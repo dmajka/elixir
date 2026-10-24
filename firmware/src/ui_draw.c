@@ -135,7 +135,7 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
         put_int(b + str_len(b), ui.step + 1);
         break;
     }
-    case M_PERF: put_str(b, PERF_TITLE[ui.page % 4u], n); break;
+    case M_PERF: put_str(b, PERF_TITLE[ui.page % NPERF], n); break;
     case M_EUCLID:
         put_str(b, EUCLID_TITLE[ui.page % NEUCLID], n);
         if (ui.page % NEUCLID == 0u && ui.action)
@@ -386,9 +386,11 @@ static void draw_clear(int32_t y0)
 }
 
 /* PERF: the 16 keys (lit: on, outlined: latched), then the STUTTER length, the THROW voice, the DJ filter */
-static const char *const PERF_KEY[NPF] = {"FILL", "RPT", "FRZ", "T.RV", "T.FX", "FB+", "STP", "LP~", "HP~"};
-static const char *const PERF_NAME[NPF] = {"FILL", "REPEAT", "FREEZE", "THROW REV", "THROW FX", "FB PUSH",
-                                           "TAPE STOP", "LP SWEEP", "HP SWEEP"};
+static const char *const PERF_KEY[NPF2] = {"FILL", "RPT", "FRZ", "T.RV", "T.FX", "FB+", "STP", "LP~", "HP~",
+                                           "HLF", "JIT", "CUT", "SHT", "PMP", "RES", "SPC", "CRS", "REV"};
+static const char *const PERF_NAME[NPF2] = {"FILL", "REPEAT", "FREEZE", "THROW REV", "THROW FX", "FB PUSH",
+                                            "TAPE STOP", "LP SWEEP", "HP SWEEP", "HALF", "JITTER", "CUTS", "SHORT",
+                                            "PUMP", "COMB", "SPACE", "CRUSH", "REVERSE"};
 static void draw_perf(int32_t y0)
 {
     static const char *const REP[4] = {"1/4", "1/8", "1/16", "1/32"};
@@ -396,19 +398,21 @@ static void draw_perf(int32_t y0)
     char b[40];
     int32_t d = pf.dj_d;
     (void)y0;
-    for (i = 0; i < 16u; i++) {
+    int b2 = perf_bank2();
+    for (i = 0; i < 16u; i++) {                      /* (PERFORM 2: its bank, 1..7 DRILL) */
         int32_t x = 3 + (int32_t)(i % 8u) * 29, y = 4 + (int32_t)(i / 8u) * 26;
-        int on = i < NTRACK ? (sq.roll >> i) & 1u : (pf.on >> (i - NTRACK)) & 1u;
-        int lat = i < NTRACK ? (ui.roll_latch >> i) & 1u : (ui.pf_latch >> (i - NTRACK)) & 1u;
+        uint32_t e = (b2 ? NPF : 0u) + i - NTRACK;
+        int on = i < NTRACK ? ((b2 ? sq.drill : sq.roll) >> i) & 1u : (pf.on >> e) & 1u;
+        int lat = i < NTRACK ? ((b2 ? ui.drill_latch : ui.roll_latch) >> i) & 1u : (ui.pf_latch >> e) & 1u;
         uint16_t c = on ? (i < NTRACK ? TRACK_COL[i] : T_THEME) : T_SURF;
         cv_rrect(x, y, 27, 22, 3, lat ? T_ACCENT : c, T_BG);
         if (lat)
             cv_rrect(x + 2, y + 2, 23, 18, 2, c, T_ACCENT);
-        text_c(x + 1, y + CAP_IN(S, 22), 25, &AF_S, i < NTRACK ? VOICE_SHORT[i] : PERF_KEY[i - NTRACK],
+        text_c(x + 1, y + CAP_IN(S, 22), 25, &AF_S, i < NTRACK ? VOICE_SHORT[i] : PERF_KEY[e],
                on ? RGB(12, 12, 12) : (i < NTRACK && ((sq.muted >> i) & 1u)) ? T_DIM : T_TEXT, c);
     }
-    put_str(b, "REPEAT ", sizeof b);
-    put_str(b + 7, REP[pfs.repeat & 3u], sizeof b - 7u);
+    put_str(b, b2 ? "1-7: DRILL  REPEAT " : "REPEAT ", sizeof b);
+    put_str(b + str_len(b), REP[pfs.repeat & 3u], sizeof b - str_len(b));
     put_str(b + str_len(b), "   THROW ", sizeof b - str_len(b));
     put_str(b + str_len(b), VOICE_SHORT[track_voice(ui.track)], sizeof b - str_len(b));
     cv_text(6, 60, &AF_S, b, T_TEXT);
@@ -422,7 +426,7 @@ static void draw_perf(int32_t y0)
         cv_rect(44, 102, (int32_t)(tape_q16 * 186u >> 16), 4, T_REC);
     }
     b[0] = 0;
-    for (i = 0; i < NPF; i++)                        /* what is on, by name */
+    for (i = 0; i < NPF2; i++)                       /* what is on, by name */
         if ((pf.on >> i) & 1u) {
             if (b[0])
                 put_str(b + str_len(b), " ", sizeof b - str_len(b));
@@ -853,7 +857,8 @@ static void draw_body(void)
     void (*fn)(int32_t) = 0;
     if ((ui.mode == M_PERF || (ui.perf && ui.shift)) && !ui.clear_open && !ui.kb_open) {   /* (SHIFT: latches) */
         fn = draw_perf;
-        s = sig_add(11, pf.on | (uint32_t)ui.pf_latch << 16);
+        s = sig_add(sig_add(11, pf.on), ui.pf_latch | (uint32_t)perf_bank2() << 31);
+        s = sig_add(s, sq.drill | ui.drill_latch << 8);
         s = sig_add(s, sq.roll | ui.roll_latch << 8 | sq.muted << 16 | ui.shift << 24);
         s = sig_add(s, pfs.repeat | ui.track << 4 | (uint32_t)(pf.dj_d + 65536) >> 10 << 8 | (tape_q16 >> 11) << 20);
     } else if (ui.shift && !ui.clear_open) {
@@ -975,6 +980,12 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_BPITCH: put_str(b, "Bnc pitch", n); return;
     case VP_ROLL: put_str(b, "Roll", n); return;
     case VP_LINK: put_str(b, "Link", n); return;
+    case VP_P2: case VP_P2 + 1: case VP_P2 + 2: case VP_P2 + 3: case VP_P2 + 4: case VP_P2 + 5: case VP_P2 + 6:
+    case VP_P2_LAST: {
+        static const char *const N[8] = {"Drill", "Jitter", "Cuts", "Pump", "Comb", "Comb fb", "Crush", "Reverse"};
+        put_str(b, N[p - VP_P2], n);
+        return;
+    }
     case VP_LSTART: put_str(b, "Start", n); return;
     case VP_LAMT: put_str(b, "Amount", n); return;
     case VP_DEPTH: put_str(b, "Depth", n); return;
@@ -1148,6 +1159,15 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
         return;
     case VP_RAT_FADE: put_str(b, v == RF_DOWN ? "DOWN" : v == RF_UP ? "UP" : "FLAT", n); return;
     case VP_LINK: put_int(b, (int32_t)v + 1); return;
+    case VP_P2 + 4: note_name(b, v); return;
+    case VP_P2_LAST: {
+        static const char *const L[3] = {"1/16", "1/8", "1/4"};
+        put_str(b, L[v < 3u ? v : 1u], n);
+        return;
+    }
+    case VP_P2: case VP_P2 + 1: case VP_P2 + 2: case VP_P2 + 3: case VP_P2 + 5: case VP_P2 + 6:
+        put_str(put_int(b, (int32_t)((v * 100u + 63u) / 127u)), "%", 2);
+        return;
     case VP_LSTART: {
         static const char *const S[NSTART + 2u] = {"-", "DUCK", "CALL", "GHOST", "CHAIN", "EDITED"};
         put_str(b, S[v <= NSTART + 1u ? v : 0], n);

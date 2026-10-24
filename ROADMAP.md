@@ -18,7 +18,7 @@ Kettle is the Erica Synths LXR-02 firmware (GPL-3.0) ported to the M-VAVE FM-1 o
 - **Firmware build:** `./build.sh` makes `build/kettle.fwsc` and passes Felucca's checks.
 - **Browser emulator:** `web/emu/build.sh`, tested in Chrome, with Web MIDI in and out, including clock.
 - **First hardware run (0.5.1):** installed on a real FM-1 from V15 with the install page (`web/make_site.py`); a battery display on CONFIG; autosave no longer makes a burst of noise after a stop. See *0.5.1* below.
-- **Tests:** render_test, compare_test and ui_test (66 screens; links between tracks; bouncing ratchets and the roll sweep; the output's hush and autosave's timing; the battery display; Grids' map; clocks, conditions, ratchets, generators, bar copy; locks, patterns, project save/load, a 0.1 project, sends, reverb, sound shaping, phaser, flanger, PERF's effects and macros, autosave failure, sync in) all pass.
+- **Tests:** render_test, compare_test and ui_test (69 screens; PERFORM 2; links between tracks; bouncing ratchets and the roll sweep; the output's hush and autosave's timing; the battery display; Grids' map; clocks, conditions, ratchets, generators, bar copy; locks, patterns, project save/load, a 0.1 project, sends, reverb, sound shaping, phaser, flanger, PERF's effects and macros, autosave failure, sync in) all pass.
 
 **Measured resources** (from the 0.5 build)
 
@@ -236,7 +236,33 @@ Tracks that react to each other, so a pattern behaves like a small system rather
 - Pattern data: 8 links × 4 bytes = 32 B a pattern (1 KB for all 32). Project format version 6 (versions 1 to 5 still load, with no links).
 - Tests: each effect, the window, a loop, depth 0 = identical to no links (sample-identical render).
 
-### 5c. PERFORM 2: a second bank of performance effects
+### 5c. PERFORM 2: a second bank of performance effects (built)
+
+What was built, and where it differs from the plan:
+- **Pages and keys** (`ui.c`): PERF has 7 pages: PERFORM 2 (the same knobs as PERFORM), then PERFORM 2: SETUP and SETUP 2 (VP_P2 .. VP_P2 + 7, i.e. `pfs.drill` .. `pfs.rev_len`). On those three pages the white keys are bank 2 (`perf_bank2`). Each key remembers the bank it went down in (`ui.kbank`) and lets go there. Bank 2's effects are bits 9..17 of `pf.on`, now 32 bits, as are `ui.pf_held` and `ui.pf_latch`. DRILL has its own held and latched masks (`sq.drill`). Leaving PERF lets go of latches in both banks. The key labels are three letters (HLF JIT CUT SHT PMP RES SPC CRS REV); COMB's key is RES because "CMB" doesn't fit a key.
+- **The sequencer** (`seq.c`):
+  - HALF counts every other tick (`sq.half`), from the internal clock and from MIDI sync. MIDI clock out is unchanged.
+  - JITTER is late-only: a random 0..N ticks (N up to 12, a 32nd) per occurrence (`sq.jit`, `sq.jocc`, `sq.jd`). A hit can't be played early without looking ahead, so the plan's "±" became late.
+  - Hits held back (JITTER and 5b's SHIFT) now go in a queue of 4 a track (`sq.dq`, `dq_push`, `seq_delayed`), so a flam's later hits are held back too, where 5b dropped them.
+  - DRILL makes a random ratchet on each hit, overriding the step's. The ratchet's later hits get random velocity and ±2 semitones. Ratchets now keep their rate, fade and note from when they started (`sq.rper`, `sq.rfade`, `sq.rnote`), which also covers 5b's link ratchets.
+- **The voices:**
+  - SHORT raises every voice's amp decay rate to `SHORT_DEC` each block while it's on.
+  - PUMP: `perf_block` follows D1's hits (`trig_count[0]`). Its envelope rises in 2 blocks and falls over an eighth; the gain is 1 − depth × env². Every voice but D1, sends included, goes through it (`voices.c` `pump_g0` → `pump_g1`, ramped across the block).
+  - SPACE isn't a true freeze. Each reverb model's feedback goes near 1 (ROOM 0.99, SPRING 0.98, HALL at SIZE 240, its lines at their 0.99 cap), the reverb doesn't sleep, and the dry mix is dipped to 0.4 before the FX bus and reverb returns join it. The input stays open as planned.
+- **The master** (`perform.c` `perf2_master`, after the DJ filter):
+  - COMB: a 4096-sample line in the pool (8 KB), a fractional delay for the note, a gentle low-pass in the loop, feedback 0.5–0.98, the input scaled by (1 − fb) × 4 so it rings without blowing up.
+  - CUTS: a new random gate every 32nd, with 32-sample fades.
+  - CRUSH: sample hold of 1..16 and 16..4 bits.
+  - REVERSE: a recorder of 0.25 s at 22 kHz, mono, in the pool (11 KB). While it plays, the recorder stops, the part loops backwards with 32-sample fades at its ends, and it crossfades in and out (64 samples).
+  - Pool left: ~29 KB.
+- **KPF2:** the 8 settings after KPF1 (tag, count, bytes), clamped on load. Older projects get the defaults.
+- **Tests** (ui_test, 69 screens):
+  - HALF (48 ticks in 0.5 s, against 96), DRILL (17 hits a bar for 4), JITTER (most hits late, never past 12 ticks), and latching across banks (a key letting go in its own bank).
+  - SHORT (the kick's tail under 10%), PUMP (down at the hit, back after an eighth).
+  - COMB (the impulse response correlates 0.82 at A2's period and 0.00 off it), CUTS (43% shut at a ~50% setting), CRUSH (held, 4 bits), REVERSE (exactly the recording backwards), and the SETUP pages and KPF2 round trip.
+  - CPU on hardware: not yet measured. Each is on only while held or latched; COMB and REVERSE are the dearest, a few multiplies a sample.
+
+The plan as agreed:
 
 A second set of PERF effects, each cheap on its own, picked for the user's influences. In PERF, SELECT gets two more pages: **PERFORM 2** and **PERFORM 2: SETUP**. While PERFORM 2 is shown, keys 1–16 play the second bank; the black keys (mutes) and the bar keys (repeat length) stay as they are. Latched effects from both banks keep running when switching pages. Effect settings are saved with the project (a KPF2 section after KPF1).
 

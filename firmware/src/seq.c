@@ -84,8 +84,9 @@ static const uint8_t LK_START[NSTART][4] = {
 /* a hit's changes from the links (the occurrence's first hit decides them, a flam's later hits keep them) */
 typedef struct {
     int16_t vel, pitch, dec;
-    uint8_t rat, shift, drop, on, held;
+    uint8_t rat, shift, drop, on;
 } lmod_t;
+#define NDQ 4u                                       /* the hits a track can hold back (SHIFT, JITTER) */
 /* trig conditions: none, FILL, not FILL, PRE, not PRE, NEI, not NEI, 1ST, not 1ST, then A:B for B 2..8, A 1..B */
 enum { COND_NONE, COND_FILL, COND_NFILL, COND_PRE, COND_NPRE, COND_NEI, COND_NNEI, COND_1ST, COND_N1ST, COND_AB };
 #define NCOND (COND_AB + 35u)
@@ -161,9 +162,18 @@ static struct {
     uint8_t lk_on, lk_trig;
     uint32_t locc[NTRACK];
     lmod_t lmod[NTRACK];
-    uint8_t dly[NTRACK], dly_s[NTRACK];          /* SHIFT: a hit held back (ticks to go), its step, loop, changes */
-    uint32_t dly_loop[NTRACK];
-    lmod_t dly_m[NTRACK];
+    struct {                                     /* hits held back (SHIFT, JITTER): ticks to go (0: free), step,
+                                                  * loop, the links' changes */
+        uint8_t n, s;
+        uint32_t loop;
+        lmod_t m;
+    } dq[NTRACK][NDQ];
+    /* 0.6: PERFORM 2 (perform.c perf_block sets them): DRILL's tracks; JITTER's most (ticks), the occurrence its
+     * delay was drawn for, that delay; HALF, its other tick */
+    uint8_t drill, drill_span, rdrill, jit, half, hph;
+    uint32_t jocc[NTRACK];
+    uint8_t jd[NTRACK];
+    uint8_t rper[NTRACK], rfade[NTRACK], rnote[NTRACK];   /* a ratchet's rate, fade, note (as it started) */
     uint8_t ldec;                                /* bit t: track t's lane 2 holds a link's DECAY */
     volatile uint8_t gsync;                      /* bit t: the live track from the pattern (the ISR does it) */
     uint16_t greg[NTRACK];                       /* TURING's registers */
@@ -372,6 +382,7 @@ static uint32_t shift_flam(const pattern_t *p, uint32_t t, uint32_t s, uint32_t 
 static const uint16_t TRACK_DECAY[NTRACK] = {PAR_VELOD1, PAR_VELOD2, PAR_VELOD3, PAR_VELOD4, PAR_VELOD5,
                                              PAR_VELOD6_CLOSED, PAR_VELOD6_OPEN};
 static void bounce_start(uint32_t t, uint32_t r, uint32_t s, uint32_t vel, uint32_t note, uint32_t occ);
+static uint32_t seq_rand(void);
 static void step_hit(uint32_t t, const pattern_t *p, uint32_t s, uint32_t loop, const lmod_t *m)
 {
     uint32_t r = p->rat[t][s], n, vel = p->step[t][s].volume & STEP_VOLUME_MASK, note = p->step[t][s].note;
@@ -381,6 +392,9 @@ static void step_hit(uint32_t t, const pattern_t *p, uint32_t s, uint32_t loop, 
             r = m->rat >= 5u ? RAT_BOUNCE | 5u | BC_BALL << 3 : m->rat;
         vel = (uint32_t)clamp32((int32_t)vel + m->vel, 1, 127);
         note = (uint32_t)clamp32((int32_t)note + m->pitch, 0, 127);
+    }
+    if (sq.drill & (1u << t)) {                      /* DRILL: 2 .. 8 hits at 1/32, 1/48 or 1/64, at random */
+        r = (seq_rand() % (sq.drill_span + 1u) + 1u) | (seq_rand() % 3u) << 3;
     }
     if (m && m->dec) {                               /* DECAY: lane 2, this hit and its ratchet */
         uint32_t d = TRACK_DECAY[t];
@@ -403,7 +417,10 @@ static void step_hit(uint32_t t, const pattern_t *p, uint32_t s, uint32_t loop, 
         sq.rocc[t] = occ;
         sq.rleft[t] = (uint8_t)(n - 1u);
         sq.rn[t] = (uint8_t)n;
-        sq.rcnt[t] = RAT_TICKS[(r >> 3) & 3u];
+        sq.rcnt[t] = sq.rper[t] = RAT_TICKS[(r >> 3) & 3u];
+        sq.rfade[t] = (uint8_t)((r >> 5) & 3u);
+        sq.rnote[t] = (uint8_t)note;
+        sq.rdrill = (uint8_t)(sq.drill & (1u << t) ? sq.rdrill | 1u << t : sq.rdrill & ~(1u << t));
         sq.rstep[t] = (uint8_t)s;
         sq.rvel[t] = (uint8_t)vel;
         if (((r >> 5) & 3u) == RF_UP)
@@ -417,21 +434,26 @@ static void seq_ratchets(void)                       /* the ratchets' later hits
     uint32_t t;
     for (t = 0; t < NTRACK; t++) {
         const pattern_t *p;
-        uint32_t r, j, v;
+        uint32_t f, j, v, note;
         if (!sq.rleft[t] || --sq.rcnt[t])
             continue;
         p = tpat(t);
-        r = p->rat[t][sq.rstep[t]];
-        sq.rcnt[t] = RAT_TICKS[(r >> 3) & 3u];
+        f = sq.rfade[t];
+        sq.rcnt[t] = sq.rper[t];
         j = sq.rn[t] - sq.rleft[t];                  /* this hit's number (1 ..) */
         sq.rleft[t]--;
         v = sq.rvel[t];
-        if (((r >> 5) & 3u) == RF_DOWN)
+        note = sq.rnote[t];
+        if (f == RF_DOWN)
             v = v * (sq.rn[t] - j) / sq.rn[t];
-        else if (((r >> 5) & 3u) == RF_UP)
+        else if (f == RF_UP)
             v = v * (j + 1u) / sq.rn[t];
+        if (sq.rdrill & (1u << t)) {                 /* DRILL: each hit's velocity and pitch (+-2) at random */
+            v = 30u + seq_rand() % 98u;
+            note = (uint32_t)clamp32((int32_t)note + (int32_t)(seq_rand() % 5u) - 2, 0, 127);
+        }
         if (!(sq.muted & (1u << t)))
-            seq_trigger(t, p, sq.rstep[t], v ? v : 1u, p->step[t][sq.rstep[t]].note);
+            seq_trigger(t, p, sq.rstep[t], v ? v : 1u, note);
     }
 }
 
@@ -625,6 +647,32 @@ static void seq_links(uint32_t hm, const uint8_t *hs, const uint32_t *hl, const 
         }
 }
 
+/* a hit held back d ticks (the queue full: the one due first plays now, its place taken) */
+static void dq_push(uint32_t t, uint32_t d, uint32_t s, uint32_t loop, const lmod_t *m)
+{
+    uint32_t k, f = 0;
+    for (k = 0; k < NDQ; k++) {
+        if (!sq.dq[t][k].n) {
+            f = k;
+            break;
+        }
+        if (sq.dq[t][k].n < sq.dq[t][f].n)
+            f = k;
+    }
+    if (k == NDQ) {
+        sq.dq[t][f].n = 0;
+        step_hit(t, tpat(t), sq.dq[t][f].s, sq.dq[t][f].loop, &sq.dq[t][f].m);
+    }
+    sq.dq[t][f].n = (uint8_t)(d > 255u ? 255u : d);
+    sq.dq[t][f].s = (uint8_t)s;
+    sq.dq[t][f].loop = loop;
+    if (m)
+        sq.dq[t][f].m = *m;
+    else
+        memset(&sq.dq[t][f].m, 0, sizeof sq.dq[t][f].m);
+    sq.dq[t][f].m.shift = 0;
+}
+
 /* what plays on this tick: each track at its clock's position in its step (tph: the 24 positions of a step that
  * this tick covers, slower clocks covering one now and then, faster several). 0.6: the hits found first, then
  * the links (with any set and a depth), then they play */
@@ -677,32 +725,33 @@ static void seq_flam(void)
         seq_links(hm, hs, hl, hp, sil);
     for (t = 0; t < NTRACK; t++) {
         const lmod_t *m = live ? &sq.lmod[t] : 0;
+        uint32_t d = 0;
         if (!(hm >> t & 1u) || (m && m->drop))
             continue;
-        if (m && m->shift) {                         /* SHIFT: the occurrence's first hit held back, later ones not */
-            if (!m->held) {
-                if (sq.dly[t]) {                     /* (one held already: it plays now) */
-                    sq.dly[t] = 0;
-                    step_hit(t, tpat(t), sq.dly_s[t], sq.dly_loop[t], &sq.dly_m[t]);
-                }
-                sq.dly[t] = (uint8_t)(m->shift * trk_ticks(t) / 200u + 1u);
-                sq.dly_s[t] = hs[t];
-                sq.dly_loop[t] = hl[t];
-                sq.dly_m[t] = *m;
-                sq.dly_m[t].shift = 0;
-                sq.lmod[t].held = 1;
+        if (m && m->shift)                           /* SHIFT: up to half a step late */
+            d = m->shift * trk_ticks(t) / 200u + 1u;
+        if (sq.jit) {                                /* JITTER: late by a random part of its most, an occurrence's
+                                                      * hits alike */
+            uint32_t occ = (hl[t] << 6 | hs[t]) + 1u;
+            if (sq.jocc[t] != occ) {
+                sq.jocc[t] = occ;
+                sq.jd[t] = (uint8_t)(seq_rand() % (sq.jit + 1u));
             }
-            continue;
+            d += sq.jd[t];
         }
-        step_hit(t, tpat(t), hs[t], hl[t], m);
+        if (d)
+            dq_push(t, d, hs[t], hl[t], m);
+        else
+            step_hit(t, tpat(t), hs[t], hl[t], m);
     }
 }
-static void seq_delayed(void)                        /* SHIFT's held hits, when due */
+static void seq_delayed(void)                        /* the hits held back, when due */
 {
-    uint32_t t;
+    uint32_t t, k;
     for (t = 0; t < NTRACK; t++)
-        if (sq.dly[t] && !--sq.dly[t])
-            step_hit(t, tpat(t), sq.dly_s[t], sq.dly_loop[t], &sq.dly_m[t]);
+        for (k = 0; k < NDQ; k++)
+            if (sq.dq[t][k].n && !--sq.dq[t][k].n)
+                step_hit(t, tpat(t), sq.dq[t][k].s, sq.dq[t][k].loop, &sq.dq[t][k].m);
 }
 
 /* the rolls (PERF: the keys roll their track at ROLL's rate): ticks between two hits */
@@ -738,8 +787,9 @@ static void seq_reset_tracks(void)                   /* every track before its f
         sq.bocc[t] = 0;
         sq.nst[t] = 0;
         sq.locc[t] = 0;
-        sq.dly[t] = 0;
+        sq.jocc[t] = 0;
     }
+    memset(sq.dq, 0, sizeof sq.dq);
     sq.lk_on = sq.lk_trig = 0;
     memset(sq.cocc, 0, sizeof sq.cocc);
     sq.pre = 0;
@@ -1031,7 +1081,7 @@ static void seq_block(void)
         sq.acc_q16 += BLOCK * tape_q16;             /* (TAPE STOP slows the clock) */
         while (sq.acc_q16 >= sq.tick_q16) {          /* (the clock goes out stopped too, as the LXR's) */
             sq.acc_q16 -= sq.tick_q16;
-            if (sq.running)
+            if (sq.running && (!sq.half || (sq.hph ^= 1u)))   /* (HALF: every other tick) */
                 sq.due++;
             seq_clock_out_tick();
         }
@@ -1039,7 +1089,7 @@ static void seq_block(void)
         sq.ext_since += BLOCK;
         while (sq.ext_left && sq.ext_next <= 0) {    /* the pulse's later ticks, spread over its length */
             sq.ext_left--;
-            if (sq.running)
+            if (sq.running && (!sq.half || (sq.hph ^= 1u)))
                 sq.due++;
             sq.ext_next += (int32_t)(sq.ext_iv / 4u);
         }

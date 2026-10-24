@@ -1158,6 +1158,208 @@ static void phase5b(void)
     }
 }
 
+/* 0.6 (5c): PERFORM 2 */
+static void p2_key(uint32_t w, int down)             /* white key w held or let go */
+{
+    keys = down ? keys | 1u << WHITE_KEY[w] : keys & ~(1u << WHITE_KEY[w]);
+    web_keys(keys);
+    run_ms(30);
+}
+static void phase5c(void)
+{
+    pattern_t *p = &pat[0];
+    uint32_t i, k, n, c, t0, t1;
+    int16_t l[BLOCK], r[BLOCK];
+    p4_reset();
+    for (k = 0; k < 16u; k += 4u)
+        main_set(p, 0, k, 1);
+    pat_backup = *p;
+    goto_mode(B_ARP, M_PERF);
+    turn(EN_SELECT, (int32_t)PG_PERF2);
+    check(ui.page == PG_PERF2 && perf_bank2(), "PERFORM 2: the fifth PERF page");
+    /* HALF: the ticks at half the rate */
+    start_now();
+    t0 = sq.ticks;
+    run_ms(500);
+    t0 = sq.ticks - t0;
+    p2_key(7, 1);
+    t1 = sq.ticks;
+    run_ms(500);
+    t1 = sq.ticks - t1;
+    shot("perform2");
+    p2_key(7, 0);
+    printf("  HALF: %u ticks in 0.5 s (%u without)\n", t1, t0);
+    check(t1 * 2u >= t0 - 2u && t1 * 2u <= t0 + 2u, "HALF: half the ticks");
+    /* DRILL: D1's 4 hits a bar each 2 .. 8 hits */
+    seq_stop_now();
+    c = trig_count[0];
+    start_now();
+    p2_key(0, 1);
+    to_tick(380);
+    n = trig_count[0] - c;
+    p2_key(0, 0);
+    seq_stop_now();
+    printf("  DRILL: D1 %u hits in a bar (4 plain)\n", n);
+    check(n >= 9u && n <= 32u && !sq.drill, "DRILL: 2 .. 8 hits a step, let go");
+    /* JITTER: hits late by up to a 32nd (12 ticks), not lost */
+    pfs.jitter = 127;
+    hold(B_OCTDN);                                   /* (SHIFT: latched) */
+    p2_key(8, 1);
+    p2_key(8, 0);
+    release(B_OCTDN);
+    check((pf.on >> PF_JITTER) & 1u && (ui.pf_latch >> PF_JITTER) & 1u, "JITTER latched");
+    for (k = 0; k < 16u; k++)
+        main_set(p, 1, k, 1);
+    pat_backup = *p;
+    {
+        uint32_t late = 0, most = 0, hits = 0, last = trig_count[1];
+        start_now();
+        while (sq.ticks < 384u) {
+            uint32_t tk = sq.ticks;
+            run_ms(1);
+            if (trig_count[1] != last) {
+                uint32_t d = tk % 24u;
+                last = trig_count[1];
+                hits++;
+                late += d > 0u;
+                most = d > most ? d : most;
+            }
+        }
+        seq_stop_now();
+        printf("  JITTER: %u of %u hits late, the most %u ticks\n", late, hits, most);
+        check(hits >= 15u && late >= 6u && most <= 12u, "JITTER: hits late by up to a 32nd");
+    }
+    /* latched across banks: JITTER stays on PERFORM; there key 9 is REPEAT's (bank 1) */
+    turn(EN_SELECT, -(int32_t)PG_PERF2);
+    check(!perf_bank2() && (pf.on >> PF_JITTER) & 1u, "PERFORM: JITTER still latched");
+    p2_key(8, 1);
+    check((pf.on >> PF_STUT) & 1u, "PERFORM: key 9 is REPEAT there");
+    turn(EN_SELECT, (int32_t)PG_PERF2);
+    p2_key(8, 0);
+    check(!((pf.on >> PF_STUT) & 1u) && (pf.on >> PF_JITTER) & 1u, "a key lets go in the bank it went down in");
+    p2_key(8, 1);                                    /* (the latched JITTER let go) */
+    p2_key(8, 0);
+    check(!((pf.on >> PF_JITTER) & 1u), "JITTER: the key again lets go");
+    for (k = 0; k < 16u; k++)
+        main_set(p, 1, k, 0);
+    pat_backup = *p;
+    /* SHORT: the kick's tail */
+    {
+        float e0 = 0, e1 = 0;
+        for (k = 0; k < 2u; k++) {
+            if (k)
+                p2_key(10, 1);
+            start_now();
+            run_ms(60);
+            for (i = 0; i < 6u; i++) {
+                uint32_t j;
+                web_render(1024);
+                for (j = 0; j < 1024u; j++)
+                    *(k ? &e1 : &e0) += out_l[j] * out_l[j];
+            }
+            seq_stop_now();
+            run_ms(400);
+        }
+        p2_key(10, 0);
+        printf("  SHORT: the kick's tail %.1f%% of its energy\n", 100.0 * e1 / (e0 + 1e-9));
+        check(e0 > 1.0f && e1 < e0 * 0.1f, "SHORT: the tail cut");
+    }
+    /* PUMP: the gain at D1's hit, then back */
+    pfs.pump = 127;
+    p2_key(11, 1);
+    start_now();
+    run_ms(8);
+    check(pump_g1 < 3000, "PUMP: down at D1's hit");
+    run_ms(300);
+    check(pump_g1 == 32768, "PUMP: back after an 8th");
+    p2_key(11, 0);
+    seq_stop_now();
+    /* the master's: COMB rings at its note, CUTS shuts its share of 32nds, CRUSH holds, REVERSE plays backwards */
+    {
+        static int16_t y[8192];
+        uint32_t on = pf.on, d;
+        double a0 = 0, a1 = 0, a2 = 0;
+        pf.on = 1u << PF_COMB;
+        pfs.comb_note = 45;                          /* A2: 110 Hz, 400.9 samples */
+        memset(comb_buf, 0, sizeof comb_buf);
+        for (i = 0; i < 8192u / BLOCK; i++) {
+            for (k = 0; k < BLOCK; k++)
+                l[k] = r[k] = (int16_t)(i == 0u && k == 0u ? 20000 : 0);
+            perf2_master(l, r);
+            memcpy(y + i * BLOCK, l, sizeof l);
+        }
+        for (k = 1000; k < 4000u; k++) {
+            a0 += (double)y[k] * y[k];
+            a1 += (double)y[k] * y[k + 401u];
+            a2 += (double)y[k] * y[k + 300u];
+        }
+        printf("  COMB A2: correlation %.2f at 401 samples, %.2f at 300\n", a1 / a0, a2 / a0);
+        check(a1 / a0 > 0.8 && a2 / a0 < 0.3, "COMB: rings at its note");
+        pf.on = 1u << PF_CUTS;
+        pfs.cuts = 64;                               /* ~50% */
+        for (i = 0, n = 0; i < 2000u; i++) {
+            for (k = 0; k < BLOCK; k++)
+                l[k] = r[k] = 10000;
+            perf2_master(l, r);
+            for (k = 0; k < BLOCK; k++)
+                n += l[k] == 0;
+        }
+        printf("  CUTS 50%%: %.0f%% of the output shut\n", 100.0 * n / (2000.0 * BLOCK));
+        check(n > 2000u * BLOCK * 3u / 10u && n < 2000u * BLOCK * 7u / 10u, "CUTS: about half shut");
+        pf.on = 1u << PF_CRUSH;
+        pfs.crush = 127;
+        for (k = 0; k < BLOCK; k++)
+            l[k] = r[k] = (int16_t)(k * 300u + 77u);
+        perf2_master(l, r);
+        for (k = 1, n = 0; k < BLOCK; k++)
+            n += l[k] == l[k - 1u];
+        check(n >= 56u && (l[5] & 4095) == 0, "CRUSH: held 16 samples, 4 bits");
+        pf.on = 0;
+        for (k = 0; k < BLOCK; k++)
+            l[k] = r[k] = 0;
+        for (d = 0; d < REC_LEN; d++)                /* (the recorder: a ramp, its newest at rec_w - 1) */
+            rec_buf[(pf.rec_w + d) % REC_LEN] = (int16_t)(d * 5u);
+        pf.on = 1u << PF_REVERSE;
+        pfs.rev_len = 1;
+        for (i = 0, n = 0; i < 8u; i++) {
+            for (k = 0; k < BLOCK; k++)
+                l[k] = r[k] = 0;
+            perf2_master(l, r);
+            for (k = 0; k < BLOCK; k++) {
+                uint32_t q = i * BLOCK + k, want = (REC_LEN - 1u - q / 2u) * 5u;
+                if (q >= 64u && (uint32_t)(l[k] - (int32_t)want + 2) > 4u)
+                    n++;
+            }
+        }
+        check(n == 0u, "REVERSE: the recording backwards");
+        pf.on = 0;
+        for (i = 0; i < 4u; i++)
+            perf2_master(l, r);
+        check(!pf.rv_len, "REVERSE: let go, the recorder again");
+        pf.on = on;
+    }
+    turn(EN_SELECT, 1);
+    kset.accel = 0;
+    turn(EN_K1, -21);
+    kset.accel = 1;
+    check(pfs.drill == 59u, "PERFORM 2: SETUP: Drill");
+    shot("perform2-setup");
+    turn(EN_SELECT, 1);
+    kset.accel = 0;
+    turn(EN_K1, 12);
+    kset.accel = 1;
+    check(pfs.comb_note == 57u, "PERFORM 2: SETUP 2: Comb A3");
+    shot("perform2-setup2");
+    {
+        int rc = proj_save(1, "PERF2   ");
+        pfs.comb_note = 30;
+        pfs.drill = 1;
+        rc |= proj_load(1);
+        check(rc == 0 && pfs.comb_note == 57u && pfs.drill == 59u, "project: PERFORM 2's settings (KPF2)");
+    }
+    goto_mode(B_HOME, M_HOME);
+}
+
 static void grids_test(void)
 {
     pattern_t *p = &pat[0];
@@ -1657,6 +1859,7 @@ int main(int argc, char **argv)
     hush_test();
     phase5a();
     phase5b();
+    phase5c();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;
 }

@@ -100,7 +100,7 @@ static struct {                          /* HALL's state (in the pool) */
 static __attribute__((noinline)) void rev_room(const int32_t *in_, int32_t *out, uint32_t n)
 {
     uint32_t i, k;
-    int32_t size = 25000 + rv.size * 50, damp = 32767 - rv.damp * 200;
+    int32_t size = space_on ? 32440 : 25000 + rv.size * 50, damp = 32767 - rv.damp * 200;   /* (SPACE: held) */
     for (i = 0; i < n; i++) {
         int32_t a = 0;
         int16_t *c = rev_comb;
@@ -132,7 +132,7 @@ static __attribute__((noinline)) void rev_room(const int32_t *in_, int32_t *out,
 static __attribute__((noinline)) void rev_spring(const int32_t *in_, int32_t *out, uint32_t n)
 {
     uint32_t i, k, s = rv.size;
-    int32_t g = 19661 + (int32_t)s * 85;                /* the loop's gain: 0.6 .. 0.93 */
+    int32_t g = space_on ? 32112 : 19661 + (int32_t)s * 85;   /* the loop's gain: 0.6 .. 0.93 (SPACE: 0.98) */
     int32_t kl = 26000 - rv.damp * 160;                 /* its low-pass: ~9 kHz .. ~1.3 kHz */
     int32_t len = (int32_t)(1323u + ((s * 1323u) >> 7)) << 8, L, L2, L3, f, w;
     int16_t *ln = rev_comb;
@@ -259,8 +259,8 @@ static __attribute__((noinline)) void rev_hall(const int32_t *in_, int32_t *out,
     int32_t kd = HL_KD(rv.damp);
     int32_t xp = hl.x, hp = hl.hp, he = hl.he, mp = hl.m, sp = hl.s;
     (void)n;
-    if (hl.sz != rv.size + 1)
-        hall_gains(rv.size);
+    if (hl.sz != (space_on ? 241 : rv.size + 1))     /* (SPACE: a tail of ~130 s, the lines at their 0.99) */
+        hall_gains(space_on ? 240 : rv.size);
     for (i = 0; i < HL_NC; i++) {
         int32_t x = (xp + 2 * in_[2u * i] + in_[2u * i + 1u]) >> 2, v;   /* every other sample, 1 2 1 */
         xp = in_[2u * i + 1u];
@@ -391,7 +391,7 @@ static void reverb_process(void)
     int32_t *wet = rev_wet;
     uint32_t i, rt = rv.type < 3u ? rv.type : 0u;
     int32_t pk = 0;
-    if (rev_fed)
+    if (rev_fed || space_on)
         rv.idle = 0;
     else if (rv.idle >= 255u)
         return;

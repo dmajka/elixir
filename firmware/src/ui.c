@@ -37,7 +37,8 @@ enum { VP_BASE = 0x200, VP_NONE = VP_BASE, VP_IO_TYPE, VP_IO_SLOT, VP_NAME_POS, 
        VP_DJ, VP_REPEAT, VP_TAPE, VP_M1, VP_M4 = VP_M1 + NMACRO - 1, VP_MSEL, VP_MTARGET, VP_MMIN, VP_MMAX,
        VP_COND, VP_RAT_N, VP_RAT_RATE, VP_RAT_FADE, VP_ACTION, VP_GMODE, VP_GA, VP_GB, VP_GC, VP_CLOCK,
        VP_GX, VP_GY, VP_GCHAOS, VP_RAT_SHAPE, VP_BSTART, VP_BPITCH, VP_ROLL,
-       VP_LINK, VP_LSTART, VP_LAMT, VP_DEPTH, VP_LWHEN, VP_LTGT, VP_LEFF, VP_LWIN };
+       VP_LINK, VP_LSTART, VP_LAMT, VP_DEPTH, VP_LWHEN, VP_LTGT, VP_LEFF, VP_LWIN,
+       VP_P2, VP_P2_LAST = VP_P2 + 7 };
 /* the EUCLID pages' ACTION (OCT+ does it) */
 enum { ACT_NONE, ACT_DICE, ACT_COMMIT, ACT_UNDO, ACT_RESET, NACT };
 
@@ -46,8 +47,10 @@ static struct {
     uint8_t track, bar, sect, half, page;
     uint8_t step;                    /* STEP: the selected step (0..63) */
     uint8_t perf;                    /* the white keys roll (PERF, and the sound pages opened from it) */
-    uint16_t pf_held, pf_latch;      /* PERF's keys 8..16 held, latched (bit PF_*: pf.on is both) */
+    uint32_t pf_held, pf_latch;      /* PERF's keys 8..16 held, latched (bit PF_*: pf.on is both) */
     uint8_t roll_latch;              /* the rolls latched (SHIFT + key 1..7) */
+    uint8_t drill_held, drill_latch; /* 0.6: PERFORM 2's keys 1..7 (DRILL) */
+    uint16_t kbank;                  /* bit w: white key w went down on a PERFORM 2 page (it lets go there) */
     uint8_t msel;                    /* MACRO SETUP: the macro */
     uint8_t action;                  /* EUCLID: the ACTION OCT+ does (ACT_*) */
     uint8_t eu_undo;                 /* the Euclid knobs' UNDO saved (track + 1): turned again, it keeps that one */
@@ -179,11 +182,18 @@ static const uint16_t P_STEP[4][4] = {{PAR_STEP_VOLUME, PAR_STEP_NOTE, PAR_STEP_
                                       {PAR_P1_DEST, PAR_P1_VAL, PAR_P2_DEST, PAR_P2_VAL},
                                       {VP_RAT_N, VP_RAT_RATE, VP_RAT_FADE, VP_RAT_SHAPE}};
 static const char *const STEP_TITLE[4] = {"STEP", "TIMING", "LOCKS", "RATCHET"};
-static const uint16_t P_PERF[4][4] = {{PAR_BPM, VP_DJ, VP_REPEAT, PAR_MORPH},
-                                      {VP_M1, VP_M1 + 1, VP_M1 + 2, VP_M1 + 3},
-                                      {VP_MSEL, VP_MTARGET, VP_MMIN, VP_MMAX},
-                                      {PAR_ROLL, PAR_SHUFFLE, PAR_VOICE_DECIMATION_ALL, VP_TAPE}};
-static const char *const PERF_TITLE[4] = {"PERFORM", "MACROS", "MACRO SETUP", "PERFORM: MORE"};
+#define NPERF 7u
+#define PG_PERF2 4u                                  /* (the pages from here: PERFORM 2, its keys the second bank) */
+static const uint16_t P_PERF[NPERF][4] = {{PAR_BPM, VP_DJ, VP_REPEAT, PAR_MORPH},
+                                          {VP_M1, VP_M1 + 1, VP_M1 + 2, VP_M1 + 3},
+                                          {VP_MSEL, VP_MTARGET, VP_MMIN, VP_MMAX},
+                                          {PAR_ROLL, PAR_SHUFFLE, PAR_VOICE_DECIMATION_ALL, VP_TAPE},
+                                          {PAR_BPM, VP_DJ, VP_REPEAT, PAR_MORPH},
+                                          {VP_P2, VP_P2 + 1, VP_P2 + 2, VP_P2 + 3},
+                                          {VP_P2 + 4, VP_P2 + 5, VP_P2 + 6, VP_P2 + 7}};
+static const char *const PERF_TITLE[NPERF] = {"PERFORM", "MACROS", "MACRO SETUP", "PERFORM: MORE", "PERFORM 2",
+                                              "PERFORM 2: SETUP", "PERFORM 2: SETUP 2"};
+static int perf_bank2(void) { return ui.mode == M_PERF && ui.page % NPERF >= PG_PERF2; }
 #define NEUCLID 6u
 #define PG_LINKS 4u
 static const uint16_t P_EUCLID[NEUCLID][4] = {{PAR_EUKLID_LENGTH, PAR_EUKLID_STEPS, PAR_EUKLID_ROTATION, VP_ACTION},
@@ -232,7 +242,7 @@ static uint32_t mode_pages(void)
     case M_SOUND: return sound_pages(l);
     case M_STEP: return 4;
     case M_EUCLID: return NEUCLID;
-    case M_PERF: return 4;
+    case M_PERF: return NPERF;
     case M_FX: return 3;
     case M_MIXER: return NMIXER;
     case M_CONFIG: return 7;
@@ -251,7 +261,7 @@ static void page_params(uint16_t out[4])
         }
         return;
     case M_STEP: p = P_STEP[ui.page % 4u]; break;
-    case M_PERF: p = P_PERF[ui.page % 4u]; break;
+    case M_PERF: p = P_PERF[ui.page % NPERF]; break;
     case M_EUCLID: p = P_EUCLID[ui.page % NEUCLID]; break;
     case M_FX: p = P_FX[ui.page % 3u]; break;
     case M_MIXER: p = P_MIXER[ui.page % NMIXER]; break;
@@ -266,7 +276,7 @@ static void page_params(uint16_t out[4])
     }
     for (k = 0; k < 4u; k++)
         out[k] = p[k];
-    if (ui.mode == M_PERF && ui.page % 4u == 0u && (sq.roll & ~ui.roll_latch))
+    if (ui.mode == M_PERF && ui.page % NPERF == 0u && (sq.roll & ~ui.roll_latch))
         out[2] = ui.shift ? PAR_ROLL : VP_ROLL;      /* 0.6: a roll held: KNOB 3 sweeps its rate (SHIFT: the grid's) */
 }
 
@@ -425,6 +435,8 @@ static uint32_t vp_get(uint32_t p)
     case VP_GY: return pt->gy;
     case VP_GCHAOS: return pt->gchaos;
     case VP_LINK: return ui.link & 7u;
+    case VP_P2: case VP_P2 + 1: case VP_P2 + 2: case VP_P2 + 3: case VP_P2 + 4: case VP_P2 + 5: case VP_P2 + 6:
+    case VP_P2_LAST: return (&pfs.drill)[p - VP_P2];
     case VP_LSTART: return link_start(pt->link[ui.link & 7u]);
     case VP_LAMT: {
         const uint8_t *L = pt->link[ui.link & 7u];
@@ -453,6 +465,7 @@ static uint32_t vp_min(uint32_t p)
     switch (p) {
     case PAR_TRACK_LENGTH: case PAR_EUKLID_LENGTH: case PAR_EUKLID_STEPS: return 1;
     case VP_GA: return shown_pat()->gen[ui.track][0] == GEN_TURING ? 2u : 0u;
+    case VP_P2 + 4: return 24;
     case PAR_BPM: return 1;
     case PAR_MIDI_CHAN_1: case PAR_MIDI_CHAN_2: case PAR_MIDI_CHAN_3: case PAR_MIDI_CHAN_4: case PAR_MIDI_CHAN_5:
     case PAR_MIDI_CHAN_6: case PAR_MIDI_CHAN_7: case PAR_MIDI_CHAN_GLOBAL: return 1;
@@ -515,6 +528,9 @@ static uint32_t vp_max(uint32_t p)
     case VP_ROLL: return 127;
     case VP_GX: case VP_GY: case VP_GCHAOS: return 127;
     case VP_LINK: return NLINK - 1u;
+    case VP_P2 + 4: return 96;                       /* (COMB's note: C1 .. C7) */
+    case VP_P2_LAST: return 2;
+    case VP_P2: case VP_P2 + 1: case VP_P2 + 2: case VP_P2 + 3: case VP_P2 + 5: case VP_P2 + 6: return 127;
     case VP_LSTART: return link_start(shown_pat()->link[ui.link & 7u]) > NSTART ? NSTART + 1u : NSTART;
     case VP_LAMT: {
         uint32_t e = shown_pat()->link[ui.link & 7u][1] & 15u;
@@ -671,6 +687,8 @@ static void vp_set(uint32_t p, uint32_t v)
     case VP_BPITCH: pt->bnc[ui.track] = (uint8_t)((pt->bnc[ui.track] & 3u) | v << 2); return;
     case VP_ROLL: sq.roll_k = (uint8_t)v; sq.roll_free = 1; return;
     case VP_LINK: ui.link = (uint8_t)v; return;
+    case VP_P2: case VP_P2 + 1: case VP_P2 + 2: case VP_P2 + 3: case VP_P2 + 4: case VP_P2 + 5: case VP_P2 + 6:
+    case VP_P2_LAST: (&pfs.drill)[p - VP_P2] = (uint8_t)v; return;
     case VP_LSTART: {
         uint8_t *L = pt->link[ui.link & 7u];
         if (v == 0u)
@@ -813,6 +831,8 @@ static void mode_set(uint32_t m)
             if (ui.roll_latch & (1u << t))
                 seq_set_roll(t, 0);
         ui.roll_latch = 0;
+        ui.drill_latch = 0;
+        sq.drill = ui.drill_held;
     }
     if (m == M_PERF)
         ui.perf = 1;
@@ -1008,10 +1028,28 @@ static void track_select(uint32_t t)
 
 /* ------------------------------------------------------------- keys --- */
 /* PERF's keys: 1..7 roll their track, 8..16 the effects (perform.c PF_*); SHIFT + a key latches it (again: lets
- * go), a key on what is latched lets go of it */
+ * go), a key on what is latched lets go of it. 0.6: on the PERFORM 2 pages, the second bank (1..7: DRILL); a key
+ * lets go in the bank it went down in */
 static void perf_key(uint32_t w, int down)
 {
-    if (w < NTRACK) {
+    int b2;
+    if (down)
+        ui.kbank = (uint16_t)(perf_bank2() ? ui.kbank | 1u << w : ui.kbank & ~(1u << w));
+    b2 = (ui.kbank >> w) & 1u;
+    if (w < NTRACK && b2) {                          /* DRILL */
+        uint8_t b = (uint8_t)(1u << w);
+        if (down && ui.shift) {
+            ui.shift_used = 1;
+            ui.drill_latch ^= b;
+        } else if (down && (ui.drill_latch & b)) {
+            ui.drill_latch &= (uint8_t)~b;
+        } else if (down) {
+            ui.drill_held |= b;
+        } else {
+            ui.drill_held &= (uint8_t)~b;
+        }
+        sq.drill = (uint8_t)(ui.drill_held | ui.drill_latch);
+    } else if (w < NTRACK) {
         uint8_t b = (uint8_t)(1u << w);
         if (down && ui.shift) {
             ui.shift_used = 1;
@@ -1024,22 +1062,22 @@ static void perf_key(uint32_t w, int down)
             seq_set_roll(w, 0);
         }
     } else {
-        uint16_t b = (uint16_t)(1u << (w - NTRACK));
+        uint32_t e = (b2 ? NPF : 0u) + w - NTRACK, b = 1u << e;
         if (down && ui.shift) {
             ui.shift_used = 1;
             ui.pf_latch ^= b;
         } else if (down && (ui.pf_latch & b)) {
-            ui.pf_latch &= (uint16_t)~b;
+            ui.pf_latch &= ~b;
         } else if (down) {
             ui.pf_held |= b;
         } else {
-            ui.pf_held &= (uint16_t)~b;
+            ui.pf_held &= ~b;
         }
-        if (down && (w - NTRACK == PF_THROW_R || w - NTRACK == PF_THROW_F))
+        if (down && (e == PF_THROW_R || e == PF_THROW_F))
             pf.throw_v = (uint8_t)track_voice(ui.track);
-        if (down && w - NTRACK == PF_FREEZE && fx.type != FX_DELAY)
+        if (down && e == PF_FREEZE && fx.type != FX_DELAY)
             ui_message("FREEZE: THE FX BUS IS NOT A DELAY");
-        pf.on = (uint16_t)(ui.pf_held | ui.pf_latch);
+        pf.on = ui.pf_held | ui.pf_latch;
     }
     ui.force = 1;
 }
@@ -1153,7 +1191,9 @@ static void white_down(uint32_t w)
 }
 static void white_up(uint32_t w)
 {
-    if (ui.perf || (w >= NTRACK && (ui.pf_held & (1u << (w - NTRACK)))))
+    uint32_t b2 = (ui.kbank >> w) & 1u;
+    if (ui.perf || (w >= NTRACK && (ui.pf_held & (1u << ((b2 ? NPF : 0u) + w - NTRACK)))) ||
+        (w < NTRACK && b2 && (ui.drill_held & (1u << w))))
         perf_key(w, 0);                               /* (an effect held when PERF was left lets go too) */
     if (ui.held_step == (int8_t)(ui.bar * 16u + w)) {
         ui.held_step = -1;
@@ -1595,13 +1635,17 @@ static void ui_leds(void)
             led_put(nl, id, ui.io_type != IO_PROJECT && ui.bank * 16u + k == ui.io_slot);
             led_put(nd, id, ui.io_type != IO_PROJECT);
             break;
-        case M_PERF:                                 /* (lit: on; breathing: latched) */
-            if (k < NTRACK) {
+        case M_PERF:                                 /* (lit: on; breathing: latched; PERFORM 2: its bank) */
+            if (k < NTRACK && perf_bank2()) {
+                led_put(nb, id, (ui.drill_latch >> k) & 1u);
+                led_put(nl, id, (sq.drill >> k) & 1u);
+            } else if (k < NTRACK) {
                 led_put(nb, id, (ui.roll_latch >> k) & 1u);
                 led_put(nl, id, (sq.roll >> k) & 1u);
             } else {
-                led_put(nb, id, (ui.pf_latch >> (k - NTRACK)) & 1u);
-                led_put(nl, id, (pf.on >> (k - NTRACK)) & 1u);
+                uint32_t e = (perf_bank2() ? NPF : 0u) + k - NTRACK;
+                led_put(nb, id, (ui.pf_latch >> e) & 1u);
+                led_put(nl, id, (pf.on >> e) & 1u);
             }
             led_put(nd, id, 1);
             break;

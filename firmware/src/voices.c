@@ -436,6 +436,10 @@ static void post_block(voice_t *v, int16_t *buf)
 /* ------------------------------------------------------------ mixer --- */
 enum { R_ST1, R_ST2, R_L1, R_R1, R_L2, R_R2, R_FX };
 static int32_t mix_l[BLOCK], mix_r[BLOCK];          /* the outputs (both stereo pairs and the mono outs) */
+/* 0.6: PERFORM 2 (perform.c). PUMP: every voice but D1 through a gain from pump_g0 to pump_g1 over the block (Q15);
+ * SPACE: the dry mix dipped before the FX bus and reverb join it (and the reverb held: reverb.c) */
+static int32_t pump_g0 = 32768, pump_g1 = 32768;
+static uint8_t space_on;
 static int16_t fx_l[BLOCK], fx_r[BLOCK];            /* the FX bus (the LXR's saturating int16 sums) */
 static int32_t rev_in[BLOCK];                       /* the reverb's send (mono) */
 static uint32_t rev_fed;                            /* a send fed it this block */
@@ -572,6 +576,14 @@ static void voices_block(void)
             }
             b = buf;
         }
+        if (vi != V_DRUM1 && (pump_g0 < 32768 || pump_g1 < 32768)) {
+            int32_t g = pump_g0 << 6, dg = pump_g1 - pump_g0;   /* (Q21 ramp: 64 samples) */
+            if (b != buf)
+                memcpy(buf, b, sizeof buf);
+            for (i = 0; i < BLOCK; i++, g += dg)
+                buf[i] = (int16_t)((buf[i] * (g >> 6)) >> 15);
+            b = buf;
+        }
         mix_voice(v, b);
         for (i = 0; i < BLOCK; i += 4) {
             int32_t a = iabs(b[i]);
@@ -582,6 +594,11 @@ static void voices_block(void)
         if (pk > 64)
             voice_active |= 1u << vi;
     }
+    if (space_on)                                    /* SPACE: the dry sound dipped to 0.4 */
+        for (i = 0; i < BLOCK; i++) {
+            mix_l[i] = (mix_l[i] * 13107) >> 15;
+            mix_r[i] = (mix_r[i] * 13107) >> 15;
+        }
     fxbus_process();
     reverb_process();
 }

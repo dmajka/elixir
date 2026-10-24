@@ -513,7 +513,7 @@ Press **ARP**. The white keys act **while held**; **SHIFT + key latches** it on 
 
 | Key | Name | Does |
 |---|---|---|
-| 1–7 | rolls | Roll the track at the roll rate (PERF: MORE page). While a roll is held, KNOB 3 sweeps its rate (below). |
+| 1–7 | rolls | Roll the track at the roll rate (PERF: MORE page). While a roll is held, KNOB 3 sweeps its rate (below). On the PERFORM 2 pages these keys are DRILL (below). |
 | 8 | **FILL** | Every step plays whatever its chance; FILL conditions play |
 | 9 | **RPT** | **Repeat:** the sequencer loops its position at the repeat length (1/4, 1/8, 1/16, 1/32), starting on that grid. When you let go, the pattern carries on where it would have been. |
 | 10 | **FRZ** | **Freeze:** the FX bus's delay loops what it holds (input off, feedback 100%). Needs the FX bus on DELAY; the longest loop is about 0.74 s. |
@@ -538,6 +538,9 @@ The screen shows all 16 keys (lit: on, outlined: latched), the repeat length, th
 | MACROS | Macro 1 | Macro 2 | Macro 3 | Macro 4 |
 | MACRO SETUP | Macro (1–4) | Target | Min | Max |
 | PERFORM: MORE | Roll rate | Shuffle | All-voice sample rate | Tape time |
+| PERFORM 2 | Tempo | DJ filter | Repeat | Morph |
+| PERFORM 2: SETUP | Drill | Jitter | Cuts | Pump |
+| PERFORM 2: SETUP 2 | Comb (note) | Comb fb | Crush | Reverse (length) |
 
 - **DJ filter:** off in the middle; left a low-pass on the whole output, right a high-pass.
 - **Macros:** each macro knob moves one parameter between its Min and Max (Max below Min turns it the other way). Set them up on MACRO SETUP: pick the macro, its target (any lockable parameter), Min and Max. Turning a macro while recording writes locks, as any knob does.
@@ -545,6 +548,27 @@ The screen shows all 16 keys (lit: on, outlined: latched), the repeat length, th
 - **Roll sweep:** while a roll key is held (or latched) on the PERFORM page, KNOB 3 turns from Repeat into **Roll**: a smooth sweep from 1/4 to 1/192, off the grid. Turn it up while holding a kick for a drum-and-bass build, or down for a stutter that slows to a stop. SHIFT + KNOB 3 sets the gridded roll rate instead. Setting the roll rate on PERFORM: MORE puts rolls back on the grid. The swept rate is not saved.
 
 Macros, the repeat length and the tape time are saved with the project. The DJ filter starts in the middle at power-on.
+
+### PERFORM 2: the second bank
+
+Turn SELECT on to **PERFORM 2**. While a PERFORM 2 page is on screen, the 16 white keys play a second set of effects, picked with Aphex Twin, Autechre, microhouse and dub techno in mind. The black keys (mutes) and the bar keys (repeat length) work as before. Hold a key, or latch it with SHIFT, just as on the first bank. Effects latched in either bank keep running when you change pages, and a key always lets go in the bank it was pressed in.
+
+| Key | Name | Does |
+|---|---|---|
+| 1–7 | **DRILL** | The track's hits become random fast ratchets: 2 to 8 hits at 1/32, 1/48 or 1/64, each with a random velocity and a pitch step of up to ±2 semitones. Drill'n'bass on any track. |
+| 8 | **HLF** (HALF) | Half time: the sequencer at half speed, the sounds unchanged |
+| 9 | **JIT** (JITTER) | Each hit lands late by a random amount, up to a 32nd; a flam's hits move together |
+| 10 | **CUT** (CUTS) | The output is cut in and out on a random 1/32 pattern, with tiny fades: clicks and cuts |
+| 11 | **SHT** (SHORT) | Every voice's decay cut to a click |
+| 12 | **PMP** (PUMP) | Every track but D1 ducks at each D1 hit and comes back over an eighth note: sidechain pumping |
+| 13 | **RES** (COMB) | A tuned comb resonator on the output: the drums ring at the Comb note, like a chord on every hit |
+| 14 | **SPC** (SPACE) | The reverb's tail held so it keeps going (a pad) and the dry sound dipped. Raise the reverb sends first. |
+| 15 | **CRS** (CRUSH) | Fewer bits and a lower sample rate on the output |
+| 16 | **REV** (REVERSE) | The last 1/16, 1/8 or 1/4 (the Reverse setting, 0.25 s at most) played backwards, over and over while held |
+
+**PERFORM 2: SETUP** and **SETUP 2** set how strong each one is: **Drill** (how many hits a drill can have), **Jitter** (the most it delays), **Cuts** (how many 32nds are cut), **Pump** (its depth), **Comb** (its note, C1–C7) and **Comb fb** (how long it rings), **Crush** (bits and rate together), **Reverse** (1/16, 1/8, 1/4). They are saved with the project.
+
+COMB, CUTS and CRUSH act on the whole output after the DJ filter, in that order; REVERSE plays what came out of them. PUMP, SHORT and DRILL act on the voices, and HALF and JITTER on the sequencer, so MIDI out follows them too.
 
 ---
 

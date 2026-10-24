@@ -284,6 +284,9 @@ static void proj_write_payload(void)
     }
     pw_byte(pfs.repeat);
     pw_byte(pfs.tape);
+    pw_bytes("KPF2", 4);                            /* PERFORM 2's settings (0.6) */
+    pw_byte(NPF2SET);
+    pw_bytes(&pfs.drill, NPF2SET);
 }
 
 /* a version-2 lock code: Kettle's parameters were at the numbers the LXR leaves free (247..254: PAR_FX_SEND1 ..,
@@ -473,6 +476,17 @@ static int proj_read_payload(uint32_t ver)
             }
             pfs.repeat = (uint8_t)(pr_byte() & 3u);
             pfs.tape = (uint8_t)(pr_byte() & 127u);
+        }
+    }
+    if (!pr.err && pr.pos + 4u <= pr.end) {
+        pr_bytes(tag, 4);
+        if (!memcmp(tag, "KPF2", 4)) {
+            n = pr_byte();
+            for (i = 0; i < n; i++) {
+                uint32_t v = pr_byte();
+                if (i < NPF2SET)
+                    (&pfs.drill)[i] = (uint8_t)(i == 4u ? clamp32((int32_t)v, 24, 96) : i == 7u ? v % 3u : v & 127u);
+            }
         }
     }
     return pr.err;
