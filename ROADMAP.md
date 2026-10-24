@@ -331,6 +331,78 @@ A second engine for the three DRUM voices: instead of the LXR's oscillators, a s
 
 **Rule for this phase:** anything that turns out much harder than planned is noted here and skipped, not forced; we come back to it later.
 
+## Phases 6–9: refinements (planned 2026-10-24)
+
+The user's list (October 24): the name and the repository, the physical models' sound, LXR-02 kits on the unit, backing up what's on the unit, and checking that Kettle has what makes people love the LXR-02, not only its engine.
+
+**Name (decided):** Kettle stays. The LXR firmware's licence terms (its README and NOTICE.md, GPL-3.0 section 7(e)) don't allow "LXR" in a firmware's name without Erica Synths' written permission; truthful compatibility statements are fine. The code is at https://github.com/dmajka/kettle (`REPO` in `web/make_site.py`).
+
+**Kits (decided):** the factory and Hrtl kits aren't in the GPL source and come with no licence to redistribute, so: (1) an import tool reads the user's own .SND files, and (2) a built-in bank is made from a local kit folder at build time, behind a build flag, off in public builds.
+
+### Phase 6: the physical models, revisited (0.7)
+
+Reported: BELL and others get very distorted, and some don't sound musical.
+
+Measured (a host probe, every model × exciter × pitch × position): a full-velocity hit peaked anywhere from 0.04× to 6.2× full scale, a 44 dB spread, and clipped hard inside the model. The causes:
+- The six modes each rang up to about full scale and were added before a hard 16-bit clip.
+- The exciter was a fixed length in samples: a soft mallet was nearly silent on high notes, and the shortest noise burst rang 6× over.
+- TUBE's soft pluck was 40 dB too quiet (0.01×).
+- Retriggering a long ring stacked hits.
+
+Plan:
+- The exciter sized to the hit's pitch (a soft pulse up to 3/4 of a period, area kept; noise by energy).
+- The modes' shares normalised to a fixed sum.
+- A new hit damps what still rings by half.
+- A soft knee instead of the hard clip.
+- TUBE: a one-period pluck at a fixed peak, its noise darkened by EXCITER.
+- A test: every model, exciter and pitch within 0.15–0.95 of full scale.
+- Then the user listens (before/after WAVs). Any model that still isn't musical is removed in a later step.
+
+### Phase 7: the Kettle library — backup, restore and kit import over USB (0.7)
+
+Today nothing on the unit can be copied off it. Kettle's projects sit in flash at 0x97000–0xDEFFF. Kettle's own updates don't touch that area, but V15 or another firmware may, and nothing protects against a bad flash.
+
+- **Protocol:** SysEx on USB, beside the updater's (F0 7D 'K' 'T' cmd … F7, 7-bit packed, 256-byte chunks, a checksum per message). Commands:
+  - info: version and the project slots' names, sizes and versions
+  - read a project's image
+  - write a project's image to a slot (a free physical slot; header last, as `proj_write` does, so a torn restore leaves the old copy)
+  - write a kit: an LXR .SND file's 8 + 247 bytes into a kit slot of the session
+  - save the session into a slot (so a backup includes what's playing)
+- **Page:** `web/library.html` on the site (Web MIDI, Chrome/Edge):
+  - Backup: every project to a file, or one project.
+  - Restore: a file into a slot.
+  - Import kits: pick .SND files or a whole LXR project folder; they fill kit slots from a chosen number; then SAVE PROJECT on the unit (or let AUTO keep them).
+- **Tests:** the device side in a host test; the page's protocol code against the device code through a host bridge (no hardware needed).
+
+### Phase 8: LXR-02 kits on the unit (0.7)
+
+- `tools/gen_factory_kits.py KIT_DIR` reads .SND files from a local folder (the factory SD image's PROJ00, Hrtl's UNTZ and DLC kits) into `build/gen/factory_kits.h`, which is never committed.
+- `KETTLE_KITS_DIR=… ./build.sh` (and `web/emu/build.sh`) builds them in. Without it, the build is as today.
+- With the bank built in:
+  - A fresh unit (no session) starts with the bank's first 64 kits in its slots.
+  - LOAD → FACTORY copies them in again on request.
+  - The version shows "+K".
+- `web/make_site.py` refuses to publish a "+K" build.
+- The import tool (Phase 7) is the public route.
+
+### Phase 9: the LXR-02's live feel (0.8)
+
+The audit (Kettle against the LXR-02 manual and firmware):
+- **Already ported:** every voice parameter, per-voice LFOs (synced, retriggered from any track, any target), velocity to any parameter, two locks a step, knob recording, rolls (recorded under REC; a single hit when stopped), morph, global sample rate, shuffle, mutes with PERF's unmute-all, sound editing from PERF with the keys still playing, kit change with patterns, reload, songs, Euclid, chromatic MIDI play (note ANY), step notes from a MIDI keyboard.
+
+What's missing is mostly what you meet first:
+- **The kits:** the LXR-02's sound in demos is hrtl's kits, which lean on LFOs, velocity routing and locks. Kettle starts on the init kit. (Phases 7–8.)
+- **Demo patterns:** the factory and DLC projects come with patterns.
+- **Faders:** six volume faders, ridden while playing. The FM-1 has four knobs and the mixer is three presses away.
+- **Playing it:** the LXR's voices are played melodically from MIDI. The FM-1 is a keyboard, but Kettle's keys are steps.
+
+Planned:
+- **9a. LXR patterns:** .PAT import in the library, so a whole LXR project (kits, patterns, songs) becomes a Kettle project. The demo patterns come with it.
+- **9b. MIX in PERF:** a PERF page with the voices' volumes (two pages: D1 D2 D3 SN / CY HH, FX return, reverb return), so levels can be ridden like the faders.
+- **9c. KEYS:** the white and black keys play the selected voice chromatically, as an instrument; REC writes the notes into steps (note and velocity), as MIDI notes do now.
+- **9d. Key velocity:** the FM-1's keys have no velocity. A setting gives the velocity of the keys and rolls, and SHIFT plays an accent.
+- After 9: the user compares with LXR-02 videos and lists what still feels missing.
+
 ## Later / bigger
 
 - **303-style acid track:** about 33 KB of pattern memory at 64 patterns (less at 32), 1–2 voices' worth of CPU, and real UI work for track selection and note entry. Check charlesvestal's fm1-x0x (FM-1 303 firmware) and its licence first.

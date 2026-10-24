@@ -368,12 +368,14 @@ The three DRUM voices have a second engine: instead of the LXR's oscillators, a 
 - **Damping:** how much faster the higher modes die. 0: they all ring as long as the lowest; high: a dull thud after the first instant.
 - **Material:** stretches the mode ratios. Below 64 they draw together (softer, wooden); above, they spread (glassy, metallic).
 - **Position:** where it's struck, from the edge (0) to the centre (127). Each mode is loudest where it moves most, so moving the strike point brings modes in and out; near the edge the fundamental is quieter.
-- **Exciter:** what strikes it. 0 to 63: a pulse from a soft thump (0) to a hard click (63). 64 to 127: a burst of noise, longer as it rises (a brush or a scrape).
+- **Exciter:** what strikes it. 0 to 63: a pulse from a soft thump (0) to a hard click (63). 64 to 127: a burst of noise, longer as it rises (a brush or a scrape). A soft thump brings out the lower modes, a click all of them. The level stays about the same whatever the exciter, pitch or position.
 - **Tension:** a hard hit stretches a drum head, so the pitch starts high and falls back in about 50 ms. Up to an octave at 127, scaled by velocity.
 
 **Velocity** sets how hard it's struck: louder, and brighter, since a harder hit brings out the higher modes.
 
-**TUBE** is a string or pipe (a Karplus-Strong loop): Decay is how long it sustains, Damping how dark it gets as it rings. It ignores Material and Position.
+**TUBE** is a string or pipe (a Karplus-Strong loop): Decay is how long it sustains, Damping how dark it gets as it rings. Exciter sets the pluck: below 64 a pulse, from soft and round (0) to sharp (63); from 64 a noise burst, dark at 64 and bright at 127. It ignores Material and Position.
+
+A new hit damps what is still ringing by half, as a mallet does, so fast repeats on a long decay don't pile up. Loud hits bend softly into full scale instead of clipping.
 
 The model replaces the oscillators, transient and amp EG: the model's own Decay sets how long the voice sounds. Everything after the oscillator still applies: the filter, drive and shape, bits, tilt, sends, LFO, random per hit and cross modulation. The model's settings are part of the kit and can be locked per step; Model itself doesn't morph: the voice keeps its own kit's engine while the other knobs morph.
 

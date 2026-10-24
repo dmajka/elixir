@@ -1470,6 +1470,41 @@ static void phase5d(void)
         printf("  TUBE: period %u samples (%.1f for %.1f Hz)\n", best, period, f0);
         check(fabs(best - period) < 2.0 || fabs(best - 2.0 * period) < 3.0, "MODEL: TUBE at the voice's pitch");
     }
+    /* 0.7: the level of a hit, whatever the model, exciter and pitch: 0.15 .. 0.95 of full scale (0.6: 0.04 .. 6) */
+    {
+        static const uint32_t EXC[6] = {0, 32, 63, 64, 100, 127};
+        static const double HZ[3] = {55, 220, 1000};
+        double lo = 9, hi = 0;
+        uint32_t e, f, i, n;
+        for (md = 1; md <= 5u; md++)
+            for (e = 0; e < 6u; e++)
+                for (f = 0; f < 3u; f++) {
+                    voice_t v;
+                    double pk = 0;
+                    memset(&v, 0, sizeof v);
+                    memset(&mdl[1], 0, sizeof mdl[1]);
+                    mdl[1].type = (uint8_t)md;
+                    mdl[1].dec = 64;
+                    mdl[1].damp = 40;
+                    mdl[1].mat = 64;
+                    mdl[1].pos = 40;
+                    mdl[1].exc = (uint8_t)EXC[e];
+                    v.osc.inc = (uint32_t)(HZ[f] / FS * 4294967296.0);
+                    model_trigger(1, 127, v.osc.inc);
+                    for (n = 0; n < FS / 2u; n += BLOCK) {
+                        int16_t b[BLOCK];
+                        model_block(1, &v, b);
+                        for (i = 0; i < BLOCK; i++)
+                            pk = fabs(b[i]) > pk ? fabs(b[i]) : pk;
+                    }
+                    pk /= 32768.0;
+                    lo = pk < lo ? pk : lo;
+                    hi = pk > hi ? pk : hi;
+                }
+        memset(&mdl[1], 0, sizeof mdl[1]);
+        printf("  a hit's peak over every model, exciter and pitch: %.2f .. %.2f of full scale\n", lo, hi);
+        check(lo > 0.15 && hi < 0.95, "MODEL: a hit's level");
+    }
     /* TENSION: the pitch up at the hit, falling back */
     par_set(PAR_MODEL1, 1);
     par_set(PAR_MTENS1, 127);

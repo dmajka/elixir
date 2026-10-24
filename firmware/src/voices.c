@@ -100,6 +100,7 @@ typedef struct {
     int32_t amp[MD_NMODE];                              /* this hit's share of each mode, Q15 */
     uint32_t ex_n, ex_len;                           /* the exciter: samples left, its length */
     int32_t ex_amp, ten;                             /* .. its peak (noise: x 1); TENSION's pitch, Q16 over 1 */
+    int32_t ex_lp, ex_k;                             /* .. the noise's low-pass (TUBE: the pluck's brightness) */
     uint8_t ex_noise;
     uint32_t tw;                                     /* TUBE: the write index, the loop's low-pass */
     int32_t tlp;
@@ -117,43 +118,100 @@ static int32_t sin_q30(uint32_t ph)
     t = (1 << 30) - ((((x2 * 178956971) >> 30) * t) >> 30);
     return (int32_t)((x * t) >> 30);
 }
-static void model_trigger(uint32_t vi, uint32_t vel)
+static uint32_t isqrt32(uint32_t x)
+{
+    uint32_t r = 0, b = 1u << 30;
+    while (b > x)
+        b >>= 2;
+    while (b) {
+        if (x >= r + b) {
+            x -= r + b;
+            r = (r >> 1) + b;
+        } else {
+            r >>= 1;
+        }
+        b >>= 2;
+    }
+    return r;
+}
+/* a mode's ratio to the pitch, MATERIAL's stretch applied (Q16) */
+static int32_t model_ratio(const model_t *m, uint32_t k)
+{
+    int32_t mat = 65536 + ((int32_t)m->mat - 64) * 310;   /* MATERIAL: the ratios to the power 0.7 .. 1.3, Q16 */
+    return exp2_q16((int32_t)(((int64_t)MD_LOG2[(m->type - 1u) & 3u][k] * mat) >> 16));
+}
+/* 0.7: a hit's level no longer depends on the pitch, the exciter or POSITION (0.6 ranged from 0.04 to 6x full
+ * scale, clipped hard). The exciter is sized to the pitch's period (inc: the hit's, without the pitch EG): a soft
+ * pulse lasts up to 3/4 of a period and keeps its area, a noise burst keeps its energy (1 / sqrt of its length);
+ * the modes' shares add up to MD_SUM; a new hit damps what still rings by half (the mallet on the body). TUBE: a
+ * pluck one period long (a half-sine, or noise darkened by EXCITER), at a fixed peak. */
+#define MD_SUM 70000                                 /* the modes' shares together, Q15 (2.1) */
+static void model_trigger(uint32_t vi, uint32_t vel, uint32_t inc)
 {
     model_t *m = &mdl[vi];
     int32_t v15 = (int32_t)(vel * 32767u / 127u), pp = 1311 + m->pos * 245;   /* the strike point 0.02 .. 0.5, Q16 */
-    uint32_t k;
-    if (m->exc < 64u) {                              /* a pulse: 190 samples (a thump) .. 1 (a click) */
-        m->ex_len = 1u + (63u - m->exc) * 3u;
+    uint32_t k, per = 0xFFFFFFFFu / (inc >> 8 ? inc >> 8 : 1u);   /* the period, Q8 samples */
+    int32_t pos[MD_NMODE], sum = 0;
+    per >>= 8;
+    per = per < 2u ? 2u : per > TUBE_LEN - 2u ? TUBE_LEN - 2u : per;
+    if (m->type == MD_TUBE) {                        /* a pluck: one period */
+        m->ex_noise = m->exc >= 64u;
+        m->ex_len = m->ex_noise ? per : 1u + (per - 1u) * (63u - m->exc) / 63u;
+        m->ex_amp = v15 * 3 / 5;
+        m->ex_k = m->ex_noise ? 3000 + (int32_t)(m->exc - 64u) * 472 : 32767;
+        if (m->ex_noise) {                           /* (darker noise is quieter: up to x2.3 back) */
+            int32_t d = (int32_t)(127u - m->exc) * 1024 / 63;
+            m->ex_amp = (int32_t)(((int64_t)m->ex_amp * (1024 + (1331 * d >> 10) * d / 1024)) >> 10);
+        }
+        for (k = 0; k < TUBE_LEN; k++)
+            tube_line[vi][k] >>= 1;
+        m->tlp >>= 1;
+    } else if (m->exc < 64u) {                       /* a pulse: 3/4 of a period (a thump, at most 300) .. 1 (a click) */
+        uint32_t l = (per * 3u >> 2) * (63u - m->exc) / 63u;
+        m->ex_len = l < 1u ? 1u : l > 300u ? 300u : l;
         m->ex_noise = 0;
-        m->ex_amp = m->ex_len > 1u ? v15 * 3 / (int32_t)(m->ex_len + 1u) : v15;   /* (its area ~ the click's x 2) */
-    } else {                                         /* a noise burst: 1.5 .. 7 ms */
+        m->ex_amp = m->ex_len > 1u ? v15 * 51472 / (int32_t)(m->ex_len << 15) : v15;   /* (area v15: x pi / 2 / l) */
+        {   /* a soft pulse rings the fundamental only: up to x4 (its share of the modes), by its length's square */
+            int32_t fr = (int32_t)(m->ex_len * 1024u / (per * 3u >> 2 ? per * 3u >> 2 : 1u));   /* Q10 */
+            fr = fr > 1024 ? 1024 : fr;
+            m->ex_amp = (int32_t)(((int64_t)m->ex_amp * (1024 + (3 * fr * fr >> 10))) >> 10);
+        }
+    } else {                                         /* a noise burst: 1.5 .. 7 ms, its energy as a click's */
         m->ex_len = 64u + (m->exc - 64u) * 4u;
         m->ex_noise = 1;
-        m->ex_amp = v15 * 3 / (int32_t)(1u + m->ex_len / 16u);
+        m->ex_amp = (int32_t)((uint32_t)v15 * 55u / isqrt32(m->ex_len << 10));   /* (1.73 / sqrt l: rms 0.58) */
+        m->ex_k = 32767;
     }
     m->ex_n = m->ex_len;
-    for (k = 0; k < MD_NMODE; k++) {                 /* POSITION: sin(pi p (k + 1)); harder: the higher modes louder */
+    m->ex_lp = 0;
+    for (k = 0; k < MD_NMODE; k++) {                 /* POSITION: sin(pi p (k + 1)) */
         int32_t a = sine_at(((uint32_t)pp * (k + 1u) << 15) + 0x40000000u);   /* (the table: -cos) */
         a = a < 0 ? -a : a;
         a = a < 3277 ? 3277 : a;
-        m->amp[k] = (a * (32768 - (32768 - v15) * (int32_t)k / 8)) >> 15;
+        if (m->type != MD_TUBE && ((uint64_t)inc * (uint32_t)model_ratio(m, k) >> 16) >= 1932735283u)
+            a = 0;                                   /* (past 0.45 FS: silent, so not counted) */
+        pos[k] = a;
+        sum += a;
+    }
+    for (k = 0; k < MD_NMODE; k++) {                 /* .. shares adding to MD_SUM; harder: the higher modes louder */
+        int32_t a = sum ? (int32_t)((int64_t)pos[k] * MD_SUM / sum) : 0;
+        m->amp[k] = (int32_t)(((int64_t)a * (32768 - (32768 - v15) * (int32_t)k / 8)) >> 15);
+        if (m->type != MD_TUBE) {                    /* a new hit damps what rings */
+            m->y1[k] >>= 1;
+            m->y2[k] >>= 1;
+        }
     }
     m->ten = (int32_t)(m->tens * (uint32_t)v15 >> 7);   /* up to + an octave */
-    if (m->type == MD_TUBE) {
-        memset(tube_line[vi], 0, sizeof tube_line[vi]);
-        m->tlp = 0;
-    }
 }
 /* the block's coefficients from the voice's pitch (inc: its oscillator's, with the pitch EG and random) */
 static void model_coefs(model_t *m, uint32_t inc)
 {
     uint32_t k, om0 = OM_MS / (uint32_t)((20 * exp2_q16(m->dec * 3922)) >> 16), lim = 1932735283u;  /* 0.45 */
-    int32_t mat = 65536 + ((int32_t)m->mat - 64) * 310;   /* MATERIAL: the ratios to the power 0.7 .. 1.3, Q16 */
     if (m->type == MD_BELL || m->type == MD_PLATE)
         om0 >>= 1;                                   /* (they ring twice as long) */
     inc = (uint32_t)(((uint64_t)inc * (uint32_t)(65536 + m->ten)) >> 16);
     for (k = 0; k < MD_NMODE; k++) {
-        int32_t l2 = MD_LOG2[(m->type - 1u) & 3u][k], ratio = exp2_q16((int32_t)(((int64_t)l2 * mat) >> 16));
+        int32_t ratio = model_ratio(m, k);
         uint64_t ik64 = ((uint64_t)inc * (uint32_t)ratio) >> 16;
         uint32_t ik = (uint32_t)ik64, om, r;
         int32_t sh, c, sw;
@@ -180,13 +238,24 @@ static int32_t model_exc(model_t *m)                 /* the exciter's next sampl
     if (!m->ex_n)
         return 0;
     m->ex_n--;
-    if (m->ex_noise)
+    if (m->ex_noise) {
         x = (int32_t)(int16_t)(noise_next() >> 16) * m->ex_amp >> 15;
-    else
+        m->ex_lp += ((x - m->ex_lp) * m->ex_k) >> 15;
+        x = m->ex_lp;
+    } else
         x = m->ex_len == 1u ? m->ex_amp   /* (the table: -cos; a quarter on, sin) */
                             : (sine_at((m->ex_len - m->ex_n) * (0x80000000u / m->ex_len) + 0x40000000u) * m->ex_amp)
                                   >> 15;
     return x;
+}
+static int32_t soft_clip(int32_t x)                 /* linear to 0.75 of full scale, then bending to it */
+{
+    int32_t a = x < 0 ? -x : x, d;
+    if (a <= 24576)
+        return x;
+    d = a - 24576;
+    a = 24576 + (int32_t)((uint32_t)d * 8191u / (uint32_t)(d + 8192));
+    return x < 0 ? -a : a;
 }
 static void model_block(uint32_t vi, const voice_t *v, int16_t *buf)
 {
@@ -208,7 +277,7 @@ static void model_block(uint32_t vi, const voice_t *v, int16_t *buf)
             uint32_t a = (m->tw + TUBE_LEN - di) % TUBE_LEN, b = (a + TUBE_LEN - 1u) % TUBE_LEN;
             int32_t y = ln[a] + (((ln[b] - ln[a]) * (int32_t)df) >> 8);
             m->tlp += ((y - m->tlp) * kd) >> 15;
-            y = sat16(((m->tlp * g) >> 15) + (model_exc(m) >> 1));
+            y = sat16(((m->tlp * g) >> 15) + model_exc(m));
             ln[m->tw] = (int16_t)y;
             m->tw = m->tw + 1u < TUBE_LEN ? m->tw + 1u : 0u;
             buf[i] = (int16_t)y;
@@ -226,7 +295,7 @@ static void model_block(uint32_t vi, const voice_t *v, int16_t *buf)
             m->y1[k] = y;
             out += y;
         }
-        buf[i] = (int16_t)sat16(out >> 10);
+        buf[i] = (int16_t)soft_clip(out >> 10);
     }
 }
 
@@ -334,8 +403,6 @@ static void voice_trigger(uint32_t track, uint32_t vel, uint32_t note)
     lfo_retrigger(vi);
     modnode_update(&velo_mod[vi], (int32_t)(vel * 65536u / 127u));
     v->velo = (int32_t)(vel * 32768u / 127u);
-    if (vi <= V_DRUM3 && mdl[vi].type)                   /* (0.6: a model's strike) */
-        model_trigger(vi, vel);
     if (vi <= V_DRUM3) {                                 /* Drum_trigger */
         osc_reset_phase(&v->osc, trans_offset(v), 1);
         osc_reset_phase(&v->mod, 65536u, 1);
@@ -361,6 +428,8 @@ static void voice_trigger(uint32_t track, uint32_t vel, uint32_t note)
     /* random per hit: pitch (up to an octave either way, the amount squared: fine at small amounts), decay (x0.5 ..
      * x2 of its time), cutoff (up to half its range either way) */
     v->rp = v->rnd[0] ? (uint32_t)exp2_q16(hit_rand() * v->rnd[0] * v->rnd[0] * 2 / 16129) : 65536u;   /* (Q16 oct) */
+    if (vi <= V_DRUM3 && mdl[vi].type)                   /* (0.6: a model's strike, at the hit's pitch) */
+        model_trigger(vi, vel, (uint32_t)(((uint64_t)v->osc.note_inc * v->rp) >> 16));
     if (v->rnd[1]) {
         uint32_t base = vi == V_HAT ? v->aeg.dec : v->dec_base;
         int32_t y = hit_rand() * v->rnd[1] / 127 * 2;   /* (Q16 octaves of time) */
