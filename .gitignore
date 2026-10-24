@@ -1,0 +1,8 @@
+# generated: ./build.sh, web/emu/build.sh, web/make_site.py (the site goes to the gh-pages branch:
+# tools/publish_site.sh)
+/build/
+# the local Python environment (build.sh: PYTHON=.venv/bin/python)
+/.venv/
+__pycache__/
+*.pyc
+.DS_Store
