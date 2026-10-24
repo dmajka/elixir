@@ -24,8 +24,14 @@ enum { S_OSC, S_AEG, S_MOD, S_FM, S_CLICK, S_FILTER, S_LFO, S_MIX, S_SHAPE, S_RA
 #define NSPG 24                                      /* the sound pages a track can have (sections x halves) */
 static const char *const SECT_NAME[NSECT] = {"OSCILLATOR", "AMP EG", "MOD EG / VELO", "FM", "TRANSIENT", "FILTER",
                                              "LFO", "MIX", "SHAPE", "RANDOM PER HIT", "CROSS MOD / CHOKE", "MODEL"};
-enum { IO_KIT, IO_PATTERN, IO_SONG, IO_MORPH, IO_PROJECT, NIO };
-static const char *const IO_NAME[NIO] = {"KIT", "PATTERN", "SONG", "MORPH", "PROJECT"};
+enum { IO_KIT, IO_PATTERN, IO_SONG, IO_MORPH, IO_PROJECT, IO_FACTORY, NIO };   /* (FACTORY: LOAD, a kit bank) */
+static const char *const IO_NAME[NIO] = {"KIT", "PATTERN", "SONG", "MORPH", "PROJECT", "FACTORY"};
+#if KETTLE_FACTORY_KITS
+#define IO_LOAD_LAST IO_FACTORY
+#else
+#define IO_LOAD_LAST IO_PROJECT
+#define FACTORY_NKITS 0u
+#endif
 
 /* the keys: k = semitones above F3 (fm1_in.notes bit k) */
 static const uint8_t WHITE_KEY[16] = {0, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 24, 26};
@@ -507,9 +513,10 @@ static uint32_t vp_max(uint32_t p)
     case VP_FX_SUB:
         return fx.type == FX_DRIVE ? 2u : fx.type == FX_RING || fx.type == FX_COMP ? 5u
              : fx.type == FX_DELAY ? 1u : 0u;
-    case VP_IO_TYPE: return ui.mode == M_SAVE ? NIO - 1u : NIO - 1u;
+    case VP_IO_TYPE: return ui.mode == M_SAVE ? IO_PROJECT : IO_LOAD_LAST;
     case VP_IO_SLOT:
         return ui.io_type == IO_PROJECT ? PROJ_USER - 1u : ui.io_type == IO_PATTERN ? NUM_PATTERN - 1u
+             : ui.io_type == IO_FACTORY ? FACTORY_NKITS          /* (the last: all of them into the slots) */
              : ui.io_type == IO_SONG ? NUM_SONGS - 1u : NUM_KITS - 1u;
     case VP_NAME_POS: return 7;
     case VP_NAME_CHAR: return 126;
@@ -892,7 +899,7 @@ static void io_open(uint32_t m, uint32_t type)
     mode_set(m);
     ui.io_type = (uint8_t)type;
     ui.io_slot = type == IO_KIT || type == IO_MORPH ? kit_loaded : type == IO_PATTERN ? sq.active
-               : type == IO_SONG ? sq.song : (pj.loaded < PROJ_USER ? pj.loaded : 0u);
+               : type == IO_SONG ? sq.song : type == IO_FACTORY ? 0u : (pj.loaded < PROJ_USER ? pj.loaded : 0u);
     ui.io_naming = 0;
     if (type != IO_PROJECT)
         ui.bank = (uint8_t)(ui.io_slot / 16u);
@@ -967,6 +974,18 @@ static void io_ok(void)
         kit_load_ram(s);
         ui_message("KIT LOADED");
         break;
+#if KETTLE_FACTORY_KITS
+    case IO_FACTORY:
+        if (s >= FACTORY_NKITS) {                     /* ALL: the bank's first 64 into the slots */
+            kit_factory_fill();
+            kit_load_ram(kit_loaded);
+            ui_message("FACTORY KITS IN SLOTS 1-64");
+        } else {
+            kit_factory_load(s);
+            ui_message("FACTORY KIT LOADED");
+        }
+        break;
+#endif
     case IO_MORPH:
         kit_load_morph(s);
         ui_message("MORPH TARGET LOADED");

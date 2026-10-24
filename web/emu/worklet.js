@@ -94,6 +94,12 @@ if (typeof registerProcessor === "function") {
       else if (m.type === "master") ex.web_master(m.value | 0);
       else if (m.type === "midi") ex.web_midi(m.data[0] | 0, m.data[1] | 0, m.data[2] | 0);
       else if (m.type === "visible") this.period = m.on ? 1 / 30 : 1 / 4;
+      else if (m.type === "lib") {                    // 0.7: a library message (library.c), answered at once
+        new Uint8Array(ex.memory.buffer).set(m.wire, ex.web_lib_buf());
+        const n = ex.web_lib_in(m.wire.length);
+        const wire = n ? new Uint8Array(ex.memory.buffer, ex.web_lib_out(), n).slice() : null;
+        this.port.postMessage({ type: "lib", id: m.id, wire });
+      }
     }
 
     publish() {

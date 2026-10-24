@@ -1,0 +1,241 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only
+     Kettle's library page (0.7): back up and restore the FM-1's projects, import LXR-02 kits (.SND), export kits.
+     Talks to firmware/src/library.c over Web MIDI SysEx (web/library.js). web/make_site.py puts it at library/. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kettle library</title>
+<style>
+  :root { --bg: #fff; --fg: #000; --dim: #6b6b6b; --line: #ddd; --warn: #a33a00; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #000; --fg: #fff; --dim: #999; --line: #333; --warn: #ff9a5c; }
+  }
+  :root[data-theme="dark"] { --bg: #000; --fg: #fff; --dim: #999; --line: #333; --warn: #ff9a5c; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 48px 16px; }
+  h1 { font-size: 28px; font-weight: 600; margin: 0; }
+  h2 { font-size: 17px; font-weight: 600; margin: 36px 0 8px; padding-top: 20px; border-top: 1px solid var(--line); }
+  p { margin: 0 0 14px; }
+  a { color: inherit; }
+  nav { margin: 6px 0 28px; }
+  nav a { margin-right: 16px; }
+  button { font: inherit; background: var(--fg); color: var(--bg); border: 0; padding: 8px 20px; cursor: pointer; }
+  button.alt { background: none; color: var(--fg); border: 1px solid var(--fg); padding: 4px 12px; font-size: 14px; }
+  button:disabled { opacity: .3; cursor: default; }
+  select, input[type=number] { font: inherit; font-size: 14px; }
+  input[type=file] { font-size: 14px; max-width: 100%; }
+  .small { color: var(--dim); font-size: 13px; }
+  .warn { color: var(--warn); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 14px; }
+  td, th { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; color: var(--dim); }
+  .kits { columns: 4 120px; font-size: 13px; margin: 0 0 14px; padding: 0; list-style: none; }
+  .kits li { break-inside: avoid; }
+  .kits a { text-decoration: none; }
+  .kits .n { color: var(--dim); display: inline-block; width: 2em; }
+  #status { min-height: 1.6em; font-weight: 600; }
+  progress { width: 100%; height: 8px; display: block; accent-color: var(--fg); margin: 8px 0; }
+  .off { opacity: .35; pointer-events: none; }
+  label { margin-right: 12px; white-space: nowrap; }
+  footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Kettle library</h1>
+  <p>Back up what's on your FM-1, put it back, and bring in kits from an LXR-02.</p>
+  <nav><a href="../">Install</a> <a href="../try/">Try it in the browser</a> <a href="../manual/">Manual</a></nav>
+  <p class="small">Chrome or Edge (Web MIDI). Kettle 0.7 or later on the FM-1, connected with a USB data cable. Close
+    other apps that use MIDI and allow MIDI (SysEx) when the browser asks.</p>
+  <p><button id="connect">Connect to Kettle</button></p>
+  <p id="status"></p>
+  <progress id="bar" max="1" value="0" hidden></progress>
+
+  <div id="dev" class="off">
+  <h2>Projects on the FM-1</h2>
+  <table><thead><tr><th>Slot</th><th>Name</th><th>Size</th><th></th></tr></thead><tbody id="slots"></tbody></table>
+
+  <h2>Back up</h2>
+  <p>Saves every project, and the session, to one file on this computer. Do this before installing other firmware
+    (V15 or another): Kettle's own updates keep your projects, other firmware may not.</p>
+  <p><label><input type="checkbox" id="savefirst" checked> first save what's on the unit now into the session slot</label></p>
+  <p><button id="backup">Back up everything</button></p>
+
+  <h2>Restore</h2>
+  <p>Puts a backup (or one project's file) back. The project that was in the slot before stays until the restore is
+    complete, so an interrupted restore loses nothing.</p>
+  <p><label>Into <select id="into">
+      <option value="same">the slots they came from</option>
+      <option value="0">Project 1</option><option value="1">Project 2</option>
+      <option value="2">Project 3</option><option value="3">Project 4</option>
+      <option value="4">the session (AUTO)</option></select></label>
+    <label><input type="checkbox" id="loadafter" checked> then load it</label></p>
+  <p><input type="file" id="restore" accept=".ktbk,.ktp"></p>
+
+  <h2>Import LXR-02 kits</h2>
+  <p>Pick .SND files from an LXR-02 SD card, or a whole project folder (PROJ00 …). They fill the kit slots of what's
+    playing, from the first slot on. Then save the project on the FM-1 (SAVE → PROJECT), or let AUTOSAVE keep them in
+    the session.</p>
+  <p><label>First slot <input type="number" id="first" min="1" max="64" value="1" style="width:4em"></label>
+    <label><input type="checkbox" id="skipinit" checked> leave out Init/empty kits</label>
+    <label><input type="checkbox" id="loadfirst" checked> load the first</label></p>
+  <p><label>Kit files <input type="file" id="sndfiles" accept=".snd,.SND" multiple></label></p>
+  <p><label>A folder <input type="file" id="snddir" webkitdirectory></label></p>
+  <p class="small">An LXR voice routed to the FX bus comes in as FX SEND 127 (the same sound). Kettle's own settings
+    (sends, reverb, shaping, models) start at their defaults.</p>
+
+  <h2>Kits on the FM-1</h2>
+  <p>Click a kit to download it as an LXR-02 .SND file (the LXR's parameters only: Kettle's own aren't in that
+    format).</p>
+  <ul class="kits" id="kits"></ul>
+  </div>
+
+  <footer class="small">
+    Kettle is free software (GPL-3.0), unofficial and not affiliated with or endorsed by Erica Synths, M-VAVE or
+    Hügelton Instruments. "Erica Synths" and "LXR-02" are trademarks of Erica Synths; "M-VAVE" and "FM-1" are
+    trademarks of their owner. Kits you import are yours to use; this page sends them only to your FM-1.
+  </footer>
+</main>
+<script type="module">
+import { Library, midiTransport, sndFiles, sndBytes, packBackup, unpackBackup, checkImage, SLOT_NAMES } from "./library.js";
+
+const $ = (id) => document.getElementById(id);
+const say = (s, warn = false) => { $("status").textContent = s; $("status").className = warn ? "warn" : ""; };
+const bar = (d, t) => { $("bar").hidden = !t; if (t) { $("bar").max = t; $("bar").value = d; } };
+let lib = null, info = null, busy = false;
+
+function download(bytes, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+const stamp = () => new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
+const safe = (s) => (s || "kettle").replace(/[^A-Za-z0-9_-]+/g, "_");
+
+async function job(fn) {
+  if (busy) return;
+  busy = true;
+  document.querySelectorAll("button, input, select").forEach((e) => (e.disabled = true));
+  try { await fn(); } catch (e) { say(e.message, true); } finally {
+    bar(0, 0);
+    busy = false;
+    document.querySelectorAll("button, input, select").forEach((e) => (e.disabled = false));
+  }
+}
+
+async function refresh() {
+  info = await lib.info();
+  const rows = info.slots.map((s, l) => `<tr><td>${SLOT_NAMES[l]}${info.loaded === l ? " ·" : ""}</td>` +
+    `<td>${s.exists ? s.name || "(no name)" : '<span class="small">empty</span>'}</td>` +
+    `<td>${s.exists ? (s.len / 1024).toFixed(1) + " KB" : ""}</td>` +
+    `<td>${s.exists ? `<button class="alt" data-get="${l}">Download</button> <button class="alt" data-load="${l}">Load</button>` : ""}</td></tr>`);
+  $("slots").innerHTML = rows.join("");
+  const names = await lib.kitNames(info.nkits);
+  $("kits").innerHTML = names.map((n, i) => `<li><span class="n">${i + 1}</span><a href="#" data-kit="${i}">` +
+    `${n.replace(/[<&]/g, "") || "–"}</a>${info.kitLoaded === i ? " ·" : ""}</li>`).join("");
+}
+
+$("connect").addEventListener("click", () => job(async () => {
+  if (!navigator.requestMIDIAccess) throw new Error("This browser has no Web MIDI: use Chrome or Edge.");
+  say("Asking for MIDI access …");
+  const access = await navigator.requestMIDIAccess({ sysex: true });
+  say("Looking for Kettle …");
+  const t = await midiTransport(access);
+  if (!t) throw new Error("Kettle 0.7 or later wasn't found. Is the FM-1 on, running Kettle, and connected by USB? " +
+    "Ports seen: " + ([...access.inputs.values()].map((i) => i.name).join(", ") || "none"));
+  lib = new Library(t);
+  await refresh();
+  $("dev").classList.remove("off");
+  say(`Connected: Kettle ${info.version} on ${t.name}.`);
+}));
+
+$("slots").addEventListener("click", (e) => {
+  const get = e.target.dataset.get, load = e.target.dataset.load;
+  if (get !== undefined) job(async () => {
+    const img = await lib.readProject(+get, bar);
+    download(img, `${safe(info.slots[+get].name)}-${stamp()}.ktp`);
+    say(`Downloaded ${SLOT_NAMES[+get]}.`);
+  });
+  if (load !== undefined && confirm(`Load ${SLOT_NAMES[+load]} on the FM-1? What's playing now is replaced.`)) job(async () => {
+    await lib.loadProject(+load);
+    await refresh();
+    say(`${SLOT_NAMES[+load]} loaded.`);
+  });
+});
+
+$("backup").addEventListener("click", () => job(async () => {
+  if ($("savefirst").checked) {
+    say("Saving the session …");
+    await lib.saveProject(4, "SESSION ");
+    info = await lib.info();
+  }
+  const entries = [];
+  for (let l = 0; l < info.nlog; l++) {
+    if (!info.slots[l].exists) continue;
+    say(`Reading ${SLOT_NAMES[l]} …`);
+    entries.push({ slot: l, img: await lib.readProject(l, bar) });
+  }
+  if (!entries.length) throw new Error("Nothing is saved on the FM-1 yet.");
+  download(packBackup(entries), `kettle-backup-${stamp()}.ktbk`);
+  say(`Backed up ${entries.length} (${entries.map((e) => SLOT_NAMES[e.slot]).join(", ")}).`);
+  await refresh();
+}));
+
+$("restore").addEventListener("change", (e) => {
+  const f = e.target.files[0];
+  e.target.value = "";
+  if (!f) return;
+  job(async () => {
+    const entries = unpackBackup(await f.arrayBuffer());
+    for (const en of entries) { const c = checkImage(en.img); if (!c.ok) throw new Error(c.why); }
+    const into = $("into").value;
+    const plan = into === "same" ? entries.map((en) => ({ ...en, slot: en.slot < 0 ? 0 : en.slot })) : [{ ...entries[0], slot: +into }];
+    const over = plan.filter((p) => info.slots[p.slot].exists).map((p) => SLOT_NAMES[p.slot]);
+    if (over.length && !confirm(`Replace ${over.join(", ")} on the FM-1?`)) { say("Restore cancelled."); return; }
+    for (const p of plan) {
+      say(`Restoring ${SLOT_NAMES[p.slot]} …`);
+      await lib.writeProject(p.slot, p.img, "", bar);
+    }
+    if ($("loadafter").checked) await lib.loadProject(plan[0].slot);
+    await refresh();
+    say(`Restored ${plan.map((p) => SLOT_NAMES[p.slot]).join(", ")}${$("loadafter").checked ? `; ${SLOT_NAMES[plan[0].slot]} loaded` : ""}.`);
+  });
+});
+
+async function importKits(files) {
+  const kits = await sndFiles(files, { skipInit: $("skipinit").checked });
+  if (!kits.length) throw new Error("No LXR kit files (.SND) there.");
+  const first = Math.max(1, Math.min(64, +$("first").value || 1)) - 1;
+  const n = Math.min(kits.length, info.nkits - first);
+  if (!confirm(`Put ${n} kits into slots ${first + 1}–${first + n}? The kits there now are replaced (until you load ` +
+               `a project again without saving).`)) { say("Import cancelled."); return; }
+  for (let i = 0; i < n; i++) {
+    await lib.kitPut(first + i, kits[i].name, kits[i].data, i === 0 && $("loadfirst").checked);
+    bar(i + 1, n);
+    say(`Importing ${kits[i].name} …`);
+  }
+  await refresh();
+  say(`${n} kits in slots ${first + 1}–${first + n}${kits.length > n ? ` (${kits.length - n} didn't fit)` : ""}. ` +
+      "Save the project on the FM-1 to keep them.");
+}
+$("sndfiles").addEventListener("change", (e) => { const f = [...e.target.files]; e.target.value = ""; job(() => importKits(f)); });
+$("snddir").addEventListener("change", (e) => { const f = [...e.target.files]; e.target.value = ""; job(() => importKits(f)); });
+
+$("kits").addEventListener("click", (e) => {
+  const k = e.target.dataset.kit;
+  if (k === undefined) return;
+  e.preventDefault();
+  job(async () => {
+    const kit = await lib.kitGet(+k);
+    download(sndBytes(kit.name, kit.data), `${String(+k).padStart(2, "0")}-${safe(kit.name).toUpperCase().slice(0, 5)}.SND`);
+    say(`Downloaded kit ${+k + 1}, ${kit.name}.`);
+  });
+});
+</script>
+</body>
+</html>

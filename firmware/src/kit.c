@@ -129,3 +129,45 @@ static void kit_sanitize(uint8_t *p)
         if (p[i] > par_max_k(kit_par(i)))
             p[i] = (uint8_t)init_kit_k(kit_par(i));
 }
+
+#if KETTLE_FACTORY_KITS
+/* 0.7: a bank of LXR-02 kits built in from a local folder (tools/gen_factory_kits.py; never in a public build: the
+ * kits aren't Kettle's to give away). FACTORY_KITS[f]: the .SND file (8 name bytes, the LXR's 247). A fresh unit
+ * starts with the first 64 in its slots; LOAD > FACTORY loads one into the edit buffer, or all into the slots. */
+#include "factory_kits.h"
+static void kit_factory_values(uint32_t f, uint8_t *p)
+{
+    uint32_t i;
+    kit_init_values(p);
+    for (i = 0; i < END_OF_SOUND_PARAMETERS; i++)
+        p[i] = FACTORY_KITS[f][8u + i];
+    kit_sanitize(p);
+}
+static void kit_factory_name(uint32_t f, char *b)
+{
+    uint32_t i;
+    for (i = 0; i < KIT_NAME_LEN; i++) {
+        uint8_t c = FACTORY_KITS[f][i];
+        b[i] = (char)(c >= 32u && c < 127u ? c : ' ');
+    }
+}
+static void kit_factory_fill(void)                   /* the bank's first 64 into the slots */
+{
+    uint32_t i;
+    for (i = 0; i < NUM_KITS && i < FACTORY_NKITS; i++) {
+        kit_factory_values(i, kits[i]);
+        kit_factory_name(i, kit_names[i]);
+    }
+}
+static void kit_factory_load(uint32_t f)             /* one into the edit buffer (the slot stays as it was) */
+{
+    uint8_t k[KIT_LEN];
+    uint32_t i;
+    if (f >= FACTORY_NKITS)
+        return;
+    kit_factory_values(f, k);
+    for (i = 0; i < KIT_LEN; i++)
+        par[kit_par(i)] = k[i];
+    snd_post_all();
+}
+#endif

@@ -174,6 +174,17 @@ static uint32_t fl_jedec_ram(void) { return 0x856014u; }
 #define FL_FAR(fn) (fn)
 #include "../../firmware/src/storage.c"
 #include "../../firmware/src/project.c"
+/* 0.7: the library (library.c): the page hands a message in (web_lib_buf, web_lib_in) and takes the answer */
+static uint8_t web_lib_inb[1024], web_lib_outb[1024];
+static uint32_t web_lib_outn;
+static void lib_send(const uint8_t *wire, uint32_t n)
+{
+    if (n <= sizeof web_lib_outb) {
+        memcpy(web_lib_outb, wire, n);
+        web_lib_outn = n;
+    }
+}
+#include "../../firmware/src/library.c"
 
 /* ------------------------------------------------- the main loop's HAL --- */
 static uint32_t web_master_adc = 700;   /* MASTER, 0..1023 as the ADC reads it */
@@ -207,6 +218,7 @@ static void web_frame(void)                      /* one pass of main.c's loop */
 {
     master_poll();
     batt_poll();
+    lib_poll();
     ui_input();
     settings_poll();
     autosave_poll();
@@ -274,6 +286,15 @@ EXPORT uint8_t *web_nor(void) { return nor; }
 EXPORT uint32_t web_nor_size(void) { return sizeof nor; }
 EXPORT void web_nor_erase(void) { memset(nor, 0xFF, sizeof nor); }
 EXPORT uint32_t web_flash_writes_count(void) { return web_flash_writes; }
+EXPORT uint8_t *web_lib_buf(void) { return web_lib_inb; }
+EXPORT uint8_t *web_lib_out(void) { return web_lib_outb; }
+EXPORT uint32_t web_lib_in(uint32_t n)          /* a message F0 .. F7 in web_lib_buf: the answer's length (0: none) */
+{
+    web_lib_outn = 0;
+    if (n >= 2u && n <= sizeof web_lib_inb && web_lib_inb[0] == 0xF0u && web_lib_inb[n - 1u] == 0xF7u)
+        lib_in(web_lib_inb + 1, n - 2u);
+    return web_lib_outn;
+}
 EXPORT void web_boot(void)
 {
     if (!web_booted)

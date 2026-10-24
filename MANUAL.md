@@ -434,6 +434,7 @@ A kit is every sound parameter of all six voices (including the sends, the rever
 
 - **Browse and load:** turn **PRESETS**. The kit list opens; turn to choose, press **OCT+** to load. It closes by itself after 6 seconds.
 - **Load / save:** SHIFT + white key 8 opens LOAD KIT; SAVE opens SAVE KIT (see [saving](#14-saving)).
+- **LXR-02 kits:** kits from an LXR-02 SD card (.SND files) come in through the [library page](#backing-up-restoring-and-lxr-02-kits). A voice the LXR routed to its FX bus comes in with FX SEND 127, which sounds the same. Kettle's own settings (sends, reverb, shaping, models) start at their defaults.
 - **Morph:** load a second kit as the *morph target* (SHIFT + white key 9: LOAD MORPH), then turn **Morph** (PERF's first page, KNOB 4) from 0 to 100%. Every sound parameter crossfades towards the target (outputs, modulation targets and the reverb model stay). The header shows M while morph is above 0. SAVE → MORPH saves the mixture you hear as a new kit.
 
 ---
@@ -610,6 +611,7 @@ Press **SAVE** for the save page, SAVE again for the load page (SHIFT + SAVE ope
 | SONG | 64 | OCT+ | OCT+ |
 | MORPH | 64 | OCT+, name it, OCT+ (saves the morph mixture you hear) | OCT+: load as the morph target |
 | PROJECT | 4 | OCT+, name it, OCT+ | OCT+ |
+| FACTORY | the built-in bank (private builds) | – | OCT+: into the sound being edited; ALL > SLOTS: the first 64 into the kit slots |
 
 **Naming:** KNOB 1 the letter's position, KNOB 2 the letter, KNOB 3 upper / lower case. OCT+ saves, OCT− alone goes back.
 
@@ -624,6 +626,26 @@ Writing to flash stalls the FM-1's processor for a moment, so every save (automa
 A project has 48 KB. A typical one uses a fraction of that (a busy test project, every pattern 32 steps long on all tracks with every kit edited, takes about 33 KB), but a completely dense one can be too big: saving then shows **PROJECT TOO BIG** and nothing is written. If the automatic session save fails this way, the screen shows **AUTOSAVE: PROJECT TOO BIG** and it doesn't try again until something changes. Clearing unused patterns or tracks makes room.
 
 Projects saved by older Kettle versions load in newer ones (the first 32 of 0.1's 64 patterns). Projects don't load in older versions than the one that saved them.
+
+### Backing up, restoring and LXR-02 kits
+
+The **library page** (`library/` on Kettle's site, from 0.7) connects to the FM-1 over USB MIDI in Chrome or Edge. It can:
+
+- **Back up** every project and the session to one file on the computer (`.ktbk`), or download one project (`.ktp`). Kettle's own updates keep your projects. Installing V15 or another firmware may not, so back up first.
+- **Restore** a backup or a project file, into the slots it came from or into a chosen slot, and load it. The old project stays in place until the restore has been written and checked, so pulling the cable halfway loses nothing.
+- **Import LXR-02 kits:** pick .SND files, or a whole project folder from an LXR-02 SD card (PROJ00 …). They fill the kit slots from the slot you choose, leaving out Init and empty kits. Then save the project (SAVE → PROJECT), or let AUTOSAVE keep them in the session.
+- **Export kits** as LXR-02 .SND files (the LXR's parameters only).
+
+While a restore is being written, the output is silent and saving is held off. If the computer stops sending, Kettle gives up after 10 seconds.
+
+The emulator has the same functions under **Library**, below the panel.
+
+**Built-in kit bank (private builds only).** The LXR-02's factory and Hrtl kits can't be shipped with Kettle, but you can build them into your own copy: `KETTLE_KITS_DIR=folder:folder:… ./build.sh` (and `web/emu/build.sh`), with folders of .SND files from your LXR-02 SD card or its downloads. Such a build:
+- shows its version as "v0.7+K";
+- starts a fresh unit with the bank's first 64 kits in the kit slots;
+- adds a **FACTORY** type on the LOAD page. OCT+ loads the chosen kit into the sound you're editing (SAVE → KIT keeps it in a slot); the last entry, **ALL > SLOTS**, puts the first 64 into the slots.
+
+The site builder refuses to publish a "+K" build.
 
 ---
 
@@ -762,7 +784,7 @@ What Kettle adds:
 - **Sound:** FX and reverb sends per voice; three reverbs; waveshaper choice; bits; tilt EQ; random per hit; choke groups; cross modulation; phaser and flanger.
 - **Performance:** PERF with fill, repeat, freeze, throws, feedback push, tape stop, filter sweeps, a DJ filter and four macros.
 - **Sequencing:** trig conditions, ratchets, per-track clocks, generators (mutate, Turing machine, cellular automata, Grids), dice, commit and undo, and copying a bar across all tracks.
-- **Safety:** the automatic session save and a CPU meter.
+- **Safety:** the automatic session save, a CPU meter, and backup and restore over USB (the library page).
 
 ---
 

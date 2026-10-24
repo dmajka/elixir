@@ -123,6 +123,12 @@ cd build/emu && python3 -m http.server 8765    # open http://localhost:8765
 
 The emulator runs the firmware's own C sources compiled to WebAssembly, on a simulated FM-1. Use the computer keyboard or the mouse. Enable Web MIDI to play it from a controller and to send its clock to other apps.
 
+## Library: backup, restore, LXR-02 kits
+
+`web/library.html` (the site's `library/`) talks to Kettle over USB MIDI SysEx (`firmware/src/library.c`, protocol in its header; `web/library.js`). It backs up and restores projects and imports LXR-02 .SND kits; the emulator page has the same under **Library**.
+
+The LXR-02's factory and Hrtl kits can't be redistributed, but a private build can include your own copies: `KETTLE_KITS_DIR=dir:dir ./build.sh` (and `web/emu/build.sh`) generates `build/gen/factory_kits.h` (`tools/gen_factory_kits.py`). The version gets "+K", a fresh unit starts with those kits, LOAD has a FACTORY type, and `web/make_site.py` refuses to publish the build.
+
 ## Build the firmware
 
 Same requirements as Felucca: the JieLi pi32v2 toolchain (`~/.jieli/toolchain`), the JieLi AC79 SDK (`~/fw-AC79_AIoT_SDK`), Python 3 with Pillow and fontTools, and Docker on macOS (the toolchain is Linux x86-64).
@@ -150,6 +156,11 @@ Projects saved by older versions load in newer ones. Kettle 0.1 had 64 patterns;
 ```sh
 cc -O2 -std=gnu99 -w -I build/gen -I firmware/src -I firmware/hal tests/render_test.c -o build/render_test && build/render_test build/
 cc -O1 -std=gnu99 -w -I build/gen -I firmware/src -I firmware/hal tests/ui_test.c -o build/ui_test -lm && build/ui_test build/shots
+```
+
+```sh
+cc -O1 -std=gnu99 -w -I build/gen -I firmware/src -I firmware/hal tests/library_bridge.c -o build/library_bridge
+node tests/library_test.mjs     # the library page's code against the device's (LXR kits from ../lxr-02_kits if there)
 ```
 
 `render_test` plays every voice and counts the MIDI clock. `ui_test` drives the panel as a user would (programming a beat, sound pages, locks, patterns, songs, saving and loading a project, MIDI sync in) and writes a screenshot of each screen to `build/shots/`. It also checks the sends, the reverb, the sound shaping, the phaser and flanger, loads a Kettle 0.1 project (`tests/data/proj_v1.bin`), and prints how big a busy and a dense project get. `compare_test` checks the voices against the original LXR DSP sources and needs the LXR repository (see its header).

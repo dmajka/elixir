@@ -13,6 +13,12 @@ Kettle is the Erica Synths LXR-02 firmware (GPL-3.0) ported to the M-VAVE FM-1 o
 - **Performance mode (0.4):** PERF's keys: rolls, FILL, repeat, freeze, throws, feedback push, tape stop, filter sweeps (latchable); a DJ filter on the master; four macros.
 - **Generative sequencing (0.5):** per step trig conditions and ratchets; per track clocks, generators (mutate, Turing machine, cellular automata, Grids' drum map), dice, commit and undo; COPY + bar copies every track's bar on the grid.
 - **Phase 5 (0.6):** bouncing ratchets and the roll sweep, links between tracks, PERFORM 2 (a second bank of PERF effects), physical-model voices for Drum 1–3. CPU on hardware still to be measured. See *Phase 5*.
+- **0.7 (Phases 6–8):**
+  - The physical models' levels fixed (no more overdrive).
+  - The library: backup, restore and LXR-02 kit import over USB, on the site's `library/` page and in the emulator.
+  - A private-build kit bank (`KETTLE_KITS_DIR`).
+  - The code is at https://github.com/dmajka/kettle.
+  - Phase 9 (the LXR's live feel) is planned.
 - **MIDI:** USB and TRS in, USB out. CC/NRPN control as on the LXR; clock out always on; clock in by turning the tempo below its minimum to "MIDI".
 - **Projects:** 4 slots plus an AUTO session slot in flash, 48 KB each, sparse encoding. Format version 5 since 0.5; versions 1 to 4 still load.
 - **UI:** mapped to the FM-1's keys, buttons and knobs; SHIFT legend on screen; mixer under GLO.
@@ -339,7 +345,9 @@ The user's list (October 24): the name and the repository, the physical models' 
 
 **Kits (decided):** the factory and Hrtl kits aren't in the GPL source and come with no licence to redistribute, so: (1) an import tool reads the user's own .SND files, and (2) a built-in bank is made from a local kit folder at build time, behind a build flag, off in public builds.
 
-### Phase 6: the physical models, revisited (0.7)
+### Phase 6: the physical models, revisited (built in 0.7)
+
+Built as planned (`voices.c` `model_trigger`, `soft_clip`). Every model, exciter and pitch now peaks at 0.17–0.84 of full scale (ui_test "MODEL: a hit's level"); the 0.6 demo phrases no longer clip anywhere. Waiting for the user's listening test; a model that still isn't musical gets removed or reworked then.
 
 Reported: BELL and others get very distorted, and some don't sound musical.
 
@@ -358,7 +366,21 @@ Plan:
 - A test: every model, exciter and pitch within 0.15–0.95 of full scale.
 - Then the user listens (before/after WAVs). Any model that still isn't musical is removed in a later step.
 
-### Phase 7: the Kettle library — backup, restore and kit import over USB (0.7)
+### Phase 7: the Kettle library — backup, restore and kit import over USB (built in 0.7)
+
+What was built, and where it differs from the plan:
+- **Device:** `firmware/src/library.c`, one entry point (`lib_in`) for a whole message, used by the firmware (`lib_service` in the main loop, before `ota_service`: a frame that isn't the library's is left for the updater), the emulator (`web_lib_in`, the worklet's "lib" message) and the host bridge. The protocol is in its header.
+- **Commands:** besides the plan's, INFO also gives the loaded slots, KIT_NAMES lists the kits, and KIT_GET exports a kit. So the page shows and exports kits too.
+- **Writes:** a restore goes to a free physical slot, with its header written last after the payload's CRC is checked in flash. While it is open, `proj_lock` holds off autosave and SAVE; it gives up after 10 s without data, and the output is hushed throughout.
+- **Kits:** KIT_PUT takes any length up to KIT_LEN. An LXR .SND's 247 bytes get Kettle's defaults for the rest, `kit_sanitize`, and their names cleaned. LXR "Out = FX BUS" becomes FX SEND 127 (204 of 15,314 bytes in the factory PROJ00, all of them outputs).
+- **Pages:** `web/library.html` (the site's `library/`) for the FM-1, and a Library panel on the emulator page. Backup files: `.ktbk` (several projects) and `.ktp` (one project's image as it is in flash). Both are self-checking (the header's CRC and the payload's).
+- **Tests:** `tests/library_bridge.c` + `tests/library_test.mjs`:
+  - the 62 factory kits in and back (byte for byte, apart from the FX bus outputs);
+  - a backup read, restored into another slot (identical payload) and loaded;
+  - a damaged image refused, data before BEGIN refused, SAVE refused during a restore and allowed after the 10 s timeout;
+  - a garbled message unanswered.
+  - Also checked in Chrome on the emulator: three Hrtl kits imported (the Init one skipped) and the first loaded.
+- **Not done:** the transfer over a real FM-1's USB is untested (the SysEx path is the updater's, which works). The first hardware test should back up, restore into another slot and load.
 
 Today nothing on the unit can be copied off it. Kettle's projects sit in flash at 0x97000–0xDEFFF. Kettle's own updates don't touch that area, but V15 or another firmware may, and nothing protects against a bad flash.
 
@@ -374,7 +396,13 @@ Today nothing on the unit can be copied off it. Kettle's projects sit in flash a
   - Import kits: pick .SND files or a whole LXR project folder; they fill kit slots from a chosen number; then SAVE PROJECT on the unit (or let AUTO keep them).
 - **Tests:** the device side in a host test; the page's protocol code against the device code through a host bridge (no hardware needed).
 
-### Phase 8: LXR-02 kits on the unit (0.7)
+### Phase 8: LXR-02 kits on the unit (built in 0.7)
+
+Built as planned.
+- **The bank:** `tools/gen_factory_kits.py` takes `KETTLE_KITS_DIR` as it is (':' between folders) and leaves out repeats by content. From the factory PROJ00, PROJ05 and PROJ01, Hrtl's UNTZ and DLC kits: 111 kits, about 28 KB of flash (image 323 KB against 294 KB).
+- **On the unit:** `engine_init` fills the slots, so it only shows on a unit with no session. LOAD → FACTORY loads a kit into the edit buffer (the header still names the slot's kit until it's saved), or ALL > SLOTS.
+- **Publishing guard:** `web/make_site.py` looks for "unofficial port, …+K" in `build/kettle.bin` and `build/emu/kettle.wasm`.
+- **Tests:** checked in Chrome on a +K emulator: it starts with Badonka, the FACTORY page lists the bank, and a factory kit loads.
 
 - `tools/gen_factory_kits.py KIT_DIR` reads .SND files from a local folder (the factory SD image's PROJ00, Hrtl's UNTZ and DLC kits) into `build/gen/factory_kits.h`, which is never committed.
 - `KETTLE_KITS_DIR=… ./build.sh` (and `web/emu/build.sh`) builds them in. Without it, the build is as today.

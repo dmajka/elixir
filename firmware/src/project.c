@@ -525,12 +525,13 @@ static void proj_scan(void)                         /* the newest copy of each p
 }
 static int proj_exists(uint32_t l) { return l < PROJ_NLOG && pj.phys[l] >= 0; }
 
+static uint8_t proj_lock;                           /* 0.7: the library is writing a project (library.c) */
 static int proj_write(uint32_t l, const char *name)
 {
     uint32_t ph, l2, s;
     proj_hdr_t h;
     int used[PROJ_NPHYS] = {0}, target = -1;
-    if (!flash_ok || l >= PROJ_NLOG)
+    if (!flash_ok || l >= PROJ_NLOG || proj_lock)
         return -1;
     for (l2 = 0; l2 < PROJ_NLOG; l2++)
         if (pj.phys[l2] >= 0)
@@ -640,7 +641,7 @@ static uint32_t session_sig(void)                   /* FNV-1a over what a projec
 static uint8_t autosave_on = 1;
 static void autosave_poll(void)
 {
-    if (!flash_ok || !autosave_on)
+    if (!flash_ok || !autosave_on || proj_lock)
         return;
     if (sq.running) {
         pj.idle_since = fm1_ms;

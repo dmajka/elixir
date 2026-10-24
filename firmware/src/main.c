@@ -128,6 +128,7 @@ static void fm1_main(void)
         master_poll();
         batt_poll();
         uboot_watch();
+        lib_service();                            /* 0.7: the library's messages (library.c) */
         ota_service();                            /* the M-UPGRADE handshake (the web installer, M-VAVE's updater) */
         if (usb.ota_req) {
             usb.ota_req = 0;

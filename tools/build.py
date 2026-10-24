@@ -183,11 +183,26 @@ def ld_regions():
     return regs
 
 
+def factory_kits():
+    """KETTLE_KITS_DIR (folders, ':' between): a private build with those LXR-02 kits built in (0.7). The version
+    gets "+K", and web/make_site.py refuses to publish it: the kits aren't Kettle's to redistribute."""
+    dirs = os.environ.get("KETTLE_KITS_DIR", "")
+    if not dirs.strip(":"):
+        return False
+    subprocess.run([sys.executable, "tools/gen_factory_kits.py", "build/gen/factory_kits.h", dirs], check=True)
+    return True
+
+
 def build_app():
     flags = [*CFLAGS, "-Ifirmware/hal", "-Ifirmware/src", "-Ibuild/gen"]
     flags.append(f'-DFELUCCA_ID="{PRODUCT}"')
-    if VERSION:
-        flags.append(f'-DKETTLE_VERSION="{VERSION}"')
+    version = VERSION
+    if factory_kits():
+        flags.append("-DKETTLE_FACTORY_KITS=1")
+        version = (version or re.search(r'#define KETTLE_VERSION "([^"]+)"',
+                                        (FW / "src" / "kettle.c").read_text()).group(1)) + "+K"
+    if version:
+        flags.append(f'-DKETTLE_VERSION="{version}"')
     cmain = ("cc", *flags, "-c", FW / "src" / "kettle.c", "-o", OUT / "kettle.o")
     (OUT / "fm1_cpu1.o").unlink(missing_ok=True)
     tc_all(("cc", "-c", FW / "crt0.S", "-o", OUT / "crt0.o"),

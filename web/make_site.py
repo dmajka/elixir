@@ -5,6 +5,7 @@
 #
 #   index.html                  the install page: web/install.html with fm1pkg.js, fm1ota.js and the package inlined
 #   try/                        the emulator (build/emu: run web/emu/build.sh first)
+#   library/                    backup, restore and LXR-02 kit import over Web MIDI (web/library.html, library.js)
 #   manual/index.html           MANUAL.md as a page
 #   firmware/                   kettle-VER.fwsc, kettle-VER-src.tar.gz (the source, as the GPL asks), MANUAL.md,
 #                               LICENSE, NOTICE.md, LICENSES/, and a page listing them
@@ -259,6 +260,12 @@ def main(pkg, out):
     emu = ROOT / "build/emu"
     if not (emu / "kettle.wasm").exists():
         raise SystemExit("no build/emu: run web/emu/build.sh first")
+    # 0.7: never publish a build with LXR-02 kits built in (KETTLE_KITS_DIR: they aren't Kettle's to give away). Its
+    # version ends in "+K", and the splash's string carries it into the app image and the emulator.
+    private = re.compile(rb"unofficial port, [^\0]*\+K\0")
+    for f in (pkg.with_name("kettle.bin"), emu / "kettle.wasm"):
+        if f.exists() and private.search(f.read_bytes()):
+            raise SystemExit(f"{f}: built with KETTLE_KITS_DIR (LXR-02 kits): rebuild without it before publishing")
     if out.exists():
         shutil.rmtree(out)
     fw, man = out / "firmware", out / "manual"
@@ -276,6 +283,10 @@ def main(pkg, out):
     repo = f' · <a href="{REPO}" target="_blank" rel="noopener">GitHub</a>' if REPO else ""
     page = page.replace("<!--REPO-->", repo)
     (out / "index.html").write_text(page.replace("/*LIB*/", lib).replace("/*META*/", meta), encoding="utf-8")
+
+    (out / "library").mkdir()                        # 0.7: the library page (backup, restore, LXR kits)
+    shutil.copy(ROOT / "web/library.html", out / "library/index.html")
+    shutil.copy(ROOT / "web/library.js", out / "library/library.js")
 
     shutil.copytree(emu, out / "try")
     t = (out / "try/index.html").read_text(encoding="utf-8")

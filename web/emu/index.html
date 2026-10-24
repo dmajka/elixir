@@ -68,6 +68,13 @@ a { color: inherit; }
 .keys, footer { margin: 16px 0 0; color: var(--dim); text-align: center; }
 .keys span { white-space: nowrap; margin: 0 8px; }
 .keys select { font: inherit; font-size: 12px; }
+.lib { max-width: 640px; margin-left: auto; margin-right: auto; }
+.lib summary { cursor: pointer; }
+.lib p { margin: 8px 0; }
+.lib label { white-space: nowrap; margin: 0 6px; }
+.lib input[type=file] { font-size: 12px; max-width: 220px; }
+.lib button { font: inherit; font-size: 12px; }
+#libstatus { color: var(--fg); min-height: 1.4em; }
 kbd { font: 600 11px ui-monospace, Menlo, monospace; border: 1px solid var(--rule); padding: 0 4px; color: var(--fg); }
 footer { margin-top: 12px; font-size: 12px; }
 footer nav a { margin: 0 6px; }
@@ -82,6 +89,19 @@ footer small { font-size: 11px; opacity: .8; }
   <div class="start" id="start"><button id="go" type="button">Switch on</button><p id="status" hidden></p></div>
 </div>
 
+<details class="keys lib"><summary><b>Library</b>: LXR-02 kits in, backup and restore</summary>
+  <p>Import kits from an LXR-02 SD card: pick its .SND files, or a whole project folder (PROJ00 …). They go into the
+    kit slots from the first slot on.
+    <label>First slot <input id="libfirst" type="number" min="1" max="64" value="1" style="width:4em"></label>
+    <label><input id="libskip" type="checkbox" checked> leave out Init/empty kits</label></p>
+  <p><label>Kit files <input id="libfiles" type="file" accept=".snd,.SND" multiple></label>
+    <label>A folder <input id="libdir" type="file" webkitdirectory></label></p>
+  <p><button id="libbackup" type="button">Download a backup</button> of the saved projects ·
+    <label>Restore a backup into <select id="libslot"><option value="same">its own slots</option>
+      <option value="0">Project 1</option><option value="1">Project 2</option><option value="2">Project 3</option>
+      <option value="3">Project 4</option></select> <input id="librestore" type="file" accept=".ktbk,.ktp"></label></p>
+  <p id="libstatus"></p>
+</details>
 <p class="keys"><b>Kettle</b>: white keys = steps 1-16, black keys = tracks D1-OH and bars 1-4. OCT- = SHIFT (hold it to see what it does), OCT+ = COPY / OK.</p>
 <p class="keys">
   <span><kbd>Z</kbd>–<kbd>'</kbd> <kbd>Q</kbd>–<kbd>O</kbd> keys</span>
@@ -108,6 +128,7 @@ footer small { font-size: 11px; opacity: .8; }
 
 <script type="module">
 import { midiKnob, KNOB_MODES } from "./worklet.js";
+import { Library, sndFiles, packBackup, unpackBackup, checkImage, SLOT_NAMES } from "./library.js";
 const NS = "http://www.w3.org/2000/svg";
 // panel.c's labels (bit = label) and encoder roles
 const B = { FX: 0, SCL: 1, ENV: 2, LFO: 3, EDIT: 4, GLO: 5, HOME: 6, SAVE: 7, ARP: 8, SEQ: 9, PLAY: 10, REC: 11, "OCT-": 12, "OCT+": 13 };
@@ -524,6 +545,7 @@ async function switchOn() {
         const m = e.data;
         if (m.type === "ready") res();
         else if (m.type === "error") rej(new Error(m.message));
+        else if (m.type === "lib") { const w = libWait.get(m.id); libWait.delete(m.id); if (w) w(m.wire); }
         else if (m.type === "frame") {
           if (m.fb) drawScreen(m.fb);
           if (m.leds) drawLights(lastLeds = m.leds, m.anim);
@@ -552,6 +574,67 @@ async function switchOn() {
   }
 }
 document.getElementById("go").addEventListener("click", switchOn);
+
+// ------------------------------------------------------------------ the library (0.7): kits in, backup, restore
+const libWait = new Map();
+let libId = 0;
+const lib = new Library({
+  request(wire) {
+    if (!node) return Promise.resolve(null);
+    const id = ++libId;
+    return new Promise((res) => {
+      const tm = setTimeout(() => { libWait.delete(id); res(null); }, 3000);
+      libWait.set(id, (w) => { clearTimeout(tm); res(w); });
+      node.port.postMessage({ type: "lib", id, wire });
+    });
+  },
+});
+const libSay = (s) => { document.getElementById("libstatus").textContent = s; };
+async function importKits(files) {
+  if (!node) { libSay("Switch the emulator on first."); return; }
+  const kits = await sndFiles(files, { skipInit: document.getElementById("libskip").checked });
+  if (!kits.length) { libSay("No LXR kit files (.SND) there."); return; }
+  const first = Math.max(1, Math.min(64, +document.getElementById("libfirst").value || 1)) - 1;
+  const n = Math.min(kits.length, 64 - first);
+  try {
+    for (let i = 0; i < n; i++) {
+      await lib.kitPut(first + i, kits[i].name, kits[i].data, i === 0);
+      libSay(`Importing ${i + 1} of ${n}: ${kits[i].name}`);
+    }
+    libSay(`${n} kits in slots ${first + 1}–${first + n}${kits.length > n ? ` (${kits.length - n} didn't fit)` : ""}. ` +
+           `The first is loaded. PRESETS browses them; SAVE → PROJECT keeps them.`);
+  } catch (e) { libSay("Import stopped: " + e.message); }
+}
+document.getElementById("libfiles").addEventListener("change", (e) => importKits([...e.target.files]));
+document.getElementById("libdir").addEventListener("change", (e) => importKits([...e.target.files]));
+document.getElementById("libbackup").addEventListener("click", async () => {
+  if (!node) { libSay("Switch the emulator on first."); return; }
+  try {
+    const info = await lib.info(), entries = [];
+    for (let l = 0; l < info.nlog; l++) if (info.slots[l].exists) entries.push({ slot: l, img: await lib.readProject(l) });
+    if (!entries.length) { libSay("Nothing saved yet."); return; }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([packBackup(entries)], { type: "application/octet-stream" }));
+    a.download = `kettle-emulator-${new Date().toISOString().slice(0, 10)}.ktbk`;
+    a.click();
+    libSay(`Backed up ${entries.map((e) => SLOT_NAMES[e.slot]).join(", ")}.`);
+  } catch (e) { libSay("Backup failed: " + e.message); }
+});
+document.getElementById("librestore").addEventListener("change", async (e) => {
+  const f = e.target.files[0];
+  e.target.value = "";
+  if (!f || !node) { if (!node) libSay("Switch the emulator on first."); return; }
+  try {
+    const entries = unpackBackup(await f.arrayBuffer());
+    const into = document.getElementById("libslot").value;
+    for (const en of entries) {
+      const slot = into === "same" ? (en.slot < 0 ? 0 : en.slot) : +into;
+      await lib.writeProject(slot, en.img, "", (d, t) => libSay(`Restoring ${SLOT_NAMES[slot]}: ${Math.round(100 * d / t)}%`));
+      if (into !== "same") break;
+    }
+    libSay(`Restored ${entries.length === 1 || into !== "same" ? "1 project" : entries.length + " projects"}. LOAD it with SAVE → LOAD → PROJECT.`);
+  } catch (err) { libSay("Restore failed: " + err.message); }
+});
 document.addEventListener("visibilitychange", () => send({ type: "visible", on: !document.hidden }));
 </script>
 </body>

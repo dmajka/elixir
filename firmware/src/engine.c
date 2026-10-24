@@ -50,6 +50,9 @@ static void engine_init(void)
         kit_init_values(kits[i]);
         memcpy(kit_names[i], "Init    ", KIT_NAME_LEN);
     }
+#if KETTLE_FACTORY_KITS
+    kit_factory_fill();
+#endif
     kit_init_values(morph_par);
     engine_globals_default();
     kit_load_ram(0);

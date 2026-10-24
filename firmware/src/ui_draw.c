@@ -519,6 +519,17 @@ static void draw_song(int32_t y0)
 
 static void io_slot_name(char *b, uint32_t n, uint32_t type, uint32_t s)
 {
+#if KETTLE_FACTORY_KITS
+    if (type == IO_FACTORY) {
+        if (s >= FACTORY_NKITS) {
+            put_str(b, "ALL > SLOTS", n);
+        } else {
+            kit_factory_name(s, b);
+            b[8] = 0;
+        }
+        return;
+    }
+#endif
     if (type == IO_KIT || type == IO_MORPH) {
         memcpy(b, kit_names[s], 8);
         b[8] = 0;
