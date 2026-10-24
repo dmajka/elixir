@@ -36,7 +36,7 @@ enum { VP_BASE = 0x200, VP_NONE = VP_BASE, VP_IO_TYPE, VP_IO_SLOT, VP_NAME_POS, 
        VP_SONG_PAT, VP_SONG_NUM, VP_LEDS, VP_AUTOSAVE, VP_ACCEL, VP_PALETTE, VP_TRACK_VOL, VP_FX_SUB, VP_MASTER,
        VP_DJ, VP_REPEAT, VP_TAPE, VP_M1, VP_M4 = VP_M1 + NMACRO - 1, VP_MSEL, VP_MTARGET, VP_MMIN, VP_MMAX,
        VP_COND, VP_RAT_N, VP_RAT_RATE, VP_RAT_FADE, VP_ACTION, VP_GMODE, VP_GA, VP_GB, VP_GC, VP_CLOCK,
-       VP_GX, VP_GY, VP_GCHAOS };
+       VP_GX, VP_GY, VP_GCHAOS, VP_RAT_SHAPE, VP_BSTART, VP_BPITCH, VP_ROLL };
 /* the EUCLID pages' ACTION (OCT+ does it) */
 enum { ACT_NONE, ACT_DICE, ACT_COMMIT, ACT_UNDO, ACT_RESET, NACT };
 
@@ -175,7 +175,7 @@ static const uint16_t P_HOME[4] = {PAR_BPM, PAR_SHUFFLE, PAR_TRACK_LENGTH, VP_TR
 static const uint16_t P_STEP[4][4] = {{PAR_STEP_VOLUME, PAR_STEP_NOTE, PAR_STEP_PROB, VP_COND},
                                       {PAR_STEP_FLAM, PAR_STEP_SHIFT, VP_NONE, VP_NONE},
                                       {PAR_P1_DEST, PAR_P1_VAL, PAR_P2_DEST, PAR_P2_VAL},
-                                      {VP_RAT_N, VP_RAT_RATE, VP_RAT_FADE, VP_NONE}};
+                                      {VP_RAT_N, VP_RAT_RATE, VP_RAT_FADE, VP_RAT_SHAPE}};
 static const char *const STEP_TITLE[4] = {"STEP", "TIMING", "LOCKS", "RATCHET"};
 static const uint16_t P_PERF[4][4] = {{PAR_BPM, VP_DJ, VP_REPEAT, PAR_MORPH},
                                       {VP_M1, VP_M1 + 1, VP_M1 + 2, VP_M1 + 3},
@@ -184,7 +184,7 @@ static const uint16_t P_PERF[4][4] = {{PAR_BPM, VP_DJ, VP_REPEAT, PAR_MORPH},
 static const char *const PERF_TITLE[4] = {"PERFORM", "MACROS", "MACRO SETUP", "PERFORM: MORE"};
 static const uint16_t P_EUCLID[4][4] = {{PAR_EUKLID_LENGTH, PAR_EUKLID_STEPS, PAR_EUKLID_ROTATION, VP_ACTION},
                                         {VP_GMODE, VP_GA, VP_GB, VP_GC},
-                                        {PAR_TRACK_LENGTH, VP_CLOCK, VP_NONE, VP_NONE},
+                                        {PAR_TRACK_LENGTH, VP_CLOCK, VP_BSTART, VP_BPITCH},
                                         {VP_GX, VP_GY, VP_GCHAOS, VP_NONE}};
 static const char *const EUCLID_TITLE[4] = {"EUCLID", "GENERATOR", "TRACK CLOCK", "GRIDS MAP"};
 static const uint16_t P_FX[3][4] = {{PAR_FX_TYPE, PAR_FX_DRY_WET, PAR_FX_ROUTING, VP_FX_SUB},
@@ -259,6 +259,8 @@ static void page_params(uint16_t out[4])
     }
     for (k = 0; k < 4u; k++)
         out[k] = p[k];
+    if (ui.mode == M_PERF && ui.page % 4u == 0u && (sq.roll & ~ui.roll_latch))
+        out[2] = ui.shift ? PAR_ROLL : VP_ROLL;      /* 0.6: a roll held: KNOB 3 sweeps its rate (SHIFT: the grid's) */
 }
 
 /* ------------------------------------------- the values the cards edit --- */
@@ -397,6 +399,10 @@ static uint32_t vp_get(uint32_t p)
     case VP_GMODE: return pt->gen[ui.track][0];
     case VP_GA: case VP_GB: case VP_GC: return pt->gen[ui.track][p - VP_GA + 1u];
     case VP_CLOCK: return pt->clk[ui.track] < NCLK ? pt->clk[ui.track] : CLK_1X;
+    case VP_RAT_SHAPE: return (pt->rat[ui.track][ui.step & 63u] & RAT_BOUNCE) != 0u;
+    case VP_BSTART: return pt->bnc[ui.track] & 3u;
+    case VP_BPITCH: return (pt->bnc[ui.track] >> 2) > 24u ? 12u : pt->bnc[ui.track] >> 2;
+    case VP_ROLL: return sq.roll_k;
     case VP_GX: return pt->gx;
     case VP_GY: return pt->gy;
     case VP_GCHAOS: return pt->gchaos;
@@ -470,6 +476,10 @@ static uint32_t vp_max(uint32_t p)
     case VP_ACTION: return NACT - 1u;
     case VP_GMODE: return NGEN - 1u;
     case VP_CLOCK: return NCLK - 1u;
+    case VP_RAT_SHAPE: return 1;
+    case VP_BSTART: return 3;
+    case VP_BPITCH: return 24;
+    case VP_ROLL: return 127;
     case VP_GX: case VP_GY: case VP_GCHAOS: return 127;
     case VP_GA: case VP_GB: case VP_GC: {           /* by the generator: see seq.c */
         static const uint8_t MX[NGEN][3] = {{0, 0, 0}, {100, 0, 1}, {16, 127, 127}, {255, 0, 1}, {2, 127, 1}};
@@ -534,7 +544,7 @@ static void vp_set(uint32_t p, uint32_t v)
         euclid_generate(ui.track, pt);
         sq.gsync |= (uint8_t)(1u << ui.track);
         return;
-    case PAR_ROLL: sq.roll_rate = (uint8_t)v; par[PAR_ROLL] = (uint8_t)v; return;
+    case PAR_ROLL: sq.roll_rate = (uint8_t)v; par[PAR_ROLL] = (uint8_t)v; sq.roll_free = 0; return;
     case PAR_MORPH: kit_set_morph(v); return;
     case PAR_AUTOM_TRACK: sq.lane = (uint8_t)v; return;
     case PAR_SHUFFLE: par[PAR_SHUFFLE] = (uint8_t)v; pat[sq.active].shuffle = (uint8_t)v; return;
@@ -608,6 +618,14 @@ static void vp_set(uint32_t p, uint32_t v)
             sq.gsync |= (uint8_t)(1u << ui.track);
         return;
     case VP_CLOCK: pt->clk[ui.track] = (uint8_t)v; return;
+    case VP_RAT_SHAPE: {
+        uint8_t *r = &pt->rat[ui.track][ui.step & 63u];
+        *r = (uint8_t)(v ? *r | RAT_BOUNCE : *r & ~RAT_BOUNCE);
+        return;
+    }
+    case VP_BSTART: pt->bnc[ui.track] = (uint8_t)((pt->bnc[ui.track] & ~3u) | v); return;
+    case VP_BPITCH: pt->bnc[ui.track] = (uint8_t)((pt->bnc[ui.track] & 3u) | v << 2); return;
+    case VP_ROLL: sq.roll_k = (uint8_t)v; sq.roll_free = 1; return;
     case VP_GX: case VP_GY: case VP_GCHAOS: {       /* the pattern's map: every GRIDS track again from it */
         uint32_t t;
         if (p == VP_GX)
@@ -1144,6 +1162,7 @@ static void seq_copy_track(uint32_t src, uint32_t dst, pattern_t *p)   /* seq_co
         p->main[dst][k] = p->main[src][k];
     p->len[dst] = p->len[src];
     p->clk[dst] = p->clk[src];
+    p->bnc[dst] = p->bnc[src];
     sq.gsync |= (uint8_t)(1u << dst);
 }
 /* bar `from` of track t into bar `to`, all of each step. The track grows to hold it when it ends before; all:

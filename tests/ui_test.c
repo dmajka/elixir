@@ -864,6 +864,144 @@ static void hush_test(void)
     check(out_hush == 0 && audio_late == 0, "after the saves: the output back, no LATE counted");
 }
 
+/* 0.6 (5a): bouncing ratchets, the roll sweep */
+static void phase5a(void)
+{
+    pattern_t *p = &pat[0];
+    uint32_t i, n, c, ms[24], hits;
+    p4_reset();
+    black(0);
+    /* a BALL bounce of 8 hits from 1/8 (250 ms at 120 BPM), the gaps 0.7 of the one before (step 5: its hits all
+     * in the count) */
+    main_set(p, 0, 4, 1);
+    p->rat[0][4] = RAT_BOUNCE | 5u | BC_BALL << 3;
+    pat_backup = *p;
+    c = trig_count[0];
+    play_from_start();
+    for (i = 0, n = 0; i < 1900u && n < 24u; i++) {
+        run_ms(1);
+        while (trig_count[0] != c && n < 24u) {
+            ms[n++] = i;
+            c++;
+        }
+    }
+    press(B_PLAY);
+    printf("  bounce BALL x8 from 1/8 (ms):");
+    for (i = 0; i < n; i++)
+        printf(" %u", ms[i]);
+    printf("\n");
+    check(n == 8u, "BOUNCE: 8 hits");
+    check(n >= 3u && ms[1] - ms[0] >= 245u && ms[1] - ms[0] <= 255u, "BOUNCE: the first gap 1/8");
+    for (i = 2, hits = 1; i < n; i++) {
+        double r = (double)(ms[i] - ms[i - 1]) / (double)(ms[i - 1] - ms[i - 2]);
+        if (r < 0.62 || r > 0.78)
+            hits = 0;
+    }
+    check(hits, "BOUNCE: each gap 0.7 of the one before");
+    /* SLOW with a drift: the gaps grow; the drift reaches the last hit */
+    p->rat[0][4] = RAT_BOUNCE | 1u | BC_SLOW << 3;  /* 3 hits */
+    p->bnc[0] = (uint8_t)((12u + 7u) << 2 | 3u);   /* from 1/32, +7 semitones */
+    pat_backup = *p;
+    c = trig_count[0];
+    play_from_start();
+    for (i = 0, n = 0; i < 1100u && n < 24u; i++) {
+        run_ms(1);
+        while (trig_count[0] != c && n < 24u) {
+            ms[n++] = i;
+            c++;
+        }
+    }
+    press(B_PLAY);
+    check(n == 3u && ms[2] - ms[1] > ms[1] - ms[0], "BOUNCE SLOW: the gaps grow");
+    check(sq.bdrift[0] == 7, "BOUNCE: the track's pitch drift");
+    /* a new hit cuts it: step 6 (a 1/16 later) before the first bounce (1/8) */
+    p->rat[0][4] = RAT_BOUNCE | 5u | BC_BALL << 3;
+    p->bnc[0] = BNC_DEFAULT;
+    main_set(p, 0, 5, 1);
+    pat_backup = *p;
+    c = trig_count[0];
+    play_from_start();
+    run_ms(1400);
+    n = trig_count[0] - c;
+    press(B_PLAY);
+    check(n == 2u, "BOUNCE: a new hit on the track cuts it");
+    /* the step's RATCHET page: Shape, the bounce's hits and curve by name; the track's bounce settings */
+    main_set(p, 0, 5, 0);
+    main_set(p, 0, 4, 0);
+    main_set(p, 0, 0, 1);
+    p->rat[0][4] = 0;
+    p->rat[0][0] = 0;
+    pat_backup = *p;
+    press(B_SEQ);
+    white(0);
+    turn(EN_SELECT, 3);
+    turn(EN_K4, 1);
+    turn(EN_K1, 5);
+    check((p->rat[0][0] & RAT_BOUNCE) && (p->rat[0][0] & 7u) == 5u, "RATCHET page: BOUNCE, 8 hits");
+    shot("step-bounce");
+    press(B_SEQ);
+    goto_mode(B_ARP, M_EUCLID);
+    turn(EN_SELECT, 2);
+    turn(EN_K3, 1);
+    turn(EN_K4, -5);
+    check((p->bnc[0] & 3u) == 2u && (p->bnc[0] >> 2) == 7u, "TRACK CLOCK: bounce from 1/16, -5 semitones");
+    shot("track-clock-bounce");
+    /* the roll sweep: a roll key held in PERF, KNOB 3 the roll's rate, faster as it turns */
+    p->bnc[0] = BNC_DEFAULT;
+    p->rat[0][0] = 0;
+    pat_backup = *p;
+    goto_mode(B_ARP, M_PERF);
+    while (ui.page % 4u)
+        turn(EN_SELECT, 1);
+    play_from_start();
+    keys |= 1u;
+    web_keys(keys);
+    run_ms(40);
+    {
+        uint16_t kp[4];
+        uint32_t slow, fast;
+        page_params(kp);
+        check(kp[2] == VP_ROLL, "PERF: a roll held, KNOB 3 is the roll");
+        kset.accel = 0;
+        turn(EN_K3, -127);
+        c = trig_count[0];
+        run_ms(1000);
+        slow = trig_count[0] - c;
+        turn(EN_K3, 80);
+        shot("perf-roll-sweep");
+        c = trig_count[0];
+        run_ms(1000);
+        fast = trig_count[0] - c;
+        kset.accel = 1;
+        printf("  roll sweep: %u hits a second at its slowest, %u at 80 (1/%u)\n", slow, fast,
+               (unsigned)((4u * (uint32_t)exp2_q16((int32_t)(80u * 2882u)) + 32768u) >> 16));
+        check(slow >= 2u && slow <= 3u, "roll sweep: slowest 1/4");
+        check(fast >= 21u && fast <= 25u, "roll sweep: at 80, about 1/46 (23 a second)");
+    }
+    keys &= ~1u;
+    web_keys(keys);
+    run_ms(40);
+    {
+        uint16_t kp[4];
+        page_params(kp);
+        check(kp[2] == VP_REPEAT, "PERF: let go, KNOB 3 is REPEAT again");
+    }
+    press(B_PLAY);
+    vp_set(PAR_ROLL, 5);
+    check(!sq.roll_free, "the roll rate (PERF: MORE) back to the grid");
+    {
+        int rc;
+        p->rat[0][4] = RAT_BOUNCE | 6u | BC_DRUNK << 3;
+        p->bnc[3] = (uint8_t)((12u - 3u) << 2 | 2u);
+        rc = proj_save(1, "BOUNCE  ");
+        p->rat[0][4] = 0;
+        p->bnc[3] = BNC_DEFAULT;
+        rc |= proj_load(1);
+        check(rc == 0 && p->rat[0][4] == (RAT_BOUNCE | 6u | BC_DRUNK << 3) && p->bnc[3] == ((12u - 3u) << 2 | 2u) &&
+              p->bnc[0] == BNC_DEFAULT, "project (version 6): a bounce, a track's bounce settings");
+    }
+}
+
 static void grids_test(void)
 {
     pattern_t *p = &pat[0];
@@ -1361,6 +1499,9 @@ int main(int argc, char **argv)
     phase4();
     grids_test();
     hush_test();
+    phase5a();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;
 }
+
+

@@ -869,7 +869,11 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_DJ: put_str(b, "DJ filter", n); return;
     case VP_COND: put_str(b, "Condition", n); return;
     case VP_RAT_N: put_str(b, "Hits", n); return;
-    case VP_RAT_RATE: put_str(b, "Rate", n); return;
+    case VP_RAT_RATE: put_str(b, shown_pat()->rat[ui.track][ui.step & 63u] & RAT_BOUNCE ? "Curve" : "Rate", n); return;
+    case VP_RAT_SHAPE: put_str(b, "Shape", n); return;
+    case VP_BSTART: put_str(b, "Bounce", n); return;
+    case VP_BPITCH: put_str(b, "Bnc pitch", n); return;
+    case VP_ROLL: put_str(b, "Roll", n); return;
     case VP_RAT_FADE: put_str(b, "Fade", n); return;
     case VP_ACTION: put_str(b, "Action", n); return;
     case VP_GMODE: put_str(b, "Generator", n); return;
@@ -1007,16 +1011,33 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
     case VP_TRACK_VOL: case VP_MASTER: put_int(b, (int32_t)v); return;
     case VP_COND: cond_name(b, v, n); return;
     case VP_RAT_N:
-        if (v)
-            put_int(b, (int32_t)v + 1);
-        else
+        if (!v)
             put_str(b, "OFF", n);
+        else
+            put_int(b, shown_pat()->rat[ui.track][ui.step & 63u] & RAT_BOUNCE ? BNC_HITS[v & 7u] : (int32_t)v + 1);
         return;
     case VP_RAT_RATE: {
         static const char *const R[4] = {"1/32", "1/48", "1/64", "1/24"};
-        put_str(b, R[v & 3u], n);
+        static const char *const C[4] = {"BALL", "TIGHT", "SLOW", "DRUNK"};
+        put_str(b, shown_pat()->rat[ui.track][ui.step & 63u] & RAT_BOUNCE ? C[v & 3u] : R[v & 3u], n);
         return;
     }
+    case VP_RAT_SHAPE: put_str(b, v ? "BOUNCE" : "EVEN", n); return;
+    case VP_BSTART: {
+        static const char *const S[4] = {"1/4", "1/8", "1/16", "1/32"};
+        put_str(b, S[v & 3u], n);
+        return;
+    }
+    case VP_BPITCH:
+        if (v > 12u)
+            b[0] = '+';
+        put_int(b + (v > 12u), (int32_t)v - 12);
+        return;
+    case VP_ROLL:                                    /* the swept rate as a note value: 1/4 .. 1/192 */
+        b[0] = '1';
+        b[1] = '/';
+        put_int(b + 2, (int32_t)((4u * (uint32_t)exp2_q16((int32_t)(v * 2882u)) + 32768u) >> 16));
+        return;
     case VP_RAT_FADE: put_str(b, v == RF_DOWN ? "DOWN" : v == RF_UP ? "UP" : "FLAT", n); return;
     case VP_ACTION: {
         static const char *const A[NACT] = {"-", "DICE", "COMMIT", "UNDO", "RESET"};
@@ -1129,7 +1150,8 @@ static void draw_card(uint32_t k, uint32_t p)
     s = sig_add(p, val);
     s = sig_add(s, hot | lock << 1 | fx.type << 2 | ui.mode << 8);
     s = sig_add(s, ui.msel | (uint32_t)pfs.m[p >= VP_M1 && p <= VP_M4 ? p - VP_M1 : ui.msel & 3u].par << 4 |
-                       (uint32_t)shown_pat()->gen[ui.track][0] << 20);
+                       (uint32_t)shown_pat()->gen[ui.track][0] << 20 |
+                       (uint32_t)(shown_pat()->rat[ui.track][ui.step & 63u] & RAT_BOUNCE) << 21);
     if (!region(R_CARD0 + k, s))
         return;
     card_name(nm, sizeof nm, p);

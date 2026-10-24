@@ -18,7 +18,7 @@ Kettle is the Erica Synths LXR-02 firmware (GPL-3.0) ported to the M-VAVE FM-1 o
 - **Firmware build:** `./build.sh` makes `build/kettle.fwsc` and passes Felucca's checks.
 - **Browser emulator:** `web/emu/build.sh`, tested in Chrome, with Web MIDI in and out, including clock.
 - **First hardware run (0.5.1):** installed on a real FM-1 from V15 with the install page (`web/make_site.py`); a battery display on CONFIG; autosave no longer makes a burst of noise after a stop. See *0.5.1* below.
-- **Tests:** render_test, compare_test and ui_test (58 screens; the output's hush and autosave's timing; the battery display; Grids' map; clocks, conditions, ratchets, generators, bar copy; locks, patterns, project save/load, a 0.1 project, sends, reverb, sound shaping, phaser, flanger, PERF's effects and macros, autosave failure, sync in) all pass.
+- **Tests:** render_test, compare_test and ui_test (61 screens; bouncing ratchets and the roll sweep; the output's hush and autosave's timing; the battery display; Grids' map; clocks, conditions, ratchets, generators, bar copy; locks, patterns, project save/load, a 0.1 project, sends, reverb, sound shaping, phaser, flanger, PERF's effects and macros, autosave failure, sync in) all pass.
 
 **Measured resources** (from the 0.5 build)
 
@@ -171,7 +171,17 @@ The user's direction (October 2026): experimental, in the spirit of Aphex Twin, 
 
 Budget today: the pool has ~49 KB free and the CPU averages ~60% (64% peak) on a busy pattern. After this phase ~25 KB would be left. That rules out a second FX bus with a full-length delay (it didn't fit anyway), and the second core stays the reserve if the physical models cost more than estimated.
 
-### 5a. Bouncing-ball ratchets
+### 5a. Bouncing-ball ratchets (built)
+
+What was built, and where it differs from the plan:
+- **Bounces** (`seq.c` `bounce_start`, `seq_bounces`): RAT_BOUNCE is bit 7 of the step's `rat`. Hits come from 1, 3, 4, 5, 6, 8, 12, 16. Index 0 stays "off", so 10 was dropped rather than losing OFF. The curve sits in the rate bits. Gaps are counted in Q8 samples and run down one block (64 samples) at a time, scaled by TAPE STOP's rate. A gap is never shorter than one block, and SLOW's gaps stop growing at half a bar. Hits land at the start of a block (1.45 ms resolution), which is fine at these speeds. The first hit is the step's own, and the pitch drift reaches its full amount on the last hit. DRUNK uses a xorshift, which 5b's chances will share.
+- **Per track:** `bnc[t]` = first gap | (pitch + 12) << 2, on TRACK CLOCK's knobs 3 and 4 (Bounce, Bnc pitch). Project format version 6 stores it after the generator, only when it differs from the default (1/8, no drift). Version 6 also keeps bit 7 of `rat` on load; versions 4 and 5 mask it off.
+- **The cut:** a new occurrence of a hit on the track cuts a bounce, but a flam's later hits don't. Stopping clears the bounce and its occurrence, so playing again restarts it. ui_test found that bug: the occurrence is (loop, step), and loop 0 repeats after a stop.
+- **Roll sweep** (`seq_roll_sweep`, `roll_period`): while a roll is held or latched, PERFORM's KNOB 3 is Roll, at positions 0..127 from 1/4 to 1/192 on a log scale. That reaches further than planned, into a buzz at 1/192 (4 ms at 120 BPM). It is sample-timed like the bounces, and turning it faster takes effect at once. SHIFT + KNOB 3 is the grid roll rate (PAR_ROLL), which turns the sweep off, as setting it on PERF: MORE does. The swept rate isn't saved. When no roll is held, KNOB 3 is REPEAT again.
+- **Screen:** the RATCHET page's KNOB 2 reads Curve and names it (BALL …) when bouncing. Hits shows the bounce count. A card's redraw signature now includes the bounce bit, so turning Shape redraws the other cards.
+- Tests (ui_test, now 61 screens): 8 BALL hits at 250, 175, 122, 87, 58, 44, 29 ms gaps (each 0.7 of the one before, the first 1/8 at 120 BPM). SLOW's gaps grow. The drift, the cut by the next step, the RATCHET and TRACK CLOCK pages, the sweep's rate (2 hits/s at the slowest; 23/s at 80, which is 1/46), KNOB 3's change of role and back, and a version 6 round trip.
+
+The plan as agreed:
 
 A ratchet whose hits get closer (a dropped ball) or further apart (slowing down), with the velocity falling as it goes.
 

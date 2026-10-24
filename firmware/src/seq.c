@@ -36,9 +36,14 @@ typedef struct {
     uint8_t len[NTRACK];                         /* 1..64 (0: 16) */
     uint8_t clk[NTRACK];                         /* the track's clock: CLK_TICKS's index (CLK_1X: as the pattern) */
     uint8_t gen[NTRACK][4];                      /* its generator: GEN_* and its three settings (seq_gen_*) */
+    uint8_t bnc[NTRACK];                         /* 0.6: its bounces: start (BNC_TICKS's index) | pitch + 12 << 2 */
     uint8_t shuffle, kit;
     uint8_t gx, gy, gchaos;                      /* GRIDS: the map's X, Y and its chaos, 0..127 (the pattern's) */
+    uint8_t link[8][4];                          /* 0.6: track coupling (seq_links): src | tgt << 3 | event << 6,
+                                                  * effect | window << 4, amount (int8), 0; effect 0: no link */
+    uint8_t cdepth;                              /* the links' depth, 0..127 (127: as set) */
 } pattern_t;
+#define NLINK 8u
 
 /* the tracks' clocks (0.5): ticks a step, slowest to fastest; 1x the LXR's 24 */
 #define NCLK 11u
@@ -47,6 +52,17 @@ static const uint8_t CLK_TICKS[NCLK] = {96, 72, 48, 36, 32, 24, 18, 16, 12, 8, 6
 /* the ratchets: their rate (ticks between hits) */
 static const uint8_t RAT_TICKS[4] = {12, 8, 6, 16};    /* 1/32 1/48 1/64 1/24 */
 enum { RF_FLAT, RF_DOWN, RF_UP };
+/* 0.6: bouncing ratchets. A step's ratchet with RAT_BOUNCE: its hits from BNC_HITS, its rate field the curve (each
+ * gap this many 65536ths of the one before; DRUNK: BALL's, +-15% at random), the first gap the track's start
+ * (BNC_TICKS), the pitch drifting by the track's semitones over the bounce. Timed in samples (seq_bounces), not
+ * ticks, so the last bounces can come closer than a tick */
+#define RAT_BOUNCE 0x80u
+enum { BC_BALL, BC_TIGHT, BC_SLOW, BC_DRUNK };
+static const uint8_t BNC_HITS[8] = {1, 3, 4, 5, 6, 8, 12, 16};
+static const uint32_t BNC_RATIO[4] = {45875, 36045, 85197, 45875};   /* 0.7 0.55 1.3 0.7 */
+static const uint8_t BNC_TICKS[4] = {96, 48, 24, 12};                /* 1/4 1/8 1/16 1/32 */
+#define BNC_DEFAULT (12u << 2 | 1u)                  /* from 1/8, no pitch drift */
+#define BNC_GAP_MIN (64u << 8)                       /* samples, Q8: a block */
 /* trig conditions: none, FILL, not FILL, PRE, not PRE, NEI, not NEI, 1ST, not 1ST, then A:B for B 2..8, A 1..B */
 enum { COND_NONE, COND_FILL, COND_NFILL, COND_PRE, COND_NPRE, COND_NEI, COND_NNEI, COND_1ST, COND_N1ST, COND_AB };
 #define NCOND (COND_AB + 35u)
@@ -106,6 +122,15 @@ static struct {
     uint64_t cres[NTRACK];                       /* .. its result, bit k */
     uint8_t rleft[NTRACK], rcnt[NTRACK], rstep[NTRACK], rvel[NTRACK], rn[NTRACK];   /* ratchets running */
     uint32_t rocc[NTRACK];                       /* the occurrence the ratchet started for */
+    /* 0.6: bounces running (seq_bounces), the roll sweep (PERF: KNOB 3 while a roll is held) */
+    uint8_t bleft[NTRACK], bn[NTRACK], bstep[NTRACK], bvel[NTRACK], bnote[NTRACK], brat[NTRACK];
+    int8_t bdrift[NTRACK];
+    int32_t bcnt[NTRACK];                        /* samples to its next hit, Q8 */
+    uint32_t bgap[NTRACK];                       /* the gap before it, Q8 */
+    uint32_t bocc[NTRACK];
+    uint32_t brng;
+    uint8_t roll_free, roll_k;                   /* the swept rate in use; its position 0..127 (1/4 .. 1/192) */
+    int32_t rl_cnt;                              /* samples to the swept rolls' next hit, Q8 */
     volatile uint8_t gsync;                      /* bit t: the live track from the pattern (the ISR does it) */
     uint16_t greg[NTRACK];                       /* TURING's registers */
     uint8_t gpert[NTRACK];                       /* GRIDS: this time round's perturbation (its chaos) */
@@ -163,12 +188,15 @@ static void seq_clear_track(uint32_t t, pattern_t *p)   /* seq_clearTrack */
     p->len[t] = 16;
     p->clk[t] = CLK_1X;
     memset(p->gen[t], 0, sizeof p->gen[t]);
+    p->bnc[t] = BNC_DEFAULT;
 }
 static void seq_clear_pattern(pattern_t *p)
 {
     uint32_t t;
     for (t = 0; t < NTRACK; t++)
         seq_clear_track(t, p);
+    memset(p->link, 0, sizeof p->link);
+    p->cdepth = 127;
 }
 static void seq_clear_automation(uint32_t t, pattern_t *p, uint32_t lane)
 {
@@ -307,11 +335,20 @@ static uint32_t shift_flam(const pattern_t *p, uint32_t t, uint32_t s, uint32_t 
 
 /* a step's hit: its ratchet (hits - 1 more, rate ticks apart, the velocity faded) starts with an occurrence's
  * first hit (a flam's later hits do not start it again) */
+static void bounce_start(uint32_t t, const pattern_t *p, uint32_t s, uint32_t vel, uint32_t occ);
 static void step_hit(uint32_t t, const pattern_t *p, uint32_t s, uint32_t loop)
 {
     uint32_t r = p->rat[t][s], n = (r & 7u) + 1u, vel = p->step[t][s].volume & STEP_VOLUME_MASK;
     uint32_t occ = (loop << 6 | s) + 1u;
-    if (n > 1u && sq.rocc[t] != occ) {
+    if (sq.bocc[t] != occ)                           /* a new hit cuts a bounce (a flam's later hits do not) */
+        sq.bleft[t] = 0;
+    if (r & RAT_BOUNCE) {
+        if (BNC_HITS[r & 7u] > 1u && sq.bocc[t] != occ) {
+            bounce_start(t, p, s, vel, occ);
+            if (((r >> 5) & 3u) == RF_UP)
+                vel = vel / BNC_HITS[r & 7u];
+        }
+    } else if (n > 1u && sq.rocc[t] != occ) {
         sq.rocc[t] = occ;
         sq.rleft[t] = (uint8_t)(n - 1u);
         sq.rn[t] = (uint8_t)n;
@@ -345,6 +382,89 @@ static void seq_ratchets(void)                       /* the ratchets' later hits
         if (!(sq.muted & (1u << t)))
             seq_trigger(t, p, sq.rstep[t], v ? v : 1u, p->step[t][sq.rstep[t]].note);
     }
+}
+
+/* 0.6: a bounce from step s's hit (that hit is its first): the rest in samples, seq_bounces */
+static void bounce_start(uint32_t t, const pattern_t *p, uint32_t s, uint32_t vel, uint32_t occ)
+{
+    uint32_t b = pat[sq.active].bnc[t];
+    sq.bocc[t] = occ;
+    sq.brat[t] = p->rat[t][s];
+    sq.bn[t] = BNC_HITS[sq.brat[t] & 7u];
+    sq.bleft[t] = (uint8_t)(sq.bn[t] - 1u);
+    sq.bstep[t] = (uint8_t)s;
+    sq.bvel[t] = (uint8_t)vel;
+    sq.bnote[t] = p->step[t][s].note;
+    sq.bdrift[t] = (int8_t)((int32_t)(b >> 2) - 12);
+    sq.bgap[t] = (uint32_t)(((uint64_t)BNC_TICKS[b & 3u] * sq.tick_q16) >> 8);
+    sq.bcnt[t] = (int32_t)sq.bgap[t];
+}
+static uint32_t seq_rand(void)                       /* xorshift32 (the bounces' DRUNK, the links' chances) */
+{
+    uint32_t x = sq.brng ? sq.brng : 0x6C8E9CF5u;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    return sq.brng = x;
+}
+/* the block's bounces: a hit when its count runs out, the next gap the curve's ratio of this one (TAPE STOP slows
+ * them with the clock) */
+static void seq_bounces(void)
+{
+    uint32_t t, dt = (uint32_t)(((uint64_t)(BLOCK << 8) * tape_q16) >> 16);
+    for (t = 0; t < NTRACK; t++) {
+        sq.bcnt[t] -= sq.bleft[t] ? (int32_t)dt : 0;
+        while (sq.bleft[t] && sq.bcnt[t] <= 0) {
+            const pattern_t *p = tpat(t);
+            uint32_t r = sq.brat[t], c = (r >> 3) & 3u, n = sq.bn[t], j = n - sq.bleft[t], v = sq.bvel[t], rt;
+            int32_t note = (int32_t)sq.bnote[t] + sq.bdrift[t] * (int32_t)j / (int32_t)(n - 1u);
+            sq.bleft[t]--;
+            if (((r >> 5) & 3u) == RF_DOWN)
+                v = v * (n - j) / n;
+            else if (((r >> 5) & 3u) == RF_UP)
+                v = v * (j + 1u) / n;
+            if (!(sq.muted & (1u << t)))
+                seq_trigger(t, p, sq.bstep[t], v ? v : 1u, (uint32_t)clamp32(note, 0, 127));
+            rt = BNC_RATIO[c];
+            if (c == BC_DRUNK)                       /* +-15% */
+                rt = (uint32_t)((int32_t)rt + (int32_t)(((seq_rand() >> 16) * 13763u) >> 16) - 6881);
+            sq.bgap[t] = (uint32_t)(((uint64_t)sq.bgap[t] * rt) >> 16);
+            if (sq.bgap[t] < BNC_GAP_MIN)
+                sq.bgap[t] = BNC_GAP_MIN;
+            if (sq.bgap[t] > (uint32_t)(((uint64_t)192u * sq.tick_q16) >> 8))   /* (SLOW: half a bar at most) */
+                sq.bgap[t] = (uint32_t)(((uint64_t)192u * sq.tick_q16) >> 8);
+            sq.bcnt[t] += (int32_t)sq.bgap[t];
+        }
+    }
+}
+/* the roll sweep's rate: position k 0..127 from 1/4 (96 ticks) to 1/192 (2 ticks), on a log scale; samples, Q8 */
+static uint32_t roll_period(uint32_t k)
+{
+    int32_t e = -(int32_t)((k > 127u ? 127u : k) * 2882u);   /* log2(48) / 127 a step, Q16 */
+    return (uint32_t)(((uint64_t)96u * sq.tick_q16 >> 8) * (uint32_t)exp2_q16(e) >> 16);
+}
+static void seq_add_note(uint32_t t, uint32_t vel, uint32_t note);
+static void seq_roll_sweep(void)                     /* the block's swept rolls (seq_set_roll starts them) */
+{
+    uint32_t t, per;
+    if (!sq.roll || !sq.roll_free)
+        return;
+    per = roll_period(sq.roll_k);
+    if (sq.rl_cnt > (int32_t)per)                    /* faster: at once */
+        sq.rl_cnt = (int32_t)per;
+    sq.rl_cnt -= (int32_t)(((uint64_t)(BLOCK << 8) * tape_q16) >> 16);
+    if (sq.rl_cnt > 0)
+        return;
+    sq.rl_cnt += (int32_t)per;
+    if (sq.rl_cnt <= 0)
+        sq.rl_cnt = (int32_t)per;
+    for (t = 0; t < NTRACK; t++)
+        if (sq.roll & (1u << t)) {
+            uint32_t i = sq.idx[t] < 0 ? 0u : (uint32_t)sq.idx[t];
+            uint32_t note = tpat(t)->step[t][i].note;
+            seq_trigger(t, 0, 0, ROLL_VOLUME, note);
+            seq_add_note(t, ROLL_VOLUME, note);
+        }
 }
 
 /* what plays on this tick: each track at its clock's position in its step (tph: the 24 positions of a step that
@@ -398,6 +518,7 @@ static void trk_copy(pattern_t *d, const pattern_t *s, uint32_t t)
     memcpy(d->gen[t], s->gen[t], sizeof d->gen[t]);
     d->len[t] = s->len[t];
     d->clk[t] = s->clk[t];
+    d->bnc[t] = s->bnc[t];
 }
 static void seq_gen_sync(uint32_t t);
 static void seq_reset_tracks(void)                   /* every track before its first step, its counts from 0 */
@@ -409,6 +530,8 @@ static void seq_reset_tracks(void)                   /* every track before its f
         sq.loops[t] = 0;
         sq.rleft[t] = 0;
         sq.rocc[t] = 0;
+        sq.bleft[t] = 0;
+        sq.bocc[t] = 0;
     }
     memset(sq.cocc, 0, sizeof sq.cocc);
     sq.pre = 0;
@@ -598,7 +721,7 @@ static void seq_tick_one(void)
     seq_advance(1);
     if (!sq.running)
         return;
-    if (sq.roll && sq.roll_rate && sq.roll_rate < 14u) {          /* rolls: on their own grid */
+    if (sq.roll && !sq.roll_free && sq.roll_rate && sq.roll_rate < 14u) {   /* rolls: on their own grid */
         uint32_t every = ROLL_TICKS[sq.roll_rate];
         if (sq.ticks % every == 0u)
             for (t = 0; t < NTRACK; t++)
@@ -712,10 +835,13 @@ static void seq_block(void)
         }
         sq.ext_next -= BLOCK << 8;
     }
-    if (sq.running)
+    if (sq.running) {
         seq_play_due(BLOCK);
-    else
+        seq_bounces();
+        seq_roll_sweep();
+    } else {
         sq.due = 0;
+    }
 }
 
 /* MIDI sync: a clock pulse (24 a beat), start, continue, stop (midi.c, in the ISR) */
@@ -816,8 +942,10 @@ static void seq_set_roll(uint32_t t, int on)         /* seq_setRoll */
     if (t >= NTRACK)
         return;
     if (on) {
+        if (!sq.roll)
+            sq.rl_cnt = 0;                           /* (swept: the first hit at once) */
         sq.roll |= (uint8_t)(1u << t);
-        if (sq.roll_rate == 0u || !sq.running) {     /* ONE, or stopped: a single hit */
+        if ((sq.roll_rate == 0u && !sq.roll_free) || !sq.running) {   /* ONE, or stopped: a single hit */
             seq_trigger(t, 0, 0, ROLL_VOLUME, SEQ_DEFAULT_NOTE);
             seq_add_note(t, ROLL_VOLUME, SEQ_DEFAULT_NOTE);
         }

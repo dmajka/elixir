@@ -19,7 +19,7 @@
 #define PROJ_AUTO 4u                                /* the session */
 #define PROJ_NLOG 5u
 #define PROJ_MAGIC 0x4A52504Bu                      /* "KPRJ" */
-#define PROJ_VERSION 5u                             /* (1 .. 4 still load: proj_read_payload) */
+#define PROJ_VERSION 6u                             /* (1 .. 5 still load: proj_read_payload) */
 #define PROJ_PAYLOAD (PROJ_SLOT - 256u)
 
 typedef struct {
@@ -139,7 +139,8 @@ static int track_is_default(const pattern_t *p, uint32_t t)
 {
     uint32_t k;
     if (p->len[t] != 16u || p->main[t][0] || p->main[t][1] || p->main[t][2] || p->main[t][3] ||
-        p->clk[t] != CLK_1X || p->gen[t][0] || p->gen[t][1] || p->gen[t][2] || p->gen[t][3])
+        p->clk[t] != CLK_1X || p->gen[t][0] || p->gen[t][1] || p->gen[t][2] || p->gen[t][3] ||
+        p->bnc[t] != BNC_DEFAULT)
         return 0;
     for (k = 0; k < NUM_STEPS; k++)
         if (step_diff(p, t, k))
@@ -201,7 +202,11 @@ static void proj_write_payload(void)
         for (t = 0; t < NTRACK; t++)
             if (!track_is_default(p, t))
                 tm |= 1u << t;
-        if (p->shuffle || p->kit || p->gx || p->gy || p->gchaos)
+        uint32_t lm = 0;
+        for (k = 0; k < NLINK; k++)
+            if (p->link[k][1] & 15u)
+                lm |= 1u << k;
+        if (p->shuffle || p->kit || p->gx || p->gy || p->gchaos || lm || p->cdepth != 127u)
             tm |= 0x80u;
         pw_byte(tm);
         if (tm & 0x80u) {
@@ -210,6 +215,11 @@ static void proj_write_payload(void)
             pw_byte(p->gx);
             pw_byte(p->gy);
             pw_byte(p->gchaos);
+            pw_byte(p->cdepth);                     /* (version 6: the links, those set) */
+            pw_byte(lm);
+            for (k = 0; k < NLINK; k++)
+                if (lm & (1u << k))
+                    pw_bytes(p->link[k], 4);
         }
         for (t = 0; t < NTRACK; t++) {
             uint8_t bits[8] = {0};
@@ -218,6 +228,7 @@ static void proj_write_payload(void)
             pw_byte(p->len[t]);
             pw_byte(p->clk[t]);
             pw_bytes(p->gen[t], 4);
+            pw_byte(p->bnc[t]);
             for (k = 0; k < 4u; k++)
                 pw_u16(p->main[t][k]);
             for (k = 0; k < NUM_STEPS; k++)
@@ -317,7 +328,7 @@ static void pr_step(uint32_t ver, pattern_t *p, uint32_t t, uint32_t k)
     if (m & SF_X) {
         uint32_t c = pr_byte();
         p->cond[t][k] = (uint8_t)(c < NCOND ? c : 0u);
-        p->rat[t][k] = (uint8_t)(pr_byte() & 0x7Fu);
+        p->rat[t][k] = (uint8_t)(pr_byte() & (ver >= 6u ? 0xFFu : 0x7Fu));   /* (version 6: RAT_BOUNCE) */
     }
     if (ver == 2u) {
         lock_v2(p, t, k, 0);
@@ -393,6 +404,14 @@ static int proj_read_payload(uint32_t ver)
                 p->gy = (uint8_t)(pr_byte() & 127u);
                 p->gchaos = (uint8_t)(pr_byte() & 127u);
             }
+            if (ver >= 6u) {
+                uint32_t lm;
+                p->cdepth = (uint8_t)(pr_byte() & 127u);
+                lm = pr_byte();
+                for (k = 0; k < NLINK; k++)
+                    if (lm & (1u << k))
+                        pr_bytes(p->link[k], 4);
+            }
         }
         for (t = 0; t < NTRACK; t++) {
             uint8_t bits[8];
@@ -408,6 +427,11 @@ static int proj_read_payload(uint32_t ver)
                     p->clk[t] = CLK_1X;
                 if (p->gen[t][0] >= NGEN)
                     p->gen[t][0] = GEN_OFF;
+            }
+            if (ver >= 6u) {
+                p->bnc[t] = (uint8_t)pr_byte();
+                if ((p->bnc[t] >> 2) > 24u)
+                    p->bnc[t] = BNC_DEFAULT;
             }
             for (k = 0; k < 4u; k++)
                 p->main[t][k] = (uint16_t)pr_u16();

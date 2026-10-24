@@ -213,12 +213,28 @@ Press **SEQ**. Tap a white key to select a step (its key breathes; tap it again 
 | STEP | Velocity | Note | Chance | Condition |
 | TIMING | Flam | Shift | – | – |
 | LOCKS | Lock 1 parameter | its value | Lock 2 parameter | its value |
-| RATCHET | Hits | Rate | Fade | – |
+| RATCHET | Hits | Rate (bouncing: Curve) | Fade | Shape |
 
 - **Note:** the pitch the voice plays at (C4 = as set).
 - **Chance:** the probability the step plays (PERF's FILL key plays it anyway).
 - **Flam:** OFF, x2, x3, x4, x6, x8: the step repeats evenly inside its length.
 - **Shift:** −7 … +7 eighths of a step, early or late.
+- **Ratchet:** the step plays Hits times, evenly at Rate (1/32, 1/48, 1/64, 1/24). Fade: FLAT, DOWN or UP.
+
+### Bouncing ratchets
+
+Turn **Shape** to **BOUNCE** and the ratchet falls like a dropped ball: the hits start far apart and come closer and closer together. With BOUNCE, KNOB 1 sets 3, 4, 5, 6, 8, 12 or 16 hits, and KNOB 2 sets the **Curve**:
+
+| Curve | Each gap |
+|---|---|
+| **BALL** | 0.7 of the one before |
+| **TIGHT** | 0.55 of the one before: a quick rattle |
+| **SLOW** | 1.3 of the one before: it spreads out and slows down (half a bar at most) |
+| **DRUNK** | 0.7, give or take 15% each time |
+
+The first gap and a pitch drift are set for the whole track on the TRACK CLOCK page (section 12): **Bounce** (1/4, 1/8, 1/16, 1/32; 1/8 at first) and **Bnc pitch** (−12 … +12 semitones over the bounce: −5 makes a tom fall as it settles). Fade works on bounces too.
+
+A bounce plays out over the steps that follow it. The next hit on the same track cuts it off, so leave room after it. TAPE STOP slows bounces with everything else.
 
 MIDI notes played while in step edit set the selected step's note.
 
@@ -403,7 +419,7 @@ Press **ARP** twice (past PERF). Turn SELECT for four pages, all for the selecte
 |---|---|---|---|---|
 | EUCLID | Length | Hits | Rotate | Action |
 | GENERATOR | Generator | its settings … | | |
-| TRACK CLOCK | Length | Clock | – | – |
+| TRACK CLOCK | Length | Clock | Bounce | Bnc pitch |
 | GRIDS MAP | Map X | Map Y | Chaos | – |
 
 ### Euclid
@@ -446,6 +462,8 @@ A typical start: D1 GRIDS / BD, SN GRIDS / SD, CH GRIDS / HH, then explore X and
 
 Each track can run at its own rate against the pattern: **/4, /3, /2, 2/3, 3/4, 1x, 4/3, 3/2, x2, x3, x4**. A hat at x2 plays 32nds; a track at 3/4 against a 16-step pattern makes 12 steps fit a bar (a polyrhythm). Combine with track lengths for polymeters. Flams and shifts scale with the track's step.
 
+**Bounce** and **Bnc pitch** set the track's bouncing ratchets (section 6): the first gap and the pitch drift.
+
 ---
 
 ## 13. Performance mode (PERF)
@@ -454,7 +472,7 @@ Press **ARP**. The white keys act **while held**; **SHIFT + key latches** it on 
 
 | Key | Name | Does |
 |---|---|---|
-| 1–7 | rolls | Roll the track at the roll rate (PERF: MORE page) |
+| 1–7 | rolls | Roll the track at the roll rate (PERF: MORE page). While a roll is held, KNOB 3 sweeps its rate (below). |
 | 8 | **FILL** | Every step plays whatever its chance; FILL conditions play |
 | 9 | **RPT** | **Repeat:** the sequencer loops its position at the repeat length (1/4, 1/8, 1/16, 1/32), starting on that grid. When you let go, the pattern carries on where it would have been. |
 | 10 | **FRZ** | **Freeze:** the FX bus's delay loops what it holds (input off, feedback 100%). Needs the FX bus on DELAY; the longest loop is about 0.74 s. |
@@ -483,6 +501,7 @@ The screen shows all 16 keys (lit: on, outlined: latched), the repeat length, th
 - **DJ filter:** off in the middle; left a low-pass on the whole output, right a high-pass.
 - **Macros:** each macro knob moves one parameter between its Min and Max (Max below Min turns it the other way). Set them up on MACRO SETUP: pick the macro, its target (any lockable parameter), Min and Max. Turning a macro while recording writes locks, as any knob does.
 - **Tape time:** 0.2 to 4 seconds.
+- **Roll sweep:** while a roll key is held (or latched) on the PERFORM page, KNOB 3 turns from Repeat into **Roll**: a smooth sweep from 1/4 to 1/192, off the grid. Turn it up while holding a kick for a drum-and-bass build, or down for a stutter that slows to a stop. SHIFT + KNOB 3 sets the gridded roll rate instead. Setting the roll rate on PERFORM: MORE puts rolls back on the grid. The swept rate is not saved.
 
 Macros, the repeat length and the tape time are saved with the project. The DJ filter starts in the middle at power-on.
 
