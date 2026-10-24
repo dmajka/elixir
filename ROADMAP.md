@@ -12,13 +12,14 @@ Kettle is the Erica Synths LXR-02 firmware (GPL-3.0) ported to the M-VAVE FM-1 o
 - **Sound shaping (0.3):** per voice a waveshaper choice, bits, tilt EQ, random per hit, choke group and cross modulation; PHASER and FLANGER on the FX bus.
 - **Performance mode (0.4):** PERF's keys: rolls, FILL, repeat, freeze, throws, feedback push, tape stop, filter sweeps (latchable); a DJ filter on the master; four macros.
 - **Generative sequencing (0.5):** per step trig conditions and ratchets; per track clocks, generators (mutate, Turing machine, cellular automata, Grids' drum map), dice, commit and undo; COPY + bar copies every track's bar on the grid.
+- **Phase 5 (0.6):** bouncing ratchets and the roll sweep, links between tracks, PERFORM 2 (a second bank of PERF effects), physical-model voices for Drum 1–3. CPU on hardware still to be measured. See *Phase 5*.
 - **MIDI:** USB and TRS in, USB out. CC/NRPN control as on the LXR; clock out always on; clock in by turning the tempo below its minimum to "MIDI".
 - **Projects:** 4 slots plus an AUTO session slot in flash, 48 KB each, sparse encoding. Format version 5 since 0.5; versions 1 to 4 still load.
 - **UI:** mapped to the FM-1's keys, buttons and knobs; SHIFT legend on screen; mixer under GLO.
 - **Firmware build:** `./build.sh` makes `build/kettle.fwsc` and passes Felucca's checks.
 - **Browser emulator:** `web/emu/build.sh`, tested in Chrome, with Web MIDI in and out, including clock.
 - **First hardware run (0.5.1):** installed on a real FM-1 from V15 with the install page (`web/make_site.py`); a battery display on CONFIG; autosave no longer makes a burst of noise after a stop. See *0.5.1* below.
-- **Tests:** render_test, compare_test and ui_test (69 screens; PERFORM 2; links between tracks; bouncing ratchets and the roll sweep; the output's hush and autosave's timing; the battery display; Grids' map; clocks, conditions, ratchets, generators, bar copy; locks, patterns, project save/load, a 0.1 project, sends, reverb, sound shaping, phaser, flanger, PERF's effects and macros, autosave failure, sync in) all pass.
+- **Tests:** render_test, compare_test and ui_test (70 screens; physical models; PERFORM 2; links between tracks; bouncing ratchets and the roll sweep; the output's hush and autosave's timing; the battery display; Grids' map; clocks, conditions, ratchets, generators, bar copy; locks, patterns, project save/load, a 0.1 project, sends, reverb, sound shaping, phaser, flanger, PERF's effects and macros, autosave failure, sync in) all pass.
 
 **Measured resources** (from the 0.5 build)
 
@@ -158,7 +159,7 @@ Fixed: every save (`storage.c` `st_save_to`, `project.c` `proj_save`) fades the 
 - **The second core.** Felucca has it (`FELUCCA_CPU2`, `hal/fm1_cpu1.h`, a menu option, off by default because core 1 misreads RAM on some FM-1s, with a fallback to one core). Moving the reverb or the FX bus there might bring 60% to roughly 35–45%. Not needed at today's load; worth it before adding heavy DSP such as a second FX bus.
 - **A second FX send** (two effects at once). The FX bus's delay buffer is 64 KB and the pool has ~49 KB free, so a second bus can't have a full-length delay. Options: (A) bus 2 offers drive, phaser, flanger and a shorter delay (~0.35 s); (B) the two buses split the delay memory. Each voice gets a second send, the mixer another send page; parameters, a project format change and tests: about a phase. The user is thinking about it.
 
-## Phase 5 (agreed): bouncing ratchets and roll sweep, track coupling, PERFORM 2, physical-model voices
+## Phase 5 (built in 0.6, except the CPU measurement on hardware): bouncing ratchets and roll sweep, track coupling, PERFORM 2, physical-model voices
 
 The user's direction (October 2026): experimental, in the spirit of Aphex Twin, Autechre, microhouse (clicks and cuts) and dub techno, and of the Torso S-4's audio effects, but within the FM-1's means. Four parts, built and checked in on one at a time (each: emulator test, then the CPU meter on hardware). In order of size:
 

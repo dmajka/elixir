@@ -1,6 +1,6 @@
 # Kettle manual
 
-Kettle is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 0.5.1: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Kettle adds.
+Kettle is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 0.6: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Kettle adds.
 
 Kettle is **unofficial**. It is not affiliated with or endorsed by Erica Synths, M-VAVE or Hügelton Instruments. It is free software under the GPL-3.0 (see *Licence and credits* at the end).
 
@@ -35,7 +35,7 @@ Kettle is **unofficial**. It is not affiliated with or endorsed by Erica Synths,
 
 ### Status
 
-Kettle has been tested extensively in its browser emulator and with host tests (the same C sources compiled for a computer), and **it has run on one real FM-1 so far** (October 2026). There, a busy pattern used about 60% of the processor on average, with a 64% peak. Kettle shows its load on screen (see [the CPU meter](#16-settings-config-and-the-cpu-meter)); reports from other FM-1s are welcome.
+Kettle has been tested extensively in its browser emulator and with host tests (the same C sources compiled for a computer), and **it has run on one real FM-1 so far** (October 2026). There, a busy pattern used about 60% of the processor on average, with a 64% peak. Kettle shows its load on screen (see [the CPU meter](#16-settings-config-and-the-cpu-meter)); reports from other FM-1s are welcome. Version 0.6 (PERFORM 2 and the physical models) has so far only run in the emulator: its load on the FM-1 hasn't been measured yet, so watch the CPU meter with several models or PERFORM 2 effects at once.
 
 ### Before the first install: official V15
 
