@@ -77,6 +77,159 @@ typedef struct {
 } voice_t;
 
 static voice_t vc[NVOICE];
+/* 0.6: physical models for the DRUM voices (the MODEL section: sound.c sets mdl[]). A struck body instead of the
+ * LXR's oscillators: 6 two-pole resonators (MEMBRANE, BAR, BELL, PLATE: their modes' ratios to the voice's pitch,
+ * stretched by MATERIAL; each excited by POSITION's share and the hit's brightness; decaying in DECAY, the higher
+ * ones DAMPING times faster), or a Karplus-Strong line (TUBE). The exciter: a half-sine pulse (soft: long; hard: a
+ * click) or a noise burst, its area the velocity. TENSION: the pitch up at the hit, falling back (a drum head). The
+ * voice's filter, shaping, sends and the rest follow as for the LXR's engine; the amp EG does not apply (DECAY is
+ * the model's). Coefficients each block: y = x b + a1 y1 - a2 y2, a1 = 2 r cos w, a2 = r^2 (Q30), the states Q8 */
+enum { MD_LXR, MD_MEMBRANE, MD_BAR, MD_BELL, MD_PLATE, MD_TUBE, NMODEL };
+#define MD_NMODE 6u
+static int32_t exp2_q16(int32_t y);                  /* (fxbus.c) */
+#define TUBE_LEN 1104u                               /* TUBE's line: down to ~40 Hz */
+static const int32_t MD_LOG2[4][MD_NMODE] = {           /* log2 of the modes' ratios, Q16 */
+    {0, 43845, 71933, 78750, 92143, 101317},         /* MEMBRANE: 1 1.59 2.14 2.30 2.65 2.92 */
+    {0, 95851, 159516, 207038, 244953, 276584},      /* BAR: 1 2.76 5.40 8.93 13.34 18.64 */
+    {-65536, 0, 15889, 38714, 65536, 87162},         /* BELL: 0.5 1 1.18 1.51 2 2.51 */
+    {0, 33154, 62168, 81185, 97686, 113739}};        /* PLATE: 1 1.42 1.93 2.36 2.81 3.33 */
+#define OM_MS ((uint32_t)(7417460000000ull / FS))    /* 1 - r (Q30) x the decay in ms: 6.908 / (T FS) */
+typedef struct {
+    uint8_t type, dec, damp, mat, pos, exc, tens;
+    int32_t y1[MD_NMODE], y2[MD_NMODE], a1[MD_NMODE], a2[MD_NMODE], b[MD_NMODE];
+    int32_t amp[MD_NMODE];                              /* this hit's share of each mode, Q15 */
+    uint32_t ex_n, ex_len;                           /* the exciter: samples left, its length */
+    int32_t ex_amp, ten;                             /* .. its peak (noise: x 1); TENSION's pitch, Q16 over 1 */
+    uint8_t ex_noise;
+    uint32_t tw;                                     /* TUBE: the write index, the loop's low-pass */
+    int32_t tlp;
+} model_t;
+static model_t mdl[3];
+static int16_t tube_line[3][TUBE_LEN] POOL;
+
+/* sin x for x = ph / 2^32 of a turn, 0 <= ph <= 2^30 (to a quarter), Q30: a Taylor series to x^9 */
+static int32_t sin_q30(uint32_t ph)
+{
+    int64_t x = ((int64_t)ph * 1686629713) >> 30, x2 = (x * x) >> 30, t;   /* x: radians, Q30 */
+    t = (1 << 30) - ((x2 * 14913081) >> 30);         /* 1 - x^2 / 72 */
+    t = (1 << 30) - ((((x2 * 25565282) >> 30) * t) >> 30);   /* 1 - x^2 / 42 (..) */
+    t = (1 << 30) - ((((x2 * 53687091) >> 30) * t) >> 30);
+    t = (1 << 30) - ((((x2 * 178956971) >> 30) * t) >> 30);
+    return (int32_t)((x * t) >> 30);
+}
+static void model_trigger(uint32_t vi, uint32_t vel)
+{
+    model_t *m = &mdl[vi];
+    int32_t v15 = (int32_t)(vel * 32767u / 127u), pp = 1311 + m->pos * 245;   /* the strike point 0.02 .. 0.5, Q16 */
+    uint32_t k;
+    if (m->exc < 64u) {                              /* a pulse: 190 samples (a thump) .. 1 (a click) */
+        m->ex_len = 1u + (63u - m->exc) * 3u;
+        m->ex_noise = 0;
+        m->ex_amp = m->ex_len > 1u ? v15 * 3 / (int32_t)(m->ex_len + 1u) : v15;   /* (its area ~ the click's x 2) */
+    } else {                                         /* a noise burst: 1.5 .. 7 ms */
+        m->ex_len = 64u + (m->exc - 64u) * 4u;
+        m->ex_noise = 1;
+        m->ex_amp = v15 * 3 / (int32_t)(1u + m->ex_len / 16u);
+    }
+    m->ex_n = m->ex_len;
+    for (k = 0; k < MD_NMODE; k++) {                 /* POSITION: sin(pi p (k + 1)); harder: the higher modes louder */
+        int32_t a = sine_at(((uint32_t)pp * (k + 1u) << 15) + 0x40000000u);   /* (the table: -cos) */
+        a = a < 0 ? -a : a;
+        a = a < 3277 ? 3277 : a;
+        m->amp[k] = (a * (32768 - (32768 - v15) * (int32_t)k / 8)) >> 15;
+    }
+    m->ten = (int32_t)(m->tens * (uint32_t)v15 >> 7);   /* up to + an octave */
+    if (m->type == MD_TUBE) {
+        memset(tube_line[vi], 0, sizeof tube_line[vi]);
+        m->tlp = 0;
+    }
+}
+/* the block's coefficients from the voice's pitch (inc: its oscillator's, with the pitch EG and random) */
+static void model_coefs(model_t *m, uint32_t inc)
+{
+    uint32_t k, om0 = OM_MS / (uint32_t)((20 * exp2_q16(m->dec * 3922)) >> 16), lim = 1932735283u;  /* 0.45 */
+    int32_t mat = 65536 + ((int32_t)m->mat - 64) * 310;   /* MATERIAL: the ratios to the power 0.7 .. 1.3, Q16 */
+    if (m->type == MD_BELL || m->type == MD_PLATE)
+        om0 >>= 1;                                   /* (they ring twice as long) */
+    inc = (uint32_t)(((uint64_t)inc * (uint32_t)(65536 + m->ten)) >> 16);
+    for (k = 0; k < MD_NMODE; k++) {
+        int32_t l2 = MD_LOG2[(m->type - 1u) & 3u][k], ratio = exp2_q16((int32_t)(((int64_t)l2 * mat) >> 16));
+        uint64_t ik64 = ((uint64_t)inc * (uint32_t)ratio) >> 16;
+        uint32_t ik = (uint32_t)ik64, om, r;
+        int32_t sh, c, sw;
+        if (ik64 >= lim) {                           /* (past 0.45 FS: silent) */
+            m->b[k] = 0;
+            m->a1[k] = m->a2[k] = 0;
+            continue;
+        }
+        om = om0 + (uint32_t)((((uint64_t)om0 * (uint32_t)(ratio > 65536 ? ratio - 65536 : 0)) >> 16) * m->damp >> 5);
+        om = om > (1u << 28) ? 1u << 28 : om;
+        r = (1u << 30) - om;
+        sh = sin_q30(ik >> 1);                       /* cos w = 1 - 2 sin^2 (w / 2): exact at low pitches */
+        c = (1 << 30) - (int32_t)(((int64_t)sh * sh) >> 29);
+        sw = sin_q30(ik <= (1u << 30) ? ik : (1u << 31) - ik);
+        m->a1[k] = (int32_t)(((int64_t)r * c) >> 29);
+        m->a2[k] = (int32_t)(((uint64_t)r * r) >> 30);
+        m->b[k] = (int32_t)(((int64_t)m->amp[k] * sw) >> 15);   /* (Q30: the mode's peak its share of the hit's) */
+    }
+    m->ten -= m->ten >> 5;                           /* TENSION falls back (~45 ms) */
+}
+static int32_t model_exc(model_t *m)                 /* the exciter's next sample */
+{
+    int32_t x;
+    if (!m->ex_n)
+        return 0;
+    m->ex_n--;
+    if (m->ex_noise)
+        x = (int32_t)(int16_t)(noise_next() >> 16) * m->ex_amp >> 15;
+    else
+        x = m->ex_len == 1u ? m->ex_amp   /* (the table: -cos; a quarter on, sin) */
+                            : (sine_at((m->ex_len - m->ex_n) * (0x80000000u / m->ex_len) + 0x40000000u) * m->ex_amp)
+                                  >> 15;
+    return x;
+}
+static void model_block(uint32_t vi, const voice_t *v, int16_t *buf)
+{
+    model_t *m = &mdl[vi];
+    uint32_t i, k;
+    if (m->type == MD_TUBE) {                        /* Karplus-Strong: the line D = FS / f, a low-pass and a loss */
+        uint32_t ik = v->osc.inc >> 8, d8, di, df;
+        int32_t g, kd = 32767 - m->damp * 200;
+        int32_t om0 = (int32_t)(OM_MS / (uint32_t)((20 * exp2_q16(m->dec * 3922)) >> 16));
+        int16_t *ln = tube_line[vi];
+        ik = (uint32_t)(((uint64_t)ik * (uint32_t)(65536 + m->ten)) >> 16);
+        d8 = 0xFFFFFFFFu / (ik ? ik : 1u);           /* the period, Q8 samples */
+        d8 = d8 < (2u << 8) ? 2u << 8 : d8 > ((TUBE_LEN - 2u) << 8) ? (TUBE_LEN - 2u) << 8 : d8;
+        di = d8 >> 8;
+        df = d8 & 255u;
+        g = 32767 - (int32_t)(((uint32_t)om0 >> 8) * di >> 7);   /* the loss a pass: r^D */
+        g = g < 16384 ? 16384 : g;
+        for (i = 0; i < BLOCK; i++) {
+            uint32_t a = (m->tw + TUBE_LEN - di) % TUBE_LEN, b = (a + TUBE_LEN - 1u) % TUBE_LEN;
+            int32_t y = ln[a] + (((ln[b] - ln[a]) * (int32_t)df) >> 8);
+            m->tlp += ((y - m->tlp) * kd) >> 15;
+            y = sat16(((m->tlp * g) >> 15) + (model_exc(m) >> 1));
+            ln[m->tw] = (int16_t)y;
+            m->tw = m->tw + 1u < TUBE_LEN ? m->tw + 1u : 0u;
+            buf[i] = (int16_t)y;
+        }
+        m->ten -= m->ten >> 5;
+        return;
+    }
+    model_coefs(m, v->osc.inc);
+    for (i = 0; i < BLOCK; i++) {
+        int32_t x = model_exc(m) << 8, out = 0;
+        for (k = 0; k < MD_NMODE; k++) {
+            int32_t y = (int32_t)((((int64_t)m->a1[k] * m->y1[k]) - ((int64_t)m->a2[k] * m->y2[k]) +
+                                   ((int64_t)x * m->b[k])) >> 30);
+            m->y2[k] = m->y1[k];
+            m->y1[k] = y;
+            out += y;
+        }
+        buf[i] = (int16_t)sat16(out >> 10);
+    }
+}
+
 static uint32_t decim_rate[NVOICE + 1];          /* [6]: ALL (the PERF page's global reducer). Q16 */
 static modnode_t velo_mod[NVOICE], lfo_mod[NVOICE];
 static uint32_t seq_bpm_x10 = 1200;               /* the tempo the LFO sync follows */
@@ -181,6 +334,8 @@ static void voice_trigger(uint32_t track, uint32_t vel, uint32_t note)
     lfo_retrigger(vi);
     modnode_update(&velo_mod[vi], (int32_t)(vel * 65536u / 127u));
     v->velo = (int32_t)(vel * 32768u / 127u);
+    if (vi <= V_DRUM3 && mdl[vi].type)                   /* (0.6: a model's strike) */
+        model_trigger(vi, vel);
     if (vi <= V_DRUM3) {                                 /* Drum_trigger */
         osc_reset_phase(&v->osc, trans_offset(v), 1);
         osc_reset_phase(&v->mod, 65536u, 1);
@@ -321,8 +476,13 @@ static void shape_block(voice_t *v, int16_t *buf)
 static void drum_block(voice_t *v, int16_t *buf)     /* calcDrumVoiceSyncBlock */
 {
     int16_t mb[BLOCK];
-    uint32_t i;
+    uint32_t i, vi = (uint32_t)(v - vc);
     int32_t g, step;
+    if (vi <= V_DRUM3 && mdl[vi].type) {             /* 0.6: a model, the filter, no amp EG */
+        model_block(vi, v, buf);
+        svf_block(&v->flt, v->ftype, buf);
+        goto shape;
+    }
     osc_block(&v->mod, mb, v->fm1, 0, 0, v->pwm);
     if (v->mix_oscs) {
         osc_block(&v->osc, buf, 32768 - v->fm1, 0, 0, v->pwm);
@@ -341,6 +501,7 @@ static void drum_block(voice_t *v, int16_t *buf)     /* calcDrumVoiceSyncBlock *
     if (v->vol_mod)
         for (i = 0; i < BLOCK; i++)
             buf[i] = (int16_t)((buf[i] * v->velo) >> 15);
+shape:
     if (v->shape == SH_LXR) {
         for (i = 0; i < BLOCK; i++) {                /* calcDistBlockFiltered: the shape smoothed (0.01 a sample) */
             v->dks += ((v->dk << 8) - v->dks) / 100;

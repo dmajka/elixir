@@ -285,7 +285,24 @@ Held back (cheap, but didn't make the 16; can swap in on review): PITCH WARP (ev
 
 Tests: each effect against its own render check (CUTS silence fraction, PUMP gain at the kick, COMB's tone at its pitch, REVERSE equals the recorded buffer backwards), latching across banks, project save and load.
 
-### 5d. Physical-model voices
+### 5d. Physical-model voices (built)
+
+What was built, and where it differs from the plan:
+- **Where it's chosen:** not an Engine switch on the OSC page but the first knob of the new **MODEL** section (EDIT, after CLICK; drum tracks only, `S_MODEL`): Model = LXR is the LXR's engine. 7 knobs (Model, Decay, Damping, Material / Position, Exciter, Tension), not 8: Pitch stays the voice's own Coarse and Fine on the OSC page. MEMBRANE is shown as **SKIN** (fits the knob card).
+- **Parameters** (`sound.c`): `PAR_MODEL1` .. `PAR_MTENS1`, six each like Kettle's other per-voice settings (4..6 unused), NRPN 256–297. Defaults (`kit.c`): decay 64, damping 40, material 64, position 40, exciter 32, tension 0. All lockable per step; Model is a menu and doesn't morph (`morph_excluded`). Old kits and projects load as LXR: the project stores `NPAR` and its count.
+- **The engine** (`voices.c` `model_t mdl[3]`, `model_trigger`, `model_coefs`, `model_block`): 6 two-pole resonators a voice, the coefficients recomputed each block from the oscillator's increment (so the pitch EG, random pitch and TENSION's fall all bend it), sin/cos from a Q30 Taylor series (`sin_q30`; `cos w` as 1 − 2 sin²(w/2) to stay exact at low pitches). Modes past 0.45 FS are dropped.
+  - Decay 20 ms × 2^(decay × 0.06) to −60 dB (BELL and PLATE ×2). Damping multiplies each mode's decay rate by 1 + (ratio − 1) × damping / 32. Material raises the ratios to the power 0.7..1.3 (`exp2_q16` of the log2 tables `MD_LOG2`).
+  - Position: each mode's level is |sin(π p (k+1))|, p = 0.02..0.5, floored at 0.1 so no mode vanishes. Velocity: the higher modes louder for a harder hit (mode k × 1 − (1 − v) k / 8).
+  - Exciter: a half-sine pulse of 190 samples (thump) down to 1 (click), or a noise burst of 1.5–7 ms.
+  - TUBE: Karplus-Strong in a 1,104-sample line a voice in the pool (6.6 KB for three), fractional delay, a one-pole low-pass in the loop (Damping) and a loss a pass from Decay. It ignores Material and Position.
+- **The amp EG is bypassed** for a model (the model's Decay is the voice's length), and so is velocity's volume mod (velocity drives the strike instead). After the model: the voice's filter, then the shape/drive, bits, tilt, sends, pan, cross modulation, as planned.
+- **A bug found by the tests:** the LXR's sine table (`LXR_SINE`, `sine_at`) is −cos, not sin. The model's position and pulse use `sine_at(ph + 2^30)`.
+- **Pool:** 348.7 KB of 360 KB used, ~19.5 KB free (TUBE's lines). Image 290 KB.
+- **CPU:** not yet measured on the FM-1. Per voice ~6 × 3 multiplies a sample while a model is on; nothing when Model = LXR. If three models are too heavy, the resonators are the second core's first job.
+- **Not built:** the SNARE model (5d+), as planned.
+- **Tests** (ui_test, 70 screens): each model's modes at their ratios (Goertzel at each ratio against its ±3% neighbours, at 523 Hz with damping 0); SKIN's decay at 64 (−20 dB over 93 ms); velocity brightness (the 6th mode 0.18 of the 1st hard, 0.09 soft); TUBE's period (84 samples at 523 Hz); TENSION up at the hit and back; the MODEL page from EDIT; Model back to LXR; the project round trip.
+
+The plan as agreed:
 
 A second engine for the three DRUM voices: instead of the LXR's oscillators, a struck resonating body.
 

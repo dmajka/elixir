@@ -1360,6 +1360,151 @@ static void phase5c(void)
     goto_mode(B_HOME, M_HOME);
 }
 
+/* 0.6 (5d): physical models */
+static double goertzel(const float *y, uint32_t n, double f)   /* |the DFT of y at f Hz| / n */
+{
+    double w = 2.0 * 3.14159265358979 * f / FS, c = 2.0 * cos(w), s1 = 0, s2 = 0, s0;
+    uint32_t i;
+    for (i = 0; i < n; i++) {
+        s0 = y[i] + c * s1 - s2;
+        s2 = s1;
+        s1 = s0;
+    }
+    return sqrt(s1 * s1 + s2 * s2 - c * s1 * s2) / n;
+}
+static float mdl_y[16384];
+static void mdl_hit(uint32_t vel, uint32_t skip_ms, uint32_t n)   /* D1 struck; n samples from skip_ms on */
+{
+    uint32_t k = 0;
+    run_ms(300);
+    voice_trigger(0, vel, vc[0].osc.base_note);
+    run_ms(skip_ms);
+    while (k < n) {
+        uint32_t j, m = n - k > 1024u ? 1024u : n - k;
+        web_render(m);
+        for (j = 0; j < m; j++)
+            mdl_y[k + j] = out_l[j];
+        k += m;
+    }
+}
+static void phase5d(void)
+{
+    static const double RATIO[4][6] = {{1, 1.59, 2.14, 2.30, 2.65, 2.92}, {1, 2.756, 5.404, 8.933, 13.34, 18.64},
+                                       {0.5, 1, 1.183, 1.506, 2.0, 2.514}, {1, 1.42, 1.93, 2.36, 2.81, 3.33}};
+    static const char *const NM[4] = {"MEMBRANE", "BAR", "BELL", "PLATE"};
+    uint32_t md, k, ok;
+    double f0;
+    p4_reset();
+    par_set(PAR_FILTER_FREQ_1, 127);                 /* (the voice's filter open, its own decay long) */
+    par_set(PAR_FILTER_TYPE_1, F_OFF - 1u);
+    par_set(PAR_MDECAY1, 90);
+    par_set(PAR_MPOS1, 30);
+    par_set(PAR_MEXC1, 63);                          /* (a click: every mode) */
+    par_set(PAR_COARSE1, 72);                        /* (higher: the modes bins apart) */
+    par_set(PAR_MDAMP1, 0);                          /* (the high modes as long as the low) */
+    run_ms(20);
+    f0 = (double)vc[0].osc.inc * FS / 4294967296.0;
+    for (md = 0; md < 4u; md++) {
+        par_set(PAR_MODEL1, md + 1u);
+        run_ms(20);
+        mdl_hit(127, 10, 16384);
+        printf("  %-8s at %.1f Hz:", NM[md], f0);
+        for (k = 0, ok = 1; k < 6u; k++) {
+            double f = f0 * RATIO[md][k], on = goertzel(mdl_y, 16384, f);
+            double off = goertzel(mdl_y, 16384, f * 0.97) + goertzel(mdl_y, 16384, f * 1.03);
+            if (f > FS * 0.45)
+                continue;
+            printf(" %.0f%s", f, on > off ? "" : "?");   /* (a peak: above both its neighbours together) */
+            if (k < 4u && !(on > off))
+                ok = 0;
+        }
+        printf("\n");
+        check(ok, "MODEL: its modes at their ratios");
+    }
+    /* DECAY: MEMBRANE at 64 rings ~0.28 s to -60 dB: -20 dB a third of it on */
+    par_set(PAR_MDAMP1, 40);
+    par_set(PAR_MODEL1, 1);
+    par_set(PAR_MDECAY1, 64);
+    run_ms(20);
+    {
+        double e1 = 0, e2 = 0, db;
+        mdl_hit(127, 20, 16384);
+        for (k = 0; k < 1024u; k++) {
+            e1 += mdl_y[k] * mdl_y[k];
+            e2 += mdl_y[k + 4096u] * mdl_y[k + 4096u];   /* (93 ms on) */
+        }
+        db = 10.0 * log10(e2 / (e1 + 1e-12));
+        printf("  MEMBRANE DECAY 64: %.1f dB over 93 ms (-20 a third of 284 ms)\n", db);
+        check(db < -14.0 && db > -30.0, "MODEL: DECAY's time");
+    }
+    /* velocity: the higher modes louder for a harder hit */
+    {
+        double hi1, lo1, hi2, lo2;
+        par_set(PAR_MDECAY1, 90);
+        run_ms(20);
+        mdl_hit(127, 10, 8192);
+        lo1 = goertzel(mdl_y, 8192, f0);
+        hi1 = goertzel(mdl_y, 8192, f0 * 2.92);
+        mdl_hit(30, 10, 8192);
+        lo2 = goertzel(mdl_y, 8192, f0);
+        hi2 = goertzel(mdl_y, 8192, f0 * 2.92);
+        printf("  velocity: the 6th mode %.2f of the 1st hard, %.2f soft\n", hi1 / lo1, hi2 / lo2);
+        check(hi1 / lo1 > hi2 / lo2 * 1.3, "MODEL: a harder hit is brighter");
+    }
+    /* TUBE: its pitch */
+    par_set(PAR_MODEL1, 5);
+    run_ms(20);
+    mdl_hit(127, 30, 8192);
+    {
+        uint32_t best = 0, lag;
+        double bv = -1e30, period = FS / f0;
+        for (lag = 20; lag < 2000u; lag++) {
+            double a = 0;
+            for (k = 0; k < 4096u; k++)
+                a += mdl_y[k] * mdl_y[k + lag];
+            if (a > bv) {
+                bv = a;
+                best = lag;
+            }
+        }
+        printf("  TUBE: period %u samples (%.1f for %.1f Hz)\n", best, period, f0);
+        check(fabs(best - period) < 2.0 || fabs(best - 2.0 * period) < 3.0, "MODEL: TUBE at the voice's pitch");
+    }
+    /* TENSION: the pitch up at the hit, falling back */
+    par_set(PAR_MODEL1, 1);
+    par_set(PAR_MTENS1, 127);
+    run_ms(20);
+    voice_trigger(0, 127, vc[0].osc.base_note);
+    check(mdl[0].ten > 30000, "MODEL: TENSION up at the hit");
+    run_ms(300);
+    check(mdl[0].ten < 1000, "MODEL: .. and back");
+    par_set(PAR_MTENS1, 0);
+    /* the page: EDIT on D1 to MODEL; LXR again: the LXR's engine */
+    goto_mode(B_HOME, M_HOME);
+    press(B_EDIT);
+    while (ui.sect != S_MODEL && ui.mode == M_SOUND) {
+        uint32_t s0 = ui.sect, h0 = ui.half;
+        press(B_EDIT);
+        if (ui.sect == s0 && ui.half == h0)
+            break;
+    }
+    check(ui.sect == S_MODEL, "EDIT: the MODEL section on D1");
+    shot("model");
+    turn(EN_K1, -1);
+    check(par[PAR_MODEL1] == 0u && mdl[0].type == MD_LXR, "MODEL: back to the LXR's engine");
+    turn(EN_K1, 2);
+    {
+        int rc = proj_save(1, "MODEL   ");
+        par[PAR_MODEL1] = 0;
+        par[PAR_MPOS1] = 0;
+        rc |= proj_load(1);
+        check(rc == 0 && par[PAR_MODEL1] == 2u && par[PAR_MPOS1] == 30u && mdl[0].type == MD_BAR,
+              "project: the model's parameters");
+    }
+    par_set(PAR_MODEL1, 0);
+    goto_mode(B_HOME, M_HOME);
+}
+
 static void grids_test(void)
 {
     pattern_t *p = &pat[0];
@@ -1860,6 +2005,7 @@ int main(int argc, char **argv)
     phase5a();
     phase5b();
     phase5c();
+    phase5d();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;
 }

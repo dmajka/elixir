@@ -20,10 +20,10 @@
 
 enum { M_HOME, M_PATTERN, M_SONG, M_SOUND, M_STEP, M_PERF, M_EUCLID, M_FX, M_MIXER, M_CONFIG, M_SAVE, M_LOAD,
        M_LAST, M_RECOPT, NMODE };
-enum { S_OSC, S_AEG, S_MOD, S_FM, S_CLICK, S_FILTER, S_LFO, S_MIX, S_SHAPE, S_RANDOM, S_XMOD, NSECT };
+enum { S_OSC, S_AEG, S_MOD, S_FM, S_CLICK, S_FILTER, S_LFO, S_MIX, S_SHAPE, S_RANDOM, S_XMOD, S_MODEL, NSECT };
 #define NSPG 24                                      /* the sound pages a track can have (sections x halves) */
 static const char *const SECT_NAME[NSECT] = {"OSCILLATOR", "AMP EG", "MOD EG / VELO", "FM", "TRANSIENT", "FILTER",
-                                             "LFO", "MIX", "SHAPE", "RANDOM PER HIT", "CROSS MOD / CHOKE"};
+                                             "LFO", "MIX", "SHAPE", "RANDOM PER HIT", "CROSS MOD / CHOKE", "MODEL"};
 enum { IO_KIT, IO_PATTERN, IO_SONG, IO_MORPH, IO_PROJECT, NIO };
 static const char *const IO_NAME[NIO] = {"KIT", "PATTERN", "SONG", "MORPH", "PROJECT"};
 
@@ -113,21 +113,29 @@ static void ui_message(const char *s)
 static uint32_t track_voice(uint32_t t) { return t < 6u ? t : 5u; }
 /* the LXR's edit page of a track (VOICE1_PAGE .. VOICE7_PAGE) */
 static uint32_t track_page(uint32_t t) { return t; }
-/* Kettle's sections (S_SHAPE ..): the first of each six per-voice parameters, a half each */
-static const uint16_t K_PAGES[3][4] = {{PAR_SHAPE1, PAR_DRIVE1, PAR_BITS1, PAR_TILT1},
+/* Kettle's sections (S_SHAPE ..): the first of each six per-voice parameters, by half (0: none). MODEL: the DRUM
+ * voices' only */
+static const uint16_t K_PAGES[4][8] = {{PAR_SHAPE1, PAR_DRIVE1, PAR_BITS1, PAR_TILT1},
                                        {PAR_RND_PITCH1, PAR_RND_DECAY1, PAR_RND_FILTER1, PAR_RND_PAN1},
-                                       {PAR_XSRC1, PAR_XMODE1, PAR_XAMT1, PAR_CHOKE1}};
+                                       {PAR_XSRC1, PAR_XMODE1, PAR_XAMT1, PAR_CHOKE1},
+                                       {PAR_MODEL1, PAR_MDECAY1, PAR_MDAMP1, PAR_MMAT1,
+                                        PAR_MPOS1, PAR_MEXC1, PAR_MTENS1, 0}};
 /* the parameter on knob k of section s's half h for track t (0: none) */
 static uint32_t sect_par(uint32_t t, uint32_t s, uint32_t h, uint32_t k)
 {
+    uint32_t q;
     if (s < S_SHAPE)
         return LXR_PAGES[track_page(t)][s][8u + h * 4u + k];
-    return h ? 0u : K_PAGES[s - S_SHAPE][k] + track_voice(t);
+    if (s == S_MODEL && track_voice(t) > 2u)
+        return 0;
+    q = K_PAGES[s - S_SHAPE][h * 4u + k];
+    return q ? q + track_voice(t) : 0u;
 }
 /* the button that opens a section: the first section of its group */
 static uint32_t sect_group(uint32_t s)
 {
-    static const uint8_t G[NSECT] = {S_OSC, S_AEG, S_AEG, S_OSC, S_OSC, S_FILTER, S_LFO, S_MIX, S_FILTER, S_LFO, S_LFO};
+    static const uint8_t G[NSECT] = {S_OSC, S_AEG, S_AEG, S_OSC, S_OSC, S_FILTER, S_LFO, S_MIX, S_FILTER, S_LFO, S_LFO,
+                                     S_OSC};
     return G[s];
 }
 
@@ -851,8 +859,8 @@ static void mode_set(uint32_t m)
 }
 static void sound_open(uint32_t s, int again)        /* a section button; again: its next section */
 {
-    static const uint8_t NEXT[NSECT] = {S_FM, S_MOD, S_AEG, S_CLICK, S_OSC, S_SHAPE, S_RANDOM, S_MIX,
-                                        S_FILTER, S_XMOD, S_LFO};
+    static const uint8_t NEXT[NSECT] = {S_FM, S_MOD, S_AEG, S_CLICK, S_MODEL, S_SHAPE, S_RANDOM, S_MIX,
+                                        S_FILTER, S_XMOD, S_LFO, S_OSC};
     if (ui.mode == M_SOUND && again) {
         if (sect_group(ui.sect) == s) {
             uint8_t l[NSPG][2];

@@ -65,9 +65,10 @@ static const char *const L_REVMODEL[] = {"ROOM", "SPRING", "HALL"};
 static const char *const L_SHAPE[] = {"LXR", "FOLD", "CLIP", "ASYM", "RECTIFY"};
 static const char *const L_XMODE[] = {"DUCK", "FILTER", "RING"};
 static const char *const L_CHOKE[] = {"OFF", "1", "2", "3", "4"};
+static const char *const L_MODEL[] = {"LXR", "SKIN", "BAR", "BELL", "PLATE", "TUBE"};
 static const char *const L_BITS[] = {"OFF", "15", "14", "13", "12", "11", "10", "9", "8", "7", "6", "5", "4", "3",
                                      "2", "1"};
-enum { MENU_REV_MODEL = 27, MENU_SHAPE, MENU_XMODE, MENU_CHOKE, MENU_BITS };   /* (Kettle's, after the LXR's) */
+enum { MENU_REV_MODEL = 27, MENU_SHAPE, MENU_XMODE, MENU_CHOKE, MENU_BITS, MENU_MODEL };   /* (Kettle's, after LXR's) */
 #define LIST(a) {a, sizeof a / sizeof a[0]}
 static const struct { const char *const *s; uint8_t n; } MENUS[] = {
     [MENU_FILTER] = LIST(L_FILTER), [MENU_WAVEFORM] = LIST(L_WAVE), [MENU_AUDIO_OUT] = LIST(L_OUT),
@@ -77,7 +78,7 @@ static const struct { const char *const *s; uint8_t n; } MENUS[] = {
     [MENU_FX] = LIST(L_FX), [MENU_DIST] = LIST(L_DIST), [MENU_RATIO] = LIST(L_RATIO), [MENU_DELAY] = LIST(L_DELAY),
     [MENU_PAT_MODE] = LIST(L_PATMODE), [MENU_STEP_FLAM] = LIST(L_FLAM), [MENU_AUDIO_OUT_FX] = LIST(L_OUT),
     [MENU_REV_MODEL] = LIST(L_REVMODEL), [MENU_SHAPE] = LIST(L_SHAPE), [MENU_XMODE] = LIST(L_XMODE),
-    [MENU_CHOKE] = LIST(L_CHOKE), [MENU_BITS] = LIST(L_BITS),
+    [MENU_CHOKE] = LIST(L_CHOKE), [MENU_BITS] = LIST(L_BITS), [MENU_MODEL] = LIST(L_MODEL),
 };
 static const char *const VOICE_NAME[NTRACK] = {"DRUM 1", "DRUM 2", "DRUM 3", "SNARE", "CYMBAL", "CL HAT", "OP HAT"};
 static const char *const VOICE_SHORT[NTRACK] = {"D1", "D2", "D3", "SN", "CY", "CH", "OH"};
@@ -102,6 +103,13 @@ static const struct { uint16_t first; uint8_t n; uint16_t dtype; const char *nm[
     {PAR_XSRC1, 6, DTYPE_VOICE_LFO, {"Source", "CrossMod", "xsr", "XSource"}},
     {PAR_XMODE1, 6, DTYPE_MENU | MENU_XMODE << 8, {"Mode", "CrossMod", "xmd", "XMode"}},
     {PAR_XAMT1, 6, DTYPE_0B127, {"Amount", "CrossMod", "xam", "XAmount"}},
+    {PAR_MODEL1, 6, DTYPE_MENU | MENU_MODEL << 8, {"Model", "Model", "mdl", "Model"}},
+    {PAR_MDECAY1, 6, DTYPE_0B127, {"Decay", "Model", "mdc", "MDecay"}},
+    {PAR_MDAMP1, 6, DTYPE_0B127, {"Damping", "Model", "mdp", "MDamping"}},
+    {PAR_MMAT1, 6, DTYPE_0B127, {"Material", "Model", "mmt", "Material"}},
+    {PAR_MPOS1, 6, DTYPE_0B127, {"Position", "Model", "mps", "Position"}},
+    {PAR_MEXC1, 6, DTYPE_0B127, {"Exciter", "Model", "mex", "Exciter"}},
+    {PAR_MTENS1, 6, DTYPE_0B127, {"Tension", "Model", "mtn", "Tension"}},
 };
 static uint32_t par_k(uint32_t p)                    /* its row in K_PARS (p >= NUM_PARAMS) */
 {

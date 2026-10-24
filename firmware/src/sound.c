@@ -34,7 +34,16 @@ enum {
     PAR_XSRC1 = PAR_RND_PAN1 + 6,                /* cross modulation: the source voice (0 none, 1..6) */
     PAR_XMODE1 = PAR_XSRC1 + 6,                  /* .. DUCK, FILTER, RING */
     PAR_XAMT1 = PAR_XMODE1 + 6,                  /* .. its amount */
-    NPAR = PAR_XAMT1 + 6
+    PAR_MODEL1 = PAR_XAMT1 + 6,                  /* 0.6: the DRUM voices' physical model (voices.c mdl): 0 the LXR's
+                                                  * engine, SKIN (a membrane) BAR BELL PLATE TUBE (six, as the others:
+                                                  * 4..6 unused) */
+    PAR_MDECAY1 = PAR_MODEL1 + 6,
+    PAR_MDAMP1 = PAR_MDECAY1 + 6,
+    PAR_MMAT1 = PAR_MDAMP1 + 6,
+    PAR_MPOS1 = PAR_MMAT1 + 6,
+    PAR_MEXC1 = PAR_MPOS1 + 6,
+    PAR_MTENS1 = PAR_MEXC1 + 6,
+    NPAR = PAR_MTENS1 + 6
 };
 #define KIT_LEN (END_OF_SOUND_PARAMETERS + NPAR - NUM_PARAMS)
 #define KIT_GAP (NUM_PARAMS - END_OF_SOUND_PARAMETERS)
@@ -105,6 +114,8 @@ static uint32_t par_max_k(uint32_t p)
         return 6;
     if (p >= PAR_XMODE1 && p < PAR_XMODE1 + 6u)
         return NXMODE - 1u;
+    if (p >= PAR_MODEL1 && p < PAR_MODEL1 + 6u)
+        return NMODEL - 1u;
     return 127;
 }
 
@@ -118,7 +129,7 @@ static int morph_excluded(uint32_t p)            /* the outputs and the modulati
 {
     return (p >= PAR_AUDIO_OUT1 && p <= PAR_AUDIO_OUT6) || (p >= PAR_VEL_DEST_1 && p <= PAR_VEL_DEST_6) ||
            (p >= PAR_VOICE_LFO1 && p <= PAR_TARGET_LFO6) || p == PAR_FX_TYPE || p == PAR_MORPH_KIT_DEST ||
-           p == PAR_REV_TYPE;
+           p == PAR_REV_TYPE || (p >= PAR_MODEL1 && p < PAR_MODEL1 + 6u);
 }
 
 /* the value a parameter sounds with: an automation lock, else the kit's (morphed) */
@@ -473,7 +484,22 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
     case PAR_XAMT1: case PAR_XAMT1 + 1: case PAR_XAMT1 + 2: case PAR_XAMT1 + 3: case PAR_XAMT1 + 4: case PAR_XAMT1 + 5:
         vc[p - PAR_XAMT1].xamt = f >> 1;
         break;
+    case PAR_MODEL1: case PAR_MODEL1 + 1: case PAR_MODEL1 + 2:   /* (the DRUM voices only) */
+        mdl[p - PAR_MODEL1].type = (uint8_t)pick(itg < NMODEL ? itg : 0u, (uint32_t)f, mod, NMODEL);
+        break;
     default:
+        if (p >= PAR_MDECAY1 && p < NPAR && (p - PAR_MDECAY1) % 6u < 3u) {   /* the model's knobs, 0..127 */
+            model_t *m = &mdl[(p - PAR_MDECAY1) % 6u];
+            uint8_t v = (uint8_t)(mod ? (127u * (uint32_t)f) >> 16 : itg & 127u);
+            switch ((p - PAR_MDECAY1) / 6u) {
+            case 0: m->dec = v; break;
+            case 1: m->damp = v; break;
+            case 2: m->mat = v; break;
+            case 3: m->pos = v; break;
+            case 4: m->exc = v; break;
+            default: m->tens = v; break;
+            }
+        }
         break;
     }
 }

@@ -101,6 +101,8 @@ Each voice (the open and closed hats share one) has three extra pages. All of th
 - **Random per hit** (LFO, after the LFO's two pages): how much each hit varies in **pitch** (up to an octave either way at 127; small amounts are subtle), **decay** (half to double), **filter** cutoff and **pan**.
 - **Cross mod / choke** (LFO, next): another voice as the **source** and a **mode**. DUCK turns this voice down while the source sounds, FILTER opens this voice's filter with the source's level, and RING multiplies the two. **Amount** sets how much. **Choke** puts the voice in a group from 1 to 4. A hit on any voice in the group fades the others out within 1.5 ms.
 
+Drum 1–3 also have **physical models** (EDIT, after the transient: MODEL). Instead of the LXR's oscillators, a struck body rings: SKIN (a drum head), BAR (marimba), BELL, PLATE or TUBE (a string or pipe), with **decay**, **damping** (how fast the high modes die), **material** (wood to metal), strike **position**, **exciter** (a thump, a click or a noise burst) and **tension** (the pitch drop of a hard hit). Velocity makes a hit brighter as well as louder. The voice's filter, shape and sends still apply.
+
 The FX bus has two new types. **Phaser**: rate, depth, feedback, centre. **Flanger**: rate, depth, feedback (negative below the middle) and delay. Both sound strongest at DRY/WET 50%.
 
 ## MIDI and sync

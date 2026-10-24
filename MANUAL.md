@@ -314,6 +314,7 @@ Select a track, then press a sound button. Pressing the same button again moves 
 | **Oscillator** (EDIT) | Coarse, Fine, Waveform, Pulse width | Coarse, Fine, Noise frequency, Mix / Waveform, Pulse width | Coarse, Fine, Waveform, Pulse width (OH: no pulse width) |
 | **FM** (EDIT) | Amount, Frequency, Waveform, Mode (FM or mix) | – | Mod 1 & 2 frequency and gain / their waveforms |
 | **Transient** (EDIT) | Waveform, Volume, Frequency | same | same |
+| **Model** (EDIT, Kettle's) | Model, Decay, Damping, Material / Position, Exciter, Tension (see *Physical models* below) | – | – |
 | **Amp EG** (ENV) | Attack, Decay, Slope | Attack, Decay, Repeat count (claps), Slope | Attack, Decay (CH: closed; OH: open), Repeat (cymbal), Slope |
 | **Mod EG / velocity** (ENV) | Pitch EG: Decay, Slope, Amount / Velocity: destination, amount, volume mod | same | Velocity: destination, amount, volume mod |
 | **Filter** (SCL) | Frequency, Resonance, Type (LP HP BP UNITY BP NOTCH PEAK LP2 OFF), Overdrive | same | same |
@@ -351,6 +352,30 @@ Each hit varies by up to the amount set: pitch up to an octave either way at 127
 - **Source:** another voice that modulates this one.
 - **Mode:** **DUCK** (this voice drops while the source sounds: sidechain), **FILTER** (the source's level opens this voice's filter), **RING** (the two multiplied).
 - **Choke:** a group 1–4. A hit on any voice in the group fades the others in that group out (within 1.5 ms). The hats already choke each other, since they share a voice.
+
+### Physical models (Drum 1–3)
+
+The three DRUM voices have a second engine: instead of the LXR's oscillators, a struck body that rings. It is set in the **MODEL** section (EDIT, after the transient; drum tracks only):
+
+| | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
+|---|---|---|---|---|
+| Row 1 | Model | Decay | Damping | Material |
+| Row 2 | Position | Exciter | Tension | |
+
+- **Model:** **LXR** (the LXR's own engine; the default, and what old kits and projects load as), **SKIN** (a drum head: six modes at 1, 1.59, 2.14, 2.30, 2.65, 2.92 times the pitch), **BAR** (marimba, xylophone: 1, 2.76, 5.40, 8.93 …), **BELL** (a hum an octave below, inharmonic, long), **PLATE** (dense and metallic, long) and **TUBE** (a plucked string or blown pipe).
+- **Pitch** is the voice's own Coarse and Fine on the oscillator page; the pitch EG and random pitch still bend it.
+- **Decay:** how long it rings, from 20 ms to about 4 s (64 is about 0.3 s). BELL and PLATE ring twice as long.
+- **Damping:** how much faster the higher modes die. 0: they all ring as long as the lowest; high: a dull thud after the first instant.
+- **Material:** stretches the mode ratios. Below 64 they draw together (softer, wooden); above, they spread (glassy, metallic).
+- **Position:** where it's struck, from the edge (0) to the centre (127). Each mode is loudest where it moves most, so moving the strike point brings modes in and out; near the edge the fundamental is quieter.
+- **Exciter:** what strikes it. 0 to 63: a pulse from a soft thump (0) to a hard click (63). 64 to 127: a burst of noise, longer as it rises (a brush or a scrape).
+- **Tension:** a hard hit stretches a drum head, so the pitch starts high and falls back in about 50 ms. Up to an octave at 127, scaled by velocity.
+
+**Velocity** sets how hard it's struck: louder, and brighter, since a harder hit brings out the higher modes.
+
+**TUBE** is a string or pipe (a Karplus-Strong loop): Decay is how long it sustains, Damping how dark it gets as it rings. It ignores Material and Position.
+
+The model replaces the oscillators, transient and amp EG: the model's own Decay sets how long the voice sounds. Everything after the oscillator still applies: the filter, drive and shape, bits, tilt, sends, LFO, random per hit and cross modulation. The model's settings are part of the kit and can be locked per step; Model itself doesn't morph: the voice keeps its own kit's engine while the other knobs morph.
 
 ---
 
@@ -694,6 +719,13 @@ Six numbers per voice-based setting, in the order D1 D2 D3 SN CY HH.
 | 238–243 | Cross-mod source (0 none, 1–6) |
 | 244–249 | Cross-mod mode (0 duck, 1 filter, 2 ring) |
 | 250–255 | Cross-mod amount |
+| 256–261 | Model (0 LXR, 1 skin, 2 bar, 3 bell, 4 plate, 5 tube; D1–D3 only) |
+| 262–267 | Model decay |
+| 268–273 | Model damping |
+| 274–279 | Model material (64 even) |
+| 280–285 | Model position |
+| 286–291 | Model exciter |
+| 292–297 | Model tension |
 
 The LXR's own parameters keep their CC and NRPN numbers.
 
