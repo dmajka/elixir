@@ -133,7 +133,7 @@ PYTHON=/path/to/python ./build.sh       # -> build/kettle.fwsc
 
 ## Install
 
-`web/make_site.py` makes Kettle's site in `build/site` (after `./build.sh` and `web/emu/build.sh`): the install page (Web MIDI, Chrome or Edge: a device check, official V15 first, Kettle, and back to V15), the emulator (`try/`), the manual as a page (`manual/`), and the package, source and licences (`firmware/`). Any static host serves it. For GitHub Pages, `tools/publish_site.sh` builds it and commits it to the `gh-pages` branch (then `git push origin gh-pages`; Settings → Pages → Deploy from a branch: `gh-pages`, root). Set `REPO` in `web/make_site.py` to link the repository from the pages. Install the official V15 first (see the manual's section 1).
+`web/make_site.py` makes Kettle's site in `build/site` (after `./build.sh` and `web/emu/build.sh`): the install page (Web MIDI, Chrome or Edge: a device check, official V15 first, Kettle, and back to V15), the emulator (`try/`), the manual as a page (`manual/`), and the package, source and licences (`firmware/`). Any static host serves it. For GitHub Pages, `tools/publish_site.sh` builds it and commits it to the `gh-pages` branch (then `git push origin gh-pages`; Settings → Pages → Deploy from a branch: `gh-pages`, root). The source is at https://github.com/dmajka/kettle (`REPO` in `web/make_site.py`; the pages link it). Install the official V15 first (see the manual's section 1).
 
 Or install `build/kettle.fwsc` over USB:
 

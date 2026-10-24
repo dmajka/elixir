@@ -19,7 +19,7 @@ import tarfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-REPO = ""                                            # the source repository's URL, once public: the pages link it
+REPO = "https://github.com/dmajka/kettle"   # the source repository's URL, once public: the pages link it
 BLOCKS, BLK, KEEP = 20, 0x30, 0x2F
 SRC = ["build.sh", "LICENSE", "LICENSES", "NOTICE.md", "README.md", "ROADMAP.md", "MANUAL.md",
        "firmware", "tools", "tests", "web", "assets"]
