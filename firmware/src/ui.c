@@ -36,7 +36,8 @@ enum { VP_BASE = 0x200, VP_NONE = VP_BASE, VP_IO_TYPE, VP_IO_SLOT, VP_NAME_POS, 
        VP_SONG_PAT, VP_SONG_NUM, VP_LEDS, VP_AUTOSAVE, VP_ACCEL, VP_PALETTE, VP_TRACK_VOL, VP_FX_SUB, VP_MASTER,
        VP_DJ, VP_REPEAT, VP_TAPE, VP_M1, VP_M4 = VP_M1 + NMACRO - 1, VP_MSEL, VP_MTARGET, VP_MMIN, VP_MMAX,
        VP_COND, VP_RAT_N, VP_RAT_RATE, VP_RAT_FADE, VP_ACTION, VP_GMODE, VP_GA, VP_GB, VP_GC, VP_CLOCK,
-       VP_GX, VP_GY, VP_GCHAOS, VP_RAT_SHAPE, VP_BSTART, VP_BPITCH, VP_ROLL };
+       VP_GX, VP_GY, VP_GCHAOS, VP_RAT_SHAPE, VP_BSTART, VP_BPITCH, VP_ROLL,
+       VP_LINK, VP_LSTART, VP_LAMT, VP_DEPTH, VP_LWHEN, VP_LTGT, VP_LEFF, VP_LWIN };
 /* the EUCLID pages' ACTION (OCT+ does it) */
 enum { ACT_NONE, ACT_DICE, ACT_COMMIT, ACT_UNDO, ACT_RESET, NACT };
 
@@ -50,6 +51,7 @@ static struct {
     uint8_t msel;                    /* MACRO SETUP: the macro */
     uint8_t action;                  /* EUCLID: the ACTION OCT+ does (ACT_*) */
     uint8_t eu_undo;                 /* the Euclid knobs' UNDO saved (track + 1): turned again, it keeps that one */
+    uint8_t link;                    /* LINKS: the link shown (0..7) */
     uint8_t shift, copy, shift_used, copy_used;
     int8_t held_step;                /* a step key held (its locks), -1 none */
     uint8_t lock_turned;
@@ -182,11 +184,16 @@ static const uint16_t P_PERF[4][4] = {{PAR_BPM, VP_DJ, VP_REPEAT, PAR_MORPH},
                                       {VP_MSEL, VP_MTARGET, VP_MMIN, VP_MMAX},
                                       {PAR_ROLL, PAR_SHUFFLE, PAR_VOICE_DECIMATION_ALL, VP_TAPE}};
 static const char *const PERF_TITLE[4] = {"PERFORM", "MACROS", "MACRO SETUP", "PERFORM: MORE"};
-static const uint16_t P_EUCLID[4][4] = {{PAR_EUKLID_LENGTH, PAR_EUKLID_STEPS, PAR_EUKLID_ROTATION, VP_ACTION},
-                                        {VP_GMODE, VP_GA, VP_GB, VP_GC},
-                                        {PAR_TRACK_LENGTH, VP_CLOCK, VP_BSTART, VP_BPITCH},
-                                        {VP_GX, VP_GY, VP_GCHAOS, VP_NONE}};
-static const char *const EUCLID_TITLE[4] = {"EUCLID", "GENERATOR", "TRACK CLOCK", "GRIDS MAP"};
+#define NEUCLID 6u
+#define PG_LINKS 4u
+static const uint16_t P_EUCLID[NEUCLID][4] = {{PAR_EUKLID_LENGTH, PAR_EUKLID_STEPS, PAR_EUKLID_ROTATION, VP_ACTION},
+                                              {VP_GMODE, VP_GA, VP_GB, VP_GC},
+                                              {PAR_TRACK_LENGTH, VP_CLOCK, VP_BSTART, VP_BPITCH},
+                                              {VP_GX, VP_GY, VP_GCHAOS, VP_NONE},
+                                              {VP_LINK, VP_LSTART, VP_LAMT, VP_DEPTH},
+                                              {VP_LWHEN, VP_LTGT, VP_LEFF, VP_LWIN}};
+static const char *const EUCLID_TITLE[NEUCLID] = {"EUCLID", "GENERATOR", "TRACK CLOCK", "GRIDS MAP", "LINKS",
+                                                  "LINK SETUP"};
 static const uint16_t P_FX[3][4] = {{PAR_FX_TYPE, PAR_FX_DRY_WET, PAR_FX_ROUTING, VP_FX_SUB},
                                     {PAR_FX_P1, PAR_FX_P2, PAR_FX_P3, PAR_FX_P4},
                                     {PAR_REV_TYPE, PAR_REV_SIZE, PAR_REV_DAMP, PAR_REV_LEVEL}};
@@ -224,7 +231,7 @@ static uint32_t mode_pages(void)
     switch (ui.mode) {
     case M_SOUND: return sound_pages(l);
     case M_STEP: return 4;
-    case M_EUCLID: return 4;
+    case M_EUCLID: return NEUCLID;
     case M_PERF: return 4;
     case M_FX: return 3;
     case M_MIXER: return NMIXER;
@@ -245,7 +252,7 @@ static void page_params(uint16_t out[4])
         return;
     case M_STEP: p = P_STEP[ui.page % 4u]; break;
     case M_PERF: p = P_PERF[ui.page % 4u]; break;
-    case M_EUCLID: p = P_EUCLID[ui.page % 4u]; break;
+    case M_EUCLID: p = P_EUCLID[ui.page % NEUCLID]; break;
     case M_FX: p = P_FX[ui.page % 3u]; break;
     case M_MIXER: p = P_MIXER[ui.page % NMIXER]; break;
     case M_CONFIG: p = P_CONFIG[ui.page % 7u]; break;
@@ -265,6 +272,17 @@ static void page_params(uint16_t out[4])
 
 /* ------------------------------------------- the values the cards edit --- */
 static pattern_t *shown_pat(void) { return &pat[ui_pattern()]; }
+/* a link as the LINKS page's Start shows it: 0 none, 1.. a starting point, NSTART + 1 changed from one */
+static uint32_t link_start(const uint8_t *L)
+{
+    uint32_t i;
+    if (!(L[1] & 15u))
+        return 0;
+    for (i = 0; i < NSTART; i++)
+        if (L[0] == LK_START[i][0] && L[1] == LK_START[i][1] && L[2] == LK_START[i][2])
+            return i + 1u;
+    return NSTART + 1u;
+}
 /* the pattern a track shows: a generator's live copy while it is on (what plays) */
 static const pattern_t *view_pat(uint32_t t)
 {
@@ -406,6 +424,21 @@ static uint32_t vp_get(uint32_t p)
     case VP_GX: return pt->gx;
     case VP_GY: return pt->gy;
     case VP_GCHAOS: return pt->gchaos;
+    case VP_LINK: return ui.link & 7u;
+    case VP_LSTART: return link_start(pt->link[ui.link & 7u]);
+    case VP_LAMT: {
+        const uint8_t *L = pt->link[ui.link & 7u];
+        uint32_t e = L[1] & 15u;
+        return e && e < NLE ? (uint32_t)clamp32((int8_t)L[2], LK_LO[e], LK_HI[e]) - (uint32_t)(int32_t)LK_LO[e] : 0u;
+    }
+    case VP_DEPTH: return pt->cdepth;
+    case VP_LWHEN: {
+        const uint8_t *L = pt->link[ui.link & 7u];
+        return (L[0] & 7u) % NTRACK * NLV + (L[0] >> 6) % NLV;
+    }
+    case VP_LTGT: return (pt->link[ui.link & 7u][0] >> 3 & 7u) % NTRACK;
+    case VP_LEFF: return (pt->link[ui.link & 7u][1] & 15u) % NLE;
+    case VP_LWIN: return pt->link[ui.link & 7u][1] >> 4 & 3u;
     default:
         return p < NPAR ? par[p] : 0u;
     }
@@ -481,6 +514,17 @@ static uint32_t vp_max(uint32_t p)
     case VP_BPITCH: return 24;
     case VP_ROLL: return 127;
     case VP_GX: case VP_GY: case VP_GCHAOS: return 127;
+    case VP_LINK: return NLINK - 1u;
+    case VP_LSTART: return link_start(shown_pat()->link[ui.link & 7u]) > NSTART ? NSTART + 1u : NSTART;
+    case VP_LAMT: {
+        uint32_t e = shown_pat()->link[ui.link & 7u][1] & 15u;
+        return e && e < NLE ? (uint32_t)(LK_HI[e] - LK_LO[e]) : 0u;
+    }
+    case VP_DEPTH: return 127;
+    case VP_LWHEN: return NTRACK * NLV - 1u;
+    case VP_LTGT: return NTRACK - 1u;
+    case VP_LEFF: return NLE - 1u;
+    case VP_LWIN: return NLW - 1u;
     case VP_GA: case VP_GB: case VP_GC: {           /* by the generator: see seq.c */
         static const uint8_t MX[NGEN][3] = {{0, 0, 0}, {100, 0, 1}, {16, 127, 127}, {255, 0, 1}, {2, 127, 1}};
         uint32_t g = shown_pat()->gen[ui.track][0];
@@ -626,6 +670,46 @@ static void vp_set(uint32_t p, uint32_t v)
     case VP_BSTART: pt->bnc[ui.track] = (uint8_t)((pt->bnc[ui.track] & ~3u) | v); return;
     case VP_BPITCH: pt->bnc[ui.track] = (uint8_t)((pt->bnc[ui.track] & 3u) | v << 2); return;
     case VP_ROLL: sq.roll_k = (uint8_t)v; sq.roll_free = 1; return;
+    case VP_LINK: ui.link = (uint8_t)v; return;
+    case VP_LSTART: {
+        uint8_t *L = pt->link[ui.link & 7u];
+        if (v == 0u)
+            memset(L, 0, 4);
+        else if (v <= NSTART)
+            memcpy(L, LK_START[v - 1u], 4);
+        return;
+    }
+    case VP_LAMT: {
+        uint8_t *L = pt->link[ui.link & 7u];
+        uint32_t e = L[1] & 15u;
+        if (e && e < NLE)
+            L[2] = (uint8_t)(int8_t)((int32_t)v + LK_LO[e]);
+        return;
+    }
+    case VP_DEPTH: pt->cdepth = (uint8_t)v; return;
+    case VP_LWHEN: {
+        uint8_t *L = pt->link[ui.link & 7u];
+        L[0] = (uint8_t)((L[0] & 0x38u) | v / NLV | (v % NLV) << 6);
+        return;
+    }
+    case VP_LTGT: {
+        uint8_t *L = pt->link[ui.link & 7u];
+        L[0] = (uint8_t)((L[0] & ~0x38u) | v << 3);
+        return;
+    }
+    case VP_LEFF: {                                  /* a new effect: its amount from where it starts */
+        uint8_t *L = pt->link[ui.link & 7u];
+        if (!L[0] && !(L[1] & 15u))                  /* (a new link: from the track shown to the next) */
+            L[0] = (uint8_t)(ui.track | (ui.track + 1u) % NTRACK << 3);
+        L[1] = (uint8_t)((L[1] & 0xF0u) | v);
+        L[2] = (uint8_t)LK_DEF[v < NLE ? v : 0u];
+        return;
+    }
+    case VP_LWIN: {
+        uint8_t *L = pt->link[ui.link & 7u];
+        L[1] = (uint8_t)((L[1] & 15u) | v << 4);
+        return;
+    }
     case VP_GX: case VP_GY: case VP_GCHAOS: {       /* the pattern's map: every GRIDS track again from it */
         uint32_t t;
         if (p == VP_GX)
@@ -1219,7 +1303,7 @@ static void button_down(uint32_t b)
             ui.force = 1;
             return;
         }
-        if (ui.mode == M_EUCLID && ui.page % 4u == 0u && ui.action) {   /* EUCLID: OCT+ does the ACTION */
+        if (ui.mode == M_EUCLID && ui.page % NEUCLID == 0u && ui.action) {   /* EUCLID: OCT+ does the ACTION */
             static const char *const M[NACT] = {"", "DICED", "COMMITTED", "UNDONE", "RESET"};
             static const char *const NO[NACT] = {"", "", "NO GENERATOR ON", "NOTHING TO UNDO", ""};
             int ok = 1;
@@ -1273,6 +1357,13 @@ static void button_down(uint32_t b)
         mode_set(ui.mode == M_HOME ? M_PATTERN : ui.mode == M_PATTERN ? M_SONG : M_HOME);
         return;
     case B_SEQ:
+        if (ui.shift) {                               /* 0.6: SHIFT SEQ: the LINKS page */
+            ui.shift_used = 1;
+            mode_set(M_EUCLID);
+            ui.perf = 0;
+            ui.page = PG_LINKS;
+            return;
+        }
         if (ui.mode == M_STEP) {
             mode_set(ui.back == M_STEP ? M_HOME : ui.back);
         } else {

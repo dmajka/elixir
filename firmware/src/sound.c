@@ -48,8 +48,8 @@ static uint8_t morph_amt;                        /* 0..255 (PAR_MORPH): 0 = the 
 
 /* automation (step parameter locks): the parameter each track's two lanes hold, and the value */
 #define NO_AUTOMATION 0xFFu
-static uint16_t auto_par[NTRACK][2];             /* 0 = none */
-static uint8_t auto_val[NTRACK][2];
+static uint16_t auto_par[NTRACK][3];             /* 0 = none (lanes 0, 1: the step's locks; 2: a link's DECAY) */
+static uint8_t auto_val[NTRACK][3];
 
 /* a lock's destination code (12 bits: the step's byte, p1n / p2n, and 4 bits in the pattern's lhi, seq.c). Below
  * 256, the LXR's numbers: the parameter + 1 below 128 (its "stupid offset"), the parameter above, 0xFF none. From
@@ -126,7 +126,7 @@ static uint32_t par_base(uint32_t p)
 {
     uint32_t t, k;
     for (t = 0; t < NTRACK; t++)
-        for (k = 0; k < 2u; k++)
+        for (k = 0; k < 3u; k++)
             if (auto_par[t][k] == p && p)
                 return auto_val[t][k];
     if (par_sound(p) && morph_amt && !morph_excluded(p))
@@ -555,7 +555,7 @@ static void auto_clear_all(void)
 {
     uint32_t t, k;
     for (t = 0; t < NTRACK; t++)
-        for (k = 0; k < 2u; k++)
+        for (k = 0; k < 3u; k++)
             auto_set(t, k, NO_AUTOMATION, 0);
 }
 

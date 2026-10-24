@@ -1002,6 +1002,162 @@ static void phase5a(void)
     }
 }
 
+/* 0.6 (5b): track coupling */
+static uint32_t lk_bar(uint32_t t)                   /* track t's hits over a bar from the start */
+{
+    uint32_t c = trig_count[t], n;
+    play_from_start();
+    run_ms(1900);
+    n = trig_count[t] - c;
+    press(B_PLAY);
+    return n;
+}
+static void start_now(void)                          /* playing from the start, at its first tick (no button) */
+{
+    seq_start(1);
+    while (sq.ticks == 0u)
+        run_ms(1);
+}
+static void to_tick(uint32_t n)
+{
+    while (sq.ticks < n)
+        run_ms(1);
+}
+static void lk_set(uint32_t l, uint32_t src, uint32_t ev, uint32_t tgt, uint32_t e, uint32_t w, int32_t a)
+{
+    pattern_t *p = &pat[0];
+    p->link[l][0] = (uint8_t)(src | tgt << 3 | ev << 6);
+    p->link[l][1] = (uint8_t)(e | w << 4);
+    p->link[l][2] = (uint8_t)(int8_t)a;
+    p->link[l][3] = 0;
+    pat_backup = *p;
+}
+static void phase5b(void)
+{
+    pattern_t *p = &pat[0];
+    uint32_t k, n, v0, c;
+    p4_reset();
+    for (k = 0; k < 16u; k++) {                      /* D1 on the beats, D2 every step */
+        main_set(p, 0, k, (k & 3u) == 0u);
+        main_set(p, 1, k, 1);
+    }
+    pat_backup = *p;
+    check(lk_bar(1) == 16u, "LINKS: none, D2 16 hits");
+    lk_set(0, 0, LV_HIT, 1, LE_DUCK, LW_SAME, 100);
+    check(lk_bar(1) == 12u, "LINKS: D1 hit ducks D2 (same step)");
+    lk_set(0, 0, LV_HIT, 1, LE_DUCK, LW_NEXT, 100);
+    check(lk_bar(1) == 12u, "LINKS: .. the next step");
+    lk_set(0, 0, LV_HIT, 1, LE_DUCK, LW_NEXT2, 100);
+    check(lk_bar(1) == 8u, "LINKS: .. the next 2 steps");
+    lk_set(0, 0, LV_HIT, 1, LE_DUCK, LW_BAR, 100);
+    check(lk_bar(1) == 0u, "LINKS: .. the rest of the bar");
+    lk_set(0, 0, LV_HIT, 1, LE_DUCK, LW_SAME, 50);
+    n = lk_bar(1);
+    printf("  DUCK 50%%: D2 %u hits of 16 (4 at stake)\n", n);
+    check(n >= 12u && n <= 16u, "LINKS: DUCK 50%");
+    /* depth 0: as no links */
+    lk_set(0, 0, LV_HIT, 1, LE_DUCK, LW_BAR, 100);
+    p->cdepth = 0;
+    pat_backup = *p;
+    memset(sq.locc, 0, sizeof sq.locc);
+    check(lk_bar(1) == 16u && lk_bar(0) == 4u && !sq.locc[1], "LINKS: depth 0, as none (not looked at)");
+    p->cdepth = 127;
+    /* SILENT, ONLY IF: D2 only where D1 rests */
+    lk_set(0, 0, LV_SILENT, 1, LE_ONLY, LW_SAME, 100);
+    check(lk_bar(1) == 12u, "LINKS: ONLY IF D1 rests");
+    /* ACCENT: only D1's loud hit */
+    for (k = 0; k < 16u; k += 4u)
+        p->step[0][k].volume = (uint8_t)((p->step[0][k].volume & ~STEP_VOLUME_MASK) | (k ? 80u : 127u));
+    lk_set(0, 0, LV_ACCENT, 1, LE_DUCK, LW_SAME, 100);
+    check(lk_bar(1) == 15u, "LINKS: ACCENT: a loud hit only");
+    /* a loop, each link seeing those before it: D1 ducks D2, D2 ducks D1 */
+    lk_set(0, 0, LV_HIT, 1, LE_DUCK, LW_SAME, 100);
+    lk_set(1, 1, LV_HIT, 0, LE_DUCK, LW_SAME, 100);
+    check(lk_bar(0) == 4u && lk_bar(1) == 12u, "LINKS: a loop: the first link wins");
+    lk_set(0, 1, LV_HIT, 0, LE_DUCK, LW_SAME, 100);
+    lk_set(1, 0, LV_HIT, 1, LE_DUCK, LW_SAME, 100);
+    check(lk_bar(0) == 0u && lk_bar(1) == 16u, "LINKS: .. the other way round");
+    memset(p->link, 0, sizeof p->link);
+    /* TRIGGER: D3 at 30 a step after each D1 hit */
+    lk_set(0, 0, LV_HIT, 2, LE_TRIG, LW_NEXT, 30);
+    c = trig_count[2];
+    start_now();
+    to_tick(22);
+    check(trig_count[2] == c, "LINKS: TRIGGER waits for the next step");
+    to_tick(26);
+    check(trig_count[2] == c + 1u && vc[2].velo == (int32_t)(30u * 32768u / 127u), "LINKS: TRIGGER at velocity 30");
+    to_tick(380);
+    seq_stop_now();
+    check(trig_count[2] == c + 4u, "LINKS: TRIGGER after each hit");
+    /* RATCHET: +2 on D2's hits with D1's */
+    lk_set(0, 0, LV_HIT, 1, LE_RAT, LW_SAME, 2);
+    check(lk_bar(1) == 24u, "LINKS: RATCHET +2");
+    /* VELOCITY, PITCH, DECAY on that one hit */
+    v0 = p->step[1][0].volume & STEP_VOLUME_MASK;
+    lk_set(0, 0, LV_HIT, 1, LE_VEL, LW_SAME, -40);
+    lk_set(1, 0, LV_HIT, 1, LE_PITCH, LW_SAME, 7);
+    lk_set(2, 0, LV_HIT, 1, LE_DECAY, LW_SAME, -40);
+    play_from_start();
+    run_ms(5);
+    check(vc[1].velo == (int32_t)((v0 - 40u) * 32768u / 127u), "LINKS: VELOCITY -40");
+    check(vc[1].osc.base_note == p->step[1][0].note + 7u, "LINKS: PITCH +7");
+    check(auto_par[1][2] == PAR_VELOD2 && auto_val[1][2] == (uint8_t)clamp32((int32_t)par[PAR_VELOD2] - 40, 0, 127),
+          "LINKS: DECAY -40 (lane 2)");
+    run_ms(130);
+    check(vc[1].velo == (int32_t)(v0 * 32768u / 127u) && vc[1].osc.base_note == p->step[1][1].note &&
+          auto_par[1][2] == 0u, "LINKS: the next hit as set");
+    press(B_PLAY);
+    memset(p->link, 0, sizeof p->link);
+    /* SHIFT: D2 half a step late */
+    lk_set(0, 0, LV_HIT, 1, LE_SHIFT, LW_SAME, 100);
+    c = trig_count[1];
+    start_now();
+    to_tick(12);
+    check(trig_count[1] == c, "LINKS: SHIFT holds the hit back");
+    to_tick(15);
+    check(trig_count[1] == c + 1u, "LINKS: .. half a step");
+    seq_stop_now();
+    memset(p->link, 0, sizeof p->link);
+    pat_backup = *p;
+    /* the page: SHIFT + SEQ; Start; the sentence; LINK SETUP; the grid's mark */
+    hold(B_OCTDN);                                   /* (SHIFT) */
+    press(B_SEQ);
+    release(B_OCTDN);
+    check(ui.mode == M_EUCLID && ui.page == PG_LINKS, "SHIFT + SEQ: LINKS");
+    shot("links-empty");
+    turn(EN_K2, 1);
+    check(!memcmp(p->link[0], LK_START[0], 4), "LINKS: Start: DUCK HATS");
+    shot("links-duck-hats");
+    turn(EN_K1, 1);
+    turn(EN_K2, 2);
+    check(!memcmp(p->link[1], LK_START[1], 4) && ui.link == 1u, "LINKS: link 2, CALL / RESPONSE");
+    kset.accel = 0;
+    turn(EN_K3, -30);
+    kset.accel = 1;
+    check((int8_t)p->link[1][2] == 70, "LINKS: Amount");
+    turn(EN_SELECT, 1);
+    turn(EN_K3, 2);
+    check((p->link[1][1] & 15u) == LE_RAT && (int8_t)p->link[1][2] == LK_DEF[LE_RAT], "LINK SETUP: Effect, its amount");
+    turn(EN_K1, -1);
+    check((p->link[1][0] & 7u) == 5u && (p->link[1][0] >> 6) == LV_ACCENT, "LINK SETUP: When (CH hits hard)");
+    shot("link-setup");
+    turn(EN_SELECT, -1);
+    shot("links-custom");
+    while (ui.page)
+        turn(EN_SELECT, -1);
+    shot("links-grid-mark");
+    {
+        int rc;
+        p->cdepth = 90;
+        rc = proj_save(1, "LINKS   ");
+        memset(p->link, 0, sizeof p->link);
+        p->cdepth = 127;
+        rc |= proj_load(1);
+        check(rc == 0 && !memcmp(p->link[0], LK_START[0], 4) && (p->link[1][1] & 15u) == LE_RAT && p->cdepth == 90,
+              "project (version 6): the links, the depth");
+    }
+}
+
 static void grids_test(void)
 {
     pattern_t *p = &pat[0];
@@ -1500,6 +1656,7 @@ int main(int argc, char **argv)
     grids_test();
     hush_test();
     phase5a();
+    phase5b();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;
 }

@@ -18,7 +18,7 @@ Kettle is the Erica Synths LXR-02 firmware (GPL-3.0) ported to the M-VAVE FM-1 o
 - **Firmware build:** `./build.sh` makes `build/kettle.fwsc` and passes Felucca's checks.
 - **Browser emulator:** `web/emu/build.sh`, tested in Chrome, with Web MIDI in and out, including clock.
 - **First hardware run (0.5.1):** installed on a real FM-1 from V15 with the install page (`web/make_site.py`); a battery display on CONFIG; autosave no longer makes a burst of noise after a stop. See *0.5.1* below.
-- **Tests:** render_test, compare_test and ui_test (61 screens; bouncing ratchets and the roll sweep; the output's hush and autosave's timing; the battery display; Grids' map; clocks, conditions, ratchets, generators, bar copy; locks, patterns, project save/load, a 0.1 project, sends, reverb, sound shaping, phaser, flanger, PERF's effects and macros, autosave failure, sync in) all pass.
+- **Tests:** render_test, compare_test and ui_test (66 screens; links between tracks; bouncing ratchets and the roll sweep; the output's hush and autosave's timing; the battery display; Grids' map; clocks, conditions, ratchets, generators, bar copy; locks, patterns, project save/load, a 0.1 project, sends, reverb, sound shaping, phaser, flanger, PERF's effects and macros, autosave failure, sync in) all pass.
 
 **Measured resources** (from the 0.5 build)
 
@@ -195,7 +195,24 @@ A ratchet whose hits get closer (a dropped ball) or further apart (slowing down)
 - Tests: the hit times against the geometric series, the pitch drift, the cut.
 - **Roll sweep** (asked for on review): hold a roll key (PERF 1–7) and turn KNOB 3 to sweep that roll's speed live, from slow to fast and back, without leaving the PERFORM page. Today the roll rate is read live but sits on PERF: MORE and jumps between 14 grid values (`seq.c` `ROLL_TICKS`, fired on `sq.ticks % every`). The sweep uses 5a's sample-timed hits, so the rate moves smoothly (1/4 to 1/64, a little past it into a buzz); SHIFT while turning snaps it to the grid values. KNOB 3 goes back to REPEAT when no roll key is held (the knobs are endless encoders, so nothing jumps). The swept rate stays as the roll rate.
 
-### 5b. Track coupling
+### 5b. Track coupling (built)
+
+What was built, and where it differs from the plan:
+- **The sequencer** (`seq.c` `seq_flam`, `seq_links`): `seq_flam` now runs in two passes. First it finds each track's hit for the tick (its step, loop and position), then `seq_links` runs links 1–8 in order, then the hits play. With no links set, or a depth of 0, `seq_links` isn't called and `step_hit` gets no changes, so playback is as before.
+- **Each link:** its event arms a window counted in the target's own steps (`sq.nst`, the steps since the start). The target's hit in the window gets the effect. Events and changes are worked out once per occurrence (`sq.locc`, `sq.lmod`), and a flam's later hits keep them. A dropped hit counts as a rest (SILENT) for the links after it. A muted source rests too.
+- **Effects:** DUCK and ONLY are chances (`seq_rand`). The plan's "CHANCE+ / ONLY IF" became ONLY: a target's hit outside its window is dropped with the amount's chance. Raising a failed step's chance was left out, because the step's chance is rolled before the links run. TRIG plays the target's current note with no locks, the window serving as its delay. RATCH gives a step with no ratchet of its own +1..+4 hits at 1/32, or a BALL bounce; a step's own ratchet wins. VEL and PITCH change the one hit. DECAY uses a third automation lane (`sound.c` `auto_par[t][2]`) on the track's amp decay, for the hit and its ratchet, and the track's next hit clears it. SHIFT holds the occurrence's first hit in a one-hit slot per track (`sq.dly`, played by `seq_delayed`), and drops a flam's later hits.
+- **Amounts** (`LK_LO`, `LK_HI`, `LK_DEF`) are stored as int8 and scaled by the depth (`cdepth`, 0..127).
+- **The UI:** two pages after GRIDS MAP. LINKS has Link, Start, Amount and Depth. LINK SETUP has When (track and event as one knob), Target, Effect and Window. The plan's "pressing again" for a second set of knobs became the second page. The body shows the row of 8 links and the shown link as a sentence. Start's four starting points are `LK_START`; it reads EDITED once the link is changed, and – clears it. Choosing an Effect on an empty link makes one from the shown track to the next. SHIFT + SEQ opens LINKS (and the SHIFT legend says so). The grid's labels mark the tracks a link joins.
+- **Not done:** **Depth as a macro target.** Macros target the kit's parameters (`par[]`), and the depth is the pattern's. That needs a pattern-level target type; the Depth knob is there instead.
+- **Project:** links and depth were already in format 6 (5a's change), written only when set.
+- **Tests** (ui_test, 66 screens):
+  - DUCK over each window (SAME, NEXT, NEXT 2, BAR: 12, 12, 8, 0 of 16 hits) and at 50%.
+  - Depth 0 is as no links (the same hits, and the link code isn't entered). This replaces the planned sample-identical render, since the emulator can't replay from a saved state.
+  - ONLY with SILENT, ACCENT, and a loop both ways round.
+  - TRIG's delay and velocity, RATCH +2, VEL, PITCH and DECAY on one hit (and the next hit as set), and SHIFT's half step.
+  - The pages and SHIFT + SEQ, Start, Amount, Effect and When, the grid mark, and a round trip.
+
+The plan as agreed:
 
 Tracks that react to each other, so a pattern behaves like a small system rather than a loop. Each pattern holds up to **8 links**:
 

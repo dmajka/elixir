@@ -413,7 +413,7 @@ A kit is every sound parameter of all six voices (including the sends, the rever
 
 ## 12. Generating tracks
 
-Press **ARP** twice (past PERF). Turn SELECT for four pages, all for the selected track:
+Press **ARP** twice (past PERF). Turn SELECT for six pages. The first four are for the selected track; the last two (the links) are for the pattern:
 
 | Page | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
@@ -421,6 +421,8 @@ Press **ARP** twice (past PERF). Turn SELECT for four pages, all for the selecte
 | GENERATOR | Generator | its settings … | | |
 | TRACK CLOCK | Length | Clock | Bounce | Bnc pitch |
 | GRIDS MAP | Map X | Map Y | Chaos | – |
+| LINKS | Link (1–8) | Start | Amount | Depth |
+| LINK SETUP | When | Target | Effect | Window |
 
 ### Euclid
 
@@ -463,6 +465,45 @@ A typical start: D1 GRIDS / BD, SN GRIDS / SD, CH GRIDS / HH, then explore X and
 Each track can run at its own rate against the pattern: **/4, /3, /2, 2/3, 3/4, 1x, 4/3, 3/2, x2, x3, x4**. A hat at x2 plays 32nds; a track at 3/4 against a 16-step pattern makes 12 steps fit a bar (a polyrhythm). Combine with track lengths for polymeters. Flams and shifts scale with the track's step.
 
 **Bounce** and **Bnc pitch** set the track's bouncing ratchets (section 6): the first gap and the pitch drift.
+
+### Links (track coupling)
+
+Links make tracks react to each other, so a pattern behaves like a small system instead of a loop: the kick ducks the hats, the open hat answers only when the closed hat rests, a snare hit makes the next hat rattle. Each pattern holds up to **8 links**. **SHIFT + SEQ** opens the LINKS page from anywhere (it is also the fifth EUCLID page).
+
+A link reads as a sentence, and the screen shows it that way:
+
+> When **D1** hits, **CH** chance −60%, on the next step.
+
+| Part | Choices |
+|---|---|
+| **When** (KNOB 1 on LINK SETUP) | A track, and what it does: **hit**, **acc** (hits hard: velocity above 100), or **rest** (its step had nothing, its chance failed, it's muted, or a link dropped its hit) |
+| **Target** | The track that reacts |
+| **Effect** | **DUCK** (its hit becomes less likely by the amount), **ONLY** (it plays only in the window, otherwise it's dropped with the amount's chance), **TRIG** (an extra hit at the amount's velocity), **RATCH** (its hit ratchets +1 to +4 at 1/32, or BOUNCE), **VEL** (velocity ±), **PITCH** (± semitones), **SHIFT** (plays late, up to half a step at 100%), **DECAY** (its decay ±, for that hit) |
+| **Window** | Which of the target's steps react: **SAME** step, **NEXT** step, **NEXT 2** steps, or the rest of the **BAR**. For TRIG, the window is a delay: at once, the next step, two steps on, the next bar. |
+| **Amount** (LINKS page) | How much, in the effect's own units |
+| **Depth** (LINKS page) | One amount for the pattern that scales every link: 0% turns them all off, so you can fade the coupling in live |
+
+On the LINKS page, KNOB 1 picks the link (the row of 8 at the top shows which are set) and **Start** offers four starting points, so a useful link is one turn away:
+
+| Start | The link |
+|---|---|
+| **DUCK HATS** | When D1 hits, CH chance −60%, on the next step |
+| **CALL / RESPONSE** | When CH rests, OH plays only then, on the next 2 steps |
+| **GHOST FILL** | When D1 rests, D2 plays at 30, at once |
+| **CHAIN** | When SN hits, CH ratchets +2, on the next step |
+
+Start shows EDITED once you change the link; turning it back to – clears the link. On the grid, a small mark by a track's name shows that a link joins it.
+
+**How they work.** On each tick, Kettle first decides every track's hit (steps, chance, conditions, generators). Then it applies the links in order, 1 to 8, each one seeing what the links before it did. Then the hits play. So a link can point either way between two tracks, and loops are fine: if link 1 has D1 duck D2 and link 2 has D2 duck D1, link 1 wins. A flam's or ratchet's later hits keep what the links decided for its first hit, and the extra hits a link makes (TRIG) don't set off other links.
+
+**A worked example: a hat line that breathes.**
+1. Program four kicks on D1 (steps 1, 5, 9, 13) and closed hats on every step of CH.
+2. SHIFT + SEQ, then turn **Start** to DUCK. The hat after each kick now drops out 60% of the time.
+3. KNOB 1 to link 2, Start to CALL. Program open hats on every step of OH: they now play only in the two steps after a closed hat rests, so they answer the gaps DUCK made. Every bar comes out a little different.
+4. KNOB 1 to link 3, then on LINK SETUP set When to **SN hit**, Target **CH**, Effect **RATCH**, Window **NEXT**. Add a snare on 5 and 13: the hat after it rattles.
+5. Back on LINKS, turn **Depth** down to 0% and up again while it plays: the system fades out to the plain pattern and back.
+
+Links, their depth and the bounce settings are saved with the pattern (project format 6). Kettle 0.5 and earlier projects load with no links.
 
 ---
 

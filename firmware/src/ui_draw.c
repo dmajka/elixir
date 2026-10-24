@@ -137,8 +137,8 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
     }
     case M_PERF: put_str(b, PERF_TITLE[ui.page % 4u], n); break;
     case M_EUCLID:
-        put_str(b, EUCLID_TITLE[ui.page % 4u], n);
-        if (ui.page % 4u == 0u && ui.action)
+        put_str(b, EUCLID_TITLE[ui.page % NEUCLID], n);
+        if (ui.page % NEUCLID == 0u && ui.action)
             put_str(b + str_len(b), "  OCT+: DO IT", n - str_len(b));
         break;
     case M_FX: put_str(b, ui.page % 3u == 2u ? "REVERB" : "FX BUS", n); break;
@@ -187,8 +187,12 @@ static void draw_title(void)
 /* -------------------------------------------------------------- grid --- */
 static void draw_labels(void)
 {
-    uint32_t t, s = sig_add(ui.track, sq.muted);
-    s = sig_add(s, ui.perf);
+    uint32_t t, s = sig_add(ui.track, sq.muted), lk = 0, l;
+    const pattern_t *pt = shown_pat();
+    for (l = 0; l < NLINK; l++)                      /* 0.6: the tracks a link joins (a mark by the name) */
+        if ((pt->link[l][1] & 15u) && (pt->link[l][1] & 15u) < NLE)
+            lk |= 1u << (pt->link[l][0] & 7u) | 1u << (pt->link[l][0] >> 3 & 7u);
+    s = sig_add(s, ui.perf | lk << 8);
     for (t = 0; t < NTRACK; t++)
         s = sig_add(s, fm1_ms - ui.flash_ms[t] < 90u);
     if (!region(R_LABELS, s))
@@ -208,6 +212,8 @@ static void draw_labels(void)
             cv_rect(0, y + 4, 2, ROW_H - 8, T_ACCENT);
         if (muted)
             cv_rect(6, y + ROW_H / 2, 19, 1, t == ui.track ? RGB(12, 12, 12) : T_DIM);
+        if (lk >> t & 1u)
+            cv_rect(25, y + 4, 3, 3, t == ui.track ? RGB(12, 12, 12) : T_ACCENT);
     }
     cv_blit(0, BODY_Y);
 }
@@ -450,7 +456,7 @@ static void draw_shift_legend(int32_t y0)
         cv_text(x + 4, y + CAP_IN(S, 17), &AF_S, b, T_INK);
         cv_text_fit(x + 22, y + CAP_IN(S, 17), &AF_S, F[i], T_INK, T_SEL, 52);
     }
-    cv_text(8, 94, &AF_S, "VOICE KEY: mute   BAR KEY: length", T_TEXT);
+    cv_text(8, 94, &AF_S, "VOICE: mute  BAR: length  SEQ: links", T_TEXT);
     cv_text(8, 108, &AF_S, "PLAY: song  REC: opts  COPY: clear", T_TEXT);
 }
 
@@ -677,6 +683,87 @@ static void draw_cpu(int32_t y)
         cv_rect(10 + wp * 218 / 100, y + 13, 2, 6, T_ACCENT);
 }
 
+/* 0.6: the links. An amount as the effect reads it (b: 12 at least) */
+static const char *const LINK_EFF[NLE] = {"OFF", "DUCK", "ONLY", "TRIG", "RATCH", "VEL", "PITCH", "SHIFT", "DECAY"};
+static void link_amount(char *b, uint32_t e, int32_t a)
+{
+    if (e == LE_RAT && a >= 5) {
+        put_str(b, "BOUNCE", 8);
+        return;
+    }
+    if (e == LE_DUCK)
+        *b++ = '-';
+    else if (a > 0 && (e == LE_VEL || e == LE_PITCH || e == LE_DECAY || e == LE_RAT))
+        *b++ = '+';
+    b = put_int(b, a);
+    if (e == LE_DUCK || e == LE_ONLY || e == LE_SHIFT)
+        put_str(b, "%", 2);
+}
+static void cat(char *b, const char *s, uint32_t n) { put_str(b + str_len(b), s, n - (uint32_t)str_len(b)); }
+/* LINKS, LINK SETUP: the 8 links (set: raised; the one shown: lit), the one shown as a sentence */
+static void draw_links(int32_t y0)
+{
+    static const char *const EV[NLV] = {" hits", " hits hard", " rests"};
+    static const char *const WIN[NLW] = {"on the same step", "on the next step", "on the next 2 steps",
+                                         "for the rest of the bar"};
+    static const char *const TWIN[NLW] = {"at once", "on the next step", "2 steps on", "at the next bar"};
+    static const char *const START[NSTART] = {"DUCK HATS", "CALL / RESPONSE", "GHOST FILL", "CHAIN"};
+    const pattern_t *pt = shown_pat();
+    const uint8_t *L = pt->link[ui.link & 7u];
+    uint32_t i, e = L[1] & 15u, src = (L[0] & 7u) % NTRACK, tgt = (L[0] >> 3 & 7u) % NTRACK, ev = (L[0] >> 6) % NLV;
+    uint32_t w = L[1] >> 4 & 3u, st = link_start(L);
+    int32_t a = (int8_t)L[2];
+    char b[48], v[16];
+    (void)y0;
+    for (i = 0; i < NLINK; i++) {
+        int32_t x = 4 + (int32_t)i * 29;
+        int set = (pt->link[i][1] & 15u) && (pt->link[i][1] & 15u) < NLE, sel = i == (ui.link & 7u);
+        uint16_t bg = sel ? T_THEME : set ? T_RAISE : T_SURF;
+        put_int(b, (int32_t)i + 1);
+        cv_rrect(x, 2, 27, 17, 3, bg, T_BG);
+        text_c(x, 2 + CAP_IN(S, 17), 27, &AF_S, b, sel ? RGB(12, 12, 12) : set ? T_TEXT : T_DIM, bg);
+    }
+    if (!e || e >= NLE) {
+        put_str(b, "Link ", sizeof b);
+        put_int(b + 5, (int32_t)(ui.link & 7u) + 1);
+        cat(b, " is empty.", sizeof b);
+        cv_text(8, 30, &AF_M, b, T_TEXT);
+        cv_text(8, 56, &AF_S, "KNOB 2 (Start): a starting point,", T_TEXT);
+        cv_text(8, 71, &AF_S, "or set one up on LINK SETUP.", T_TEXT);
+        cv_text(8, 94, &AF_S, "SHIFT + SEQ opens this page.", T_MID);
+        return;
+    }
+    if (e > LE_DUCK && e != LE_TRIG)
+        a = clamp32(a, LK_LO[e], LK_HI[e]);
+    put_str(b, "When ", sizeof b);
+    cat(b, VOICE_SHORT[src], sizeof b);
+    cat(b, EV[ev], sizeof b);
+    cv_text(8, 26, &AF_M, b, T_TEXT);
+    put_str(b, VOICE_SHORT[tgt], sizeof b);
+    link_amount(v, e, a);
+    switch (e) {
+    case LE_DUCK: cat(b, " chance ", sizeof b); cat(b, v, sizeof b); break;
+    case LE_ONLY:
+        cat(b, a >= 100 ? " plays only then" : " only then, ", sizeof b);
+        if (a < 100)
+            cat(b, v, sizeof b);
+        break;
+    case LE_TRIG: cat(b, " plays at ", sizeof b); cat(b, v, sizeof b); break;
+    case LE_RAT: cat(b, a >= 5 ? " bounces" : " ratchets ", sizeof b); if (a < 5) cat(b, v, sizeof b); break;
+    case LE_VEL: cat(b, " velocity ", sizeof b); cat(b, v, sizeof b); break;
+    case LE_PITCH: cat(b, " pitch ", sizeof b); cat(b, v, sizeof b); break;
+    case LE_SHIFT: cat(b, " plays ", sizeof b); cat(b, v, sizeof b); cat(b, " late", sizeof b); break;
+    default: cat(b, " decay ", sizeof b); cat(b, v, sizeof b); break;
+    }
+    cv_text(8, 48, &AF_M, b, TRACK_COL[tgt]);
+    cv_text(8, 70, &AF_M, e == LE_TRIG ? TWIN[w] : WIN[w], T_TEXT);
+    put_str(b, st && st <= NSTART ? START[st - 1u] : "", sizeof b);
+    cv_text(8, 96, &AF_S, b, T_MID);
+    put_str(b, "DEPTH ", sizeof b);
+    put_str(put_int(b + 6, (int32_t)((pt->cdepth * 100u + 63u) / 127u)), "%", 2);
+    cv_text(232 - text_w(&AF_S, b), 96, &AF_S, b, pt->cdepth ? T_MID : T_ACCENT);
+}
+
 static void draw_config_help(int32_t y0)
 {
     (void)y0;
@@ -830,6 +917,19 @@ static void draw_body(void)
             fn = draw_sound;
             s = sig_add(10, sound_sig());
             break;
+        case M_EUCLID:
+            if (ui.page % NEUCLID >= PG_LINKS) {
+                uint32_t l;
+                const pattern_t *pt = shown_pat();
+                fn = draw_links;
+                s = sig_add(12, ui.link | (uint32_t)pt->cdepth << 8);
+                for (l = 0; l < NLINK; l++)
+                    s = sig_add(s, (uint32_t)pt->link[l][0] | (uint32_t)pt->link[l][1] << 8 |
+                                       (uint32_t)pt->link[l][2] << 16);
+                break;
+            }
+            draw_grid();
+            return;
         default:
             draw_grid();
             return;
@@ -874,6 +974,14 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_BSTART: put_str(b, "Bounce", n); return;
     case VP_BPITCH: put_str(b, "Bnc pitch", n); return;
     case VP_ROLL: put_str(b, "Roll", n); return;
+    case VP_LINK: put_str(b, "Link", n); return;
+    case VP_LSTART: put_str(b, "Start", n); return;
+    case VP_LAMT: put_str(b, "Amount", n); return;
+    case VP_DEPTH: put_str(b, "Depth", n); return;
+    case VP_LWHEN: put_str(b, "When", n); return;
+    case VP_LTGT: put_str(b, "Target", n); return;
+    case VP_LEFF: put_str(b, "Effect", n); return;
+    case VP_LWIN: put_str(b, "Window", n); return;
     case VP_RAT_FADE: put_str(b, "Fade", n); return;
     case VP_ACTION: put_str(b, "Action", n); return;
     case VP_GMODE: put_str(b, "Generator", n); return;
@@ -1039,6 +1147,35 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
         put_int(b + 2, (int32_t)((4u * (uint32_t)exp2_q16((int32_t)(v * 2882u)) + 32768u) >> 16));
         return;
     case VP_RAT_FADE: put_str(b, v == RF_DOWN ? "DOWN" : v == RF_UP ? "UP" : "FLAT", n); return;
+    case VP_LINK: put_int(b, (int32_t)v + 1); return;
+    case VP_LSTART: {
+        static const char *const S[NSTART + 2u] = {"-", "DUCK", "CALL", "GHOST", "CHAIN", "EDITED"};
+        put_str(b, S[v <= NSTART + 1u ? v : 0], n);
+        return;
+    }
+    case VP_LAMT: {
+        const uint8_t *L = shown_pat()->link[ui.link & 7u];
+        uint32_t e = L[1] & 15u;
+        if (!e || e >= NLE)
+            put_str(b, "-", n);
+        else
+            link_amount(b, e, (int32_t)v + LK_LO[e]);
+        return;
+    }
+    case VP_DEPTH: put_str(put_int(b, (int32_t)((v * 100u + 63u) / 127u)), "%", 2); return;
+    case VP_LWHEN: {
+        static const char *const E[NLV] = {" hit", " acc", " rest"};
+        put_str(b, VOICE_SHORT[v / NLV % NTRACK], n);
+        put_str(b + 2, E[v % NLV], n - 2u);
+        return;
+    }
+    case VP_LTGT: put_str(b, VOICE_SHORT[v % NTRACK], n); return;
+    case VP_LEFF: put_str(b, LINK_EFF[v < NLE ? v : 0], n); return;
+    case VP_LWIN: {
+        static const char *const W[NLW] = {"SAME", "NEXT", "NEXT 2", "BAR"};
+        put_str(b, W[v & 3u], n);
+        return;
+    }
     case VP_ACTION: {
         static const char *const A[NACT] = {"-", "DICE", "COMMIT", "UNDO", "RESET"};
         put_str(b, A[v < NACT ? v : 0], n);
