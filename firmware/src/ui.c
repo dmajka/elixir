@@ -43,7 +43,7 @@ enum { VP_BASE = 0x200, VP_NONE = VP_BASE, VP_IO_TYPE, VP_IO_SLOT, VP_NAME_POS, 
        VP_DJ, VP_REPEAT, VP_TAPE, VP_M1, VP_M4 = VP_M1 + NMACRO - 1, VP_MSEL, VP_MTARGET, VP_MMIN, VP_MMAX,
        VP_COND, VP_RAT_N, VP_RAT_RATE, VP_RAT_FADE, VP_ACTION, VP_GMODE, VP_GA, VP_GB, VP_GC, VP_CLOCK,
        VP_GX, VP_GY, VP_GCHAOS, VP_RAT_SHAPE, VP_BSTART, VP_BPITCH, VP_ROLL,
-       VP_LINK, VP_LSTART, VP_LAMT, VP_DEPTH, VP_LWHEN, VP_LTGT, VP_LEFF, VP_LWIN, VP_KOCT, VP_KVEL, VP_KACC,
+       VP_LINK, VP_LSTART, VP_LAMT, VP_DEPTH, VP_LWHEN, VP_LTGT, VP_LEFF, VP_LWIN, VP_KOCT, VP_KVEL, VP_KACC, VP_PKEEP,
        VP_IO_SRC, VP_IO_TRACK,
        VP_P2, VP_P2_LAST = VP_P2 + 7 };
 /* the EUCLID pages' ACTION (OCT+ does it) */
@@ -258,7 +258,7 @@ static const char *const CONFIG_TITLE[7] = {"SEQUENCER", "MIDI", "MIDI CHANNELS"
                                             "MIDI NOTES", "DEVICE"};
 static const uint16_t P_NAME[4] = {VP_NAME_POS, VP_NAME_CHAR, VP_NAME_CASE, VP_NONE};
 static const uint16_t P_SONG[4] = {VP_SONG_PAT, VP_SONG_NUM, VP_NONE, VP_NONE};
-static const uint16_t P_PATTERN[4] = {PAR_PATTERN_MODE, PAR_SHUFFLE, VP_NONE, VP_NONE};
+static const uint16_t P_PATTERN[4] = {PAR_PATTERN_MODE, PAR_SHUFFLE, VP_PKEEP, VP_NONE};
 static const uint16_t P_LAST[4] = {PAR_TRACK_LENGTH, VP_NONE, VP_NONE, VP_NONE};
 static const uint16_t P_RECOPT[4] = {PAR_AUTOM_TRACK, VP_NONE, VP_NONE, VP_NONE};
 static const uint16_t P_KEYS[4] = {VP_KOCT, VP_KVEL, VP_KACC, VP_NONE};
@@ -456,6 +456,7 @@ static uint32_t vp_get(uint32_t p)
     case VP_SONG_NUM: return sq.song;
     case VP_LEDS: return kset.leds;
     case VP_AUTOSAVE: return autosave_on;
+    case VP_PKEEP: return pat_keep;
     case VP_ACCEL: return kset.accel;
     case VP_PALETTE: return kset.palette;
     case VP_MASTER: return (uint32_t)(master_q12 >> 5);
@@ -563,7 +564,7 @@ static uint32_t vp_max(uint32_t p)
     case VP_SONG_PAT: return NUM_PATTERN + 1u;
     case VP_SONG_NUM: return NUM_SONGS - 1u;
     case VP_LEDS: return 2;
-    case VP_AUTOSAVE: case VP_ACCEL: case VP_IO_SRC: return 1;
+    case VP_AUTOSAVE: case VP_ACCEL: case VP_IO_SRC: case VP_PKEEP: return 1;
     case VP_IO_TRACK: return NTRACK - 1u;
     case VP_PALETTE: return NPALETTES - 1u;
     case VP_MASTER: case VP_DJ: case VP_TAPE: case VP_M1: case VP_M1 + 1: case VP_M1 + 2: case VP_M1 + 3: return 127;
@@ -701,6 +702,7 @@ static void vp_set(uint32_t p, uint32_t v)
     case VP_SONG_NUM: sq.song = (uint8_t)v; return;
     case VP_LEDS: kset.leds = (uint8_t)v; settings_later(); return;
     case VP_AUTOSAVE: autosave_on = (uint8_t)v; settings_later(); return;
+    case VP_PKEEP: pat_keep = (uint8_t)v; kset.pdrop = (uint8_t)!v; settings_later(); return;
     case VP_ACCEL: kset.accel = (uint8_t)v; settings_later(); return;
     case VP_PALETTE: kset.palette = (uint8_t)v; palette_apply(); settings_later(); ui.force = 1; return;
     case VP_NONE: case VP_MASTER: return;
@@ -1292,6 +1294,7 @@ static void white_down(uint32_t w)
             kit_load_ram(kit_loaded);
             sq.pending = sq.active;
             sq.load_pending = 1;
+            pat_revert = 1;
             if (!sq.running)
                 seq_pattern_activate();
             ui_message("RELOADED");

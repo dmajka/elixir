@@ -694,9 +694,13 @@ static void autosave_poll(void)
 
 /* ------------------------------------------------------- settings --- */
 #define SET_MAGIC 0x3154454Bu                       /* "KET1" */
-/* 0.8: kvel, kacc: the keys' velocity and accent (seq.c key_vel, key_acc; 0, as settings before 0.8 hold: 100, 127) */
-typedef struct { uint32_t magic; uint8_t palette, leds, autosave, accel, project, kvel, kacc, rsv[5]; } kettle_settings_t;
-static kettle_settings_t kset = {SET_MAGIC, 2, 1, 1, 1, 0xFF, 100, 127, {0}};   /* (palette 2: AMBER) */
+/* 0.8: kvel, kacc: the keys' velocity and accent (seq.c key_vel, key_acc; 0, as settings before 0.8 hold: 100, 127).
+ * 0.9: pdrop: a pattern's unsaved edits dropped when another plays (the LXR's way; 0, the default: kept) */
+typedef struct {
+    uint32_t magic;
+    uint8_t palette, leds, autosave, accel, project, kvel, kacc, pdrop, rsv[4];
+} kettle_settings_t;
+static kettle_settings_t kset = {SET_MAGIC, 2, 1, 1, 1, 0xFF, 100, 127, 0, {0}};   /* (palette 2: AMBER) */
 static uint8_t settings_dirty;
 static uint32_t settings_ms;
 static void settings_later(void)
@@ -727,6 +731,7 @@ static void persist_boot(void)                      /* power-on: the flash, the 
     autosave_on = kset.autosave;
     key_vel = kset.kvel ? kset.kvel : 100u;
     key_acc = kset.kacc ? kset.kacc : 127u;
+    pat_keep = !kset.pdrop;
     proj_scan();
     kl_scan();
 }

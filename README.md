@@ -35,6 +35,8 @@ The FM-1 has no FPU, so the LXR's floating-point DSP is rewritten in fixed point
 | PRESETS | Kit browser (OCT+ loads) · on a sound page or in KEYS: the sound browser (OCT+ keeps, OCT− reverts) |
 | KNOB 1–4 | The four parameters on screen. **Hold a step and turn a knob** to lock that parameter on that step |
 
+Patterns keep their edits when you switch, as on an Elektron box: they are part of the session, which AUTOSAVE keeps. The pattern page's Edits setting can drop them instead, the LXR's way. RELOAD reverts the playing pattern either way.
+
 SHIFT + white keys follow the LXR's SHIFT + step functions: 1–7 audition a voice, 8 KIT, 9 MORPH, 10 SONG, 11 PROJECT, 12 CONFIG, 13 RELOAD, 14 LAST (last-touched parameters), 15 FX, 16 PATTERN.
 
 ## Sends and reverb

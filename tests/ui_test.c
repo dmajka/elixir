@@ -1969,6 +1969,49 @@ static void phase9_library(void)
     p4_reset();
 }
 
+static void phase9_patkeep(void)                     /* 0.9: a pattern's edits kept when another plays */
+{
+    p4_reset();
+    check(pat_keep == 1 && kset.pdrop == 0, "Edits: KEEP by default");
+    black(0);                                        /* D1 */
+    white(0);                                        /* D1 on step 1 of pattern 1 */
+    check(main_on(&pat[0], 0, 0), "a step on pattern 1");
+    goto_mode(B_HOME, M_PATTERN);
+    shot("patterns-keep");
+    white(1);
+    check(sq.active == 1, "PATTERNS: pattern 2 plays");
+    white(0);
+    check(sq.active == 0 && main_on(&pat[0], 0, 0), "KEEP: pattern 1's step is still there");
+    press(B_PLAY);                                   /* playing, the switch at the bar's end */
+    white(1);
+    run_ms(2100);
+    check(sq.active == 1, "PATTERNS: pattern 2, playing");
+    white(0);
+    run_ms(2100);
+    check(sq.active == 0 && main_on(&pat[0], 0, 0), "KEEP: pattern 1's step, playing");
+    press(B_PLAY);
+    /* RELOAD reverts, whatever Edits says */
+    goto_mode(B_HOME, M_HOME);
+    white(4);
+    hold(B_OCTDN);
+    white(12);
+    release(B_OCTDN);
+    check(!main_on(&pat[0], 0, 4) && main_on(&pat[0], 0, 0), "RELOAD: pattern 1 as entered");
+    /* DROP: the LXR's way */
+    goto_mode(B_HOME, M_PATTERN);
+    turn(EN_K3, -1);
+    check(pat_keep == 0 && kset.pdrop == 1, "Edits: DROP, a setting");
+    shot("patterns-drop");
+    goto_mode(B_HOME, M_HOME);
+    white(8);
+    goto_mode(B_HOME, M_PATTERN);
+    white(1);
+    white(0);
+    check(!main_on(&pat[0], 0, 8) && main_on(&pat[0], 0, 0), "DROP: pattern 1's unsaved step goes");
+    turn(EN_K3, 1);
+    check(pat_keep == 1 && kset.pdrop == 0, "Edits: KEEP again");
+    goto_mode(B_HOME, M_HOME);
+}
 int main(int argc, char **argv)
 {
     uint32_t t;
@@ -2392,6 +2435,7 @@ int main(int argc, char **argv)
     phase9_perf();
     phase9_keys();
     phase9_library();
+    phase9_patkeep();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;
 }

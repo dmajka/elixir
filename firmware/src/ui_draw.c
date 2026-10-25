@@ -1079,6 +1079,7 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_SONG_NUM: put_str(b, "Song", n); return;
     case VP_LEDS: put_str(b, "Leds", n); return;
     case VP_AUTOSAVE: put_str(b, "Autosave", n); return;
+    case VP_PKEEP: put_str(b, "Edits", n); return;
     case VP_ACCEL: put_str(b, "Accel", n); return;
     case VP_PALETTE: put_str(b, "Colours", n); return;
     case VP_TRACK_VOL: put_str(b, "Volume", n); return;
@@ -1244,6 +1245,7 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
     case VP_SONG_NUM: two_digits(b, v + 1u); return;
     case VP_LEDS: put_str(b, v == 0u ? "OFF" : v == 1u ? "LOW" : "HIGH", n); return;
     case VP_AUTOSAVE: case VP_ACCEL: put_str(b, v ? "ON" : "OFF", n); return;
+    case VP_PKEEP: put_str(b, v ? "KEEP" : "DROP", n); return;
     case VP_PALETTE: put_str(b, UI_PALETTES[v % NPALETTES].name, n); return;
     case VP_FX_SUB:
         put_str(b, fx.type == FX_DRIVE ? L_DIST[v % 3u] : fx.type == FX_RING ? L_WAVE[v % NWAVE]

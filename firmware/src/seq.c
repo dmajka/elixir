@@ -96,7 +96,10 @@ enum { GEN_OFF, GEN_MUTATE, GEN_TURING, GEN_CA, GEN_GRIDS, NGEN };
 static uint8_t key_vel = 100, key_acc = 127;
 
 static pattern_t pat[NUM_PATTERN] POOL;
-static pattern_t pat_backup POOL;   /* the playing pattern as loaded (or saved) */
+static pattern_t pat_backup POOL;   /* the playing pattern as loaded (or saved): RELOAD's, and DROP's */
+static uint8_t pat_keep = 1;        /* 0.9: a pattern's edits stay when another plays (as in the project); 0: dropped,
+                                     * the LXR's way (the pattern page's Edits; project.c kset.pdrop) */
+static uint8_t pat_revert;          /* RELOAD: the playing pattern back as saved, whatever Edits says */
 static pattern_t gpat POOL;         /* the generators' live tracks: track t of it plays when t's generator is on */
 static pattern_t upat POOL;         /* UNDO: a track as it was before DICE, COMMIT, EUCLID (undo_t, undo_p) */
 static uint8_t songs[NUM_SONGS][MAX_SONG_LENGTH] POOL;
@@ -804,7 +807,9 @@ static void seq_pattern_activate(void)               /* seq_setPendingPatternAct
         seq_reset_tracks();
         sq.gsync = (1u << NTRACK) - 1u;              /* (the generators' live tracks from the new pattern) */
         sq.load_pending = 0;
-        pat[sq.active] = pat_backup;                 /* unsaved changes of the old pattern go (the LXR's way) */
+        if (!pat_keep || pat_revert)
+            pat[sq.active] = pat_backup;             /* unsaved changes of the old pattern go (the LXR's way) */
+        pat_revert = 0;
         pat_backup = pat[sq.pending];
         sq.active = sq.pending;
         seq_set_shuffle_from(sq.active);

@@ -462,6 +462,14 @@ What was built:
 - **Tests:** ui_test phase5d (MODAL's harmonic and stretched partials, STRING's and FM's pitch, STRING below its line, DECAY, the level over models, BRIGHT, STRUCTURE and pitch, EXCITER, velocity, D1 through the voice, TENSION, the page, a project, version 6's mapping).
 - **Next:** the user listens, and the CPU is measured on a unit.
 
+### Pattern edits kept on a switch (built in 0.9)
+
+Requested 2026-10-25: losing a new pattern's work on a switch broke the flow; on a Digitakt the patterns are simply part of the project.
+
+- **Edits** on the pattern page (KNOB 3): KEEP (the default) leaves a pattern's changes in place when another starts; DROP is the LXR's way (they go unless saved with SAVE → PATTERN). A setting (`kset.pdrop`, so settings from before read as KEEP). AUTOSAVE already writes every pattern to the session.
+- **RELOAD** still reverts the playing pattern to how it was when it started (or was last saved), on either setting (`pat_revert`).
+- **Tests:** ui_test phase9_patkeep (KEEP stopped and playing, RELOAD, DROP, the setting).
+
 ## Later / bigger
 
 - **303-style acid track:** about 33 KB of pattern memory at 64 patterns (less at 32), 1–2 voices' worth of CPU, and real UI work for track selection and note entry. Check charlesvestal's fm1-x0x (FM-1 303 firmware) and its licence first.

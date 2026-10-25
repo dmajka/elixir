@@ -293,9 +293,11 @@ Kettle has **32 patterns** in two banks of 16, and **64 songs**.
 
 - **White key:** queue that pattern. While playing, it starts when the current pattern ends (the header shows >nn); while stopped, at once.
 - **Bar keys 8–9:** bank 1 (patterns 1–16) or bank 2 (17–32).
-- **Knobs:** kit change (AUTO: switching to a pattern also loads the kit saved with it), shuffle.
+- **Knobs:** kit change (AUTO: switching to a pattern also loads the kit saved with it), shuffle, Edits (KEEP or DROP, below).
 
-**Save before you switch.** As on the LXR, changes to the playing pattern that haven't been saved (SAVE → PATTERN) are lost when another pattern starts. **RELOAD** (SHIFT + white key 13) brings back the kit and pattern as saved. Saving a project also keeps the playing pattern's changes.
+**Your edits stay.** With **Edits** on KEEP (the default), a pattern keeps its changes when you switch to another, as on an Elektron box: the patterns are part of the project, and AUTOSAVE keeps the session, every pattern in it, through power-off. To keep a version for good, save the project (SAVE → PROJECT). **RELOAD** (SHIFT + white key 13) brings back the kit, and the playing pattern as it was when it started playing (or was last saved with SAVE → PATTERN).
+
+With **Edits** on DROP, the LXR's way, changes to the playing pattern that haven't been saved (SAVE → PATTERN) are lost when another pattern starts. Edits is a setting: it stays through power-off.
 
 ### Songs (HOME, press a third time)
 
@@ -639,7 +641,7 @@ Press **SAVE** for the save page, SAVE again for the load page (SHIFT + SAVE ope
 
 A project is everything: all 64 kits, the 32 patterns, the 64 songs, the settings, the sound as it is, the morph target, the macros. Kettle keeps **four projects** in the FM-1's flash.
 
-**The session saves itself.** When AUTOSAVE is on (CONFIG → DEVICE), Kettle saves the session while stopped, once 8 seconds have passed since you stopped or last changed something and the sound (reverb and delay tails too) has died away. It loads it at power-on. The FM-1 runs on a battery, so this means nothing is lost when it switches off. If something keeps sounding (a frozen delay, pads played live), it saves anyway after 30 seconds of rest.
+**The session saves itself.** When AUTOSAVE is on (CONFIG → DEVICE), Kettle saves the session (all the patterns, with their edits, the kits and the rest) while stopped, once 8 seconds have passed since you stopped or last changed something and the sound (reverb and delay tails too) has died away. It loads it at power-on. The FM-1 runs on a battery, so this means nothing is lost when it switches off. If something keeps sounding (a frozen delay, pads played live), it saves anyway after 30 seconds of rest.
 
 Writing to flash stalls the FM-1's processor for a moment, so every save (automatic or from the SAVE page) fades the output out, writes, and fades it back in: a save while something sounds is a short gap, not a click or noise. (Before 0.5.1 the save could come right after a stop and chopped the reverb tail into a burst of noise.)
 
@@ -816,7 +818,7 @@ What Kettle adds:
 
 | Symptom | Try |
 |---|---|
-| A change to the pattern disappeared after switching patterns | Unsaved pattern changes are dropped on a switch (as on the LXR). Save with SAVE → PATTERN first, or save the project. |
+| A change to the pattern disappeared after switching patterns | The pattern page's Edits is on DROP (the LXR's way): unsaved changes go on a switch. Set it to KEEP (the default), or save with SAVE → PATTERN first. RELOAD also undoes a pattern's changes. |
 | No sound from a voice | Is it muted (dark key)? Its volume (mixer)? FX send at 127 with the FX bus on a quiet setting? A choke group cutting it? Cross mod DUCK? |
 | FREEZE does nothing | The FX bus must be set to DELAY, and something must be sent to it (FX send or THROW FX). |
 | Tempo shows MIDI and nothing plays | Tempo is turned to MIDI: Kettle waits for MIDI clock. Turn the tempo up. |
