@@ -354,14 +354,18 @@ static void list_row(int32_t y, const char *left, const char *right, int sel, in
     cv_text_fit(64, y + CAP_IN(S, 16), &AF_S, right, sel ? T_INK : dim ? T_DIM : T_TEXT, bg, 168);
 }
 
-static void draw_kit_browser(int32_t y0)             /* 0.9: the slots, then the library's kits (L1 ..) */
+static void draw_kit_browser(int32_t y0)             /* 0.9: the slots or (0.9.2) the library's kits (L1 ..) */
 {
     uint32_t i, k = ui.kb_sel, first = kb_step(ui.kb_sel, -3);
     (void)y0;
     for (i = 0; i < 3u && kb_step(first, 5) == kb_step(first, 6) && kb_step(first, -1) != first; i++)
         first = kb_step(first, -1);                   /* (the list's end: the last 7 shown) */
-    cv_text(10, 2, &AF_S, "LOAD KIT", T_THEME);
+    cv_text(10, 2, &AF_S, ui.kb_lib ? "LIBRARY KITS" : "KIT SLOTS", T_THEME);
     cv_text_r(232, 2, &AF_S, "OCT+ LOAD", T_MID, T_BG);
+    if (!kb_has((int32_t)ui.kb_sel)) {                /* (the library empty) */
+        cv_text(10, 34, &AF_S, "THE LIBRARY IS EMPTY", T_MID);
+        return;
+    }
     for (i = 0, k = first; i < 7u; i++) {
         char l[8], r[12];
         put_str(l, "", sizeof l);
@@ -984,7 +988,7 @@ static void draw_body(void)
         s = sig_add(40, ui.sb_sel | ui.track << 16);
     } else if (ui.kb_open) {
         fn = draw_kit_browser;
-        s = sig_add(3, ui.kb_sel | kit_loaded << 8);
+        s = sig_add(3, ui.kb_sel | kit_loaded << 8 | (uint32_t)ui.kb_lib << 16);
     } else {
         switch (ui.mode) {
         case M_PATTERN:
@@ -1121,6 +1125,7 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_KOCT: put_str(b, "Octave", n); return;
     case VP_KVEL: put_str(b, "Velocity", n); return;
     case VP_KACC: put_str(b, "Accent", n); return;
+    case VP_KB_SRC: put_str(b, "From", n); return;
     case VP_RAT_FADE: put_str(b, "Fade", n); return;
     case VP_ACTION: put_str(b, "Action", n); return;
     case VP_GMODE: put_str(b, "Generator", n); return;
@@ -1301,6 +1306,7 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
         put_int(b + (v > 3u), (int32_t)v - 3);
         return;
     case VP_KVEL: case VP_KACC: put_int(b, (int32_t)v); return;
+    case VP_KB_SRC: put_str(b, v ? "LIBRARY" : "SLOTS", n); return;
     case VP_P2 + 4: note_name(b, v); return;
     case VP_P2_LAST: {
         static const char *const L[3] = {"1/16", "1/8", "1/4"};

@@ -43,7 +43,7 @@ enum { VP_BASE = 0x200, VP_NONE = VP_BASE, VP_IO_TYPE, VP_IO_SLOT, VP_NAME_POS, 
        VP_DJ, VP_REPEAT, VP_TAPE, VP_M1, VP_M4 = VP_M1 + NMACRO - 1, VP_MSEL, VP_MTARGET, VP_MMIN, VP_MMAX,
        VP_COND, VP_RAT_N, VP_RAT_RATE, VP_RAT_FADE, VP_ACTION, VP_GMODE, VP_GA, VP_GB, VP_GC, VP_CLOCK,
        VP_GX, VP_GY, VP_GCHAOS, VP_RAT_SHAPE, VP_BSTART, VP_BPITCH, VP_ROLL,
-       VP_LINK, VP_LSTART, VP_LAMT, VP_DEPTH, VP_LWHEN, VP_LTGT, VP_LEFF, VP_LWIN, VP_KOCT, VP_KVEL, VP_KACC, VP_PKEEP,
+       VP_LINK, VP_LSTART, VP_LAMT, VP_DEPTH, VP_LWHEN, VP_LTGT, VP_LEFF, VP_LWIN, VP_KOCT, VP_KVEL, VP_KACC, VP_PKEEP, VP_KB_SRC,
        VP_IO_SRC, VP_IO_TRACK,
        VP_P2, VP_P2_LAST = VP_P2 + 7 };
 /* the EUCLID pages' ACTION (OCT+ does it) */
@@ -71,6 +71,7 @@ static struct {
     uint8_t clear_open, clear_sel;
     uint8_t last_all;
     uint8_t kb_open, kb_sel;         /* the kit browser (0.9: 0..63 the slots, 64.. the library's kits: kb_has) */
+    uint8_t kb_lib;                  /* .. 0.9.2: listing the library (KNOB 1 in the browser), not the slots */
     uint8_t sb_open, sb_voice, sb_on; /* 0.8: the sound browser (its voice; the voice as it was: sb_orig, sb_on values) */
     uint16_t sb_sel;
     uint8_t sb_orig[SOUND_MAX];
@@ -281,6 +282,11 @@ static void page_params(uint16_t out[4])
 {
     const uint16_t *p = P_HOME;
     uint32_t k;
+    if (ui.kb_open) {                                 /* 0.9.2: the kit browser: KNOB 1 the slots or the library */
+        out[0] = VP_KB_SRC;
+        out[1] = out[2] = out[3] = VP_NONE;
+        return;
+    }
     switch (ui.mode) {
     case M_SOUND:
         for (k = 0; k < 4u; k++) {
@@ -339,11 +345,25 @@ static const pattern_t *view_pat(uint32_t t)
     return p == &pat[sq.active] && p->gen[t][0] != GEN_OFF ? &gpat : p;
 }
 static uint32_t vp_max(uint32_t p);
-/* 0.9: the kit browser's entries: the 64 slots, then the library's kits that exist */
+/* 0.9: the kit browser's entries: the 64 slots, or (0.9.2: KNOB 1, ui.kb_lib) the library's kits that exist */
 #define KB_N (NUM_KITS + KL_KITS)
 static int kb_has(int32_t i)
 {
-    return i >= 0 && i < (int32_t)KB_N && (i < (int32_t)NUM_KITS || kl_exists(KLK_KIT, (uint32_t)i - NUM_KITS));
+    if (!ui.kb_lib)
+        return i >= 0 && i < (int32_t)NUM_KITS;
+    return i >= (int32_t)NUM_KITS && i < (int32_t)KB_N && kl_exists(KLK_KIT, (uint32_t)i - NUM_KITS);
+}
+static uint32_t kb_start(void)                       /* where the list opens: the kit loaded, or last from the library */
+{
+    uint32_t i;
+    if (!ui.kb_lib)
+        return kit_loaded;
+    if (kb_has((int32_t)(NUM_KITS + ui.lib_kit)))
+        return NUM_KITS + ui.lib_kit;
+    for (i = NUM_KITS; i < KB_N; i++)
+        if (kb_has((int32_t)i))
+            return i;
+    return NUM_KITS;                                  /* (the library empty) */
 }
 static uint32_t kb_step(uint32_t s, int32_t n)       /* n entries on from s (as far as there are) */
 {
@@ -515,6 +535,7 @@ static uint32_t vp_get(uint32_t p)
     case VP_KOCT: return ui.koct;
     case VP_KVEL: return key_vel;
     case VP_KACC: return key_acc;
+    case VP_KB_SRC: return ui.kb_lib;
     case VP_LWHEN: {
         const uint8_t *L = pt->link[ui.link & 7u];
         return (L[0] & 7u) % NTRACK * NLV + (L[0] >> 6) % NLV;
@@ -583,7 +604,7 @@ static uint32_t vp_max(uint32_t p)
     case VP_SONG_PAT: return NUM_PATTERN + 1u;
     case VP_SONG_NUM: return NUM_SONGS - 1u;
     case VP_LEDS: return 2;
-    case VP_AUTOSAVE: case VP_ACCEL: case VP_IO_SRC: case VP_PKEEP: return 1;
+    case VP_AUTOSAVE: case VP_ACCEL: case VP_IO_SRC: case VP_PKEEP: case VP_KB_SRC: return 1;
     case VP_IO_TRACK: return NTRACK - 1u;
     case VP_PALETTE: return NPALETTES - 1u;
     case VP_MASTER: case VP_DJ: case VP_TAPE: case VP_M1: case VP_M1 + 1: case VP_M1 + 2: case VP_M1 + 3: return 127;
@@ -797,6 +818,11 @@ static void vp_set(uint32_t p, uint32_t v)
     case VP_KOCT: ui.koct = (uint8_t)v; return;
     case VP_KVEL: key_vel = (uint8_t)v; kset.kvel = (uint8_t)v; settings_later(); return;
     case VP_KACC: key_acc = (uint8_t)v; kset.kacc = (uint8_t)v; settings_later(); return;
+    case VP_KB_SRC:
+        ui.kb_lib = (uint8_t)v;
+        ui.kb_sel = (uint8_t)kb_start();
+        ui.kb_ms = fm1_ms;
+        return;
     case VP_LWHEN: {
         uint8_t *L = pt->link[ui.link & 7u];
         L[0] = (uint8_t)((L[0] & 0x38u) | v / NLV | (v % NLV) << 6);
@@ -1798,7 +1824,7 @@ static void ui_input(void)
         } else {
             if (!ui.kb_open) {
                 ui.kb_open = 1;
-                ui.kb_sel = kit_loaded;
+                ui.kb_sel = (uint8_t)kb_start();
             } else {
                 ui.kb_sel = (uint8_t)kb_step(ui.kb_sel, n);
             }

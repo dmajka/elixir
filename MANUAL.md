@@ -1,6 +1,6 @@
 # Kettle manual
 
-Kettle is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 0.9.1: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Kettle adds.
+Kettle is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 0.9.2: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Kettle adds.
 
 Kettle is **unofficial**. It is not affiliated with or endorsed by Erica Synths, M-VAVE or Hügelton Instruments. It is free software under the GPL-3.0 (see *Licence and credits* at the end).
 
@@ -444,7 +444,7 @@ A separate send bus after the FX bus, from Felucca: **ROOM** (a Freeverb-style r
 
 A kit is every sound parameter of all six voices (including the sends, the reverb and Kettle's shaping). Kettle holds **64 kits**.
 
-- **Browse and load:** turn **PRESETS**. The kit list opens: the 64 slots, then the kit library's kits (L1 …; from 0.9.1). Turn to choose, press **OCT+** to load. It closes by itself after 6 seconds. (On a sound page, PRESETS browses single sounds instead: the [sound browser](#the-sound-browser).)
+- **Browse and load:** turn **PRESETS**. The kit list opens on the 64 slots, or on the kit library if you browsed that last. **KNOB 1** switches it: **From: SLOTS** or **From: LIBRARY** (the library's kits, L1 …, empty ones left out; from 0.9.2). Turn PRESETS to choose, press **OCT+** to load. It closes by itself after 6 seconds. (On a sound page, PRESETS browses single sounds instead: the [sound browser](#the-sound-browser).)
 - **Load / save:** SHIFT + white key 8 opens LOAD KIT; SAVE opens SAVE KIT (see [saving](#14-saving)).
 - **LXR-02 kits:** kits from an LXR-02 SD card (.SND files) come in through the [library page](#backing-up-restoring-and-lxr-02-kits). A voice the LXR routed to its FX bus comes in with FX SEND 127, which sounds the same. Kettle's own settings (sends, reverb, shaping, models) start at their defaults. A whole LXR project (kits, patterns, songs) comes in the same way.
 - **The kit library:** besides the 64 slots, the FM-1 keeps **128 kits and 128 single sounds** in its flash, apart from the projects: loading another project leaves them. SAVE → KIT with **To: LIBRARY** (KNOB 3) saves there; LOAD → KIT with **From: LIBRARY** loads one into the sound being edited (SAVE → KIT keeps it in a slot). SAVE / LOAD → SOUND does the same for one track's sound (KNOB 3: the track). The library page backs the library up.

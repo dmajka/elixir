@@ -92,7 +92,7 @@ footer small { font-size: 11px; opacity: .8; }
 <details class="keys lib"><summary><b>Library</b>: try LXR-02 kits, backup and restore</summary>
   <p>Try kits here before putting them on your FM-1. The emulator holds what the FM-1 does: <b>64 kit slots</b> (the
     project's: patterns load them by number) and the <b>kit library</b> of 128 more (kept apart from the projects). Turn
-    PRESETS to browse the slots and then the library (L1 …), OCT+ loads one; a library kit can also be the morph target
+    PRESETS for the kit browser and KNOB 1 to switch it between the slots and the library (L1 …); OCT+ loads one; a library kit can also be the morph target
     (LOAD → MORPH, From LIBRARY). Then download the kit library below, and restore it onto the FM-1 from the library
     page.</p>
   <p>Pick .SND files, or a folder: it takes the .SND files in it and in all its subfolders (one project's folder,
@@ -625,7 +625,7 @@ async function importKits(files) {
       libSay(`Importing ${i + 1} of ${n}: ${kits[i].name}`);
     }
     libSay(`${n} kits in ${where} ${first + 1}–${first + n}${kits.length > n ? ` (${kits.length - n} more didn't fit)` : ""}. ` +
-           (toLib ? "PRESETS lists them after the slots (L1 …); OCT+ loads one."
+           (toLib ? "Turn PRESETS, then KNOB 1 to From LIBRARY; OCT+ loads one."
                   : "The first is loaded. PRESETS browses them; SAVE → PROJECT keeps them."));
   } catch (e) { libSay("Import stopped: " + e.message); }
 }

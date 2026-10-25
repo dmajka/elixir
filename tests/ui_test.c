@@ -1876,18 +1876,31 @@ static void phase9_library(void)
     check(morph_par[kit_idx(PAR_VOL2)] == 77, "LOAD MORPH < LIBRARY: the morph target");
     vp_set(VP_IO_SRC, 0);
     goto_mode(B_HOME, M_HOME);
-    /* 0.9: the kit browser (PRESETS) lists the library's kits after the slots, the empty ones left out */
+    /* 0.9.2: the kit browser (PRESETS): KNOB 1 lists the slots or the library's kits (the empty ones left out) */
     par[PAR_VOL2] = 10;
     turn(EN_PRESET, 1);
-    check(ui.kb_open && ui.kb_sel == kit_loaded, "PRESETS: the kit browser, on the loaded kit");
+    check(ui.kb_open && !ui.kb_lib && ui.kb_sel == kit_loaded, "PRESETS: the kit browser, the slots, on the loaded kit");
     turn(EN_PRESET, 100);
-    check(ui.kb_sel == NUM_KITS + 99u, "kit browser: past the slots, library kit 100 (the only one), then the end");
+    check(ui.kb_sel == NUM_KITS - 1u, "kit browser: the slots end at 64");
+    {
+        uint16_t kp[4];
+        page_params(kp);
+        check(kp[0] == VP_KB_SRC, "kit browser: KNOB 1 is From");
+    }
+    turn(EN_K1, 1);
+    check(ui.kb_lib && ui.kb_sel == NUM_KITS + 99u, "kit browser: From LIBRARY, on library kit 100 (the only one)");
     shot("kits-library");
-    turn(EN_PRESET, -1);
-    check(ui.kb_sel == NUM_KITS - 1u, "kit browser: back over the empty library slots to slot 64");
-    turn(EN_PRESET, 1);
+    turn(EN_PRESET, -5);
+    check(ui.kb_sel == NUM_KITS + 99u, "kit browser: the library only, its empty slots left out");
     press(B_OCTUP);
     check(!ui.kb_open && par[PAR_VOL2] == 77 && ui.lib_kit == 99u, "kit browser: OCT+ loads the library kit");
+    turn(EN_PRESET, 1);
+    check(ui.kb_open && ui.kb_lib && ui.kb_sel == NUM_KITS + 99u, "kit browser: it opens on the library again");
+    turn(EN_K1, -1);
+    check(!ui.kb_lib && ui.kb_sel == kit_loaded, "kit browser: From SLOTS, on the loaded kit");
+    press(B_OCTDN);
+    run_ms(6100);
+    check(!ui.kb_open, "kit browser: closes by itself");
     /* a write torn before its record: the slot as it was */
     libkit_get(99, a);
     par[PAR_VOL2] = 12;
@@ -1920,6 +1933,13 @@ static void phase9_library(void)
         kl_write(KLK_SOUND, i, 0, 0, 0);
     }
     check(kl_count(KLK_KIT) == 0u && kl_count(KLK_SOUND) == 0u, "LIBRARY: emptied");
+    turn(EN_PRESET, 1);
+    turn(EN_K1, 1);
+    check(ui.kb_open && ui.kb_lib && ui.kb_sel == NUM_KITS, "kit browser: From LIBRARY, the library empty");
+    shot("kits-library-empty");
+    press(B_OCTUP);
+    check(!ui.kb_open, "kit browser: OCT+ on an empty library loads nothing");
+    ui.kb_lib = 0;
     /* SOUND: D1's into D2 (its velocity target, its LFO on itself, moved along); not into the snare */
     kit_init_par();
     par[PAR_OSC_WAVE_DRUM1] = 2;
