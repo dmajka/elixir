@@ -19,6 +19,7 @@
   main { max-width: 640px; margin: 0 auto; padding: 48px 16px; }
   h1 { font-size: 28px; font-weight: 600; margin: 0; }
   h2 { font-size: 17px; font-weight: 600; margin: 36px 0 8px; padding-top: 20px; border-top: 1px solid var(--line); }
+  h3 { font-size: 15px; font-weight: 600; margin: 20px 0 6px; }
   p { margin: 0 0 14px; }
   a { color: inherit; }
   nav { margin: 6px 0 28px; }
@@ -77,37 +78,53 @@
   <p><input type="file" id="restore" accept=".ktbk,.ktp"></p>
 
   <h2>Kit slots or the kit library?</h2>
-  <p>Kettle keeps kits in two places:</p>
+  <p>Kettle keeps kits in two places, both in the FM-1's flash:</p>
   <ul>
-    <li><b>The kit slots</b> (64) are part of the project, like the LXR-02's. Patterns name their kit by slot number
-      (with the pattern page's Kit change on AUTO, a pattern loads its kit), and the slots are saved with the project.
-      Loading another project brings its own 64 kits. Put a project's working kits here.</li>
-    <li><b>The kit library</b> (128 kits, and 128 single sounds) is a collection kept apart from the projects: loading
-      a project leaves it as it is. Put kits you want to reach from any project here, such as the LXR-02's factory
-      kits or your favourites. Turn <b>PRESETS</b> to browse the slots and then the library (L1 …), and press
-      <b>OCT+</b> to load one. A kit from the library can also be the <b>morph target</b> (LOAD → MORPH, From LIBRARY),
-      and the sound browser on a track's sound pages offers single voices from its kits. To use a library kit with a
-      pattern, load it and save it into a slot (SAVE → KIT, To SLOTS).</li>
+    <li><b>The kit slots</b> (64) belong to the project, like the LXR-02's. Patterns name their kit by slot number
+      (with the pattern page's Kit change on AUTO, a pattern loads its kit), and the slots are saved with the project
+      (SAVE → PROJECT, or AUTOSAVE's session). Loading another project brings its own 64 kits. Put a project's
+      working kits here.</li>
+    <li><b>The kit library</b> (128 kits, and 128 single sounds) is a collection of its own, written to flash at once
+      and left as it is whatever project you load. Put kits you want in every project here, such as the LXR-02's
+      factory kits or your favourites. On the FM-1, turn <b>PRESETS</b> to browse the slots and then the library
+      (L1 …), and press <b>OCT+</b> to load one. A library kit can also be the <b>morph target</b> (LOAD → MORPH, From
+      LIBRARY), and the sound browser on a track's sound pages offers single voices from its kits. To use a library
+      kit with a pattern, load it and save it into a slot (SAVE → KIT, To SLOTS).</li>
   </ul>
+  <p class="small">Picking a folder below takes the .SND files in it <b>and in all its subfolders</b>, nothing else:
+    one project's folder (PROJ00 …), or an SD card's top folder for every project's kits, project by project. Chrome
+    asks to "upload" the folder's files: the page only reads them here and sends the kits to your FM-1, nothing else
+    leaves this computer. An LXR voice routed to the FX bus comes in as FX SEND 127 (the same sound); Kettle's own
+    settings (sends, reverb, shaping, models) start at their defaults.</p>
 
-  <h2>Import LXR-02 kits</h2>
-  <p>Pick .SND files from an LXR-02 SD card, or a folder. A folder takes the .SND files in it <b>and in all its
-    subfolders</b>, other files left out: pick one project's folder (PROJ00 …), or the card's top folder for every
-    project's kits at once, project by project in their order. The slots take up to 64, the library 128; the rest are
-    left out (the page says how many). Into the slots, they replace what's playing until you load a project: save the
-    project on the FM-1 (SAVE → PROJECT) or let AUTOSAVE keep them. Into the library, they are kept at once.</p>
-  <p><label>Into <select id="dest"><option value="slots">the kit slots</option>
-      <option value="lib">the kit library</option></select></label>
-    <label>from number <input type="number" id="first" min="1" max="64" value="1" style="width:4em"></label>
+  <h2>Kit library</h2>
+  <h3>Import LXR-02 kits into the library</h3>
+  <p>Up to 128 kits, from the library kit you choose on; the rest are left out (the page says how many). For example,
+    pick the LXR-02 factory SD image's top folder to put all its kits (about 100, without the Init ones) in the
+    library.</p>
+  <p><label>From library kit <input type="number" id="libfirst" min="1" max="128" value="1" style="width:4em"></label>
+    <label><input type="checkbox" id="libskip" checked> leave out Init/empty kits</label></p>
+  <p><label>Kit files <input type="file" id="libsndfiles" accept=".snd,.SND" multiple></label></p>
+  <p><label>A folder <input type="file" id="libsnddir" webkitdirectory></label></p>
+  <h3>In the library</h3>
+  <p>On the FM-1, SAVE → KIT or MORPH with To LIBRARY saves into it, SAVE → SOUND a single sound. Click a kit to
+    download it as an LXR-02 .SND file. Back the library up before installing other firmware; a backup restores onto
+    any Kettle, the emulator's too.</p>
+  <p id="libsum" class="small"></p>
+  <ul class="kits" id="libkits"></ul>
+  <p><button id="libbackup">Back up the kit library</button></p>
+  <p><label>Restore <input type="file" id="librestore" accept=".ktlb"></label></p>
+
+  <h2>Kit slots</h2>
+  <h3>Import LXR-02 kits into the slots</h3>
+  <p>Up to 64 kits, from the slot you choose on, into the project that's playing. They replace the kits there until you
+    load a project: save the project on the FM-1 (SAVE → PROJECT), or let AUTOSAVE keep them.</p>
+  <p><label>From slot <input type="number" id="first" min="1" max="64" value="1" style="width:4em"></label>
     <label><input type="checkbox" id="skipinit" checked> leave out Init/empty kits</label>
     <label><input type="checkbox" id="loadfirst" checked> load the first</label></p>
   <p><label>Kit files <input type="file" id="sndfiles" accept=".snd,.SND" multiple></label></p>
   <p><label>A folder <input type="file" id="snddir" webkitdirectory></label></p>
-  <p class="small">Chrome asks to "upload" the folder's files: the page only reads them here and sends the kits to
-    your FM-1, nothing else leaves this computer. An LXR voice routed to the FX bus comes in as FX SEND 127 (the same
-    sound). Kettle's own settings (sends, reverb, shaping, models) start at their defaults.</p>
-
-  <h2>Import an LXR-02 project</h2>
+  <h3>Import an LXR-02 project</h3>
   <p>Pick one project folder from an LXR-02 SD card (PROJ00 …), not the whole card: its kits go into the kit slots by
     their numbers (so each pattern still finds its kit), its patterns into Kettle's patterns, its songs into the songs.
     It replaces what's playing; save the project on the FM-1 afterwards. Kettle has 32 patterns to the LXR's 64: pick
@@ -115,17 +132,7 @@
   <p><label>Patterns <select id="lxrhalf"><option value="0">1–32</option><option value="32">33–64</option></select></label></p>
   <p><label>A project folder <input type="file" id="lxrdir" webkitdirectory></label></p>
   <p class="small">A song's steps on a pattern from the other half play pattern 32 instead.</p>
-
-  <h2>Kit library</h2>
-  <p>What's in the library (above: what it's for). On the FM-1, SAVE → KIT or MORPH with To LIBRARY saves into it,
-    SAVE → SOUND a single sound. Back it up here before installing other firmware; a backup restores onto any Kettle,
-    the emulator's too. Click a kit to download it as an LXR-02 .SND file.</p>
-  <p id="libsum" class="small"></p>
-  <ul class="kits" id="libkits"></ul>
-  <p><button id="libbackup">Back up the kit library</button></p>
-  <p><label>Restore <input type="file" id="librestore" accept=".ktlb"></label></p>
-
-  <h2>The kit slots on the FM-1</h2>
+  <h3>The slots on the FM-1</h3>
   <p>The playing project's 64 kits. Click one to download it as an LXR-02 .SND file (the LXR's parameters only:
     Kettle's own aren't in that format).</p>
   <ul class="kits" id="kits"></ul>
@@ -254,12 +261,11 @@ $("restore").addEventListener("change", (e) => {
   });
 });
 
-$("dest").addEventListener("change", () => { $("first").max = $("dest").value === "lib" ? 128 : 64; });
-async function importKits(files) {
-  const kits = await sndFiles(files, { skipInit: $("skipinit").checked }), toLib = $("dest").value === "lib";
+async function importKits(files, toLib) {
+  const kits = await sndFiles(files, { skipInit: $(toLib ? "libskip" : "skipinit").checked });
   if (!kits.length) throw new Error("No LXR kit files (.SND) there.");
   const max = toLib ? 128 : info.nkits, where = toLib ? "library kits" : "slots";
-  const first = Math.max(1, Math.min(max, +$("first").value || 1)) - 1;
+  const first = Math.max(1, Math.min(max, +$(toLib ? "libfirst" : "first").value || 1)) - 1;
   const n = Math.min(kits.length, max - first), more = kits.length > n ? ` (${kits.length - n} more didn't fit)` : "";
   if (!confirm(`Put ${n} kits into ${where} ${first + 1}–${first + n}${more}? The kits there now are replaced` +
                `${toLib ? "" : " (until you load a project again without saving)"}.`)) { say("Import cancelled."); return; }
@@ -273,8 +279,8 @@ async function importKits(files) {
   say(`${n} kits in ${where} ${first + 1}–${first + n}${more}. ` +
       (toLib ? "PRESETS on the FM-1 lists them after the slots (L1 …)." : "Save the project on the FM-1 to keep them."));
 }
-$("sndfiles").addEventListener("change", (e) => { const f = [...e.target.files]; e.target.value = ""; job(() => importKits(f)); });
-$("snddir").addEventListener("change", (e) => { const f = [...e.target.files]; e.target.value = ""; job(() => importKits(f)); });
+for (const [id, toLib] of [["sndfiles", false], ["snddir", false], ["libsndfiles", true], ["libsnddir", true]])
+  $(id).addEventListener("change", (e) => { const f = [...e.target.files]; e.target.value = ""; job(() => importKits(f, toLib)); });
 
 $("lxrdir").addEventListener("change", (e) => {
   const files = [...e.target.files];
