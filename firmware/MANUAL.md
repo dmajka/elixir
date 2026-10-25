@@ -1,6 +1,6 @@
 # Kettle manual
 
-Kettle is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 0.9: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Kettle adds.
+Kettle is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 0.9.1: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Kettle adds.
 
 Kettle is **unofficial**. It is not affiliated with or endorsed by Erica Synths, M-VAVE or Hügelton Instruments. It is free software under the GPL-3.0 (see *Licence and credits* at the end).
 
@@ -444,10 +444,12 @@ A separate send bus after the FX bus, from Felucca: **ROOM** (a Freeverb-style r
 
 A kit is every sound parameter of all six voices (including the sends, the reverb and Kettle's shaping). Kettle holds **64 kits**.
 
-- **Browse and load:** turn **PRESETS**. The kit list opens; turn to choose, press **OCT+** to load. It closes by itself after 6 seconds. (On a sound page, PRESETS browses single sounds instead: the [sound browser](#the-sound-browser).)
+- **Browse and load:** turn **PRESETS**. The kit list opens: the 64 slots, then the kit library's kits (L1 …; from 0.9.1). Turn to choose, press **OCT+** to load. It closes by itself after 6 seconds. (On a sound page, PRESETS browses single sounds instead: the [sound browser](#the-sound-browser).)
 - **Load / save:** SHIFT + white key 8 opens LOAD KIT; SAVE opens SAVE KIT (see [saving](#14-saving)).
 - **LXR-02 kits:** kits from an LXR-02 SD card (.SND files) come in through the [library page](#backing-up-restoring-and-lxr-02-kits). A voice the LXR routed to its FX bus comes in with FX SEND 127, which sounds the same. Kettle's own settings (sends, reverb, shaping, models) start at their defaults. A whole LXR project (kits, patterns, songs) comes in the same way.
 - **The kit library:** besides the 64 slots, the FM-1 keeps **128 kits and 128 single sounds** in its flash, apart from the projects: loading another project leaves them. SAVE → KIT with **To: LIBRARY** (KNOB 3) saves there; LOAD → KIT with **From: LIBRARY** loads one into the sound being edited (SAVE → KIT keeps it in a slot). SAVE / LOAD → SOUND does the same for one track's sound (KNOB 3: the track). The library page backs the library up.
+
+  **Slots or library?** The slots are the project's kits, as on the LXR-02: patterns name their kit by slot number (the pattern page's Kit change on AUTO loads it), and loading another project brings its own 64. The library is a collection that stays whatever project is loaded: the place for kits you want everywhere, such as the LXR-02's factory kits or your favourites. Browse it with PRESETS, use a kit from it as the morph target directly, or take single voices from it with the sound browser. To give a pattern a library kit, load it and save it into a slot (SAVE → KIT, To SLOTS).
 - **Morph:** load a second kit as the *morph target* (SHIFT + white key 9: LOAD MORPH; KNOB 3 picks the slots or the library), then turn **Morph** (PERF's first page, KNOB 3) from 0 to 100%. Every sound parameter crossfades towards the target (outputs, modulation targets and the reverb model stay). The header shows M while morph is above 0. SAVE → MORPH saves the mixture you hear as a new kit.
 
 ---
@@ -655,14 +657,14 @@ The **library page** (`library/` on Kettle's site, from 0.7) connects to the FM-
 
 - **Back up** every project and the session to one file on the computer (`.ktbk`), or download one project (`.ktp`). Kettle's own updates keep your projects. Installing V15 or another firmware may not, so back up first.
 - **Restore** a backup or a project file, into the slots it came from or into a chosen slot, and load it. The old project stays in place until the restore has been written and checked, so pulling the cable halfway loses nothing.
-- **Import LXR-02 kits:** pick .SND files, or a whole project folder from an LXR-02 SD card (PROJ00 …). They fill the kit slots from the slot you choose, leaving out Init and empty kits. Then save the project (SAVE → PROJECT), or let AUTOSAVE keep them in the session.
-- **Import a whole LXR-02 project** (from 0.8): pick a project folder from the SD card. Its kits go into the kit slots by their numbers (so each pattern still finds its kit), its patterns into Kettle's patterns and its songs into the songs, replacing what's playing; then save the project. Kettle has 32 patterns to the LXR's 64, so you pick which half (a song step on the other half plays pattern 32). The factory and DLC projects' demo patterns come in this way.
-- **Back up and restore the kit library** (from 0.8, a `.ktlb` file), and import LXR-02 kits straight into it.
+- **Import LXR-02 kits** into the kit slots or (from 0.9.1) the kit library: pick .SND files, or a folder. A folder takes the .SND files in it **and in all its subfolders**, other files left out, so picking an SD card's top folder takes every project's kits, project by project. They fill from the number you choose, leaving out Init and empty kits: up to 64 into the slots, 128 into the library, and the page tells you how many didn't fit. Into the slots, save the project afterwards (SAVE → PROJECT) or let AUTOSAVE keep them; the library keeps them at once. (Chrome asks to "upload" a folder's files: the page only reads them, and sends nothing but the kits to your FM-1.)
+- **Import a whole LXR-02 project** (from 0.8): pick one project's folder from the SD card, not the whole card (the page refuses a folder holding several). Its kits go into the kit slots by their numbers (so each pattern still finds its kit), its patterns into Kettle's patterns and its songs into the songs, replacing what's playing; then save the project. Kettle has 32 patterns to the LXR's 64, so you pick which half (a song step on the other half plays pattern 32). The factory and DLC projects' demo patterns come in this way.
+- **Back up and restore the kit library** (from 0.8, a `.ktlb` file).
 - **Export kits** as LXR-02 .SND files (the LXR's parameters only).
 
 While a restore is being written, the output is silent and saving is held off. If the computer stops sending, Kettle gives up after 10 seconds.
 
-The emulator has the same functions under **Library**, below the panel.
+The emulator has the same functions under **Library**, below the panel, so you can try kits before they go on the FM-1: import them into the emulator's kit library, browse them with PRESETS, then download the kit library (`.ktlb`) and restore it onto the FM-1 from the library page. The emulator holds what the FM-1 holds (64 slots, 128 library kits); to try more, import the next batch over them.
 
 **Built-in kit bank (private builds only).** The LXR-02's factory and Hrtl kits can't be shipped with Kettle, but you can build them into your own copy: `KETTLE_KITS_DIR=folder:folder:… ./build.sh` (and `web/emu/build.sh`), with folders of .SND files from your LXR-02 SD card or its downloads. Such a build:
 - shows its version as "v0.7+K";

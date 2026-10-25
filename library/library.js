@@ -340,8 +340,21 @@ export function parseSng(buf, fileName = "") {
 export function songWindow(entries, first) {
   return entries.map((e) => (e >= 64 ? e : e >= first && e < first + 32 ? e - first : 31));
 }
-// an LXR-02 project folder: its kits (by number), patterns and songs. -> { kits, pats, songs }
+// the folders that hold LXR-02 files (.SND, .PAT, .SNG): a picked folder's own and its subfolders' (a whole SD card: one
+// per project, PROJ00 …)
+export function lxrFolders(files) {
+  const dirs = new Set();
+  for (const f of files)
+    if (/\.(snd|pat|sng)$/i.test(f.name)) dirs.add((f.webkitRelativePath || f.name).split("/").slice(0, -1).join("/"));
+  return [...dirs].sort();
+}
+// an LXR-02 project folder: its kits (by number), patterns and songs. -> { kits, pats, songs }. One project only: the
+// numbers of two would collide
 export async function lxrProject(files) {
+  const dirs = lxrFolders(files);
+  if (dirs.length > 1)
+    throw new Error(`That folder holds ${dirs.length} LXR-02 projects (${dirs.slice(0, 3).map((d) => d.split("/").pop()).join(", ")}` +
+                    `${dirs.length > 3 ? " …" : ""}). Pick one project's folder.`);
   const kits = await sndFiles(files, { skipInit: false }), pats = [], songs = [];
   for (const f of files) {
     const path = f.webkitRelativePath || f.name;
