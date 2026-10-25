@@ -611,6 +611,7 @@ static void proj_after_load(void)                   /* the session as the projec
     for (t = 0; t < NTRACK; t++)
         sq.idx[t] = -1;
     morph_par[0] = 0;
+    kit_loads++;
     snd_post_all();
 }
 static int proj_load(uint32_t l)

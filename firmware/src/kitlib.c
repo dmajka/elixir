@@ -412,6 +412,8 @@ static int libkit_load(uint32_t n, int morph)
         else
             par[kit_par(i)] = k[i];
     }
+    if (!morph)
+        kit_loads++;
     snd_post_all();
     return 0;
 }

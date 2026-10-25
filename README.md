@@ -18,7 +18,7 @@ The FM-1 has no FPU, so the LXR's floating-point DSP is rewritten in fixed point
 | Black keys 1–7 | Tracks D1 D2 D3 SN CY CH OH (select) · SHIFT + key: mute · SHIFT + GLO: solo the selected track |
 | Black keys 8–11 | Bars 1–4 (shown bar) · banks of 16 (2 on the pattern page, 4 for kits and songs) · SHIFT: track length · COPY: copy the shown bar into it (on the grid: every track) |
 | OCT− | **SHIFT** (hold it: the screen shows every SHIFT combination) |
-| OCT+ | **COPY** (hold + track/bar/pattern) · SHIFT + OCT+ = **CLEAR** (on a sound page: CLEAR SOUND, the voice back to init) · OK in dialogs |
+| OCT+ | **COPY** (hold + track/bar/pattern) · held on a sound page + a knob: **CONTROL ALL** · SHIFT + OCT+ = **CLEAR** (on a sound page: CLEAR SOUND, the voice back to init) · OK in dialogs |
 | EDIT | Oscillator → FM → transient (click) → model (drums) · SHIFT + EDIT: **KEYS** (the keys play the track's voice) |
 | ENV | Amp EG → mod EG / velocity |
 | SCL | Filter → shape (waveshaper, drive, bits, tilt) |
@@ -107,6 +107,8 @@ Each voice (the open and closed hats share one) has three extra pages. All of th
 - **Cross mod / choke** (LFO, next): another voice as the **source** and a **mode**. DUCK turns this voice down while the source sounds, FILTER opens this voice's filter with the source's level, and RING multiplies the two. **Amount** sets how much. **Choke** puts the voice in a group from 1 to 4. A hit on any voice in the group fades the others out within 1.5 ms.
 
 Drum 1–3 also have **models** (EDIT, after the transient: MODEL), ported from Mutable Instruments **Rings** (MIT licence) to fixed point: **MODAL** (Rings' modal resonator, up to 32 modes: bars, plates, bells, drum heads), **STRING** (its string, with dispersion and a curved bridge) and **FM** (its two-operator FM voice). The knobs are Rings': **decay** (DAMPING), **bright** (BRIGHTNESS), **struct** (STRUCTURE), **position** (POSITION), plus **exciter** (0: Rings' own exciter at the hit; 127: the voice's own LXR sound, as if patched into Rings' input) and **tension** (the pitch drop of a hard hit). The voice's filter, shape and sends still apply. Rings' sympathetic strings and reverb aren't ported. `tests/rings_compare.cc` checks the port against Rings' own code. Projects from 0.8 and before load their old models (SKIN, BAR, BELL, PLATE, TUBE) as MODAL or STRING.
+
+**Control All** (as on Elektron's boxes): hold OCT+ on a sound page and turn a knob, and that parameter moves on every track that has it, each from its own value, so the kit keeps its balance. Keep holding and page (SELECT, the sound buttons) to move more. Letting go of OCT+ asks whether to revert: OCT+ again reverts the kit (the default), OCT− keeps the changes, so a slipped thumb never keeps them by accident. It records no locks.
 
 **KEYS** (SHIFT + EDIT): the white and black keys play the selected track's voice chromatically (KNOB 1: octave). Under REC the notes go into the steps. The keys have no velocity, so KNOB 2 sets it (for rolls too) and KNOB 3 the accent, played with SHIFT.
 

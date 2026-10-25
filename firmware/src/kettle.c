@@ -5,7 +5,7 @@
  * or supported by Erica Synths or M-VAVE.
  * One compilation unit (the HAL is header-only); each file uses what the files above it define. */
 #ifndef KETTLE_VERSION
-#define KETTLE_VERSION "v0.10"
+#define KETTLE_VERSION "v0.11"
 #endif
 #define FELUCCA_FLASH 1
 #define FELUCCA_OTA 1

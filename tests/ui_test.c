@@ -2307,6 +2307,126 @@ static void phase11(void)
     kset.accel = 1;
 }
 
+/* 0.11 (Phase 13): Control All: OCT+ held on a sound page, a knob moves its parameter on every voice */
+static void phase13_control_all(void)
+{
+    static const uint16_t DEC[NTRACK] = {50, 52, 54, 56, 58, 60, 61};   /* AMP EG's decay, D1 .. OH */
+    static const uint16_t FMP[3] = {82, 84, 86};                         /* FM's first knob, D1 .. D3 */
+    pattern_t *p = &pat[0];
+    uint8_t k0[KIT_LEN], acc = kset.accel;
+    pattern_t before;
+    uint32_t i, v, ok;
+    p4_reset();
+    kit_init_par();
+    snd_post_all();
+    kset.accel = 0;
+    for (v = 0; v < NVOICE; v++)
+        par[PAR_FILTER_FREQ_1 + v] = (uint8_t)(v == 4u ? 125u : 20u + 15u * v);
+    main_set(p, 1, 0, 1);
+    before = *p;
+    black(0);
+    press(B_SCL);
+    check(ui.mode == M_SOUND && ui.sect == S_FILTER, "SCL: the filter page");
+    /* the filter on every voice, by the knob's steps from each one's own value, clamped */
+    hold(B_OCTUP);
+    turn(EN_K1, 5);
+    for (v = 0, ok = 1; v < NVOICE; v++)
+        ok &= par[PAR_FILTER_FREQ_1 + v] == (v == 4u ? 127u : 25u + 15u * v);
+    check(ok, "CONTROL ALL: every voice's filter +5 from its own value, the cymbal's clamped at 127");
+    check(ui.ca, "CONTROL ALL under way");
+    shot("control-all");
+    /* a voice key now selects, it doesn't copy */
+    black(2);
+    check(ui.track == 2 && !ui.copy_src, "CONTROL ALL: a voice key selects the track, no COPY");
+    release(B_OCTUP);
+    check(!ui.ca && ui.ca_ask && par[PAR_FILTER_FREQ_1] == 25u, "letting go of OCT+: the dialog, the changes still sounding");
+    run_ms(50);
+    shot("control-all-ask");
+    turn(EN_K1, 3);
+    black(4);
+    check(par[PAR_FILTER_FREQ_1] == 25u && ui.track == 2 && ui.ca_ask, "the dialog: knobs and keys do nothing");
+    press(B_OCTDN);
+    check(!ui.ca_ask && !ui.shift && msg_on() && ui.msg[12] == 'K', "OCT- in the dialog: CONTROL ALL KEPT");
+    check(par[PAR_FILTER_FREQ_1] == 25u && !memcmp(p, &before, sizeof before), "kept; nothing copied");
+    /* paging during the hold, then OCT- puts back everything since the first turn */
+    for (i = 0; i < KIT_LEN; i++)
+        k0[i] = par[kit_par(i)];
+    black(0);
+    hold(B_OCTUP);
+    turn(EN_K1, -10);
+    press(B_ENV);
+    check(ui.mode == M_SOUND && ui.sect == S_AEG, "ENV pages while OCT+ is held");
+    turn(EN_K2, 3);
+    for (i = 0, ok = 1; i < KIT_LEN; i++) {
+        uint32_t q = kit_par(i), d = 0;
+        for (v = 0; v < NTRACK; v++)
+            d |= q == DEC[v];
+        if (d)
+            ok &= par[q] == (k0[i] + 3u > 127u ? 127u : k0[i] + 3u);
+    }
+    check(ok, "CONTROL ALL: decay on every voice, the hats' closed and open decay both");
+    check(par[PAR_FILTER_FREQ_1] == 15u && par[PAR_FILTER_FREQ_1 + 1] == 30u, "the filter turn of the same hold");
+    press(B_OCTDN);
+    for (i = 0, ok = 1; i < KIT_LEN; i++)
+        ok &= par[kit_par(i)] == k0[i];
+    check(ok && !ui.ca && !ui.shift, "OCT- while OCT+ is held: the kit as before the first turn, not SHIFT");
+    check(msg_on() && ui.msg[12] == 'R', "CONTROL ALL REVERTED");
+    release(B_OCTUP);
+    check(!ui.ca_ask, "letting go after the revert: no dialog");
+    /* the dialog's default: OCT+ again reverts */
+    v = par[DEC[0]];
+    hold(B_OCTUP);
+    turn(EN_K2, 6);
+    release(B_OCTUP);
+    check(ui.ca_ask && par[DEC[0]] == v + 6u, "a decay turn, let go: the dialog");
+    press(B_OCTUP);
+    for (i = 0, ok = 1; i < KIT_LEN; i++)
+        ok &= par[kit_par(i)] == k0[i];
+    check(ok && !ui.ca_ask && !ui.copy && ui.msg[12] == 'R', "OCT+ in the dialog: the kit reverted, no COPY held");
+    /* a parameter only some voices have: FM's on D1..D3, the others left alone */
+    press(B_EDIT);
+    press(B_EDIT);
+    check(ui.sect == S_FM, "EDIT twice: FM");
+    for (i = 0; i < KIT_LEN; i++)
+        k0[i] = par[kit_par(i)];
+    hold(B_OCTUP);
+    turn(EN_K1, 4);
+    release(B_OCTUP);
+    press(B_OCTDN);
+    for (i = 0, ok = 1; i < KIT_LEN; i++) {
+        uint32_t q = kit_par(i);
+        ok &= q == FMP[0] || q == FMP[1] || q == FMP[2] ? par[q] == (k0[i] + 4u > 127u ? 127u : k0[i] + 4u)
+                                                         : par[q] == k0[i];
+    }
+    check(ok, "CONTROL ALL on FM: D1..D3 moved, the voices without it untouched");
+    /* a Kettle parameter (blocks of six): bits on every voice */
+    press(B_SCL);
+    press(B_SCL);
+    check(ui.sect == S_SHAPE, "SCL again: SHAPE");
+    hold(B_OCTUP);
+    turn(EN_K3, 2);
+    release(B_OCTUP);
+    press(B_OCTDN);
+    for (v = 0, ok = 1; v < NVOICE; v++)
+        ok &= par[PAR_BITS1 + v] == 2u;
+    check(ok, "CONTROL ALL on a Kettle parameter: every voice's bits");
+    /* COPY still works when no knob is turned; a turn on a page that isn't a sound page edits as usual */
+    hold(B_OCTUP);
+    black(1);
+    black(4);
+    release(B_OCTUP);
+    check(main_on(p, 4, 0) && !ui.ca && !ui.ca_ask, "COPY + D2, then CY: the track copied (no knob turned), no dialog");
+    goto_mode(B_HOME, M_HOME);
+    v = par[PAR_BPM];
+    hold(B_OCTUP);
+    turn(EN_K1, 1);
+    release(B_OCTUP);
+    check(!ui.ca && !ui.ca_ask && par[PAR_BPM] == v + 1u, "OCT+ held on the grid: the knob edits as usual");
+    kset.accel = acc;
+    kit_init_par();
+    snd_post_all();
+}
+
 int main(int argc, char **argv)
 {
     uint32_t t;
@@ -2733,6 +2853,7 @@ int main(int argc, char **argv)
     phase9_patkeep();
     phase11();
     phase11_sound_solo();
+    phase13_control_all();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;
 }

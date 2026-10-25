@@ -98,7 +98,7 @@ The FM-1's keyboard has 16 white keys and 11 black keys, numbered left to right 
 | **Black keys 1–7** | Select a track: D1 D2 D3 SN CY CH OH. SHIFT + key: mute / unmute it. |
 | **Black keys 8–11** | Show bar 1–4. On pattern, song, save and load pages: the bank of 16. SHIFT + key: track length (16, 32, 48, 64). COPY + key: copy the shown bar into it. In PERF: the repeat length. |
 | **OCT−** | **SHIFT** (hold). While held, the screen shows what SHIFT + each key does. |
-| **OCT+** | **COPY** (hold). SHIFT + OCT+ = **CLEAR**. OK in the save, load and action dialogs. |
+| **OCT+** | **COPY** (hold). SHIFT + OCT+ = **CLEAR**. OK in the save, load and action dialogs. Held on a sound page, a knob turned is **Control All**. |
 | **EDIT** | Sound: oscillator → FM → transient → model (press again to step through). SHIFT + EDIT: **KEYS** (the keys play the track's voice; again: back) |
 | **ENV** | Sound: amp envelope → mod envelope / velocity |
 | **SCL** | Sound: filter → shape |
@@ -133,7 +133,7 @@ The FM-1's keyboard has 16 white keys and 11 black keys, numbered left to right 
 - **Step keys:** lit = step on; the playing step flips its light; beats (1, 5, 9, 13) glow faintly.
 - **Track keys:** the selected track lit; each flashes when its track plays; a muted track goes dark.
 - **Bar keys:** the shown bar lit, the playing bar breathing, bars past the track's length dark.
-- **Buttons:** the current mode's button lit; REC lit when recording; OCT− lit while SHIFT is held, OCT+ while COPY is held; OCT+ breathes when it will act as OK.
+- **Buttons:** the current mode's button lit; REC lit when recording; OCT− lit while SHIFT is held, OCT+ while COPY is held; OCT+ breathes when it will act as OK, and during Control All and its dialog.
 - **PLAY:** green while playing, dark for half a step on each beat.
 
 ---
@@ -393,6 +393,17 @@ The model replaces the oscillators, transient and amp EG in the output: the mode
 ### The sound browser
 
 On a track's sound pages (or in KEYS), turn **PRESETS**: a list of sounds that track can take opens, and each step plays the sound on the track. It lists the library's saved sounds, then the voices of the library's kits, of the 64 kit slots and (on a private build) of the factory bank; a drum track lists all three drums of each kit, the others their own voice. Kits' voices still as the init kit are left out. SELECT moves through it too. **OCT+** keeps the sound; **OCT−** puts back what you had. SAVE → SOUND saves the track's sound into the library, to come up first next time.
+
+### Control All: every track at once
+
+As on Elektron's boxes: hold **OCT+** on a sound page and turn a knob, and that parameter moves on every track. The title reads **CONTROL ALL**. Turn the filter's frequency and the whole kit gets darker.
+
+- **Relative.** Each voice moves by the knob's steps from its own value, clamped to its range, so the voices keep their differences. The card shows the selected track's value.
+- **The same parameter** is the one with the same name in the same section: the filter's frequency on each voice, the amp EG's decay (the closed hat's and the open hat's decay both). A voice without it is left alone: FM moves only Drum 1–3, a model only the drums. Kettle's own pages (shape, random, cross mod) move every voice. The hats share a voice, so it moves once.
+- **Page while you hold.** The sound buttons and SELECT still page: hold OCT+, turn the filter, press ENV, turn the decay. Everything you change during the hold is one move.
+- **Keep or revert.** When you let go of OCT+, a dialog asks **REVERT THE KIT?** and the changes keep sounding until you answer. Press **OCT+** again (the default) to put the whole kit back as it was before the first turn (**CONTROL ALL REVERTED**), or **OCT−** to keep the changes (**CONTROL ALL KEPT**). So a thumb slipping off OCT+ doesn't keep anything by accident. While the dialog is open, the knobs, keys and other buttons do nothing, except PLAY and REC. You can also press OCT− while still holding OCT+ to revert at once, then turn again to start a new one. As on Elektron, the kit is the working copy: RELOAD (SHIFT + key 13) or loading the kit goes back further.
+- **COPY still works.** Until a knob turns, OCT+ is COPY as before (track, bar). Once a knob has turned, the voice keys select a track and the bar keys show a bar; nothing is copied on release.
+- **Not recorded.** Under REC, Control All writes no locks: it changes the kit. Morph moves from the kit as it now is. A kit loaded during the hold or the dialog (a pattern change, MIDI) ends it, kept.
 
 ---
 
@@ -700,7 +711,7 @@ The site builder refuses to publish a "+K" build.
 
 - **Notes:** each track has a MIDI channel (CONFIG: MIDI CHANNELS). A note on a track's channel plays it. With the track's MIDI note set to ANY, it plays at the note's pitch; with a note set, only that note triggers it. Notes on the **global channel** play the selected track.
 - **Notes out:** the sequencer sends each track's hits on its channel.
-- **CC:** CC *n* sets parameter *n* − 1, as on the LXR. **NRPN** (CC 99 / 98, data entry CC 6) reaches every parameter: NRPN *n* sets parameter *n* + 128. Kettle's own parameters are listed [below](#kettles-parameters-by-nrpn).
+- **CC:** CC *n* sets parameter *n* − 1, as on the LXR. **NRPN** (CC 99 / 98, data entry CC 6) reaches every parameter: NRPN *n* sets parameter *n* + 128. The tables are [below](#the-sound-by-cc): the LXR's sound by CC, the rest by NRPN, and Kettle's own parameters.
 - **CC 0** loads a kit. **Program change** 0–31 on the global channel queues a pattern; Kettle sends one when its pattern changes.
 - **Clock out:** always on, 24 PPQ, with start and stop.
 - **Clock in:** turn the tempo all the way down to **MIDI**. Kettle then follows incoming clock, start, continue and stop. The header shows MIDI and the measured tempo.
@@ -763,6 +774,7 @@ In PERF, SHIFT + a white key latches it instead.
 | COPY + track, track | Copy a track |
 | COPY + pattern, pattern | Copy a pattern (pattern page) |
 | SHIFT + COPY | CLEAR (again to confirm) |
+| COPY held + knob (sound page) | Control All: the parameter on every track; let go, then OCT+ reverts or OCT− keeps |
 | SHIFT + PLAY | Play the song from the start |
 | SHIFT + REC | Record options |
 | SHIFT + SAVE | Load page |
@@ -770,6 +782,73 @@ In PERF, SHIFT + a white key latches it instead.
 | SHIFT + a key (KEYS) | The note at the accent velocity |
 | OCT− + OCT+ held 5 s | The chip's UBOOT mode (recovery with the Transporter only) |
 | Hold step + turn knob | Lock |
+
+### The sound by CC
+
+Each CC is received on its voice's track channel or on the global channel (10 by default). A CC with no voice (FX bus, global sample rate) is received on any of Kettle's channels. To control everything from one channel, send every CC on the global channel. The values go in as they are, so set list-type controls (waveform, filter type) to the range shown and pans to 0–127 with 63/64 as the centre. CH and OH share the HH voice: a CC for HH acts on both, except the two decays. CY and HH have three oscillators: Wave 2 and 3 are their FM oscillators' waveforms.
+
+| Parameter | D1 | D2 | D3 | SN | CY | HH |
+|---|---|---|---|---|---|---|
+| Volume | 89 | 90 | 91 | 92 | 93 | 94 |
+| Pan (63/64 centre) | 95 | 96 | 97 | 100 | 101 | 102 |
+| Drive | 103 | 104 | 105 | 106 | 107 | 108 |
+| Sample rate | 109 | 110 | 111 | 112 | 113 | 114 |
+| Coarse (pitch) | 9 | 11 | 13 | 15 | 17 | 19 |
+| Fine | 10 | 12 | 14 | 16 | 18 | 20 |
+| Waveform (0–5) | 2 | 3 | 4 | 5 | 7 | 8 |
+| FM / mod waveform (0–5) | 21 | 22 | 23 | – | 24, 25 | 26, 27 |
+| Filter frequency | 38 | 39 | 40 | 41 | 42 | 43 |
+| Filter resonance | 44 | 45 | 46 | 47 | 48 | 49 |
+| Attack | 50 | 52 | 54 | 56 | 58 | 60 |
+| Decay | 51 | 53 | 55 | 57 | 59 | 61 (CH), 62 (OH) |
+| Amp slope | 63 | 64 | 65 | 66 | 67 | 68 |
+| Repeat (claps) | – | – | – | 69 | 70 | – |
+| Pitch EG decay | 71 | 72 | 73 | 74 | – | – |
+| Pitch EG amount | 75 | 76 | 77 | 78 | – | – |
+| Pitch EG slope | 79 | 80 | 81 | 82 | – | – |
+| FM amount | 83 | 85 | 87 | – | – | – |
+| FM frequency | 84 | 86 | 88 | – | – | – |
+| LFO frequency | 116 | 117 | 118 | 119 | 120 | 121 |
+| LFO amount | 122 | 123 | 124 | 125 | 126 | 127 |
+
+| CC | Parameter |
+|---|---|
+| 28, 29 | SN noise frequency, noise / oscillator mix |
+| 30–33 | CY mod 1 frequency, mod 2 frequency, mod 1 gain, mod 2 gain |
+| 34–37 | HH mod 1 frequency, mod 2 frequency, mod 1 gain, mod 2 gain |
+| 115 | Global sample rate (PERFORM: SRate) |
+| 0 | Load a kit (0–63) |
+| 6, 98, 99 | NRPN (data entry, LSB, MSB) |
+| 1 | Ignored (the mod wheel) |
+
+### The rest by NRPN
+
+NRPN *n* sets parameter *n* + 128: send CC 99 = *n* ÷ 128, CC 98 = *n* mod 128, then CC 6 = the value. Six numbers per voice-based setting, in the order D1 D2 D3 SN CY HH.
+
+| NRPN | Parameter |
+|---|---|
+| 0–5 | Filter overdrive |
+| 6–8 | D1–D3 FM mode (0 FM, 1 mix) |
+| 15–20 | Velocity amount |
+| 27–32 | LFO waveform (0–7) |
+| 51–56 | LFO clock sync (0–11) |
+| 57–62 | LFO offset |
+| 63–68 | Filter type (0–7: LP HP BP UNITY BP NOTCH PEAK LP2 OFF) |
+| 69–74 | Transient volume |
+| 75–80 | Transient waveform (0–13) |
+| 81–86 | Transient frequency |
+| 100–105 | Pulse width |
+| 106 | FX bus type (0 off, 1 drive, 2 ring, 3 comp, 4 delay, 5 phaser, 6 flanger) |
+| 108 | FX bus dry/wet (0–100) |
+| 107 | FX bus output (0–5) |
+| 109 | Drive curve (0 tube, 1 fold, 2 clip) |
+| 110–113 | FX bus P1–P4 (see [the FX bus](#the-fx-bus-fx)) |
+| 114 | Comp ratio (0–5) |
+| 115 | Ring carrier waveform (0–5) |
+| 117 | Delay mode (0 mono, 1 ping pong) |
+| 133 | Shuffle |
+
+Tempo, roll rate, morph, the DJ filter, repeat, tape, the PERFORM 2 effects, mutes and solo can't be reached by MIDI.
 
 ### Kettle's parameters by NRPN
 
@@ -829,7 +908,7 @@ What changed in the port:
 
 What Kettle adds:
 
-- **Sound:** FX and reverb sends per voice; three reverbs; waveshaper choice; bits; tilt EQ; random per hit; choke groups; cross modulation; phaser and flanger; Rings' resonators on the drum voices; a sound browser and a kit library.
+- **Sound:** Control All (OCT+ held, a knob: every track); FX and reverb sends per voice; three reverbs; waveshaper choice; bits; tilt EQ; random per hit; choke groups; cross modulation; phaser and flanger; Rings' resonators on the drum voices; a sound browser and a kit library.
 - **Performance:** PERF with fill, repeat, freeze, throws, feedback push, tape stop, filter sweeps, a DJ filter, four macros, the voices' volumes on two pages, and PERFORM 2; KEYS, to play a voice from the keyboard.
 - **Sequencing:** trig conditions, ratchets, per-track clocks, generators (mutate, Turing machine, cellular automata, Grids), dice, commit and undo, and copying a bar across all tracks.
 - **Safety:** the automatic session save, a CPU meter, and backup and restore over USB (the library page).

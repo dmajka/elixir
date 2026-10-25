@@ -120,7 +120,12 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
     case M_SOUND: {
         uint8_t l[NSPG][2];
         uint32_t i, k = sound_pages(l);
-        put_str(b, SECT_NAME[ui.sect], n);
+        if (ui.copy) {                               /* 0.11: OCT+ held: the knobs move every voice */
+            put_str(b, "CONTROL ALL: ", n);
+            put_str(b + str_len(b), SECT_NAME[ui.sect], n - str_len(b));
+        } else {
+            put_str(b, SECT_NAME[ui.sect], n);
+        }
         if (ui.kplay)                                /* (0.8: the keys still play notes) */
             put_str(b + str_len(b), "  KEYS", n - str_len(b));
         for (i = 0; i < k && !(l[i][0] == ui.sect && l[i][1] == ui.half); i++)
@@ -434,6 +439,17 @@ static void draw_clear(int32_t y0)
     cv_text_in(10, 50, 220, &AF_M, CLEAR_NAME[ui.clear_sel], T_ACCENT, T_SURF);
     cv_text_in(10, 76, 220, &AF_S, "SELECT: what   COPY: confirm", T_TEXT, T_SURF);
     cv_text_in(10, 90, 220, &AF_S, "let go of SHIFT to cancel", T_MID, T_SURF);
+}
+
+/* 0.11: Control All's dialog, after OCT+ is let go */
+static void draw_ca_ask(int32_t y0)
+{
+    (void)y0;
+    cv_rrect(10, 20, 220, 88, 6, T_SURF, T_BG);
+    cv_text_in(10, 30, 220, &AF_S, "CONTROL ALL", T_MID, T_SURF);
+    cv_text_in(10, 50, 220, &AF_M, "REVERT THE KIT?", T_ACCENT, T_SURF);
+    cv_text_in(10, 76, 220, &AF_S, "OCT+: revert   OCT-: keep", T_TEXT, T_SURF);
+    cv_text_in(10, 90, 220, &AF_S, "the changes sound until then", T_MID, T_SURF);
 }
 
 /* PERF: the 16 keys (lit: on, outlined: latched), then the STUTTER length, the THROW voice, the DJ filter */
@@ -945,6 +961,10 @@ static void draw_sound(int32_t y0)
             par_format(v, p, vp_get(p), sizeof v);
             cv_text_fit(x + 64, y + CAP_IN(S, 17), &AF_S, v, act ? T_TEXT : T_DIM, act ? T_SURF : T_BG, 46);
         }
+    if (ui.copy) {                                   /* 0.11: Control All: what OCT- and letting go do */
+        cv_text(6, 106, &AF_S, ui.ca ? "LET GO: KEEP OR REVERT" : "KNOB: ALL TRACKS   TRACK KEY: COPY", T_ACCENT);
+        return;
+    }
     for (k = 0; k < 16u; k++) {                      /* the track's steps in the shown bar */
         uint32_t s = ui.bar * 16u + k;
         int32_t x = 6 + (int32_t)k * 14;
@@ -957,7 +977,7 @@ static void draw_sound(int32_t y0)
 }
 static uint32_t sound_sig(void)
 {
-    uint32_t k, h, s = sig_add(ui.track, ui.sect | ui.half << 4 | ui.bar << 6);
+    uint32_t k, h, s = sig_add(ui.track, ui.sect | ui.half << 4 | ui.bar << 6 | ui.copy << 8 | ui.ca << 9);
     const pattern_t *pt = shown_pat();
     for (h = 0; h < 2u; h++)
         for (k = 0; k < 4u; k++) {
@@ -974,7 +994,10 @@ static void draw_body(void)
 {
     uint32_t s;
     void (*fn)(int32_t) = 0;
-    if (perf_mix() && !ui.shift && !ui.clear_open && !ui.kb_open) {   /* 0.8: PERF's MIX: the faders */
+    if (ui.ca_ask) {                                 /* 0.11: Control All's dialog */
+        fn = draw_ca_ask;
+        s = 41;
+    } else if (perf_mix() && !ui.shift && !ui.clear_open && !ui.kb_open) {   /* 0.8: PERF's MIX: the faders */
         uint32_t v;
         fn = draw_mixer;
         s = 13;

@@ -11,6 +11,7 @@ static uint8_t kits[NUM_KITS][KIT_LEN] POOL;       /* (21 KB: the pool, the fast
 static char kit_names[NUM_KITS][KIT_NAME_LEN];
 static uint8_t kit_loaded;                           /* the slot the edit buffer came from (menu_loadedPresetNr) */
 static uint8_t kit_morph_loaded;                     /* the slot loaded as the morph target */
+static uint8_t kit_loads;                            /* 0.11: one more at each kit into the edit buffer (Control All) */
 
 /* initKit.c: "Initkit" from hrtlkits_batch3 (name, then the parameters 0..245) */
 static const uint8_t INIT_KIT[254] = {
@@ -57,6 +58,7 @@ static void kit_init_par(void)                       /* the init kit into the ed
     kit_init_values(k);
     for (i = 0; i < KIT_LEN; i++)
         par[kit_par(i)] = k[i];
+    kit_loads++;
 }
 
 /* preset_loadDrumsetRam: a slot into the edit buffer (the morph target stays) */
@@ -68,6 +70,7 @@ static void kit_load_ram(uint32_t n)
     for (i = 0; i < KIT_LEN; i++)
         par[kit_par(i)] = kits[n][i];
     kit_loaded = (uint8_t)n;
+    kit_loads++;
     snd_post_all();
 }
 /* preset_saveDrumsetRam: the edit buffer, or with morph the mixture that sounds, into a slot */
@@ -168,6 +171,7 @@ static void kit_factory_load(uint32_t f)             /* one into the edit buffer
     kit_factory_values(f, k);
     for (i = 0; i < KIT_LEN; i++)
         par[kit_par(i)] = k[i];
+    kit_loads++;
     snd_post_all();
 }
 #endif

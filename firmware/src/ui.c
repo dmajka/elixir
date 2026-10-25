@@ -8,7 +8,8 @@
  *   black keys 8..11   the 4 bar buttons: show bar 1..4 (patterns: the bank, 2 of 16; kits and songs: 4);
  *                      SHIFT: the track's length; COPY: copy
  *   OCT-               SHIFT (held; the screen shows what SHIFT + a key does: the LXR's SHIFT + step functions)
- *   OCT+               COPY (held, + a track, a bar, a pattern); SHIFT + COPY = CLEAR; OK in the dialogs
+ *   OCT+               COPY (held, + a track, a bar, a pattern); SHIFT + COPY = CLEAR; OK in the dialogs;
+ *                      held on a sound page, a knob: CONTROL ALL (let go: OCT+ reverts, OCT- keeps)
  *   EDIT ENV SCL LFO GLO   the sound sections (SHIFT GLO: solo the track): OSC > FM > CLICK, AMP EG > MOD, FILTER > SHAPE, LFO > RANDOM >
  *                      CROSS MOD (Kettle's: their pages are K_PAGES), MIX > MIXER (volume,
  *                      pan, FX send, reverb send) > CONFIG (the CPU load at the bottom)
@@ -69,6 +70,8 @@ static struct {
     int8_t held_step;                /* a step key held (its locks), -1 none */
     uint8_t lock_turned;
     uint8_t copy_src;                /* COPY: the source track + 1 / pattern + 1 */
+    uint8_t ca, ca_loads;            /* 0.11: Control All under way (the kit as it was: ca_snap), kit_loads then */
+    uint8_t ca_ask;                  /* .. OCT+ let go: its dialog (OCT+ reverts, OCT- keeps) */
     uint8_t clear_open, clear_sel;
     uint8_t last_all;
     uint8_t kb_open, kb_sel;         /* the kit browser (0.9: 0..63 the slots, 64.. the library's kits: kb_has) */
@@ -953,6 +956,64 @@ static void vp_set(uint32_t p, uint32_t v)
     }
 }
 
+/* ------------------------------------------------------ control all --- */
+/* 0.11: Control All (Elektron's): OCT+ held on a sound page, a knob moves its parameter on every voice that has it,
+ * by the knob's steps from each voice's own value (clamped), so the voices keep their differences. The first turn
+ * keeps the kit as it was. Letting go of OCT+ asks (the FM-1's thumb can't easily reach OCT- while holding OCT+, and
+ * a slipped thumb mustn't keep it all): OCT+ again reverts, OCT- keeps; the changes sound meanwhile. OCT- while OCT+
+ * is still held reverts at once. No locks are recorded: it is a kit move. A kit loaded meanwhile ends it, kept. */
+static uint8_t ca_snap[KIT_LEN] POOL;
+static uint32_t ca_name(uint32_t t) { return t == 31u || t == 32u ? 4u : t; }   /* (the hats' closed, open decay) */
+/* the parameter on track u that is knob k's on the shown page (the same name in the same section), 0 none */
+static uint32_t ca_par(uint32_t u, uint32_t k)
+{
+    const uint16_t *a = LXR_PAGES[track_page(ui.track)][ui.sect], *b;
+    uint32_t j = ui.half * 4u + k, i, t, n = 0;
+    if (ui.sect >= S_SHAPE)                          /* (Kettle's: blocks of six, the voice's own) */
+        return sect_par(u, ui.sect, ui.half, k);
+    if (!(t = ca_name(a[j])))
+        return 0;
+    for (i = 0; i < j; i++)                          /* (its n-th of that name: the metal voices' two frequencies) */
+        if (ca_name(a[i]) == t)
+            n++;
+    b = LXR_PAGES[track_page(u)][ui.sect];
+    for (i = 0; i < 8u; i++)
+        if (ca_name(b[i]) == t && !n--)
+            return b[8u + i] != PAR_NONE ? b[8u + i] : 0u;
+    return 0;
+}
+static void control_all(uint32_t k, int32_t step)
+{
+    uint16_t done[NTRACK];
+    uint32_t u, i, nd = 0;
+    if (!ui.ca) {
+        for (i = 0; i < KIT_LEN; i++)
+            ca_snap[i] = par[kit_par(i)];
+        ui.ca = 1;
+        ui.ca_loads = kit_loads;
+        ui.copy_used = 1;                            /* (nothing copied on release) */
+        ui.copy_src = 0;
+    }
+    for (u = 0; u < NTRACK; u++) {
+        uint32_t q = ca_par(u, k);
+        for (i = 0; i < nd && done[i] != q; i++)     /* (the hats' voice once) */
+            ;
+        if (!q || i < nd)
+            continue;
+        done[nd++] = (uint16_t)q;
+        vp_set(q, (uint32_t)clamp32((int32_t)vp_get(q) + step, (int32_t)vp_min(q), (int32_t)vp_max(q)));
+    }
+}
+static void control_all_undo(void)
+{
+    uint32_t i;
+    for (i = 0; i < KIT_LEN; i++)
+        par[kit_par(i)] = ca_snap[i];
+    snd_post_all();
+    ui.ca = ui.ca_ask = 0;
+    ui_message("CONTROL ALL REVERTED");
+}
+
 /* a knob: n detents on parameter p (accelerated for wide ranges) */
 static void knob_turn(uint32_t k, int32_t n)
 {
@@ -975,6 +1036,10 @@ static void knob_turn(uint32_t k, int32_t n)
     ui.knob_ms[k] = fm1_ms;
     ui.hot = (uint8_t)(k + 1u);
     ui.hot_ms = fm1_ms;
+    if (ui.copy && ui.mode == M_SOUND && ui.held_step < 0 && !ui.sb_open && !ui.kb_open) {
+        control_all(k, step);                        /* 0.11: OCT+ held: every voice */
+        return;
+    }
     /* a step key held: that step's lock (sequencer automation), in the lane that has the parameter or is free */
     if (ui.held_step >= 0 && par_lockable(p) && ui.mode != M_STEP) {
         pattern_t *pt = shown_pat();
@@ -1527,7 +1592,7 @@ static void black_down(uint32_t k)
     }
     if (k < NTRACK) {
         uint32_t t = k;
-        if (ui.copy && ui.mode != M_PATTERN) {        /* COPY + a track, then the target */
+        if (ui.copy && ui.mode != M_PATTERN && !ui.ca) {   /* COPY + a track, then the target (Control All: select) */
             ui.copy_used = 1;
             if (!ui.copy_src) {
                 ui.copy_src = (uint8_t)(t + 1u);
@@ -1575,7 +1640,7 @@ static void black_down(uint32_t k)
         ui_message("LENGTH SET");
         return;
     }
-    if (ui.copy) {                                    /* COPY + bar: the shown bar into it (the grid: every track) */
+    if (ui.copy && !ui.ca) {                          /* COPY + bar: the shown bar into it (the grid: every track) */
         uint32_t t;
         ui.copy_used = 1;
         if (k == ui.bar)
@@ -1632,8 +1697,25 @@ static void bar_copy(pattern_t *p, uint32_t t, uint32_t from, uint32_t to, int a
 /* ---------------------------------------------------------- buttons --- */
 static void button_down(uint32_t b)
 {
+    if (ui.ca_ask) {                                 /* 0.11: Control All's dialog: OCT+ reverts, OCT- keeps */
+        if (b == B_OCTUP) {
+            control_all_undo();
+        } else if (b == B_OCTDN) {
+            ui.ca_ask = 0;
+            ui.shift_used = 1;                       /* (its release: nothing) */
+            ui_message("CONTROL ALL KEPT");
+        }
+        ui.force = 1;
+        if (b != B_PLAY && b != B_REC)               /* (the transport still works; the rest waits) */
+            return;
+    }
     switch (b) {
     case B_OCTDN:
+        if (ui.copy && ui.ca) {                      /* 0.11: Control All's undo, not SHIFT */
+            control_all_undo();
+            ui.shift_used = 1;
+            return;
+        }
         ui.shift = 1;
         ui.shift_used = 0;
         ui.force = 1;
@@ -1828,6 +1910,10 @@ static void button_up(uint32_t b)
             sb_close(0);
         }
     } else if (b == B_OCTUP) {
+        if (ui.ca) {                                  /* 0.11: Control All: ask */
+            ui.ca = 0;
+            ui.ca_ask = 1;
+        }
         ui.copy = 0;
         sq.erase = 0;
         if (ui.copy_src && !ui.copy_used)
@@ -1842,6 +1928,10 @@ static void ui_input(void)
     uint32_t rel, pressed = fm1_input_edges(&rel), b, k, keys = fm1_in.notes;
     uint32_t down = keys & ~ui.keys, up = ui.keys & ~keys;
     int32_t n;
+    if ((ui.ca || ui.ca_ask) && kit_loads != ui.ca_loads) {   /* 0.11: a kit loaded: Control All ends (kept) */
+        ui.ca = ui.ca_ask = 0;
+        ui.force = 1;
+    }
     for (b = 0; b < NB; b++) {
         if (pressed & (1u << panel.btn[b]))
             button_down(b);
@@ -1851,19 +1941,19 @@ static void ui_input(void)
     (void)fm1_input_note_edges();
     ui.keys = keys;
     for (k = 0; k < 16u; k++) {
-        if (down & (1u << WHITE_KEY[k]))
+        if ((down & (1u << WHITE_KEY[k])) && !ui.ca_ask)
             white_down(k);
         if (up & (1u << WHITE_KEY[k]))
             white_up(k);
     }
     for (k = 0; k < 11u; k++)
-        if (down & (1u << BLACK_KEY[k]))
+        if ((down & (1u << BLACK_KEY[k])) && !ui.ca_ask)
             black_down(k);
-    if ((n = panel_enc(EN_ALGO)) != 0) {
+    if ((n = panel_enc(EN_ALGO)) != 0 && !ui.ca_ask) {
         int32_t t = clamp32((int32_t)ui.track + n, 0, NTRACK - 1);
         track_select((uint32_t)t);
     }
-    if ((n = panel_enc(EN_SELECT)) != 0) {
+    if ((n = panel_enc(EN_SELECT)) != 0 && !ui.ca_ask) {
         if (ui.clear_open) {
             ui.clear_sel = (uint8_t)clamp32((int32_t)ui.clear_sel + n, 0, NCLEAR - 1);
         } else if (ui.kb_open) {
@@ -1900,7 +1990,7 @@ static void ui_input(void)
         ui.msg_long = 1;
         pj.auto_err = 0;
     }
-    if ((n = panel_enc(EN_PRESET)) != 0) {
+    if ((n = panel_enc(EN_PRESET)) != 0 && !ui.ca_ask) {
         if (ui.mode == M_SAVE || ui.mode == M_LOAD) {
             ui.io_slot = (uint8_t)clamp32((int32_t)ui.io_slot + n, 0, (int32_t)vp_max(VP_IO_SLOT));
         } else if ((ui.mode == M_SOUND || ui.mode == M_KEYS) && !ui.kb_open) {
@@ -1917,7 +2007,7 @@ static void ui_input(void)
         ui.force = 1;
     }
     for (k = 0; k < 4u; k++)
-        if ((n = panel_enc(EN_K1 + k)) != 0)
+        if ((n = panel_enc(EN_K1 + k)) != 0 && !ui.ca_ask)
             knob_turn(k, n);
     if (ui.kb_open && fm1_ms - ui.kb_ms > 6000u) {   /* the kit browser closes by itself, nothing loaded */
         ui.kb_open = 0;
@@ -2051,7 +2141,7 @@ static void ui_leds(void)
     led_put(nb, panel.btn[B_REC], sq.erase);
     led_put(nl, panel.btn[B_OCTDN], ui.shift);
     led_put(nl, panel.btn[B_OCTUP], ui.copy);
-    led_put(nb, panel.btn[B_OCTUP], ui.clear_open || ui.kb_open || ui.sb_open || ui.copy_src || ((ui.mode == M_SAVE ||
+    led_put(nb, panel.btn[B_OCTUP], ui.ca || ui.ca_ask || ui.clear_open || ui.kb_open || ui.sb_open || ui.copy_src || ((ui.mode == M_SAVE ||
                                                                                      ui.mode == M_LOAD) && !ui.copy));
     for (k = 0; k < NB; k++)
         if (k != B_PLAY)
