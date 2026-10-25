@@ -196,6 +196,18 @@ check((await transport.request(message(0x01, 1, [5]).map((b, i, a) => (i === a.l
         JSON.stringify(songWindow([0, 3, 40, 64], 0)) === JSON.stringify([0, 3, 31, 64]), "a song's patterns, the half picked");
   await lib.songPut(2, [0, 1, 1, 2, 65, ...new Array(59).fill(64)]);
   check((await ask("song 2")).startsWith("0001010241"), "a song in");
+  // a whole SD card (two projects' folders): one project only; a kit import takes both, folder by folder
+  {
+    const f = (path) => ({ name: path.split("/").pop(), webkitRelativePath: path,
+                           arrayBuffer: async () => new Uint8Array(8 + 247).buffer });
+    const card = [f("SD/PROJ01/00-B.SND"), f("SD/PROJ00/01-A.SND"), f("SD/PROJ00/00-A.SND"), f("SD/PROJ00/00-X.PAT"), f("SD/README.TXT")];
+    let why = "";
+    try { await lxrProject(card); } catch (e) { why = e.message; }
+    check(/2 LXR-02 projects/.test(why), "an LXR project: a whole card refused");
+    const ks = await sndFiles(card, { skipInit: false });
+    check(ks.map((k) => k.file).join() === "SD/PROJ00/00-A.SND,SD/PROJ00/01-A.SND,SD/PROJ01/00-B.SND",
+          "kits from a folder: its subfolders' too, in order, nothing else");
+  }
   if (lxrFiles.length) {
     const proj = await lxrProject(lxrFiles);
     const r = await importLxrProject(lib, proj, 0);

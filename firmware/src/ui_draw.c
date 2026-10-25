@@ -354,27 +354,39 @@ static void list_row(int32_t y, const char *left, const char *right, int sel, in
     cv_text_fit(64, y + CAP_IN(S, 16), &AF_S, right, sel ? T_INK : dim ? T_DIM : T_TEXT, bg, 168);
 }
 
-static void draw_kit_browser(int32_t y0)
+static void draw_kit_browser(int32_t y0)             /* 0.9: the slots, then the library's kits (L1 ..) */
 {
-    int32_t i, first = (int32_t)ui.kb_sel - 3;
+    uint32_t i, k = ui.kb_sel, first = kb_step(ui.kb_sel, -3);
     (void)y0;
-    if (first < 0)
-        first = 0;
-    if (first > NUM_KITS - 7)
-        first = NUM_KITS - 7;
+    for (i = 0; i < 3u && kb_step(first, 5) == kb_step(first, 6) && kb_step(first, -1) != first; i++)
+        first = kb_step(first, -1);                   /* (the list's end: the last 7 shown) */
     cv_text(10, 2, &AF_S, "LOAD KIT", T_THEME);
     cv_text_r(232, 2, &AF_S, "OCT+ LOAD", T_MID, T_BG);
-    for (i = 0; i < 7; i++) {
-        uint32_t k = (uint32_t)(first + i);
+    for (i = 0, k = first; i < 7u; i++) {
         char l[8], r[12];
         put_str(l, "", sizeof l);
-        two_digits(l, k + 1u);
-        memcpy(r, kit_names[k], 8);
-        r[8] = 0;
-        if (k == kit_loaded) {
-            put_str(l + 2, " *", sizeof l - 2);
+        if (k < NUM_KITS) {
+            two_digits(l, k + 1u);
+            memcpy(r, kit_names[k], 8);
+            if (k == kit_loaded)
+                put_str(l + 2, " *", sizeof l - 2);
+        } else {
+            uint32_t n = k - NUM_KITS + 1u, p = 1;
+            l[0] = 'L';
+            if (n >= 100u)
+                l[p++] = (char)('0' + n / 100u);
+            if (n >= 10u)
+                l[p++] = (char)('0' + n / 10u % 10u);
+            l[p++] = (char)('0' + n % 10u);
+            l[p] = 0;
+            if (kl_name(KLK_KIT, k - NUM_KITS, r))
+                memset(r, ' ', 8);
         }
-        list_row(18 + i * 16, l, r, k == ui.kb_sel, 0);
+        r[8] = 0;
+        list_row(18 + (int32_t)i * 16, l, r, k == ui.kb_sel, 0);
+        if (kb_step(k, 1) == k)
+            break;
+        k = kb_step(k, 1);
     }
 }
 

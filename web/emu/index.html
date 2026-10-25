@@ -89,13 +89,25 @@ footer small { font-size: 11px; opacity: .8; }
   <div class="start" id="start"><button id="go" type="button">Switch on</button><p id="status" hidden></p></div>
 </div>
 
-<details class="keys lib"><summary><b>Library</b>: LXR-02 kits in, backup and restore</summary>
-  <p>Import kits from an LXR-02 SD card: pick its .SND files, or a whole project folder (PROJ00 …). They go into the
-    kit slots from the first slot on.
-    <label>First slot <input id="libfirst" type="number" min="1" max="64" value="1" style="width:4em"></label>
+<details class="keys lib"><summary><b>Library</b>: try LXR-02 kits, backup and restore</summary>
+  <p>Try kits here before putting them on your FM-1. The emulator holds what the FM-1 does: <b>64 kit slots</b> (the
+    project's: patterns load them by number) and the <b>kit library</b> of 128 more (kept apart from the projects). Turn
+    PRESETS to browse the slots and then the library (L1 …), OCT+ loads one; a library kit can also be the morph target
+    (LOAD → MORPH, From LIBRARY). Then download the kit library below, and restore it onto the FM-1 from the library
+    page.</p>
+  <p>Pick .SND files, or a folder: it takes the .SND files in it and in all its subfolders (one project's folder,
+    PROJ00 …, or a whole SD card, project by project). The slots take 64, the library 128; import more over them.
+    <label>Into <select id="libdest"><option value="lib">the kit library</option>
+      <option value="slots">the kit slots</option></select></label>
+    <label>from number <input id="libfirst" type="number" min="1" max="128" value="1" style="width:4em"></label>
     <label><input id="libskip" type="checkbox" checked> leave out Init/empty kits</label></p>
   <p><label>Kit files <input id="libfiles" type="file" accept=".snd,.SND" multiple></label>
-    <label>A folder <input id="libdir" type="file" webkitdirectory></label></p>
+    <label>A folder <input id="libdir" type="file" webkitdirectory></label>
+    · <button id="kitlibbackup" type="button">Download the kit library</button> (.ktlb)
+    · <label>Restore one <input id="kitlibrestore" type="file" accept=".ktlb"></label></p>
+  <p>An LXR-02 project (one project's folder: kits into the slots by number, patterns, songs), its patterns
+    <select id="lxrhalf"><option value="0">1–32</option><option value="32">33–64</option></select>:
+    <input id="lxrdir" type="file" webkitdirectory></p>
   <p><button id="libbackup" type="button">Download a backup</button> of the saved projects ·
     <label>Restore a backup into <select id="libslot"><option value="same">its own slots</option>
       <option value="0">Project 1</option><option value="1">Project 2</option><option value="2">Project 3</option>
@@ -128,7 +140,8 @@ footer small { font-size: 11px; opacity: .8; }
 
 <script type="module">
 import { midiKnob, KNOB_MODES } from "./worklet.js";
-import { Library, sndFiles, packBackup, unpackBackup, checkImage, SLOT_NAMES } from "./library.js";
+import { Library, sndFiles, packBackup, unpackBackup, checkImage, SLOT_NAMES, KL_KIT, packKitLib, unpackKitLib, lxrProject,
+         importLxrProject } from "./library.js";
 const NS = "http://www.w3.org/2000/svg";
 // panel.c's labels (bit = label) and encoder roles
 const B = { FX: 0, SCL: 1, ENV: 2, LFO: 3, EDIT: 4, GLO: 5, HOME: 6, SAVE: 7, ARP: 8, SEQ: 9, PLAY: 10, REC: 11, "OCT-": 12, "OCT+": 13 };
@@ -590,23 +603,64 @@ const lib = new Library({
   },
 });
 const libSay = (s) => { document.getElementById("libstatus").textContent = s; };
+const libEl = (id) => document.getElementById(id);
+function libDownload(bytes, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
+  a.download = name;
+  a.click();
+}
+libEl("libdest").addEventListener("change", () => { libEl("libfirst").max = libEl("libdest").value === "lib" ? 128 : 64; });
 async function importKits(files) {
   if (!node) { libSay("Switch the emulator on first."); return; }
-  const kits = await sndFiles(files, { skipInit: document.getElementById("libskip").checked });
+  const kits = await sndFiles(files, { skipInit: libEl("libskip").checked }), toLib = libEl("libdest").value === "lib";
   if (!kits.length) { libSay("No LXR kit files (.SND) there."); return; }
-  const first = Math.max(1, Math.min(64, +document.getElementById("libfirst").value || 1)) - 1;
-  const n = Math.min(kits.length, 64 - first);
+  const max = toLib ? 128 : 64, where = toLib ? "library kits" : "slots";
+  const first = Math.max(1, Math.min(max, +libEl("libfirst").value || 1)) - 1;
+  const n = Math.min(kits.length, max - first);
   try {
     for (let i = 0; i < n; i++) {
-      await lib.kitPut(first + i, kits[i].name, kits[i].data, i === 0);
+      if (toLib) await lib.libPut(KL_KIT, first + i, kits[i].name, kits[i].data);
+      else await lib.kitPut(first + i, kits[i].name, kits[i].data, i === 0);
       libSay(`Importing ${i + 1} of ${n}: ${kits[i].name}`);
     }
-    libSay(`${n} kits in slots ${first + 1}–${first + n}${kits.length > n ? ` (${kits.length - n} didn't fit)` : ""}. ` +
-           `The first is loaded. PRESETS browses them; SAVE → PROJECT keeps them.`);
+    libSay(`${n} kits in ${where} ${first + 1}–${first + n}${kits.length > n ? ` (${kits.length - n} more didn't fit)` : ""}. ` +
+           (toLib ? "PRESETS lists them after the slots (L1 …); OCT+ loads one."
+                  : "The first is loaded. PRESETS browses them; SAVE → PROJECT keeps them."));
   } catch (e) { libSay("Import stopped: " + e.message); }
 }
-document.getElementById("libfiles").addEventListener("change", (e) => importKits([...e.target.files]));
-document.getElementById("libdir").addEventListener("change", (e) => importKits([...e.target.files]));
+for (const id of ["libfiles", "libdir"])
+  libEl(id).addEventListener("change", (e) => { const f = [...e.target.files]; e.target.value = ""; importKits(f); });
+libEl("kitlibbackup").addEventListener("click", async () => {
+  if (!node) { libSay("Switch the emulator on first."); return; }
+  try {
+    const entries = await lib.libBackup();
+    if (!entries.length) { libSay("The kit library is empty."); return; }
+    libDownload(packKitLib(entries), `kettle-kits-emulator-${new Date().toISOString().slice(0, 10)}.ktlb`);
+    libSay(`Downloaded ${entries.length} kits and sounds. The library page restores them onto the FM-1.`);
+  } catch (e) { libSay("Download failed: " + e.message); }
+});
+libEl("kitlibrestore").addEventListener("change", async (e) => {
+  const f = e.target.files[0];
+  e.target.value = "";
+  if (!f || !node) { if (!node) libSay("Switch the emulator on first."); return; }
+  try {
+    const entries = unpackKitLib(await f.arrayBuffer());
+    await lib.libRestore(entries, (d, t) => libSay(`Restoring the kit library: ${Math.round(100 * d / t)}%`));
+    libSay(`Restored ${entries.length} kits and sounds into the kit library.`);
+  } catch (err) { libSay("Restore failed: " + err.message); }
+});
+libEl("lxrdir").addEventListener("change", async (e) => {
+  const files = [...e.target.files];
+  e.target.value = "";
+  if (!node) { libSay("Switch the emulator on first."); return; }
+  try {
+    const proj = await lxrProject(files), first = +libEl("lxrhalf").value;
+    if (!proj.kits.length && !proj.pats.length) { libSay("No LXR-02 kits or patterns there."); return; }
+    const r = await importLxrProject(lib, proj, first, (d, t) => libSay(`Importing the project: ${d} of ${t}`));
+    libSay(`${r.kits} kits, ${r.pats} patterns, ${r.songs} songs in. SAVE → PROJECT keeps them.`);
+  } catch (err) { libSay("Import stopped: " + err.message); }
+});
 document.getElementById("libbackup").addEventListener("click", async () => {
   if (!node) { libSay("Switch the emulator on first."); return; }
   try {

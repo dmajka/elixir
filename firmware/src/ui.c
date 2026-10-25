@@ -70,7 +70,7 @@ static struct {
     uint8_t copy_src;                /* COPY: the source track + 1 / pattern + 1 */
     uint8_t clear_open, clear_sel;
     uint8_t last_all;
-    uint8_t kb_open, kb_sel;         /* the kit browser */
+    uint8_t kb_open, kb_sel;         /* the kit browser (0.9: 0..63 the slots, 64.. the library's kits: kb_has) */
     uint8_t sb_open, sb_voice, sb_on; /* 0.8: the sound browser (its voice; the voice as it was: sb_orig, sb_on values) */
     uint16_t sb_sel;
     uint8_t sb_orig[SOUND_MAX];
@@ -339,6 +339,25 @@ static const pattern_t *view_pat(uint32_t t)
     return p == &pat[sq.active] && p->gen[t][0] != GEN_OFF ? &gpat : p;
 }
 static uint32_t vp_max(uint32_t p);
+/* 0.9: the kit browser's entries: the 64 slots, then the library's kits that exist */
+#define KB_N (NUM_KITS + KL_KITS)
+static int kb_has(int32_t i)
+{
+    return i >= 0 && i < (int32_t)KB_N && (i < (int32_t)NUM_KITS || kl_exists(KLK_KIT, (uint32_t)i - NUM_KITS));
+}
+static uint32_t kb_step(uint32_t s, int32_t n)       /* n entries on from s (as far as there are) */
+{
+    while (n) {
+        int32_t d = n > 0 ? 1 : -1, j = (int32_t)s + d;
+        while (j >= 0 && j < (int32_t)KB_N && !kb_has(j))
+            j += d;
+        if (!kb_has(j))
+            break;
+        s = (uint32_t)j;
+        n -= d;
+    }
+    return s;
+}
 /* 0.8: SAVE / LOAD on the library (a SOUND always) */
 static int io_lib(void)
 {
@@ -1536,8 +1555,13 @@ static void button_down(uint32_t b)
             return;
         }
         if (ui.kb_open) {                             /* the kit browser: load */
-            kit_load_ram(ui.kb_sel);
             ui.kb_open = 0;
+            if (ui.kb_sel >= NUM_KITS) {              /* a library kit: the edit buffer, as LOAD > KIT From LIBRARY */
+                ui.lib_kit = (uint8_t)(ui.kb_sel - NUM_KITS);
+                ui_message(libkit_load(ui.lib_kit, 0) ? "EMPTY SLOT" : "LIBRARY KIT LOADED");
+                return;
+            }
+            kit_load_ram(ui.kb_sel);
             ui_message("KIT LOADED");
             return;
         }
@@ -1776,7 +1800,7 @@ static void ui_input(void)
                 ui.kb_open = 1;
                 ui.kb_sel = kit_loaded;
             } else {
-                ui.kb_sel = (uint8_t)clamp32((int32_t)ui.kb_sel + n, 0, NUM_KITS - 1);
+                ui.kb_sel = (uint8_t)kb_step(ui.kb_sel, n);
             }
             ui.kb_ms = fm1_ms;
         }

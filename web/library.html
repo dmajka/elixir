@@ -76,39 +76,58 @@
     <label><input type="checkbox" id="loadafter" checked> then load it</label></p>
   <p><input type="file" id="restore" accept=".ktbk,.ktp"></p>
 
+  <h2>Kit slots or the kit library?</h2>
+  <p>Kettle keeps kits in two places:</p>
+  <ul>
+    <li><b>The kit slots</b> (64) are part of the project, like the LXR-02's. Patterns name their kit by slot number
+      (with the pattern page's Kit change on AUTO, a pattern loads its kit), and the slots are saved with the project.
+      Loading another project brings its own 64 kits. Put a project's working kits here.</li>
+    <li><b>The kit library</b> (128 kits, and 128 single sounds) is a collection kept apart from the projects: loading
+      a project leaves it as it is. Put kits you want to reach from any project here, such as the LXR-02's factory
+      kits or your favourites. Turn <b>PRESETS</b> to browse the slots and then the library (L1 …), and press
+      <b>OCT+</b> to load one. A kit from the library can also be the <b>morph target</b> (LOAD → MORPH, From LIBRARY),
+      and the sound browser on a track's sound pages offers single voices from its kits. To use a library kit with a
+      pattern, load it and save it into a slot (SAVE → KIT, To SLOTS).</li>
+  </ul>
+
   <h2>Import LXR-02 kits</h2>
-  <p>Pick .SND files from an LXR-02 SD card, or a whole project folder (PROJ00 …). They fill the kit slots of what's
-    playing, from the first slot on. Then save the project on the FM-1 (SAVE → PROJECT), or let AUTOSAVE keep them in
-    the session.</p>
-  <p><label>First slot <input type="number" id="first" min="1" max="64" value="1" style="width:4em"></label>
+  <p>Pick .SND files from an LXR-02 SD card, or a folder. A folder takes the .SND files in it <b>and in all its
+    subfolders</b>, other files left out: pick one project's folder (PROJ00 …), or the card's top folder for every
+    project's kits at once, project by project in their order. The slots take up to 64, the library 128; the rest are
+    left out (the page says how many). Into the slots, they replace what's playing until you load a project: save the
+    project on the FM-1 (SAVE → PROJECT) or let AUTOSAVE keep them. Into the library, they are kept at once.</p>
+  <p><label>Into <select id="dest"><option value="slots">the kit slots</option>
+      <option value="lib">the kit library</option></select></label>
+    <label>from number <input type="number" id="first" min="1" max="64" value="1" style="width:4em"></label>
     <label><input type="checkbox" id="skipinit" checked> leave out Init/empty kits</label>
     <label><input type="checkbox" id="loadfirst" checked> load the first</label></p>
   <p><label>Kit files <input type="file" id="sndfiles" accept=".snd,.SND" multiple></label></p>
   <p><label>A folder <input type="file" id="snddir" webkitdirectory></label></p>
-  <p class="small">An LXR voice routed to the FX bus comes in as FX SEND 127 (the same sound). Kettle's own settings
-    (sends, reverb, shaping, models) start at their defaults.</p>
+  <p class="small">Chrome asks to "upload" the folder's files: the page only reads them here and sends the kits to
+    your FM-1, nothing else leaves this computer. An LXR voice routed to the FX bus comes in as FX SEND 127 (the same
+    sound). Kettle's own settings (sends, reverb, shaping, models) start at their defaults.</p>
 
   <h2>Import an LXR-02 project</h2>
-  <p>Pick a project folder from an LXR-02 SD card (PROJ00 …): its kits go into the kit slots by their numbers (so each
-    pattern still finds its kit), its patterns into Kettle's patterns, its songs into the songs. It replaces what's
-    playing; save the project on the FM-1 afterwards. Kettle has 32 patterns to the LXR's 64: pick which half.</p>
+  <p>Pick one project folder from an LXR-02 SD card (PROJ00 …), not the whole card: its kits go into the kit slots by
+    their numbers (so each pattern still finds its kit), its patterns into Kettle's patterns, its songs into the songs.
+    It replaces what's playing; save the project on the FM-1 afterwards. Kettle has 32 patterns to the LXR's 64: pick
+    which half.</p>
   <p><label>Patterns <select id="lxrhalf"><option value="0">1–32</option><option value="32">33–64</option></select></label></p>
   <p><label>A project folder <input type="file" id="lxrdir" webkitdirectory></label></p>
   <p class="small">A song's steps on a pattern from the other half play pattern 32 instead.</p>
 
   <h2>Kit library</h2>
-  <p>128 kits and 128 sounds the FM-1 keeps apart from the projects (SAVE → KIT or MORPH, To LIBRARY; SAVE → SOUND).
-    They survive loading other projects; back them up here too.</p>
+  <p>What's in the library (above: what it's for). On the FM-1, SAVE → KIT or MORPH with To LIBRARY saves into it,
+    SAVE → SOUND a single sound. Back it up here before installing other firmware; a backup restores onto any Kettle,
+    the emulator's too. Click a kit to download it as an LXR-02 .SND file.</p>
   <p id="libsum" class="small"></p>
   <ul class="kits" id="libkits"></ul>
   <p><button id="libbackup">Back up the kit library</button></p>
   <p><label>Restore <input type="file" id="librestore" accept=".ktlb"></label></p>
-  <p><label>LXR-02 kits into it, from library kit <input type="number" id="libfirst" min="1" max="128" value="1" style="width:4em"></label>
-    <input type="file" id="libsnd" accept=".snd,.SND" multiple></p>
 
-  <h2>Kits on the FM-1</h2>
-  <p>Click a kit to download it as an LXR-02 .SND file (the LXR's parameters only: Kettle's own aren't in that
-    format).</p>
+  <h2>The kit slots on the FM-1</h2>
+  <p>The playing project's 64 kits. Click one to download it as an LXR-02 .SND file (the LXR's parameters only:
+    Kettle's own aren't in that format).</p>
   <ul class="kits" id="kits"></ul>
   </div>
 
@@ -235,21 +254,24 @@ $("restore").addEventListener("change", (e) => {
   });
 });
 
+$("dest").addEventListener("change", () => { $("first").max = $("dest").value === "lib" ? 128 : 64; });
 async function importKits(files) {
-  const kits = await sndFiles(files, { skipInit: $("skipinit").checked });
+  const kits = await sndFiles(files, { skipInit: $("skipinit").checked }), toLib = $("dest").value === "lib";
   if (!kits.length) throw new Error("No LXR kit files (.SND) there.");
-  const first = Math.max(1, Math.min(64, +$("first").value || 1)) - 1;
-  const n = Math.min(kits.length, info.nkits - first);
-  if (!confirm(`Put ${n} kits into slots ${first + 1}–${first + n}? The kits there now are replaced (until you load ` +
-               `a project again without saving).`)) { say("Import cancelled."); return; }
+  const max = toLib ? 128 : info.nkits, where = toLib ? "library kits" : "slots";
+  const first = Math.max(1, Math.min(max, +$("first").value || 1)) - 1;
+  const n = Math.min(kits.length, max - first), more = kits.length > n ? ` (${kits.length - n} more didn't fit)` : "";
+  if (!confirm(`Put ${n} kits into ${where} ${first + 1}–${first + n}${more}? The kits there now are replaced` +
+               `${toLib ? "" : " (until you load a project again without saving)"}.`)) { say("Import cancelled."); return; }
   for (let i = 0; i < n; i++) {
-    await lib.kitPut(first + i, kits[i].name, kits[i].data, i === 0 && $("loadfirst").checked);
-    bar(i + 1, n);
     say(`Importing ${kits[i].name} …`);
+    if (toLib) await lib.libPut(KL_KIT, first + i, kits[i].name, kits[i].data);
+    else await lib.kitPut(first + i, kits[i].name, kits[i].data, i === 0 && $("loadfirst").checked);
+    bar(i + 1, n);
   }
   await refresh();
-  say(`${n} kits in slots ${first + 1}–${first + n}${kits.length > n ? ` (${kits.length - n} didn't fit)` : ""}. ` +
-      "Save the project on the FM-1 to keep them.");
+  say(`${n} kits in ${where} ${first + 1}–${first + n}${more}. ` +
+      (toLib ? "PRESETS on the FM-1 lists them after the slots (L1 …)." : "Save the project on the FM-1 to keep them."));
 }
 $("sndfiles").addEventListener("change", (e) => { const f = [...e.target.files]; e.target.value = ""; job(() => importKits(f)); });
 $("snddir").addEventListener("change", (e) => { const f = [...e.target.files]; e.target.value = ""; job(() => importKits(f)); });
@@ -288,19 +310,6 @@ $("librestore").addEventListener("change", (e) => {
     await lib.libRestore(entries, bar);
     await refresh();
     say(`Restored ${entries.length} kits and sounds.`);
-  });
-});
-$("libsnd").addEventListener("change", (e) => {
-  const files = [...e.target.files];
-  e.target.value = "";
-  job(async () => {
-    const kits = await sndFiles(files);
-    if (!kits.length) throw new Error("No LXR kit files (.SND) there.");
-    const first = Math.max(1, Math.min(128, +$("libfirst").value || 1)) - 1, n = Math.min(kits.length, 128 - first);
-    if (!confirm(`Put ${n} kits into library kits ${first + 1}–${first + n}?`)) { say("Import cancelled."); return; }
-    for (let i = 0; i < n; i++) { await lib.libPut(KL_KIT, first + i, kits[i].name, kits[i].data); bar(i + 1, n); }
-    await refresh();
-    say(`${n} kits in the library.`);
   });
 });
 $("libkits").addEventListener("click", (e) => {

@@ -470,6 +470,15 @@ Requested 2026-10-25: losing a new pattern's work on a switch broke the flow; on
 - **RELOAD** still reverts the playing pattern to how it was when it started (or was last saved), on either setting (`pat_revert`).
 - **Tests:** ui_test phase9_patkeep (KEEP stopped and playing, RELOAD, DROP, the setting).
 
+### 0.9.1: trying kits in the emulator (built)
+
+Requested 2026-10-25: try LXR-02 kits in the emulator before putting them on the unit, without the emulator holding more than the FM-1 does; and a clearer library page.
+
+- **Kit browser:** PRESETS lists the 64 slots, then the kit library's kits (L1 …, the empty ones left out); OCT+ loads a library kit as LOAD → KIT From LIBRARY does (`kb_has`, `kb_step` in ui.c).
+- **Emulator page:** its Library imports .SND files or folders into the kit library (the default) or the slots, imports an LXR-02 project, and downloads / restores the kit library (`.ktlb`, which the library page restores onto the FM-1). The emulator stays 1:1 (64 slots, 128 library kits): more kits mean another batch.
+- **Library page:** one kit import with Into: slots or library (the separate library-only input gone); text on what each is for (slots: the project's, named by patterns; library: a collection across projects, the morph target, the sound browser's voices); folders are read with their subfolders (a whole SD card: every project's kits, in order); a project import refuses a folder holding several projects (`lxrFolders`).
+- **Tests:** ui_test (the kit browser over the slots and the library), library_test (a card's subfolders, the several-projects refusal).
+
 ## Later / bigger
 
 - **303-style acid track:** about 33 KB of pattern memory at 64 patterns (less at 32), 1–2 voices' worth of CPU, and real UI work for track selection and note entry. Check charlesvestal's fm1-x0x (FM-1 303 firmware) and its licence first.

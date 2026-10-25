@@ -1876,6 +1876,18 @@ static void phase9_library(void)
     check(morph_par[kit_idx(PAR_VOL2)] == 77, "LOAD MORPH < LIBRARY: the morph target");
     vp_set(VP_IO_SRC, 0);
     goto_mode(B_HOME, M_HOME);
+    /* 0.9: the kit browser (PRESETS) lists the library's kits after the slots, the empty ones left out */
+    par[PAR_VOL2] = 10;
+    turn(EN_PRESET, 1);
+    check(ui.kb_open && ui.kb_sel == kit_loaded, "PRESETS: the kit browser, on the loaded kit");
+    turn(EN_PRESET, 100);
+    check(ui.kb_sel == NUM_KITS + 99u, "kit browser: past the slots, library kit 100 (the only one), then the end");
+    shot("kits-library");
+    turn(EN_PRESET, -1);
+    check(ui.kb_sel == NUM_KITS - 1u, "kit browser: back over the empty library slots to slot 64");
+    turn(EN_PRESET, 1);
+    press(B_OCTUP);
+    check(!ui.kb_open && par[PAR_VOL2] == 77 && ui.lib_kit == 99u, "kit browser: OCT+ loads the library kit");
     /* a write torn before its record: the slot as it was */
     libkit_get(99, a);
     par[PAR_VOL2] = 12;

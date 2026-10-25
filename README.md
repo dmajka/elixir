@@ -32,7 +32,7 @@ The FM-1 has no FPU, so the LXR's floating-point DSP is rewritten in fixed point
 | PLAY / REC | Start/stop (SHIFT + PLAY: the song from the top) · record (SHIFT + REC: options) |
 | ALGORITHM | Track |
 | SELECT | Page / list position |
-| PRESETS | Kit browser (OCT+ loads) · on a sound page or in KEYS: the sound browser (OCT+ keeps, OCT− reverts) |
+| PRESETS | Kit browser: the slots, then the kit library (OCT+ loads) · on a sound page or in KEYS: the sound browser (OCT+ keeps, OCT− reverts) |
 | KNOB 1–4 | The four parameters on screen. **Hold a step and turn a knob** to lock that parameter on that step |
 
 Patterns keep their edits when you switch, as on an Elektron box: they are part of the session, which AUTOSAVE keeps. The pattern page's Edits setting can drop them instead, the LXR's way. RELOAD reverts the playing pattern either way.
@@ -134,7 +134,7 @@ The emulator runs the firmware's own C sources compiled to WebAssembly, on a sim
 
 `web/library.html` (the site's `library/`) talks to Kettle over USB MIDI SysEx (`firmware/src/library.c`, protocol in its header; `web/library.js`). It backs up and restores projects, imports LXR-02 .SND kits, imports a whole LXR-02 project folder (kits, patterns in V1–V3 formats, songs; Kettle's 32 patterns take one half of the LXR's 64), and backs up and restores the kit library (`.ktlb`); the emulator page has the same under **Library**.
 
-**Kit library** (`firmware/src/kitlib.c`): 128 kits and 128 single sounds in flash at 0xEA000–0xFBFFF, outside the projects, read one at a time (no RAM per kit). SAVE / LOAD → KIT and MORPH reach it with KNOB 3 (To / From LIBRARY), SAVE / LOAD → SOUND saves or loads one track's sound, and the sound browser lists it. Writes are a log with a commit record written last, so a write cut short leaves the slot as it was. That flash area is outside Kettle's updater and the stock firmware's known store; that the stock V15 leaves it alone is not yet confirmed on a unit, so back the library up before installing other firmware.
+**Kit library** (`firmware/src/kitlib.c`): 128 kits and 128 single sounds in flash at 0xEA000–0xFBFFF, outside the projects, read one at a time (no RAM per kit). PRESETS' kit browser lists it after the slots, SAVE / LOAD → KIT and MORPH reach it with KNOB 3 (To / From LIBRARY), SAVE / LOAD → SOUND saves or loads one track's sound, and the sound browser lists it. Writes are a log with a commit record written last, so a write cut short leaves the slot as it was. That flash area is outside Kettle's updater and the stock firmware's known store; that the stock V15 leaves it alone is not yet confirmed on a unit, so back the library up before installing other firmware. The library page and the emulator's Library import LXR-02 kits into it or into the slots (a folder: its subfolders too); in the emulator, kits can be tried first and the library downloaded for the FM-1.
 
 The LXR-02's factory and Hrtl kits can't be redistributed, but a private build can include your own copies: `KETTLE_KITS_DIR=dir:dir ./build.sh` (and `web/emu/build.sh`) generates `build/gen/factory_kits.h` (`tools/gen_factory_kits.py`). The version gets "+K", a fresh unit starts with those kits, LOAD has a FACTORY type, and `web/make_site.py` refuses to publish the build.
 
