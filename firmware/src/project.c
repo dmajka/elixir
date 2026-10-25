@@ -19,7 +19,7 @@
 #define PROJ_AUTO 4u                                /* the session */
 #define PROJ_NLOG 5u
 #define PROJ_MAGIC 0x4A52504Bu                      /* "KPRJ" */
-#define PROJ_VERSION 7u                             /* (1 .. 6 still load: proj_read_payload) */
+#define PROJ_VERSION 8u                             /* (1 .. 7 still load: proj_read_payload) */
 #define PROJ_PAYLOAD (PROJ_SLOT - 256u)
 
 typedef struct {
@@ -118,7 +118,8 @@ static void pr_bytes(void *p, uint32_t n)
  * to their numbers), and so does version 1 (64 patterns, a step all of its 8 bytes): its first 32 patterns, songs
  * pointing past them to the last one, a voice's Out = FX BUS as FX SEND 127. Version 4 (0.5): a track's clock
  * and generator after its length (CLK_1X and GEN_OFF before), a step's condition and ratchet (SF_X). Version 5
- * (0.5): a pattern's GRIDS map (X, Y, chaos) after its shuffle and kit (0 before). */
+ * (0.5): a pattern's GRIDS map (X, Y, chaos) after its shuffle and kit (0 before). Version 8 (0.10): a track's
+ * direction after its bounce (DIR_FWD before). */
 #define SF_VOL 0x01u
 #define SF_PROB 0x02u
 #define SF_NOTE 0x04u
@@ -140,7 +141,7 @@ static int track_is_default(const pattern_t *p, uint32_t t)
     uint32_t k;
     if (p->len[t] != 16u || p->main[t][0] || p->main[t][1] || p->main[t][2] || p->main[t][3] ||
         p->clk[t] != CLK_1X || p->gen[t][0] || p->gen[t][1] || p->gen[t][2] || p->gen[t][3] ||
-        p->bnc[t] != BNC_DEFAULT)
+        p->bnc[t] != BNC_DEFAULT || p->dir[t] != DIR_FWD)
         return 0;
     for (k = 0; k < NUM_STEPS; k++)
         if (step_diff(p, t, k))
@@ -180,9 +181,8 @@ static void proj_write_payload(void)
     pw_byte(sq.song);
     pw_byte(sq.roll_rate);
     pw_byte(sq.lane);
-    pw_bytes(eu_len, NTRACK);
-    pw_bytes(eu_steps, NTRACK);
-    pw_bytes(eu_rot, NTRACK);
+    for (k = 0; k < 3u * NTRACK; k++)               /* (0.10: unused, the Euclid settings before: now the pattern's) */
+        pw_byte(0);
     pw_byte(NUM_KITS);
     for (k = 0; k < NUM_KITS; k++) {                /* kits: the name, which parameters differ from INIT, those */
         uint8_t bits[(KIT_LEN + 7) / 8] = {0};
@@ -229,6 +229,7 @@ static void proj_write_payload(void)
             pw_byte(p->clk[t]);
             pw_bytes(p->gen[t], 4);
             pw_byte(p->bnc[t]);
+            pw_byte(p->dir[t]);
             for (k = 0; k < 4u; k++)
                 pw_u16(p->main[t][k]);
             for (k = 0; k < NUM_STEPS; k++)
@@ -377,9 +378,8 @@ static int proj_read_payload(uint32_t ver)
     sq.song = (uint8_t)(pr_byte() % NUM_SONGS);
     sq.roll_rate = (uint8_t)(pr_byte() % 14u);
     sq.lane = (uint8_t)(pr_byte() & 1u);
-    pr_bytes(eu_len, NTRACK);
-    pr_bytes(eu_steps, NTRACK);
-    pr_bytes(eu_rot, NTRACK);
+    for (k = 0; k < 3u * NTRACK; k++)               /* (the Euclid settings before 0.10: the pattern's now) */
+        (void)pr_byte();
     n = ver < 2u ? NUM_KITS : pr_byte();
     for (k = 0; k < n; k++) {                       /* (kits past NUM_KITS: read, dropped) */
         uint8_t bits[64], v, *kp = k < NUM_KITS ? kits[k] : 0;
@@ -454,6 +454,11 @@ static int proj_read_payload(uint32_t ver)
                 p->bnc[t] = (uint8_t)pr_byte();
                 if ((p->bnc[t] >> 2) > 24u)
                     p->bnc[t] = BNC_DEFAULT;
+            }
+            if (ver >= 8u) {
+                p->dir[t] = (uint8_t)pr_byte();
+                if (p->dir[t] >= NDIR)
+                    p->dir[t] = DIR_FWD;
             }
             for (k = 0; k < 4u; k++)
                 p->main[t][k] = (uint16_t)pr_u16();

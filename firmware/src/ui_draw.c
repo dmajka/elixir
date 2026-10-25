@@ -139,9 +139,15 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
     }
     case M_PERF: put_str(b, PERF_TITLE[ui.page % NPERF], n); break;
     case M_EUCLID:
-        put_str(b, EUCLID_TITLE[ui.page % NEUCLID], n);
-        if (ui.page % NEUCLID == 0u && ui.action)
-            put_str(b + str_len(b), "  OCT+: DO IT", n - str_len(b));
+        if (ui.page % NEUCLID == PG_ACTION && ui.action) {   /* 0.10: what OCT+ does, in place of the title */
+            static const char *const A[NACT] = {"", "DICE", "COMMIT", "UNDO", "RESET"};
+            put_str(b, "PRESS OCT+ TO ", n);
+            put_str(b + str_len(b), A[ui.action < NACT ? ui.action : 0], n - str_len(b));
+        } else if (ui.page % NEUCLID == PG_ACTION && shown_pat()->gen[ui.track][0] == GEN_GRIDS) {
+            put_str(b, "ACTION / GRIDS MAP", n);
+        } else {
+            put_str(b, EUCLID_TITLE[ui.page % NEUCLID], n);
+        }
         break;
     case M_FX: put_str(b, ui.page % 3u == 2u ? "REVERB" : "FX BUS", n); break;
     case M_MIXER: put_str(b, MIXER_TITLE[(ui.page % NMIXER) / 2u], n); break;
@@ -158,9 +164,11 @@ static int msg_on(void) { return ui.msg[0] && fm1_ms - ui.msg_ms < (ui.msg_long 
 static void draw_title(void)
 {
     char b[40];
-    uint32_t pg, np, s, t = ui.track, mo = msg_on();
+    uint32_t pg, np, s, t = ui.track, mo = msg_on(), i;
     title_text(b, sizeof b, &pg, &np);
     s = sig_add(ui.mode, t);
+    for (i = 0; b[i]; i++)                           /* (the text itself: a title that changes on its page) */
+        s = sig_add(s, (uint8_t)b[i]);
     s = sig_add(s, pg | np << 8 | mo << 16 | ui.step << 20);
     s = sig_add(s, mo ? (uint32_t)ui.msg[0] | (uint32_t)ui.msg[2] << 8 | ui.msg_ms : 0u);
     if (!region(R_TITLE, s))
@@ -190,7 +198,7 @@ static void draw_title(void)
 /* -------------------------------------------------------------- grid --- */
 static void draw_labels(void)
 {
-    uint32_t t, s = sig_add(ui.track, sq.muted), lk = 0, l;
+    uint32_t t, s = sig_add(ui.track, seq_mutes() | (uint32_t)sq.solo << 8), lk = 0, l;
     const pattern_t *pt = shown_pat();
     for (l = 0; l < NLINK; l++)                      /* 0.6: the tracks a link joins (a mark by the name) */
         if ((pt->link[l][1] & 15u) && (pt->link[l][1] & 15u) < NLE)
@@ -203,7 +211,7 @@ static void draw_labels(void)
     cv_begin(GRID_X, NTRACK * ROW_H, T_BG);
     for (t = 0; t < NTRACK; t++) {
         int32_t y = (int32_t)t * ROW_H;
-        int muted = (sq.muted >> t) & 1u, flash = fm1_ms - ui.flash_ms[t] < 90u;
+        int muted = (seq_mutes() >> t) & 1u, flash = fm1_ms - ui.flash_ms[t] < 90u;
         uint16_t c = muted ? T_DIM : TRACK_COL[t];
         if (t == ui.track) {
             cv_rrect(2, y + 1, 27, ROW_H - 2, 3, c, T_BG);
@@ -215,6 +223,8 @@ static void draw_labels(void)
             cv_rect(0, y + 4, 2, ROW_H - 8, T_ACCENT);
         if (muted)
             cv_rect(6, y + ROW_H / 2, 19, 1, t == ui.track ? RGB(12, 12, 12) : T_DIM);
+        if ((sq.solo >> t) & 1u)                     /* 0.10: soloed: a bar on the right */
+            cv_rect(29, y + 3, 2, ROW_H - 6, T_ACCENT);
         if (lk >> t & 1u)
             cv_rect(25, y + 4, 3, 3, t == ui.track ? RGB(12, 12, 12) : T_ACCENT);
     }
@@ -224,7 +234,7 @@ static void draw_labels(void)
 static uint32_t col_sig(uint32_t c)
 {
     uint32_t t, s = sig_add(c, ui.bar), st = ui.bar * 16u + c;
-    s = sig_add(s, ui.track | ui.mode << 4 | (ui.mode == M_STEP && ui.step == st) << 8 | sq.muted << 9);
+    s = sig_add(s, ui.track | ui.mode << 4 | (ui.mode == M_STEP && ui.step == st) << 8 | seq_mutes() << 9);
     for (t = 0; t < NTRACK; t++) {
         const pattern_t *pt = view_pat(t);
         const step_t *x = &pt->step[t][st];
@@ -248,7 +258,7 @@ static void draw_col(uint32_t c)
         const pattern_t *pt = view_pat(t);
         int32_t y = (int32_t)t * ROW_H;
         const step_t *x = &pt->step[t][st];
-        int on = main_on(pt, t, st), in = st < track_len(pt, t), muted = (sq.muted >> t) & 1u;
+        int on = main_on(pt, t, st), in = st < track_len(pt, t), muted = (seq_mutes() >> t) & 1u;
         int play = sq.running && sq.idx[t] == (int8_t)st;
         uint16_t col = muted ? T_DIM : TRACK_COL[t];
         if (!in) {
@@ -450,7 +460,7 @@ static void draw_perf(int32_t y0)
         if (lat)
             cv_rrect(x + 2, y + 2, 23, 18, 2, c, T_ACCENT);
         text_c(x + 1, y + CAP_IN(S, 22), 25, &AF_S, i < NTRACK ? VOICE_SHORT[i] : PERF_KEY[e],
-               on ? RGB(12, 12, 12) : (i < NTRACK && ((sq.muted >> i) & 1u)) ? T_DIM : T_TEXT, c);
+               on ? RGB(12, 12, 12) : (i < NTRACK && ((seq_mutes() >> i) & 1u)) ? T_DIM : T_TEXT, c);
     }
     put_str(b, b2 ? "1-7: DRILL  REPEAT " : "REPEAT ", sizeof b);
     put_str(b + str_len(b), REP[pfs.repeat & 3u], sizeof b - str_len(b));
@@ -501,8 +511,8 @@ static void draw_shift_legend(int32_t y0)
         cv_text(x + 4, y + CAP_IN(S, 17), &AF_S, b, T_INK);
         cv_text_fit(x + 22, y + CAP_IN(S, 17), &AF_S, F[i], T_INK, T_SEL, 52);
     }
-    cv_text(8, 94, &AF_S, "VOICE: mute  BAR: length  SEQ: links", T_TEXT);
-    cv_text(8, 108, &AF_S, "PLAY: song  REC: opts  EDIT: keys", T_TEXT);
+    cv_text(8, 94, &AF_S, "VOICE: mute  GLO: solo  BAR: length", T_TEXT);
+    cv_text(8, 108, &AF_S, "SEQ: links EDIT: keys PLAY: song REC: opts", T_TEXT);
 }
 
 /* 0.8: KEYS: the FM-1's keyboard (from F; held keys in the track's colour), the last note, how to play */
@@ -975,7 +985,7 @@ static void draw_body(void)
         fn = draw_perf;
         s = sig_add(sig_add(11, pf.on), ui.pf_latch | (uint32_t)perf_bank2() << 31);
         s = sig_add(s, sq.drill | ui.drill_latch << 8);
-        s = sig_add(s, sq.roll | ui.roll_latch << 8 | sq.muted << 16 | ui.shift << 24);
+        s = sig_add(s, sq.roll | ui.roll_latch << 8 | seq_mutes() << 16 | ui.shift << 24);
         s = sig_add(s, pfs.repeat | ui.track << 4 | (uint32_t)(pf.dj_d + 65536) >> 10 << 8 | (tape_q16 >> 11) << 20);
     } else if (ui.shift && !ui.clear_open) {
         fn = draw_shift_legend;
@@ -1130,13 +1140,14 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_ACTION: put_str(b, "Action", n); return;
     case VP_GMODE: put_str(b, "Generator", n); return;
     case VP_CLOCK: put_str(b, "Clock", n); return;
+    case VP_DIR: put_str(b, "Direction", n); return;
     case VP_GX: put_str(b, "Map X", n); return;
     case VP_GY: put_str(b, "Map Y", n); return;
     case VP_GCHAOS: put_str(b, "Chaos", n); return;
     case VP_GA: case VP_GB: case VP_GC: {
         static const char *const N[NGEN][3] = {{"-", "-", "-"}, {"Amount", "-", "Freeze"},
                                                {"Length", "Lock", "Density"}, {"Rule", "-", "Freeze"},
-                                               {"Part", "Density", "Accent"}};
+                                               {"Part", "Density", "Accent"}, {"-", "-", "-"}};
         uint32_t g = shown_pat()->gen[ui.track][0];
         put_str(b, N[g < NGEN ? g : 0][p - VP_GA], n);
         return;
@@ -1344,14 +1355,21 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
         put_str(b, W[v & 3u], n);
         return;
     }
-    case VP_ACTION: {
+    case VP_ACTION: {                                 /* (v: the track's generator's actions' 1.., gen_acts) */
         static const char *const A[NACT] = {"-", "DICE", "COMMIT", "UNDO", "RESET"};
-        put_str(b, A[v < NACT ? v : 0], n);
+        uint8_t a[3];
+        uint32_t na = gen_acts(shown_pat()->gen[ui.track][0], a);
+        put_str(b, A[v && v <= na ? a[v - 1u] : 0], n);
         return;
     }
-    case VP_GMODE: {
-        static const char *const G[NGEN] = {"OFF", "MUTATE", "TURING", "CELLULAR", "GRIDS"};
+    case VP_GMODE: {                                  /* (v: GEN_ORDER's index) */
+        static const char *const G[NGEN] = {"OFF", "EUCLID", "MUTATE", "TURING", "CELLULAR", "GRIDS"};
         put_str(b, G[v < NGEN ? v : 0], n);
+        return;
+    }
+    case VP_DIR: {
+        static const char *const D[NDIR] = {"FWD", "REV", "PING", "PING2", "RAND", "WALK"};
+        put_str(b, D[v < NDIR ? v : 0], n);
         return;
     }
     case VP_CLOCK: {

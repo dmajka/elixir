@@ -479,7 +479,24 @@ Requested 2026-10-25: try LXR-02 kits in the emulator before putting them on the
 - **Library page:** a Kit library section with its own import (files or a folder) and a Kit slots section with the slots' import and the LXR project import; text on what each is for (slots: the project's, named by patterns; library: a collection across projects, the morph target, the sound browser's voices); folders are read with their subfolders (a whole SD card: every project's kits, in order); a project import refuses a folder holding several projects (`lxrFolders`).
 - **Tests:** ui_test (the kit browser over the slots and the library), library_test (a card's subfolders, the several-projects refusal).
 
-## Later / bigger
+### Phase 11: the track pages, made plain (built in 0.10)
+
+Requested 2026-10-25, from looking for the generator page:
+
+- **11a. SEQ like every other button.** SEQ toggled between step edit and the page it came from (`ui.back`), so a second press left step edit, where every other button shows its next page. It was on purpose (a way back to a sound page), but it's the one exception, and the way back is the sound's own button anyway. SEQ again now steps through STEP → TIMING → LOCKS → RATCHET, as SELECT does; another button leaves.
+- **11b. One generator page.** Euclid was its own page and the generators (MUTATE, TURING, CELLULAR, GRIDS) the next one, though both are a way of making a track's steps. Now the first page is **GENERATOR**: KNOB 1 the type (OFF, EUCLID, MUTATE, TURING, CELLULAR, GRIDS), KNOBS 2–4 that type's settings (Euclid: length, hits, rotation). EUCLID still writes the steps (the LXR's way; no live copy) and is kept as a generator mode that doesn't play live (`GEN_EUCLID`, added last so saved projects keep their numbers), so its settings belong to the pattern's track and are saved, and a generator turned on afterwards works on the Euclid steps.
+- **11c. Euclid starts empty.** EUCLID starts at 0 hits with the track's length and nothing written; the steps change once the hits are turned (back to 0 clears them). Before, it showed 4 hits that weren't on the track until another knob moved.
+- **11d. The action, findable.** The second page is **ACTION** (GRIDS: **GRIDS MAP**, the map's X, Y, chaos on KNOBS 2–4). The actions are the type's: EUCLID DICE, UNDO; a live generator COMMIT, UNDO, RESET; OFF UNDO. The card reads "OCT+ to …" while one is picked.
+- **11e. The Grids map only with Grids** (11d): no GRIDS MAP page on a track without GRIDS.
+- **11f. Play direction per track** (as on the Polyend Play): FWD, REV, PING (ping-pong, the ends once), PING2 (the ends twice), RAND (any step), WALK (a step either way, at random), on the **TRACK** page with length and clock (the bounce's start and pitch move to a **BOUNCE** page). A time round stays the track's length in steps, so A:B conditions, generators and the pattern's length keep their timing; the next step is drawn a step ahead, so negative shifts and flams still see it. A pattern byte per track (project version 8).
+- **Also fixed:** the title didn't redraw when only its text changed on the same page, so the old "OCT+: DO IT" never showed (`draw_title`'s signature now covers the text).
+- **Project format:** version 8 (the directions). The 21 bytes that held the per-track Euclid settings (not the pattern's then) stay in the format, written as 0 and skipped.
+- **Tests:** ui_test phase11 (SEQ's pages, the generator types, Euclid from 0 hits, MUTATE over Euclid's steps, the actions by type, the map only with GRIDS, each direction's order of steps, a time round under PING, a negative shift going backwards as forwards, the TRACK page, project version 8).
+- **11g. Back to init, one sound** (requested 2026-10-25: "I go crazy turning knobs … I just want the individual sound back to an init state"): CLEAR has **CLEAR SOUND (INIT)**, the selected track's voice as the init kit has it (all of its parameters, Kettle's too), the other voices untouched. On a sound page or in KEYS, CLEAR opens on it, so SHIFT + OCT+ twice does it (`sound_init`).
+- **11h. Solo** (requested the same day): **SHIFT + GLO** solos the selected track, from any page (shaping a sound in a busy pattern). Several can be soloed; the mutes stay underneath (`sq.solo`, `seq_mutes`: what the sequencer, the rolls, the links and MIDI notes in treat as muted). The grid marks a soloed track, the others show muted. Not saved.
+- **Tests:** ui_test phase11_sound_solo (CLEAR SOUND on a sound page: that voice to init, another left; solo: one track, two, off, the mutes kept).
+- **Next:** the user tries it in the emulator and on the unit.
+
 
 - **303-style acid track:** about 33 KB of pattern memory at 64 patterns (less at 32), 1–2 voices' worth of CPU, and real UI work for track selection and note entry. Check charlesvestal's fm1-x0x (FM-1 303 firmware) and its licence first.
 - **More FX buses:** cheap for drive, ring mod or compressor; costly if each has its own delay.

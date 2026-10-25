@@ -1,6 +1,6 @@
 # Kettle manual
 
-Kettle is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 0.9.2: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Kettle adds.
+Kettle is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 0.10: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Kettle adds.
 
 Kettle is **unofficial**. It is not affiliated with or endorsed by Erica Synths, M-VAVE or Hügelton Instruments. It is free software under the GPL-3.0 (see *Licence and credits* at the end).
 
@@ -19,7 +19,7 @@ Kettle is **unofficial**. It is not affiliated with or endorsed by Erica Synths,
 9. [Shaping the sound](#9-shaping-the-sound)
 10. [Mixer, sends, FX bus and reverb](#10-mixer-sends-fx-bus-and-reverb)
 11. [Kits and morph](#11-kits-and-morph)
-12. [Generating tracks: Euclid, generators, Grids, track clocks](#12-generating-tracks)
+12. [Generating tracks: generators (Euclid, Grids …), directions, track clocks](#12-generating-tracks)
 13. [Performance mode (PERF)](#13-performance-mode-perf)
 14. [Saving: kits, patterns, songs, projects](#14-saving)
 15. [MIDI](#15-midi)
@@ -105,8 +105,8 @@ The FM-1's keyboard has 16 white keys and 11 black keys, numbered left to right 
 | **LFO** | Sound: LFO → random per hit → cross mod / choke |
 | **GLO** | Sound: mix → mixer → config |
 | **FX** | FX bus → reverb (turn SELECT for the pages) |
-| **SEQ** | Step edit (press again to go back) |
-| **ARP** | PERF → Euclid / generator / track clock / Grids map |
+| **SEQ** | Step edit (press again: its next page) |
+| **ARP** | PERF → generator / action / track / bounce / links |
 | **HOME** | Grid → patterns → song |
 | **SAVE** | Save → load (SHIFT + SAVE: load) |
 | **PLAY** | Start / stop. SHIFT + PLAY: play the song from its start. |
@@ -173,7 +173,7 @@ On the grid, a step's height shows its velocity, an outline means a chance below
 - **Length knob** on the grid (KNOB 3): any length from 1 to 64.
 - **LAST** (SHIFT + white key 14): tap the step that should be the track's last. Press SHIFT + 14 again to set all tracks at once.
 
-The pattern lasts as long as its longest track (in time, counting [track clocks](#track-clock)). Shorter tracks keep looping on their own across the pattern's end.
+The pattern lasts as long as its longest track (in time, counting [track clocks](#track-length-clock-direction)). Shorter tracks keep looping on their own across the pattern's end.
 
 ### Copying
 
@@ -183,19 +183,22 @@ The pattern lasts as long as its longest track (in time, counting [track clocks]
 
 ### Clearing
 
-Hold SHIFT and press **OCT+** (CLEAR). A list opens; turn SELECT to choose, then press SHIFT + OCT+ again to confirm. Letting go of SHIFT cancels.
+Hold SHIFT and press **OCT+** (CLEAR). A list opens; turn SELECT to choose, then press SHIFT + OCT+ again to confirm. Letting go of SHIFT cancels. On a sound page (or in KEYS) the list opens on CLEAR SOUND, so SHIFT + OCT+ twice puts the sound you're shaping back to its init state.
 
 | Choice | Clears |
 |---|---|
 | CLEAR TRACK | the selected track's steps |
 | CLEAR PATTERN | every track of the pattern |
 | CLEAR AUTOMATION 1 / 2 | lock lane 1 or 2 of the selected track |
-| CLEAR KIT (INIT) | the sound back to the init kit |
+| CLEAR SOUND (INIT) | the selected track's voice back to the init kit's, every one of its parameters (sends, shape, LFO, model …); the other voices stay as they are. CH and OH share a voice. |
+| CLEAR KIT (INIT) | every voice back to the init kit |
 | DELETE SONG ROW | (song page) the selected row |
 
-### Mutes
+### Mutes and solo
 
 SHIFT + a track's black key mutes or unmutes it (in PERF, the black keys mute on their own).
+
+**SHIFT + GLO** solos the selected track: only soloed tracks play, from any page, so you can shape one sound inside a busy pattern. Select another track and press SHIFT + GLO again to solo it too; SHIFT + GLO on a soloed track takes it out. The mutes are kept underneath and come back as they were when the last solo goes. A soloed track has a bar beside its name on the grid; the others show as muted. Solo isn't saved.
 
 ### Tempo, shuffle, MIDI sync
 
@@ -206,7 +209,7 @@ SHIFT + a track's black key mutes or unmutes it (in PERF, the black keys mute on
 
 ## 6. Step edit
 
-Press **SEQ**. Tap a white key to select a step (its key breathes; tap it again to turn the step on or off). Turn **SELECT** for the four pages:
+Press **SEQ**. Tap a white key to select a step (its key breathes; tap it again to turn the step on or off). Turn **SELECT**, or press **SEQ** again, for the four pages (SEQ goes round from RATCHET to STEP; any other button leaves step edit):
 
 | Page | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
@@ -232,7 +235,7 @@ Turn **Shape** to **BOUNCE** and the ratchet falls like a dropped ball: the hits
 | **SLOW** | 1.3 of the one before: it spreads out and slows down (half a bar at most) |
 | **DRUNK** | 0.7, give or take 15% each time |
 
-The first gap and a pitch drift are set for the whole track on the TRACK CLOCK page (section 12): **Bounce** (1/4, 1/8, 1/16, 1/32; 1/8 at first) and **Bnc pitch** (−12 … +12 semitones over the bounce: −5 makes a tom fall as it settles). Fade works on bounces too.
+The first gap and a pitch drift are set for the whole track on the BOUNCE page (section 12): **Bounce** (1/4, 1/8, 1/16, 1/32; 1/8 at first) and **Bnc pitch** (−12 … +12 semitones over the bounce: −5 makes a tom fall as it settles). Fade works on bounces too.
 
 A bounce plays out over the steps that follow it. The next hit on the same track cuts it off, so leave room after it. TAPE STOP slows bounces with everything else.
 
@@ -460,58 +463,74 @@ Press **ARP** twice (past PERF). Turn SELECT for six pages. The first four are f
 
 | Page | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
-| EUCLID | Length | Hits | Rotate | Action |
-| GENERATOR | Generator | its settings … | | |
-| TRACK CLOCK | Length | Clock | Bounce | Bnc pitch |
-| GRIDS MAP | Map X | Map Y | Chaos | – |
+| GENERATOR | Generator | the generator's settings … | | |
+| ACTION | Action | GRIDS only: Map X | Map Y | Chaos |
+| TRACK | Length | Clock | Direction | – |
+| BOUNCE | Bounce | Bnc pitch | – | – |
 | LINKS | Link (1–8) | Start | Amount | Depth |
 | LINK SETUP | When | Target | Effect | Window |
 
-### Euclid
-
-Turning Length, Hits or Rotate rewrites the track at once: that many hits spread as evenly as possible over that length, rotated. Each track keeps its own Euclid settings.
-
-### Actions
-
-Turn **Action** (EUCLID page, KNOB 4), then press **OCT+** to do it:
-
-| Action | Does |
-|---|---|
-| **DICE** | A new track at random: the Euclid page's number of hits, anywhere over its length |
-| **COMMIT** | Writes the generator's live track into the pattern |
-| **UNDO** | Takes back the last DICE, COMMIT or Euclid change on this track. UNDO again redoes it. |
-| **RESET** | Starts the generator's live track again from the pattern |
-
 ### Generators
 
-A generator plays a **live copy** of the track and changes it as it plays; the grid shows what is playing. The pattern itself isn't changed until you COMMIT. Turning a generator on, RESET, or changing pattern starts the live copy again from the pattern; stopping and starting doesn't.
+KNOB 1 on the GENERATOR page picks how the track is made: **OFF**, **EUCLID**, **MUTATE**, **TURING**, **CELLULAR** or **GRIDS**. KNOBS 2–4 are that generator's settings, and change with it.
 
 | Generator | Settings | What it does |
 |---|---|---|
+| **EUCLID** | Length, Hits, Rotate | Writes the track's steps: that many hits spread as evenly as possible over that length, rotated. |
 | **MUTATE** | Amount, –, Freeze | Each time round, up to two changes at the Amount's chance: a step flipped, a step moved to a free neighbour, a lock's (or the velocity's) value drifted. Freeze stops it. |
 | **TURING** | Length, Lock, Density | A shift register (2–16 bits), as in a Turing Machine module. Lock 127: the loop repeats exactly; lower, its bits flip at random more often. Density: how many steps play. The velocity follows the register. |
 | **CELLULAR** | Rule, –, Freeze | Each time round the steps become the next row of a cellular automaton (rule 0–255, Wolfram's numbering: 30, 90, 110 …). An empty row starts again from the pattern. |
 | **GRIDS** | Part, Density, Accent | Emilie Gillet's Grids drum map: see below. |
 
+**EUCLID** is the LXR's Euclid: it rewrites the pattern's steps directly. It starts with no hits over the track's length and leaves the track alone until you turn **Hits**; from then on every turn of Length, Hits or Rotate rewrites the track at once (Hits back to 0 clears it). Its settings are saved with the pattern.
+
+The others play a **live copy** of the track and change it as it plays; the grid shows what is playing. The pattern itself isn't changed until you COMMIT. Turning a generator on, RESET, or changing pattern starts the live copy again from the pattern; stopping and starting doesn't. So EUCLID then MUTATE mutates the Euclid rhythm.
+
 Steps you tap on a generator's track change both the pattern and the live copy.
+
+### Actions
+
+On the ACTION page, turn **Action** (KNOB 1) to pick one; the title then reads **PRESS OCT+ TO …**. Press **OCT+** to do it. The actions are the generator's:
+
+| Action | Generator | Does |
+|---|---|---|
+| **DICE** | EUCLID | A new track at random: the same number of hits, anywhere over the length |
+| **COMMIT** | MUTATE, TURING, CELLULAR, GRIDS | Writes the generator's live track into the pattern |
+| **UNDO** | all | Takes back the last DICE, COMMIT or Euclid change on this track. UNDO again redoes it. |
+| **RESET** | MUTATE, TURING, CELLULAR, GRIDS | Starts the generator's live track again from the pattern |
 
 ### Grids
 
 GRIDS plays a track from Grids' map of drum patterns. Each Grids track takes a **part** (BD, SD or HH; it starts as BD for D1–D3, SD for the snare, HH for the cymbal and hats), a **density** (how many of the map's hits play) and **accent** (the velocity follows the map).
 
-The map's **X**, **Y** and **Chaos** are on the GRIDS MAP page and belong to the pattern, as on the module: one position drives every Grids track, so moving X or Y changes the kick, snare and hats together. Chaos varies the hits a little each time round.
+The map's **X**, **Y** and **Chaos** are on the ACTION page (KNOBS 2–4) of a Grids track, and belong to the pattern, as on the module: one position drives every Grids track, so moving X or Y changes the kick, snare and hats together. Chaos varies the hits a little each time round.
 
 A typical start: D1 GRIDS / BD, SN GRIDS / SD, CH GRIDS / HH, then explore X and Y, and COMMIT what you like.
 
-### Track clock
+### Track: length, clock, direction
 
 Each track can run at its own rate against the pattern: **/4, /3, /2, 2/3, 3/4, 1x, 4/3, 3/2, x2, x3, x4**. A hat at x2 plays 32nds; a track at 3/4 against a 16-step pattern makes 12 steps fit a bar (a polyrhythm). Combine with track lengths for polymeters. Flams and shifts scale with the track's step.
+
+**Direction** sets the order the track plays its steps in:
+
+| Direction | Order (4 steps) |
+|---|---|
+| **FWD** | 1 2 3 4 1 2 … |
+| **REV** | 4 3 2 1 4 3 … |
+| **PING** | 1 2 3 4 3 2 1 2 … (ping-pong, the ends once) |
+| **PING2** | 1 2 3 4 4 3 2 1 1 2 … (the ends twice) |
+| **RAND** | any step, at random |
+| **WALK** | one step forward or back, at random |
+
+A time round is still the track's length in steps, whatever the direction, so the track keeps its place in the pattern, and conditions (1:2 …) and generators count rounds as before. Flams and shifts follow the direction: a step shifted early sounds early before whichever step comes before it.
+
+### Bounce
 
 **Bounce** and **Bnc pitch** set the track's bouncing ratchets (section 6): the first gap and the pitch drift.
 
 ### Links (track coupling)
 
-Links make tracks react to each other, so a pattern behaves like a small system instead of a loop: the kick ducks the hats, the open hat answers only when the closed hat rests, a snare hit makes the next hat rattle. Each pattern holds up to **8 links**. **SHIFT + SEQ** opens the LINKS page from anywhere (it is also the fifth EUCLID page).
+Links make tracks react to each other, so a pattern behaves like a small system instead of a loop: the kick ducks the hats, the open hat answers only when the closed hat rests, a snare hit makes the next hat rattle. Each pattern holds up to **8 links**. **SHIFT + SEQ** opens the LINKS page from anywhere (it is also the fifth page after PERF).
 
 A link reads as a sentence, and the screen shows it that way:
 
@@ -738,6 +757,7 @@ In PERF, SHIFT + a white key latches it instead.
 | Combination | Does |
 |---|---|
 | SHIFT + track key | Mute / unmute |
+| SHIFT + GLO | Solo / unsolo the selected track |
 | SHIFT + bar key | Track length 16 / 32 / 48 / 64 |
 | COPY + bar key | Copy the shown bar (on the grid: every track) |
 | COPY + track, track | Copy a track |

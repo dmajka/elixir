@@ -9,10 +9,11 @@
  *                      SHIFT: the track's length; COPY: copy
  *   OCT-               SHIFT (held; the screen shows what SHIFT + a key does: the LXR's SHIFT + step functions)
  *   OCT+               COPY (held, + a track, a bar, a pattern); SHIFT + COPY = CLEAR; OK in the dialogs
- *   EDIT ENV SCL LFO GLO   the sound sections: OSC > FM > CLICK, AMP EG > MOD, FILTER > SHAPE, LFO > RANDOM >
+ *   EDIT ENV SCL LFO GLO   the sound sections (SHIFT GLO: solo the track): OSC > FM > CLICK, AMP EG > MOD, FILTER > SHAPE, LFO > RANDOM >
  *                      CROSS MOD (Kettle's: their pages are K_PAGES), MIX > MIXER (volume,
  *                      pan, FX send, reverb send) > CONFIG (the CPU load at the bottom)
- *   FX  SEQ  ARP  HOME  SAVE   FX bus > reverb; step edit; PERF > EUCLID; GRID > PATTERNS > SONG; SAVE > LOAD
+ *   FX  SEQ  ARP  HOME  SAVE   FX bus > reverb; step edit (again: its next page); PERF > GENERATOR; GRID >
+ *                      PATTERNS > SONG; SAVE > LOAD
  *   PLAY REC           transport (SHIFT PLAY: the song from its start); record (SHIFT REC: its options)
  *   ALGORITHM SELECT PRESETS   the track; the page; the kit browser (OCT+ loads)
  *   KNOB 1..4          the four parameters on the screen; with a step key held, that step's lock
@@ -44,13 +45,13 @@ enum { VP_BASE = 0x200, VP_NONE = VP_BASE, VP_IO_TYPE, VP_IO_SLOT, VP_NAME_POS, 
        VP_COND, VP_RAT_N, VP_RAT_RATE, VP_RAT_FADE, VP_ACTION, VP_GMODE, VP_GA, VP_GB, VP_GC, VP_CLOCK,
        VP_GX, VP_GY, VP_GCHAOS, VP_RAT_SHAPE, VP_BSTART, VP_BPITCH, VP_ROLL,
        VP_LINK, VP_LSTART, VP_LAMT, VP_DEPTH, VP_LWHEN, VP_LTGT, VP_LEFF, VP_LWIN, VP_KOCT, VP_KVEL, VP_KACC, VP_PKEEP, VP_KB_SRC,
-       VP_IO_SRC, VP_IO_TRACK,
+       VP_IO_SRC, VP_IO_TRACK, VP_DIR,
        VP_P2, VP_P2_LAST = VP_P2 + 7 };
-/* the EUCLID pages' ACTION (OCT+ does it) */
+/* the ACTION page's action (OCT+ does it); 0.10: those of the track's generator (gen_acts) */
 enum { ACT_NONE, ACT_DICE, ACT_COMMIT, ACT_UNDO, ACT_RESET, NACT };
 
 static struct {
-    uint8_t mode, back;              /* back: where SEQ returns to */
+    uint8_t mode;
     uint8_t track, bar, sect, half, page;
     uint8_t step;                    /* STEP: the selected step (0..63) */
     uint8_t perf;                    /* the white keys roll (PERF, and the sound pages opened from it) */
@@ -61,7 +62,7 @@ static struct {
     uint8_t drill_held, drill_latch; /* 0.6: PERFORM 2's keys 1..7 (DRILL) */
     uint16_t kbank;                  /* bit w: white key w went down on a PERFORM 2 page (it lets go there) */
     uint8_t msel;                    /* MACRO SETUP: the macro */
-    uint8_t action;                  /* EUCLID: the ACTION OCT+ does (ACT_*) */
+    uint8_t action;                  /* the GENERATOR's ACTION OCT+ does (ACT_*) */
     uint8_t eu_undo;                 /* the Euclid knobs' UNDO saved (track + 1): turned again, it keeps that one */
     uint8_t link;                    /* LINKS: the link shown (0..7) */
     uint8_t shift, copy, shift_used, copy_used;
@@ -106,7 +107,7 @@ static void step_toggle(pattern_t *p, uint32_t t, uint32_t s)
 {
     int on = !main_on(p, t, s);
     main_set(p, t, s, on);
-    if (p == &pat[sq.active] && p->gen[t][0] != GEN_OFF) {
+    if (p == &pat[sq.active] && gen_live(p, t)) {
         gpat.step[t][s] = p->step[t][s];
         gpat.timing[t][s] = p->timing[t][s];
         gpat.lhi[t][s] = p->lhi[t][s];
@@ -158,6 +159,7 @@ static uint32_t sect_group(uint32_t s)
 /* the four parameters a page puts on the knobs */
 static void page_params(uint16_t out[4]);
 static uint32_t mode_pages(void);
+static pattern_t *shown_pat(void);
 
 static int sect_half_used(uint32_t t, uint32_t s, uint32_t h)
 {
@@ -223,16 +225,35 @@ static const char *const PERF_TITLE[NPERF] = {"PERFORM", "PERFORM: MORE", "PERFO
                                               "MACRO SETUP", "PERFORM 2", "PERFORM 2: SETUP", "PERFORM 2: SETUP 2"};
 static int perf_mix(void) { return ui.mode == M_PERF && (ui.page % NPERF == PG_MIX || ui.page % NPERF == PG_MIX + 1u); }
 static int perf_bank2(void) { return ui.mode == M_PERF && ui.page % NPERF >= PG_PERF2; }
+/* 0.10: ARP's second set of pages: GENERATOR (the type, then its settings: page_params), ACTION (GRIDS: and the
+ * map), TRACK, BOUNCE, LINKS, LINK SETUP */
 #define NEUCLID 6u
+#define PG_GEN 0u
+#define PG_ACTION 1u
 #define PG_LINKS 4u
-static const uint16_t P_EUCLID[NEUCLID][4] = {{PAR_EUKLID_LENGTH, PAR_EUKLID_STEPS, PAR_EUKLID_ROTATION, VP_ACTION},
-                                              {VP_GMODE, VP_GA, VP_GB, VP_GC},
-                                              {PAR_TRACK_LENGTH, VP_CLOCK, VP_BSTART, VP_BPITCH},
-                                              {VP_GX, VP_GY, VP_GCHAOS, VP_NONE},
+static const uint16_t P_EUCLID[NEUCLID][4] = {{VP_GMODE, VP_GA, VP_GB, VP_GC},
+                                              {VP_ACTION, VP_NONE, VP_NONE, VP_NONE},
+                                              {PAR_TRACK_LENGTH, VP_CLOCK, VP_DIR, VP_NONE},
+                                              {VP_BSTART, VP_BPITCH, VP_NONE, VP_NONE},
                                               {VP_LINK, VP_LSTART, VP_LAMT, VP_DEPTH},
                                               {VP_LWHEN, VP_LTGT, VP_LEFF, VP_LWIN}};
-static const char *const EUCLID_TITLE[NEUCLID] = {"EUCLID", "GENERATOR", "TRACK CLOCK", "GRIDS MAP", "LINKS",
-                                                  "LINK SETUP"};
+static const char *const EUCLID_TITLE[NEUCLID] = {"GENERATOR", "ACTION", "TRACK", "BOUNCE", "LINKS", "LINK SETUP"};
+/* the GENERATOR knob's order (KNOB 1: the value's index here) */
+static const uint8_t GEN_ORDER[NGEN] = {GEN_OFF, GEN_EUCLID, GEN_MUTATE, GEN_TURING, GEN_CA, GEN_GRIDS};
+/* the actions a track's generator has (the ACTION knob's 1..; 0: none): EUCLID's steps diced, a live generator's
+ * track committed or reset; UNDO for every one */
+static uint32_t gen_acts(uint32_t g, uint8_t out[3])
+{
+    uint32_t n = 0;
+    if (g == GEN_EUCLID)
+        out[n++] = ACT_DICE;
+    else if (g != GEN_OFF)
+        out[n++] = ACT_COMMIT;
+    out[n++] = ACT_UNDO;
+    if (g != GEN_OFF && g != GEN_EUCLID)
+        out[n++] = ACT_RESET;
+    return n;
+}
 static const uint16_t P_FX[3][4] = {{PAR_FX_TYPE, PAR_FX_DRY_WET, PAR_FX_ROUTING, VP_FX_SUB},
                                     {PAR_FX_P1, PAR_FX_P2, PAR_FX_P3, PAR_FX_P4},
                                     {PAR_REV_TYPE, PAR_REV_SIZE, PAR_REV_DAMP, PAR_REV_LEVEL}};
@@ -296,7 +317,24 @@ static void page_params(uint16_t out[4])
         return;
     case M_STEP: p = P_STEP[ui.page % 4u]; break;
     case M_PERF: p = P_PERF[ui.page % NPERF]; break;
-    case M_EUCLID: p = P_EUCLID[ui.page % NEUCLID]; break;
+    case M_EUCLID: {
+        uint32_t g = shown_pat()->gen[ui.track][0];
+        p = P_EUCLID[ui.page % NEUCLID];
+        for (k = 0; k < 4u; k++)
+            out[k] = p[k];
+        if (ui.page % NEUCLID == PG_GEN && g == GEN_EUCLID) {
+            out[1] = PAR_EUKLID_LENGTH;
+            out[2] = PAR_EUKLID_STEPS;
+            out[3] = PAR_EUKLID_ROTATION;
+        } else if (ui.page % NEUCLID == PG_GEN && g == GEN_OFF) {
+            out[1] = out[2] = out[3] = VP_NONE;
+        } else if (ui.page % NEUCLID == PG_ACTION && g == GEN_GRIDS) {   /* (the map: only with GRIDS) */
+            out[1] = VP_GX;
+            out[2] = VP_GY;
+            out[3] = VP_GCHAOS;
+        }
+        return;
+    }
     case M_FX: p = P_FX[ui.page % 3u]; break;
     case M_MIXER: p = P_MIXER[ui.page % NMIXER]; break;
     case M_CONFIG: p = P_CONFIG[ui.page % 7u]; break;
@@ -342,7 +380,7 @@ static uint32_t link_start(const uint8_t *L)
 static const pattern_t *view_pat(uint32_t t)
 {
     const pattern_t *p = shown_pat();
-    return p == &pat[sq.active] && p->gen[t][0] != GEN_OFF ? &gpat : p;
+    return p == &pat[sq.active] && gen_live(p, t) ? &gpat : p;
 }
 static uint32_t vp_max(uint32_t p);
 /* 0.9: the kit browser's entries: the 64 slots, or (0.9.2: KNOB 1, ui.kb_lib) the library's kits that exist */
@@ -471,9 +509,8 @@ static uint32_t vp_get(uint32_t p)
     }
     case PAR_P1_VAL: return sel_step()->p1v;
     case PAR_P2_VAL: return sel_step()->p2v;
-    case PAR_EUKLID_LENGTH: return eu_len[ui.track];
-    case PAR_EUKLID_STEPS: return eu_steps[ui.track];
-    case PAR_EUKLID_ROTATION: return eu_rot[ui.track];
+    case PAR_EUKLID_LENGTH: case PAR_EUKLID_STEPS: case PAR_EUKLID_ROTATION:
+        return pt->gen[ui.track][p - PAR_EUKLID_LENGTH + 1u];
     case PAR_ROLL: return sq.roll_rate;
     case PAR_MORPH: return morph_amt;
     case PAR_AUTOM_TRACK: return sq.lane;
@@ -511,8 +548,21 @@ static uint32_t vp_get(uint32_t p)
     case VP_RAT_N: return pt->rat[ui.track][ui.step & 63u] & 7u;
     case VP_RAT_RATE: return (pt->rat[ui.track][ui.step & 63u] >> 3) & 3u;
     case VP_RAT_FADE: return (pt->rat[ui.track][ui.step & 63u] >> 5) & 3u;
-    case VP_ACTION: return ui.action;
-    case VP_GMODE: return pt->gen[ui.track][0];
+    case VP_ACTION: {
+        uint8_t a[3];
+        uint32_t n = gen_acts(pt->gen[ui.track][0], a), i;
+        for (i = 0; i < n; i++)
+            if (a[i] == ui.action)
+                return i + 1u;
+        return 0;
+    }
+    case VP_GMODE: {
+        uint32_t i;
+        for (i = 0; i < NGEN && GEN_ORDER[i] != pt->gen[ui.track][0]; i++)
+            ;
+        return i < NGEN ? i : 0u;
+    }
+    case VP_DIR: return pt->dir[ui.track] < NDIR ? pt->dir[ui.track] : DIR_FWD;
     case VP_GA: case VP_GB: case VP_GC: return pt->gen[ui.track][p - VP_GA + 1u];
     case VP_CLOCK: return pt->clk[ui.track] < NCLK ? pt->clk[ui.track] : CLK_1X;
     case VP_RAT_SHAPE: return (pt->rat[ui.track][ui.step & 63u] & RAT_BOUNCE) != 0u;
@@ -555,7 +605,8 @@ static uint32_t vp_min(uint32_t p)
     (void)lo;
     (void)hi;
     switch (p) {
-    case PAR_TRACK_LENGTH: case PAR_EUKLID_LENGTH: case PAR_EUKLID_STEPS: return 1;
+    case PAR_TRACK_LENGTH: case PAR_EUKLID_LENGTH: return 1;
+    case PAR_EUKLID_STEPS: case PAR_EUKLID_ROTATION: return 0;   /* (0.10: 0 hits, none) */
     case VP_GA: return shown_pat()->gen[ui.track][0] == GEN_TURING ? 2u : 0u;
     case VP_P2 + 4: return 24;
     case VP_KVEL: case VP_KACC: return 1;
@@ -574,8 +625,8 @@ static uint32_t vp_max(uint32_t p)
     }
     switch (p) {
     case PAR_TRACK_LENGTH: case PAR_EUKLID_LENGTH: return 64;
-    case PAR_EUKLID_STEPS: return eu_len[ui.track] ? eu_len[ui.track] : 16u;
-    case PAR_EUKLID_ROTATION: return (eu_len[ui.track] ? eu_len[ui.track] : 16u) - 1u;
+    case PAR_EUKLID_STEPS: return shown_pat()->gen[ui.track][1] ? shown_pat()->gen[ui.track][1] : 16u;
+    case PAR_EUKLID_ROTATION: return (shown_pat()->gen[ui.track][1] ? shown_pat()->gen[ui.track][1] : 16u) - 1u;
     case PAR_STEP_VOLUME: case PAR_STEP_NOTE: case PAR_P1_VAL: case PAR_P2_VAL: return 127;
     case PAR_STEP_PROB: return 100;
     case PAR_STEP_FLAM: return 5;
@@ -615,8 +666,12 @@ static uint32_t vp_max(uint32_t p)
     case VP_RAT_N: return 7;
     case VP_RAT_RATE: return 3;
     case VP_RAT_FADE: return 2;
-    case VP_ACTION: return NACT - 1u;
+    case VP_ACTION: {
+        uint8_t a[3];
+        return gen_acts(shown_pat()->gen[ui.track][0], a);
+    }
     case VP_GMODE: return NGEN - 1u;
+    case VP_DIR: return NDIR - 1u;
     case VP_CLOCK: return NCLK - 1u;
     case VP_RAT_SHAPE: return 1;
     case VP_BSTART: return 3;
@@ -640,7 +695,8 @@ static uint32_t vp_max(uint32_t p)
     case VP_LEFF: return NLE - 1u;
     case VP_LWIN: return NLW - 1u;
     case VP_GA: case VP_GB: case VP_GC: {           /* by the generator: see seq.c */
-        static const uint8_t MX[NGEN][3] = {{0, 0, 0}, {100, 0, 1}, {16, 127, 127}, {255, 0, 1}, {2, 127, 1}};
+        static const uint8_t MX[NGEN][3] = {{0, 0, 0}, {100, 0, 1}, {16, 127, 127}, {255, 0, 1}, {2, 127, 1},
+                                            {0, 0, 0}};
         uint32_t g = shown_pat()->gen[ui.track][0];
         return MX[g < NGEN ? g : 0][p - VP_GA];
     }
@@ -683,18 +739,21 @@ static void vp_set(uint32_t p, uint32_t v)
     case PAR_P2_VAL: sel_step()->p2v = (uint8_t)v; return;
     case PAR_EUKLID_LENGTH:
     case PAR_EUKLID_STEPS:
-    case PAR_EUKLID_ROTATION:
+    case PAR_EUKLID_ROTATION: {
+        uint8_t *g = pt->gen[ui.track];
         if (p == PAR_EUKLID_LENGTH) {
-            eu_len[ui.track] = (uint8_t)v;
-            if (eu_steps[ui.track] > v)
-                eu_steps[ui.track] = (uint8_t)v;
-            if (eu_rot[ui.track] >= v)
-                eu_rot[ui.track] = 0;
+            g[1] = (uint8_t)v;
+            if (g[2] > v)
+                g[2] = (uint8_t)v;
+            if (g[3] >= v)
+                g[3] = 0;
         } else if (p == PAR_EUKLID_STEPS) {
-            eu_steps[ui.track] = (uint8_t)v;
+            g[2] = (uint8_t)v;
         } else {
-            eu_rot[ui.track] = (uint8_t)v;
+            g[3] = (uint8_t)v;
         }
+        if (!g[2] && p != PAR_EUKLID_STEPS)          /* 0.10: nothing written until the hits are turned */
+            return;
         if (ui.eu_undo != ui.track + 1u) {           /* (UNDO: the track before the first turn) */
             seq_undo_save(ui.track);
             ui.eu_undo = (uint8_t)(ui.track + 1u);
@@ -702,6 +761,7 @@ static void vp_set(uint32_t p, uint32_t v)
         euclid_generate(ui.track, pt);
         sq.gsync |= (uint8_t)(1u << ui.track);
         return;
+    }
     case PAR_ROLL: sq.roll_rate = (uint8_t)v; par[PAR_ROLL] = (uint8_t)v; sq.roll_free = 0; return;
     case PAR_MORPH: kit_set_morph(v); return;
     case PAR_AUTOM_TRACK: sq.lane = (uint8_t)v; return;
@@ -769,16 +829,25 @@ static void vp_set(uint32_t p, uint32_t v)
         *r = (uint8_t)((*r & ~(m << sh)) | v << sh);
         return;
     }
-    case VP_ACTION: ui.action = (uint8_t)v; return;
+    case VP_ACTION: {
+        uint8_t a[3];
+        uint32_t n = gen_acts(pt->gen[ui.track][0], a);
+        ui.action = (uint8_t)(v && v <= n ? a[v - 1u] : ACT_NONE);
+        return;
+    }
     case VP_GMODE: {                                /* a generator: its settings from their defaults, its live track */
-        static const uint8_t DEF[NGEN][3] = {{0, 0, 0}, {25, 0, 0}, {8, 64, 64}, {30, 0, 0}, {0, 64, 1}};
+        static const uint8_t DEF[NGEN][3] = {{0, 0, 0}, {25, 0, 0}, {8, 64, 64}, {30, 0, 0}, {0, 64, 1}, {16, 0, 0}};
         uint8_t *g = pt->gen[ui.track];
+        v = GEN_ORDER[v < NGEN ? v : 0];
         if (g[0] == v)
             return;
         g[0] = (uint8_t)v;
-        memcpy(g + 1, DEF[v < NGEN ? v : 0], 3);
+        memcpy(g + 1, DEF[v], 3);
+        ui.action = ACT_NONE;
         if (v == GEN_GRIDS)                          /* (the part from the track: drums BD, snare SD, metal HH) */
             g[1] = (uint8_t)(ui.track < 3u ? 0u : ui.track == 3u ? 1u : 2u);
+        if (v == GEN_EUCLID)                         /* (0.10: over the track's length, no hits yet: nothing written) */
+            g[1] = (uint8_t)track_len(pt, ui.track);
         sq.gsync |= (uint8_t)(1u << ui.track);
         return;
     }
@@ -788,6 +857,7 @@ static void vp_set(uint32_t p, uint32_t v)
             sq.gsync |= (uint8_t)(1u << ui.track);
         return;
     case VP_CLOCK: pt->clk[ui.track] = (uint8_t)v; return;
+    case VP_DIR: pt->dir[ui.track] = (uint8_t)v; return;
     case VP_RAT_SHAPE: {
         uint8_t *r = &pt->rat[ui.track][ui.step & 63u];
         *r = (uint8_t)(v ? *r | RAT_BOUNCE : *r & ~RAT_BOUNCE);
@@ -962,8 +1032,6 @@ static void mode_set(uint32_t m)
     } else if (m != M_SOUND) {
         ui.kplay = 0;                                /* (the sound pages keep playing them) */
     }
-    if (m != M_STEP)
-        ui.back = (uint8_t)m;
     if (m == M_CONFIG && ui.mode != M_CONFIG)
         audio_max_us = 0;                            /* (the CPU meter's peak: from now) */
     if (m != ui.mode) {
@@ -1181,9 +1249,17 @@ static void io_ok(void)
 }
 
 /* CLEAR (SHIFT + COPY): what it clears */
-enum { CL_TRACK, CL_PATTERN, CL_AUTO1, CL_AUTO2, CL_KIT, CL_SONG_ROW, NCLEAR };
+enum { CL_TRACK, CL_PATTERN, CL_AUTO1, CL_AUTO2, CL_SOUND, CL_KIT, CL_SONG_ROW, NCLEAR };
 static const char *const CLEAR_NAME[NCLEAR] = {"CLEAR TRACK", "CLEAR PATTERN", "CLEAR AUTOMATION 1",
-                                               "CLEAR AUTOMATION 2", "CLEAR KIT (INIT)", "DELETE SONG ROW"};
+                                               "CLEAR AUTOMATION 2", "CLEAR SOUND (INIT)", "CLEAR KIT (INIT)",
+                                               "DELETE SONG ROW"};
+/* 0.10: CLEAR SOUND: the track's voice as the init kit has it (the rest of the kit as it is) */
+static void sound_init(uint32_t v)
+{
+    uint8_t k[KIT_LEN], s[SOUND_MAX];
+    kit_init_values(k);
+    voice_put_par(v, s, voice_get(k, v, s), v);
+}
 static void clear_do(void)
 {
     pattern_t *pt = shown_pat();
@@ -1192,6 +1268,7 @@ static void clear_do(void)
     case CL_PATTERN: seq_clear_pattern(pt); ui_message("PATTERN CLEARED"); break;
     case CL_AUTO1: seq_clear_automation(ui.track, pt, 0); ui_message("AUTOMATION 1 CLEARED"); break;
     case CL_AUTO2: seq_clear_automation(ui.track, pt, 1); ui_message("AUTOMATION 2 CLEARED"); break;
+    case CL_SOUND: sound_init(track_voice(ui.track)); ui_message("SOUND CLEARED (INIT)"); break;
     case CL_KIT:
         kit_init_par();
         snd_post_all();
@@ -1208,6 +1285,7 @@ static void track_select(uint32_t t)
 {
     ui.track = (uint8_t)(t < NTRACK ? t : NTRACK - 1u);
     ui.sb_open = 0;
+    ui.action = ACT_NONE;                            /* (0.10: another track's generator, its own actions) */
     if (ui.mode == M_SOUND)
         sound_fix();
     ui.force = 1;
@@ -1569,7 +1647,8 @@ static void button_down(uint32_t b)
             }
             if (!ui.clear_open) {
                 ui.clear_open = 1;
-                ui.clear_sel = ui.mode == M_SONG ? CL_SONG_ROW : CL_TRACK;
+                ui.clear_sel = ui.mode == M_SONG ? CL_SONG_ROW   /* (0.10: on a sound page, its sound) */
+                             : ui.mode == M_SOUND || ui.mode == M_KEYS ? CL_SOUND : CL_TRACK;
             } else {
                 clear_do();
             }
@@ -1596,13 +1675,13 @@ static void button_down(uint32_t b)
             ui.force = 1;
             return;
         }
-        if (ui.mode == M_EUCLID && ui.page % NEUCLID == 0u && ui.action) {   /* EUCLID: OCT+ does the ACTION */
+        if (ui.mode == M_EUCLID && ui.page % NEUCLID == PG_ACTION && ui.action) {   /* OCT+ does the ACTION */
             static const char *const M[NACT] = {"", "DICED", "COMMITTED", "UNDONE", "RESET"};
             static const char *const NO[NACT] = {"", "", "NO GENERATOR ON", "NOTHING TO UNDO", ""};
             int ok = 1;
             switch (ui.action) {
             case ACT_DICE: seq_dice(ui.track); break;
-            case ACT_COMMIT: ok = shown_pat()->gen[ui.track][0] != GEN_OFF; seq_commit(ui.track); break;
+            case ACT_COMMIT: ok = gen_live(shown_pat(), ui.track); seq_commit(ui.track); break;
             case ACT_UNDO: ok = seq_undo(ui.track); break;
             default: sq.gsync |= (uint8_t)(1u << ui.track); break;
             }
@@ -1657,12 +1736,11 @@ static void button_down(uint32_t b)
             ui.page = PG_LINKS;
             return;
         }
-        if (ui.mode == M_STEP) {
-            mode_set(ui.back == M_STEP ? M_HOME : ui.back);
+        if (ui.mode == M_STEP) {                      /* 0.10: again, as every button: its next page */
+            ui.page = (uint8_t)((ui.page + 1u) % mode_pages());
+            ui.force = 1;
         } else {
-            uint8_t back = ui.mode;
             mode_set(M_STEP);
-            ui.back = back;
             if (ui.step / 16u != ui.bar)
                 ui.step = (uint8_t)(ui.bar * 16u);
         }
@@ -1698,6 +1776,12 @@ static void button_down(uint32_t b)
         sound_open(S_LFO, 1);
         return;
     case B_GLO:
+        if (ui.shift) {                               /* 0.10: SHIFT GLO: the track soloed (again: not) */
+            ui.shift_used = 1;
+            sq.solo ^= (uint8_t)(1u << ui.track);
+            ui_message(sq.solo & (1u << ui.track) ? "SOLO ON" : sq.solo ? "SOLO OFF (OTHERS STILL SOLO)" : "SOLO OFF");
+            return;
+        }
         if (ui.mode == M_SOUND && ui.sect == S_MIX) {
             if (ui.half == 0 && sect_half_used(ui.track, S_MIX, 1)) {
                 ui.half = 1;
@@ -1942,7 +2026,7 @@ static void ui_leds(void)
     }
     for (k = 0; k < NTRACK && !ui.kplay; k++) {      /* the voice keys */
         uint32_t id = 14u + BLACK_KEY[k];
-        int muted = (sq.muted >> k) & 1u, flash = fm1_ms - ui.flash_ms[k] < 70u;
+        int muted = (seq_mutes() >> k) & 1u, flash = fm1_ms - ui.flash_ms[k] < 70u;
         led_put(nl, id, (k == ui.track && !ui.perf) || (flash && !muted));
         led_put(nb, id, ui.copy_src == k + 1u && ui.mode != M_PATTERN);
         led_put(nd, id, !muted);

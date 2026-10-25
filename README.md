@@ -15,18 +15,18 @@ The FM-1 has no FPU, so the LXR's floating-point DSP is rewritten in fixed point
 | FM-1 control | Kettle |
 |---|---|
 | White keys 1–16 | Steps of the shown bar · patterns (pattern page) · rolls, FILL and effects (PERF) |
-| Black keys 1–7 | Tracks D1 D2 D3 SN CY CH OH (select) · SHIFT + key: mute |
+| Black keys 1–7 | Tracks D1 D2 D3 SN CY CH OH (select) · SHIFT + key: mute · SHIFT + GLO: solo the selected track |
 | Black keys 8–11 | Bars 1–4 (shown bar) · banks of 16 (2 on the pattern page, 4 for kits and songs) · SHIFT: track length · COPY: copy the shown bar into it (on the grid: every track) |
 | OCT− | **SHIFT** (hold it: the screen shows every SHIFT combination) |
-| OCT+ | **COPY** (hold + track/bar/pattern) · SHIFT + OCT+ = **CLEAR** · OK in dialogs |
+| OCT+ | **COPY** (hold + track/bar/pattern) · SHIFT + OCT+ = **CLEAR** (on a sound page: CLEAR SOUND, the voice back to init) · OK in dialogs |
 | EDIT | Oscillator → FM → transient (click) → model (drums) · SHIFT + EDIT: **KEYS** (the keys play the track's voice) |
 | ENV | Amp EG → mod EG / velocity |
 | SCL | Filter → shape (waveshaper, drive, bits, tilt) |
 | LFO | LFO → random per hit → cross mod / choke |
 | GLO | Mix → mixer (volume, pan, FX send, reverb send) → config (MIDI, sync; CPU load at the bottom) |
 | FX | FX bus: drive (tube/fold/rat), ring mod, compressor, delay, phaser, flanger → reverb (SELECT: its page) |
-| SEQ | Step edit: velocity, note, probability, condition · flam, shift · locks · ratchet |
-| ARP | PERF (rolls, effects, mutes, DJ filter, macros) → Euclid / generator / track clock |
+| SEQ | Step edit: velocity, note, probability, condition → flam, shift → locks → ratchet (SEQ again: the next page) |
+| ARP | PERF (rolls, effects, mutes, DJ filter, macros) → generator / action / track (length, clock, direction) / bounce / links |
 | HOME | Grid → patterns → song |
 | SAVE | Save → load (kit, pattern, song, morph, project) |
 | PLAY / REC | Start/stop (SHIFT + PLAY: the song from the top) · record (SHIFT + REC: options) |
@@ -59,15 +59,17 @@ On the grid (HOME), hold COPY (OCT+) and press a bar key. The bar you are lookin
 - **Ratchet** (RATCHET page): 2–8 hits from the step, at 1/32, 1/48, 1/64 or 1/24, with the velocity FLAT, fading DOWN or rising UP. A ratchet can run past its step.
 - On the grid, a condition shows as a dot top left, a ratchet as a bar under the step.
 
-**Per track** (ARP twice: the EUCLID pages, SELECT for the next):
-- **Euclid**: length, hits, rotation as before. **Action**: pick DICE (the track again, with the Euclid hits placed at random), COMMIT, UNDO or RESET, then press OCT+.
-- **Generator**: plays a live copy of the track and changes it as it plays. The pattern itself stays as it was until COMMIT copies the live track into it. UNDO takes back the last DICE, COMMIT or Euclid change; pressing it again redoes it. RESET copies the pattern into the live track again, as turning a generator on or changing pattern does.
+**Per track** (ARP twice: the GENERATOR page, SELECT for the next):
+- **Generator** (KNOB 1): OFF, EUCLID, MUTATE, TURING, CELLULAR or GRIDS; KNOBS 2–4 are its settings.
+  - EUCLID: length, hits, rotation. It writes the track's steps, as the LXR's Euclid does. It starts at 0 hits over the track's length and changes nothing until the hits are turned.
+  - The others play a live copy of the track and change it as it plays. The pattern itself stays as it was until COMMIT copies the live track into it. EUCLID then MUTATE mutates the Euclid rhythm.
   - MUTATE: amount, freeze. Each time round, up to two changes: a step flipped, a step moved, a lock's (or the velocity's) value drifted.
   - TURING: length (the register, 2–16), lock (0 random … 127 repeats), density (how many steps play).
   - CELLULAR: rule (Wolfram's 0–255: 30, 90, 110 …), freeze. Each time round the steps become the rule's next row.
-  - GRIDS: Emilie Gillet's Grids drum map. Settings: part (BD, SD, HH), density, accent (the velocity follows the map). The map's X, Y and chaos are on the GRIDS MAP page and belong to the pattern, so turning them moves every Grids track together. Put the kick on BD, the snare on SD and a hat on HH, then explore the map.
-- **Grids map** (4th page): X, Y, chaos.
-- **Track clock**: the track's step rate against the pattern: /4, /3, /2, 2/3, 3/4, 1x, 4/3, 3/2, x2, x3, x4. Use it for polyrhythms, or with lengths for polymeters. The pattern lasts as long as its longest track.
+  - GRIDS: Emilie Gillet's Grids drum map. Settings: part (BD, SD, HH), density, accent (the velocity follows the map). Put the kick on BD, the snare on SD and a hat on HH, then explore the map.
+- **Action** (2nd page): pick one with KNOB 1, the title says PRESS OCT+ TO …, press OCT+. EUCLID has DICE (its hits placed at random) and UNDO; the live generators COMMIT, UNDO and RESET (the live track from the pattern again, as turning a generator on or changing pattern does). UNDO takes back the last DICE, COMMIT or Euclid change; again, it redoes it. On a GRIDS track the page also has the map's X, Y and chaos, which belong to the pattern, so turning them moves every Grids track together.
+- **Track** (3rd page): length; clock, the track's step rate against the pattern (/4, /3, /2, 2/3, 3/4, 1x, 4/3, 3/2, x2, x3, x4) for polyrhythms, or with lengths for polymeters (the pattern lasts as long as its longest track); **direction**: FWD, REV, PING (ping-pong), PING2 (the ends played twice), RAND (any step), WALK (a step either way). A time round stays the track's length in steps, so conditions and generators keep their timing.
+- **Bounce** (4th page): the bouncing ratchets' first gap and pitch drift.
 
 ## Performance (PERF)
 

@@ -35,6 +35,7 @@ typedef struct {
     uint8_t len[NTRACK];                         /* 1..64 (0: 16) */
     uint8_t clk[NTRACK];                         /* the track's clock: CLK_TICKS's index (CLK_1X: as the pattern) */
     uint8_t gen[NTRACK][4];                      /* its generator: GEN_* and its three settings (seq_gen_*) */
+    uint8_t dir[NTRACK];                         /* 0.10: its direction (DIR_*) */
     uint8_t bnc[NTRACK];                         /* 0.6: its bounces: start (BNC_TICKS's index) | pitch + 12 << 2 */
     uint8_t shuffle, kit;
     uint8_t gx, gy, gchaos;                      /* GRIDS: the map's X, Y and its chaos, 0..127 (the pattern's) */
@@ -89,8 +90,13 @@ typedef struct {
 /* trig conditions: none, FILL, not FILL, PRE, not PRE, NEI, not NEI, 1ST, not 1ST, then A:B for B 2..8, A 1..B */
 enum { COND_NONE, COND_FILL, COND_NFILL, COND_PRE, COND_NPRE, COND_NEI, COND_NNEI, COND_1ST, COND_N1ST, COND_AB };
 #define NCOND (COND_AB + 35u)
-/* the generators */
-enum { GEN_OFF, GEN_MUTATE, GEN_TURING, GEN_CA, GEN_GRIDS, NGEN };
+/* the generators. 0.10: EUCLID is one too, the one that writes the steps and plays none live (its settings
+ * length, hits, rotation); last, so saved projects keep their numbers */
+enum { GEN_OFF, GEN_MUTATE, GEN_TURING, GEN_CA, GEN_GRIDS, GEN_EUCLID, NGEN };
+static int gen_live(const pattern_t *p, uint32_t t) { return p->gen[t][0] != GEN_OFF && p->gen[t][0] != GEN_EUCLID; }
+/* 0.10: the tracks' directions (as the Polyend Play's): forward, reverse, ping-pong (the ends once, twice), any
+ * step at random, a step either way at random. A time round is the track's length in steps whichever way */
+enum { DIR_FWD, DIR_REV, DIR_PING, DIR_PING2, DIR_RAND, DIR_WALK, NDIR };
 
 /* 0.8: the velocity the keys play at: the rolls, KEYS, and KEYS' accent (SHIFT). The device's (project.c kset) */
 static uint8_t key_vel = 100, key_acc = 127;
@@ -110,6 +116,7 @@ static struct {
     int8_t idx[NTRACK];                          /* the playing step (-1: before the first) */
     uint8_t prescale, master_cnt;
     uint8_t muted, roll, roll_rate, last_on;
+    uint8_t solo;                                /* 0.10: the soloed tracks (any: only they play; seq_mutes) */
     uint8_t rec, erase, lane;                    /* recording, erasing (SHIFT CLEAR while recording), automation lane */
     int8_t armed_step, armed_track;              /* a step held while a knob turns: its lock */
     int8_t skip[NTRACK];                         /* a note just recorded into the next step: not triggered again */
@@ -141,11 +148,17 @@ static struct {
         uint8_t rnd[NTRACK][3];
         uint8_t tph[NTRACK];
         uint16_t ptick, loops[NTRACK];
+        uint8_t dpos[NTRACK], dback[NTRACK];
+        int8_t dnext[NTRACK], dprev[NTRACK];
     } stut;                                      /* the position the loop goes back to */
     /* 0.5: the tracks' clocks, conditions, ratchets, generators */
     uint8_t tph[NTRACK];                         /* ticks into the track's step (its clock: CLK_TICKS) */
     uint16_t ptick;                              /* ticks into the pattern (its end: pat_ticks) */
     uint16_t loops[NTRACK];                      /* the track's times round since the start (A:B, 1ST) */
+    /* 0.10: the directions: steps into the time round, going back (PING), the next step drawn (RAND, WALK), the
+     * step before (-1: none) */
+    uint8_t dpos[NTRACK], dback[NTRACK];
+    int8_t dnext[NTRACK], dprev[NTRACK];
     uint8_t pre;                                 /* bit t: track t's last condition's result (PRE, NEI) */
     uint16_t cocc[NTRACK][NUM_STEPS];            /* the occurrence (loop + 1) a step's condition was worked out for */
     uint64_t cres[NTRACK];                       /* .. its result, bit k */
@@ -184,6 +197,8 @@ static struct {
     uint16_t greg[NTRACK];                       /* TURING's registers */
     uint8_t gpert[NTRACK];                       /* GRIDS: this time round's perturbation (its chaos) */
 } sq;
+/* 0.10: the tracks silent: muted, or not soloed while any is */
+static uint32_t seq_mutes(void) { return sq.muted | (sq.solo ? ~(uint32_t)sq.solo & ((1u << NTRACK) - 1u) : 0u); }
 
 /* MIDI out and the voices (midi.c, voices.c) */
 static void midi_out_note(uint32_t track, uint32_t note, uint32_t vel);
@@ -238,6 +253,7 @@ static void seq_clear_track(uint32_t t, pattern_t *p)   /* seq_clearTrack */
     p->clk[t] = CLK_1X;
     memset(p->gen[t], 0, sizeof p->gen[t]);
     p->bnc[t] = BNC_DEFAULT;
+    p->dir[t] = DIR_FWD;
 }
 static void seq_clear_pattern(pattern_t *p)
 {
@@ -306,7 +322,7 @@ enum { POS_PREV, POS_CUR, POS_NEXT };
 static pattern_t *tpat(uint32_t t)
 {
     pattern_t *p = &pat[sq.active];
-    return p->gen[t][0] != GEN_OFF ? &gpat : p;
+    return gen_live(p, t) ? &gpat : p;
 }
 static uint32_t trk_ticks(uint32_t t)                /* ticks a step of track t */
 {
@@ -457,7 +473,7 @@ static void seq_ratchets(void)                       /* the ratchets' later hits
             v = 30u + seq_rand() % 98u;
             note = (uint32_t)clamp32((int32_t)note + (int32_t)(seq_rand() % 5u) - 2, 0, 127);
         }
-        if (!(sq.muted & (1u << t)))
+        if (!(seq_mutes() & (1u << t)))
             seq_trigger(t, p, sq.rstep[t], v ? v : 1u, note);
     }
 }
@@ -501,7 +517,7 @@ static void seq_bounces(void)
                 v = v * (n - j) / n;
             else if (((r >> 5) & 3u) == RF_UP)
                 v = v * (j + 1u) / n;
-            if (!(sq.muted & (1u << t)))
+            if (!(seq_mutes() & (1u << t)))
                 seq_trigger(t, p, sq.bstep[t], v ? v : 1u, (uint32_t)clamp32(note, 0, 127));
             rt = BNC_RATIO[c];
             if (c == BC_DRUNK)                       /* +-15% */
@@ -645,7 +661,7 @@ static void seq_links(uint32_t hm, const uint8_t *hs, const uint32_t *hl, const 
         }
     }
     for (t = 0; t < NTRACK; t++)                     /* the TRIGGERs: the track's step's note, no locks */
-        if ((trig >> t & 1u) && !(sq.muted >> t & 1u)) {
+        if ((trig >> t & 1u) && !(seq_mutes() >> t & 1u)) {
             uint32_t i = sq.idx[t] < 0 ? 0u : (uint32_t)sq.idx[t];
             sq.last_on |= 1u << t;
             seq_trigger(t, 0, 0, tvel[t], tpat(t)->step[t][i].note);
@@ -678,6 +694,39 @@ static void dq_push(uint32_t t, uint32_t d, uint32_t s, uint32_t loop, const lmo
     sq.dq[t][f].m.shift = 0;
 }
 
+/* 0.10: the step after cur on track t going its direction (back: PING's way back, updated); RAND, WALK: the one
+ * drawn (sq.dnext) */
+static uint32_t trk_dir(uint32_t t)                  /* (the pattern's, as the clock: not a live track's copy) */
+{
+    uint32_t d = pat[sq.active].dir[t];
+    return d < NDIR ? d : DIR_FWD;
+}
+static uint32_t dir_after(uint32_t t, uint32_t cur, uint32_t len, uint8_t *back)
+{
+    uint32_t d = trk_dir(t);
+    switch (d) {
+    case DIR_REV: return cur && cur < len ? cur - 1u : len - 1u;
+    case DIR_PING:
+    case DIR_PING2:
+        if (len < 2u)
+            return 0;
+        if (cur >= len)
+            cur = len - 1u;
+        if (!*back) {
+            if (cur + 1u < len)
+                return cur + 1u;
+            *back = 1;                               /* (the end: PING turns, PING2 plays it again first) */
+            return d == DIR_PING ? cur - 1u : cur;
+        }
+        if (cur)
+            return cur - 1u;
+        *back = 0;
+        return d == DIR_PING ? 1u : 0u;
+    case DIR_RAND:
+    case DIR_WALK: return sq.dnext[t] >= 0 && (uint32_t)sq.dnext[t] < len ? (uint32_t)sq.dnext[t] : 0u;
+    default: return cur + 1u >= len ? 0u : cur + 1u;
+    }
+}
 /* what plays on this tick: each track at its clock's position in its step (tph: the 24 positions of a step that
  * this tick covers, slower clocks covering one now and then, faster several). 0.6: the hits found first, then
  * the links (with any set and a depth), then they play */
@@ -689,21 +738,33 @@ static void seq_flam(void)
     int8_t hp[NTRACK];
     for (t = 0; t < NTRACK; t++) {
         const pattern_t *p = tpat(t);
-        uint32_t len, cur, nxt, prv, L = trk_ticks(t), lo, hi, bits, lp = sq.loops[t];
+        uint32_t len, cur, nxt, prv, nlp, plp, L = trk_ticks(t), lo, hi, bits, lp = sq.loops[t];
+        int has_prv = 1;
         lo = sq.tph[t] * 24u / L;
         hi = (sq.tph[t] + 1u) * 24u / L;
         bits = hi > lo ? ((1u << (hi - lo)) - 1u) << (24u - hi) : 0u;
         len = track_len(p, t);
         cur = sq.idx[t] < 0 ? 0u : (uint32_t)sq.idx[t];
-        if (live && sq.tph[t] == 0u && ((sq.muted & (1u << t)) || !step_live(p, t, cur, lp)))
+        if (live && sq.tph[t] == 0u && ((seq_mutes() & (1u << t)) || !step_live(p, t, cur, lp)))
             sil |= 1u << t;
-        if ((sq.muted & (1u << t)) || !bits)
+        if ((seq_mutes() & (1u << t)) || !bits)
             continue;
-        nxt = (cur + 1u) % len;
-        prv = cur ? cur - 1u : len - 1u;
-        if (shift_flam(p, t, nxt, POS_NEXT, nxt ? lp : lp + 1u) & bits) {
+        if (trk_dir(t) == DIR_FWD) {
+            nxt = (cur + 1u) % len;
+            prv = cur ? cur - 1u : len - 1u;
+            nlp = nxt ? lp : lp + 1u;
+            plp = cur || !lp ? lp : lp - 1u;
+        } else {                                     /* (0.10: the steps either side as the direction has them) */
+            uint8_t bk = sq.dback[t];
+            nxt = dir_after(t, cur, len, &bk);
+            nlp = sq.dpos[t] + 1u >= len ? lp + 1u : lp;
+            has_prv = sq.dprev[t] >= 0 && (uint32_t)sq.dprev[t] < len;
+            prv = has_prv ? (uint32_t)sq.dprev[t] : 0u;
+            plp = sq.dpos[t] == 0u && lp ? lp - 1u : lp;
+        }
+        if (shift_flam(p, t, nxt, POS_NEXT, nlp) & bits) {
             hs[t] = (uint8_t)nxt;
-            hl[t] = nxt ? lp : lp + 1u;
+            hl[t] = nlp;
             hp[t] = 1;
         } else if (shift_flam(p, t, cur, POS_CUR, lp) & bits) {
             if (sq.skip[t] == (int8_t)cur) {         /* recorded into this step a moment ago: it sounded already */
@@ -713,9 +774,9 @@ static void seq_flam(void)
             hs[t] = (uint8_t)cur;
             hl[t] = lp;
             hp[t] = 0;
-        } else if (shift_flam(p, t, prv, POS_PREV, cur || !lp ? lp : lp - 1u) & bits) {
+        } else if (has_prv && shift_flam(p, t, prv, POS_PREV, plp) & bits) {
             hs[t] = (uint8_t)prv;
-            hl[t] = cur || !lp ? lp : lp - 1u;
+            hl[t] = plp;
             hp[t] = -1;
         } else {
             if (sq.last_on & (1u << t)) {
@@ -777,6 +838,7 @@ static void trk_copy(pattern_t *d, const pattern_t *s, uint32_t t)
     d->len[t] = s->len[t];
     d->clk[t] = s->clk[t];
     d->bnc[t] = s->bnc[t];
+    d->dir[t] = s->dir[t];
 }
 static void seq_gen_sync(uint32_t t);
 static void seq_reset_tracks(void)                   /* every track before its first step, its counts from 0 */
@@ -793,6 +855,8 @@ static void seq_reset_tracks(void)                   /* every track before its f
         sq.nst[t] = 0;
         sq.locc[t] = 0;
         sq.jocc[t] = 0;
+        sq.dpos[t] = sq.dback[t] = 0;
+        sq.dnext[t] = sq.dprev[t] = -1;
     }
     memset(sq.dq, 0, sizeof sq.dq);
     sq.lk_on = sq.lk_trig = 0;
@@ -875,21 +939,41 @@ static void seq_gen_loop(uint32_t t);
 static void seq_track_step(uint32_t t)
 {
     const pattern_t *p;
-    uint32_t len, i;
+    uint32_t len, i, d;
     p = tpat(t);
     len = track_len(p, t);
-    i = (uint32_t)(sq.idx[t] + 1);
-    if (i >= len || (i & 63u) == 0u) {
-        i = 0;
-        if (sq.idx[t] >= 0) {                        /* round again */
+    d = trk_dir(t);
+    if (d == DIR_FWD) {
+        i = (uint32_t)(sq.idx[t] + 1);
+        if (i >= len || (i & 63u) == 0u) {
+            i = 0;
+            if (sq.idx[t] >= 0) {                    /* round again */
+                sq.loops[t]++;
+                seq_gen_loop(t);
+            }
+        }
+        sq.dpos[t] = (uint8_t)i;
+    } else if (sq.idx[t] < 0) {                      /* 0.10: the first step, by the direction */
+        i = d == DIR_REV ? len - 1u : d == DIR_RAND ? seq_rand() % len : 0u;
+        sq.dpos[t] = 0;
+        sq.dback[t] = 0;
+    } else {
+        i = dir_after(t, (uint32_t)sq.idx[t], len, &sq.dback[t]);
+        if (++sq.dpos[t] >= len) {                   /* round again: as many steps as the track has */
+            sq.dpos[t] = 0;
             sq.loops[t]++;
             seq_gen_loop(t);
         }
     }
+    if (d == DIR_RAND)                               /* (the next one drawn now: a negative shift sees it) */
+        sq.dnext[t] = (int8_t)(seq_rand() % len);
+    else if (d == DIR_WALK)
+        sq.dnext[t] = (int8_t)(len < 2u ? 0u : (i + ((seq_rand() & 1u) ? 1u : len - 1u)) % len);
+    sq.dprev[t] = sq.idx[t];
     sq.idx[t] = (int8_t)i;
     sq.nst[t]++;
     seq_gen_step(t, i);
-    if (!(sq.muted & (1u << t)) && main_on(p, t, i)) {
+    if (!(seq_mutes() & (1u << t)) && main_on(p, t, i)) {
         if (sq.erase && t == ui_track()) {
             main_set(&pat[sq.active], t, i, 0);
             if (p == &gpat)
@@ -937,6 +1021,10 @@ static void stut_save(void)
     memcpy(sq.stut.rnd, sq.rnd, sizeof sq.rnd);
     memcpy(sq.stut.tph, sq.tph, sizeof sq.tph);
     memcpy(sq.stut.loops, sq.loops, sizeof sq.loops);
+    memcpy(sq.stut.dpos, sq.dpos, sizeof sq.dpos);
+    memcpy(sq.stut.dback, sq.dback, sizeof sq.dback);
+    memcpy(sq.stut.dnext, sq.dnext, sizeof sq.dnext);
+    memcpy(sq.stut.dprev, sq.dprev, sizeof sq.dprev);
     sq.stut.prescale = sq.prescale;
     sq.stut.master_cnt = sq.master_cnt;
     sq.stut.beat = sq.beat;
@@ -948,6 +1036,10 @@ static void stut_load(void)
     memcpy(sq.rnd, sq.stut.rnd, sizeof sq.rnd);
     memcpy(sq.tph, sq.stut.tph, sizeof sq.tph);
     memcpy(sq.loops, sq.stut.loops, sizeof sq.loops);
+    memcpy(sq.dpos, sq.stut.dpos, sizeof sq.dpos);
+    memcpy(sq.dback, sq.stut.dback, sizeof sq.dback);
+    memcpy(sq.dnext, sq.stut.dnext, sizeof sq.dnext);
+    memcpy(sq.dprev, sq.stut.dprev, sizeof sq.dprev);
     sq.prescale = sq.stut.prescale;
     sq.master_cnt = sq.stut.master_cnt;
     sq.beat = sq.stut.beat;
@@ -1172,7 +1264,7 @@ static void seq_add_note(uint32_t t, uint32_t vel, uint32_t note)
     p->step[t][q].volume = (uint8_t)(vel | STEP_ACTIVE_MASK);
     p->step[t][q].prob = 100;
     main_set(p, t, q, 1);
-    if (p == &pat[sq.active] && p->gen[t][0] != GEN_OFF) {   /* (a generator's track: its live copy too) */
+    if (p == &pat[sq.active] && gen_live(p, t)) {   /* (a generator's track: its live copy too) */
         gpat.step[t][q] = p->step[t][q];
         main_set(&gpat, t, q, 1);
     }
@@ -1238,22 +1330,20 @@ static void song_delete_row(uint32_t song, uint32_t pos)   /* seq_deleteRow */
 
 /* ------------------------------------------------------- Euclid --- */
 /* the Euclidean generator: n hits over len steps, evenly (Bjorklund), rotated; it rewrites the track's steps and
- * length (EuklidGenerator.c: the same rhythms, built directly) */
-static uint8_t eu_len[NTRACK], eu_steps[NTRACK], eu_rot[NTRACK];
+ * length (EuklidGenerator.c: the same rhythms, built directly). 0.10: its settings the track's (gen[t] at
+ * GEN_EUCLID: length, hits, rotation), and 0 hits none */
 static void euclid_generate(uint32_t t, pattern_t *p)
 {
-    uint32_t len = eu_len[t] ? eu_len[t] : 16u, n = eu_steps[t], k, rot;
+    uint32_t len = p->gen[t][1] ? p->gen[t][1] : 16u, n = p->gen[t][2], k, rot;
     uint64_t bits = 0;
     if (len > NUM_STEPS)
         len = NUM_STEPS;
-    if (n == 0u)
-        n = 1;
     if (n > len)
         n = len;
     for (k = 0; k < len; k++)                        /* the hits where k x n / len steps over a whole number */
         if (((k * n) % len) < n)
             bits |= 1ull << k;
-    rot = eu_rot[t] % len;
+    rot = p->gen[t][3] % len;
     if (rot)
         bits = ((bits << rot) | (bits >> (len - rot))) & (len == 64u ? ~0ull : ((1ull << len) - 1u));
     for (k = 0; k < 4u; k++)
@@ -1443,7 +1533,7 @@ static void seq_commit(uint32_t t)                   /* COMMIT: the live track i
 {
     pattern_t *p = &pat[sq.active];
     uint8_t g[4];
-    if (p->gen[t][0] == GEN_OFF)
+    if (!gen_live(p, t))
         return;
     seq_undo_save(t);
     memcpy(g, p->gen[t], 4);
@@ -1454,7 +1544,7 @@ static void seq_commit(uint32_t t)                   /* COMMIT: the live track i
 static void seq_dice(uint32_t t)
 {
     pattern_t *p = &pat[sq.active];
-    uint32_t len = eu_len[t] ? eu_len[t] : 16u, n = eu_steps[t], k;
+    uint32_t len = p->gen[t][1] ? p->gen[t][1] : 16u, n = p->gen[t][2], k;
     seq_undo_save(t);
     if (len > NUM_STEPS)
         len = NUM_STEPS;
@@ -1491,8 +1581,6 @@ static void seq_init(void)                           /* seq_init */
     for (t = 0; t < NTRACK; t++) {
         sq.idx[t] = -1;
         sq.skip[t] = -1;
-        eu_len[t] = 16;
-        eu_steps[t] = 4;
     }
     sq.armed_step = sq.armed_track = -1;
     sq.roll_rate = 5;                                /* 1/16 */

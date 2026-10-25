@@ -87,7 +87,7 @@ static void midi_note_on(uint32_t t, uint32_t note, uint32_t vel, int rec)
 {
     if (ui_step_note_edit(note))
         return;
-    if (sq.muted & (1u << t))
+    if (seq_mutes() & (1u << t))
         return;
     if (par[PAR_MIDI_NOTE1 + t]) {
         if (note != par[PAR_MIDI_NOTE1 + t])

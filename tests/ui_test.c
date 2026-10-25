@@ -702,9 +702,8 @@ static void phase4(void)
     black(0);
     press(B_ARP);
     press(B_ARP);
-    check(ui.mode == M_EUCLID, "ARP twice: EUCLID");
-    turn(EN_SELECT, 1);
-    turn(EN_K1, 1);
+    check(ui.mode == M_EUCLID && ui.page == PG_GEN, "ARP twice: GENERATOR");
+    turn(EN_K1, 2);
     check(p->gen[0][0] == GEN_MUTATE, "GENERATOR: MUTATE");
     turn(EN_K2, 75);
     shot("generator");
@@ -716,26 +715,34 @@ static void phase4(void)
     shot("mutated");
     {
         uint16_t live = gpat.main[0][0];
-        turn(EN_SELECT, -1);
-        kset.accel = 0;
-        turn(EN_K4, ACT_COMMIT);
-        kset.accel = 1;
+        turn(EN_SELECT, 1);
+        check(ui.page == PG_ACTION && vp_max(VP_ACTION) == 3, "ACTION: a live generator's COMMIT, UNDO, RESET");
+        turn(EN_K1, 1);
+        check(ui.action == ACT_COMMIT, "ACTION: COMMIT");
+        shot("action-commit");
         press(B_OCTUP);
         check(p->main[0][0] == live, "COMMIT: the live track into the pattern");
-        turn(EN_K4, ACT_UNDO - ACT_NONE);
+        turn(EN_K1, 2);
+        check(ui.action == ACT_UNDO, "ACTION: UNDO");
         press(B_OCTUP);
         check(p->main[0][0] == 0x1111u, "UNDO: the pattern as it was before COMMIT");
-        /* DICE: Euclid's hits anywhere over its length; UNDO */
-        eu_len[0] = 16;
-        eu_steps[0] = 5;
-        turn(EN_K4, ACT_DICE);
+        /* DICE (EUCLID's): its hits anywhere over its length; UNDO */
+        turn(EN_SELECT, -1);
+        turn(EN_K1, -1);
+        check(p->gen[0][0] == GEN_EUCLID && p->main[0][0] == 0x1111u, "GENERATOR: EUCLID, the steps as they were");
+        p->gen[0][2] = 5;
+        turn(EN_SELECT, 1);
+        check(vp_max(VP_ACTION) == 2, "ACTION: EUCLID's DICE, UNDO");
+        turn(EN_K1, 1);
+        check(ui.action == ACT_DICE, "ACTION: DICE");
         press(B_OCTUP);
         n = (uint32_t)__builtin_popcount(p->main[0][0]);
         check(n == 5, "DICE: 5 hits");
         shot("diced");
-        turn(EN_K4, ACT_UNDO);
+        turn(EN_K1, 2);
         press(B_OCTUP);
         check(p->main[0][0] == 0x1111u, "UNDO after DICE");
+        turn(EN_SELECT, -1);
     }
     /* CELLULAR, rule 90, from a cell: the next rows */
     p->gen[0][0] = GEN_CA;
@@ -748,10 +755,10 @@ static void phase4(void)
     check(gpat.main[0][0] == ((1u << 7) | (1u << 9)), "CELLULAR rule 90: a cell's next row");
     seq_gen_loop(0);
     check(gpat.main[0][0] == ((1u << 6) | (1u << 10)), "CELLULAR rule 90: the row after");
-    /* the track clock page; the step pages: condition, ratchet */
+    /* the track page; the step pages: condition, ratchet */
     turn(EN_SELECT, 2);
     turn(EN_K2, 3);
-    check(p->clk[0] == CLK_1X + 3, "TRACK CLOCK: x2");
+    check(p->clk[0] == CLK_1X + 3, "TRACK: clock x2");
     shot("track-clock");
     p->clk[0] = CLK_1X;
     p->gen[0][0] = GEN_OFF;
@@ -770,6 +777,7 @@ static void phase4(void)
           "RATCHET: 3 hits, 1/48, up");
     shot("step-ratchet");
     press(B_SEQ);
+    check(ui.mode == M_STEP && ui.page == 0, "SEQ again from RATCHET: STEP");
     /* project version 4: conditions, ratchets, clocks, generators */
     {
         int rc;
@@ -941,10 +949,10 @@ static void phase5a(void)
     shot("step-bounce");
     press(B_SEQ);
     goto_mode(B_ARP, M_EUCLID);
-    turn(EN_SELECT, 2);
-    turn(EN_K3, 1);
-    turn(EN_K4, -5);
-    check((p->bnc[0] & 3u) == 2u && (p->bnc[0] >> 2) == 7u, "TRACK CLOCK: bounce from 1/16, -5 semitones");
+    turn(EN_SELECT, 3);
+    turn(EN_K1, 1);
+    turn(EN_K2, -5);
+    check((p->bnc[0] & 3u) == 2u && (p->bnc[0] >> 2) == 7u, "BOUNCE: from 1/16, -5 semitones");
     shot("track-clock-bounce");
     /* the roll sweep: a roll key held in PERF, KNOB 3 the roll's rate, faster as it turns */
     p->bnc[0] = BNC_DEFAULT;
@@ -1665,13 +1673,17 @@ static void grids_test(void)
     black(5);
     goto_mode(B_ARP, M_PERF);
     press(B_ARP);
-    turn(EN_SELECT, 1);
     shot("grids-generator");
-    turn(EN_SELECT, 2);
+    turn(EN_SELECT, 1);
+    {
+        uint16_t pp[4];
+        page_params(pp);
+        check(pp[0] == VP_ACTION && pp[1] == VP_GX && pp[3] == VP_GCHAOS, "GRIDS: the map on the ACTION page");
+    }
     kset.accel = 0;
-    turn(EN_K1, -20);
+    turn(EN_K2, -20);
     kset.accel = 1;
-    check(p->gx == 107, "GRIDS MAP: K1 moves X");
+    check(p->gx == 107, "GRIDS MAP: K2 moves X");
     run_ms(50);
     shot("grids-map");
     {
@@ -2044,6 +2056,257 @@ static void phase9_patkeep(void)                     /* 0.9: a pattern's edits k
     check(pat_keep == 1 && kset.pdrop == 0, "Edits: KEEP again");
     goto_mode(B_HOME, M_HOME);
 }
+/* 0.10: CLEAR SOUND (the track's voice back to the init kit's), SOLO (SHIFT + GLO) */
+static void phase11_sound_solo(void)
+{
+    pattern_t *p = &pat[0];
+    uint8_t k[KIT_LEN];
+    uint32_t i, ok, c[NTRACK], n[NTRACK];
+    p4_reset();
+    sq.muted = sq.solo = 0;
+    kit_init_par();
+    snd_post_all();
+    kit_init_values(k);
+    /* a sound turned far from the init kit's, SN's too; CLEAR on a sound page offers SOUND, and resets D2 alone */
+    black(1);
+    press(B_EDIT);
+    for (i = 0; i < KIT_LEN; i++) {
+        uint32_t q = kit_par(i);
+        if (par_voice(q) == 1u || par_voice(q) == 3u)
+            par[q] = (uint8_t)(k[i] ^ 5u);
+    }
+    hold(B_OCTDN);
+    press(B_OCTUP);
+    check(ui.clear_open && ui.clear_sel == CL_SOUND, "CLEAR on a sound page: CLEAR SOUND first");
+    shot("clear-sound");
+    press(B_OCTUP);
+    release(B_OCTDN);
+    for (i = 0, ok = 1; i < KIT_LEN; i++) {
+        uint32_t q = kit_par(i);
+        if (par_voice(q) == 1u)
+            ok &= par[q] == k[i];
+        if (par_voice(q) == 3u)
+            ok &= par[q] == (uint8_t)(k[i] ^ 5u);
+    }
+    check(ok, "CLEAR SOUND: D2's parameters as the init kit's, SN's as they were");
+    kit_init_par();
+    snd_post_all();
+    goto_mode(B_HOME, M_HOME);
+    /* SOLO: SHIFT + GLO on the selected track; only it plays; another soloed too; off again */
+    for (i = 0; i < NTRACK; i++)
+        main_set(p, i, 0, 1);
+    pat_backup = *p;
+    black(3);
+    hold(B_OCTDN);
+    press(B_GLO);
+    release(B_OCTDN);
+    check(sq.solo == 1u << 3 && ui.mode == M_HOME, "SHIFT + GLO: SN soloed");
+    run_ms(50);
+    shot("solo");
+    play_from_start();
+    for (i = 0; i < NTRACK; i++)
+        c[i] = trig_count[i];
+    run_ms(2100);                                    /* (the next bar's first step) */
+    for (i = 0; i < NTRACK; i++)
+        n[i] = trig_count[i] - c[i];
+    check(n[3] == 1 && !n[0] && !n[1] && !n[5], "SOLO: only the soloed track plays");
+    black(0);
+    hold(B_OCTDN);
+    press(B_GLO);
+    release(B_OCTDN);
+    c[0] = trig_count[0];
+    c[3] = trig_count[3];
+    run_ms(2000);
+    check(trig_count[0] - c[0] == 1 && trig_count[3] - c[3] == 1 && sq.muted == 0, "SOLO: two tracks, the mutes untouched");
+    hold(B_OCTDN);
+    press(B_GLO);
+    release(B_OCTDN);
+    black(3);
+    hold(B_OCTDN);
+    press(B_GLO);
+    release(B_OCTDN);
+    check(sq.solo == 0, "SOLO off again");
+    c[1] = trig_count[1];
+    run_ms(2000);
+    check(trig_count[1] - c[1] == 1, "SOLO off: every track plays");
+    press(B_PLAY);
+}
+
+/* ------------------------------------------------------ Phase 11 (0.10) --- */
+/* track 0's next n steps as it plays them (sq.nst: each step taken, repeats too) */
+static void dir_order(uint32_t n, uint8_t *out)
+{
+    uint32_t k = 0, seen = sq.nst[0];
+    play_from_start();
+    while (k < n) {
+        run_ms(1);
+        if (sq.nst[0] != seen) {
+            seen = sq.nst[0];
+            out[k++] = (uint8_t)sq.idx[0];
+        }
+    }
+    press(B_PLAY);
+}
+static void phase11(void)
+{
+    pattern_t *p = &pat[0];
+    uint32_t i, ok;
+    uint8_t o[16];
+    uint16_t pp[4];
+    p4_reset();
+    sq.muted = 0;
+    kset.accel = 0;                                  /* (exact detents) */
+    black(0);
+    /* 11a: SEQ again steps through the step pages, as every button does, and stays in step edit */
+    press(B_LFO);
+    press(B_SEQ);
+    check(ui.mode == M_STEP && ui.page == 0, "SEQ: step edit, STEP");
+    for (i = 1; i < 5u; i++) {
+        press(B_SEQ);
+        check(ui.mode == M_STEP && ui.page == i % 4u, "SEQ again: the next step page (round to STEP)");
+    }
+    /* 11b, 11c: one GENERATOR page; EUCLID from 0 hits over the track's length, nothing written until the hits */
+    for (i = 0; i < 16u; i += 2)
+        main_set(p, 0, i, 1);
+    p->len[0] = 12;
+    goto_mode(B_ARP, M_EUCLID);
+    check(ui.page == PG_GEN, "ARP twice: the GENERATOR page first");
+    page_params(pp);
+    check(pp[0] == VP_GMODE && pp[1] == VP_NONE, "GENERATOR OFF: only the type");
+    turn(EN_K1, 1);
+    page_params(pp);
+    check(p->gen[0][0] == GEN_EUCLID && pp[1] == PAR_EUKLID_LENGTH && pp[2] == PAR_EUKLID_STEPS &&
+          pp[3] == PAR_EUKLID_ROTATION, "GENERATOR: EUCLID, its length, hits, rotation");
+    check(p->gen[0][1] == 12 && p->gen[0][2] == 0 && p->main[0][0] == 0x5555u,
+          "EUCLID: 0 hits over the track's 12, the steps untouched");
+    shot("generator-euclid");
+    turn(EN_K2, 4);
+    check(p->gen[0][1] == 16 && p->main[0][0] == 0x5555u && p->len[0] == 12, "EUCLID: the length alone writes nothing");
+    turn(EN_K3, 4);
+    check(p->main[0][0] == 0x1111u && p->len[0] == 16, "EUCLID: 4 hits written at once, on 1 5 9 13");
+    turn(EN_K4, 1);
+    check(p->main[0][0] == 0x2222u, "EUCLID: rotated");
+    turn(EN_K3, -4);
+    check(p->main[0][0] == 0, "EUCLID: back to 0 hits, none");
+    turn(EN_K3, 3);
+    check(view_pat(0) == p, "EUCLID: no live copy (the pattern plays)");
+    /* a generator over Euclid's steps: MUTATE starts from them */
+    {
+        uint16_t e = p->main[0][0];
+        turn(EN_K1, 1);
+        run_ms(5);
+        check(p->gen[0][0] == GEN_MUTATE && gpat.main[0][0] == e, "MUTATE after EUCLID: its live track the Euclid steps");
+    }
+    /* 11d, 11e: the ACTION page, the actions by type; the map only with GRIDS */
+    turn(EN_SELECT, 1);
+    page_params(pp);
+    check(pp[0] == VP_ACTION && pp[1] == VP_NONE, "ACTION: no map without GRIDS");
+    turn(EN_K1, 1);
+    check(ui.action == ACT_COMMIT, "ACTION: MUTATE's first, COMMIT");
+    shot("action-title");
+    black(1);
+    check(ui.action == ACT_NONE, "another track: no action picked");
+    check(vp_max(VP_ACTION) == 1, "a track with no generator: UNDO alone");
+    black(0);
+    turn(EN_SELECT, -1);
+    turn(EN_K1, -5);
+    check(p->gen[0][0] == GEN_OFF, "GENERATOR: OFF");
+    /* 11f: the directions, over 4 steps */
+    goto_mode(B_HOME, M_HOME);
+    p4_reset();
+    p->len[0] = 4;
+    {
+        static const uint8_t WANT[5][10] = {{0, 1, 2, 3, 0, 1, 2, 3, 0, 1},   /* FWD */
+                                            {3, 2, 1, 0, 3, 2, 1, 0, 3, 2},   /* REV */
+                                            {0, 1, 2, 3, 2, 1, 0, 1, 2, 3},   /* PING */
+                                            {0, 1, 2, 3, 3, 2, 1, 0, 0, 1}};  /* PING2 */
+        for (i = 0; i < 4u; i++) {
+            uint32_t k;
+            p->dir[0] = (uint8_t)i;
+            pat_backup = *p;
+            dir_order(10, o);
+            for (k = 0, ok = 1; k < 10u; k++)
+                ok &= o[k] == WANT[i][k];
+            printf("  direction %u:", (unsigned)i);
+            for (k = 0; k < 10u; k++)
+                printf(" %u", o[k]);
+            printf("\n");
+            check(ok, "a direction's order of steps");
+        }
+    }
+    p->len[0] = 16;
+    p->dir[0] = DIR_RAND;
+    dir_order(16, o);
+    {
+        uint32_t k, mv = 0;
+        for (k = 1, ok = 1; k < 16u; k++)
+            mv += o[k] != o[k - 1] + 1u;
+        check(mv > 4, "RAND: not in order");
+    }
+    p->dir[0] = DIR_WALK;
+    dir_order(16, o);
+    for (i = 1, ok = 1; i < 16u; i++)
+        ok &= o[i] == (o[i - 1] + 1u) % 16u || o[i] == (o[i - 1] + 15u) % 16u;
+    check(ok, "WALK: a step either way each time");
+    /* a time round is the length in steps: REV, a step on 1, plays once a bar; 1:2 every other bar */
+    p->dir[0] = DIR_PING;
+    main_set(p, 0, 0, 1);
+    pat_backup = *p;
+    play_from_start();
+    i = hits_in(0, 8000 - 50);
+    press(B_PLAY);
+    printf("  PING over 16, a step on 1: %u hits in 4 bars\n", (unsigned)i);
+    check(i >= 2 && i <= 3, "PING: step 1 at each turn (every other bar)");
+    /* a negative shift on the step coming next, going backwards: heard before it, as going forwards */
+    {
+        uint32_t c, at[2], k, d;
+        for (d = 0; d < 2u; d++) {                   /* FWD: step 2 next; REV: step 3 next (4, 3 ..) */
+            uint32_t s2 = d ? 2u : 1u;
+            seq_clear_track(0, p);
+            p->len[0] = 4;
+            p->dir[0] = (uint8_t)(d ? DIR_REV : DIR_FWD);
+            main_set(p, 0, s2, 1);
+            p->timing[0][s2] = 3u << 4;              /* (shift -4/8 of a step) */
+            pat_backup = *p;
+            c = trig_count[0];
+            at[d] = 0;
+            play_from_start();
+            for (k = 0; k < 600u && !at[d]; k++) {
+                run_ms(1);
+                if (trig_count[0] != c)
+                    at[d] = sq.ticks;
+            }
+            press(B_PLAY);
+        }
+        printf("  a step shifted -1/2, next: heard on tick %u (FWD), %u (REV)\n", (unsigned)at[0], (unsigned)at[1]);
+        check(at[0] < 20u && at[1] == at[0], "REV: a negative shift of the next step, early as FWD's");
+    }
+    seq_clear_track(0, p);
+    /* the TRACK page's direction; project version 8 */
+    goto_mode(B_ARP, M_EUCLID);
+    turn(EN_SELECT, 2);
+    page_params(pp);
+    check(pp[0] == PAR_TRACK_LENGTH && pp[1] == VP_CLOCK && pp[2] == VP_DIR, "TRACK: length, clock, direction");
+    turn(EN_K3, -10);
+    turn(EN_K3, 2);
+    check(p->dir[0] == DIR_PING, "TRACK: direction PING");
+    shot("track-direction");
+    p->dir[4] = DIR_WALK;
+    p->gen[2][0] = GEN_EUCLID;
+    p->gen[2][1] = 12;
+    p->gen[2][2] = 5;
+    {
+        int rc = proj_save(1, "V8      ");
+        p->dir[0] = p->dir[4] = 0;
+        memset(p->gen[2], 0, 4);
+        rc |= proj_load(1);
+        check(rc == 0 && p->dir[0] == DIR_PING && p->dir[4] == DIR_WALK && p->gen[2][0] == GEN_EUCLID &&
+              p->gen[2][2] == 5, "project (version 8): directions, Euclid's settings");
+    }
+    p4_reset();
+    kset.accel = 1;
+}
+
 int main(int argc, char **argv)
 {
     uint32_t t;
@@ -2468,6 +2731,8 @@ int main(int argc, char **argv)
     phase9_keys();
     phase9_library();
     phase9_patkeep();
+    phase11();
+    phase11_sound_solo();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;
 }
