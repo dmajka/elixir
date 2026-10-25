@@ -476,7 +476,7 @@ Requested 2026-10-25: try LXR-02 kits in the emulator before putting them on the
 
 - **Kit browser:** PRESETS lists the 64 slots, then the kit library's kits (L1 …, the empty ones left out); OCT+ loads a library kit as LOAD → KIT From LIBRARY does (`kb_has`, `kb_step` in ui.c).
 - **Emulator page:** its Library imports .SND files or folders into the kit library (the default) or the slots, imports an LXR-02 project, and downloads / restores the kit library (`.ktlb`, which the library page restores onto the FM-1). The emulator stays 1:1 (64 slots, 128 library kits): more kits mean another batch.
-- **Library page:** one kit import with Into: slots or library (the separate library-only input gone); text on what each is for (slots: the project's, named by patterns; library: a collection across projects, the morph target, the sound browser's voices); folders are read with their subfolders (a whole SD card: every project's kits, in order); a project import refuses a folder holding several projects (`lxrFolders`).
+- **Library page:** a Kit library section with its own import (files or a folder) and a Kit slots section with the slots' import and the LXR project import; text on what each is for (slots: the project's, named by patterns; library: a collection across projects, the morph target, the sound browser's voices); folders are read with their subfolders (a whole SD card: every project's kits, in order); a project import refuses a folder holding several projects (`lxrFolders`).
 - **Tests:** ui_test (the kit browser over the slots and the library), library_test (a card's subfolders, the several-projects refusal).
 
 ## Later / bigger
