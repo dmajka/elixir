@@ -19,7 +19,7 @@
 #define PROJ_AUTO 4u                                /* the session */
 #define PROJ_NLOG 5u
 #define PROJ_MAGIC 0x4A52504Bu                      /* "KPRJ" */
-#define PROJ_VERSION 6u                             /* (1 .. 5 still load: proj_read_payload) */
+#define PROJ_VERSION 7u                             /* (1 .. 6 still load: proj_read_payload) */
 #define PROJ_PAYLOAD (PROJ_SLOT - 256u)
 
 typedef struct {
@@ -339,6 +339,16 @@ static void pr_step(uint32_t ver, pattern_t *p, uint32_t t, uint32_t k)
     }
 }
 
+/* 0.9: a kit's (kit layout) model from before 0.9 as Rings' nearest: SKIN BAR BELL PLATE (struck bodies) MODAL, TUBE
+ * (a plucked line) STRING */
+static void proj_models_08(uint8_t *k)
+{
+    uint32_t i;
+    for (i = 0; i < 3u; i++) {
+        uint8_t *m = &k[kit_idx(PAR_MODEL1 + i)];
+        *m = *m >= 1u && *m <= 4u ? 1u : *m == 5u ? 2u : *m;
+    }
+}
 static int proj_read_payload(uint32_t ver)
 {
     uint32_t i, k, t, n, nk, npat;
@@ -387,8 +397,17 @@ static int proj_read_payload(uint32_t ver)
             for (i = nk; i < KIT_LEN; i++)
                 kp[i] = init[i];
             memcpy(kit_names[k], nm, KIT_NAME_LEN);
+            if (ver < 7u)
+                proj_models_08(kp);
             kit_sanitize(kp);
         }
+    }
+    if (ver < 7u) {
+        uint32_t i2;
+        proj_models_08(morph_par);
+        for (i2 = 0; i2 < 3u; i2++)                  /* (the edit buffer: par[], not the kit layout) */
+            par[PAR_MODEL1 + i2] = par[PAR_MODEL1 + i2] >= 1u && par[PAR_MODEL1 + i2] <= 4u ? 1u
+                                 : par[PAR_MODEL1 + i2] == 5u ? 2u : par[PAR_MODEL1 + i2];
     }
     kit_sanitize(morph_par);
     out_migrate(&par[PAR_AUDIO_OUT1], &par[PAR_FX_SEND1]);

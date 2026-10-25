@@ -9,6 +9,8 @@ It is derived from:
 
 - **Grids**, Copyright (C) 2011–2012 Emilie Gillet, GPL-3.0-or-later (used under GPL-3.0). The GRIDS generator's drum map (`firmware/src/grids_map.h`, generated from Grids' `resources.cc` by `tools/gen_grids.py`) and its reading of the map (`firmware/src/seq.c` `grids_level`, `grids_step`) follow Grids' `pattern_generator.cc`.
 
+- **Rings** and **stmlib**, Copyright 2012–2015 Emilie Gillet, MIT licence (`LICENSES/MIT-Rings.txt`). The DRUM voices' models (`firmware/src/rings.c`, its tables `firmware/src/rings_tables.h` from `tools/gen_rings_tables.py`) are a fixed-point port of Rings' modal resonator, string and FM voice, its exciters, limiter and the stmlib DSP they use.
+
 Other parts:
 
 - Inter Tight (UI font), SIL Open Font License 1.1 (`LICENSES/OFL-InterTight.txt`).

@@ -1360,7 +1360,7 @@ static void phase5c(void)
     goto_mode(B_HOME, M_HOME);
 }
 
-/* 0.6 (5d): physical models */
+/* 0.6 (5d), 0.9 (10): the models (Rings' resonators; tests/rings_compare.cc holds them to Rings' own code) */
 static double goertzel(const float *y, uint32_t n, double f)   /* |the DFT of y at f Hz| / n */
 {
     double w = 2.0 * 3.14159265358979 * f / FS, c = 2.0 * cos(w), s1 = 0, s2 = 0, s0;
@@ -1387,126 +1387,173 @@ static void mdl_hit(uint32_t vel, uint32_t skip_ms, uint32_t n)   /* D1 struck; 
         k += m;
     }
 }
+/* model voice 1 alone (model_block, no voice around it): a hit at hz, n samples of it into mdl_y (x 1/32768). in:
+ * the voice's own sound (0: silence), the share EXCITER takes; its peak */
+static double rg_hit(uint32_t md, uint32_t dec, uint32_t bright, uint32_t mat, uint32_t pos, uint32_t exc, double hz,
+                     uint32_t vel, uint32_t n, int16_t (*in)(uint32_t))
+{
+    voice_t v;
+    double pk = 0;
+    uint32_t k, i;
+    memset(&v, 0, sizeof v);
+    memset(&mdl[1], 0, sizeof mdl[1]);
+    mdl[1].type = (uint8_t)md;
+    mdl[1].dec = (uint8_t)dec;
+    mdl[1].damp = (uint8_t)bright;
+    mdl[1].mat = (uint8_t)mat;
+    mdl[1].pos = (uint8_t)pos;
+    mdl[1].exc = (uint8_t)exc;
+    v.osc.inc = (uint32_t)(hz / FS * 4294967296.0);
+    model_reset(&mdl[1], 1);                         /* (as a block would, the model new: before the hit) */
+    noise_rng = 0x9E3779B9u;                         /* (the plucker's noise: the same each run) */
+    model_trigger(1, vel, v.osc.inc);
+    for (k = 0; k < n; k += BLOCK) {
+        int16_t b[BLOCK];
+        for (i = 0; i < BLOCK; i++)
+            b[i] = in ? in(k + i) : 0;
+        model_block(1, &v, b);
+        for (i = 0; i < BLOCK && k + i < 16384u; i++)
+            mdl_y[k + i] = b[i] / 32768.0f;
+        for (i = 0; i < BLOCK; i++)
+            pk = fabs(b[i]) > pk ? fabs(b[i]) : pk;
+    }
+    return pk / 32768.0;
+}
+static int16_t rg_click(uint32_t i) { return i < 8u ? (int16_t)(20000 - 2500 * (int32_t)i) : 0; }
+static uint32_t rg_period(uint32_t lo, uint32_t hi, uint32_t from)   /* the lag of mdl_y's autocorrelation's peak */
+{
+    uint32_t best = 0, lag, k;
+    double bv = -1e30;
+    for (lag = lo; lag < hi; lag++) {
+        double a = 0;
+        for (k = from; k < from + 4096u; k++)
+            a += mdl_y[k] * mdl_y[k + lag];
+        if (a > bv) {
+            bv = a;
+            best = lag;
+        }
+    }
+    return best;
+}
+static double rg_rms(uint32_t a, uint32_t n)
+{
+    double e = 0;
+    uint32_t k;
+    for (k = a; k < a + n; k++)
+        e += mdl_y[k] * mdl_y[k];
+    return sqrt(e / n);
+}
 static void phase5d(void)
 {
-    static const double RATIO[4][6] = {{1, 1.59, 2.14, 2.30, 2.65, 2.92}, {1, 2.756, 5.404, 8.933, 13.34, 18.64},
-                                       {0.5, 1, 1.183, 1.506, 2.0, 2.514}, {1, 1.42, 1.93, 2.36, 2.81, 3.33}};
-    static const char *const NM[4] = {"MEMBRANE", "BAR", "BELL", "PLATE"};
-    uint32_t md, k, ok;
-    double f0;
-    p4_reset();
-    par_set(PAR_FILTER_FREQ_1, 127);                 /* (the voice's filter open, its own decay long) */
-    par_set(PAR_FILTER_TYPE_1, F_OFF - 1u);
-    par_set(PAR_MDECAY1, 90);
-    par_set(PAR_MPOS1, 30);
-    par_set(PAR_MEXC1, 63);                          /* (a click: every mode) */
-    par_set(PAR_COARSE1, 72);                        /* (higher: the modes bins apart) */
-    par_set(PAR_MDAMP1, 0);                          /* (the high modes as long as the low) */
-    run_ms(20);
-    f0 = (double)vc[0].osc.inc * FS / 4294967296.0;
-    for (md = 0; md < 4u; md++) {
-        par_set(PAR_MODEL1, md + 1u);
-        run_ms(20);
-        mdl_hit(127, 10, 16384);
-        printf("  %-8s at %.1f Hz:", NM[md], f0);
-        for (k = 0, ok = 1; k < 6u; k++) {
-            double f = f0 * RATIO[md][k], on = goertzel(mdl_y, 16384, f);
-            double off = goertzel(mdl_y, 16384, f * 0.97) + goertzel(mdl_y, 16384, f * 1.03);
-            if (f > FS * 0.45)
-                continue;
-            printf(" %.0f%s", f, on > off ? "" : "?");   /* (a peak: above both its neighbours together) */
-            if (k < 4u && !(on > off))
-                ok = 0;
-        }
-        printf("\n");
-        check(ok, "MODEL: its modes at their ratios");
+    uint32_t k, ok, md;
+    /* MODAL, STRUCTURE 34 (0.27: Rings' harmonic stretch, none): its modes at the pitch's multiples */
+    rg_hit(MD_MODAL, 90, 90, 34, 5, 0, 220, 127, 16384, NULL);
+    printf("  MODAL at 220 Hz, harmonic:");
+    for (k = 1, ok = 1; k <= 6u; k++) {
+        double on = goertzel(mdl_y, 16384, 220.0 * k);
+        double off = goertzel(mdl_y, 16384, 220.0 * k * 0.97) + goertzel(mdl_y, 16384, 220.0 * k * 1.03);
+        printf(" %u%s", 220u * k, on > off ? "" : "?");   /* (a peak: above both its neighbours together) */
+        ok &= on > off;
     }
-    /* DECAY: MEMBRANE at 64 rings ~0.28 s to -60 dB: -20 dB a third of it on */
-    par_set(PAR_MDAMP1, 40);
-    par_set(PAR_MODEL1, 1);
-    par_set(PAR_MDECAY1, 64);
-    run_ms(20);
+    printf("\n");
+    check(ok, "MODAL: STRUCTURE 0.27, the modes harmonic");
+    /* .. STRUCTURE 100 (0.79): stretched, the 4th mode well above 4 f */
     {
-        double e1 = 0, e2 = 0, db;
-        mdl_hit(127, 20, 16384);
-        for (k = 0; k < 1024u; k++) {
-            e1 += mdl_y[k] * mdl_y[k];
-            e2 += mdl_y[k + 4096u] * mdl_y[k + 4096u];   /* (93 ms on) */
-        }
-        db = 10.0 * log10(e2 / (e1 + 1e-12));
-        printf("  MEMBRANE DECAY 64: %.1f dB over 93 ms (-20 a third of 284 ms)\n", db);
-        check(db < -14.0 && db > -30.0, "MODEL: DECAY's time");
-    }
-    /* velocity: the higher modes louder for a harder hit */
-    {
-        double hi1, lo1, hi2, lo2;
-        par_set(PAR_MDECAY1, 90);
-        run_ms(20);
-        mdl_hit(127, 10, 8192);
-        lo1 = goertzel(mdl_y, 8192, f0);
-        hi1 = goertzel(mdl_y, 8192, f0 * 2.92);
-        mdl_hit(30, 10, 8192);
-        lo2 = goertzel(mdl_y, 8192, f0);
-        hi2 = goertzel(mdl_y, 8192, f0 * 2.92);
-        printf("  velocity: the 6th mode %.2f of the 1st hard, %.2f soft\n", hi1 / lo1, hi2 / lo2);
-        check(hi1 / lo1 > hi2 / lo2 * 1.3, "MODEL: a harder hit is brighter");
-    }
-    /* TUBE: its pitch */
-    par_set(PAR_MODEL1, 5);
-    run_ms(20);
-    mdl_hit(127, 30, 8192);
-    {
-        uint32_t best = 0, lag;
-        double bv = -1e30, period = FS / f0;
-        for (lag = 20; lag < 2000u; lag++) {
-            double a = 0;
-            for (k = 0; k < 4096u; k++)
-                a += mdl_y[k] * mdl_y[k + lag];
-            if (a > bv) {
-                bv = a;
-                best = lag;
+        double st = 0;
+        uint32_t best = 0, f;
+        rg_hit(MD_MODAL, 90, 90, 100, 20, 0, 220, 127, 16384, NULL);
+        for (f = 900; f < 2400u; f += 5) {
+            double g = goertzel(mdl_y, 16384, f);
+            if (g > st) {
+                st = g;
+                best = f;
             }
         }
-        printf("  TUBE: period %u samples (%.1f for %.1f Hz)\n", best, period, f0);
-        check(fabs(best - period) < 2.0 || fabs(best - 2.0 * period) < 3.0, "MODEL: TUBE at the voice's pitch");
+        printf("  MODAL STRUCTURE 100: the strongest partial between 900 and 2400 Hz at %u Hz\n", best);
+        check(goertzel(mdl_y, 16384, 880) < st * 0.5 && best > 950u, "MODAL: a stiff STRUCTURE stretches the modes");
     }
-    /* 0.7: the level of a hit, whatever the model, exciter and pitch: 0.15 .. 0.95 of full scale (0.6: 0.04 .. 6) */
+    /* STRING: its period */
+    rg_hit(MD_STRING, 90, 70, 32, 40, 0, 110, 127, 16384, NULL);
+    k = rg_period(200, 1000, 2048);
+    printf("  STRING at 110 Hz: period %u samples (%.1f)\n", k, FS / 110.0);
+    check(abs((int)k - 401) <= 1, "STRING: at the voice's pitch");
+    /* .. below the line's lowest (1020 samples, 43 Hz): at a slower rate, still at pitch */
+    rg_hit(MD_STRING, 100, 70, 32, 40, 0, 32.7, 127, 16384, NULL);
+    k = rg_period(1000, 1800, 2048);
+    printf("  STRING at 32.7 Hz: period %u samples (%.1f)\n", k, FS / 32.7);
+    check(abs((int)k - 1349) <= 3, "STRING: below its line's length, at pitch");
+    /* FM, a ratio of 1: harmonics of the pitch, its period */
     {
-        static const uint32_t EXC[6] = {0, 32, 63, 64, 100, 127};
+        uint32_t m1 = 0;
+        for (k = 0; k < 128u; k++)                   /* (the STRUCTURE whose quantized ratio is 1) */
+            if (RG_FM_RATIO[(k * 516u) >> 9] == 0 && RG_FM_RATIO[((k * 516u) >> 9) + 1u] == 0) {
+                m1 = k;
+                break;
+            }
+        rg_hit(MD_FM, 80, 70, m1, 64, 0, 196, 127, 16384, NULL);
+        k = rg_period(100, 400, 1024);
+        printf("  FM at 196 Hz, ratio 1 (STRUCTURE %u): period %u samples (%.1f)\n", m1, k, FS / 196.0);
+        check(m1 > 0u && abs((int)k - 225) <= 1, "FM: at the voice's pitch");
+    }
+    /* DECAY: longer, and more of the hit left 0.3 s on */
+    for (md = MD_MODAL; md <= MD_FM; md++) {
+        double r1, r2;
+        rg_hit(md, 20, 70, 34, 30, 0, 220, 127, 16384, NULL);
+        r1 = rg_rms(13230, 2048) / (rg_rms(0, 2048) + 1e-9);
+        rg_hit(md, 110, 70, 34, 30, 0, 220, 127, 16384, NULL);
+        r2 = rg_rms(13230, 2048) / (rg_rms(0, 2048) + 1e-9);
+        printf("  %s DECAY 20 / 110: %.1f / %.1f dB at 0.3 s\n", L_MODEL[md], 20 * log10(r1 + 1e-9), 20 * log10(r2 + 1e-9));
+        check(r2 > r1 * 2.0, "MODEL: DECAY lengthens the ring");
+    }
+    /* the level of a hit, whatever the model, its knobs and the pitch: under full scale (Rings' limiter, then the soft
+     * clip), and there (BRIGHT filters Rings' exciter: a dark hit ~20 dB under a bright one, as in Rings) */
+    {
+        static const uint32_t KN[3] = {10, 64, 120};
         static const double HZ[3] = {55, 220, 1000};
         double lo = 9, hi = 0;
-        uint32_t e, f, i, n;
-        for (md = 1; md <= 5u; md++)
-            for (e = 0; e < 6u; e++)
-                for (f = 0; f < 3u; f++) {
-                    voice_t v;
-                    double pk = 0;
-                    memset(&v, 0, sizeof v);
-                    memset(&mdl[1], 0, sizeof mdl[1]);
-                    mdl[1].type = (uint8_t)md;
-                    mdl[1].dec = 64;
-                    mdl[1].damp = 40;
-                    mdl[1].mat = 64;
-                    mdl[1].pos = 40;
-                    mdl[1].exc = (uint8_t)EXC[e];
-                    v.osc.inc = (uint32_t)(HZ[f] / FS * 4294967296.0);
-                    model_trigger(1, 127, v.osc.inc);
-                    for (n = 0; n < FS / 2u; n += BLOCK) {
-                        int16_t b[BLOCK];
-                        model_block(1, &v, b);
-                        for (i = 0; i < BLOCK; i++)
-                            pk = fabs(b[i]) > pk ? fabs(b[i]) : pk;
+        uint32_t a, b, f;
+        for (md = MD_MODAL; md <= MD_FM; md++)
+            for (a = 0; a < 3u; a++)
+                for (b = 0; b < 3u; b++)
+                    for (f = 0; f < 3u; f++) {
+                        double pk = rg_hit(md, 64, KN[a], KN[b], 40, 0, HZ[f], 127, FS / 2u, NULL);
+                        lo = pk < lo ? pk : lo;
+                        hi = pk > hi ? pk : hi;
                     }
-                    pk /= 32768.0;
-                    lo = pk < lo ? pk : lo;
-                    hi = pk > hi ? pk : hi;
-                }
-        memset(&mdl[1], 0, sizeof mdl[1]);
-        printf("  a hit's peak over every model, exciter and pitch: %.2f .. %.2f of full scale\n", lo, hi);
-        check(lo > 0.15 && hi < 0.95, "MODEL: a hit's level");
+        printf("  a hit's peak over every model, BRIGHT, STRUCTURE and pitch: %.2f .. %.2f of full scale\n", lo, hi);
+        check(lo > 0.04 && hi < 0.98, "MODEL: a hit's level");
+    }
+    /* EXCITER: 0, Rings' own exciter; 127, the voice's sound only (silence: nothing; a click: the model rings) */
+    for (md = MD_MODAL; md <= MD_FM; md++) {
+        double own = rg_hit(md, 64, 64, 34, 40, 0, 220, 127, 8192, NULL);
+        double none = rg_hit(md, 64, 64, 34, 40, 127, 220, 127, 8192, NULL);
+        double click = rg_hit(md, 64, 64, 34, 40, 127, 220, 127, 8192, rg_click);
+        printf("  %s EXCITER 0: %.3f; 127, silent voice %.4f, a click %.3f\n", L_MODEL[md], own, none, click);
+        check(own > 0.05 && none < 0.002 && click > 0.01, "MODEL: EXCITER, Rings' own exciter or the voice's sound");
+    }
+    /* velocity: a softer hit, quieter */
+    {
+        double hard = rg_hit(MD_MODAL, 64, 64, 34, 40, 0, 220, 127, 8192, NULL);
+        double soft = rg_hit(MD_MODAL, 64, 64, 34, 40, 0, 220, 40, 8192, NULL);
+        check(soft < hard * 0.6, "MODEL: velocity");
+    }
+    /* the voice: D1 on MODAL rings at its pitch */
+    p4_reset();
+    par_set(PAR_FILTER_FREQ_1, 127);                 /* (the voice's filter open) */
+    par_set(PAR_FILTER_TYPE_1, F_OFF - 1u);
+    par_set(PAR_MODEL1, MD_STRING);
+    par_set(PAR_MDECAY1, 90);
+    run_ms(20);
+    mdl_hit(127, 50, 16384);
+    {
+        double f0 = (double)vc[0].osc.inc * FS / 4294967296.0, per = FS / f0;
+        uint32_t lo = (uint32_t)(per * 0.8), hi = (uint32_t)(per * 1.25);
+        k = rg_period(lo, hi, 0);
+        printf("  D1 on STRING: period %u samples (%.1f for %.1f Hz)\n", k, per, f0);
+        check(fabs(k - per) < 2.0, "MODEL: D1's STRING at D1's pitch");
     }
     /* TENSION: the pitch up at the hit, falling back */
-    par_set(PAR_MODEL1, 1);
+    par_set(PAR_MODEL1, MD_MODAL);
     par_set(PAR_MTENS1, 127);
     run_ms(20);
     voice_trigger(0, 127, vc[0].osc.base_note);
@@ -1526,15 +1573,30 @@ static void phase5d(void)
     check(ui.sect == S_MODEL, "EDIT: the MODEL section on D1");
     shot("model");
     turn(EN_K1, -1);
-    check(par[PAR_MODEL1] == 0u && mdl[0].type == MD_LXR, "MODEL: back to the LXR's engine");
+    check(par[PAR_MODEL1] == MD_LXR && mdl[0].type == MD_LXR, "MODEL: back to the LXR's engine");
     turn(EN_K1, 2);
+    check(par[PAR_MODEL1] == MD_STRING, "MODEL: K1 to STRING");
+    par_set(PAR_MPOS1, 30);
+    run_ms(20);
     {
         int rc = proj_save(1, "MODEL   ");
         par[PAR_MODEL1] = 0;
         par[PAR_MPOS1] = 0;
         rc |= proj_load(1);
-        check(rc == 0 && par[PAR_MODEL1] == 2u && par[PAR_MPOS1] == 30u && mdl[0].type == MD_BAR,
+        run_ms(20);
+        check(rc == 0 && par[PAR_MODEL1] == MD_STRING && par[PAR_MPOS1] == 30u && mdl[0].type == MD_STRING,
               "project: the model's parameters");
+    }
+    /* a project before 0.9 (version 6): its models MEMBRANE BAR BELL PLATE to MODAL, TUBE to STRING */
+    {
+        static uint8_t kb[KIT_LEN];
+        uint32_t i;
+        memset(kb, 0, sizeof kb);
+        for (i = 0; i < 3u; i++)
+            kb[kit_idx(PAR_MODEL1 + i)] = (uint8_t)(i == 0 ? 3u : i == 1 ? 5u : 0u);
+        proj_models_08(kb);
+        check(kb[kit_idx(PAR_MODEL1)] == MD_MODAL && kb[kit_idx(PAR_MODEL1 + 1)] == MD_STRING &&
+              kb[kit_idx(PAR_MODEL1 + 2)] == MD_LXR, "project 6: the old models to Rings' (BELL MODAL, TUBE STRING)");
     }
     par_set(PAR_MODEL1, 0);
     goto_mode(B_HOME, M_HOME);

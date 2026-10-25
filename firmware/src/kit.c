@@ -36,8 +36,8 @@ static uint32_t init_kit_k(uint32_t p)
 {
     if (p >= PAR_TILT1 && p < PAR_TILT1 + 6u)
         return 64;
-    if (p >= PAR_MDECAY1 && p < NPAR) {              /* the models' knobs: a medium drum, mid-way struck */
-        static const uint8_t D[6] = {64, 40, 64, 40, 32, 0};
+    if (p >= PAR_MDECAY1 && p < NPAR) {              /* the models' knobs (0.9: Rings'): a medium decay, harmonic */
+        static const uint8_t D[6] = {64, 64, 32, 40, 0, 0};
         return D[(p - PAR_MDECAY1) / 6u];
     }
     return p == PAR_REV_SIZE ? 64u : p == PAR_REV_DAMP ? 48u : p == PAR_REV_LEVEL ? 100u : 0u;

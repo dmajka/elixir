@@ -65,7 +65,7 @@ static const char *const L_REVMODEL[] = {"ROOM", "SPRING", "HALL"};
 static const char *const L_SHAPE[] = {"LXR", "FOLD", "CLIP", "ASYM", "RECTIFY"};
 static const char *const L_XMODE[] = {"DUCK", "FILTER", "RING"};
 static const char *const L_CHOKE[] = {"OFF", "1", "2", "3", "4"};
-static const char *const L_MODEL[] = {"LXR", "SKIN", "BAR", "BELL", "PLATE", "TUBE"};
+static const char *const L_MODEL[] = {"LXR", "MODAL", "STRING", "FM"};   /* (0.9: Rings' models, rings.c) */
 static const char *const L_BITS[] = {"OFF", "15", "14", "13", "12", "11", "10", "9", "8", "7", "6", "5", "4", "3",
                                      "2", "1"};
 enum { MENU_REV_MODEL = 27, MENU_SHAPE, MENU_XMODE, MENU_CHOKE, MENU_BITS, MENU_MODEL };   /* (Kettle's, after LXR's) */
@@ -105,8 +105,8 @@ static const struct { uint16_t first; uint8_t n; uint16_t dtype; const char *nm[
     {PAR_XAMT1, 6, DTYPE_0B127, {"Amount", "CrossMod", "xam", "XAmount"}},
     {PAR_MODEL1, 6, DTYPE_MENU | MENU_MODEL << 8, {"Model", "Model", "mdl", "Model"}},
     {PAR_MDECAY1, 6, DTYPE_0B127, {"Decay", "Model", "mdc", "MDecay"}},
-    {PAR_MDAMP1, 6, DTYPE_0B127, {"Damping", "Model", "mdp", "MDamping"}},
-    {PAR_MMAT1, 6, DTYPE_0B127, {"Material", "Model", "mmt", "Material"}},
+    {PAR_MDAMP1, 6, DTYPE_0B127, {"Bright", "Model", "mbr", "MBright"}},
+    {PAR_MMAT1, 6, DTYPE_0B127, {"Struct", "Model", "mst", "Structure"}},
     {PAR_MPOS1, 6, DTYPE_0B127, {"Position", "Model", "mps", "Position"}},
     {PAR_MEXC1, 6, DTYPE_0B127, {"Exciter", "Model", "mex", "Exciter"}},
     {PAR_MTENS1, 6, DTYPE_0B127, {"Tension", "Model", "mtn", "Tension"}},

@@ -34,10 +34,11 @@ enum {
     PAR_XSRC1 = PAR_RND_PAN1 + 6,                /* cross modulation: the source voice (0 none, 1..6) */
     PAR_XMODE1 = PAR_XSRC1 + 6,                  /* .. DUCK, FILTER, RING */
     PAR_XAMT1 = PAR_XMODE1 + 6,                  /* .. its amount */
-    PAR_MODEL1 = PAR_XAMT1 + 6,                  /* 0.6: the DRUM voices' physical model (voices.c mdl): 0 the LXR's
-                                                  * engine, SKIN (a membrane) BAR BELL PLATE TUBE (six, as the others:
-                                                  * 4..6 unused) */
-    PAR_MDECAY1 = PAR_MODEL1 + 6,
+    PAR_MODEL1 = PAR_XAMT1 + 6,                  /* 0.6: the DRUM voices' model (rings.c mdl): 0 the LXR's engine; 0.9:
+                                                  * Rings' MODAL STRING FM (0.6 - 0.8: physical models, project.c
+                                                  * proj_models_08; six, as the others: 4..6 unused) */
+    PAR_MDECAY1 = PAR_MODEL1 + 6,                /* .. its DECAY (Rings' DAMPING), BRIGHT, STRUCTURE, POSITION, EXCITER
+                                                  * (the voice's own sound's share), TENSION */
     PAR_MDAMP1 = PAR_MDECAY1 + 6,
     PAR_MMAT1 = PAR_MDAMP1 + 6,
     PAR_MPOS1 = PAR_MMAT1 + 6,

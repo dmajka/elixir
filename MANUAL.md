@@ -1,6 +1,6 @@
 # Kettle manual
 
-Kettle is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 0.8: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Kettle adds.
+Kettle is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 0.9: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Kettle adds.
 
 Kettle is **unofficial**. It is not affiliated with or endorsed by Erica Synths, M-VAVE or Hügelton Instruments. It is free software under the GPL-3.0 (see *Licence and credits* at the end).
 
@@ -35,7 +35,7 @@ Kettle is **unofficial**. It is not affiliated with or endorsed by Erica Synths,
 
 ### Status
 
-Kettle has been tested extensively in its browser emulator and with host tests (the same C sources compiled for a computer), and **it has run on one real FM-1 so far** (October 2026). There, a busy pattern used about 60% of the processor on average, with a 64% peak. Kettle shows its load on screen (see [the CPU meter](#16-settings-config-and-the-cpu-meter)); reports from other FM-1s are welcome. Versions 0.6 to 0.8 (PERFORM 2, the physical models, KEYS, the kit library) have so far only run in the emulator: their load on the FM-1 hasn't been measured yet, so watch the CPU meter with several models or PERFORM 2 effects at once.
+Kettle has been tested extensively in its browser emulator and with host tests (the same C sources compiled for a computer), and **it has run on one real FM-1 so far** (October 2026). There, a busy pattern used about 60% of the processor on average, with a 64% peak. Kettle shows its load on screen (see [the CPU meter](#16-settings-config-and-the-cpu-meter)); reports from other FM-1s are welcome. Versions 0.6 to 0.9 (PERFORM 2, the models, KEYS, the kit library) have so far only run in the emulator: their load on the FM-1 hasn't been measured yet. The models (Rings', from 0.9) are the heaviest part, so watch the CPU meter with two or three drum voices on a model, or with PERFORM 2 effects on.
 
 ### Before the first install: official V15
 
@@ -320,7 +320,7 @@ Select a track, then press a sound button. Pressing the same button again moves 
 | **Oscillator** (EDIT) | Coarse, Fine, Waveform, Pulse width | Coarse, Fine, Noise frequency, Mix / Waveform, Pulse width | Coarse, Fine, Waveform, Pulse width (OH: no pulse width) |
 | **FM** (EDIT) | Amount, Frequency, Waveform, Mode (FM or mix) | – | Mod 1 & 2 frequency and gain / their waveforms |
 | **Transient** (EDIT) | Waveform, Volume, Frequency | same | same |
-| **Model** (EDIT, Kettle's) | Model, Decay, Damping, Material / Position, Exciter, Tension (see *Physical models* below) | – | – |
+| **Model** (EDIT, Kettle's) | Model, Decay, Bright, Struct / Position, Exciter, Tension (see *Models* below) | – | – |
 | **Amp EG** (ENV) | Attack, Decay, Slope | Attack, Decay, Repeat count (claps), Slope | Attack, Decay (CH: closed; OH: open), Repeat (cymbal), Slope |
 | **Mod EG / velocity** (ENV) | Pitch EG: Decay, Slope, Amount / Velocity: destination, amount, volume mod | same | Velocity: destination, amount, volume mod |
 | **Filter** (SCL) | Frequency, Resonance, Type (LP HP BP UNITY BP NOTCH PEAK LP2 OFF), Overdrive | same | same |
@@ -359,31 +359,35 @@ Each hit varies by up to the amount set: pitch up to an octave either way at 127
 - **Mode:** **DUCK** (this voice drops while the source sounds: sidechain), **FILTER** (the source's level opens this voice's filter), **RING** (the two multiplied).
 - **Choke:** a group 1–4. A hit on any voice in the group fades the others in that group out (within 1.5 ms). The hats already choke each other, since they share a voice.
 
-### Physical models (Drum 1–3)
+### Models: Rings (Drum 1–3)
 
-The three DRUM voices have a second engine: instead of the LXR's oscillators, a struck body that rings. It is set in the **MODEL** section (EDIT, after the transient; drum tracks only):
+The three DRUM voices have a second engine: a port of the resonators of Mutable Instruments' **Rings**, struck by the voice. It is set in the **MODEL** section (EDIT, after the transient; drum tracks only):
 
 | | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
-| Row 1 | Model | Decay | Damping | Material |
+| Row 1 | Model | Decay | Bright | Struct |
 | Row 2 | Position | Exciter | Tension | |
 
-- **Model:** **LXR** (the LXR's own engine; the default, and what old kits and projects load as), **SKIN** (a drum head: six modes at 1, 1.59, 2.14, 2.30, 2.65, 2.92 times the pitch), **BAR** (marimba, xylophone: 1, 2.76, 5.40, 8.93 …), **BELL** (a hum an octave below, inharmonic, long), **PLATE** (dense and metallic, long) and **TUBE** (a plucked string or blown pipe).
+- **Model:** **LXR** (the LXR's own engine; the default), **MODAL** (Rings' modal resonator: a bank of up to 32 tuned modes, a struck bar, plate, bell or drum head), **STRING** (Rings' string: a plucked or struck string with dispersion) or **FM** (Rings' FM voice: two operators, with an envelope from the hit).
 - **Pitch** is the voice's own Coarse and Fine on the oscillator page; the pitch EG and random pitch still bend it.
-- **Decay:** how long it rings, from 20 ms to about 4 s (64 is about 0.3 s). BELL and PLATE ring twice as long.
-- **Damping:** how much faster the higher modes die. 0: they all ring as long as the lowest; high: a dull thud after the first instant.
-- **Material:** stretches the mode ratios. Below 64 they draw together (softer, wooden); above, they spread (glassy, metallic).
-- **Position:** where it's struck, from the edge (0) to the centre (127). Each mode is loudest where it moves most, so moving the strike point brings modes in and out; near the edge the fundamental is quieter.
-- **Exciter:** what strikes it. 0 to 63: a pulse from a soft thump (0) to a hard click (63). 64 to 127: a burst of noise, longer as it rises (a brush or a scrape). A soft thump brings out the lower modes, a click all of them. The level stays about the same whatever the exciter, pitch or position.
-- **Tension:** a hard hit stretches a drum head, so the pitch starts high and falls back in about 50 ms. Up to an octave at 127, scaled by velocity.
+- **Decay** (Rings' DAMPING): how long it rings, from a short knock to minutes (STRING near 127 sustains for good).
+- **Bright** (Rings' BRIGHTNESS): how much of the high end the hit brings out and keeps. Dark hits are quieter as well as duller, as in Rings.
+- **Struct** (Rings' STRUCTURE): MODAL, the modes' spacing: around 34 (0.27) they are harmonic, lower they draw together, higher they spread into bells and metal. STRING: below 32 a curved bridge (a sitar's buzz), around 32 a plain string, above it a stiffer, more inharmonic one. FM: the modulator's frequency ratio, in steps (½, 1, √2, 2, 3, π, 4 …).
+- **Position** (Rings' POSITION): MODAL, where it is struck (which modes sound); STRING, where it is picked up; FM, the feedback (below 64 on the phase, above on the modulator: grit).
+- **Exciter:** what strikes it. 0 is Rings' own exciter (a filtered pulse for MODAL, a plucked noise burst for STRING, the envelope for FM); 127 is the voice's own sound (the LXR's oscillators, transient and amp EG, as if patched into Rings' input); between, a mix. With the voice's sound, the model rings with whatever the LXR plays into it.
+- **Tension:** the pitch starts high on a hard hit and falls back in about 50 ms, as a drum head does. Up to an octave at 127, scaled by velocity.
 
-**Velocity** sets how hard it's struck: louder, and brighter, since a harder hit brings out the higher modes.
+**Velocity** sets how hard it's struck.
 
-**TUBE** is a string or pipe (a Karplus-Strong loop): Decay is how long it sustains, Damping how dark it gets as it rings. Exciter sets the pluck: below 64 a pulse, from soft and round (0) to sharp (63); from 64 a noise burst, dark at 64 and bright at 127. It ignores Material and Position.
+The modes a MODAL voice runs drop as more drums use MODAL: 32 with one, 24 with two, 16 with three (Rings does the same with its polyphony). STRING plays down to 43 Hz at full bandwidth; below that it runs at a lower rate, as Rings' does at its lowest. A limiter keeps every model below full scale. Rings' sympathetic strings, its other models and its reverb aren't ported.
 
-A new hit damps what is still ringing by half, as a mallet does, so fast repeats on a long decay don't pile up. Loud hits bend softly into full scale instead of clipping.
+The model replaces the oscillators, transient and amp EG in the output: the model's own Decay sets how long the voice sounds. Everything after the oscillator still applies: the filter, drive and shape, bits, tilt, sends, LFO, random per hit and cross modulation. The model's settings are part of the kit and can be locked per step; Model itself doesn't morph: the voice keeps its own kit's engine while the other knobs morph.
 
-The model replaces the oscillators, transient and amp EG: the model's own Decay sets how long the voice sounds. Everything after the oscillator still applies: the filter, drive and shape, bits, tilt, sends, LFO, random per hit and cross modulation. The model's settings are part of the kit and can be locked per step; Model itself doesn't morph: the voice keeps its own kit's engine while the other knobs morph.
+**From 0.8 and earlier:** the old models (SKIN, BAR, BELL, PLATE, TUBE) are gone. A project or kit that used them loads with MODAL in place of SKIN, BAR, BELL and PLATE, and STRING in place of TUBE; the knobs keep their values, so they sound different. Check those sounds after updating.
+
+### The sound browser
+
+On a track's sound pages (or in KEYS), turn **PRESETS**: a list of sounds that track can take opens, and each step plays the sound on the track. It lists the library's saved sounds, then the voices of the library's kits, of the 64 kit slots and (on a private build) of the factory bank; a drum track lists all three drums of each kit, the others their own voice. Kits' voices still as the init kit are left out. SELECT moves through it too. **OCT+** keeps the sound; **OCT−** puts back what you had. SAVE → SOUND saves the track's sound into the library, to come up first next time.
 
 ---
 
@@ -763,10 +767,10 @@ Six numbers per voice-based setting, in the order D1 D2 D3 SN CY HH.
 | 238–243 | Cross-mod source (0 none, 1–6) |
 | 244–249 | Cross-mod mode (0 duck, 1 filter, 2 ring) |
 | 250–255 | Cross-mod amount |
-| 256–261 | Model (0 LXR, 1 skin, 2 bar, 3 bell, 4 plate, 5 tube; D1–D3 only) |
+| 256–261 | Model (0 LXR, 1 modal, 2 string, 3 FM; D1–D3 only) |
 | 262–267 | Model decay |
-| 268–273 | Model damping |
-| 274–279 | Model material (64 even) |
+| 268–273 | Model bright |
+| 274–279 | Model structure |
 | 280–285 | Model position |
 | 286–291 | Model exciter |
 | 292–297 | Model tension |
@@ -801,7 +805,7 @@ What changed in the port:
 
 What Kettle adds:
 
-- **Sound:** FX and reverb sends per voice; three reverbs; waveshaper choice; bits; tilt EQ; random per hit; choke groups; cross modulation; phaser and flanger; physical models on the drum voices; a sound browser and a kit library.
+- **Sound:** FX and reverb sends per voice; three reverbs; waveshaper choice; bits; tilt EQ; random per hit; choke groups; cross modulation; phaser and flanger; Rings' resonators on the drum voices; a sound browser and a kit library.
 - **Performance:** PERF with fill, repeat, freeze, throws, feedback push, tape stop, filter sweeps, a DJ filter, four macros, the voices' volumes on two pages, and PERFORM 2; KEYS, to play a voice from the keyboard.
 - **Sequencing:** trig conditions, ratchets, per-track clocks, generators (mutate, Turing machine, cellular automata, Grids), dice, commit and undo, and copying a bar across all tracks.
 - **Safety:** the automatic session save, a CPU meter, and backup and restore over USB (the library page).
@@ -834,10 +838,11 @@ It is built from:
 - **The LXR-02 firmware**, © 2012–2026 Erica Synths, GPL-3.0, itself built on Julian Schmidt's original Sonic Potions LXR: the sound engine, parameters, kit format, sequencer, MIDI and front-panel functions.
 - **Felucca**, © 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments, GPL-3.0: the FM-1 hardware layer, boot, screen, graphics, USB, storage, updater, browser emulator and the reverb.
 - **Grids**, © 2011–2012 Emilie Gillet, GPL-3.0-or-later (used under GPL-3.0): the drum map and its reading.
+- **Rings** and **stmlib**, © 2012–2015 Emilie Gillet, MIT licence: the drum voices' models (a fixed-point port).
 - **Inter Tight** (the screen's font) and **DotGothic16** (the emulator page), SIL Open Font License 1.1.
 
 "Erica Synths" and "LXR-02" are trademarks of Erica Synths; "M-VAVE" and "FM-1" are trademarks of their owner.
 
 ### Building and testing
 
-See `README.md`: building the firmware (`./build.sh`), the browser emulator (`web/emu/build.sh`), and the host tests (`render_test`, `ui_test`, `compare_test`, the library tests).
+See `README.md`: building the firmware (`./build.sh`), the browser emulator (`web/emu/build.sh`), and the host tests (`render_test`, `ui_test`, `compare_test`, `rings_compare`, the library tests).

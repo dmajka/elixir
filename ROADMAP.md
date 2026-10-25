@@ -19,22 +19,22 @@ Kettle is the Erica Synths LXR-02 firmware (GPL-3.0) ported to the M-VAVE FM-1 o
   - A private-build kit bank (`KETTLE_KITS_DIR`).
   - The code is at https://github.com/dmajka/kettle.
 - **0.8 (Phase 9, the LXR's live feel):** PERF's pages reordered (the performance pages, MIX, then the macros, then PERFORM 2), the LXR's PERFORMANCE page with its global sample rate (SRate), MIX pages for the voices' volumes; KEYS (SHIFT + EDIT) to play a voice, with a key velocity and accent; LXR project import (kits, patterns, songs); a kit library in flash (128 kits, 128 sounds) with SOUND save and load and morph from it; a per-track sound browser. See *Phase 9*.
-  - Phase 10 (Rings in place of the physical models) is planned.
+- **0.9 (Phase 10):** the physical models replaced by a fixed-point port of Mutable Instruments Rings' modal resonator, string and FM voice, checked against Rings' own code. CPU on hardware still to be measured. See *Phase 10*.
 - **MIDI:** USB and TRS in, USB out. CC/NRPN control as on the LXR; clock out always on; clock in by turning the tempo below its minimum to "MIDI".
-- **Projects:** 4 slots plus an AUTO session slot in flash, 48 KB each, sparse encoding. Format version 6; versions 1 to 5 still load.
+- **Projects:** 4 slots plus an AUTO session slot in flash, 48 KB each, sparse encoding. Format version 7 since 0.9; versions 1 to 6 still load (6's models mapped to Rings').
 - **UI:** mapped to the FM-1's keys, buttons and knobs; SHIFT legend on screen; mixer under GLO.
 - **Firmware build:** `./build.sh` makes `build/kettle.fwsc` and passes Felucca's checks.
 - **Browser emulator:** `web/emu/build.sh`, tested in Chrome, with Web MIDI in and out, including clock.
 - **First hardware run (0.5.1):** installed on a real FM-1 from V15 with the install page (`web/make_site.py`); a battery display on CONFIG; autosave no longer makes a burst of noise after a stop. See *0.5.1* below.
-- **Tests:** render_test, compare_test, library_test (the library page's code against the device's) and ui_test (75 screens; physical models; PERF's pages, MIX and KEYS; the kit library and sound browser; PERFORM 2; links between tracks; bouncing ratchets and the roll sweep; the output's hush and autosave's timing; the battery display; Grids' map; clocks, conditions, ratchets, generators, bar copy; locks, patterns, project save/load, a 0.1 project, sends, reverb, sound shaping, phaser, flanger, PERF's effects and macros, autosave failure, sync in) all pass.
+- **Tests:** render_test, compare_test, library_test (the library page's code against the device's), rings_compare (the models against Rings' float code) and ui_test (75 screens; Rings' models; PERF's pages, MIX and KEYS; the kit library and sound browser; PERFORM 2; links between tracks; bouncing ratchets and the roll sweep; the output's hush and autosave's timing; the battery display; Grids' map; clocks, conditions, ratchets, generators, bar copy; locks, patterns, project save/load, a 0.1 project, sends, reverb, sound shaping, phaser, flanger, PERF's effects and macros, autosave failure, sync in) all pass.
 
-**Measured resources** (from the 0.8 build)
+**Measured resources** (from the 0.9 build)
 
 | | Used | Total | Free |
 |---|---|---|---|
-| Fast RAM | 20 KB | 72 KB | ~52 KB |
-| Pool | 342 KB | 360 KB | ~18 KB |
-| App flash | 296 KB | 581 KB | ~285 KB |
+| Fast RAM | 41 KB | 72 KB | ~31 KB (Rings' string lines: 18 KB of it) |
+| Pool | 337 KB | 360 KB | ~23 KB |
+| App flash | 312 KB | 581 KB | ~269 KB |
 | Kit library (flash) | 72 KB at 0xEA000–0xFBFFF | | 128 kits + 128 sounds |
 
 **CPU on a real FM-1 (0.5, first measurement):** about 60% average and 64% peak with a busy pattern. The 122 LATE buffers seen then were not the engine's load (a 64% peak leaves a third of each buffer spare) but autosave's flash erases, which hold the processor; 0.5.1 no longer counts those. The load is on screen (bottom of the CONFIG pages: average, peak since CONFIG opened, late buffers since power-on). The browser emulator always shows 0%, because it doesn't model CPU time. The second core is unused (`FELUCCA_CPU2 0`); it's a reserve for heavy DSP (see *0.5.1*).
@@ -448,12 +448,19 @@ Planned:
 - **9g. The global sample-rate reducer, easy to reach:** the LXR's PAR_VOICE_DECIMATION_ALL (its PERFORMANCE page: BPM, Roll, Morph, Sample rate, Shuffle) is ported exactly (voices.c, mixer_decimateBlock: each voice's own rate × the global one, before the mix), but it is hidden on PERFORM: MORE, KNOB 3 ("All SRate"). The LXR's global crush is a sample-rate reducer, not a bit-depth one. Kettle's extras are separate: per-voice Bits (Shape page) and PERF 2's CRUSH effect on the output. To do: put it on a main PERF page next to Morph (the LXR's own layout), check that it is a macro target and that knob recording records it, and check it against the LXR's sound (it is a kit parameter there, so a kit carries it). (Requested 2026-10-24.)
 - After 9: the user compares with LXR-02 videos and lists what still feels missing.
 
-### Phase 10: Rings in place of the physical models (0.9)
+### Phase 10: Rings in place of the physical models (built in 0.9)
 
 Requested 2026-10-24: the user isn't fond of how the Phase 5d/6 physical models sound.
-- Unhook the physical models (SKIN, BAR, BELL, PLATE, TUBE) from the UI, but keep their code in the tree.
-- Port Mutable Instruments Rings (GPL-3.0; https://pichenettes.github.io/mutable-instruments-documentation/modules/rings/) as a voice: its resonator models (modal, sympathetic strings, string, FM voice and the others) excited by the voice's own hit.
-- First check whether it fits the FM-1: CPU (Rings runs one voice at 48 kHz on an STM32F405 with an FPU), RAM, flash and its float code. If it doesn't fit, ship 0.9 with the physical models removed from the UI and nothing in their place.
+
+What was built:
+- **The port:** `firmware/src/rings.c`, a fixed-point port of Rings' modal resonator (`resonator.cc`), string (`string.cc`, with its dispersion, curved bridge and the plucker) and FM voice (`fm_voice.cc`, with its follower), Part's exciter filter and its limiter, with the stmlib DSP they use. Its tables come from `tools/gen_rings_tables.py`. Rings is **MIT-licensed** (not GPL as first noted); its notice is in `LICENSES/MIT-Rings.txt` and NOTICE.md.
+- **Models:** LXR, MODAL, STRING, FM on Drum 1–3. The knobs are Rings': Decay (DAMPING), Bright (BRIGHTNESS), Struct (STRUCTURE), Position (POSITION), plus Exciter (Rings' own exciter at 0, the voice's LXR sound as Rings' audio input at 127, a mix between) and Tension.
+- **Left out:** the sympathetic strings (several strings a voice: CPU), Rings' other modes, its reverb (Kettle has its own) and its polyphony (a drum voice is one).
+- **Cost:** MODAL runs 32 modes with one drum on it, 24 with two, 16 with three (Rings: 60, 28, 12 by polyphony). The string's lines are 32-bit and live in fast RAM (18 KB for three voices): in 16 bits, a long decay's tail sticks at a level. The line is 1024 samples (43 Hz); lower notes run the string at a lower rate, as Rings' does. CPU on the FM-1 not yet measured: the first thing to check on hardware, with three drums on MODAL.
+- **Accuracy:** `tests/rings_compare.cc` (with `tests/rings_core.c`; `tests/rings_compare.sh` needs Rings' and stmlib's sources) renders 18 cases (pitches from 30 Hz to 1 kHz, every model, their parameters, impulses, bursts and the FM envelope) with the port and with Rings' float code at 44.1 kHz: correlation 0.9998 and up, the error −35 dB or lower. Where Q20 alone wasn't enough, the port keeps more bits (the modes' rounding error fed back, the SVFs' and DC blockers' Q26 states, the FM envelopes' Q28, a finer ratio for the FM modulator, a true sine table: the LXR's is off by half a step), and replicates stmlib's 1/256-semitone pitch steps.
+- **The old models:** their code is kept, unbuilt, in `firmware/src/physmodels.c`. Projects (version 7 now) from before map SKIN, BAR, BELL and PLATE to MODAL and TUBE to STRING (`proj_models_08`).
+- **Tests:** ui_test phase5d (MODAL's harmonic and stretched partials, STRING's and FM's pitch, STRING below its line, DECAY, the level over models, BRIGHT, STRUCTURE and pitch, EXCITER, velocity, D1 through the voice, TENSION, the page, a project, version 6's mapping).
+- **Next:** the user listens, and the CPU is measured on a unit.
 
 ## Later / bigger
 
