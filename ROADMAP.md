@@ -337,7 +337,7 @@ A second engine for the three DRUM voices: instead of the LXR's oscillators, a s
 
 **Rule for this phase:** anything that turns out much harder than planned is noted here and skipped, not forced; we come back to it later.
 
-## Phases 6–9: refinements (planned 2026-10-24)
+## Phases 6–10: refinements (planned 2026-10-24)
 
 The user's list (October 24): the name and the repository, the physical models' sound, LXR-02 kits on the unit, backing up what's on the unit, and checking that Kettle has what makes people love the LXR-02, not only its engine.
 
@@ -429,7 +429,15 @@ Planned:
 - **9b. MIX in PERF:** a PERF page with the voices' volumes (two pages: D1 D2 D3 SN / CY HH, FX return, reverb return), so levels can be ridden like the faders.
 - **9c. KEYS:** the white and black keys play the selected voice chromatically, as an instrument; REC writes the notes into steps (note and velocity), as MIDI notes do now.
 - **9d. Key velocity:** the FM-1's keys have no velocity. A setting gives the velocity of the keys and rolls, and SHIFT plays an accent.
+- **9e. Sound browser (per track):** select a track (say D1) and browse, audition and load single-voice presets taken from every kit's voices of the same kind: the D1, D2 and D3 voices of all kits for a drum track, SN for SN, CY for CY, HH for CH/OH. Save the current track's sound as a preset too. Not in the LXR-02; it works like the Digitone's or Digitakt's sound browser. (Requested 2026-10-24.)
 - After 9: the user compares with LXR-02 videos and lists what still feels missing.
+
+### Phase 10: Rings in place of the physical models (0.9)
+
+Requested 2026-10-24: the user isn't fond of how the Phase 5d/6 physical models sound.
+- Unhook the physical models (SKIN, BAR, BELL, PLATE, TUBE) from the UI, but keep their code in the tree.
+- Port Mutable Instruments Rings (GPL-3.0; https://pichenettes.github.io/mutable-instruments-documentation/modules/rings/) as a voice: its resonator models (modal, sympathetic strings, string, FM voice and the others) excited by the voice's own hit.
+- First check whether it fits the FM-1: CPU (Rings runs one voice at 48 kHz on an STM32F405 with an FPU), RAM, flash and its float code. If it doesn't fit, ship 0.9 with the physical models removed from the UI and nothing in their place.
 
 ## Later / bigger
 
