@@ -173,6 +173,7 @@ static void irq_restore(uint32_t f) { (void)f; }
 static uint32_t fl_jedec_ram(void) { return 0x856014u; }
 #define FL_FAR(fn) (fn)
 #include "../../firmware/src/storage.c"
+#include "../../firmware/src/kitlib.c"
 #include "../../firmware/src/project.c"
 /* 0.7: the library (library.c): the page hands a message in (web_lib_buf, web_lib_in) and takes the answer */
 static uint8_t web_lib_inb[1024], web_lib_outb[1024];

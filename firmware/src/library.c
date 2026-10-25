@@ -27,6 +27,19 @@
  *                                                n, the LXR's part is 0 (as the LXR reads a short .SND) and Kettle's
  *                                                its init values. Flags bit 0: load it into the edit buffer too
  *   31 KIT_GET idx                            -> idx, name[8], n (2) = KIT_LEN, the kit layout
+ *   32 PAT_BEGIN idx                          -> 0.8, an LXR-02 pattern in (the page reads the .PAT): the pattern
+ *                                                cleared (no shuffle, kit 1, Kettle's own settings off)
+ *   33 PAT_STEPS idx, track, first, n (<= 32), steps[n] (7 bytes each: the LXR's Step), timing[n]
+ *   34 PAT_END idx, main[7][4] (2 each), shuffle, len[7], kit
+ *                                             -> the pattern complete (the playing one: as loaded)
+ *   35 SONG_PUT idx, entries[64]              -> a song (pattern numbers, SONG_END, SONG_LOOP)
+ *   40 KL_LIST kind, first, count (<= 32)     -> 0.8, the kit library (kitlib.c; kind 1 kits, 2 sounds): kind, first,
+ *                                                count, then per entry: exists, name[8]
+ *   41 KL_GET kind, slot                      -> kind, slot, name[8], n (2), the payload (a kit: the kit layout, a
+ *                                                sound: kitlib.c's)
+ *   42 KL_PUT kind, slot, name[8], n (2), data
+ *                                             -> the entry written; n 0 deletes it. A kit's data: the kit layout, up
+ *                                                to KIT_LEN (past n: as KIT_PUT)
  *
  * A write locks the projects (proj_lock: no autosave, no SAVE) until WRITE_END, WRITE_ABORT or 10 s without data;
  * the output is hushed meanwhile (flash writes hold the processor). */
@@ -334,6 +347,137 @@ static uint32_t lib_kit_put(const uint8_t *a, uint32_t n)
     return LS_OK;
 }
 
+/* 0.8: LXR-02 patterns and songs */
+static uint32_t lib_pat(uint32_t cmd, const uint8_t *a, uint32_t n)
+{
+    pattern_t *p;
+    uint32_t i, t;
+    if (n < 1u)
+        return LS_BAD;
+    if (a[0] >= NUM_PATTERN)
+        return LS_ARGS;
+    p = &pat[a[0]];
+    if (cmd == 0x32u) {
+        seq_clear_pattern(p);
+        p->shuffle = 0;
+        p->kit = 0;
+        p->gx = p->gy = p->gchaos = 0;
+        return LS_OK;
+    }
+    if (cmd == 0x33u) {
+        uint32_t first, cnt;
+        if (n < 4u)
+            return LS_BAD;
+        t = a[1];
+        first = a[2];
+        cnt = a[3];
+        if (t >= NTRACK || cnt > 32u || first + cnt > NUM_STEPS)
+            return LS_ARGS;
+        if (n < 4u + cnt * 8u)
+            return LS_BAD;
+        for (i = 0; i < cnt; i++) {
+            memcpy(&p->step[t][first + i], a + 4 + i * 7u, 7);
+            p->timing[t][first + i] = a[4 + cnt * 7u + i];
+            p->lhi[t][first + i] = 0;
+        }
+        return LS_OK;
+    }
+    if (n < 1u + 56u + 1u + 7u + 1u)
+        return LS_BAD;
+    for (t = 0; t < NTRACK; t++) {
+        for (i = 0; i < 4u; i++)
+            p->main[t][i] = (uint16_t)(a[1 + (t * 4u + i) * 2u] | a[2 + (t * 4u + i) * 2u] << 8);
+        p->len[t] = a[58 + t] >= 1u && a[58 + t] <= NUM_STEPS ? a[58 + t] : 16u;
+    }
+    p->shuffle = a[57] > 127u ? 127u : a[57];
+    p->kit = a[65] < NUM_KITS ? a[65] : 0u;
+    if (a[0] == sq.active) {                         /* the playing pattern: as loaded */
+        pat_backup = *p;
+        sq.gsync = (1u << NTRACK) - 1u;
+    }
+    return LS_OK;
+}
+static uint32_t lib_song(const uint8_t *a, uint32_t n)
+{
+    uint32_t i;
+    if (n < 1u + MAX_SONG_LENGTH)
+        return LS_BAD;
+    if (a[0] >= NUM_SONGS)
+        return LS_ARGS;
+    for (i = 0; i < MAX_SONG_LENGTH; i++) {
+        uint8_t v = a[1 + i];
+        songs[a[0]][i] = v < NUM_PATTERN || v == SONG_END || v == SONG_LOOP ? v : (uint8_t)SONG_END;
+    }
+    return LS_OK;
+}
+
+/* 0.8: the kit library */
+static uint32_t lib_kl_list(const uint8_t *a, uint32_t n)
+{
+    uint32_t k, c, max;
+    if (n < 3u)
+        return LS_BAD;
+    max = a[0] == KLK_KIT ? KL_KITS : KL_SOUNDS;
+    if (a[0] < KLK_KIT || a[0] > KLK_SOUND || a[1] >= max || a[2] > 32u)
+        return LS_ARGS;
+    if (!kl.ok)
+        return LS_FLASH;
+    c = a[2] > max - a[1] ? max - a[1] : a[2];
+    lib_put(a[0]);
+    lib_put(a[1]);
+    lib_put(c);
+    for (k = 0; k < c; k++) {
+        char nm[8];
+        int e = !kl_name(a[0], a[1] + k, nm);
+        lib_put(e);
+        if (e)
+            lib_puts(nm, 8);
+        else
+            lib_puts("        ", 8);
+    }
+    return LS_OK;
+}
+static uint32_t lib_kl_get(const uint8_t *a, uint32_t n)
+{
+    uint8_t b[KIT_LEN];
+    char nm[8];
+    int32_t len;
+    if (n < 2u)
+        return LS_BAD;
+    if (a[0] < KLK_KIT || a[0] > KLK_SOUND || a[1] >= 128u)
+        return LS_ARGS;
+    len = kl_read(a[0], a[1], b, sizeof b, nm);
+    if (len < 0)
+        return LS_EMPTY;
+    lib_put(a[0]);
+    lib_put(a[1]);
+    lib_puts(nm, 8);
+    lib_put((uint32_t)len);
+    lib_put((uint32_t)len >> 8);
+    lib_puts(b, (uint32_t)len);
+    return LS_OK;
+}
+static uint32_t lib_kl_put(const uint8_t *a, uint32_t n)
+{
+    uint32_t cnt, i;
+    char nm[8];
+    int rc;
+    if (n < 12u)
+        return LS_BAD;
+    cnt = a[10] | (uint32_t)a[11] << 8;
+    if (n < 12u + cnt)
+        return LS_BAD;
+    if (a[0] < KLK_KIT || a[0] > KLK_SOUND || a[1] >= 128u ||
+        (a[0] == KLK_KIT ? cnt > KIT_LEN : cnt && (cnt < 3u || cnt > 3u + SOUND_MAX || a[12] > SK_HAT)))
+        return LS_ARGS;
+    if (!kl.ok)
+        return LS_FLASH;
+    for (i = 0; i < 8u; i++)                         /* (a name's zeros and controls as spaces) */
+        nm[i] = (char)(a[2 + i] >= 32u && a[2 + i] < 127u ? a[2 + i] : ' ');
+    rc = kl_write(a[0], a[1], nm, a + 12, cnt);
+    return rc == -20 ? LS_SIZE : rc ? LS_FLASH : LS_OK;
+}
+
 static uint32_t lib_kit_get(uint32_t idx)
 {
     if (idx >= NUM_KITS)
@@ -400,6 +544,13 @@ static int lib_in(const uint8_t *p, uint32_t n)
         case 0x25: st = lib_save(a, an); break;
         case 0x30: st = lib_kit_put(a, an); break;
         case 0x31: st = an ? lib_kit_get(a[0]) : LS_BAD; break;
+        case 0x32:
+        case 0x33:
+        case 0x34: st = lib_pat(cmd, a, an); break;
+        case 0x35: st = lib_song(a, an); break;
+        case 0x40: st = lib_kl_list(a, an); break;
+        case 0x41: st = lib_kl_get(a, an); break;
+        case 0x42: st = lib_kl_put(a, an); break;
         default: st = LS_BAD; break;
         }
     }

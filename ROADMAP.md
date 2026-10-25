@@ -18,22 +18,24 @@ Kettle is the Erica Synths LXR-02 firmware (GPL-3.0) ported to the M-VAVE FM-1 o
   - The library: backup, restore and LXR-02 kit import over USB, on the site's `library/` page and in the emulator.
   - A private-build kit bank (`KETTLE_KITS_DIR`).
   - The code is at https://github.com/dmajka/kettle.
-  - Phase 9 (the LXR's live feel) is planned.
+- **0.8 (Phase 9, the LXR's live feel):** PERF's pages reordered (the performance pages, MIX, then the macros, then PERFORM 2), the LXR's PERFORMANCE page with its global sample rate (SRate), MIX pages for the voices' volumes; KEYS (SHIFT + EDIT) to play a voice, with a key velocity and accent; LXR project import (kits, patterns, songs); a kit library in flash (128 kits, 128 sounds) with SOUND save and load and morph from it; a per-track sound browser. See *Phase 9*.
+  - Phase 10 (Rings in place of the physical models) is planned.
 - **MIDI:** USB and TRS in, USB out. CC/NRPN control as on the LXR; clock out always on; clock in by turning the tempo below its minimum to "MIDI".
-- **Projects:** 4 slots plus an AUTO session slot in flash, 48 KB each, sparse encoding. Format version 5 since 0.5; versions 1 to 4 still load.
+- **Projects:** 4 slots plus an AUTO session slot in flash, 48 KB each, sparse encoding. Format version 6; versions 1 to 5 still load.
 - **UI:** mapped to the FM-1's keys, buttons and knobs; SHIFT legend on screen; mixer under GLO.
 - **Firmware build:** `./build.sh` makes `build/kettle.fwsc` and passes Felucca's checks.
 - **Browser emulator:** `web/emu/build.sh`, tested in Chrome, with Web MIDI in and out, including clock.
 - **First hardware run (0.5.1):** installed on a real FM-1 from V15 with the install page (`web/make_site.py`); a battery display on CONFIG; autosave no longer makes a burst of noise after a stop. See *0.5.1* below.
-- **Tests:** render_test, compare_test and ui_test (70 screens; physical models; PERFORM 2; links between tracks; bouncing ratchets and the roll sweep; the output's hush and autosave's timing; the battery display; Grids' map; clocks, conditions, ratchets, generators, bar copy; locks, patterns, project save/load, a 0.1 project, sends, reverb, sound shaping, phaser, flanger, PERF's effects and macros, autosave failure, sync in) all pass.
+- **Tests:** render_test, compare_test, library_test (the library page's code against the device's) and ui_test (75 screens; physical models; PERF's pages, MIX and KEYS; the kit library and sound browser; PERFORM 2; links between tracks; bouncing ratchets and the roll sweep; the output's hush and autosave's timing; the battery display; Grids' map; clocks, conditions, ratchets, generators, bar copy; locks, patterns, project save/load, a 0.1 project, sends, reverb, sound shaping, phaser, flanger, PERF's effects and macros, autosave failure, sync in) all pass.
 
-**Measured resources** (from the 0.5 build)
+**Measured resources** (from the 0.8 build)
 
 | | Used | Total | Free |
 |---|---|---|---|
-| Fast RAM | 16 KB | 72 KB | ~56 KB |
-| Pool | 311 KB | 360 KB | ~49 KB |
-| App flash | 269 KB | 581 KB | ~312 KB |
+| Fast RAM | 20 KB | 72 KB | ~52 KB |
+| Pool | 342 KB | 360 KB | ~18 KB |
+| App flash | 296 KB | 581 KB | ~285 KB |
+| Kit library (flash) | 72 KB at 0xEA000–0xFBFFF | | 128 kits + 128 sounds |
 
 **CPU on a real FM-1 (0.5, first measurement):** about 60% average and 64% peak with a busy pattern. The 122 LATE buffers seen then were not the engine's load (a 64% peak leaves a third of each buffer spare) but autosave's flash erases, which hold the processor; 0.5.1 no longer counts those. The load is on screen (bottom of the CONFIG pages: average, peak since CONFIG opened, late buffers since power-on). The browser emulator always shows 0%, because it doesn't model CPU time. The second core is unused (`FELUCCA_CPU2 0`); it's a reserve for heavy DSP (see *0.5.1*).
 
@@ -413,7 +415,19 @@ Built as planned.
 - `web/make_site.py` refuses to publish a "+K" build.
 - The import tool (Phase 7) is the public route.
 
-### Phase 9: the LXR-02's live feel (0.8)
+### Phase 9: the LXR-02's live feel (built in 0.8)
+
+What was built, and where it differs from the plan:
+- **9a, LXR patterns:** the library page imports a whole LXR project folder: its kits into the slots by number, its .PAT patterns (V1, V2 and V3 formats) and .SNG songs. Kettle has 32 patterns, so the user picks the LXR's first or second half; a song step on the other half plays pattern 32. New SysEx: PAT_BEGIN / PAT_STEPS / PAT_END (0x32–0x34), SONG_PUT (0x35).
+- **9b, MIX in PERF, and the page order** (the user asked whether performance, macros, more performance was confusing; it was): PERFORM (BPM, Roll, Morph, SRate: the LXR's PERFORMANCE page), PERFORM: MORE (DJ filter, Repeat, Shuffle, Tape), PERFORM: MIX (D1–SN volumes), MIX 2 (CY, HH volumes, FX dry/wet, reverb level), MACROS, MACRO SETUP, then PERFORM 2 and its setups. A held roll puts the swept roll on KNOB 2.
+- **9c, KEYS:** SHIFT + EDIT. The keys play the track's voice from F (octave on KNOB 1); notes go out on MIDI and into the steps under REC (as MIDI notes in, through the audio side's queue). The sound pages opened from KEYS keep the keys playing.
+- **9d, key velocity:** KEYS' KNOB 2 and 3: the velocity of keys, rolls and auditions, and the accent (SHIFT). Kept in the settings.
+- **9e, sound browser:** PRESETS on a sound page or in KEYS: the library's sounds, then the voices of the library's kits, the slots' kits and the factory kits (a drum track: all three drums of each; init voices left out). Each step auditions; OCT+ keeps, OCT− reverts.
+- **9f, kit library:** `firmware/src/kitlib.c`. 128 kits and 128 sounds in flash at 0xEA000–0xFBFFF (18 sectors: a log of 256-byte pages, the commit record written last, one sector kept erased for compaction). SAVE / LOAD → KIT and MORPH take To / From SLOTS or LIBRARY; SAVE / LOAD → SOUND keeps one voice (a drum's into any drum). The library page lists, backs up (`.ktlb`), restores and imports LXR kits into it (SysEx KL_LIST / KL_GET / KL_PUT, 0x40–0x42). Not yet checked on a unit: that stock V15 and the installer leave 0xEA000–0xFBFFF alone (the stock store is 0x93000–0xE8FFF, and Kettle's updater doesn't write there).
+- **9g, SRate:** on PERFORM's KNOB 4 ("SRate"), lockable, so it is a macro target and records under REC.
+- **Tests:** ui_test phase9 (PERF pages, MIX, KEYS, the library's SAVE / LOAD, the browser), library_test sections 7 and 8 (an LXR project in, V2 and V3; the kit library: list, get, put, delete, backup, restore, a reboot's scan).
+- **Still open:** the user's comparison with LXR-02 videos (what still feels missing).
+
 
 The audit (Kettle against the LXR-02 manual and firmware):
 - **Already ported:** every voice parameter, per-voice LFOs (synced, retriggered from any track, any target), velocity to any parameter, two locks a step, knob recording, rolls (recorded under REC; a single hit when stopped), morph, global sample rate, shuffle, mutes with PERF's unmute-all, sound editing from PERF with the keys still playing, kit change with patterns, reload, songs, Euclid, chromatic MIDI play (note ANY), step notes from a MIDI keyboard.

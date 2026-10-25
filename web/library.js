@@ -137,6 +137,80 @@ export class Library {
     const n = d[9] | (d[10] << 8);
     return { name: nameOf(d.subarray(1, 9)), data: d.slice(11, 11 + n) };
   }
+
+  // 0.8: an LXR-02 pattern (parsePat) into pattern idx (0..31)
+  async patPut(idx, p) {
+    await this.call(0x32, [idx]);
+    for (let t = 0; t < 7; t++)
+      for (let first = 0; first < 64; first += 32) {
+        const steps = p.steps[t].subarray(first * 7, (first + 32) * 7), timing = p.timing[t].subarray(first, first + 32);
+        await this.call(0x33, [idx, t, first, 32, ...steps, ...timing]);
+      }
+    const mains = [];
+    for (let t = 0; t < 7; t++) for (let b = 0; b < 4; b++) mains.push(p.main[t][b] & 255, p.main[t][b] >> 8);
+    await this.call(0x34, [idx, ...mains, p.shuffle, ...p.len, p.kit]);
+  }
+  songPut(idx, entries) { return this.call(0x35, [idx, ...entries]); }
+
+  // 0.8: the kit library (kind KL_KIT: kits in the kit layout; KL_SOUND: single sounds). -> [{ slot, name }]
+  async libList(kind) {
+    const out = [];
+    for (let first = 0; first < 128; first += 32) {
+      const d = await this.call(0x40, [kind, first, 32], 3);
+      for (let k = 0; k < d[2]; k++)
+        if (d[3 + k * 9]) out.push({ slot: first + k, name: nameOf(d.subarray(4 + k * 9, 12 + k * 9)) });
+    }
+    return out;
+  }
+  async libGet(kind, slot) {
+    const d = await this.call(0x41, [kind, slot], 3);
+    const n = d[10] | (d[11] << 8);
+    return { kind, slot, name: nameOf(d.subarray(2, 10)), data: d.slice(12, 12 + n) };
+  }
+  libPut(kind, slot, name, data) {
+    return this.call(0x42, [kind, slot, ...nameBytes(name), data.length & 255, data.length >> 8, ...data]);
+  }
+  libDelete(kind, slot) { return this.libPut(kind, slot, "", []); }
+  // every entry, for a backup file (packKitLib)
+  async libBackup(onProgress) {
+    const all = [];
+    for (const kind of [KL_KIT, KL_SOUND]) all.push(...(await this.libList(kind)).map((e) => ({ kind, ...e })));
+    const out = [];
+    for (const e of all) {
+      out.push(await this.libGet(e.kind, e.slot));
+      if (onProgress) onProgress(out.length, all.length);
+    }
+    return out;
+  }
+  async libRestore(entries, onProgress) {
+    let i = 0;
+    for (const e of entries) {
+      await this.libPut(e.kind, e.slot, e.name, e.data);
+      if (onProgress) onProgress(++i, entries.length);
+    }
+  }
+}
+export const KL_KIT = 1, KL_SOUND = 2;
+
+// a kit library backup file: "KTLB", a count, then (kind, slot, name[8], length (2), data) for each entry
+export function packKitLib(entries) {
+  const out = [0x4b, 0x54, 0x4c, 0x42, ...u32(entries.length)];
+  for (const e of entries) out.push(e.kind, e.slot, ...nameBytes(e.name), e.data.length & 255, e.data.length >> 8, ...e.data);
+  return Uint8Array.from(out);
+}
+export function unpackKitLib(buf) {
+  const b = new Uint8Array(buf);
+  if (!(b[0] === 0x4b && b[1] === 0x54 && b[2] === 0x4c && b[3] === 0x42)) throw new Error("not a Kettle kit library");
+  const n = rd32(b, 4), out = [];
+  let i = 8;
+  for (let k = 0; k < n; k++) {
+    if (i + 12 > b.length) throw new Error("the kit library file is cut short");
+    const len = b[i + 10] | (b[i + 11] << 8);
+    if (i + 12 + len > b.length || b[i] < 1 || b[i] > 2 || b[i + 1] > 127) throw new Error("the kit library file is damaged");
+    out.push({ kind: b[i], slot: b[i + 1], name: nameOf(b.subarray(i + 2, i + 10)), data: b.slice(i + 12, i + 12 + len) });
+    i += 12 + len;
+  }
+  return out;
 }
 
 // ----------------------------------------------------------------------------------------------- files ---
@@ -224,6 +298,73 @@ export function sndBytes(name, data) {
   out.set(nameBytes(name).map((c) => c), 0);
   out.set(data.subarray(0, LXR_PARAMS), 8);
   return out;
+}
+
+// an LXR-02 pattern file (.PAT): V3 ("PatV03": the steps' timing, the kit), V2 (no timing), V1 (no tag, no kit).
+// -> { name, version, steps[7] (64 x 7 bytes: the LXR's Step), timing[7] (64), main[7][4], shuffle, len[7], kit }
+const PAT_STEPS = 64 * 7;
+export function parsePat(buf, fileName = "") {
+  const b = new Uint8Array(buf);
+  const tag = String.fromCharCode(...b.subarray(8, 14));
+  const version = /^PatV0[23]$/.test(tag) ? +tag[5] : 1;
+  const size = { 1: 8 + 7 * PAT_STEPS + 56 + 1 + 7, 2: 14 + 7 * PAT_STEPS + 56 + 1 + 7 + 1,
+                 3: 14 + 7 * (PAT_STEPS + 64) + 56 + 1 + 7 + 1 }[version];
+  if (b.length < size) throw new Error("not an LXR pattern file");
+  let i = version === 1 ? 8 : 14;
+  const steps = [], timing = [], main = [], len = [];
+  for (let t = 0; t < 7; t++) {
+    steps.push(b.slice(i, i + PAT_STEPS));
+    i += PAT_STEPS;
+    if (version === 3) { timing.push(b.slice(i, i + 64)); i += 64; } else timing.push(new Uint8Array(64).fill(0x70));
+  }
+  for (let t = 0; t < 7; t++) {
+    main.push([]);
+    for (let k = 0; k < 4; k++, i += 2) main[t].push(b[i] | (b[i + 1] << 8));
+  }
+  const shuffle = b[i++];
+  for (let t = 0; t < 7; t++) len.push(b[i++]);
+  const kit = version === 1 ? 0 : b[i];
+  const m = /^(\d+)-/.exec(fileName.split("/").pop() || "");
+  return { name: nameOf(b.subarray(0, 8)).replace(/\0/g, "").trim(), version, steps, timing, main, shuffle, len,
+           kit: kit < 64 ? kit : 0, number: m ? +m[1] : null, file: fileName };
+}
+// an LXR-02 song file (.SNG): its name, 64 entries (pattern 0..63, END 64, LOOP 65)
+export function parseSng(buf, fileName = "") {
+  const b = new Uint8Array(buf);
+  if (b.length < 8 + 64) throw new Error("not an LXR song file");
+  const m = /^(\d+)-/.exec(fileName.split("/").pop() || "");
+  return { name: nameOf(b.subarray(0, 8)).replace(/\0/g, "").trim(), entries: [...b.subarray(8, 72)],
+           number: m ? +m[1] : null, file: fileName };
+}
+// a song's entries for Kettle's 32 patterns: LXR's patterns from `first` (0 or 32) are 0..31; the rest the last
+export function songWindow(entries, first) {
+  return entries.map((e) => (e >= 64 ? e : e >= first && e < first + 32 ? e - first : 31));
+}
+// an LXR-02 project folder: its kits (by number), patterns and songs. -> { kits, pats, songs }
+export async function lxrProject(files) {
+  const kits = await sndFiles(files, { skipInit: false }), pats = [], songs = [];
+  for (const f of files) {
+    const path = f.webkitRelativePath || f.name;
+    try {
+      if (/\.pat$/i.test(f.name)) pats.push(parsePat(await f.arrayBuffer(), path));
+      else if (/\.sng$/i.test(f.name)) songs.push(parseSng(await f.arrayBuffer(), path));
+    } catch (_) { /* (not one) */ }
+  }
+  const byNum = (a, b) => (a.number ?? 999) - (b.number ?? 999);
+  return { kits: kits.filter((k) => k.number !== null && k.number < 64), pats: pats.filter((p) => p.number !== null).sort(byNum),
+           songs: songs.filter((s) => s.number !== null && s.number < 64).sort(byNum) };
+}
+// an LXR project into Kettle: its kits into their slots (so the patterns' kit numbers still name them), its patterns
+// from `first` (0: 1..32, 32: 33..64) into the patterns, its songs (those not empty)
+export async function importLxrProject(lib, proj, first = 0, onProgress = () => {}) {
+  const pats = proj.pats.filter((p) => p.number >= first && p.number < first + 32);
+  const songs = proj.songs.filter((s) => s.entries[0] !== 64);
+  const total = proj.kits.length + pats.length + songs.length;
+  let n = 0;
+  for (const k of proj.kits) { await lib.kitPut(k.number, k.name, k.data); onProgress(++n, total); }
+  for (const p of pats) { await lib.patPut(p.number - first, p); onProgress(++n, total); }
+  for (const s of songs) { await lib.songPut(s.number, songWindow(s.entries, first)); onProgress(++n, total); }
+  return { kits: proj.kits.length, pats: pats.length, songs: songs.length };
 }
 
 // ----------------------------------------------------------------------------------------- transports ---

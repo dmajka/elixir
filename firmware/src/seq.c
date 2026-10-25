@@ -21,7 +21,6 @@
 #define MAX_SONG_LENGTH 64
 #define SONG_END 64u                                 /* (the LXR's numbers, past its 64 patterns: kept) */
 #define SONG_LOOP 65u
-#define ROLL_VOLUME 100u
 #define STEP_ACTIVE_MASK 0x80u
 #define STEP_VOLUME_MASK 0x7Fu
 
@@ -92,6 +91,9 @@ enum { COND_NONE, COND_FILL, COND_NFILL, COND_PRE, COND_NPRE, COND_NEI, COND_NNE
 #define NCOND (COND_AB + 35u)
 /* the generators */
 enum { GEN_OFF, GEN_MUTATE, GEN_TURING, GEN_CA, GEN_GRIDS, NGEN };
+
+/* 0.8: the velocity the keys play at: the rolls, KEYS, and KEYS' accent (SHIFT). The device's (project.c kset) */
+static uint8_t key_vel = 100, key_acc = 127;
 
 static pattern_t pat[NUM_PATTERN] POOL;
 static pattern_t pat_backup POOL;   /* the playing pattern as loaded (or saved) */
@@ -535,8 +537,8 @@ static void seq_roll_sweep(void)                     /* the block's swept rolls 
         if (sq.roll & (1u << t)) {
             uint32_t i = sq.idx[t] < 0 ? 0u : (uint32_t)sq.idx[t];
             uint32_t note = tpat(t)->step[t][i].note;
-            seq_trigger(t, 0, 0, ROLL_VOLUME, note);
-            seq_add_note(t, ROLL_VOLUME, note);
+            seq_trigger(t, 0, 0, key_vel, note);
+            seq_add_note(t, key_vel, note);
         }
 }
 
@@ -988,8 +990,8 @@ static void seq_tick_one(void)
                 if (sq.roll & (1u << t)) {
                     uint32_t i = sq.idx[t] < 0 ? 0u : (uint32_t)sq.idx[t];
                     uint32_t note = tpat(t)->step[t][i].note;
-                    seq_trigger(t, 0, 0, ROLL_VOLUME, note);
-                    seq_add_note(t, ROLL_VOLUME, note);
+                    seq_trigger(t, 0, 0, key_vel, note);
+                    seq_add_note(t, key_vel, note);
                 }
     }
     sq.ticks++;
@@ -1206,8 +1208,8 @@ static void seq_set_roll(uint32_t t, int on)         /* seq_setRoll */
             sq.rl_cnt = 0;                           /* (swept: the first hit at once) */
         sq.roll |= (uint8_t)(1u << t);
         if ((sq.roll_rate == 0u && !sq.roll_free) || !sq.running) {   /* ONE, or stopped: a single hit */
-            seq_trigger(t, 0, 0, ROLL_VOLUME, SEQ_DEFAULT_NOTE);
-            seq_add_note(t, ROLL_VOLUME, SEQ_DEFAULT_NOTE);
+            seq_trigger(t, 0, 0, key_vel, SEQ_DEFAULT_NOTE);
+            seq_add_note(t, key_vel, SEQ_DEFAULT_NOTE);
         }
     } else {
         sq.roll &= (uint8_t)~(1u << t);

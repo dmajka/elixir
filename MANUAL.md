@@ -1,6 +1,6 @@
 # Kettle manual
 
-Kettle is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 0.6: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Kettle adds.
+Kettle is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 0.8: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Kettle adds.
 
 Kettle is **unofficial**. It is not affiliated with or endorsed by Erica Synths, M-VAVE or Hügelton Instruments. It is free software under the GPL-3.0 (see *Licence and credits* at the end).
 
@@ -35,7 +35,7 @@ Kettle is **unofficial**. It is not affiliated with or endorsed by Erica Synths,
 
 ### Status
 
-Kettle has been tested extensively in its browser emulator and with host tests (the same C sources compiled for a computer), and **it has run on one real FM-1 so far** (October 2026). There, a busy pattern used about 60% of the processor on average, with a 64% peak. Kettle shows its load on screen (see [the CPU meter](#16-settings-config-and-the-cpu-meter)); reports from other FM-1s are welcome. Version 0.6 (PERFORM 2 and the physical models) has so far only run in the emulator: its load on the FM-1 hasn't been measured yet, so watch the CPU meter with several models or PERFORM 2 effects at once.
+Kettle has been tested extensively in its browser emulator and with host tests (the same C sources compiled for a computer), and **it has run on one real FM-1 so far** (October 2026). There, a busy pattern used about 60% of the processor on average, with a 64% peak. Kettle shows its load on screen (see [the CPU meter](#16-settings-config-and-the-cpu-meter)); reports from other FM-1s are welcome. Versions 0.6 to 0.8 (PERFORM 2, the physical models, KEYS, the kit library) have so far only run in the emulator: their load on the FM-1 hasn't been measured yet, so watch the CPU meter with several models or PERFORM 2 effects at once.
 
 ### Before the first install: official V15
 
@@ -99,7 +99,7 @@ The FM-1's keyboard has 16 white keys and 11 black keys, numbered left to right 
 | **Black keys 8–11** | Show bar 1–4. On pattern, song, save and load pages: the bank of 16. SHIFT + key: track length (16, 32, 48, 64). COPY + key: copy the shown bar into it. In PERF: the repeat length. |
 | **OCT−** | **SHIFT** (hold). While held, the screen shows what SHIFT + each key does. |
 | **OCT+** | **COPY** (hold). SHIFT + OCT+ = **CLEAR**. OK in the save, load and action dialogs. |
-| **EDIT** | Sound: oscillator → FM → transient (press again to step through) |
+| **EDIT** | Sound: oscillator → FM → transient → model (press again to step through). SHIFT + EDIT: **KEYS** (the keys play the track's voice; again: back) |
 | **ENV** | Sound: amp envelope → mod envelope / velocity |
 | **SCL** | Sound: filter → shape |
 | **LFO** | Sound: LFO → random per hit → cross mod / choke |
@@ -113,7 +113,7 @@ The FM-1's keyboard has 16 white keys and 11 black keys, numbered left to right 
 | **REC** | Record on / off. SHIFT + REC: record options. |
 | **ALGORITHM** (encoder) | Select the track |
 | **SELECT** (encoder) | The page; in lists, the row |
-| **PRESETS** (encoder) | The kit browser |
+| **PRESETS** (encoder) | The kit browser. On a sound page or in KEYS: the [sound browser](#the-sound-browser) |
 | **KNOB 1–4** | The four parameters shown at the bottom of the screen |
 | **MASTER** (pot) | Output volume |
 
@@ -277,6 +277,12 @@ Press **REC** (it lights), then **PLAY**.
 - **SHIFT + CLEAR while recording** erases the selected track's steps as they pass.
 - **SHIFT + REC** opens the record options: the lock lane (1 or 2) knob moves record into.
 
+### KEYS: playing a voice
+
+**SHIFT + EDIT** turns the keyboard into an instrument for the selected track (ALGORITHM picks the track): the white and black keys play its voice chromatically, as on a piano, from F at the octave set (KNOB 1, **Octave**: F3 by default). SHIFT + EDIT again goes back to the grid. Under REC each note is written into the nearest step with its note and velocity, as a MIDI note would be, and it goes out on USB MIDI too. The sound pages opened from KEYS keep the keys playing, so you can play and tweak at once; PRESETS opens the [sound browser](#the-sound-browser).
+
+The FM-1's keys have no velocity, so KEYS sets it: **Velocity** (KNOB 2) is the velocity of a key, and of PERF's rolls and SHIFT + white keys 1–7. **Accent** (KNOB 3) is the velocity of a key played with SHIFT held. Both are kept in the settings.
+
 ---
 
 ## 8. Patterns, banks and songs
@@ -432,10 +438,11 @@ A separate send bus after the FX bus, from Felucca: **ROOM** (a Freeverb-style r
 
 A kit is every sound parameter of all six voices (including the sends, the reverb and Kettle's shaping). Kettle holds **64 kits**.
 
-- **Browse and load:** turn **PRESETS**. The kit list opens; turn to choose, press **OCT+** to load. It closes by itself after 6 seconds.
+- **Browse and load:** turn **PRESETS**. The kit list opens; turn to choose, press **OCT+** to load. It closes by itself after 6 seconds. (On a sound page, PRESETS browses single sounds instead: the [sound browser](#the-sound-browser).)
 - **Load / save:** SHIFT + white key 8 opens LOAD KIT; SAVE opens SAVE KIT (see [saving](#14-saving)).
-- **LXR-02 kits:** kits from an LXR-02 SD card (.SND files) come in through the [library page](#backing-up-restoring-and-lxr-02-kits). A voice the LXR routed to its FX bus comes in with FX SEND 127, which sounds the same. Kettle's own settings (sends, reverb, shaping, models) start at their defaults.
-- **Morph:** load a second kit as the *morph target* (SHIFT + white key 9: LOAD MORPH), then turn **Morph** (PERF's first page, KNOB 4) from 0 to 100%. Every sound parameter crossfades towards the target (outputs, modulation targets and the reverb model stay). The header shows M while morph is above 0. SAVE → MORPH saves the mixture you hear as a new kit.
+- **LXR-02 kits:** kits from an LXR-02 SD card (.SND files) come in through the [library page](#backing-up-restoring-and-lxr-02-kits). A voice the LXR routed to its FX bus comes in with FX SEND 127, which sounds the same. Kettle's own settings (sends, reverb, shaping, models) start at their defaults. A whole LXR project (kits, patterns, songs) comes in the same way.
+- **The kit library:** besides the 64 slots, the FM-1 keeps **128 kits and 128 single sounds** in its flash, apart from the projects: loading another project leaves them. SAVE → KIT with **To: LIBRARY** (KNOB 3) saves there; LOAD → KIT with **From: LIBRARY** loads one into the sound being edited (SAVE → KIT keeps it in a slot). SAVE / LOAD → SOUND does the same for one track's sound (KNOB 3: the track). The library page backs the library up.
+- **Morph:** load a second kit as the *morph target* (SHIFT + white key 9: LOAD MORPH; KNOB 3 picks the slots or the library), then turn **Morph** (PERF's first page, KNOB 3) from 0 to 100%. Every sound parameter crossfades towards the target (outputs, modulation targets and the reverb model stay). The header shows M while morph is above 0. SAVE → MORPH saves the mixture you hear as a new kit.
 
 ---
 
@@ -541,7 +548,7 @@ Press **ARP**. The white keys act **while held**; **SHIFT + key latches** it on 
 
 | Key | Name | Does |
 |---|---|---|
-| 1–7 | rolls | Roll the track at the roll rate (PERF: MORE page). While a roll is held, KNOB 3 sweeps its rate (below). On the PERFORM 2 pages these keys are DRILL (below). |
+| 1–7 | rolls | Roll the track at the roll rate (PERFORM page, KNOB 2). While a roll is held, KNOB 2 sweeps its rate (below). On the PERFORM 2 pages these keys are DRILL (below). |
 | 8 | **FILL** | Every step plays whatever its chance; FILL conditions play |
 | 9 | **RPT** | **Repeat:** the sequencer loops its position at the repeat length (1/4, 1/8, 1/16, 1/32), starting on that grid. When you let go, the pattern carries on where it would have been. |
 | 10 | **FRZ** | **Freeze:** the FX bus's delay loops what it holds (input off, feedback 100%). Needs the FX bus on DELAY; the longest loop is about 0.74 s. |
@@ -560,20 +567,28 @@ The screen shows all 16 keys (lit: on, outlined: latched), the repeat length, th
 
 ### PERF pages (SELECT)
 
+The performance pages come first, then the macros, then PERFORM 2.
+
 | Page | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
-| PERFORM | Tempo | DJ filter | Repeat | Morph |
+| PERFORM | Tempo | Roll (rate) | Morph | SRate |
+| PERFORM: MORE | DJ filter | Repeat | Shuffle | Tape time |
+| PERFORM: MIX | D1 volume | D2 volume | D3 volume | SN volume |
+| PERFORM: MIX 2 | CY volume | HH volume | FX dry/wet | Reverb level |
 | MACROS | Macro 1 | Macro 2 | Macro 3 | Macro 4 |
 | MACRO SETUP | Macro (1–4) | Target | Min | Max |
-| PERFORM: MORE | Roll rate | Shuffle | All-voice sample rate | Tape time |
-| PERFORM 2 | Tempo | DJ filter | Repeat | Morph |
+| PERFORM 2 | Tempo | Roll (rate) | Morph | SRate |
 | PERFORM 2: SETUP | Drill | Jitter | Cuts | Pump |
 | PERFORM 2: SETUP 2 | Comb (note) | Comb fb | Crush | Reverse (length) |
 
+- **PERFORM** is the LXR's own PERFORMANCE page: tempo, roll rate, morph and the global sample-rate reducer.
+- **SRate:** the LXR's global sample rate: every voice's own rate (Mix page) times this one, before the mix. Lower is grittier. It is part of the kit, so a kit can bring its own crush; it can be a macro's target and is recorded as locks under REC.
+- **MIX** and **MIX 2** stand in for the LXR's faders: ride the voices' levels while playing. They are the mixer's volumes (GLO), so they are part of the kit and record as locks under REC.
 - **DJ filter:** off in the middle; left a low-pass on the whole output, right a high-pass.
 - **Macros:** each macro knob moves one parameter between its Min and Max (Max below Min turns it the other way). Set them up on MACRO SETUP: pick the macro, its target (any lockable parameter), Min and Max. Turning a macro while recording writes locks, as any knob does.
 - **Tape time:** 0.2 to 4 seconds.
-- **Roll sweep:** while a roll key is held (or latched) on the PERFORM page, KNOB 3 turns from Repeat into **Roll**: a smooth sweep from 1/4 to 1/192, off the grid. Turn it up while holding a kick for a drum-and-bass build, or down for a stutter that slows to a stop. SHIFT + KNOB 3 sets the gridded roll rate instead. Setting the roll rate on PERFORM: MORE puts rolls back on the grid. The swept rate is not saved.
+- **Roll sweep:** while a roll key is held (or latched) on the PERFORM page, KNOB 2 turns from the roll rate into a smooth sweep from 1/4 to 1/192, off the grid. Turn it up while holding a kick for a drum-and-bass build, or down for a stutter that slows to a stop. SHIFT + KNOB 2 sets the gridded roll rate instead, which puts rolls back on the grid. The swept rate is not saved.
+- **Velocity:** rolls play at the KEYS velocity (see [KEYS](#keys-playing-a-voice)).
 
 Macros, the repeat length and the tape time are saved with the project. The DJ filter starts in the middle at power-on.
 
@@ -606,10 +621,11 @@ Press **SAVE** for the save page, SAVE again for the load page (SHIFT + SAVE ope
 
 | Type | Slots | Save | Load |
 |---|---|---|---|
-| KIT | 64 | OCT+, name it, OCT+ | OCT+ |
+| KIT | 64 slots, or the library's 128 (KNOB 3: To / From SLOTS or LIBRARY) | OCT+, name it, OCT+ | OCT+ (from the library: into the sound being edited) |
 | PATTERN | 32 | a white key saves to that pattern at once | white key / OCT+: queue it |
 | SONG | 64 | OCT+ | OCT+ |
-| MORPH | 64 | OCT+, name it, OCT+ (saves the morph mixture you hear) | OCT+: load as the morph target |
+| MORPH | 64, or the library's 128 (KNOB 3) | OCT+, name it, OCT+ (saves the morph mixture you hear) | OCT+: load as the morph target |
+| SOUND | the library's 128 (KNOB 3: the track) | OCT+, name it, OCT+: the track's sound | OCT+: into the track (a drum's sound into any drum track; the others into their own) |
 | PROJECT | 4 | OCT+, name it, OCT+ | OCT+ |
 | FACTORY | the built-in bank (private builds) | – | OCT+: into the sound being edited; ALL > SLOTS: the first 64 into the kit slots |
 
@@ -634,6 +650,8 @@ The **library page** (`library/` on Kettle's site, from 0.7) connects to the FM-
 - **Back up** every project and the session to one file on the computer (`.ktbk`), or download one project (`.ktp`). Kettle's own updates keep your projects. Installing V15 or another firmware may not, so back up first.
 - **Restore** a backup or a project file, into the slots it came from or into a chosen slot, and load it. The old project stays in place until the restore has been written and checked, so pulling the cable halfway loses nothing.
 - **Import LXR-02 kits:** pick .SND files, or a whole project folder from an LXR-02 SD card (PROJ00 …). They fill the kit slots from the slot you choose, leaving out Init and empty kits. Then save the project (SAVE → PROJECT), or let AUTOSAVE keep them in the session.
+- **Import a whole LXR-02 project** (from 0.8): pick a project folder from the SD card. Its kits go into the kit slots by their numbers (so each pattern still finds its kit), its patterns into Kettle's patterns and its songs into the songs, replacing what's playing; then save the project. Kettle has 32 patterns to the LXR's 64, so you pick which half (a song step on the other half plays pattern 32). The factory and DLC projects' demo patterns come in this way.
+- **Back up and restore the kit library** (from 0.8, a `.ktlb` file), and import LXR-02 kits straight into it.
 - **Export kits** as LXR-02 .SND files (the LXR's parameters only).
 
 While a restore is being written, the output is silent and saving is held off. If the computer stops sending, Kettle gives up after 10 seconds.
@@ -720,6 +738,8 @@ In PERF, SHIFT + a white key latches it instead.
 | SHIFT + PLAY | Play the song from the start |
 | SHIFT + REC | Record options |
 | SHIFT + SAVE | Load page |
+| SHIFT + EDIT | KEYS (again: the grid) |
+| SHIFT + a key (KEYS) | The note at the accent velocity |
 | OCT− + OCT+ held 5 s | The chip's UBOOT mode (recovery with the Transporter only) |
 | Hold step + turn knob | Lock |
 
@@ -760,7 +780,7 @@ The LXR's own parameters keep their CC and NRPN numbers.
 | Voices / tracks | 6 / 7 |
 | Patterns | 32, each 7 tracks × up to 64 steps |
 | Locks | 2 per step |
-| Kits | 64 |
+| Kits | 64 in the project, plus the library's 128 kits and 128 sounds |
 | Songs | 64 × 64 rows |
 | Projects | 4, plus the automatic session |
 | Sample rate | 44.1 kHz |
@@ -781,8 +801,8 @@ What changed in the port:
 
 What Kettle adds:
 
-- **Sound:** FX and reverb sends per voice; three reverbs; waveshaper choice; bits; tilt EQ; random per hit; choke groups; cross modulation; phaser and flanger.
-- **Performance:** PERF with fill, repeat, freeze, throws, feedback push, tape stop, filter sweeps, a DJ filter and four macros.
+- **Sound:** FX and reverb sends per voice; three reverbs; waveshaper choice; bits; tilt EQ; random per hit; choke groups; cross modulation; phaser and flanger; physical models on the drum voices; a sound browser and a kit library.
+- **Performance:** PERF with fill, repeat, freeze, throws, feedback push, tape stop, filter sweeps, a DJ filter, four macros, the voices' volumes on two pages, and PERFORM 2; KEYS, to play a voice from the keyboard.
 - **Sequencing:** trig conditions, ratchets, per-track clocks, generators (mutate, Turing machine, cellular automata, Grids), dice, commit and undo, and copying a bar across all tracks.
 - **Safety:** the automatic session save, a CPU meter, and backup and restore over USB (the library page).
 
@@ -820,4 +840,4 @@ It is built from:
 
 ### Building and testing
 
-See `README.md`: building the firmware (`./build.sh`), the browser emulator (`web/emu/build.sh`), and the host tests (`render_test`, `ui_test`, `compare_test`).
+See `README.md`: building the firmware (`./build.sh`), the browser emulator (`web/emu/build.sh`), and the host tests (`render_test`, `ui_test`, `compare_test`, the library tests).

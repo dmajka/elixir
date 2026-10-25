@@ -9,7 +9,8 @@ import { createInterface } from "node:readline";
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Library, checkImage, packBackup, unpackBackup, sndFiles, sndBytes, message } from "../web/library.js";
+import { Library, checkImage, packBackup, unpackBackup, sndFiles, sndBytes, message, KL_KIT, KL_SOUND, packKitLib,
+         unpackKitLib, parsePat, parseSng, songWindow, lxrProject, importLxrProject } from "../web/library.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const kitDir = process.argv[2] || join(root, "..", "lxr-02_kits", "LXR factory SD image 06.07", "PROJ00");
@@ -121,6 +122,94 @@ info = await lib.info();
 check(info.slots[3].exists && info.slots[3].name === "AFTER", "SAVE after an abandoned restore");
 check((await transport.request(message(0x01, 1, [5]).map((b, i, a) => (i === a.length - 2 ? b ^ 1 : b)))) === null,
       "a garbled message: no answer");
+
+// 7. 0.8: the kit library: kits and sounds in, listed, read back, deleted; a backup file; the power-on scan
+{
+  const kit = new Uint8Array(371).map((_, i) => (i * 7) & 127);
+  await lib.libPut(KL_KIT, 7, "LIBKIT", kit);
+  await lib.libPut(KL_KIT, 120, "OTHER", kit.subarray(0, 247));
+  const snd = Uint8Array.from([0, 1, 4, 10, 20, 30, 40]);
+  await lib.libPut(KL_SOUND, 3, "SNARE?", snd);
+  let lk = await lib.libList(KL_KIT), ls = await lib.libList(KL_SOUND);
+  check(lk.length === 2 && lk[0].slot === 7 && lk[0].name === "LIBKIT" && lk[1].slot === 120 && ls.length === 1,
+        "the kit library listed");
+  const back7 = await lib.libGet(KL_KIT, 7);
+  check(Buffer.compare(Buffer.from(back7.data), Buffer.from(kit)) === 0, "a library kit read back");
+  const entries = await lib.libBackup();
+  const file = packKitLib(entries), again = unpackKitLib(file);
+  check(again.length === 3 && again[2].kind === KL_SOUND && again[2].data.length === 7, "a kit library backup file");
+  await lib.libDelete(KL_KIT, 7);
+  await lib.libDelete(KL_KIT, 120);
+  await lib.libDelete(KL_SOUND, 3);
+  check((await lib.libList(KL_KIT)).length === 0, "library kits deleted");
+  await expectStatus(lib.libGet(KL_KIT, 7), 7, "a deleted kit");
+  await lib.libRestore(again);
+  await ask("boot");
+  lk = await lib.libList(KL_KIT);
+  ls = await lib.libList(KL_SOUND);
+  check(lk.length === 2 && ls.length === 1 && (await lib.libGet(KL_SOUND, 3)).data[2] === 4,
+        "the kit library restored, at power-on");
+  await expectStatus(lib.libPut(KL_SOUND, 9, "BAD", [9, 0, 0]), 2, "a sound of no kind");
+  console.log(`  kit library: ${lk.length} kits, ${ls.length} sound, backup file ${file.length} bytes`);
+}
+
+// 8. 0.8: an LXR-02 project: its kits by number, its patterns, its songs
+{
+  const projDir = existsSync(kitDir) ? kitDir : null;
+  const lxrFiles = projDir ? readdirSync(projDir).map((n) => {
+    const b = readFileSync(join(projDir, n));
+    return { name: n, webkitRelativePath: "", arrayBuffer: async () => b.buffer.slice(b.byteOffset, b.byteOffset + b.length) };
+  }) : [];
+  // a made-up V3 pattern, and V2 / V1 forms of it
+  const mk = (v) => {
+    const head = v === 1 ? 8 : 14, n = head + 7 * (64 * 7 + (v === 3 ? 64 : 0)) + 56 + 1 + 7 + (v === 1 ? 0 : 1);
+    const b = new Uint8Array(n);
+    b.set([...Buffer.from("PATNAME ")], 0);
+    if (v > 1) b.set([...Buffer.from("PatV0" + v)], 8);
+    let i = head;
+    for (let t = 0; t < 7; t++) {
+      for (let s = 0; s < 64; s++, i += 7) b.set([s % 4 === 0 ? 0x80 | 100 : 100, 127, 60 + t, 255, 0, 255, 0], i);
+      if (v === 3) { for (let s = 0; s < 64; s++) b[i + s] = 0x70 | (s === 4 ? 2 : 0); i += 64; }
+    }
+    for (let t = 0; t < 7; t++) for (let k = 0; k < 4; k++, i += 2) { b[i] = t === 0 ? 0x11 : 0; b[i + 1] = k; }
+    b[i++] = 9;
+    for (let t = 0; t < 7; t++) b[i++] = t === 2 ? 32 : 16;
+    if (v > 1) b[i] = 5;
+    return b;
+  };
+  const p3 = parsePat(mk(3), "07-.PAT"), p2 = parsePat(mk(2)), p1 = parsePat(mk(1));
+  check(p3.version === 3 && p3.number === 7 && p3.kit === 5 && p3.len[2] === 32 && p3.shuffle === 9 && p3.timing[0][4] === 0x72 &&
+        p2.version === 2 && p2.timing[0][4] === 0x70 && p1.version === 1 && p1.kit === 0 && p1.main[0][3] === 0x311,
+        "an LXR pattern file, its three versions");
+  await lib.patPut(4, p3);
+  const d = Buffer.from(await ask("pat 4"), "hex");
+  let ok = true, i = 0;
+  for (let t = 0; t < 7; t++) {
+    ok &&= Buffer.compare(d.subarray(i, i + 448), Buffer.from(p3.steps[t])) === 0;
+    i += 448;
+    ok &&= Buffer.compare(d.subarray(i, i + 64), Buffer.from(p3.timing[t])) === 0;
+    i += 64;
+  }
+  ok &&= d[i] === 0x11 && d[i + 7] === 3 && d[i + 56] === 9 && d[i + 57 + 2] === 32 && d[i + 64] === 5;
+  check(ok, "an LXR pattern into Kettle's pattern 5, as in the file");
+  check(JSON.stringify(songWindow([0, 3, 40, 33, 64, 65], 32)) === JSON.stringify([31, 31, 8, 1, 64, 65]) &&
+        JSON.stringify(songWindow([0, 3, 40, 64], 0)) === JSON.stringify([0, 3, 31, 64]), "a song's patterns, the half picked");
+  await lib.songPut(2, [0, 1, 1, 2, 65, ...new Array(59).fill(64)]);
+  check((await ask("song 2")).startsWith("0001010241"), "a song in");
+  if (lxrFiles.length) {
+    const proj = await lxrProject(lxrFiles);
+    const r = await importLxrProject(lib, proj, 0);
+    const pats = proj.pats.filter((p) => p.number < 32);
+    let same = 0;
+    for (const p of pats) {
+      const q = Buffer.from(await ask("pat " + p.number), "hex");
+      same += Buffer.compare(q.subarray(0, 448), Buffer.from(p.steps[0])) === 0 && q[q.length - 1] === p.kit;
+    }
+    console.log(`  LXR project: ${r.kits} kits, ${r.pats} patterns (${proj.pats.map((p) => "V" + p.version).filter((v, k, a) => a.indexOf(v) === k)}), ${r.songs} songs; ${same} patterns as in their files`);
+    check(r.pats === pats.length && same === pats.length && (await lib.kitNames())[proj.kits[1].number] === proj.kits[1].name.slice(0, 8).trimEnd(),
+          "an LXR project in: kits by number, patterns as in the files");
+  }
+}
 
 dev.stdin.end();
 console.log(fails ? `library_test: ${fails} FAILED` : "library_test: ok");

@@ -19,13 +19,13 @@
  * The main loop calls ui_input (every ms), ui_leds and ui_draw (a frame). */
 
 enum { M_HOME, M_PATTERN, M_SONG, M_SOUND, M_STEP, M_PERF, M_EUCLID, M_FX, M_MIXER, M_CONFIG, M_SAVE, M_LOAD,
-       M_LAST, M_RECOPT, NMODE };
+       M_LAST, M_RECOPT, M_KEYS, NMODE };
 enum { S_OSC, S_AEG, S_MOD, S_FM, S_CLICK, S_FILTER, S_LFO, S_MIX, S_SHAPE, S_RANDOM, S_XMOD, S_MODEL, NSECT };
 #define NSPG 24                                      /* the sound pages a track can have (sections x halves) */
 static const char *const SECT_NAME[NSECT] = {"OSCILLATOR", "AMP EG", "MOD EG / VELO", "FM", "TRANSIENT", "FILTER",
                                              "LFO", "MIX", "SHAPE", "RANDOM PER HIT", "CROSS MOD / CHOKE", "MODEL"};
-enum { IO_KIT, IO_PATTERN, IO_SONG, IO_MORPH, IO_PROJECT, IO_FACTORY, NIO };   /* (FACTORY: LOAD, a kit bank) */
-static const char *const IO_NAME[NIO] = {"KIT", "PATTERN", "SONG", "MORPH", "PROJECT", "FACTORY"};
+enum { IO_KIT, IO_PATTERN, IO_SONG, IO_MORPH, IO_SOUND, IO_PROJECT, IO_FACTORY, NIO };   /* (FACTORY: LOAD, a kit bank) */
+static const char *const IO_NAME[NIO] = {"KIT", "PATTERN", "SONG", "MORPH", "SOUND", "PROJECT", "FACTORY"};
 #if KETTLE_FACTORY_KITS
 #define IO_LOAD_LAST IO_FACTORY
 #else
@@ -43,7 +43,8 @@ enum { VP_BASE = 0x200, VP_NONE = VP_BASE, VP_IO_TYPE, VP_IO_SLOT, VP_NAME_POS, 
        VP_DJ, VP_REPEAT, VP_TAPE, VP_M1, VP_M4 = VP_M1 + NMACRO - 1, VP_MSEL, VP_MTARGET, VP_MMIN, VP_MMAX,
        VP_COND, VP_RAT_N, VP_RAT_RATE, VP_RAT_FADE, VP_ACTION, VP_GMODE, VP_GA, VP_GB, VP_GC, VP_CLOCK,
        VP_GX, VP_GY, VP_GCHAOS, VP_RAT_SHAPE, VP_BSTART, VP_BPITCH, VP_ROLL,
-       VP_LINK, VP_LSTART, VP_LAMT, VP_DEPTH, VP_LWHEN, VP_LTGT, VP_LEFF, VP_LWIN,
+       VP_LINK, VP_LSTART, VP_LAMT, VP_DEPTH, VP_LWHEN, VP_LTGT, VP_LEFF, VP_LWIN, VP_KOCT, VP_KVEL, VP_KACC,
+       VP_IO_SRC, VP_IO_TRACK,
        VP_P2, VP_P2_LAST = VP_P2 + 7 };
 /* the EUCLID pages' ACTION (OCT+ does it) */
 enum { ACT_NONE, ACT_DICE, ACT_COMMIT, ACT_UNDO, ACT_RESET, NACT };
@@ -53,6 +54,8 @@ static struct {
     uint8_t track, bar, sect, half, page;
     uint8_t step;                    /* STEP: the selected step (0..63) */
     uint8_t perf;                    /* the white keys roll (PERF, and the sound pages opened from it) */
+    uint8_t kplay;                   /* 0.8: the keys play the track's voice (KEYS, and the sound pages opened from it) */
+    uint8_t koct, knote;             /* .. KEYS' octave (3: the keys from F3), the last note played */
     uint32_t pf_held, pf_latch;      /* PERF's keys 8..16 held, latched (bit PF_*: pf.on is both) */
     uint8_t roll_latch;              /* the rolls latched (SHIFT + key 1..7) */
     uint8_t drill_held, drill_latch; /* 0.6: PERFORM 2's keys 1..7 (DRILL) */
@@ -68,8 +71,13 @@ static struct {
     uint8_t clear_open, clear_sel;
     uint8_t last_all;
     uint8_t kb_open, kb_sel;         /* the kit browser */
+    uint8_t sb_open, sb_voice, sb_on; /* 0.8: the sound browser (its voice; the voice as it was: sb_orig, sb_on values) */
+    uint16_t sb_sel;
+    uint8_t sb_orig[SOUND_MAX];
     uint32_t kb_ms;
     uint8_t io_type, io_slot, io_naming, io_pos, io_bank;
+    uint8_t io_src;                  /* 0.8: KIT and MORPH from / to the slots (0) or the library (1) */
+    uint8_t lib_kit, lib_sound;      /* .. the library's kit and sound last loaded or saved */
     char io_name[8];
     uint8_t song_row;
     uint8_t bank;                    /* PATTERN / SONG: the bank of 16 the keys show */
@@ -83,7 +91,7 @@ static struct {
     uint32_t knob_ms[4];
     uint32_t trig_seen[NTRACK];
     uint32_t flash_ms[NTRACK];
-} ui = {.held_step = -1};
+} ui = {.held_step = -1, .koct = 3, .knote = 0xFF};
 
 
 static uint32_t ui_track(void) { return ui.track; }
@@ -196,17 +204,23 @@ static const uint16_t P_STEP[4][4] = {{PAR_STEP_VOLUME, PAR_STEP_NOTE, PAR_STEP_
                                       {PAR_P1_DEST, PAR_P1_VAL, PAR_P2_DEST, PAR_P2_VAL},
                                       {VP_RAT_N, VP_RAT_RATE, VP_RAT_FADE, VP_RAT_SHAPE}};
 static const char *const STEP_TITLE[4] = {"STEP", "TIMING", "LOCKS", "RATCHET"};
-#define NPERF 7u
-#define PG_PERF2 4u                                  /* (the pages from here: PERFORM 2, its keys the second bank) */
-static const uint16_t P_PERF[NPERF][4] = {{PAR_BPM, VP_DJ, VP_REPEAT, PAR_MORPH},
+/* 0.8: the performance pages first, then the macros, then PERFORM 2 (its keys the second bank). PERFORM is the LXR's
+ * PERFORMANCE page (BPM, roll, morph, sample rate); MIX rides the voices' volumes as the LXR's faders */
+#define NPERF 9u
+#define PG_MIX 2u
+#define PG_PERF2 6u                                  /* (the pages from here: PERFORM 2, its keys the second bank) */
+static const uint16_t P_PERF[NPERF][4] = {{PAR_BPM, PAR_ROLL, PAR_MORPH, PAR_VOICE_DECIMATION_ALL},
+                                          {VP_DJ, VP_REPEAT, PAR_SHUFFLE, VP_TAPE},
+                                          {PAR_VOL1, PAR_VOL2, PAR_VOL3, PAR_VOL4},
+                                          {PAR_VOL5, PAR_VOL6, PAR_FX_DRY_WET, PAR_REV_LEVEL},
                                           {VP_M1, VP_M1 + 1, VP_M1 + 2, VP_M1 + 3},
                                           {VP_MSEL, VP_MTARGET, VP_MMIN, VP_MMAX},
-                                          {PAR_ROLL, PAR_SHUFFLE, PAR_VOICE_DECIMATION_ALL, VP_TAPE},
-                                          {PAR_BPM, VP_DJ, VP_REPEAT, PAR_MORPH},
+                                          {PAR_BPM, PAR_ROLL, PAR_MORPH, PAR_VOICE_DECIMATION_ALL},
                                           {VP_P2, VP_P2 + 1, VP_P2 + 2, VP_P2 + 3},
                                           {VP_P2 + 4, VP_P2 + 5, VP_P2 + 6, VP_P2 + 7}};
-static const char *const PERF_TITLE[NPERF] = {"PERFORM", "MACROS", "MACRO SETUP", "PERFORM: MORE", "PERFORM 2",
-                                              "PERFORM 2: SETUP", "PERFORM 2: SETUP 2"};
+static const char *const PERF_TITLE[NPERF] = {"PERFORM", "PERFORM: MORE", "PERFORM: MIX", "PERFORM: MIX 2", "MACROS",
+                                              "MACRO SETUP", "PERFORM 2", "PERFORM 2: SETUP", "PERFORM 2: SETUP 2"};
+static int perf_mix(void) { return ui.mode == M_PERF && (ui.page % NPERF == PG_MIX || ui.page % NPERF == PG_MIX + 1u); }
 static int perf_bank2(void) { return ui.mode == M_PERF && ui.page % NPERF >= PG_PERF2; }
 #define NEUCLID 6u
 #define PG_LINKS 4u
@@ -242,12 +256,12 @@ static const uint16_t P_CONFIG[7][4] = {
     {VP_LEDS, VP_AUTOSAVE, VP_ACCEL, VP_PALETTE}};
 static const char *const CONFIG_TITLE[7] = {"SEQUENCER", "MIDI", "MIDI CHANNELS", "MIDI CHANNELS", "MIDI NOTES",
                                             "MIDI NOTES", "DEVICE"};
-static const uint16_t P_IO[4] = {VP_IO_TYPE, VP_IO_SLOT, VP_NONE, VP_NONE};
 static const uint16_t P_NAME[4] = {VP_NAME_POS, VP_NAME_CHAR, VP_NAME_CASE, VP_NONE};
 static const uint16_t P_SONG[4] = {VP_SONG_PAT, VP_SONG_NUM, VP_NONE, VP_NONE};
 static const uint16_t P_PATTERN[4] = {PAR_PATTERN_MODE, PAR_SHUFFLE, VP_NONE, VP_NONE};
 static const uint16_t P_LAST[4] = {PAR_TRACK_LENGTH, VP_NONE, VP_NONE, VP_NONE};
 static const uint16_t P_RECOPT[4] = {PAR_AUTOM_TRACK, VP_NONE, VP_NONE, VP_NONE};
+static const uint16_t P_KEYS[4] = {VP_KOCT, VP_KVEL, VP_KACC, VP_NONE};
 
 static uint32_t mode_pages(void)
 {
@@ -281,17 +295,28 @@ static void page_params(uint16_t out[4])
     case M_MIXER: p = P_MIXER[ui.page % NMIXER]; break;
     case M_CONFIG: p = P_CONFIG[ui.page % 7u]; break;
     case M_SAVE:
-    case M_LOAD: p = ui.io_naming ? P_NAME : P_IO; break;
+    case M_LOAD:
+        if (ui.io_naming) {
+            p = P_NAME;
+            break;
+        }
+        out[0] = VP_IO_TYPE;                          /* (the third: the slots or the library, the sound's track) */
+        out[1] = VP_IO_SLOT;
+        out[2] = ui.io_type == IO_KIT || ui.io_type == IO_MORPH ? VP_IO_SRC
+               : ui.io_type == IO_SOUND ? VP_IO_TRACK : VP_NONE;
+        out[3] = VP_NONE;
+        return;
     case M_SONG: p = P_SONG; break;
     case M_PATTERN: p = P_PATTERN; break;
     case M_LAST: p = P_LAST; break;
     case M_RECOPT: p = P_RECOPT; break;
+    case M_KEYS: p = P_KEYS; break;
     default: break;
     }
     for (k = 0; k < 4u; k++)
         out[k] = p[k];
     if (ui.mode == M_PERF && ui.page % NPERF == 0u && (sq.roll & ~ui.roll_latch))
-        out[2] = ui.shift ? PAR_ROLL : VP_ROLL;      /* 0.6: a roll held: KNOB 3 sweeps its rate (SHIFT: the grid's) */
+        out[1] = ui.shift ? PAR_ROLL : VP_ROLL;      /* 0.6: a roll held: the roll knob sweeps its rate (SHIFT: the grid's) */
 }
 
 /* ------------------------------------------- the values the cards edit --- */
@@ -314,6 +339,13 @@ static const pattern_t *view_pat(uint32_t t)
     return p == &pat[sq.active] && p->gen[t][0] != GEN_OFF ? &gpat : p;
 }
 static uint32_t vp_max(uint32_t p);
+/* 0.8: SAVE / LOAD on the library (a SOUND always) */
+static int io_lib(void)
+{
+    return ui.io_type == IO_SOUND || ((ui.io_type == IO_KIT || ui.io_type == IO_MORPH) && ui.io_src);
+}
+static uint32_t io_slot_default(uint32_t type);
+static void track_select(uint32_t t);
 /* the banks of 16 the white keys show (the bar keys pick one): patterns 2, kits and songs 4; 0: no banks here */
 static uint32_t ui_banks(void)
 {
@@ -412,6 +444,8 @@ static uint32_t vp_get(uint32_t p)
              : fx.type == FX_COMP ? par[PAR_FX_RATIO] : par[PAR_FX_DELAY_TYPE];
     case VP_IO_TYPE: return ui.io_type;
     case VP_IO_SLOT: return ui.io_slot;
+    case VP_IO_SRC: return ui.io_src;
+    case VP_IO_TRACK: return ui.track;
     case VP_NAME_POS: return ui.io_pos;
     case VP_NAME_CHAR: return (uint8_t)ui.io_name[ui.io_pos & 7u];
     case VP_NAME_CASE: return ui.io_name[ui.io_pos & 7u] >= 'a' && ui.io_name[ui.io_pos & 7u] <= 'z';
@@ -458,6 +492,9 @@ static uint32_t vp_get(uint32_t p)
         return e && e < NLE ? (uint32_t)clamp32((int8_t)L[2], LK_LO[e], LK_HI[e]) - (uint32_t)(int32_t)LK_LO[e] : 0u;
     }
     case VP_DEPTH: return pt->cdepth;
+    case VP_KOCT: return ui.koct;
+    case VP_KVEL: return key_vel;
+    case VP_KACC: return key_acc;
     case VP_LWHEN: {
         const uint8_t *L = pt->link[ui.link & 7u];
         return (L[0] & 7u) % NTRACK * NLV + (L[0] >> 6) % NLV;
@@ -480,6 +517,7 @@ static uint32_t vp_min(uint32_t p)
     case PAR_TRACK_LENGTH: case PAR_EUKLID_LENGTH: case PAR_EUKLID_STEPS: return 1;
     case VP_GA: return shown_pat()->gen[ui.track][0] == GEN_TURING ? 2u : 0u;
     case VP_P2 + 4: return 24;
+    case VP_KVEL: case VP_KACC: return 1;
     case PAR_BPM: return 1;
     case PAR_MIDI_CHAN_1: case PAR_MIDI_CHAN_2: case PAR_MIDI_CHAN_3: case PAR_MIDI_CHAN_4: case PAR_MIDI_CHAN_5:
     case PAR_MIDI_CHAN_6: case PAR_MIDI_CHAN_7: case PAR_MIDI_CHAN_GLOBAL: return 1;
@@ -515,7 +553,8 @@ static uint32_t vp_max(uint32_t p)
              : fx.type == FX_DELAY ? 1u : 0u;
     case VP_IO_TYPE: return ui.mode == M_SAVE ? IO_PROJECT : IO_LOAD_LAST;
     case VP_IO_SLOT:
-        return ui.io_type == IO_PROJECT ? PROJ_USER - 1u : ui.io_type == IO_PATTERN ? NUM_PATTERN - 1u
+        return io_lib() ? (ui.io_type == IO_SOUND ? KL_SOUNDS : KL_KITS) - 1u
+             : ui.io_type == IO_PROJECT ? PROJ_USER - 1u : ui.io_type == IO_PATTERN ? NUM_PATTERN - 1u
              : ui.io_type == IO_FACTORY ? FACTORY_NKITS          /* (the last: all of them into the slots) */
              : ui.io_type == IO_SONG ? NUM_SONGS - 1u : NUM_KITS - 1u;
     case VP_NAME_POS: return 7;
@@ -524,7 +563,8 @@ static uint32_t vp_max(uint32_t p)
     case VP_SONG_PAT: return NUM_PATTERN + 1u;
     case VP_SONG_NUM: return NUM_SONGS - 1u;
     case VP_LEDS: return 2;
-    case VP_AUTOSAVE: case VP_ACCEL: return 1;
+    case VP_AUTOSAVE: case VP_ACCEL: case VP_IO_SRC: return 1;
+    case VP_IO_TRACK: return NTRACK - 1u;
     case VP_PALETTE: return NPALETTES - 1u;
     case VP_MASTER: case VP_DJ: case VP_TAPE: case VP_M1: case VP_M1 + 1: case VP_M1 + 2: case VP_M1 + 3: return 127;
     case VP_REPEAT: case VP_MSEL: return 3;
@@ -552,6 +592,8 @@ static uint32_t vp_max(uint32_t p)
         return e && e < NLE ? (uint32_t)(LK_HI[e] - LK_LO[e]) : 0u;
     }
     case VP_DEPTH: return 127;
+    case VP_KOCT: return 6;
+    case VP_KVEL: case VP_KACC: return 127;
     case VP_LWHEN: return NTRACK * NLV - 1u;
     case VP_LTGT: return NTRACK - 1u;
     case VP_LEFF: return NLE - 1u;
@@ -629,8 +671,19 @@ static void vp_set(uint32_t p, uint32_t v)
             par_set(fx.type == FX_DRIVE ? PAR_FX_DIST_TYPE : fx.type == FX_RING ? PAR_FX_WAVE
                     : fx.type == FX_COMP ? PAR_FX_RATIO : PAR_FX_DELAY_TYPE, v);
         return;
-    case VP_IO_TYPE: ui.io_type = (uint8_t)v; ui.io_slot = 0; bank_fix(); return;
+    case VP_IO_TYPE:
+        ui.io_type = (uint8_t)v;
+        ui.io_slot = (uint8_t)(io_lib() ? io_slot_default(v) : 0u);
+        ui.bank = (uint8_t)(ui.io_slot / 16u);
+        bank_fix();
+        return;
     case VP_IO_SLOT: ui.io_slot = (uint8_t)v; return;
+    case VP_IO_SRC:
+        ui.io_src = (uint8_t)v;
+        ui.io_slot = io_slot_default(ui.io_type);
+        ui.bank = (uint8_t)(ui.io_slot / 16u);
+        return;
+    case VP_IO_TRACK: track_select(v); return;
     case VP_NAME_POS: ui.io_pos = (uint8_t)v; return;
     case VP_NAME_CHAR: ui.io_name[ui.io_pos & 7u] = (char)(v < 32u ? 32u : v); return;
     case VP_NAME_CASE: {
@@ -720,6 +773,9 @@ static void vp_set(uint32_t p, uint32_t v)
         return;
     }
     case VP_DEPTH: pt->cdepth = (uint8_t)v; return;
+    case VP_KOCT: ui.koct = (uint8_t)v; return;
+    case VP_KVEL: key_vel = (uint8_t)v; kset.kvel = (uint8_t)v; settings_later(); return;
+    case VP_KACC: key_acc = (uint8_t)v; kset.kacc = (uint8_t)v; settings_later(); return;
     case VP_LWHEN: {
         uint8_t *L = pt->link[ui.link & 7u];
         L[0] = (uint8_t)((L[0] & 0x38u) | v / NLV | (v % NLV) << 6);
@@ -836,8 +892,9 @@ static void mode_set(uint32_t m)
     if (ui.mode != m) {
         ui.page = 0;
         ui.io_naming = 0;
+        ui.sb_open = 0;                              /* (the sound browser: what it loaded stays) */
     }
-    if ((m == M_HOME || m == M_STEP || m == M_PATTERN || m == M_SONG) && ui.perf) {
+    if ((m == M_HOME || m == M_STEP || m == M_PATTERN || m == M_SONG || m == M_KEYS) && ui.perf) {
         uint32_t t;
         ui.perf = 0;                                 /* (PERF left: what it latched lets go) */
         ui.pf_latch = 0;
@@ -851,6 +908,13 @@ static void mode_set(uint32_t m)
     }
     if (m == M_PERF)
         ui.perf = 1;
+    if (m == M_KEYS) {                               /* 0.8: KEYS: the keys play notes (PERF's let go: above) */
+        ui.kplay = 1;
+        ui.held_step = -1;
+        sq.armed_step = sq.armed_track = -1;
+    } else if (m != M_SOUND) {
+        ui.kplay = 0;                                /* (the sound pages keep playing them) */
+    }
     if (m != M_STEP)
         ui.back = (uint8_t)m;
     if (m == M_CONFIG && ui.mode != M_CONFIG)
@@ -894,12 +958,28 @@ static void sound_open(uint32_t s, int again)        /* a section button; again:
     sound_fix();
 }
 
+static void put_pad8(char *d, const char *s)          /* an 8-character name: s, spaces after */
+{
+    uint32_t i;
+    for (i = 0; i < 8u; i++)
+        d[i] = *s ? *s++ : ' ';
+}
+static uint32_t io_slot_default(uint32_t type)
+{
+    if (type == IO_SOUND)
+        return ui.lib_sound;
+    if ((type == IO_KIT || type == IO_MORPH) && ui.io_src)
+        return ui.lib_kit;
+    return type == IO_KIT ? kit_loaded : type == IO_MORPH ? kit_morph_loaded : type == IO_PATTERN ? sq.active
+         : type == IO_SONG ? sq.song : type == IO_FACTORY ? 0u : (pj.loaded < PROJ_USER ? pj.loaded : 0u);
+}
 static void io_open(uint32_t m, uint32_t type)
 {
+    if (m == M_SAVE && type > IO_PROJECT)
+        type = IO_KIT;                                /* (FACTORY: nothing to save to) */
     mode_set(m);
     ui.io_type = (uint8_t)type;
-    ui.io_slot = type == IO_KIT || type == IO_MORPH ? kit_loaded : type == IO_PATTERN ? sq.active
-               : type == IO_SONG ? sq.song : type == IO_FACTORY ? 0u : (pj.loaded < PROJ_USER ? pj.loaded : 0u);
+    ui.io_slot = (uint8_t)io_slot_default(type);
     ui.io_naming = 0;
     if (type != IO_PROJECT)
         ui.bank = (uint8_t)(ui.io_slot / 16u);
@@ -911,19 +991,34 @@ static void io_ok(void)
     uint32_t s = ui.io_slot;
     char b[32];
     if (ui.mode == M_SAVE) {
-        if ((ui.io_type == IO_KIT || ui.io_type == IO_MORPH || ui.io_type == IO_PROJECT) && !ui.io_naming) {
+        if ((ui.io_type == IO_KIT || ui.io_type == IO_MORPH || ui.io_type == IO_SOUND || ui.io_type == IO_PROJECT) &&
+            !ui.io_naming) {
             ui.io_naming = 1;                         /* the name first */
             ui.io_pos = 0;
             if (ui.io_type == IO_PROJECT)
                 memcpy(ui.io_name, proj_exists(s) ? pj.name[s] : "PROJECT ", 8);
-            else
-                memcpy(ui.io_name, kit_names[ui.io_type == IO_MORPH ? s : s], 8);
+            else if (ui.io_type == IO_SOUND && kl_name(KLK_SOUND, s, ui.io_name))
+                put_pad8(ui.io_name, VOICE_NAME[track_voice(ui.track)]);
+            else if (ui.io_type != IO_SOUND && (!ui.io_src || kl_name(KLK_KIT, s, ui.io_name)))
+                memcpy(ui.io_name, kit_names[ui.io_src ? kit_loaded : s], 8);
             ui.force = 1;
             return;
         }
         switch (ui.io_type) {
         case IO_KIT:
         case IO_MORPH:
+        case IO_SOUND:
+            if (io_lib()) {
+                int rc = ui.io_type == IO_SOUND ? libsound_save(s, ui.io_name, track_voice(ui.track))
+                                                : libkit_save(s, ui.io_name, ui.io_type == IO_MORPH);
+                if (ui.io_type == IO_SOUND)
+                    ui.lib_sound = (uint8_t)s;
+                else
+                    ui.lib_kit = (uint8_t)s;
+                ui_message(rc == 0 ? (ui.io_type == IO_SOUND ? "SOUND SAVED" : "KIT SAVED TO LIBRARY")
+                           : rc == -20 ? "LIBRARY FULL" : "SAVE FAILED");
+                break;
+            }
             kit_save_ram(s, ui.io_type == IO_MORPH);
             memcpy(kit_names[s], ui.io_name, 8);
             ui_message("KIT SAVED");
@@ -971,9 +1066,21 @@ static void io_ok(void)
     }
     switch (ui.io_type) {                             /* LOAD */
     case IO_KIT:
+        if (ui.io_src) {                              /* a library kit: the edit buffer, the slot it came from stays */
+            ui.lib_kit = (uint8_t)s;
+            ui_message(libkit_load(s, 0) ? "EMPTY SLOT" : "KIT LOADED");
+            break;
+        }
         kit_load_ram(s);
         ui_message("KIT LOADED");
         break;
+    case IO_SOUND: {
+        int rc = libsound_load(s, track_voice(ui.track));
+        if (rc == 0)
+            ui.lib_sound = (uint8_t)s;
+        ui_message(rc == 0 ? "SOUND LOADED" : rc == -2 ? "NOT THIS TRACK'S KIND" : "EMPTY SLOT");
+        break;
+    }
 #if KETTLE_FACTORY_KITS
     case IO_FACTORY:
         if (s >= FACTORY_NKITS) {                     /* ALL: the bank's first 64 into the slots */
@@ -987,6 +1094,11 @@ static void io_ok(void)
         break;
 #endif
     case IO_MORPH:
+        if (ui.io_src) {
+            ui.lib_kit = (uint8_t)s;
+            ui_message(libkit_load(s, 1) ? "EMPTY SLOT" : "MORPH TARGET LOADED");
+            break;
+        }
         kit_load_morph(s);
         ui_message("MORPH TARGET LOADED");
         break;
@@ -1048,9 +1160,44 @@ static void clear_do(void)
 static void track_select(uint32_t t)
 {
     ui.track = (uint8_t)(t < NTRACK ? t : NTRACK - 1u);
+    ui.sb_open = 0;
     if (ui.mode == M_SOUND)
         sound_fix();
     ui.force = 1;
+}
+
+/* 0.8: the sound browser: entry e into the track's voice, and a hit of it */
+static void sb_audition(uint32_t e)
+{
+    uint8_t v[SOUND_MAX];
+    uint32_t from, n = sb_values(e, ui.sb_voice, v, &from);
+    if (n)
+        voice_put_par(ui.sb_voice, v, n, from);
+    key_note_post(ui.track, SEQ_DEFAULT_NOTE, key_vel, 0);
+}
+static void sb_turn(int32_t n)                       /* PRESETS on a sound page: opens it, moves through it */
+{
+    if (!ui.sb_open) {
+        ui.sb_voice = (uint8_t)track_voice(ui.track);
+        sb_build(ui.sb_voice);
+        if (!sb_n) {
+            ui_message("NO SOUNDS FOR THIS TRACK");
+            return;
+        }
+        ui.sb_on = (uint8_t)voice_get_par(ui.sb_voice, ui.sb_orig);
+        ui.sb_open = 1;
+        ui.sb_sel = 0;
+    } else {
+        ui.sb_sel = (uint16_t)clamp32((int32_t)ui.sb_sel + n, 0, (int32_t)sb_n - 1);
+    }
+    sb_audition(ui.sb_sel);
+}
+static void sb_close(int keep)                       /* OCT+: keeps what it loaded, OCT-: the sound as it was */
+{
+    if (!keep)
+        voice_put_par(ui.sb_voice, ui.sb_orig, ui.sb_on, ui.sb_voice);
+    ui.sb_open = 0;
+    ui_message(keep ? "SOUND LOADED" : "SOUND AS IT WAS");
 }
 
 /* ------------------------------------------------------------- keys --- */
@@ -1109,10 +1256,26 @@ static void perf_key(uint32_t w, int down)
     ui.force = 1;
 }
 
+/* 0.8: KEYS: key k (semitones above F3) plays the track's voice at its note, the octave KEYS' knob sets; SHIFT: the
+ * accent. As a MIDI note: recorded into the steps under REC (midi.c key_service) */
+static void key_play(uint32_t k)
+{
+    int32_t n = 53 + (int32_t)k + 12 * ((int32_t)ui.koct - 3);
+    if (ui.shift)
+        ui.shift_used = 1;
+    ui.knote = (uint8_t)clamp32(n, 0, 127);
+    key_note_post(ui.track, ui.knote, ui.shift ? key_acc : key_vel, 1);
+    ui.force = 1;
+}
+
 static void white_down(uint32_t w)
 {
     uint32_t s = ui.bar * 16u + w;
     pattern_t *pt = shown_pat();
+    if (ui.kplay) {
+        key_play(WHITE_KEY[w]);
+        return;
+    }
     if (ui.perf && ui.shift) {                        /* PERF: SHIFT latches */
         perf_key(w, 1);
         return;
@@ -1144,8 +1307,8 @@ static void white_down(uint32_t w)
             return;
         case 14: mode_set(M_FX); return;
         case 15: mode_set(M_PATTERN); return;
-        default:                                      /* 1..7: play the voice */
-            voice_trigger(w, 110, SEQ_DEFAULT_NOTE);
+        default:                                      /* 1..7: play the voice (at the keys' velocity) */
+            key_note_post(w, SEQ_DEFAULT_NOTE, key_vel, 0);
             return;
         }
     }
@@ -1219,6 +1382,8 @@ static void white_down(uint32_t w)
 static void white_up(uint32_t w)
 {
     uint32_t b2 = (ui.kbank >> w) & 1u;
+    if (ui.kplay)
+        return;
     if (ui.perf || (w >= NTRACK && (ui.pf_held & (1u << ((b2 ? NPF : 0u) + w - NTRACK)))) ||
         (w < NTRACK && b2 && (ui.drill_held & (1u << w))))
         perf_key(w, 0);                               /* (an effect held when PERF was left lets go too) */
@@ -1230,6 +1395,10 @@ static void white_up(uint32_t w)
 static void black_down(uint32_t k)
 {
     pattern_t *pt = shown_pat();
+    if (ui.kplay) {
+        key_play(BLACK_KEY[k]);
+        return;
+    }
     if (k < NTRACK) {
         uint32_t t = k;
         if (ui.copy && ui.mode != M_PATTERN) {        /* COPY + a track, then the target */
@@ -1359,6 +1528,10 @@ static void button_down(uint32_t b)
             ui.force = 1;
             return;
         }
+        if (ui.sb_open) {
+            sb_close(1);
+            return;
+        }
         if (ui.kb_open) {                             /* the kit browser: load */
             kit_load_ram(ui.kb_sel);
             ui.kb_open = 0;
@@ -1455,6 +1628,11 @@ static void button_down(uint32_t b)
         mode_set(M_FX);
         return;
     case B_EDIT:
+        if (ui.shift) {                               /* 0.8: SHIFT EDIT: KEYS (again: the grid) */
+            ui.shift_used = 1;
+            mode_set(ui.mode == M_KEYS ? M_HOME : M_KEYS);
+            return;
+        }
         sound_open(S_OSC, 1);
         return;
     case B_ENV:
@@ -1509,6 +1687,8 @@ static void button_up(uint32_t b)
             ui.io_naming = 0;                         /* OCT- alone: back (the dialogs) */
         } else if (!ui.shift_used && ui.kb_open) {
             ui.kb_open = 0;
+        } else if (!ui.shift_used && ui.sb_open) {
+            sb_close(0);
         }
     } else if (b == B_OCTUP) {
         ui.copy = 0;
@@ -1552,6 +1732,8 @@ static void ui_input(void)
         } else if (ui.kb_open) {
             ui.kb_sel = (uint8_t)clamp32((int32_t)ui.kb_sel + n, 0, NUM_KITS - 1);
             ui.kb_ms = fm1_ms;
+        } else if (ui.sb_open) {
+            sb_turn(n);
         } else if (ui.mode == M_SONG) {
             ui.song_row = (uint8_t)clamp32((int32_t)ui.song_row + n, 0, MAX_SONG_LENGTH - 1);
         } else if (ui.mode == M_SAVE || ui.mode == M_LOAD) {
@@ -1584,6 +1766,8 @@ static void ui_input(void)
     if ((n = panel_enc(EN_PRESET)) != 0) {
         if (ui.mode == M_SAVE || ui.mode == M_LOAD) {
             ui.io_slot = (uint8_t)clamp32((int32_t)ui.io_slot + n, 0, (int32_t)vp_max(VP_IO_SLOT));
+        } else if ((ui.mode == M_SOUND || ui.mode == M_KEYS) && !ui.kb_open) {
+            sb_turn(n);
         } else {
             if (!ui.kb_open) {
                 ui.kb_open = 1;
@@ -1633,6 +1817,7 @@ static void ui_leds(void)
     uint32_t k, c, play_step = sq.idx[ui.track] < 0 ? 0xFFu : (uint32_t)sq.idx[ui.track];
     uint32_t mode_btn = ui.mode == M_HOME || ui.mode == M_PATTERN || ui.mode == M_SONG ? B_HOME
                       : ui.mode == M_STEP ? B_SEQ : ui.mode == M_PERF || ui.mode == M_EUCLID ? B_ARP
+                      : ui.mode == M_KEYS ? B_EDIT
                       : ui.mode == M_FX ? B_FX : ui.mode == M_SAVE || ui.mode == M_LOAD ? B_SAVE
                       : ui.mode == M_MIXER || ui.mode == M_CONFIG ? B_GLO
                       : ui.mode == M_SOUND ? (ui.sect == S_OSC || ui.sect == S_FM || ui.sect == S_CLICK ? B_EDIT
@@ -1642,7 +1827,14 @@ static void ui_leds(void)
                       : NB;
     if (fm1_led_anim_on())
         return;
-    for (k = 0; k < 16u; k++) {                       /* the white keys */
+    if (ui.kplay) {                                  /* 0.8: KEYS: a keyboard (lit: held; the Cs a mid level) */
+        for (k = 0; k < 27u; k++) {
+            uint32_t n = 53u + k + 12u * ui.koct - 36u;
+            led_put(nl, 14u + k, (ui.keys >> k) & 1u);
+            led_put(n % 12u == 0u ? nm : nd, 14u + k, 1);
+        }
+    }
+    for (k = 0; k < 16u && !ui.kplay; k++) {          /* the white keys */
         uint32_t id = 14u + WHITE_KEY[k], s = ui.bar * 16u + k;
         if (ui.shift) {
             led_put(k >= 7u ? nl : nd, id, 1);         /* (the SHIFT functions lit) */
@@ -1695,14 +1887,14 @@ static void ui_leds(void)
         }
         }
     }
-    for (k = 0; k < NTRACK; k++) {                   /* the voice keys */
+    for (k = 0; k < NTRACK && !ui.kplay; k++) {      /* the voice keys */
         uint32_t id = 14u + BLACK_KEY[k];
         int muted = (sq.muted >> k) & 1u, flash = fm1_ms - ui.flash_ms[k] < 70u;
         led_put(nl, id, (k == ui.track && !ui.perf) || (flash && !muted));
         led_put(nb, id, ui.copy_src == k + 1u && ui.mode != M_PATTERN);
         led_put(nd, id, !muted);
     }
-    for (k = 0; k < 4u; k++) {                        /* the bar keys */
+    for (k = 0; k < 4u && !ui.kplay; k++) {           /* the bar keys */
         uint32_t id = 14u + BLACK_KEY[NTRACK + k];
         if (ui_banks()) {
             led_put(nl, id, ui.bank == k);
@@ -1722,7 +1914,7 @@ static void ui_leds(void)
     led_put(nb, panel.btn[B_REC], sq.erase);
     led_put(nl, panel.btn[B_OCTDN], ui.shift);
     led_put(nl, panel.btn[B_OCTUP], ui.copy);
-    led_put(nb, panel.btn[B_OCTUP], ui.clear_open || ui.kb_open || ui.copy_src || ((ui.mode == M_SAVE ||
+    led_put(nb, panel.btn[B_OCTUP], ui.clear_open || ui.kb_open || ui.sb_open || ui.copy_src || ((ui.mode == M_SAVE ||
                                                                                      ui.mode == M_LOAD) && !ui.copy));
     for (k = 0; k < NB; k++)
         if (k != B_PLAY)

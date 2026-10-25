@@ -675,8 +675,9 @@ static void autosave_poll(void)
 
 /* ------------------------------------------------------- settings --- */
 #define SET_MAGIC 0x3154454Bu                       /* "KET1" */
-typedef struct { uint32_t magic; uint8_t palette, leds, autosave, accel, project, rsv[7]; } kettle_settings_t;
-static kettle_settings_t kset = {SET_MAGIC, 2, 1, 1, 1, 0xFF, {0}};   /* (palette 2: AMBER) */
+/* 0.8: kvel, kacc: the keys' velocity and accent (seq.c key_vel, key_acc; 0, as settings before 0.8 hold: 100, 127) */
+typedef struct { uint32_t magic; uint8_t palette, leds, autosave, accel, project, kvel, kacc, rsv[5]; } kettle_settings_t;
+static kettle_settings_t kset = {SET_MAGIC, 2, 1, 1, 1, 0xFF, 100, 127, {0}};   /* (palette 2: AMBER) */
 static uint8_t settings_dirty;
 static uint32_t settings_ms;
 static void settings_later(void)
@@ -705,7 +706,10 @@ static void persist_boot(void)                      /* power-on: the flash, the 
     if (st_load(OBJ_SETTINGS, &s, sizeof s) == (int)sizeof s && s.magic == SET_MAGIC)
         kset = s;
     autosave_on = kset.autosave;
+    key_vel = kset.kvel ? kset.kvel : 100u;
+    key_acc = kset.kacc ? kset.kacc : 127u;
     proj_scan();
+    kl_scan();
 }
 static void session_boot(void)                      /* after engine_init: the last session */
 {

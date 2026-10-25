@@ -121,6 +121,8 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
         uint8_t l[NSPG][2];
         uint32_t i, k = sound_pages(l);
         put_str(b, SECT_NAME[ui.sect], n);
+        if (ui.kplay)                                /* (0.8: the keys still play notes) */
+            put_str(b + str_len(b), "  KEYS", n - str_len(b));
         for (i = 0; i < k && !(l[i][0] == ui.sect && l[i][1] == ui.half); i++)
             ;
         *pg = i;
@@ -148,6 +150,7 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
     case M_LOAD: put_str(b, "LOAD ", n); put_str(b + 5, IO_NAME[ui.io_type], n - 5); break;
     case M_LAST: put_str(b, ui.last_all ? "LAST STEP (ALL)" : "LAST STEP", n); break;
     case M_RECOPT: put_str(b, "RECORD", n); break;
+    case M_KEYS: put_str(b, "KEYS", n); break;
     default: b[0] = 0; break;
     }
 }
@@ -375,6 +378,28 @@ static void draw_kit_browser(int32_t y0)
     }
 }
 
+static void draw_sound_browser(int32_t y0)           /* 0.8 */
+{
+    int32_t i, first = (int32_t)ui.sb_sel - 3, rows = sb_n < 7u ? (int32_t)sb_n : 7;
+    char t[24];
+    (void)y0;
+    if (first > (int32_t)sb_n - rows)
+        first = (int32_t)sb_n - rows;
+    if (first < 0)
+        first = 0;
+    put_str(t, "SOUND ", sizeof t);
+    put_str(t + 6, VOICE_NAME[ui.track], sizeof t - 6u);
+    cv_text(10, 2, &AF_S, t, T_THEME);
+    cv_text_r(232, 2, &AF_S, "OCT+ KEEP  OCT- BACK", T_MID, T_BG);
+    for (i = 0; i < rows; i++) {
+        uint32_t e = (uint32_t)(first + i);
+        char l[16], r[12];
+        sb_label(e, ui.sb_voice, r, l, sizeof l);
+        r[8] = 0;
+        list_row(18 + i * 16, l, r, e == ui.sb_sel, 0);
+    }
+}
+
 static void draw_clear(int32_t y0)
 {
     (void)y0;
@@ -461,7 +486,49 @@ static void draw_shift_legend(int32_t y0)
         cv_text_fit(x + 22, y + CAP_IN(S, 17), &AF_S, F[i], T_INK, T_SEL, 52);
     }
     cv_text(8, 94, &AF_S, "VOICE: mute  BAR: length  SEQ: links", T_TEXT);
-    cv_text(8, 108, &AF_S, "PLAY: song  REC: opts  COPY: clear", T_TEXT);
+    cv_text(8, 108, &AF_S, "PLAY: song  REC: opts  EDIT: keys", T_TEXT);
+}
+
+/* 0.8: KEYS: the FM-1's keyboard (from F; held keys in the track's colour), the last note, how to play */
+static int32_t key_x(uint32_t k)                     /* the left of key k (semitones above the first F) */
+{
+    static const uint8_t WI[12] = {0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6};   /* F .. E: the white key at or below */
+    return 8 + (int32_t)(k / 12u * 7u + WI[k % 12u]) * 14;
+}
+static void draw_keys(int32_t y0)
+{
+    uint32_t k;
+    char b[32];
+    uint16_t c = TRACK_COL[ui.track];
+    (void)y0;
+    for (k = 0; k < 27u; k++) {                      /* the white keys, then the black ones over them */
+        uint32_t s = k % 12u;
+        int held = (ui.keys >> k) & 1u;
+        if (s == 1u || s == 3u || s == 5u || s == 8u || s == 10u)
+            continue;
+        cv_rrect(key_x(k), 6, 13, 64, 2, held ? c : T_RAISE, T_BG);
+        if ((53u + k + 12u * ui.koct - 36u) % 12u == 0u)
+            cv_rect(key_x(k) + 4, 60, 5, 2, held ? RGB(12, 12, 12) : T_THEME);
+    }
+    for (k = 0; k < 27u; k++) {
+        uint32_t s = k % 12u;
+        int held = (ui.keys >> k) & 1u;
+        if (!(s == 1u || s == 3u || s == 5u || s == 8u || s == 10u))
+            continue;
+        cv_rect(key_x(k) + 8, 6, 11, 40, T_BG);       /* (a gap round it) */
+        cv_rrect(key_x(k) + 9, 6, 9, 39, 2, held ? c : T_MID, T_BG);
+        if (!held)
+            cv_rect(key_x(k) + 10, 7, 7, 37, T_BG);
+    }
+    put_str(b, "F", sizeof b);
+    put_int(b + 1, (int32_t)ui.koct);
+    cv_text(8, 76, &AF_S, b, T_MID);
+    if (ui.knote < 128u) {
+        note_name(b, ui.knote);
+        cv_text_r(232, 74, &AF_M, b, T_THEME, T_BG);
+    }
+    cv_text(8, 96, &AF_S, sq.rec && sq.running ? "REC: the notes go into the steps" : "SHIFT + key: accent", T_TEXT);
+    cv_text(8, 112, &AF_S, "ALGORITHM: track   SHIFT + EDIT: grid", T_MID);
 }
 
 static void draw_patterns(int32_t y0)
@@ -530,7 +597,17 @@ static void io_slot_name(char *b, uint32_t n, uint32_t type, uint32_t s)
         return;
     }
 #endif
-    if (type == IO_KIT || type == IO_MORPH) {
+    if (io_lib()) {                                  /* 0.8: the library's */
+        static const char *const KIND[4] = {"  DRUM", "  SNARE", "  CYMBAL", "  HIHAT"};
+        uint8_t h[3];
+        if (kl_name(type == IO_SOUND ? KLK_SOUND : KLK_KIT, s, b)) {
+            put_str(b, "(empty)", n);
+        } else {
+            b[8] = 0;
+            if (type == IO_SOUND && !kl_peek(KLK_SOUND, s, h, 3) && h[0] < 4u)
+                put_str(b + 8, KIND[h[0]], n - 8u);
+        }
+    } else if (type == IO_KIT || type == IO_MORPH) {
         memcpy(b, kit_names[s], 8);
         b[8] = 0;
     } else if (type == IO_PROJECT) {
@@ -583,7 +660,10 @@ static void draw_io(int32_t y0)
         for (i = 0; i < rows; i++) {
             uint32_t s = (uint32_t)(first + i);
             char l[8], r[32];
-            two_digits(l, s + 1u);
+            if (s >= 99u)
+                put_int(l, (int32_t)s + 1);
+            else
+                two_digits(l, s + 1u);
             io_slot_name(r, sizeof r, ui.io_type, s);
             list_row(i * 16, l, r, s == ui.io_slot, 0);
         }
@@ -596,6 +676,8 @@ static void draw_io(int32_t y0)
 static uint32_t mixer_bar_par(uint32_t v)
 {
     uint32_t g = (ui.page % NMIXER) / 2u;
+    if (ui.mode == M_PERF)                           /* (PERF's MIX pages: the volumes) */
+        return PAR_VOL1 + v;
     return g == 2u ? PAR_FX_SEND1 + v : g == 3u ? PAR_REV_SEND1 + v : PAR_VOL1 + v;
 }
 static void draw_mixer(int32_t y0)
@@ -866,7 +948,14 @@ static void draw_body(void)
 {
     uint32_t s;
     void (*fn)(int32_t) = 0;
-    if ((ui.mode == M_PERF || (ui.perf && ui.shift)) && !ui.clear_open && !ui.kb_open) {   /* (SHIFT: latches) */
+    if (perf_mix() && !ui.shift && !ui.clear_open && !ui.kb_open) {   /* 0.8: PERF's MIX: the faders */
+        uint32_t v;
+        fn = draw_mixer;
+        s = 13;
+        for (v = 0; v < NVOICE; v++)
+            s = sig_add(s, par[PAR_VOL1 + v] | (uint32_t)(voice_peak[v] >> 10) << 8 |
+                               (uint32_t)par[v < 3u ? PAR_PAN1 + v : PAR_PAN4 + v - 3u] << 16);
+    } else if ((ui.mode == M_PERF || (ui.perf && ui.shift)) && !ui.clear_open && !ui.kb_open) {   /* (SHIFT: latches) */
         fn = draw_perf;
         s = sig_add(sig_add(11, pf.on), ui.pf_latch | (uint32_t)perf_bank2() << 31);
         s = sig_add(s, sq.drill | ui.drill_latch << 8);
@@ -878,6 +967,9 @@ static void draw_body(void)
     } else if (ui.clear_open) {
         fn = draw_clear;
         s = sig_add(2, ui.clear_sel);
+    } else if (ui.sb_open) {
+        fn = draw_sound_browser;
+        s = sig_add(40, ui.sb_sel | ui.track << 16);
     } else if (ui.kb_open) {
         fn = draw_kit_browser;
         s = sig_add(3, ui.kb_sel | kit_loaded << 8);
@@ -899,7 +991,9 @@ static void draw_body(void)
         case M_SAVE:
         case M_LOAD:
             fn = draw_io;
-            s = sig_add(6, ui.io_type | ui.io_slot << 8 | ui.io_naming << 16 | ui.io_pos << 20 | ui.mode << 24);
+            s = sig_add(6, ui.io_type | ui.io_slot << 8 | ui.io_naming << 16 | ui.io_pos << 20 | ui.mode << 24 |
+                               (uint32_t)ui.io_src << 29);
+            s = sig_add(s, ui.track | kl.seq << 8);
             s = sig_add(s, (uint32_t)ui.io_name[0] | (uint32_t)ui.io_name[1] << 8 | (uint32_t)ui.io_name[2] << 16 |
                                (uint32_t)ui.io_name[3] << 24);
             s = sig_add(s, (uint32_t)ui.io_name[4] | (uint32_t)ui.io_name[5] << 8 | (uint32_t)ui.io_name[6] << 16 |
@@ -924,6 +1018,11 @@ static void draw_body(void)
                 s = sig_add(s, par[PAR_FX_SEND1 + v] | (uint32_t)par[PAR_REV_SEND1 + v] << 8);
             break;
         }
+        case M_KEYS:
+            fn = draw_keys;
+            s = sig_add(14, ui.keys | (uint32_t)ui.knote << 27);
+            s = sig_add(s, ui.track | ui.koct << 4 | (sq.rec && sq.running) << 8);
+            break;
         case M_CONFIG:
             fn = draw_config_help;
             s = sig_add(9, ui.page);
@@ -971,6 +1070,8 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_NONE: b[0] = 0; return;
     case VP_IO_TYPE: put_str(b, "Type", n); return;
     case VP_IO_SLOT: put_str(b, "Slot", n); return;
+    case VP_IO_SRC: put_str(b, ui.mode == M_SAVE ? "To" : "From", n); return;
+    case VP_IO_TRACK: put_str(b, "Track", n); return;
     case VP_NAME_POS: put_str(b, "Position", n); return;
     case VP_NAME_CHAR: put_str(b, "Letter", n); return;
     case VP_NAME_CASE: put_str(b, "Case", n); return;
@@ -1004,6 +1105,9 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_LTGT: put_str(b, "Target", n); return;
     case VP_LEFF: put_str(b, "Effect", n); return;
     case VP_LWIN: put_str(b, "Window", n); return;
+    case VP_KOCT: put_str(b, "Octave", n); return;
+    case VP_KVEL: put_str(b, "Velocity", n); return;
+    case VP_KACC: put_str(b, "Accent", n); return;
     case VP_RAT_FADE: put_str(b, "Fade", n); return;
     case VP_ACTION: put_str(b, "Action", n); return;
     case VP_GMODE: put_str(b, "Generator", n); return;
@@ -1053,7 +1157,7 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case PAR_MIDI_FILT_TX: put_str(b, "TX filter", n); return;
     case PAR_MIDI_FILT_RX: put_str(b, "RX filter", n); return;
     case PAR_MIDI_ROUTING: put_str(b, "Route", n); return;
-    case PAR_VOICE_DECIMATION_ALL: put_str(b, "All SRate", n); return;
+    case PAR_VOICE_DECIMATION_ALL: put_str(b, "SRate", n); return;
     default: break;
     }
     if (p >= PAR_MIDI_CHAN_1 && p <= PAR_MIDI_CHAN_6) {
@@ -1081,7 +1185,7 @@ static void card_name(char *b, uint32_t n, uint32_t p)
                 n - 4);
         return;
     }
-    if (ui.mode == M_MIXER && ((p >= PAR_VOL1 && p <= PAR_VOL6) || (p >= PAR_PAN1 && p <= PAR_PAN3) ||
+    if ((ui.mode == M_MIXER || perf_mix()) && ((p >= PAR_VOL1 && p <= PAR_VOL6) || (p >= PAR_PAN1 && p <= PAR_PAN3) ||
                                (p >= PAR_PAN4 && p <= PAR_PAN6))) {
         uint32_t v = p >= PAR_VOL1 && p <= PAR_VOL6 ? p - PAR_VOL1 : p <= PAR_PAN3 ? p - PAR_PAN1 : p - PAR_PAN4 + 3u;
         put_str(b, v == 5u ? "HH" : VOICE_SHORT[v], n);
@@ -1121,7 +1225,14 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
     switch (p) {
     case VP_NONE: b[0] = 0; return;
     case VP_IO_TYPE: put_str(b, IO_NAME[v % NIO], n); return;
-    case VP_IO_SLOT: two_digits(b, v + 1u); return;
+    case VP_IO_SLOT:
+        if (v >= 99u)
+            put_int(b, (int32_t)v + 1);
+        else
+            two_digits(b, v + 1u);
+        return;
+    case VP_IO_SRC: put_str(b, v ? "LIBRARY" : "SLOTS", n); return;
+    case VP_IO_TRACK: put_str(b, VOICE_NAME[v % NTRACK], n); return;
     case VP_NAME_POS: put_int(b, (int32_t)v + 1); return;
     case VP_NAME_CHAR: b[0] = (char)(v >= 32u ? v : ' '); b[1] = 0; return;
     case VP_NAME_CASE: put_str(b, v ? "lower" : "UPPER", n); return;
@@ -1170,6 +1281,12 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
         return;
     case VP_RAT_FADE: put_str(b, v == RF_DOWN ? "DOWN" : v == RF_UP ? "UP" : "FLAT", n); return;
     case VP_LINK: put_int(b, (int32_t)v + 1); return;
+    case VP_KOCT:
+        if (v > 3u)
+            b[0] = '+';
+        put_int(b + (v > 3u), (int32_t)v - 3);
+        return;
+    case VP_KVEL: case VP_KACC: put_int(b, (int32_t)v); return;
     case VP_P2 + 4: note_name(b, v); return;
     case VP_P2_LAST: {
         static const char *const L[3] = {"1/16", "1/8", "1/4"};

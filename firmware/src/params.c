@@ -187,7 +187,7 @@ static const char *par_name(uint32_t p)
     switch (p) {                                     /* (the step and global ones the pages name otherwise) */
     case PAR_BPM: return "Tempo";
     case PAR_SHUFFLE: return "Shuffle";
-    case PAR_ROLL: return "RollRate";
+    case PAR_ROLL: return "Roll";
     case PAR_MORPH: return "Morph";
     case PAR_TRACK_LENGTH: return "Length";
     default: break;

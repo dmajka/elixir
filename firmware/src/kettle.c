@@ -5,7 +5,7 @@
  * or supported by Erica Synths or M-VAVE.
  * One compilation unit (the HAL is header-only); each file uses what the files above it define. */
 #ifndef KETTLE_VERSION
-#define KETTLE_VERSION "v0.7"
+#define KETTLE_VERSION "v0.8"
 #endif
 #define FELUCCA_FLASH 1
 #define FELUCCA_OTA 1
@@ -70,6 +70,7 @@ static uint32_t ui_pattern(void);
 #include "fm1_flash.h"
 #include "storage_hw.c"
 #include "storage.c"
+#include "kitlib.c"
 #include "project.c"
 #include "ota.c"
 #include "library.c"

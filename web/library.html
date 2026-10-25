@@ -1,6 +1,7 @@
 <!doctype html>
 <!-- SPDX-License-Identifier: GPL-3.0-only
      Kettle's library page (0.7): back up and restore the FM-1's projects, import LXR-02 kits (.SND), export kits.
+     0.8: the kit library (back up, restore, kits into it), LXR-02 projects (kits, patterns, songs).
      Talks to firmware/src/library.c over Web MIDI SysEx (web/library.js). web/make_site.py puts it at library/. -->
 <html lang="en">
 <head>
@@ -87,6 +88,24 @@
   <p class="small">An LXR voice routed to the FX bus comes in as FX SEND 127 (the same sound). Kettle's own settings
     (sends, reverb, shaping, models) start at their defaults.</p>
 
+  <h2>Import an LXR-02 project</h2>
+  <p>Pick a project folder from an LXR-02 SD card (PROJ00 …): its kits go into the kit slots by their numbers (so each
+    pattern still finds its kit), its patterns into Kettle's patterns, its songs into the songs. It replaces what's
+    playing; save the project on the FM-1 afterwards. Kettle has 32 patterns to the LXR's 64: pick which half.</p>
+  <p><label>Patterns <select id="lxrhalf"><option value="0">1–32</option><option value="32">33–64</option></select></label></p>
+  <p><label>A project folder <input type="file" id="lxrdir" webkitdirectory></label></p>
+  <p class="small">A song's steps on a pattern from the other half play pattern 32 instead.</p>
+
+  <h2>Kit library</h2>
+  <p>128 kits and 128 sounds the FM-1 keeps apart from the projects (SAVE → KIT or MORPH, To LIBRARY; SAVE → SOUND).
+    They survive loading other projects; back them up here too.</p>
+  <p id="libsum" class="small"></p>
+  <ul class="kits" id="libkits"></ul>
+  <p><button id="libbackup">Back up the kit library</button></p>
+  <p><label>Restore <input type="file" id="librestore" accept=".ktlb"></label></p>
+  <p><label>LXR-02 kits into it, from library kit <input type="number" id="libfirst" min="1" max="128" value="1" style="width:4em"></label>
+    <input type="file" id="libsnd" accept=".snd,.SND" multiple></p>
+
   <h2>Kits on the FM-1</h2>
   <p>Click a kit to download it as an LXR-02 .SND file (the LXR's parameters only: Kettle's own aren't in that
     format).</p>
@@ -100,7 +119,8 @@
   </footer>
 </main>
 <script type="module">
-import { Library, midiTransport, sndFiles, sndBytes, packBackup, unpackBackup, checkImage, SLOT_NAMES } from "./library.js";
+import { Library, midiTransport, sndFiles, sndBytes, packBackup, unpackBackup, checkImage, SLOT_NAMES, KL_KIT, KL_SOUND,
+         packKitLib, unpackKitLib, lxrProject, importLxrProject } from "./library.js";
 
 const $ = (id) => document.getElementById(id);
 const say = (s, warn = false) => { $("status").textContent = s; $("status").className = warn ? "warn" : ""; };
@@ -138,6 +158,14 @@ async function refresh() {
   const names = await lib.kitNames(info.nkits);
   $("kits").innerHTML = names.map((n, i) => `<li><span class="n">${i + 1}</span><a href="#" data-kit="${i}">` +
     `${n.replace(/[<&]/g, "") || "–"}</a>${info.kitLoaded === i ? " ·" : ""}</li>`).join("");
+  try {                                              // (0.8 on: the kit library)
+    const lk = await lib.libList(KL_KIT), ls = await lib.libList(KL_SOUND);
+    $("libsum").textContent = `${lk.length} kits, ${ls.length} sounds.`;
+    $("libkits").innerHTML = lk.map((e) => `<li><span class="n">${e.slot + 1}</span><a href="#" data-lib="${e.slot}">` +
+      `${e.name.replace(/[<&]/g, "") || "–"}</a></li>`).join("");
+  } catch (_) {
+    $("libsum").textContent = "This Kettle has no kit library (0.8 or later has).";
+  }
 }
 
 $("connect").addEventListener("click", () => job(async () => {
@@ -225,6 +253,66 @@ async function importKits(files) {
 }
 $("sndfiles").addEventListener("change", (e) => { const f = [...e.target.files]; e.target.value = ""; job(() => importKits(f)); });
 $("snddir").addEventListener("change", (e) => { const f = [...e.target.files]; e.target.value = ""; job(() => importKits(f)); });
+
+$("lxrdir").addEventListener("change", (e) => {
+  const files = [...e.target.files];
+  e.target.value = "";
+  job(async () => {
+    const proj = await lxrProject(files), first = +$("lxrhalf").value;
+    if (!proj.kits.length && !proj.pats.length) throw new Error("No LXR-02 kits or patterns there.");
+    if (!confirm(`Bring in ${proj.kits.length} kits, the patterns ${first + 1}–${first + 32} and the songs? What's ` +
+                 "playing now is replaced (until you load a project again without saving).")) { say("Import cancelled."); return; }
+    say("Importing the project …");
+    const r = await importLxrProject(lib, proj, first, bar);
+    await refresh();
+    say(`${r.kits} kits, ${r.pats} patterns, ${r.songs} songs in. Save the project on the FM-1 to keep them.`);
+  });
+});
+
+$("libbackup").addEventListener("click", () => job(async () => {
+  const entries = await lib.libBackup(bar);
+  if (!entries.length) throw new Error("The kit library is empty.");
+  download(packKitLib(entries), `kettle-kits-${stamp()}.ktlb`);
+  say(`Backed up ${entries.length} kits and sounds.`);
+}));
+$("librestore").addEventListener("change", (e) => {
+  const f = e.target.files[0];
+  e.target.value = "";
+  if (!f) return;
+  job(async () => {
+    const entries = unpackKitLib(await f.arrayBuffer());
+    if (!confirm(`Put ${entries.length} kits and sounds back into the kit library? Those in their slots are replaced.`)) {
+      say("Restore cancelled.");
+      return;
+    }
+    await lib.libRestore(entries, bar);
+    await refresh();
+    say(`Restored ${entries.length} kits and sounds.`);
+  });
+});
+$("libsnd").addEventListener("change", (e) => {
+  const files = [...e.target.files];
+  e.target.value = "";
+  job(async () => {
+    const kits = await sndFiles(files);
+    if (!kits.length) throw new Error("No LXR kit files (.SND) there.");
+    const first = Math.max(1, Math.min(128, +$("libfirst").value || 1)) - 1, n = Math.min(kits.length, 128 - first);
+    if (!confirm(`Put ${n} kits into library kits ${first + 1}–${first + n}?`)) { say("Import cancelled."); return; }
+    for (let i = 0; i < n; i++) { await lib.libPut(KL_KIT, first + i, kits[i].name, kits[i].data); bar(i + 1, n); }
+    await refresh();
+    say(`${n} kits in the library.`);
+  });
+});
+$("libkits").addEventListener("click", (e) => {
+  const k = e.target.dataset.lib;
+  if (k === undefined) return;
+  e.preventDefault();
+  job(async () => {
+    const kit = await lib.libGet(KL_KIT, +k);
+    download(sndBytes(kit.name, kit.data), `${safe(kit.name).toUpperCase().slice(0, 5)}.SND`);
+    say(`Downloaded library kit ${+k + 1}, ${kit.name}.`);
+  });
+});
 
 $("kits").addEventListener("click", (e) => {
   const k = e.target.dataset.kit;

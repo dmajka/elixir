@@ -2,7 +2,7 @@
 
 The Erica Synths LXR-02 drum machine's firmware, ported to the M-VAVE FM-1.
 
-Kettle runs the LXR-02's sound engine and sequencer on the FM-1. It has six voices on seven tracks (three drums, snare/clap, cymbal, closed and open hat), the FX bus, 32 patterns of 4 bars with parameter locks, flams and shifts, rolls, Euclid, morph, songs, kits and projects, and MIDI in/out with clock sync. On top of the LXR, each voice has an FX send and a reverb send, and the reverb is Felucca's (room, spring, hall). Each voice also has a waveshaper choice, a bit reducer, a tilt EQ, random-per-hit variation, a choke group and cross-modulation from another voice. The FX bus adds a phaser and a flanger. It is built on [Felucca](https://github.com/hugelton/Felucca)'s hardware layer, USB stack, updater, reverb and emulator.
+Kettle runs the LXR-02's sound engine and sequencer on the FM-1. It has six voices on seven tracks (three drums, snare/clap, cymbal, closed and open hat), the FX bus, 32 patterns of 4 bars with parameter locks, flams and shifts, rolls, Euclid, morph, songs, kits and projects, and MIDI in/out with clock sync. On top of the LXR, each voice has an FX send and a reverb send, and the reverb is Felucca's (room, spring, hall). Each voice also has a waveshaper choice, a bit reducer, a tilt EQ, random-per-hit variation, a choke group and cross-modulation from another voice. The FX bus adds a phaser and a flanger. The three drum voices can also play physical models instead of the LXR's oscillators. The keyboard can play a voice as an instrument (KEYS), a sound browser loads single sounds into a track, and a kit library in flash holds 128 kits and 128 sounds beyond the project. It is built on [Felucca](https://github.com/hugelton/Felucca)'s hardware layer, USB stack, updater, reverb and emulator.
 
 The FM-1 has no FPU, so the LXR's floating-point DSP is rewritten in fixed point. `tests/compare_test.c` renders each voice with both engines and compares them: levels match to 0.1 dB, and the tonal voices correlate at 0.99–1.00. Noise-based sounds correlate lower only because the noise generator differs.
 
@@ -19,7 +19,7 @@ The FM-1 has no FPU, so the LXR's floating-point DSP is rewritten in fixed point
 | Black keys 8–11 | Bars 1–4 (shown bar) · banks of 16 (2 on the pattern page, 4 for kits and songs) · SHIFT: track length · COPY: copy the shown bar into it (on the grid: every track) |
 | OCT− | **SHIFT** (hold it: the screen shows every SHIFT combination) |
 | OCT+ | **COPY** (hold + track/bar/pattern) · SHIFT + OCT+ = **CLEAR** · OK in dialogs |
-| EDIT | Oscillator → FM → transient (click) |
+| EDIT | Oscillator → FM → transient (click) → model (drums) · SHIFT + EDIT: **KEYS** (the keys play the track's voice) |
 | ENV | Amp EG → mod EG / velocity |
 | SCL | Filter → shape (waveshaper, drive, bits, tilt) |
 | LFO | LFO → random per hit → cross mod / choke |
@@ -32,7 +32,7 @@ The FM-1 has no FPU, so the LXR's floating-point DSP is rewritten in fixed point
 | PLAY / REC | Start/stop (SHIFT + PLAY: the song from the top) · record (SHIFT + REC: options) |
 | ALGORITHM | Track |
 | SELECT | Page / list position |
-| PRESETS | Kit browser (OCT+ loads) |
+| PRESETS | Kit browser (OCT+ loads) · on a sound page or in KEYS: the sound browser (OCT+ keeps, OCT− reverts) |
 | KNOB 1–4 | The four parameters on screen. **Hold a step and turn a knob** to lock that parameter on that step |
 
 SHIFT + white keys follow the LXR's SHIFT + step functions: 1–7 audition a voice, 8 KIT, 9 MORPH, 10 SONG, 11 PROJECT, 12 CONFIG, 13 RELOAD, 14 LAST (last-touched parameters), 15 FX, 16 PATTERN.
@@ -73,7 +73,7 @@ Press ARP for PERF. The white keys act while held, and SHIFT + a key latches it 
 
 | Keys | |
 |---|---|
-| 1–7 | Roll the track at the roll rate (as on the LXR) |
+| 1–7 | Roll the track at the roll rate (as on the LXR), at the KEYS velocity |
 | 8 FILL | Every step plays, whatever its probability |
 | 9 RPT | **Repeat:** the sequencer loops its position at the repeat length (1/4, 1/8, 1/16, 1/32: the bar keys or the Repeat knob), starting on that grid. When you let go, the pattern carries on where it would have been. |
 | 10 FRZ | **Freeze:** the FX bus delay loops what it holds (input off, feedback 100%). It needs the FX bus set to DELAY; the longest loop is about 0.74 s. |
@@ -84,12 +84,13 @@ Press ARP for PERF. The white keys act while held, and SHIFT + a key latches it 
 | 15 LP~ / 16 HP~ | **Sweeps:** push the DJ filter to its low-pass or high-pass end over a bar, and back in a quarter bar after you let go |
 | Black keys | Mutes · bar keys: repeat length |
 
-The knobs have four pages, selected with SELECT:
+The knobs have nine pages, selected with SELECT: the performance pages, then the macros, then PERFORM 2.
 
-- **Perform:** tempo, DJ filter, repeat length, morph. The DJ filter is off at the middle; turning left is a low-pass on the master, turning right a high-pass.
-- **Macros:** four knobs.
-- **Macro setup:** pick a macro, its target (any parameter a step can lock), and its min and max. A max below the min turns the macro the other way. Turning a macro under REC records locks, as any knob does.
-- **More:** roll rate, shuffle, all-voice sample-rate reduction, tape time.
+- **Perform** (the LXR's PERFORMANCE page): tempo, roll rate, morph, and **SRate**, the LXR's global sample-rate reducer (each voice's own rate times this one; part of the kit). While a roll is held, the roll knob sweeps its rate smoothly from 1/4 to 1/192.
+- **More:** DJ filter (off at the middle; left a low-pass on the master, right a high-pass), repeat length, shuffle, tape time.
+- **Mix** and **Mix 2:** the six voices' volumes, the FX bus's dry/wet and the reverb's level, to ride like the LXR's faders.
+- **Macros:** four knobs. **Macro setup:** pick a macro, its target (any parameter a step can lock), and its min and max. A max below the min turns the macro the other way. Turning a macro under REC records locks, as any knob does.
+- **PERFORM 2** and its two setup pages: a second bank of key effects (drill, half time, jitter, cuts, short, pump, comb, space, crush, reverse); see the manual.
 
 Macros, the repeat length and the tape time are saved with the project.
 
@@ -102,6 +103,10 @@ Each voice (the open and closed hats share one) has three extra pages. All of th
 - **Cross mod / choke** (LFO, next): another voice as the **source** and a **mode**. DUCK turns this voice down while the source sounds, FILTER opens this voice's filter with the source's level, and RING multiplies the two. **Amount** sets how much. **Choke** puts the voice in a group from 1 to 4. A hit on any voice in the group fades the others out within 1.5 ms.
 
 Drum 1–3 also have **physical models** (EDIT, after the transient: MODEL). Instead of the LXR's oscillators, a struck body rings: SKIN (a drum head), BAR (marimba), BELL, PLATE or TUBE (a string or pipe), with **decay**, **damping** (how fast the high modes die), **material** (wood to metal), strike **position**, **exciter** (a thump, a click or a noise burst) and **tension** (the pitch drop of a hard hit). Velocity makes a hit brighter as well as louder. The voice's filter, shape and sends still apply.
+
+**KEYS** (SHIFT + EDIT): the white and black keys play the selected track's voice chromatically (KNOB 1: octave). Under REC the notes go into the steps. The keys have no velocity, so KNOB 2 sets it (for rolls too) and KNOB 3 the accent, played with SHIFT.
+
+**Sound browser:** on a track's sound pages, turn PRESETS to step through the sounds that track can take (the library's sounds, then the voices of the library's kits, the kit slots and the factory bank), each auditioned; OCT+ keeps one, OCT− goes back. SAVE → SOUND saves a track's sound to the library.
 
 The FX bus has two new types. **Phaser**: rate, depth, feedback, centre. **Flanger**: rate, depth, feedback (negative below the middle) and delay. Both sound strongest at DRY/WET 50%.
 
@@ -125,7 +130,9 @@ The emulator runs the firmware's own C sources compiled to WebAssembly, on a sim
 
 ## Library: backup, restore, LXR-02 kits
 
-`web/library.html` (the site's `library/`) talks to Kettle over USB MIDI SysEx (`firmware/src/library.c`, protocol in its header; `web/library.js`). It backs up and restores projects and imports LXR-02 .SND kits; the emulator page has the same under **Library**.
+`web/library.html` (the site's `library/`) talks to Kettle over USB MIDI SysEx (`firmware/src/library.c`, protocol in its header; `web/library.js`). It backs up and restores projects, imports LXR-02 .SND kits, imports a whole LXR-02 project folder (kits, patterns in V1–V3 formats, songs; Kettle's 32 patterns take one half of the LXR's 64), and backs up and restores the kit library (`.ktlb`); the emulator page has the same under **Library**.
+
+**Kit library** (`firmware/src/kitlib.c`): 128 kits and 128 single sounds in flash at 0xEA000–0xFBFFF, outside the projects, read one at a time (no RAM per kit). SAVE / LOAD → KIT and MORPH reach it with KNOB 3 (To / From LIBRARY), SAVE / LOAD → SOUND saves or loads one track's sound, and the sound browser lists it. Writes are a log with a commit record written last, so a write cut short leaves the slot as it was. That flash area is outside Kettle's updater and the stock firmware's known store; that the stock V15 leaves it alone is not yet confirmed on a unit, so back the library up before installing other firmware.
 
 The LXR-02's factory and Hrtl kits can't be redistributed, but a private build can include your own copies: `KETTLE_KITS_DIR=dir:dir ./build.sh` (and `web/emu/build.sh`) generates `build/gen/factory_kits.h` (`tools/gen_factory_kits.py`). The version gets "+K", a fresh unit starts with those kits, LOAD has a FACTORY type, and `web/make_site.py` refuses to publish the build.
 
@@ -160,10 +167,10 @@ cc -O1 -std=gnu99 -w -I build/gen -I firmware/src -I firmware/hal tests/ui_test.
 
 ```sh
 cc -O1 -std=gnu99 -w -I build/gen -I firmware/src -I firmware/hal tests/library_bridge.c -o build/library_bridge
-node tests/library_test.mjs     # the library page's code against the device's (LXR kits from ../lxr-02_kits if there)
+node tests/library_test.mjs [LXR project folder]   # the library page's code against the device's
 ```
 
-`render_test` plays every voice and counts the MIDI clock. `ui_test` drives the panel as a user would (programming a beat, sound pages, locks, patterns, songs, saving and loading a project, MIDI sync in) and writes a screenshot of each screen to `build/shots/`. It also checks the sends, the reverb, the sound shaping, the phaser and flanger, loads a Kettle 0.1 project (`tests/data/proj_v1.bin`), and prints how big a busy and a dense project get. `compare_test` checks the voices against the original LXR DSP sources and needs the LXR repository (see its header).
+`render_test` plays every voice and counts the MIDI clock. `ui_test` drives the panel as a user would (programming a beat, sound pages, locks, patterns, songs, saving and loading a project, MIDI sync in) and writes a screenshot of each screen to `build/shots/`. It also checks the sends, the reverb, the sound shaping, the phaser and flanger, loads a Kettle 0.1 project (`tests/data/proj_v1.bin`), and prints how big a busy and a dense project get. `compare_test` checks the voices against the original LXR DSP sources and needs the LXR repository (see its header). `library_test` runs the library page's own code against the device's through `library_bridge`: kits in and out, backups, restores, LXR projects (the LXR kits from `../lxr-02_kits` if there, or the project folder given), and the kit library.
 
 ## Licence
 

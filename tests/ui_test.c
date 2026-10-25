@@ -510,8 +510,8 @@ static void phase3(void)
         turn(EN_ALGO, -3);
     }
     /* MACROS: M1 on D1's decay between 10 and 100; turned under REC it records a lock */
-    turn(EN_SELECT, 2);
-    check(ui.page == 2, "PERF: MACRO SETUP");
+    turn(EN_SELECT, 5);
+    check(ui.page == 5, "PERF: MACRO SETUP");
     kset.accel = 0;                                   /* (exact detents) */
     turn(EN_K2, (int32_t)lock_idx_of(PAR_VELOD1));
     check(pfs.m[0].par == PAR_VELOD1, "MACRO SETUP: the target");
@@ -951,8 +951,8 @@ static void phase5a(void)
     p->rat[0][0] = 0;
     pat_backup = *p;
     goto_mode(B_ARP, M_PERF);
-    while (ui.page % 4u)
-        turn(EN_SELECT, 1);
+    while (ui.page)
+        turn(EN_SELECT, -1);
     play_from_start();
     keys |= 1u;
     web_keys(keys);
@@ -961,13 +961,13 @@ static void phase5a(void)
         uint16_t kp[4];
         uint32_t slow, fast;
         page_params(kp);
-        check(kp[2] == VP_ROLL, "PERF: a roll held, KNOB 3 is the roll");
+        check(kp[1] == VP_ROLL, "PERF: a roll held, KNOB 2 is the roll");
         kset.accel = 0;
-        turn(EN_K3, -127);
+        turn(EN_K2, -127);
         c = trig_count[0];
         run_ms(1000);
         slow = trig_count[0] - c;
-        turn(EN_K3, 80);
+        turn(EN_K2, 80);
         shot("perf-roll-sweep");
         c = trig_count[0];
         run_ms(1000);
@@ -984,7 +984,7 @@ static void phase5a(void)
     {
         uint16_t kp[4];
         page_params(kp);
-        check(kp[2] == VP_REPEAT, "PERF: let go, KNOB 3 is REPEAT again");
+        check(kp[1] == PAR_ROLL, "PERF: let go, KNOB 2 is the roll rate again");
     }
     press(B_PLAY);
     vp_set(PAR_ROLL, 5);
@@ -1176,7 +1176,7 @@ static void phase5c(void)
     pat_backup = *p;
     goto_mode(B_ARP, M_PERF);
     turn(EN_SELECT, (int32_t)PG_PERF2);
-    check(ui.page == PG_PERF2 && perf_bank2(), "PERFORM 2: the fifth PERF page");
+    check(ui.page == PG_PERF2 && perf_bank2(), "PERFORM 2: the seventh PERF page");
     /* HALF: the ticks at half the rate */
     start_now();
     t0 = sq.ticks;
@@ -1621,6 +1621,292 @@ static void grids_test(void)
     }
 }
 
+
+/* ------------------------------------------------------- Phase 9 (0.8) --- */
+/* 9b, 9g: PERF's pages (the performance ones, then the macros, then PERFORM 2), MIX, the global sample rate */
+static void phase9_perf(void)
+{
+    static const char *const T[NPERF] = {"PERFORM", "PERFORM: MORE", "PERFORM: MIX", "PERFORM: MIX 2", "MACROS",
+                                         "MACRO SETUP", "PERFORM 2", "PERFORM 2: SETUP", "PERFORM 2: SETUP 2"};
+    pattern_t *p = &pat[0];
+    uint16_t kp[4];
+    uint32_t i, ok = 1, d0, d1;
+    p4_reset();
+    goto_mode(B_ARP, M_PERF);
+    for (i = 0; i < NPERF; i++) {
+        uint32_t pg, np;
+        char b[40];
+        title_text(b, sizeof b, &pg, &np);
+        ok &= !strcmp(b, T[i]) && pg == i && (i >= PG_PERF2) == (uint32_t)perf_bank2();
+        turn(EN_SELECT, 1);
+    }
+    check(ok, "PERF: its pages in order, PERFORM 2's bank last");
+    turn(EN_SELECT, -(int32_t)NPERF);
+    page_params(kp);
+    check(kp[0] == PAR_BPM && kp[1] == PAR_ROLL && kp[2] == PAR_MORPH && kp[3] == PAR_VOICE_DECIMATION_ALL,
+          "PERFORM: tempo, roll, morph, sample rate (the LXR's page)");
+    shot("perf-page");
+    /* the sample rate: KNOB 4 lowers it; a macro can target it; under REC it records a lock */
+    kset.accel = 0;
+    par_set(PAR_VOICE_DECIMATION_ALL, 127);
+    run_ms(20);
+    d0 = decim_rate[6];
+    turn(EN_K4, -60);
+    run_ms(20);
+    d1 = decim_rate[6];
+    check(par[PAR_VOICE_DECIMATION_ALL] == 67 && d1 < d0, "SRATE: KNOB 4 lowers the voices' rate");
+    check(lock_idx_of(PAR_VOICE_DECIMATION_ALL) == 1u && lock_target_par(1) == PAR_VOICE_DECIMATION_ALL,
+          "SRATE: a macro and lock target");
+    main_set(p, 0, 0, 1);
+    for (i = 1; i < 16u; i++)
+        main_set(p, 0, i, 1);
+    pat_backup = *p;
+    black(0);
+    press(B_REC);
+    play_from_start();
+    run_ms(300);
+    turn(EN_K4, -10);
+    run_ms(10);
+    press(B_PLAY);
+    press(B_REC);
+    {
+        uint32_t k, n = 0, d = par_to_autodest(PAR_VOICE_DECIMATION_ALL);
+        for (k = 0; k < 16u; k++)
+            n += lock_get(p, 0, k, 0) == d || lock_get(p, 0, k, 1) == d;
+        check(n >= 1u, "SRATE: turned under REC, a lock on the playing step");
+    }
+    par_set(PAR_VOICE_DECIMATION_ALL, 127);
+    /* MIX: the volumes on the knobs, the faders on the screen */
+    turn(EN_SELECT, (int32_t)PG_MIX);
+    page_params(kp);
+    check(kp[0] == PAR_VOL1 && kp[3] == PAR_VOL4, "MIX: D1 D2 D3 SN");
+    par_set(PAR_VOL1, 100);
+    turn(EN_K1, -40);
+    check(par[PAR_VOL1] == 60, "MIX: KNOB 1 rides D1's volume");
+    shot("perf-mix");
+    turn(EN_SELECT, 1);
+    page_params(kp);
+    check(kp[0] == PAR_VOL5 && kp[1] == PAR_VOL6 && kp[2] == PAR_FX_DRY_WET && kp[3] == PAR_REV_LEVEL,
+          "MIX 2: CY HH, the FX bus, the reverb");
+    white(0);                                        /* (the keys still roll there) */
+    check(ui.mode == M_PERF, "MIX: the keys still PERF's");
+    par_set(PAR_VOL1, 100);
+    kset.accel = 1;
+    p4_reset();
+}
+
+/* 9c, 9d: KEYS (the keys play the track's voice chromatically, recorded under REC), the keys' velocity and accent */
+static void phase9_keys(void)
+{
+    pattern_t *p = &pat[0];
+    uint32_t c, k, n;
+    p4_reset();
+    black(1);                                        /* D2 */
+    hold(B_OCTDN);
+    press(B_EDIT);
+    release(B_OCTDN);
+    check(ui.mode == M_KEYS && ui.kplay, "SHIFT + EDIT: KEYS");
+    kset.accel = 0;
+    turn(EN_K2, 80 - (int32_t)key_vel);
+    check(key_vel == 80 && kset.kvel == 80, "KEYS: the velocity, a setting");
+    c = trig_count[1];
+    white(4);                                        /* C4: the voice's own pitch */
+    run_ms(10);
+    check(trig_count[1] == c + 1u && vc[1].osc.base_note == 60u && vc[1].velo == 80 * 32768 / 127,
+          "KEYS: white key 5 plays D2 at C4, the velocity set");
+    black(0);                                        /* F#3 */
+    run_ms(10);
+    check(vc[1].osc.base_note == 54u, "KEYS: black key 1 is F#3, not a track");
+    check(ui.track == 1u, "KEYS: the black keys don't select");
+    turn(EN_K1, 1);
+    white(0);
+    run_ms(10);
+    check(vc[1].osc.base_note == 65u, "KEYS: an octave up, F4");
+    turn(EN_K1, -1);
+    hold(B_OCTDN);
+    white(4);
+    release(B_OCTDN);
+    run_ms(10);
+    check(vc[1].velo == key_acc * 32768 / 127 && ui.mode == M_KEYS, "KEYS: SHIFT plays the accent, no SHIFT function");
+    tap_key(BLACK_KEY[0]);                           /* (held for the screen) */
+    keys |= 1u << 7 | 1u << 11;
+    web_keys(keys);
+    run_ms(40);
+    shot("keys");
+    keys = 0;
+    web_keys(keys);
+    run_ms(40);
+    /* REC: the notes into the steps (note, velocity), as MIDI notes go */
+    press(B_REC);
+    play_from_start();
+    for (k = 0; k < 4u; k++) {
+        while (sq.idx[1] != (int8_t)(k * 4u) || sq.tph[1] > 4u)
+            run_ms(1);
+        white(k);
+    }
+    press(B_PLAY);
+    press(B_REC);
+    for (k = 0, n = 0; k < 16u; k++)
+        n += main_on(p, 1, k);
+    check(n == 4u && main_on(p, 1, 4) && p->step[1][4].note == 55u && (p->step[1][4].volume & 127u) == 80u &&
+          p->step[1][12].note == 59u, "KEYS under REC: notes and velocity into D2's steps");
+    /* the sound pages keep the keys; HOME lets go */
+    press(B_ENV);
+    check(ui.mode == M_SOUND && ui.kplay, "KEYS: the sound pages keep playing");
+    c = trig_count[1];
+    white(2);
+    run_ms(10);
+    check(trig_count[1] == c + 1u && !main_on(p, 1, 2), "KEYS on a sound page: a note, not a step");
+    press(B_HOME);
+    check(!ui.kplay, "HOME: KEYS let go");
+    /* the rolls at the keys' velocity */
+    goto_mode(B_ARP, M_PERF);
+    white(0);
+    run_ms(10);
+    check(vc[0].velo == 80 * 32768 / 127, "a roll (stopped: one hit) at the keys' velocity");
+    hold(B_OCTDN);
+    white(1);                                        /* (SHIFT + 1..7 auditions the voice: not recorded) */
+    release(B_OCTDN);
+    goto_mode(B_HOME, M_HOME);
+    hold(B_OCTDN);
+    c = trig_count[0];
+    white(0);
+    release(B_OCTDN);
+    run_ms(10);
+    check(trig_count[0] == c + 1u, "SHIFT + 1: the voice plays");
+    vp_set(VP_KVEL, 100);
+    kset.accel = 1;
+    p4_reset();
+}
+
+/* 9f, 9e: the kit library (kits and sounds in flash, a torn write, the space reclaimed), the sound browser */
+static void phase9_library(void)
+{
+    uint32_t i, ok, c, sv;
+    uint8_t a[KIT_LEN], b[KIT_LEN];
+    uint16_t kp[4];
+    p4_reset();
+    check(kl.ok && kl.spare < KL_NSEC, "LIBRARY: its flash found, a sector kept erased");
+    /* SAVE KIT > LIBRARY, LOAD KIT < LIBRARY */
+    kit_init_par();
+    par[PAR_OSC_WAVE_DRUM1] = 3;
+    par[PAR_VOL2] = 77;
+    snd_post_all();
+    io_open(M_SAVE, IO_KIT);
+    vp_set(VP_IO_SRC, 1);
+    page_params(kp);
+    check(kp[2] == VP_IO_SRC && vp_max(VP_IO_SLOT) == KL_KITS - 1u, "SAVE KIT: To LIBRARY, 128 kits");
+    ui.io_slot = 99;
+    press(B_OCTUP);
+    check(ui.io_naming, "SAVE KIT > LIBRARY: the name first");
+    memcpy(ui.io_name, "LIBKIT1 ", 8);
+    press(B_OCTUP);
+    shot("io-library");
+    check(kl_exists(KLK_KIT, 99) && kl_count(KLK_KIT) == 1u, "SAVE KIT > LIBRARY: in the library");
+    par[PAR_OSC_WAVE_DRUM1] = 0;
+    par[PAR_VOL2] = 10;
+    io_open(M_LOAD, IO_KIT);
+    check(ui.io_src == 1u && ui.io_slot == 99u, "LOAD KIT: From LIBRARY stays, the kit last saved");
+    press(B_OCTUP);
+    check(par[PAR_OSC_WAVE_DRUM1] == 3 && par[PAR_VOL2] == 77, "LOAD KIT < LIBRARY: the edit buffer");
+    io_open(M_LOAD, IO_MORPH);
+    press(B_OCTUP);
+    check(morph_par[kit_idx(PAR_VOL2)] == 77, "LOAD MORPH < LIBRARY: the morph target");
+    vp_set(VP_IO_SRC, 0);
+    goto_mode(B_HOME, M_HOME);
+    /* a write torn before its record: the slot as it was */
+    libkit_get(99, a);
+    par[PAR_VOL2] = 12;
+    check(!libkit_save(99, "TORN    ", 0), "LIBRARY: a second version");
+    memset(nor + kl_off((uint32_t)kl.at[0][99]), 0xFF, KL_HDR);   /* (its record never written) */
+    kl_scan();
+    libkit_get(99, b);
+    check(!memcmp(a, b, KIT_LEN) && b[kit_idx(PAR_VOL2)] == 77, "LIBRARY: a torn write leaves the slot as it was");
+    /* the space reclaimed: many more writes than the flash holds, every slot still there */
+    for (i = 0; i < 40u; i++) {
+        par[PAR_VOL2] = (uint8_t)i;
+        libkit_save(i, "MANY    ", 0);
+    }
+    for (i = 0, ok = 1; i < 600u && ok; i++) {
+        par[PAR_VOL3] = (uint8_t)(i & 127u);
+        ok = !libkit_save(i % 40u, "MANY    ", 0) && !libsound_save(i % 100u, "SND     ", 0);
+    }
+    check(ok, "LIBRARY: 1200 writes into 288 pages (the full sectors reclaimed)");
+    kl_scan();
+    for (i = 0, ok = 1; i < 40u; i++)
+        ok &= !libkit_get(i, a) && a[kit_idx(PAR_VOL3)] == ((560u + i) & 127u);
+    check(ok && kl_count(KLK_KIT) == 41u && kl_count(KLK_SOUND) == 100u && libkit_get(99, a) == 0,
+          "LIBRARY: after them, at power-on, every slot's newest");
+    check(!kl_write(KLK_SOUND, 5, 0, 0, 0) && !kl_exists(KLK_SOUND, 5) && kl_count(KLK_SOUND) == 99u,
+          "LIBRARY: a slot deleted");
+    kl_scan();
+    check(!kl_exists(KLK_SOUND, 5) && kl_exists(KLK_SOUND, 6), "LIBRARY: .. still deleted at power-on");
+    for (i = 0; i < 128u; i++) {
+        kl_write(KLK_KIT, i, 0, 0, 0);
+        kl_write(KLK_SOUND, i, 0, 0, 0);
+    }
+    check(kl_count(KLK_KIT) == 0u && kl_count(KLK_SOUND) == 0u, "LIBRARY: emptied");
+    /* SOUND: D1's into D2 (its velocity target, its LFO on itself, moved along); not into the snare */
+    kit_init_par();
+    par[PAR_OSC_WAVE_DRUM1] = 2;
+    par[PAR_VEL_DEST_1] = MOD_TARGET_VOICE[0][0] + 5u;
+    par[PAR_VOICE_LFO1] = 1;
+    par[PAR_TARGET_LFO1] = MOD_TARGET_VOICE[0][0] + 7u;
+    snd_post_all();
+    track_select(0);
+    io_open(M_SAVE, IO_SOUND);
+    page_params(kp);
+    check(kp[2] == VP_IO_TRACK && vp_max(VP_IO_SLOT) == KL_SOUNDS - 1u, "SAVE SOUND: the track, 128 sounds");
+    ui.io_slot = 3;
+    press(B_OCTUP);
+    check(!memcmp(ui.io_name, "DRUM 1  ", 8), "SAVE SOUND: named for its voice");
+    press(B_OCTUP);
+    check(kl_exists(KLK_SOUND, 3), "SAVE SOUND: in the library");
+    io_open(M_LOAD, IO_SOUND);
+    vp_set(VP_IO_TRACK, 1);
+    ui.io_slot = 3;
+    press(B_OCTUP);
+    check(par[PAR_OSC_WAVE_DRUM2] == 2 && par[PAR_VEL_DEST_2] == MOD_TARGET_VOICE[1][0] + 5u &&
+          par[PAR_VOICE_LFO2] == 2 && par[PAR_TARGET_LFO2] == MOD_TARGET_VOICE[1][0] + 7u,
+          "LOAD SOUND: D1's into D2, what pointed at D1 at D2");
+    sv = par[PAR_OSC_WAVE_DRUM1 + 0];
+    vp_set(VP_IO_TRACK, 3);
+    press(B_OCTUP);
+    check(!strcmp(ui.msg, "NOT THIS TRACK'S KIND"), "LOAD SOUND: a drum's not into the snare");
+    (void)sv;
+    goto_mode(B_HOME, M_HOME);
+    /* the browser: PRESETS on a sound page lists the track's sounds, auditions each; OCT- puts it back */
+    kit_init_par();
+    kits[2][kit_idx(PAR_OSC_WAVE_DRUM3)] = 4;      /* (slot 3's D3: something to find) */
+    snd_post_all();
+    black(1);
+    press(B_ENV);
+    check(ui.mode == M_SOUND && ui.track == 1u, "D2's sound pages");
+    c = trig_count[1];
+    turn(EN_PRESET, 1);
+    run_ms(20);
+    check(ui.sb_open && sb_n >= 2u && trig_count[1] > c && (sb_list[0] >> 14) == SB_SOUND,
+          "SOUND BROWSER: open, the library's sound first, auditioned");
+    check(par[PAR_OSC_WAVE_DRUM2] == 2, "SOUND BROWSER: the sound in D2 as it plays");
+    for (i = 0; i < sb_n && sb_list[i] != (SB_SLOT << 14 | 2u << 11 | 2u); i++)
+        ;
+    check(i < sb_n, "SOUND BROWSER: a slot kit's D3 for D2");
+    turn(EN_PRESET, (int32_t)i);
+    shot("sound-browser");
+    check(par[PAR_OSC_WAVE_DRUM2] == 4, "SOUND BROWSER: moving on loads the next");
+    press(B_OCTDN);
+    check(!ui.sb_open && par[PAR_OSC_WAVE_DRUM2] == INIT_KIT[8u + PAR_OSC_WAVE_DRUM2],
+          "SOUND BROWSER: OCT- puts the sound back");
+    turn(EN_PRESET, 1);
+    turn(EN_PRESET, 1);
+    press(B_OCTUP);
+    check(!ui.sb_open && !strcmp(ui.msg, "SOUND LOADED"), "SOUND BROWSER: OCT+ keeps it");
+    kits[2][kit_idx(PAR_OSC_WAVE_DRUM3)] = INIT_KIT[8u + PAR_OSC_WAVE_DRUM3];
+    kl_write(KLK_SOUND, 3, 0, 0, 0);
+    goto_mode(B_HOME, M_HOME);
+    p4_reset();
+}
+
 int main(int argc, char **argv)
 {
     uint32_t t;
@@ -2041,6 +2327,9 @@ int main(int argc, char **argv)
     phase5b();
     phase5c();
     phase5d();
+    phase9_perf();
+    phase9_keys();
+    phase9_library();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;
 }

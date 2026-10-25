@@ -73,6 +73,7 @@ static void engine_block(int32_t *out)
     }
     snd_service();
     midi_service();
+    key_service();                                  /* (0.8: the notes the keys played) */
     perf_block();
     seq_block();
     voices_block();

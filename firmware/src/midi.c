@@ -201,6 +201,34 @@ static void midi_message(uint32_t pkt, uint32_t src)   /* midiParser_parseMidiMe
     }
 }
 
+/* 0.8: the notes the panel plays (KEYS; SHIFT + 1..7 audition), posted by the main loop: the audio ISR plays them at
+ * its next block as a MIDI note in would be (MIDI out, recorded under REC; an audition is not recorded) */
+#define KQ 8u
+#define KQ_NOREC 0x1000000u
+static volatile uint32_t key_q[KQ];
+static volatile uint8_t key_w, key_r;
+static void key_note_post(uint32_t t, uint32_t note, uint32_t vel, int rec)
+{
+    if ((uint8_t)(key_w - key_r) >= KQ || t >= NTRACK)
+        return;
+    key_q[key_w % KQ] = t | (note & 127u) << 8 | (vel & 127u) << 16 | (rec ? 0u : KQ_NOREC);
+    RING_PUBLISH();
+    key_w++;
+}
+static void key_service(void)
+{
+    while (key_r != key_w) {
+        uint32_t e = key_q[key_r % KQ], t = e & 7u, note = (e >> 8) & 127u, vel = (e >> 16) & 127u;
+        RING_PUBLISH();
+        key_r++;
+        midi_out_note_off(t);
+        voice_trigger(t, vel ? vel : 1u, note);
+        if (!(e & KQ_NOREC))
+            seq_add_note(t, vel ? vel : 1u, note);
+        midi_out_note(t, note, vel ? vel : 1u);
+    }
+}
+
 /* the audio ISR, at a block start: what came in. A broken stream (the ring overflowed): dropped */
 static void midi_service(void)
 {
