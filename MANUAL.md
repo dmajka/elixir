@@ -28,6 +28,7 @@ Kettle is **unofficial**. It is not affiliated with or endorsed by Erica Synths,
 18. [How Kettle differs from the LXR-02](#18-how-kettle-differs-from-the-lxr-02)
 19. [Troubleshooting](#19-troubleshooting)
 20. [Licence and credits](#20-licence-and-credits)
+- [Appendix: the remote map at a glance](#appendix-the-remote-map-at-a-glance)
 
 ---
 
@@ -403,7 +404,8 @@ As on Elektron's boxes: hold **OCT+** on a sound page and turn a knob, and that 
 - **Page while you hold.** The sound buttons and SELECT still page: hold OCT+, turn the filter, press ENV, turn the decay. Everything you change during the hold is one move.
 - **Keep or revert.** When you let go of OCT+, a dialog asks **REVERT THE KIT?** and the changes keep sounding until you answer. Press **OCT+** again (the default) to put the whole kit back as it was before the first turn (**CONTROL ALL REVERTED**), or **OCT−** to keep the changes (**CONTROL ALL KEPT**). So a thumb slipping off OCT+ doesn't keep anything by accident. While the dialog is open, the knobs, keys and other buttons do nothing, except PLAY and REC. You can also press OCT− while still holding OCT+ to revert at once, then turn again to start a new one. As on Elektron, the kit is the working copy: RELOAD (SHIFT + key 13) or loading the kit goes back further.
 - **COPY still works.** Until a knob turns, OCT+ is COPY as before (track, bar). Once a knob has turned, the voice keys select a track and the bar keys show a bar; nothing is copied on release.
-- **Not recorded.** Under REC, Control All writes no locks: it changes the kit. Morph moves from the kit as it now is. A kit loaded during the hold or the dialog (a pattern change, MIDI) ends it, kept.
+- **With morph.** What you hear is a mix of the kit and the morph target, so a change to the kit alone fades out as morph goes up: at full morph you'd hear nothing. So with morph turned up, Control All moves the morph target's value by the same steps too, and the change is heard at any morph amount and stays as you turn morph. Reverting puts the target back as well. CONFIG → CONTROL ALL → **Morph: KIT ONLY** moves the kit alone instead (the LXR's way); **BOTH KITS** is the default. The kit slot the target was loaded from isn't changed.
+- **Not recorded.** Under REC, Control All writes no locks: it changes the kit. A kit loaded during the hold or the dialog (a pattern change, MIDI) ends it, kept.
 
 ---
 
@@ -717,6 +719,58 @@ The site builder refuses to publish a "+K" build.
 - **Clock in:** turn the tempo all the way down to **MIDI**. Kettle then follows incoming clock, start, continue and stop. The header shows MIDI and the measured tempo.
 - **Filters** (CONFIG: MIDI): what is received and sent: N notes, R clock and start/stop, C CC and NRPN, P program change.
 - **Route:** TRS>USB forwards the jack's input to USB (soft thru).
+- **Remote** (CONFIG: REMOTE, channel 16 by default): a second map, made for an 8-column controller such as Novation's Launch Control XL. See below.
+
+### The remote map
+
+Everything on the **remote channel** goes to this map and nowhere else (the LXR's CC map and the notes ignore it, and the MIDI filters don't apply). It reaches what the LXR's map can't: mutes, solo, morph, tempo, the DJ filter, PERF's effects, Kettle's sends. Set the remote channel to one no track and not the global channel uses; the REMOTE page warns if it's shared. The whole map on one page, laid out as the controller is: [the appendix](#appendix-the-remote-map-at-a-glance).
+
+Everything comes in **rows of eight**: columns 1–7 are the tracks **D1 D2 D3 SN CY CH OH**, column 8 the **master**. CH and OH both act on the hat voice, except their decays.
+
+**Knobs and faders: CC = row + column − 1**
+
+| CC | Columns 1–7 (the tracks) | Column 8 (master) |
+|---|---|---|
+| 8–15 | Volume | FX bus dry/wet |
+| 16–23 | Pan | Reverb size |
+| 24–31 | Filter frequency | DJ filter (middle: off) |
+| 32–39 | Resonance | FX bus P1 |
+| 40–47 | Decay (CH closed, OH open) | Tape stop time |
+| 48–55 | Pitch (coarse) | Tempo (60–187 BPM) |
+| 56–63 | Drive | Global sample rate (SRate) |
+| 64–71 | FX send | FX bus P2 |
+| 72–79 | Reverb send | Reverb level |
+| 80–87 | Sample rate | Shuffle |
+| 88–95 | LFO amount | Morph |
+| 96–103 | Random pitch | Roll rate |
+| 104–111 | Macros 1–4, then DRILL, JITTER, CUTS, PUMP (their PERFORM 2 settings) | |
+| 112–119 | Random decay | Repeat length |
+
+**Buttons: note = row + column − 1** (note on: pressed; note off, or velocity 0: released)
+
+| Note | Columns 1–7 | Column 8 |
+|---|---|---|
+| 36–43 | Mute (toggle) | PLAY / STOP |
+| 44–51 | Solo (toggle) | REC |
+| 52–59 | Select the track | FILL (held) |
+| 60–67 | Roll (held) | REPEAT (held) |
+| 68–75 | DRILL (held) | FREEZE (held) |
+| 76–83 | Held: TAPE STOP, HALF, CUTS, PUMP, COMB, SPACE, CRUSH, REVERSE (one per column) | |
+| 84–91 | The same eight, latched: press on, press again off | |
+| 92, 93 | Previous, next pattern | |
+
+The effects are PERF's (see [Performance mode](#13-performance-mode-perf)); they work from any page, and leaving PERF doesn't turn off what the remote latched.
+
+**Knobs** (REMOTE page, KNOB 2):
+- **PICKUP** (the default): a knob or fader does nothing until it reaches or passes the current value, then follows. If the value changes elsewhere (the panel, a kit), it waits again. Nothing jumps.
+- **ABS:** the value goes straight to the control's position.
+- **REL:** for endless encoders sending relative values: 64 ± n (65 up, 63 down) or two's complement (1 up, 127 down). Don't use it with faders.
+
+**Recording:** under REC with the sequencer playing, a track's knob records locks on its own track, as a panel knob does on the selected track. The master column records nothing.
+
+**Feedback:** when a value on the map changes from anywhere (the panel, a kit or pattern load, MIDI), Kettle sends its CC back on the remote channel, so encoder rings and motorless displays can follow. Button states go back as their notes: velocity 127 on, 0 off. These cover mutes, solo, the selected track, the rolls, the effects, PLAY and REC. A lock playing back isn't sent: the values are the kit's. Out is USB only, so feedback reaches the controller only when both are on a USB host (a computer or a USB MIDI host such as the mioXL), not with the controller's DIN out straight into the FM-1's TRS input.
+
+**Connecting:** a controller with a DIN out into the TRS input (with a TRS-to-DIN adapter: check the FM-1's TRS type), or both over a USB host. The FM-1 and the Launch Control XL are both USB devices, so neither plugs straight into the other.
 
 ---
 
@@ -731,6 +785,8 @@ GLO three times (past Mix and the mixer) opens CONFIG. Turn SELECT for its pages
 | MIDI CHANNELS (2 pages) | Each track's channel |
 | MIDI NOTES (2 pages) | Each track's note (ANY or a note) |
 | DEVICE | LEDs (OFF / LOW / HIGH glow), Autosave, Accel (fast knob turns move further), Colours (screen palette) |
+| REMOTE | Channel (OFF, 1–16; 16 by default), Knobs (PICKUP / ABS / REL): see [the remote map](#the-remote-map) |
+| CONTROL ALL | Morph: BOTH KITS (the default: with morph on, the morph target moves too) or KIT ONLY; see [Control All](#control-all-every-track-at-once) |
 
 ### The CPU meter
 
@@ -848,7 +904,7 @@ NRPN *n* sets parameter *n* + 128: send CC 99 = *n* ÷ 128, CC 98 = *n* mod 128,
 | 117 | Delay mode (0 mono, 1 ping pong) |
 | 133 | Shuffle |
 
-Tempo, roll rate, morph, the DJ filter, repeat, tape, the PERFORM 2 effects, mutes and solo can't be reached by MIDI.
+NRPN 120 (morph, 0–127 for 0–255) and 119 (roll rate, 0–13) act as the panel's knobs do (from 0.12). The DJ filter, repeat, tape, the PERFORM 2 effects, mutes and solo aren't in this map: use [the remote map](#the-remote-map).
 
 ### Kettle's parameters by NRPN
 
@@ -949,3 +1005,43 @@ It is built from:
 ### Building and testing
 
 See `README.md`: building the firmware (`./build.sh`), the browser emulator (`web/emu/build.sh`), and the host tests (`render_test`, `ui_test`, `compare_test`, `rings_compare`, the library tests).
+
+---
+
+## Appendix: the remote map at a glance
+
+The [remote map](#the-remote-map) laid out as the controller is: the tracks across, the rows down. Everything is on the remote channel (CONFIG → REMOTE, 16 by default). CH and OH both act on the hat voice, except their decays.
+
+**Knobs and faders: the CC numbers** (how they take values, PICKUP, ABS or REL: [the remote map](#the-remote-map))
+
+<!-- grid -->
+| | D1 | D2 | D3 | SN | CY | CH | OH | Master |
+|---|---|---|---|---|---|---|---|---|
+| Volume | **8** | **9** | **10** | **11** | **12** | **13** | **14** | **15** FX dry/wet |
+| Pan | **16** | **17** | **18** | **19** | **20** | **21** | **22** | **23** Reverb size |
+| Filter frequency | **24** | **25** | **26** | **27** | **28** | **29** | **30** | **31** DJ filter |
+| Resonance | **32** | **33** | **34** | **35** | **36** | **37** | **38** | **39** FX P1 |
+| Decay | **40** | **41** | **42** | **43** | **44** | **45** closed | **46** open | **47** Tape time |
+| Pitch (coarse) | **48** | **49** | **50** | **51** | **52** | **53** | **54** | **55** Tempo |
+| Drive | **56** | **57** | **58** | **59** | **60** | **61** | **62** | **63** SRate |
+| FX send | **64** | **65** | **66** | **67** | **68** | **69** | **70** | **71** FX P2 |
+| Reverb send | **72** | **73** | **74** | **75** | **76** | **77** | **78** | **79** Reverb level |
+| Sample rate | **80** | **81** | **82** | **83** | **84** | **85** | **86** | **87** Shuffle |
+| LFO amount | **88** | **89** | **90** | **91** | **92** | **93** | **94** | **95** Morph |
+| Random pitch | **96** | **97** | **98** | **99** | **100** | **101** | **102** | **103** Roll rate |
+| Macros, PERFORM 2 | **104** Macro 1 | **105** Macro 2 | **106** Macro 3 | **107** Macro 4 | **108** DRILL | **109** JITTER | **110** CUTS | **111** PUMP |
+| Random decay | **112** | **113** | **114** | **115** | **116** | **117** | **118** | **119** Repeat length |
+
+**Buttons: the note numbers** (note on: pressed; note off or velocity 0: released). Mute, solo and the latched effects toggle; the others act while held, except select, PLAY / STOP, REC and the patterns, which act on the press. Their lights follow the state: Kettle sends each note back, velocity 127 on and 0 off.
+
+<!-- grid -->
+| | D1 | D2 | D3 | SN | CY | CH | OH | Master |
+|---|---|---|---|---|---|---|---|---|
+| Mute | **36** | **37** | **38** | **39** | **40** | **41** | **42** | **43** PLAY / STOP |
+| Solo | **44** | **45** | **46** | **47** | **48** | **49** | **50** | **51** REC |
+| Select | **52** | **53** | **54** | **55** | **56** | **57** | **58** | **59** FILL (held) |
+| Roll (held) | **60** | **61** | **62** | **63** | **64** | **65** | **66** | **67** REPEAT (held) |
+| DRILL (held) | **68** | **69** | **70** | **71** | **72** | **73** | **74** | **75** FREEZE (held) |
+| Effects, held | **76** TAPE STOP | **77** HALF | **78** CUTS | **79** PUMP | **80** COMB | **81** SPACE | **82** CRUSH | **83** REVERSE |
+| Effects, latched | **84** TAPE STOP | **85** HALF | **86** CUTS | **87** PUMP | **88** COMB | **89** SPACE | **90** CRUSH | **91** REVERSE |
+| Patterns | **92** previous | **93** next | | | | | | |

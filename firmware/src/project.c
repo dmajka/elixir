@@ -701,12 +701,14 @@ static void autosave_poll(void)
 /* ------------------------------------------------------- settings --- */
 #define SET_MAGIC 0x3154454Bu                       /* "KET1" */
 /* 0.8: kvel, kacc: the keys' velocity and accent (seq.c key_vel, key_acc; 0, as settings before 0.8 hold: 100, 127).
- * 0.9: pdrop: a pattern's unsaved edits dropped when another plays (the LXR's way; 0, the default: kept) */
+ * 0.9: pdrop: a pattern's unsaved edits dropped when another plays (the LXR's way; 0, the default: kept).
+ * 0.12: remote: the remote's channel 1..16, 17 off (0, as settings before 0.12 hold: 16); rknobs: its knobs (RK_*);
+ * cakit: Control All moves the kit only, not the morph target too (0, the default: both) */
 typedef struct {
     uint32_t magic;
-    uint8_t palette, leds, autosave, accel, project, kvel, kacc, pdrop, rsv[4];
+    uint8_t palette, leds, autosave, accel, project, kvel, kacc, pdrop, remote, rknobs, cakit, rsv[1];
 } kettle_settings_t;
-static kettle_settings_t kset = {SET_MAGIC, 2, 1, 1, 1, 0xFF, 100, 127, 0, {0}};   /* (palette 2: AMBER) */
+static kettle_settings_t kset = {SET_MAGIC, 2, 1, 1, 1, 0xFF, 100, 127, 0, 0, 0, 0, {0}};   /* (palette 2: AMBER) */
 static uint8_t settings_dirty;
 static uint32_t settings_ms;
 static void settings_later(void)
@@ -738,6 +740,7 @@ static void persist_boot(void)                      /* power-on: the flash, the 
     key_vel = kset.kvel ? kset.kvel : 100u;
     key_acc = kset.kacc ? kset.kacc : 127u;
     pat_keep = !kset.pdrop;
+    remote_ch = (uint8_t)(kset.remote > 16u ? 0xFFu : kset.remote ? kset.remote - 1u : 15u);
     proj_scan();
     kl_scan();
 }

@@ -156,7 +156,7 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
         break;
     case M_FX: put_str(b, ui.page % 3u == 2u ? "REVERB" : "FX BUS", n); break;
     case M_MIXER: put_str(b, MIXER_TITLE[(ui.page % NMIXER) / 2u], n); break;
-    case M_CONFIG: put_str(b, CONFIG_TITLE[ui.page % 7u], n); break;
+    case M_CONFIG: put_str(b, CONFIG_TITLE[ui.page % NCONFIG], n); break;
     case M_SAVE: put_str(b, "SAVE ", n); put_str(b + 5, IO_NAME[ui.io_type], n - 5); break;
     case M_LOAD: put_str(b, "LOAD ", n); put_str(b + 5, IO_NAME[ui.io_type], n - 5); break;
     case M_LAST: put_str(b, ui.last_all ? "LAST STEP (ALL)" : "LAST STEP", n); break;
@@ -906,7 +906,7 @@ static void draw_links(int32_t y0)
 static void draw_config_help(int32_t y0)
 {
     (void)y0;
-    switch (ui.page % 7u) {
+    switch (ui.page % NCONFIG) {
     case 0:
         cv_text(10, 8, &AF_S, "TEMPO: turn it to the bottom for MIDI", T_TEXT);
         cv_text(10, 22, &AF_S, "clock sync (the LXR's MID).", T_TEXT);
@@ -931,6 +931,28 @@ static void draw_config_help(int32_t y0)
     case 5:
         cv_text(10, 8, &AF_S, "ANY: the track plays any note, pitched", T_TEXT);
         cv_text(10, 22, &AF_S, "A NOTE: only that note triggers it", T_TEXT);
+        break;
+    case 7: {                                        /* 0.12: the remote; a channel it shares with a track warned of */
+        uint32_t t, clash = remote_ch == midi_global_ch();
+        for (t = 0; t < NTRACK; t++)
+            clash |= remote_ch == midi_track_ch(t);
+        cv_text(10, 8, &AF_S, "A controller on this channel: knob rows", T_TEXT);
+        cv_text(10, 22, &AF_S, "CC 8-119, buttons notes 36-93 (manual)", T_TEXT);
+        cv_text(10, 40, &AF_S, "PICKUP: a pot acts once it passes", T_TEXT);
+        cv_text(10, 54, &AF_S, "the value. REL: encoders (64 +/- n)", T_TEXT);
+        if (clash && remote_ch < 16u)
+            cv_text(10, 76, &AF_S, "SHARES A TRACK'S OR THE GLOBAL CHANNEL", T_REC);
+        else
+            cv_text(10, 76, &AF_S, "Values go back to it over USB.", T_MID);
+        break;
+    }
+    case 8:                                          /* 0.12: Control All with morph */
+        cv_text(10, 8, &AF_S, "OCT+ held on a sound page, a knob:", T_TEXT);
+        cv_text(10, 22, &AF_S, "the parameter on every track.", T_TEXT);
+        cv_text(10, 40, &AF_S, "BOTH KITS: with morph on, the morph", T_TEXT);
+        cv_text(10, 54, &AF_S, "target moves too: heard at any morph", T_TEXT);
+        cv_text(10, 72, &AF_S, "KIT ONLY: the kit alone (full morph:", T_TEXT);
+        cv_text(10, 86, &AF_S, "nothing heard, as the LXR's knobs)", T_TEXT);
         break;
     default:
         cv_text(10, 8, &AF_S, "LEDS: OFF / LOW / HIGH glow", T_TEXT);
@@ -1074,7 +1096,7 @@ static void draw_body(void)
             break;
         case M_CONFIG:
             fn = draw_config_help;
-            s = sig_add(9, ui.page);
+            s = sig_add(9, ui.page | (uint32_t)remote_ch << 8);
             s = sig_add(s, cpu_pct() | cpu_peak_pct() << 8 | audio_late << 16 | (uint32_t)batt_level() << 28);
             break;
         case M_SOUND:
@@ -1131,6 +1153,9 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_PKEEP: put_str(b, "Edits", n); return;
     case VP_ACCEL: put_str(b, "Accel", n); return;
     case VP_PALETTE: put_str(b, "Colours", n); return;
+    case VP_RCH: put_str(b, "Channel", n); return;
+    case VP_RKNOBS: put_str(b, "Knobs", n); return;
+    case VP_CAKIT: put_str(b, "Morph", n); return;
     case VP_TRACK_VOL: put_str(b, "Volume", n); return;
     case VP_MASTER: put_str(b, "Master", n); return;
     case VP_DJ: put_str(b, "DJ filter", n); return;
@@ -1298,6 +1323,9 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
     case VP_AUTOSAVE: case VP_ACCEL: put_str(b, v ? "ON" : "OFF", n); return;
     case VP_PKEEP: put_str(b, v ? "KEEP" : "DROP", n); return;
     case VP_PALETTE: put_str(b, UI_PALETTES[v % NPALETTES].name, n); return;
+    case VP_RCH: if (v) put_int(b, (int32_t)v); else put_str(b, "OFF", n); return;
+    case VP_RKNOBS: put_str(b, v == RK_ABS ? "ABS" : v == RK_REL ? "REL" : "PICKUP", n); return;
+    case VP_CAKIT: put_str(b, v ? "KIT ONLY" : "BOTH KITS", n); return;
     case VP_FX_SUB:
         put_str(b, fx.type == FX_DRIVE ? L_DIST[v % 3u] : fx.type == FX_RING ? L_WAVE[v % NWAVE]
                    : fx.type == FX_COMP ? L_RATIO[v % 6u] : fx.type == FX_DELAY ? L_DELAY[v & 1u] : "-", n);

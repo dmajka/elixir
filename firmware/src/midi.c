@@ -11,7 +11,9 @@
  *   - program change 0..31 on the global channel queues a pattern;
  *   - MIDI clock / start / continue / stop drive the sequencer when BPM is MIDI;
  *   - the filters (RX / TX: N notes, R realtime, C CC, P program change) and the soft thru (TRS in -> USB out:
- *     M2U, M2A; the LXR's routes to its DIN out have no jack here). */
+ *     M2U, M2A; the LXR's routes to its DIN out have no jack here);
+ *   - 0.12: the remote channel (CONFIG: REMOTE): its CCs and notes go to the remote map (remote.c, the main loop)
+ *     and nowhere else, past the filters; the remote's feedback goes out from here. */
 
 enum { MF_NOTE = 1, MF_RT = 2, MF_CC = 4, MF_PC = 8 };
 enum { MR_OFF, MR_U2M, MR_M2M, MR_A2M, MR_M2U, MR_M2A };
@@ -21,6 +23,30 @@ static uint8_t midi_note_mask;
 static uint16_t nrpn_num;
 static volatile uint8_t midi_seen;                  /* MIDI arrived (the UI's indicator) */
 static volatile uint16_t midi_cc_par;               /* the last parameter MIDI changed + 1 (the UI shows it) */
+
+/* 0.12: the remote: its channel (0..15, 0xFF off; the settings set it), what came in on it for the main loop
+ * (remote.c), what the main loop sends back (its feedback) */
+#define RQ 64u
+static volatile uint8_t remote_ch = 15u;
+static volatile uint32_t rin_q[RQ], rout_q[RQ];
+static volatile uint8_t rin_w, rin_r, rout_w, rout_r;
+static void remote_in_post(uint32_t pkt)             /* (the audio ISR) */
+{
+    if ((uint8_t)(rin_w - rin_r) >= RQ)
+        return;
+    rin_q[rin_w % RQ] = pkt;
+    RING_PUBLISH();
+    rin_w++;
+}
+static int remote_out_post(uint32_t st, uint32_t d1, uint32_t d2)   /* (the main loop) 0: the queue is full */
+{
+    if ((uint8_t)(rout_w - rout_r) >= RQ)
+        return 0;
+    rout_q[rout_w % RQ] = (st >> 4) | st << 8 | (d1 & 127u) << 16 | (d2 & 127u) << 24;
+    RING_PUBLISH();
+    rout_w++;
+    return 1;
+}
 
 /* channels: the settings hold 1..16 (DTYPE_1B16) */
 static uint32_t midi_track_ch(uint32_t t)
@@ -109,6 +135,16 @@ static void midi_param(uint32_t p, uint32_t v)
         return;
     if (p == PAR_NRPN_DATA_ENTRY_COARSE || p == PAR_NRPN_FINE || p == PAR_NRPN_COARSE || p == PAR_BANK_CHANGE)
         return;
+    if (p == PAR_MORPH) {                            /* 0.12: as the panel sets them (par[] alone did nothing) */
+        kit_set_morph(v * 255u / 127u);
+        return;
+    }
+    if (p == PAR_ROLL) {
+        sq.roll_rate = (uint8_t)(v > 13u ? 13u : v);
+        par[PAR_ROLL] = sq.roll_rate;
+        sq.roll_free = 0;
+        return;
+    }
     par[p] = (uint8_t)v;
     if (p >= PAR_AUDIO_OUT1 && p <= PAR_AUDIO_OUT6 && v >= 6u) {   /* the LXR's Out = FX BUS: FX SEND 127 */
         out_migrate(&par[PAR_AUDIO_OUT1], &par[PAR_FX_SEND1]);
@@ -165,6 +201,10 @@ static void midi_message(uint32_t pkt, uint32_t src)   /* midiParser_parseMidiMe
     midi_seen = 1;
     if (src == 2u && (route == MR_M2U || route == MR_M2A))   /* soft thru: the TRS input to USB */
         midi_out_event(pkt);
+    if (st < 0xF0u && (st & 15u) == remote_ch && ((st & 0xE0u) == 0x80u || (st & 0xF0u) == 0xB0u)) {
+        remote_in_post(pkt);                         /* 0.12: the remote's notes and CCs */
+        return;
+    }
     if (st >= 0xF8u) {
         if (!(rx & MF_RT))
             return;
@@ -236,6 +276,12 @@ static void midi_service(void)
         mi_r = mi_w;
         midi_in_overflow = 0;
         return;
+    }
+    while (rout_r != rout_w) {                       /* 0.12: the remote's feedback */
+        uint32_t pkt = rout_q[rout_r % RQ];
+        RING_PUBLISH();
+        rout_r++;
+        midi_out_event(pkt);
     }
     while (mi_r != mi_w) {
         uint32_t i = mi_r % MQ, pkt, src;

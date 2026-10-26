@@ -11,7 +11,8 @@ static uint8_t kits[NUM_KITS][KIT_LEN] POOL;       /* (21 KB: the pool, the fast
 static char kit_names[NUM_KITS][KIT_NAME_LEN];
 static uint8_t kit_loaded;                           /* the slot the edit buffer came from (menu_loadedPresetNr) */
 static uint8_t kit_morph_loaded;                     /* the slot loaded as the morph target */
-static uint8_t kit_loads;                            /* 0.11: one more at each kit into the edit buffer (Control All) */
+static uint8_t kit_loads;                            /* 0.11: one more at each kit into the edit buffer or the morph
+                                                      * target (Control All) */
 
 /* initKit.c: "Initkit" from hrtlkits_batch3 (name, then the parameters 0..245) */
 static const uint8_t INIT_KIT[254] = {
@@ -94,6 +95,7 @@ static void kit_load_morph(uint32_t n)               /* LOAD MORPH: a slot as th
     for (i = 0; i < KIT_LEN; i++)
         morph_par[i] = kits[n][i];
     kit_morph_loaded = (uint8_t)n;
+    kit_loads++;
     snd_post_all();
 }
 static void kit_set_morph(uint32_t amt)              /* PAR_MORPH 0..255 */

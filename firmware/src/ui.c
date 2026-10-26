@@ -46,7 +46,7 @@ enum { VP_BASE = 0x200, VP_NONE = VP_BASE, VP_IO_TYPE, VP_IO_SLOT, VP_NAME_POS, 
        VP_COND, VP_RAT_N, VP_RAT_RATE, VP_RAT_FADE, VP_ACTION, VP_GMODE, VP_GA, VP_GB, VP_GC, VP_CLOCK,
        VP_GX, VP_GY, VP_GCHAOS, VP_RAT_SHAPE, VP_BSTART, VP_BPITCH, VP_ROLL,
        VP_LINK, VP_LSTART, VP_LAMT, VP_DEPTH, VP_LWHEN, VP_LTGT, VP_LEFF, VP_LWIN, VP_KOCT, VP_KVEL, VP_KACC, VP_PKEEP, VP_KB_SRC,
-       VP_IO_SRC, VP_IO_TRACK, VP_DIR,
+       VP_IO_SRC, VP_IO_TRACK, VP_DIR, VP_RCH, VP_RKNOBS, VP_CAKIT,
        VP_P2, VP_P2_LAST = VP_P2 + 7 };
 /* the ACTION page's action (OCT+ does it); 0.10: those of the track's generator (gen_acts) */
 enum { ACT_NONE, ACT_DICE, ACT_COMMIT, ACT_UNDO, ACT_RESET, NACT };
@@ -61,6 +61,8 @@ static struct {
     uint32_t pf_held, pf_latch;      /* PERF's keys 8..16 held, latched (bit PF_*: pf.on is both) */
     uint8_t roll_latch;              /* the rolls latched (SHIFT + key 1..7) */
     uint8_t drill_held, drill_latch; /* 0.6: PERFORM 2's keys 1..7 (DRILL) */
+    uint32_t rm_held, rm_latch;      /* 0.12: the effects the remote's buttons hold, latch (bit PF_*) */
+    uint8_t rm_drill;                /* .. the DRILLs it holds */
     uint16_t kbank;                  /* bit w: white key w went down on a PERFORM 2 page (it lets go there) */
     uint8_t msel;                    /* MACRO SETUP: the macro */
     uint8_t action;                  /* the GENERATOR's ACTION OCT+ does (ACT_*) */
@@ -119,6 +121,17 @@ static void step_toggle(pattern_t *p, uint32_t t, uint32_t s)
         main_set(&gpat, t, s, on);
     }
 }
+
+/* the effects and DRILLs on: the panel's held and latched, the remote's (0.12) */
+static void perf_apply(void)
+{
+    pf.on = ui.pf_held | ui.pf_latch | ui.rm_held | ui.rm_latch;
+    sq.drill = (uint8_t)(ui.drill_held | ui.drill_latch | ui.rm_drill);
+}
+/* 0.12: the remote (remote.c): its knobs' modes, what it has seen forgotten, what came in */
+enum { RK_PICKUP, RK_ABS, RK_REL, NRK };
+static void remote_reset(void);
+static void remote_service(void);
 
 static void ui_message(const char *s)
 {
@@ -271,16 +284,19 @@ static const uint16_t P_MIXER[NMIXER][4] = {{PAR_VOL1, PAR_VOL2, PAR_VOL3, PAR_V
                                             {PAR_REV_SEND1 + 4, PAR_REV_SEND1 + 5, PAR_REV_LEVEL, VP_NONE}};
 static const char *const MIXER_TITLE[NMIXER / 2u] = {"MIXER: VOLUME", "MIXER: PAN", "MIXER: FX SEND",
                                                      "MIXER: REVERB SEND"};
-static const uint16_t P_CONFIG[7][4] = {
+#define NCONFIG 9u
+static const uint16_t P_CONFIG[NCONFIG][4] = {
     {PAR_BPM, PAR_SHUFFLE, PAR_FOLLOW, PAR_PATTERN_MODE},
     {PAR_MIDI_CHAN_GLOBAL, PAR_MIDI_FILT_TX, PAR_MIDI_FILT_RX, PAR_MIDI_ROUTING},
     {PAR_MIDI_CHAN_1, PAR_MIDI_CHAN_2, PAR_MIDI_CHAN_3, PAR_MIDI_CHAN_4},
     {PAR_MIDI_CHAN_5, PAR_MIDI_CHAN_6, PAR_MIDI_CHAN_7, VP_NONE},
     {PAR_MIDI_NOTE1, PAR_MIDI_NOTE2, PAR_MIDI_NOTE3, PAR_MIDI_NOTE4},
     {PAR_MIDI_NOTE5, PAR_MIDI_NOTE6, PAR_MIDI_NOTE7, VP_NONE},
-    {VP_LEDS, VP_AUTOSAVE, VP_ACCEL, VP_PALETTE}};
-static const char *const CONFIG_TITLE[7] = {"SEQUENCER", "MIDI", "MIDI CHANNELS", "MIDI CHANNELS", "MIDI NOTES",
-                                            "MIDI NOTES", "DEVICE"};
+    {VP_LEDS, VP_AUTOSAVE, VP_ACCEL, VP_PALETTE},
+    {VP_RCH, VP_RKNOBS, VP_NONE, VP_NONE},
+    {VP_CAKIT, VP_NONE, VP_NONE, VP_NONE}};
+static const char *const CONFIG_TITLE[NCONFIG] = {"SEQUENCER", "MIDI", "MIDI CHANNELS", "MIDI CHANNELS", "MIDI NOTES",
+                                                  "MIDI NOTES", "DEVICE", "REMOTE", "CONTROL ALL"};
 static const uint16_t P_NAME[4] = {VP_NAME_POS, VP_NAME_CHAR, VP_NAME_CASE, VP_NONE};
 static const uint16_t P_SONG[4] = {VP_SONG_PAT, VP_SONG_NUM, VP_NONE, VP_NONE};
 static const uint16_t P_PATTERN[4] = {PAR_PATTERN_MODE, PAR_SHUFFLE, VP_PKEEP, VP_NONE};
@@ -298,7 +314,7 @@ static uint32_t mode_pages(void)
     case M_PERF: return NPERF;
     case M_FX: return 3;
     case M_MIXER: return NMIXER;
-    case M_CONFIG: return 7;
+    case M_CONFIG: return NCONFIG;
     default: return 1;
     }
 }
@@ -340,7 +356,7 @@ static void page_params(uint16_t out[4])
     }
     case M_FX: p = P_FX[ui.page % 3u]; break;
     case M_MIXER: p = P_MIXER[ui.page % NMIXER]; break;
-    case M_CONFIG: p = P_CONFIG[ui.page % 7u]; break;
+    case M_CONFIG: p = P_CONFIG[ui.page % NCONFIG]; break;
     case M_SAVE:
     case M_LOAD:
         if (ui.io_naming) {
@@ -538,6 +554,9 @@ static uint32_t vp_get(uint32_t p)
     case VP_PKEEP: return pat_keep;
     case VP_ACCEL: return kset.accel;
     case VP_PALETTE: return kset.palette;
+    case VP_RCH: return kset.remote > 16u ? 0u : kset.remote ? kset.remote : 16u;   /* (0: OFF) */
+    case VP_RKNOBS: return kset.rknobs;
+    case VP_CAKIT: return kset.cakit;
     case VP_MASTER: return (uint32_t)(master_q12 >> 5);
     case VP_DJ: return pf.dj;
     case VP_REPEAT: return pfs.repeat;
@@ -661,6 +680,9 @@ static uint32_t vp_max(uint32_t p)
     case VP_AUTOSAVE: case VP_ACCEL: case VP_IO_SRC: case VP_PKEEP: case VP_KB_SRC: return 1;
     case VP_IO_TRACK: return NTRACK - 1u;
     case VP_PALETTE: return NPALETTES - 1u;
+    case VP_RCH: return 16;
+    case VP_RKNOBS: return NRK - 1u;
+    case VP_CAKIT: return 1;
     case VP_MASTER: case VP_DJ: case VP_TAPE: case VP_M1: case VP_M1 + 1: case VP_M1 + 2: case VP_M1 + 3: return 127;
     case VP_REPEAT: case VP_MSEL: return 3;
     case VP_MTARGET: return NUM_MOD_TARGETS - 1u + NLOCK_K;
@@ -808,6 +830,14 @@ static void vp_set(uint32_t p, uint32_t v)
     case VP_PKEEP: pat_keep = (uint8_t)v; kset.pdrop = (uint8_t)!v; settings_later(); return;
     case VP_ACCEL: kset.accel = (uint8_t)v; settings_later(); return;
     case VP_PALETTE: kset.palette = (uint8_t)v; palette_apply(); settings_later(); ui.force = 1; return;
+    case VP_RCH:
+        kset.remote = (uint8_t)(v ? v : 17u);
+        remote_ch = (uint8_t)(v ? v - 1u : 0xFFu);
+        remote_reset();
+        settings_later();
+        return;
+    case VP_RKNOBS: kset.rknobs = (uint8_t)v; remote_reset(); settings_later(); return;
+    case VP_CAKIT: kset.cakit = (uint8_t)v; settings_later(); return;
     case VP_NONE: case VP_MASTER: return;
     case VP_DJ: pf.dj = (uint8_t)v; return;
     case VP_REPEAT: pfs.repeat = (uint8_t)v; return;
@@ -961,8 +991,11 @@ static void vp_set(uint32_t p, uint32_t v)
  * by the knob's steps from each voice's own value (clamped), so the voices keep their differences. The first turn
  * keeps the kit as it was. Letting go of OCT+ asks (the FM-1's thumb can't easily reach OCT- while holding OCT+, and
  * a slipped thumb mustn't keep it all): OCT+ again reverts, OCT- keeps; the changes sound meanwhile. OCT- while OCT+
- * is still held reverts at once. No locks are recorded: it is a kit move. A kit loaded meanwhile ends it, kept. */
-static uint8_t ca_snap[KIT_LEN] POOL;
+ * is still held reverts at once. No locks are recorded: it is a kit move. A kit loaded meanwhile ends it, kept.
+ * 0.12: with morph on, the morph target's value moves by the same steps (CONFIG: CONTROL ALL, Morph BOTH KITS, the
+ * default), so the change sounds at any morph amount (a + d morphed to b + d is the mixture + d) and stays as morph
+ * turns; KIT ONLY moves the kit alone, the LXR's way (at full morph, nothing heard). */
+static uint8_t ca_snap[KIT_LEN] POOL, ca_msnap[KIT_LEN] POOL;
 static uint32_t ca_name(uint32_t t) { return t == 31u || t == 32u ? 4u : t; }   /* (the hats' closed, open decay) */
 /* the parameter on track u that is knob k's on the shown page (the same name in the same section), 0 none */
 static uint32_t ca_par(uint32_t u, uint32_t k)
@@ -987,8 +1020,10 @@ static void control_all(uint32_t k, int32_t step)
     uint16_t done[NTRACK];
     uint32_t u, i, nd = 0;
     if (!ui.ca) {
-        for (i = 0; i < KIT_LEN; i++)
+        for (i = 0; i < KIT_LEN; i++) {
             ca_snap[i] = par[kit_par(i)];
+            ca_msnap[i] = morph_par[i];
+        }
         ui.ca = 1;
         ui.ca_loads = kit_loads;
         ui.copy_used = 1;                            /* (nothing copied on release) */
@@ -1001,14 +1036,20 @@ static void control_all(uint32_t k, int32_t step)
         if (!q || i < nd)
             continue;
         done[nd++] = (uint16_t)q;
+        if (morph_amt && !kset.cakit && par_sound(q) && !morph_excluded(q)) {   /* (the target first: vp_set sounds it) */
+            uint8_t *m = &morph_par[kit_idx(q)];
+            *m = (uint8_t)clamp32((int32_t)*m + step, (int32_t)vp_min(q), (int32_t)vp_max(q));
+        }
         vp_set(q, (uint32_t)clamp32((int32_t)vp_get(q) + step, (int32_t)vp_min(q), (int32_t)vp_max(q)));
     }
 }
 static void control_all_undo(void)
 {
     uint32_t i;
-    for (i = 0; i < KIT_LEN; i++)
+    for (i = 0; i < KIT_LEN; i++) {
         par[kit_par(i)] = ca_snap[i];
+        morph_par[i] = ca_msnap[i];
+    }
     snd_post_all();
     ui.ca = ui.ca_ask = 0;
     ui_message("CONTROL ALL REVERTED");
@@ -1080,13 +1121,12 @@ static void mode_set(uint32_t m)
         uint32_t t;
         ui.perf = 0;                                 /* (PERF left: what it latched lets go) */
         ui.pf_latch = 0;
-        pf.on = ui.pf_held;
         for (t = 0; t < NTRACK; t++)
             if (ui.roll_latch & (1u << t))
                 seq_set_roll(t, 0);
         ui.roll_latch = 0;
         ui.drill_latch = 0;
-        sq.drill = ui.drill_held;
+        perf_apply();
     }
     if (m == M_PERF)
         ui.perf = 1;
@@ -1412,7 +1452,7 @@ static void perf_key(uint32_t w, int down)
         } else {
             ui.drill_held &= (uint8_t)~b;
         }
-        sq.drill = (uint8_t)(ui.drill_held | ui.drill_latch);
+        perf_apply();
     } else if (w < NTRACK) {
         uint8_t b = (uint8_t)(1u << w);
         if (down && ui.shift) {
@@ -1441,7 +1481,7 @@ static void perf_key(uint32_t w, int down)
             pf.throw_v = (uint8_t)track_voice(ui.track);
         if (down && e == PF_FREEZE && fx.type != FX_DELAY)
             ui_message("FREEZE: THE FX BUS IS NOT A DELAY");
-        pf.on = ui.pf_held | ui.pf_latch;
+        perf_apply();
     }
     ui.force = 1;
 }
@@ -2009,6 +2049,7 @@ static void ui_input(void)
     for (k = 0; k < 4u; k++)
         if ((n = panel_enc(EN_K1 + k)) != 0 && !ui.ca_ask)
             knob_turn(k, n);
+    remote_service();
     if (ui.kb_open && fm1_ms - ui.kb_ms > 6000u) {   /* the kit browser closes by itself, nothing loaded */
         ui.kb_open = 0;
         ui.force = 1;

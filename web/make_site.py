@@ -42,7 +42,8 @@ def version():
 
 
 # the manual: the Markdown MANUAL.md uses (headings, paragraphs, lists, tables, fenced code, rules, emphasis, code,
-# links), with GitHub's heading anchors so its links work
+# links), with GitHub's heading anchors so its links work. A line <!-- grid --> (hidden on GitHub) makes the table
+# after it a grid: every cell boxed and centred, the last column shaded (the remote map's appendix)
 def slug(text):
     return re.sub(r"[^\w\- ]", "", text.lower()).replace(" ", "-")
 
@@ -68,10 +69,13 @@ def cells(row):
 
 def markdown(md):
     """md -> (title, body, heads): heads the (level, id, text) of its h2s and h3s, for the side bar"""
-    lines, out, i, title, heads = md.split("\n"), [], 0, "Kettle manual", []
+    lines, out, i, title, heads, grid = md.split("\n"), [], 0, "Kettle manual", [], False
     while i < len(lines):
         ln = lines[i]
-        if ln.startswith("```"):
+        if ln.strip() == "<!-- grid -->":
+            grid = True
+            i += 1
+        elif ln.startswith("```"):
             j = i + 1
             while j < len(lines) and not lines[j].startswith("```"):
                 j += 1
@@ -94,9 +98,10 @@ def markdown(md):
                 rows.append(lines[i])
                 i += 1
             head, body = cells(rows[0]), [cells(r) for r in rows[2:]]
-            out.append('<div class="table"><table><thead><tr>' + "".join(f"<th>{inline(c)}</th>" for c in head) +
+            out.append(f'<div class="table{" grid" if grid else ""}"><table><thead><tr>' + "".join(f"<th>{inline(c)}</th>" for c in head) +
                        "</tr></thead><tbody>" + "".join("<tr>" + "".join(f"<td>{inline(c)}</td>" for c in r) +
                                                        "</tr>" for r in body) + "</tbody></table></div>")
+            grid = False
         elif re.match(r"(\d+\.|[-*]) ", ln):
             tag = "ol" if ln[0].isdigit() else "ul"
             items = []
@@ -194,6 +199,12 @@ PAGE = """<!doctype html>
   table {{ border-collapse: collapse; font-size: 14px; min-width: 100%; }}
   th, td {{ text-align: left; vertical-align: top; padding: 6px 10px; border-bottom: 1px solid var(--line); }}
   th {{ font-weight: 600; }}
+  .grid table {{ border: 1px solid var(--line); table-layout: fixed; }}
+  .grid th, .grid td {{ border: 1px solid var(--line); text-align: center; vertical-align: middle; padding: 6px 4px;
+                        font-size: 13px; }}
+  .grid th:first-child, .grid td:first-child {{ text-align: left; width: 9em; font-weight: 600; padding-left: 8px; }}
+  .grid th:last-child, .grid td:last-child {{ background: var(--code); }}
+  .grid strong {{ display: block; font-size: 15px; }}
   li {{ margin-bottom: 4px; }}
 </style>
 </head>

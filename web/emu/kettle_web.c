@@ -194,6 +194,7 @@ static int32_t fm1_adc_read(uint32_t ch) { return ch == FM1_ADC_MASTER ? (int32_
 #include "../../firmware/src/master.c"
 #include "../../firmware/src/panel.c"
 #include "../../firmware/src/ui.c"
+#include "../../firmware/src/remote.c"
 #include "../../firmware/src/ui_draw.c"
 
 /* --------------------------------------------------------- the device --- */

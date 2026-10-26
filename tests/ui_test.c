@@ -2422,7 +2422,227 @@ static void phase13_control_all(void)
     turn(EN_K1, 1);
     release(B_OCTUP);
     check(!ui.ca && !ui.ca_ask && par[PAR_BPM] == v + 1u, "OCT+ held on the grid: the knob edits as usual");
+    /* 0.12: with morph on, the morph target moves too (BOTH KITS): heard at full morph; reverted with the kit */
+    for (i = 0; i < KIT_LEN; i++)
+        morph_par[i] = par[kit_par(i)];
+    for (v = 0; v < NVOICE; v++)
+        morph_par[kit_idx(PAR_FILTER_FREQ_1 + v)] = (uint8_t)(90u + v);
+    kit_set_morph(255);
+    run_ms(20);
+    vp_set(VP_CAKIT, 0);
+    black(0);
+    press(B_SCL);
+    v = par_base(PAR_FILTER_FREQ_1 + 2);
+    hold(B_OCTUP);
+    turn(EN_K1, 6);
+    release(B_OCTUP);
+    check(morph_par[kit_idx(PAR_FILTER_FREQ_1 + 2)] == 98u && par_base(PAR_FILTER_FREQ_1 + 2) == v + 6u,
+          "full morph, BOTH KITS: the target moves too, D3's filter heard 6 higher");
+    press(B_OCTUP);
+    check(morph_par[kit_idx(PAR_FILTER_FREQ_1 + 2)] == 92u && par_base(PAR_FILTER_FREQ_1 + 2) == v,
+          "OCT+ in the dialog: the morph target reverted too");
+    kit_set_morph(128);
+    run_ms(20);
+    v = par_base(PAR_FILTER_FREQ_1 + 2);
+    hold(B_OCTUP);
+    turn(EN_K1, 4);
+    release(B_OCTUP);
+    press(B_OCTDN);
+    check(par_base(PAR_FILTER_FREQ_1 + 2) == v + 4u, "half morph, BOTH KITS: heard 4 higher");
+    kit_set_morph(255);
+    vp_set(VP_CAKIT, 1);
+    run_ms(20);
+    v = par_base(PAR_FILTER_FREQ_1 + 2);
+    hold(B_OCTUP);
+    turn(EN_K1, 6);
+    release(B_OCTUP);
+    press(B_OCTDN);
+    check(morph_par[kit_idx(PAR_FILTER_FREQ_1 + 2)] == 96u && par_base(PAR_FILTER_FREQ_1 + 2) == v,
+          "full morph, KIT ONLY: the target left alone, nothing heard (the LXR's way)");
+    vp_set(VP_CAKIT, 0);
+    kit_set_morph(0);
+    goto_mode(B_HOME, M_HOME);
     kset.accel = acc;
+    kit_init_par();
+    snd_post_all();
+}
+
+/* 0.12 (Phase 12): the remote map on its channel (16), its knob modes, its buttons, its feedback; NRPN morph and roll */
+static void rcc(uint32_t cc, uint32_t v) { web_midi(0xB0 | remote_ch, cc, v); run_ms(10); }
+static void rnote(uint32_t n, int on) { web_midi((on ? 0x90 : 0x80) | remote_ch, n, on ? 100 : 0); run_ms(10); }
+static int fb_seen(uint32_t st, uint32_t d1, uint32_t d2)   /* the remote's feedback since the last call has it */
+{
+    uint32_t i, n = web_midi_out_take(), *o = web_midi_out(), hit = 0;
+    for (i = 0; i < n; i++)
+        hit |= ((o[i] >> 8) & 0xFFu) == st && ((o[i] >> 16) & 127u) == d1 && (o[i] >> 24) == d2;
+    return hit;
+}
+static void phase12_remote(void)
+{
+    pattern_t *p = &pat[0];
+    uint32_t ch, i, ok, bpm, t;
+    p4_reset();
+    kit_init_par();
+    snd_post_all();
+    vp_set(VP_RCH, 16);
+    check(remote_ch == 15u && kset.remote == 16u, "REMOTE: channel 16");
+    vp_set(VP_RKNOBS, RK_ABS);
+    goto_mode(B_GLO, M_CONFIG);
+    while (ui.page != 7u)
+        turn(EN_SELECT, 1);
+    run_ms(50);
+    shot("remote-config");
+    goto_mode(B_HOME, M_HOME);
+    /* ABS: a track's knobs and the master column, scaled to their ranges */
+    rcc(24, 127);
+    rcc(8 + 7, 127);
+    rcc(88 + 7, 127);
+    rcc(24 + 7, 0);
+    check(par[PAR_FILTER_FREQ_1] == 127 && par[PAR_FX_DRY_WET] == vp_max(PAR_FX_DRY_WET) && morph_amt == 255 &&
+          pf.dj == 0, "ABS: D1's filter, FX dry/wet, morph, DJ filter from the remote");
+    pf.dj = 64;
+    kit_set_morph(0);
+    rcc(40 + 5, 11);
+    rcc(40 + 6, 22);
+    check(par[PAR_VELOD6_CLOSED] == 11 && par[PAR_VELOD6_OPEN] == 22, "CH's decay, OH's decay: each its own");
+    i = par[PAR_FILTER_FREQ_1];
+    rcc(38, 5);                                      /* (the LXR's CC 38 is D1's filter: here OH's resonance) */
+    check(par[PAR_FILTER_FREQ_1] == i && par[PAR_RESO_6] == 5, "the remote channel: the remote map, not the LXR's");
+    rcc(48 + 7, 0);
+    check(par[PAR_BPM] == 60, "the tempo knob: 60 BPM at 0, never MIDI sync");
+    rcc(48 + 7, 60);
+    check(par[PAR_BPM] == 120, "120 BPM at 60");
+    rcc(104, 127);
+    rcc(104 + 4, 10);
+    check(pfs.drill == 10, "the macro row: DRILL's density");
+    /* PICKUP: nothing until the pot passes the value; again after the value moves elsewhere */
+    vp_set(VP_RKNOBS, RK_PICKUP);
+    par[PAR_VOL1] = 64;
+    run_ms(30);
+    rcc(8, 10);
+    rcc(8, 30);
+    check(par[PAR_VOL1] == 64, "PICKUP: below the value, nothing");
+    rcc(8, 70);
+    check(par[PAR_VOL1] == 70, "PICKUP: passed it, it follows");
+    rcc(8, 80);
+    check(par[PAR_VOL1] == 80, "PICKUP: and on");
+    par_set(PAR_VOL1, 20);                           /* (the panel, say) */
+    run_ms(60);
+    rcc(8, 90);
+    check(par[PAR_VOL1] == 20, "PICKUP: the value moved elsewhere: the pot waits again");
+    rcc(8, 15);
+    check(par[PAR_VOL1] == 15, "PICKUP: passed the new value");
+    /* REL: 64 +/- n and two's complement */
+    vp_set(VP_RKNOBS, RK_REL);
+    par[PAR_RESO_1] = 50;
+    rcc(32, 65);
+    ok = par[PAR_RESO_1] == 51;
+    rcc(32, 61);
+    ok &= par[PAR_RESO_1] == 48;
+    rcc(32, 2);
+    ok &= par[PAR_RESO_1] == 50;
+    rcc(32, 127);
+    ok &= par[PAR_RESO_1] == 49;
+    bpm = par[PAR_BPM];
+    rcc(48 + 7, 66);
+    check(ok && par[PAR_BPM] == bpm + 2u, "REL: 64 +/- n, two's complement, the tempo a BPM a step");
+    vp_set(VP_RKNOBS, RK_PICKUP);
+    /* buttons: mute, solo, select, held FILL, a roll, DRILL, an effect held and latched, PLAY, patterns */
+    sq.muted = sq.solo = 0;
+    rnote(36 + 1, 1);
+    rnote(36 + 1, 0);
+    rnote(44 + 3, 1);
+    rnote(52 + 4, 1);
+    check(sq.muted == 2u && sq.solo == 8u && ui.track == 4, "buttons: D2 muted, SN soloed, CY selected");
+    sq.muted = sq.solo = 0;
+    rnote(52 + 7, 1);
+    ok = (pf.on >> PF_FILL) & 1u;
+    rnote(52 + 7, 0);
+    check(ok && !((pf.on >> PF_FILL) & 1u), "FILL while held");
+    rnote(60, 1);
+    ok = sq.roll & 1u;
+    rnote(60, 0);
+    rnote(68 + 2, 1);
+    ok &= (sq.drill >> 2) & 1u;
+    rnote(68 + 2, 0);
+    check(ok && !(sq.roll & 1u) && !sq.drill, "a roll and a DRILL while held");
+    rnote(76 + 1, 1);
+    ok = (pf.on >> PF_HALF) & 1u;
+    rnote(76 + 1, 0);
+    rnote(84 + 6, 1);
+    rnote(84 + 6, 0);
+    ok &= !((pf.on >> PF_HALF) & 1u) && ((pf.on >> PF_CRUSH) & 1u);
+    goto_mode(B_ARP, M_PERF);
+    goto_mode(B_HOME, M_HOME);                       /* (leaving PERF lets the panel's latches go, not the remote's) */
+    ok &= (pf.on >> PF_CRUSH) & 1u;
+    rnote(84 + 6, 1);
+    check(ok && !((pf.on >> PF_CRUSH) & 1u), "HALF held; CRUSH latched (past PERF), then off");
+    rnote(93, 1);
+    check(sq.active == 1, "the next pattern");
+    rnote(92, 1);
+    check(sq.active == 0, "the previous pattern");
+    /* REC: a track's knob records a lock on its own track */
+    for (i = 0; i < 16u; i++)
+        main_set(p, 2, i, 1);
+    pat_backup = *p;
+    rnote(36 + 7, 1);
+    check(sq.running, "PLAY from the remote");
+    sq.rec = 1;
+    vp_set(VP_RKNOBS, RK_ABS);
+    for (t = 0; t < 8u; t++)
+        rcc(24 + 2, 100 - t);
+    sq.rec = 0;
+    for (i = ok = 0; i < 16u; i++)
+        ok |= lock_get(p, 2, i, 0) == par_to_autodest(PAR_FILTER_FREQ_1 + 2) ||
+              lock_get(p, 2, i, 1) == par_to_autodest(PAR_FILTER_FREQ_1 + 2);
+    check(ok, "REC: D3's filter knob locks D3's steps");
+    rnote(36 + 7, 1);
+    check(!sq.running, "STOP from the remote");
+    /* feedback: a panel change, a mute; nothing back for what the remote itself sent */
+    run_ms(100);
+    (void)fb_seen(0, 0, 0);
+    par_set(PAR_FILTER_FREQ_1 + 1, 77);
+    sq.muted = 4u;
+    run_ms(30);
+    ch = 0xB0u | remote_ch;
+    ok = fb_seen(ch, 25, 77);
+    sq.muted = 0;
+    run_ms(30);
+    check(ok, "feedback: D2's filter changed on the panel goes back as CC 25");
+    rcc(16, 33);
+    run_ms(30);
+    check(!fb_seen(ch, 16, 33), "no echo of what the remote sent");
+    kit_load_ram(3);
+    run_ms(80);
+    {
+        uint32_t n = web_midi_out_take(), *o = web_midi_out(), cc = 0;
+        for (i = 0; i < n; i++)
+            cc += ((o[i] >> 8) & 0xF0u) == 0xB0u && (o[i] >> 8 & 15u) == remote_ch;
+        printf("  a kit load: %u remote CCs back\n", cc);
+        check(cc > 0, "feedback after a kit load");
+    }
+    sq.muted = 1u << 2;
+    run_ms(30);
+    check(fb_seen(0x90u | remote_ch, 36 + 2, 127), "feedback: D3 muted lights its mute button");
+    sq.muted = 0;
+    /* NRPN morph (120) and roll rate (119) do what the panel does (12a) */
+    ch = (par[PAR_MIDI_CHAN_GLOBAL] - 1u) & 15u;
+    web_midi(0xB0 | ch, 99, 0);
+    web_midi(0xB0 | ch, 98, 120);
+    web_midi(0xB0 | ch, 6, 127);
+    web_midi(0xB0 | ch, 98, 119);
+    web_midi(0xB0 | ch, 6, 5);
+    run_ms(20);
+    check(morph_amt == 255 && sq.roll_rate == 5, "NRPN morph and roll rate take effect");
+    kit_set_morph(0);
+    /* OFF: the channel is a plain one again */
+    vp_set(VP_RCH, 0);
+    par[PAR_RESO_1] = 9;
+    web_midi(0xB0 | 15, 32, 100);
+    run_ms(20);
+    check(remote_ch == 0xFFu && kset.remote == 17u && par[PAR_RESO_1] == 9, "REMOTE OFF: nothing from the map");
+    vp_set(VP_RCH, 16);
+    vp_set(VP_RKNOBS, RK_PICKUP);
     kit_init_par();
     snd_post_all();
 }
@@ -2854,6 +3074,7 @@ int main(int argc, char **argv)
     phase11();
     phase11_sound_solo();
     phase13_control_all();
+    phase12_remote();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;
 }
