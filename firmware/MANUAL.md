@@ -1,6 +1,6 @@
 # Kettle manual
 
-Kettle is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 0.10: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Kettle adds.
+Kettle is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 0.13: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Kettle adds.
 
 Kettle is **unofficial**. It is not affiliated with or endorsed by Erica Synths, M-VAVE or Hügelton Instruments. It is free software under the GPL-3.0 (see *Licence and credits* at the end).
 
@@ -331,9 +331,23 @@ Select a track, then press a sound button. Pressing the same button again moves 
 | **Mod EG / velocity** (ENV) | Pitch EG: Decay, Slope, Amount / Velocity: destination, amount, volume mod | same | Velocity: destination, amount, volume mod |
 | **Filter** (SCL) | Frequency, Resonance, Type (LP HP BP UNITY BP NOTCH PEAK LP2 OFF), Overdrive | same | same |
 | **LFO** (LFO) | Frequency, Clock sync, Amount, Waveform / Retrigger, Offset, Destination voice, Destination parameter | same | same |
+| **LFO mode** (LFO, Kettle's) | Mode (TRIG, HOLD, ONE, HALF: see below) | same | same |
 | **Mix** (GLO) | Volume, Pan, Sample rate, Drive / Output, Length, MIDI channel, MIDI note | same | same |
 
 The LXR's waveforms are SINE, TRI, SAW, SQUARE, NOISE and PWM; its transients SNAP, OFFSET, CLICK, CLICK 2, TICK, KICK, RIM, DRIP, HAT, CLAP, KICK 2, SNARE, TOM and SNAP 2. Each voice has one LFO, which can modulate any parameter of any voice; the velocity destination can be any of the voice's own parameters.
+
+### The LFO's mode
+
+**LFO MODE** (LFO, after the LFO's two pages) sets how a hit starts the LFO, as on Elektron's machines. Retrigger (on the LFO page) still picks whose hits those are.
+
+| Mode | Does |
+|---|---|
+| **TRIG** | The LXR's way (the default): each hit starts the cycle again from the Offset. With Retrigger OFF, the LFO runs free. |
+| **HOLD** | The LFO runs free; each hit takes its value at that moment and holds it until the next hit. A random sample and hold per hit, or a "where was the sweep when it hit" value. |
+| **ONE** | One-shot: each hit starts it from the Offset, it runs one cycle and stops at the end. Until the first hit it waits at the Offset. A saw becomes an envelope; a sine a single swell. |
+| **HALF** | The same, half a cycle: a triangle or sine rises and stays up. |
+
+In HOLD, ONE and HALF, Retrigger OFF means the LFO's own voice's hits. A RANDOM wave draws a new value at each one-shot. The mode is part of the kit and can be locked per step; it doesn't morph.
 
 ### Kettle's sound pages
 
@@ -477,7 +491,7 @@ Press **ARP** twice (past PERF). Turn SELECT for six pages. The first four are f
 | Page | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
 | GENERATOR | Generator | the generator's settings … | | |
-| ACTION | Action | GRIDS only: Map X | Map Y | Chaos |
+| ACTION | Action | GRIDS: Map X · EUCLID: Hits 2 | Map Y · Rotate 2 | Chaos · Join |
 | TRACK | Length | Clock | Direction | – |
 | BOUNCE | Bounce | Bnc pitch | – | – |
 | LINKS | Link (1–8) | Start | Amount | Depth |
@@ -496,6 +510,17 @@ KNOB 1 on the GENERATOR page picks how the track is made: **OFF**, **EUCLID**, *
 | **GRIDS** | Part, Density, Accent | Emilie Gillet's Grids drum map: see below. |
 
 **EUCLID** is the LXR's Euclid: it rewrites the pattern's steps directly. It starts with no hits over the track's length and leaves the track alone until you turn **Hits**; from then on every turn of Length, Hits or Rotate rewrites the track at once (Hits back to 0 clears it). Its settings are saved with the pattern.
+
+**A second pulse.** With EUCLID, the ACTION page (titled **ACTION / EUCLID 2**) has a second Euclidean pulse over the same length on KNOBS 2–4: **Hits 2**, **Rotate 2** and **Join**, how the two are combined:
+
+| Join | Plays a step when |
+|---|---|
+| **OR** (default) | either pulse has a hit |
+| **XOR** | one pulse has a hit, not both |
+| **AND** | both have a hit |
+| **SUB** | the first has a hit and the second doesn't |
+
+Hits 2 at 0 (OFF) leaves the first pulse alone, whatever the join. 4 hits OR 3 hits over 16 gives a tresillo against four on the floor; SUB carves gaps out of a busy pulse. DICE then keeps the number of hits the two made.
 
 The others play a **live copy** of the track and change it as it plays; the grid shows what is playing. The pattern itself isn't changed until you COMMIT. Turning a generator on, RESET, or changing pattern starts the live copy again from the pattern; stopping and starting doesn't. So EUCLID then MUTATE mutates the Euclid rhythm.
 
@@ -607,7 +632,7 @@ The screen shows all 16 keys (lit: on, outlined: latched), the repeat length, th
 
 ### PERF pages (SELECT)
 
-The performance pages come first, then the macros, then PERFORM 2.
+The performance pages come first (PERFORM 2's among them, last), then the global LFOs, then the macros.
 
 | Page | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
@@ -615,11 +640,15 @@ The performance pages come first, then the macros, then PERFORM 2.
 | PERFORM: MORE | DJ filter | Repeat | Shuffle | Tape time |
 | PERFORM: MIX | D1 volume | D2 volume | D3 volume | SN volume |
 | PERFORM: MIX 2 | CY volume | HH volume | FX dry/wet | Reverb level |
-| MACROS | Macro 1 | Macro 2 | Macro 3 | Macro 4 |
-| MACRO SETUP | Macro (1–4) | Target | Min | Max |
 | PERFORM 2 | Tempo | Roll (rate) | Morph | SRate |
 | PERFORM 2: SETUP | Drill | Jitter | Cuts | Pump |
 | PERFORM 2: SETUP 2 | Comb (note) | Comb fb | Crush | Reverse (length) |
+| GLOBAL LFO 1 | Dest | Depth | Speed | Wave |
+| GLOBAL LFO 1: MODE | Mode | Trig | Phase | – |
+| GLOBAL LFO 2 | Dest | Depth | Speed | Wave |
+| GLOBAL LFO 2: MODE | Mode | Trig | Phase | – |
+| MACROS | Macro 1 | Macro 2 | Macro 3 | Macro 4 |
+| MACRO SETUP | Macro (1–4) | Target | Min | Max |
 
 - **PERFORM** is the LXR's own PERFORMANCE page: tempo, roll rate, morph and the global sample-rate reducer.
 - **SRate:** the LXR's global sample rate: every voice's own rate (Mix page) times this one, before the mix. Lower is grittier. It is part of the kit, so a kit can bring its own crush; it can be a macro's target and is recorded as locks under REC.
@@ -631,6 +660,35 @@ The performance pages come first, then the macros, then PERFORM 2.
 - **Velocity:** rolls play at the KEYS velocity (see [KEYS](#keys-playing-a-voice)).
 
 Macros, the repeat length and the tape time are saved with the project. The DJ filter starts in the middle at power-on.
+
+### Global LFOs
+
+Two LFOs that move the whole kit's performance controls, not a voice's sound. Slow one down to many bars and it plays the set for you: a kit morphing into the next over 64 bars, a filter opening over 16, comb resonance drifting in and out.
+
+| Knob | Does |
+|---|---|
+| **Dest** | What it moves (below), or OFF |
+| **Depth** | −127 to +127. How far it moves it; negative turns it the other way |
+| **Speed** | One cycle's length at the tempo: 1/16, 1/8, 1/4, 1/2, 1 bar, then 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128 and 256 bars. At 120 BPM, 256 bars is about 8½ minutes. |
+| **Wave** | The LFO waves: SINE, TRI, SAW UP, SAW DN, SQUARE, RANDOM, EXP UP, EXP DN |
+| **Mode** | **FREE** (runs on its own; the default), **TRIG** (starts again at each trigger), **HOLD** (runs, its value held at each trigger), **ONE** (one cycle from a trigger, then still at its end), **HALF** (half a cycle) |
+| **Trig** | What triggers it: **PLAY** (the sequencer starting), **PATTERN** (PLAY and each pattern change), **BAR** (PLAY and each bar) |
+| **Phase** | Where in its cycle a trigger starts it |
+
+| Dest | Moves |
+|---|---|
+| **MORPH** | Morph, from where the Morph knob is (PERFORM page), up for a positive depth and down for a negative one |
+| **FILTER** | The DJ filter both ways from its knob: low-pass on one side of the wave, high-pass on the other |
+| **LP**, **HP** | The DJ filter towards its low-pass (high-pass) end, as the LP~ and HP~ keys sweep it |
+| **FB PUSH**, **COMB**, **CRUSH**, **JITTER**, **CUTS**, **PUMP** | Those effects fade in with the LFO, from off up to how the key plays them at its setting (PERFORM 2: SETUP). A negative depth turns the wave upside down. A key held or latched still plays its effect in full. |
+
+- **The knobs stay put.** The LFO moves the sound, not the setting: the Morph knob, the DJ filter and the effects' settings read as you left them, and that is what the project saves.
+- **Synced to the clock:** the speed follows the tempo, MIDI clock, HALF and TAPE STOP. The LFOs run when stopped too (FREE, or after a trigger).
+- **OCT+** on a global LFO's page triggers it by hand (a FREE LFO has no trigger: set its Mode first).
+- The screen shows both LFOs moving (L1, L2) on their pages. Both LFOs on the same destination add up.
+- They are saved with the project.
+
+**A kit morphing into another over 64 bars:** LOAD → MORPH the second kit; GLOBAL LFO 1: Dest MORPH, Depth +127, Speed 64 BARS, Wave SAW UP; MODE page: Mode ONE, Trig PLAY. Press PLAY: morph goes from the knob's value to full over 64 bars and stays there. With Mode FREE and Wave TRI instead, it morphs there and back for as long as you play.
 
 ### PERFORM 2: the second bank
 
@@ -787,6 +845,7 @@ GLO three times (past Mix and the mixer) opens CONFIG. Turn SELECT for its pages
 | DEVICE | LEDs (OFF / LOW / HIGH glow), Autosave, Accel (fast knob turns move further), Colours (screen palette) |
 | REMOTE | Channel (OFF, 1–16; 16 by default), Knobs (PICKUP / ABS / REL): see [the remote map](#the-remote-map) |
 | CONTROL ALL | Morph: BOTH KITS (the default: with morph on, the morph target moves too) or KIT ONLY; see [Control All](#control-all-every-track-at-once) |
+| BUTTONS | Last page: NO (the default) or YES. With YES, a button opens the page it showed when you left it: on CONFIG's last page, press FX, then GLO, and you're back on CONFIG's last page. It works for SEQ, FX, ARP (PERF or the generator pages, whichever you were on), GLO (Mix, the mixer or CONFIG) and the sound buttons (the section and row). Pressed again, a button moves on as always. HOME still goes to the grid. |
 
 ### The CPU meter
 
@@ -933,6 +992,7 @@ Six numbers per voice-based setting, in the order D1 D2 D3 SN CY HH.
 | 280–285 | Model position |
 | 286–291 | Model exciter |
 | 292–297 | Model tension |
+| 298–303 | LFO mode (0 trig, 1 hold, 2 one, 3 half) |
 
 The LXR's own parameters keep their CC and NRPN numbers.
 
@@ -964,9 +1024,9 @@ What changed in the port:
 
 What Kettle adds:
 
-- **Sound:** Control All (OCT+ held, a knob: every track); FX and reverb sends per voice; three reverbs; waveshaper choice; bits; tilt EQ; random per hit; choke groups; cross modulation; phaser and flanger; Rings' resonators on the drum voices; a sound browser and a kit library.
-- **Performance:** PERF with fill, repeat, freeze, throws, feedback push, tape stop, filter sweeps, a DJ filter, four macros, the voices' volumes on two pages, and PERFORM 2; KEYS, to play a voice from the keyboard.
-- **Sequencing:** trig conditions, ratchets, per-track clocks, generators (mutate, Turing machine, cellular automata, Grids), dice, commit and undo, and copying a bar across all tracks.
+- **Sound:** Control All (OCT+ held, a knob: every track); LFO modes (hold, one-shot, half); FX and reverb sends per voice; three reverbs; waveshaper choice; bits; tilt EQ; random per hit; choke groups; cross modulation; phaser and flanger; Rings' resonators on the drum voices; a sound browser and a kit library.
+- **Performance:** PERF with fill, repeat, freeze, throws, feedback push, tape stop, filter sweeps, a DJ filter, four macros, the voices' volumes on two pages, PERFORM 2 and two global LFOs (morph, the DJ filter, the effects, down to 256 bars a cycle); KEYS, to play a voice from the keyboard.
+- **Sequencing:** trig conditions, ratchets, per-track clocks, generators (mutate, Turing machine, cellular automata, Grids, Euclid with a second pulse), dice, commit and undo, and copying a bar across all tracks.
 - **Safety:** the automatic session save, a CPU meter, and backup and restore over USB (the library page).
 
 ---
