@@ -25,7 +25,16 @@
  *   COMB       a tuned comb (its note, its feedback) on the master: drums ring at a pitch
  *   SPACE      the reverb held (its tail kept going), the dry sound dipped (voices.c space_on, reverb.c)
  *   CRUSH      the master's bits and sample rate down
- *   REVERSE    the last 1/16 .. 1/4 played backwards, again while held (a recorder: 0.25 s, mono, 22 kHz) */
+ *   REVERSE    the last 1/16 .. 1/4 played backwards, again while held (a recorder: 0.25 s, mono, 22 kHz)
+ * 0.13: two GLOBAL LFOs (the PERF pages GLOBAL LFO 1, 2 and their MODE pages), the project's (gls): each moves one
+ * of the whole kit's performance controls (GD_*). DEPTH -127 .. 127. MORPH and FILTER (the DJ filter, both ways) are
+ * moved from where their knobs are, by the depth either way; LP and HP push the DJ filter towards that end; the
+ * effects (FB PUSH, COMB, CRUSH, JITTER, CUTS, PUMP) come in by the LFO (its upside down for a negative depth), at
+ * most as the key would play them, their settings as they are. SPEED is a length in 16ths to 256 bars, at the
+ * tempo (the clock: MIDI's too, TAPE STOP, HALF). MODE as Elektron's: FREE, TRIG (restarts), HOLD (runs, its value
+ * held at each trigger), ONE (a cycle from the trigger, then still), HALF (half of one); TRIG the triggers: PLAY,
+ * PATTERN (PLAY and each pattern change), BAR (PLAY and each bar); OCT+ on its page triggers it too. PHASE: where a
+ * trigger starts it. The audio ISR runs them (glfo_block); morph is the main loop's (ui.c glfo_morph). */
 
 enum { PF_FILL, PF_STUT, PF_FREEZE, PF_THROW_R, PF_THROW_F, PF_PUSH, PF_TAPE, PF_SWEEP_LP, PF_SWEEP_HP, NPF };
 enum { PF_HALF = NPF, PF_JITTER, PF_CUTS, PF_SHORT, PF_PUMP, PF_COMB, PF_SPACE, PF_CRUSH, PF_REVERSE, NPF2 };
@@ -72,8 +81,32 @@ static struct {
 #define NPF2SET 8u                                   /* (KPF2: the bytes from drill) */
 static const uint8_t REPEAT_TICKS[4] = {96, 48, 24, 12};
 
+/* 0.13: the global LFOs */
+enum { GD_OFF, GD_MORPH, GD_FILTER, GD_LP, GD_HP, GD_PUSH, GD_COMB, GD_CRUSH, GD_JITTER, GD_CUTS, GD_PUMP, NGD };
+enum { GM_FREE, GM_TRIG, GM_HOLD, GM_ONE, GM_HALF, NGM };
+enum { GT_PLAY, GT_PATTERN, GT_BAR, NGT };
+#define NGLFO 2u
+#define NGLEN 19u
+static const uint16_t GL_LEN[NGLEN] = {1, 2, 4, 8, 16, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048,
+                                       4096};       /* SPEED: a cycle, in 16ths (1/16 .. 256 bars) */
+static struct {                                      /* the project's (KGL1) */
+    uint8_t dest, len, wave, mode, trig, phase;      /* GD_*, GL_LEN's index, LFO_*, GM_*, GT_*, 0..127 */
+    int8_t depth;                                    /* -127 .. 127 */
+} gls[NGLFO];
+#define NGLSET 7u                                    /* (KGL1: the bytes of each) */
+static struct {
+    lfo_t l[NGLFO];
+    uint32_t tick[NGLFO];                            /* the tick length and SPEED l[n].inc was worked out for */
+    uint8_t len[NGLFO];
+    int32_t out[NGLFO];                              /* their value, 0 .. 65536 (the screen) */
+    int32_t dj;                                      /* the DJ filter moved by them, -65536 .. 65536 */
+    int32_t amt[NGD];                                /* each effect's amount from them, 0 .. 65536 */
+    volatile int32_t morph;                          /* morph moved by them, -255 .. 255 (the main loop's) */
+} gl;
+
 static void perf_defaults(void)
 {
+    uint32_t c;
     memset(&pfs, 0, sizeof pfs);
     pfs.repeat = 2;                                  /* 1/16 */
     pfs.tape = 64;                                   /* ~0.9 s */
@@ -85,6 +118,12 @@ static void perf_defaults(void)
     pfs.comb_fb = 100;
     pfs.crush = 64;
     pfs.rev_len = 1;                                 /* 1/8 */
+    for (c = 0; c < NGLFO; c++) {                    /* 0.13: the global LFOs: off, a triangle over 4 bars */
+        memset(&gls[c], 0, sizeof gls[c]);
+        gls[c].len = 7;
+        gls[c].wave = LFO_TRI;
+        gl.tick[c] = 0;
+    }
 }
 static void perf_init(void)
 {
@@ -99,14 +138,73 @@ static void perf_init(void)
     }
 }
 
+/* 0.13: the global LFOs, a block (the audio ISR, perf_block): their triggers, a step, what they move */
+static void glfo_block(void)
+{
+    static const uint8_t LM_OF[NGM] = {LM_TRIG, LM_TRIG, LM_HOLD, LM_ONE, LM_HALF};
+    static const uint8_t TRIG_EV[NGT] = {GLE_PLAY, GLE_PLAY | GLE_PATTERN, GLE_PLAY | GLE_BAR};
+    uint32_t ev = glfo_ev, n;
+    int32_t morph = 0;
+    glfo_ev = 0;
+    gl.dj = 0;
+    memset(gl.amt, 0, sizeof gl.amt);
+    for (n = 0; n < NGLFO; n++) {
+        lfo_t *l = &gl.l[n];
+        const uint32_t g = gls[n].dest < NGD ? gls[n].dest : GD_OFF, m = gls[n].mode < NGM ? gls[n].mode : GM_FREE;
+        uint32_t t = sq.tick_q16 ? sq.tick_q16 : 1u;
+        int32_t d = gls[n].depth, x;
+        if (gl.tick[n] != t || gl.len[n] != gls[n].len) {   /* a cycle: GL_LEN 16ths of 24 ticks; 2^32 x BLOCK / its
+                                                      * samples */
+            gl.tick[n] = t;
+            gl.len[n] = gls[n].len;
+            l->inc = (uint32_t)((((uint64_t)BLOCK << 48) / 24u / t) / GL_LEN[gls[n].len % NGLEN]);
+        }
+        l->wave = (uint8_t)(gls[n].wave % NLFO);
+        l->offset = gls[n].phase >= 127u ? 0xFFFFFFFFu : (uint32_t)gls[n].phase << 25;
+        lfo_mode_set(l, LM_OF[m]);
+        if (m != GM_FREE && (ev & (TRIG_EV[gls[n].trig % NGT] | GLE_KEY << n)))
+            lfo_hit(l);
+        {
+            uint32_t inc = l->inc;                   /* (the clock's speed: TAPE STOP, HALF) */
+            l->inc = (uint32_t)(((uint64_t)inc * tape_q16) >> (16u + (sq.half && sq.running)));
+            gl.out[n] = lfo_calc(l);
+            l->inc = inc;
+        }
+        if (g == GD_OFF || !d)
+            continue;
+        x = gl.out[n];
+        if (g == GD_MORPH) {
+            morph += d * x / 32768;                  /* (127 x 65536 / 32768: about 255) */
+        } else if (g == GD_FILTER) {
+            gl.dj += (int32_t)(((int64_t)d * (2 * x - 65536)) / 127);
+        } else {                                     /* the rest from 0 by |depth|; a negative one upside down */
+            int32_t a = (d > 0 ? x : 65536 - x) * (d > 0 ? d : -d) / 127;
+            if (g == GD_LP)
+                gl.dj -= a;
+            else if (g == GD_HP)
+                gl.dj += a;
+            else
+                gl.amt[g] = gl.amt[g] + a < 65536 ? gl.amt[g] + a : 65536;
+        }
+    }
+    gl.morph = clamp32(morph, -255, 255);
+}
+/* an effect's amount, 0 .. 65536: its key (held, latched, the remote's) the most, else the LFOs' */
+static uint32_t pf_amount(uint32_t on, uint32_t bit, uint32_t g)
+{
+    return (on >> bit) & 1u ? 65536u : (uint32_t)gl.amt[g];
+}
+
 /* the audio ISR, a block's start: the held effects into the engine */
 static void perf_block(void)
 {
-    uint32_t on = pf.on, v;
+    uint32_t on = pf.on, v, a;
     int32_t target, step;
+    glfo_block();
     sq.fill = (on >> PF_FILL) & 1u;
     sq.half = (on >> PF_HALF) & 1u;
-    sq.jit = (on >> PF_JITTER) & 1u ? (uint8_t)(1u + pfs.jitter * 11u / 127u) : 0u;
+    a = pf_amount(on, PF_JITTER, GD_JITTER);         /* (0.13: the global LFOs' amounts, a key's the most) */
+    sq.jit = a >= 1024u ? (uint8_t)(1u + pfs.jitter * 11u * (a >> 4) / (127u << 12)) : 0u;
     sq.drill_span = (uint8_t)(1u + pfs.drill * 6u / 127u);
     space_on = (on >> PF_SPACE) & 1u;
     if ((on >> PF_SHORT) & 1u)                       /* SHORT: every voice's decay a click, as long as it's on */
@@ -114,7 +212,8 @@ static void perf_block(void)
             if (vc[v].aeg.dec < SHORT_DEC)
                 vc[v].aeg.dec = SHORT_DEC;
     pump_g0 = pump_g1;                               /* PUMP: D1's hit: down in 2 blocks, back over an 8th */
-    if ((on >> PF_PUMP) & 1u) {
+    a = pf_amount(on, PF_PUMP, GD_PUMP);
+    if (a) {
         if (trig_count[0] != pf.pump_seen)
             pf.pump_up = 1;
         if (pf.pump_up) {
@@ -128,7 +227,7 @@ static void perf_block(void)
             if (pf.pump_env < 0)
                 pf.pump_env = 0;
         }
-        pump_g1 = 32768 - ((pf.pump_env * pf.pump_env) >> 15) * (int32_t)pfs.pump / 127;
+        pump_g1 = 32768 - ((pf.pump_env * pf.pump_env) >> 15) * (int32_t)(pfs.pump * (a >> 4) >> 12) / 127;
     } else {
         pf.pump_env = 0;
         pump_g1 = pump_g1 + 2048 < 32768 ? pump_g1 + 2048 : 32768;
@@ -137,7 +236,7 @@ static void perf_block(void)
     sq.stut_req = (on >> PF_STUT) & 1u;
     sq.stut_len = REPEAT_TICKS[pfs.repeat & 3u];
     fx.freeze = (on >> PF_FREEZE) & 1u;
-    fx.push = (on >> PF_PUSH) & 1u;
+    fx.push = (int32_t)pf_amount(on, PF_PUSH, GD_PUSH);
     for (v = 0; v < NVOICE; v++) {
         vc[v].throw_rev = (uint8_t)(v == pf.throw_v && ((on >> PF_THROW_R) & 1u));
         vc[v].throw_fx = (uint8_t)(v == pf.throw_v && ((on >> PF_THROW_F) & 1u));
@@ -164,8 +263,11 @@ static void perf_block(void)
 /* 0.6: PERFORM 2 on the master, in this order: COMB, CUTS, CRUSH, then the recorder and REVERSE */
 static void perf2_master(int16_t *l, int16_t *r)
 {
-    uint32_t on = pf.on, i;
-    if ((on >> PF_COMB) & 1u) {                      /* COMB: y = x (1 - fb) 4 + fb lp(y[n - D]); out x / 2 + y */
+    uint32_t on = pf.on, i, a;
+    a = pf_amount(on, PF_COMB, GD_COMB);
+    if (a) {                                         /* COMB: y = x (1 - fb) 4 + fb lp(y[n - D]); out x / 2 + y (0.13:
+                                                      * by the amount, a: x + (y - x / 2) a) */
+        int32_t g = (int32_t)(a >> 1);
         int32_t f8 = (int32_t)(((uint64_t)112640u * (uint32_t)exp2_q16(((int32_t)pfs.comb_note - 69) * 65536 / 12)) >>
                                16);                  /* the note's Hz, Q8 */
         uint32_t d8 = ((uint32_t)FS << 16) / (uint32_t)(f8 > 0 ? f8 : 1), di = d8 >> 8, df = d8 & 255u;
@@ -180,18 +282,19 @@ static void perf2_master(int16_t *l, int16_t *r)
             pf.comb_lp += ((y - pf.comb_lp) * 24576) >> 15;   /* (a gentle low-pass in the loop) */
             y = sat16(((x * gi) >> 15) + ((pf.comb_lp * fb) >> 15));
             comb_buf[pf.comb_w++ & (COMB_LEN - 1u)] = (int16_t)y;
-            l[i] = (int16_t)sat16((l[i] >> 1) + y);
-            r[i] = (int16_t)sat16((r[i] >> 1) + y);
+            l[i] = (int16_t)sat16(l[i] + ((((y - (l[i] >> 1))) * g) >> 15));
+            r[i] = (int16_t)sat16(r[i] + ((((y - (r[i] >> 1))) * g) >> 15));
         }
     }
-    if ((on >> PF_CUTS) & 1u || pf.cut_g < 32767) {  /* CUTS: each 32nd open or shut at random, 32-sample fades */
-        int32_t per = (int32_t)((12u * (sq.tick_q16 >> 8)) >> 8);
+    a = pf_amount(on, PF_CUTS, GD_CUTS);
+    if (a || pf.cut_g < 32767) {                     /* CUTS: each 32nd open or shut at random, 32-sample fades */
+        int32_t per = (int32_t)((12u * (sq.tick_q16 >> 8)) >> 8), dens = (int32_t)(pfs.cuts * (a >> 4) >> 12);
         for (i = 0; i < BLOCK; i++) {
-            if (!((on >> PF_CUTS) & 1u))
+            if (!a)
                 pf.cut_open = 1;
             else if (--pf.cut_n <= 0) {
                 pf.cut_n = per > 64 ? per : 64;
-                pf.cut_open = (int32_t)(seq_rand() % 100u) >= pfs.cuts * 100 / 127;
+                pf.cut_open = (int32_t)(seq_rand() % 100u) >= dens * 100 / 127;
             }
             pf.cut_g = pf.cut_open ? (pf.cut_g + 1024 < 32767 ? pf.cut_g + 1024 : 32767)
                                    : (pf.cut_g > 1024 ? pf.cut_g - 1024 : 0);
@@ -199,8 +302,9 @@ static void perf2_master(int16_t *l, int16_t *r)
             r[i] = (int16_t)((r[i] * pf.cut_g) >> 15);
         }
     }
-    if ((on >> PF_CRUSH) & 1u) {                     /* CRUSH: held 1 .. 16 samples, 16 .. 4 bits */
-        uint32_t hold = 1u + pfs.crush * 15u / 127u, bits = 16u - pfs.crush * 12u / 127u;
+    a = pf_amount(on, PF_CRUSH, GD_CRUSH);
+    if (a) {                                         /* CRUSH: held 1 .. 16 samples, 16 .. 4 bits */
+        uint32_t c = pfs.crush * (a >> 4) >> 12, hold = 1u + c * 15u / 127u, bits = 16u - c * 12u / 127u;
         int32_t mask = (int32_t)(0xFFFFFFFFu << (16u - bits));
         for (i = 0; i < BLOCK; i++) {
             if (--pf.cr_n <= 0) {
@@ -246,7 +350,7 @@ static void perf2_master(int16_t *l, int16_t *r)
 /* the master (engine_block): the DJ filter, the tape's fade; l, r: the block, saturated */
 static void perf_master(int16_t *l, int16_t *r)
 {
-    int32_t d = clamp32(((int32_t)pf.dj - 64) * 1040 + pf.sweep, -65536, 65536), a = iabs(d), w;
+    int32_t d = clamp32(((int32_t)pf.dj - 64) * 1040 + pf.sweep + gl.dj, -65536, 65536), a = iabs(d), w;
     uint32_t i, c, type;
     int16_t f[BLOCK];
     pf.dj_d = d;

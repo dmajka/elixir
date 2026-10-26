@@ -19,7 +19,7 @@
 #define PROJ_AUTO 4u                                /* the session */
 #define PROJ_NLOG 5u
 #define PROJ_MAGIC 0x4A52504Bu                      /* "KPRJ" */
-#define PROJ_VERSION 8u                             /* (1 .. 7 still load: proj_read_payload) */
+#define PROJ_VERSION 9u                             /* (1 .. 8 still load: proj_read_payload) */
 #define PROJ_PAYLOAD (PROJ_SLOT - 256u)
 
 typedef struct {
@@ -119,7 +119,8 @@ static void pr_bytes(void *p, uint32_t n)
  * pointing past them to the last one, a voice's Out = FX BUS as FX SEND 127. Version 4 (0.5): a track's clock
  * and generator after its length (CLK_1X and GEN_OFF before), a step's condition and ratchet (SF_X). Version 5
  * (0.5): a pattern's GRIDS map (X, Y, chaos) after its shuffle and kit (0 before). Version 8 (0.10): a track's
- * direction after its bounce (DIR_FWD before). */
+ * direction after its bounce (DIR_FWD before). Version 9 (0.13): a track's second Euclid pulse after its direction
+ * (none before); the global LFOs after PERFORM 2's settings (KGL1). */
 #define SF_VOL 0x01u
 #define SF_PROB 0x02u
 #define SF_NOTE 0x04u
@@ -141,7 +142,7 @@ static int track_is_default(const pattern_t *p, uint32_t t)
     uint32_t k;
     if (p->len[t] != 16u || p->main[t][0] || p->main[t][1] || p->main[t][2] || p->main[t][3] ||
         p->clk[t] != CLK_1X || p->gen[t][0] || p->gen[t][1] || p->gen[t][2] || p->gen[t][3] ||
-        p->bnc[t] != BNC_DEFAULT || p->dir[t] != DIR_FWD)
+        p->bnc[t] != BNC_DEFAULT || p->dir[t] != DIR_FWD || p->eu2[t][0] || p->eu2[t][1] || p->eu2[t][2])
         return 0;
     for (k = 0; k < NUM_STEPS; k++)
         if (step_diff(p, t, k))
@@ -174,7 +175,7 @@ static void proj_write_payload(void)
     pw_bytes(par, NPAR);                           /* the edit buffer and the settings */
     pw_u16(KIT_LEN);
     pw_bytes(morph_par, KIT_LEN);
-    pw_byte(morph_amt);
+    pw_byte(par[PAR_MORPH]);                       /* (0.13: the knob; the global LFOs move it from there) */
     pw_byte(kit_loaded);
     pw_byte(kit_morph_loaded);
     pw_byte(sq.active);
@@ -230,6 +231,7 @@ static void proj_write_payload(void)
             pw_bytes(p->gen[t], 4);
             pw_byte(p->bnc[t]);
             pw_byte(p->dir[t]);
+            pw_bytes(p->eu2[t], 3);
             for (k = 0; k < 4u; k++)
                 pw_u16(p->main[t][k]);
             for (k = 0; k < NUM_STEPS; k++)
@@ -288,6 +290,18 @@ static void proj_write_payload(void)
     pw_bytes("KPF2", 4);                            /* PERFORM 2's settings (0.6) */
     pw_byte(NPF2SET);
     pw_bytes(&pfs.drill, NPF2SET);
+    pw_bytes("KGL1", 4);                            /* the global LFOs (0.13) */
+    pw_byte(NGLFO);
+    for (i = 0; i < NGLFO; i++) {
+        pw_byte(NGLSET);
+        pw_byte(gls[i].dest);
+        pw_byte((uint8_t)gls[i].depth);
+        pw_byte(gls[i].len);
+        pw_byte(gls[i].wave);
+        pw_byte(gls[i].mode);
+        pw_byte(gls[i].trig);
+        pw_byte(gls[i].phase);
+    }
 }
 
 /* a version-2 lock code: Kettle's parameters were at the numbers the LXR leaves free (247..254: PAR_FX_SEND1 ..,
@@ -368,7 +382,7 @@ static int proj_read_payload(uint32_t ver)
     memcpy(morph_par, init, KIT_LEN);
     pr_bytes(morph_par, nk < KIT_LEN ? nk : KIT_LEN);
     pr_skip(nk > KIT_LEN ? nk - KIT_LEN : 0u);
-    morph_amt = (uint8_t)pr_byte();
+    par[PAR_MORPH] = morph_amt = (uint8_t)pr_byte();   /* (0.13: the knob; the LFOs' push: morph_update) */
     kit_loaded = (uint8_t)(pr_byte() % NUM_KITS);
     kit_morph_loaded = (uint8_t)(pr_byte() % NUM_KITS);
     sq.active = (uint8_t)pr_byte();
@@ -460,6 +474,11 @@ static int proj_read_payload(uint32_t ver)
                 if (p->dir[t] >= NDIR)
                     p->dir[t] = DIR_FWD;
             }
+            if (ver >= 9u) {
+                pr_bytes(p->eu2[t], 3);
+                if (p->eu2[t][2] >= NEUOP)
+                    p->eu2[t][2] = EU_OR;
+            }
             for (k = 0; k < 4u; k++)
                 p->main[t][k] = (uint16_t)pr_u16();
             pr_bytes(bits, 8);
@@ -510,6 +529,27 @@ static int proj_read_payload(uint32_t ver)
                 uint32_t v = pr_byte();
                 if (i < NPF2SET)
                     (&pfs.drill)[i] = (uint8_t)(i == 4u ? clamp32((int32_t)v, 24, 96) : i == 7u ? v % 3u : v & 127u);
+            }
+        }
+    }
+    if (!pr.err && pr.pos + 4u <= pr.end) {
+        pr_bytes(tag, 4);
+        if (!memcmp(tag, "KGL1", 4)) {               /* 0.13: the global LFOs */
+            n = pr_byte();
+            for (i = 0; i < n; i++) {
+                uint8_t b[NGLSET] = {0};
+                uint32_t c = pr_byte();
+                pr_bytes(b, c < NGLSET ? c : NGLSET);
+                pr_skip(c > NGLSET ? c - NGLSET : 0u);
+                if (i >= NGLFO || c < NGLSET)
+                    continue;
+                gls[i].dest = (uint8_t)(b[0] < NGD ? b[0] : GD_OFF);
+                gls[i].depth = (int8_t)clamp32((int8_t)b[1], -127, 127);
+                gls[i].len = (uint8_t)(b[2] < NGLEN ? b[2] : 7u);
+                gls[i].wave = (uint8_t)(b[3] % NLFO);
+                gls[i].mode = (uint8_t)(b[4] < NGM ? b[4] : GM_FREE);
+                gls[i].trig = (uint8_t)(b[5] < NGT ? b[5] : GT_PLAY);
+                gls[i].phase = (uint8_t)(b[6] & 127u);
             }
         }
     }
@@ -654,6 +694,7 @@ static uint32_t session_sig(void)                   /* FNV-1a over what a projec
     SIG(songs, sizeof songs);
     SIG(morph_par, sizeof morph_par);
     SIG(&pfs, sizeof pfs);
+    SIG(gls, sizeof gls);
 #undef SIG
     return s;
 }
@@ -703,12 +744,13 @@ static void autosave_poll(void)
 /* 0.8: kvel, kacc: the keys' velocity and accent (seq.c key_vel, key_acc; 0, as settings before 0.8 hold: 100, 127).
  * 0.9: pdrop: a pattern's unsaved edits dropped when another plays (the LXR's way; 0, the default: kept).
  * 0.12: remote: the remote's channel 1..16, 17 off (0, as settings before 0.12 hold: 16); rknobs: its knobs (RK_*);
- * cakit: Control All moves the kit only, not the morph target too (0, the default: both) */
+ * cakit: Control All moves the kit only, not the morph target too (0, the default: both).
+ * 0.13: pmem: a button opens the page it showed last (ui.c pmem_*; 0, the default: its first) */
 typedef struct {
     uint32_t magic;
-    uint8_t palette, leds, autosave, accel, project, kvel, kacc, pdrop, remote, rknobs, cakit, rsv[1];
+    uint8_t palette, leds, autosave, accel, project, kvel, kacc, pdrop, remote, rknobs, cakit, pmem;
 } kettle_settings_t;
-static kettle_settings_t kset = {SET_MAGIC, 2, 1, 1, 1, 0xFF, 100, 127, 0, 0, 0, 0, {0}};   /* (palette 2: AMBER) */
+static kettle_settings_t kset = {SET_MAGIC, 2, 1, 1, 1, 0xFF, 100, 127, 0, 0, 0, 0, 0};   /* (palette 2: AMBER) */
 static uint8_t settings_dirty;
 static uint32_t settings_ms;
 static void settings_later(void)

@@ -44,7 +44,8 @@ enum {
     PAR_MPOS1 = PAR_MMAT1 + 6,
     PAR_MEXC1 = PAR_MPOS1 + 6,
     PAR_MTENS1 = PAR_MEXC1 + 6,
-    NPAR = PAR_MTENS1 + 6
+    PAR_LFOMODE1 = PAR_MTENS1 + 6,               /* 0.13: the LFO's mode (voices.c LM_*: TRIG HOLD ONE HALF) */
+    NPAR = PAR_LFOMODE1 + 6
 };
 #define KIT_LEN (END_OF_SOUND_PARAMETERS + NPAR - NUM_PARAMS)
 #define KIT_GAP (NUM_PARAMS - END_OF_SOUND_PARAMETERS)
@@ -117,6 +118,8 @@ static uint32_t par_max_k(uint32_t p)
         return NXMODE - 1u;
     if (p >= PAR_MODEL1 && p < PAR_MODEL1 + 6u)
         return NMODEL - 1u;
+    if (p >= PAR_LFOMODE1 && p < PAR_LFOMODE1 + 6u)
+        return NLFOMODE - 1u;
     return 127;
 }
 
@@ -130,7 +133,7 @@ static int morph_excluded(uint32_t p)            /* the outputs and the modulati
 {
     return (p >= PAR_AUDIO_OUT1 && p <= PAR_AUDIO_OUT6) || (p >= PAR_VEL_DEST_1 && p <= PAR_VEL_DEST_6) ||
            (p >= PAR_VOICE_LFO1 && p <= PAR_TARGET_LFO6) || p == PAR_FX_TYPE || p == PAR_MORPH_KIT_DEST ||
-           p == PAR_REV_TYPE || (p >= PAR_MODEL1 && p < PAR_MODEL1 + 6u);
+           p == PAR_REV_TYPE || (p >= PAR_MODEL1 && p < PAR_MODEL1 + 6u) || (p >= PAR_LFOMODE1 && p < NPAR);
 }
 
 /* the value a parameter sounds with: an automation lock, else the kit's (morphed) */
@@ -488,8 +491,12 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
     case PAR_MODEL1: case PAR_MODEL1 + 1: case PAR_MODEL1 + 2:   /* (the DRUM voices only) */
         mdl[p - PAR_MODEL1].type = (uint8_t)pick(itg < NMODEL ? itg : 0u, (uint32_t)f, mod, NMODEL);
         break;
+    case PAR_LFOMODE1: case PAR_LFOMODE1 + 1: case PAR_LFOMODE1 + 2: case PAR_LFOMODE1 + 3: case PAR_LFOMODE1 + 4:
+    case PAR_LFOMODE1 + 5:
+        lfo_mode_set(&vc[p - PAR_LFOMODE1].lfo, pick(itg < NLFOMODE ? itg : 0u, (uint32_t)f, mod, NLFOMODE));
+        break;
     default:
-        if (p >= PAR_MDECAY1 && p < NPAR && (p - PAR_MDECAY1) % 6u < 3u) {   /* the model's knobs, 0..127 */
+        if (p >= PAR_MDECAY1 && p < PAR_LFOMODE1 && (p - PAR_MDECAY1) % 6u < 3u) {   /* the model's knobs, 0..127 */
             model_t *m = &mdl[(p - PAR_MDECAY1) % 6u];
             uint8_t v = (uint8_t)(mod ? (127u * (uint32_t)f) >> 16 : itg & 127u);
             switch ((p - PAR_MDECAY1) / 6u) {

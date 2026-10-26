@@ -61,7 +61,7 @@ On the grid (HOME), hold COPY (OCT+) and press a bar key. The bar you are lookin
 
 **Per track** (ARP twice: the GENERATOR page, SELECT for the next):
 - **Generator** (KNOB 1): OFF, EUCLID, MUTATE, TURING, CELLULAR or GRIDS; KNOBS 2–4 are its settings.
-  - EUCLID: length, hits, rotation. It writes the track's steps, as the LXR's Euclid does. It starts at 0 hits over the track's length and changes nothing until the hits are turned.
+  - EUCLID: length, hits, rotation. It writes the track's steps, as the LXR's Euclid does. It starts at 0 hits over the track's length and changes nothing until the hits are turned. A second pulse (the ACTION page: Hits 2, Rotate 2) over the same length joins the first by OR, XOR, AND or SUB.
   - The others play a live copy of the track and change it as it plays. The pattern itself stays as it was until COMMIT copies the live track into it. EUCLID then MUTATE mutates the Euclid rhythm.
   - MUTATE: amount, freeze. Each time round, up to two changes: a step flipped, a step moved, a lock's (or the velocity's) value drifted.
   - TURING: length (the register, 2–16), lock (0 random … 127 repeats), density (how many steps play).
@@ -88,22 +88,24 @@ Press ARP for PERF. The white keys act while held, and SHIFT + a key latches it 
 | 15 LP~ / 16 HP~ | **Sweeps:** push the DJ filter to its low-pass or high-pass end over a bar, and back in a quarter bar after you let go |
 | Black keys | Mutes · bar keys: repeat length |
 
-The knobs have nine pages, selected with SELECT: the performance pages, then the macros, then PERFORM 2.
+The knobs have thirteen pages, selected with SELECT: the performance pages (PERFORM, MORE, MIX, MIX 2, then PERFORM 2 and its setups), then the global LFOs, then the macros.
 
 - **Perform** (the LXR's PERFORMANCE page): tempo, roll rate, morph, and **SRate**, the LXR's global sample-rate reducer (each voice's own rate times this one; part of the kit). While a roll is held, the roll knob sweeps its rate smoothly from 1/4 to 1/192.
 - **More:** DJ filter (off at the middle; left a low-pass on the master, right a high-pass), repeat length, shuffle, tape time.
 - **Mix** and **Mix 2:** the six voices' volumes, the FX bus's dry/wet and the reverb's level, to ride like the LXR's faders.
 - **Macros:** four knobs. **Macro setup:** pick a macro, its target (any parameter a step can lock), and its min and max. A max below the min turns the macro the other way. Turning a macro under REC records locks, as any knob does.
+- **Global LFO 1 and 2** (two pages each): an LFO on the whole kit's performance controls: morph, the DJ filter (both ways, or towards LP or HP), feedback push, comb, crush, jitter, cuts or pump. Depth −127 to +127; speed from 1/16 to 256 bars at the tempo; the LFO waves; mode FREE, TRIG, HOLD, ONE (one-shot) or HALF, triggered by PLAY, each pattern change or each bar (or OCT+ on its page). A one-shot saw on morph over 64 bars turns one kit into another while you play. The knobs stay where you left them; the LFOs move the sound.
 - **PERFORM 2** and its two setup pages: a second bank of key effects (drill, half time, jitter, cuts, short, pump, comb, space, crush, reverse); see the manual.
 
-Macros, the repeat length and the tape time are saved with the project.
+Macros, the repeat length, the tape time and the global LFOs are saved with the project.
 
 ## Sound shaping
 
-Each voice (the open and closed hats share one) has three extra pages. All of their settings are part of the kit, morph with it, and can be locked per step.
+Each voice (the open and closed hats share one) has four extra pages. All of their settings are part of the kit, morph with it, and can be locked per step.
 
 - **Shape** (SCL, press again after the filter): the **waveshaper** used by the voice's drive: LXR (the original curve), FOLD, CLIP, ASYM (soft on top, clipped below), RECTIFY (full-wave, an octave up). Also the **drive** itself, **bits** (OFF, then 15 down to 1; applied after the sample-rate reducer) and **tilt** (0 is flat; + brighter, − darker).
-- **Random per hit** (LFO, after the LFO's two pages): how much each hit varies in **pitch** (up to an octave either way at 127; small amounts are subtle), **decay** (half to double), **filter** cutoff and **pan**.
+- **LFO mode** (LFO, after the LFO's two pages): TRIG (the LXR's: a hit restarts it), HOLD (runs free, its value held at each hit), ONE (one cycle from a hit, then still: an envelope) or HALF, as on Elektron's machines.
+- **Random per hit** (LFO, next): how much each hit varies in **pitch** (up to an octave either way at 127; small amounts are subtle), **decay** (half to double), **filter** cutoff and **pan**.
 - **Cross mod / choke** (LFO, next): another voice as the **source** and a **mode**. DUCK turns this voice down while the source sounds, FILTER opens this voice's filter with the source's level, and RING multiplies the two. **Amount** sets how much. **Choke** puts the voice in a group from 1 to 4. A hit on any voice in the group fades the others out within 1.5 ms.
 
 Drum 1–3 also have **models** (EDIT, after the transient: MODEL), ported from Mutable Instruments **Rings** (MIT licence) to fixed point: **MODAL** (Rings' modal resonator, up to 32 modes: bars, plates, bells, drum heads), **STRING** (its string, with dispersion and a curved bridge) and **FM** (its two-operator FM voice). The knobs are Rings': **decay** (DAMPING), **bright** (BRIGHTNESS), **struct** (STRUCTURE), **position** (POSITION), plus **exciter** (0: Rings' own exciter at the hit; 127: the voice's own LXR sound, as if patched into Rings' input) and **tension** (the pitch drop of a hard hit). The voice's filter, shape and sends still apply. Rings' sympathetic strings and reverb aren't ported. `tests/rings_compare.cc` checks the port against Rings' own code. Projects from 0.8 and before load their old models (SKIN, BAR, BELL, PLATE, TUBE) as MODAL or STRING.

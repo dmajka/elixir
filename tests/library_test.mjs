@@ -37,7 +37,7 @@ const expectStatus = async (p, st, what) => {
 // 1. info
 let info = await lib.info();
 console.log(`  info: proto ${info.proto}, ${info.version}, ${info.nlog} projects, ${info.nkits} kits of ${info.kitLen}`);
-check(info.proto === 1 && info.nlog === 5 && info.nkits === 64 && info.kitLen === 371, "info");
+check(info.proto === 1 && info.nlog === 5 && info.nkits === 64 && info.kitLen === 377, "info");
 
 // 2. LXR kits in
 let kits = [];
@@ -71,7 +71,7 @@ if (existsSync(kitDir)) {
   const data = new Uint8Array(247).fill(64);
   await lib.kitPut(5, "TESTKIT", data);
   const k = await lib.kitGet(5);
-  check(k.name === "TESTKIT" && k.data.length === 371, "a kit in and out");
+  check(k.name === "TESTKIT" && k.data.length === 377, "a kit in and out");
 }
 
 // 3. backup: the session saved into project 1, read back
@@ -125,7 +125,7 @@ check((await transport.request(message(0x01, 1, [5]).map((b, i, a) => (i === a.l
 
 // 7. 0.8: the kit library: kits and sounds in, listed, read back, deleted; a backup file; the power-on scan
 {
-  const kit = new Uint8Array(371).map((_, i) => (i * 7) & 127);
+  const kit = new Uint8Array(377).map((_, i) => (i * 7) & 127);
   await lib.libPut(KL_KIT, 7, "LIBKIT", kit);
   await lib.libPut(KL_KIT, 120, "OTHER", kit.subarray(0, 247));
   const snd = Uint8Array.from([0, 1, 4, 10, 20, 30, 40]);

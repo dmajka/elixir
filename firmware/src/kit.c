@@ -38,7 +38,7 @@ static uint32_t init_kit_k(uint32_t p)
 {
     if (p >= PAR_TILT1 && p < PAR_TILT1 + 6u)
         return 64;
-    if (p >= PAR_MDECAY1 && p < NPAR) {              /* the models' knobs (0.9: Rings'): a medium decay, harmonic */
+    if (p >= PAR_MDECAY1 && p < PAR_LFOMODE1) {      /* the models' knobs (0.9: Rings'): a medium decay, harmonic */
         static const uint8_t D[6] = {64, 64, 32, 40, 0, 0};
         return D[(p - PAR_MDECAY1) / 6u];
     }
@@ -98,13 +98,21 @@ static void kit_load_morph(uint32_t n)               /* LOAD MORPH: a slot as th
     kit_loads++;
     snd_post_all();
 }
+/* 0.13: morph as it sounds (morph_amt): the knob (par[PAR_MORPH]) and the global LFOs' push (morph_mod, -255 .. 255:
+ * perform.c glfo_morph) */
+static int32_t morph_mod;
+static void morph_update(void)
+{
+    uint32_t a = (uint32_t)clamp32((int32_t)par[PAR_MORPH] + morph_mod, 0, 255);
+    if (morph_amt == a)
+        return;
+    morph_amt = (uint8_t)a;
+    snd_post_all();
+}
 static void kit_set_morph(uint32_t amt)              /* PAR_MORPH 0..255 */
 {
-    if (morph_amt == amt)
-        return;
-    morph_amt = (uint8_t)amt;
     par[PAR_MORPH] = (uint8_t)amt;
-    snd_post_all();
+    morph_update();
 }
 
 /* a voice's Out = FX BUS (the LXR's, a kit from before the sends) becomes its output STEREO and FX SEND 127: the

@@ -38,7 +38,8 @@ static struct {
     int32_t ph_s[2][6], ph_fb[2];                    /* the allpasses' states, the chains' last outputs */
     int32_t fl_d[2];                                 /* the flanger's delay at the block's end, samples Q16 */
     uint32_t fl_w;                                   /* .. its write index */
-    uint8_t freeze, push;                            /* PERF: FREEZE (the delay loops), FB PUSH (perform.c) */
+    uint8_t freeze;                                  /* PERF: FREEZE (the delay loops) */
+    int32_t push;                                    /* .. FB PUSH, 0 .. 65536 (0.13: the global LFOs' amount) */
 } fx;
 
 /* ----------------------------------------------------- fixed log / exp --- */
@@ -329,7 +330,7 @@ static void fx_delay(void)                           /* Delay_process / Delay_pr
 {
     uint32_t i, mask = delay_mask(), half = FXBUF_SIZE >> 1;
     int pp = fx.delay_type != DELAY_NORMAL, st = fx_stereo();
-    int32_t *side = fx_side(), fb = fx.push ? 62259 : fx.d_fb;   /* (FB PUSH: 0.95) */
+    int32_t *side = fx_side(), fb = fx.d_fb + (int32_t)(((int64_t)(62259 - fx.d_fb) * fx.push) >> 16);   /* (FB PUSH) */
     for (i = 0; i < BLOCK; i++) {
         int32_t ol, orr;
         if (fx.d_interp <= 0) {
@@ -408,7 +409,8 @@ static void fx_out(uint32_t c, uint32_t i, int32_t y)   /* a channel's sample of
 static void fx_phaser(void)
 {
     uint32_t i, c, k, nc = fx_stereo() ? 2u : 1u;
-    int32_t fb = fx.push ? 58982 : (int32_t)(((int64_t)fx.p[2] * 58982) >> 16);   /* Q16, 0 .. 0.9 */
+    int32_t fb = (int32_t)(((int64_t)fx.p[2] * 58982) >> 16);   /* Q16, 0 .. 0.9 */
+    fb += (int32_t)(((int64_t)(58982 - fb) * fx.push) >> 16);   /* (FB PUSH: to the most) */
     mod_lfo_step();
     for (c = 0; c < nc; c++) {
         /* the corner: 100 Hz x 2^(centre x 5 + depth x 3 x sin); w = 2 pi f / FS (Q16), a = (1 - w) / (1 + w) */
@@ -437,8 +439,8 @@ static void fx_flanger(void)
 {
     uint32_t i, c, nc = fx_stereo() ? 2u : 1u;
     int32_t fb = (int32_t)(((int64_t)(fx.p[2] - 32768) * 117965) >> 16);   /* Q16, -0.9 .. 0.9 */
-    if (fx.push)                                     /* (FB PUSH: the most, on the side it was) */
-        fb = fb < 0 ? -58982 : 58982;
+    if (fx.push)                                     /* (FB PUSH: to the most, on the side it was) */
+        fb += (int32_t)(((int64_t)((fb < 0 ? -58982 : 58982) - fb) * fx.push) >> 16);
     int32_t dmax = 573 + (int32_t)(((int64_t)fx.p[3] * 28738) >> 16);       /* Q6 samples: 0.2 .. 10 ms */
     mod_lfo_step();
     for (c = 0; c < nc; c++) {

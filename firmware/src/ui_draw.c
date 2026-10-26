@@ -150,6 +150,8 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
             put_str(b + str_len(b), A[ui.action < NACT ? ui.action : 0], n - str_len(b));
         } else if (ui.page % NEUCLID == PG_ACTION && shown_pat()->gen[ui.track][0] == GEN_GRIDS) {
             put_str(b, "ACTION / GRIDS MAP", n);
+        } else if (ui.page % NEUCLID == PG_ACTION && shown_pat()->gen[ui.track][0] == GEN_EUCLID) {
+            put_str(b, "ACTION / EUCLID 2", n);
         } else {
             put_str(b, EUCLID_TITLE[ui.page % NEUCLID], n);
         }
@@ -491,6 +493,14 @@ static void draw_perf(int32_t y0)
     if (tape_q16 < 65536u) {
         cv_text(6, 98, &AF_S, "TAPE", T_REC);
         cv_rect(44, 102, (int32_t)(tape_q16 * 186u >> 16), 4, T_REC);
+    } else if (glfo_page() >= 0) {                   /* 0.13: the global LFOs as they move */
+        for (i = 0; i < NGLFO; i++) {
+            int32_t x = 6 + (int32_t)i * 118;
+            int on = gls[i].dest != GD_OFF && gls[i].depth;
+            cv_text(x, 98, &AF_S, i ? "L2" : "L1", (int32_t)i == glfo_page() ? T_THEME : T_MID);
+            cv_rect(x + 20, 102, 90, 4, T_SURF);
+            cv_rect(x + 20, 102, (int32_t)((uint32_t)gl.out[i] * 90u >> 16), 4, on ? T_ACCENT : T_DIM);
+        }
     }
     b[0] = 0;
     for (i = 0; i < NPF2; i++)                       /* what is on, by name */
@@ -503,6 +513,8 @@ static void draw_perf(int32_t y0)
         cv_text(6, 112, &AF_S, "SHIFT + KEY: LATCH (AGAIN: OFF)", T_MID);
     else if (b[0])
         cv_text_fit(6, 112, &AF_S, b, T_ACCENT, T_BG, 228);
+    else if (glfo_page() >= 0)
+        cv_text(6, 112, &AF_S, "OCT+: TRIGGER THIS LFO", T_MID);
     else
         cv_text(6, 112, &AF_S, "BLACK: MUTE  BAR KEYS: REPEAT", T_MID);
 }
@@ -954,6 +966,13 @@ static void draw_config_help(int32_t y0)
         cv_text(10, 72, &AF_S, "KIT ONLY: the kit alone (full morph:", T_TEXT);
         cv_text(10, 86, &AF_S, "nothing heard, as the LXR's knobs)", T_TEXT);
         break;
+    case 9:                                          /* 0.13: page memory */
+        cv_text(10, 8, &AF_S, "LAST PAGE: a button opens the page", T_TEXT);
+        cv_text(10, 22, &AF_S, "it showed when you left it (SEQ, FX,", T_TEXT);
+        cv_text(10, 36, &AF_S, "ARP, GLO, the sound buttons).", T_TEXT);
+        cv_text(10, 54, &AF_S, "Pressed again, it moves on as always.", T_TEXT);
+        cv_text(10, 72, &AF_S, "NO: the first page, every time.", T_MID);
+        break;
     default:
         cv_text(10, 8, &AF_S, "LEDS: OFF / LOW / HIGH glow", T_TEXT);
         cv_text(10, 22, &AF_S, "AUTOSAVE: the session, when stopped", T_TEXT);
@@ -1032,6 +1051,9 @@ static void draw_body(void)
         s = sig_add(s, sq.drill | ui.drill_latch << 8);
         s = sig_add(s, sq.roll | ui.roll_latch << 8 | seq_mutes() << 16 | ui.shift << 24);
         s = sig_add(s, pfs.repeat | ui.track << 4 | (uint32_t)(pf.dj_d + 65536) >> 10 << 8 | (tape_q16 >> 11) << 20);
+        if (glfo_page() >= 0)                        /* (0.13: the LFOs' bars, which page) */
+            s = sig_add(s, (uint32_t)gl.out[0] >> 11 | (uint32_t)gl.out[1] >> 11 << 8 | ui.page << 16 |
+                               (uint32_t)gls[0].dest << 20 | (uint32_t)gls[1].dest << 24);
     } else if (ui.shift && !ui.clear_open) {
         fn = draw_shift_legend;
         s = 1;
@@ -1156,6 +1178,15 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_RCH: put_str(b, "Channel", n); return;
     case VP_RKNOBS: put_str(b, "Knobs", n); return;
     case VP_CAKIT: put_str(b, "Morph", n); return;
+    case VP_PMEM: put_str(b, "Last page", n); return;
+    case VP_EH2: put_str(b, "Hits 2", n); return;
+    case VP_ER2: put_str(b, "Rotate 2", n); return;
+    case VP_EOP: put_str(b, "Join", n); return;
+    case VP_GL ... VP_GL_LAST: {
+        static const char *const N[NGLSET] = {"Dest", "Depth", "Speed", "Wave", "Mode", "Trig", "Phase"};
+        put_str(b, N[(p - VP_GL) % NGLSET], n);
+        return;
+    }
     case VP_TRACK_VOL: put_str(b, "Volume", n); return;
     case VP_MASTER: put_str(b, "Master", n); return;
     case VP_DJ: put_str(b, "DJ filter", n); return;
@@ -1326,6 +1357,51 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
     case VP_RCH: if (v) put_int(b, (int32_t)v); else put_str(b, "OFF", n); return;
     case VP_RKNOBS: put_str(b, v == RK_ABS ? "ABS" : v == RK_REL ? "REL" : "PICKUP", n); return;
     case VP_CAKIT: put_str(b, v ? "KIT ONLY" : "BOTH KITS", n); return;
+    case VP_PMEM: put_str(b, v ? "YES" : "NO", n); return;
+    case VP_GL ... VP_GL_LAST:
+        switch ((p - VP_GL) % NGLSET) {
+        case 0: {
+            static const char *const D[NGD] = {"OFF", "MORPH", "FILTER", "LP", "HP", "FB PUSH", "COMB", "CRUSH",
+                                               "JITTER", "CUTS", "PUMP"};
+            put_str(b, D[v < NGD ? v : 0], n);
+            return;
+        }
+        case 1:
+            if (v > 127u)
+                b[0] = '+';
+            put_int(b + (v > 127u), (int32_t)v - 127);
+            return;
+        case 2: {
+            uint32_t l = GL_LEN[v < NGLEN ? v : 0];
+            if (l < 16u) {
+                put_str(b, "1/", n);
+                put_int(b + 2, (int32_t)(16u / l));
+            } else {
+                put_int(b, (int32_t)(l / 16u));
+                put_str(b + str_len(b), l == 16u ? " BAR" : " BARS", n - str_len(b));
+            }
+            return;
+        }
+        case 3: put_str(b, L_LFOW[v % NLFO], n); return;
+        case 4: {
+            static const char *const M[NGM] = {"FREE", "TRIG", "HOLD", "ONE", "HALF"};
+            put_str(b, M[v < NGM ? v : 0], n);
+            return;
+        }
+        case 5: {
+            static const char *const T[NGT] = {"PLAY", "PATTERN", "BAR"};
+            put_str(b, T[v < NGT ? v : 0], n);
+            return;
+        }
+        default: put_int(b, (int32_t)v); return;
+        }
+    case VP_EH2: if (v) put_int(b, (int32_t)v); else put_str(b, "OFF", n); return;
+    case VP_ER2: put_int(b, (int32_t)v); return;
+    case VP_EOP: {
+        static const char *const O[NEUOP] = {"OR", "XOR", "AND", "SUB"};
+        put_str(b, O[v < NEUOP ? v : 0], n);
+        return;
+    }
     case VP_FX_SUB:
         put_str(b, fx.type == FX_DRIVE ? L_DIST[v % 3u] : fx.type == FX_RING ? L_WAVE[v % NWAVE]
                    : fx.type == FX_COMP ? L_RATIO[v % 6u] : fx.type == FX_DELAY ? L_DELAY[v & 1u] : "-", n);

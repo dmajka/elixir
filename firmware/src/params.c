@@ -68,7 +68,8 @@ static const char *const L_CHOKE[] = {"OFF", "1", "2", "3", "4"};
 static const char *const L_MODEL[] = {"LXR", "MODAL", "STRING", "FM"};   /* (0.9: Rings' models, rings.c) */
 static const char *const L_BITS[] = {"OFF", "15", "14", "13", "12", "11", "10", "9", "8", "7", "6", "5", "4", "3",
                                      "2", "1"};
-enum { MENU_REV_MODEL = 27, MENU_SHAPE, MENU_XMODE, MENU_CHOKE, MENU_BITS, MENU_MODEL };   /* (Kettle's, after LXR's) */
+static const char *const L_LFOMODE[] = {"TRIG", "HOLD", "ONE", "HALF"};   /* (0.13: voices.c LM_*) */
+enum { MENU_REV_MODEL = 27, MENU_SHAPE, MENU_XMODE, MENU_CHOKE, MENU_BITS, MENU_MODEL, MENU_LFOMODE };   /* (Kettle's) */
 #define LIST(a) {a, sizeof a / sizeof a[0]}
 static const struct { const char *const *s; uint8_t n; } MENUS[] = {
     [MENU_FILTER] = LIST(L_FILTER), [MENU_WAVEFORM] = LIST(L_WAVE), [MENU_AUDIO_OUT] = LIST(L_OUT),
@@ -79,6 +80,7 @@ static const struct { const char *const *s; uint8_t n; } MENUS[] = {
     [MENU_PAT_MODE] = LIST(L_PATMODE), [MENU_STEP_FLAM] = LIST(L_FLAM), [MENU_AUDIO_OUT_FX] = LIST(L_OUT),
     [MENU_REV_MODEL] = LIST(L_REVMODEL), [MENU_SHAPE] = LIST(L_SHAPE), [MENU_XMODE] = LIST(L_XMODE),
     [MENU_CHOKE] = LIST(L_CHOKE), [MENU_BITS] = LIST(L_BITS), [MENU_MODEL] = LIST(L_MODEL),
+    [MENU_LFOMODE] = LIST(L_LFOMODE),
 };
 static const char *const VOICE_NAME[NTRACK] = {"DRUM 1", "DRUM 2", "DRUM 3", "SNARE", "CYMBAL", "CL HAT", "OP HAT"};
 static const char *const VOICE_SHORT[NTRACK] = {"D1", "D2", "D3", "SN", "CY", "CH", "OH"};
@@ -110,6 +112,7 @@ static const struct { uint16_t first; uint8_t n; uint16_t dtype; const char *nm[
     {PAR_MPOS1, 6, DTYPE_0B127, {"Position", "Model", "mps", "Position"}},
     {PAR_MEXC1, 6, DTYPE_0B127, {"Exciter", "Model", "mex", "Exciter"}},
     {PAR_MTENS1, 6, DTYPE_0B127, {"Tension", "Model", "mtn", "Tension"}},
+    {PAR_LFOMODE1, 6, DTYPE_MENU | MENU_LFOMODE << 8, {"Mode", "LFO", "lfm", "LFO mode"}},
 };
 static uint32_t par_k(uint32_t p)                    /* its row in K_PARS (p >= NUM_PARAMS) */
 {

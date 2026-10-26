@@ -307,10 +307,12 @@ static void phase2(void)
     run_ms(40);
     check(autodest_to_par(lock_get(&pat[sq.active], 0, 6, 0)) == PAR_TILT1 ||
           autodest_to_par(lock_get(&pat[sq.active], 0, 6, 1)) == PAR_TILT1, "a step locks the tilt");
-    press(B_LFO);                                     /* LFO, its second half, then RANDOM */
+    press(B_LFO);                                     /* LFO, its second half, LFO MODE (0.13), then RANDOM */
     press(B_LFO);
     press(B_LFO);
-    check(ui.sect == S_RANDOM, "LFO three times: RANDOM");
+    check(ui.sect == S_LFOM, "LFO three times: LFO MODE");
+    press(B_LFO);
+    check(ui.sect == S_RANDOM, "LFO four times: RANDOM");
     turn(EN_K1, 30);
     shot("random");
     press(B_LFO);
@@ -510,8 +512,8 @@ static void phase3(void)
         turn(EN_ALGO, -3);
     }
     /* MACROS: M1 on D1's decay between 10 and 100; turned under REC it records a lock */
-    turn(EN_SELECT, 5);
-    check(ui.page == 5, "PERF: MACRO SETUP");
+    turn(EN_SELECT, (int32_t)PG_MACRO + 1);
+    check(ui.page == PG_MACRO + 1u, "PERF: MACRO SETUP");
     kset.accel = 0;                                   /* (exact detents) */
     turn(EN_K2, (int32_t)lock_idx_of(PAR_VELOD1));
     check(pfs.m[0].par == PAR_VELOD1, "MACRO SETUP: the target");
@@ -1184,7 +1186,7 @@ static void phase5c(void)
     pat_backup = *p;
     goto_mode(B_ARP, M_PERF);
     turn(EN_SELECT, (int32_t)PG_PERF2);
-    check(ui.page == PG_PERF2 && perf_bank2(), "PERFORM 2: the seventh PERF page");
+    check(ui.page == PG_PERF2 && perf_bank2(), "PERFORM 2: the fifth PERF page");
     /* HALF: the ticks at half the rate */
     start_now();
     t0 = sq.ticks;
@@ -1696,12 +1698,264 @@ static void grids_test(void)
 }
 
 
+/* ------------------------------------------------------ Phase 14 (0.13) --- */
+/* the LFO's modes, the global LFOs, a button's last page, Euclid's second pulse */
+static void phase14(void)
+{
+    pattern_t *p = &pat[0];
+    uint16_t pp[4];
+    uint32_t i, ok, pg, np, ph;
+    int32_t lo, hi;
+    char b[40];
+    lfo_t *l = &vc[0].lfo;
+    p4_reset();
+    sq.muted = 0;
+    kset.accel = 0;                                  /* (exact detents) */
+    black(0);
+    /* 14d: Euclid's second pulse, on the ACTION page; joined OR, XOR, AND, SUB */
+    goto_mode(B_ARP, M_EUCLID);
+    turn(EN_K1, 1);
+    turn(EN_K3, 4);
+    check(p->gen[0][0] == GEN_EUCLID && p->main[0][0] == 0x1111u, "EUCLID: 4 hits");
+    turn(EN_SELECT, 1);
+    page_params(pp);
+    title_text(b, sizeof b, &pg, &np);
+    check(pp[1] == VP_EH2 && pp[2] == VP_ER2 && pp[3] == VP_EOP && !strcmp(b, "ACTION / EUCLID 2"),
+          "ACTION with EUCLID: Hits 2, Rotate 2, Join");
+    turn(EN_K2, 3);
+    check(p->main[0][0] == (0x1111u | 0x0841u), "EUCLID 2: 3 hits OR'd in");
+    shot("euclid2");
+    turn(EN_K4, 1);
+    check(p->main[0][0] == (0x1111u ^ 0x0841u), "EUCLID 2: XOR");
+    turn(EN_K4, 1);
+    check(p->main[0][0] == 0x0001u, "EUCLID 2: AND");
+    turn(EN_K4, 1);
+    check(p->main[0][0] == 0x1110u, "EUCLID 2: SUB");
+    turn(EN_K3, 2);
+    check(p->main[0][0] == (0x1111u & ~0x2104u), "EUCLID 2: rotated");
+    {
+        int rc = proj_save(1, "EU2     ");
+        p->eu2[0][0] = p->eu2[0][1] = p->eu2[0][2] = 0;
+        rc |= proj_load(1);
+        p = &pat[0];
+        check(!rc && p->eu2[0][0] == 3 && p->eu2[0][1] == 2 && p->eu2[0][2] == EU_SUB,
+              "EUCLID 2: saved with the project (version 9)");
+    }
+    turn(EN_K2, -3);
+    check(p->eu2[0][0] == 0 && p->main[0][0] == 0x1111u, "EUCLID 2: Hits 2 at 0, the first alone");
+    seq_clear_track(0, p);
+    sq.gsync = 0x7F;
+
+    /* 14a: the LFO's modes (D1's LFO; RETRIGGER off: its own hits in HOLD, ONE, HALF) */
+    par_set(PAR_WAVE_LFO1, LFO_SAW_UP);
+    par_set(PAR_FREQ_LFO1, 127);
+    par_set(PAR_SYNC_LFO1, 0);
+    par_set(PAR_RETRIGGER_LFO1, 0);
+    par_set(PAR_LFOMODE1, LM_TRIG);
+    run_ms(10);
+    ph = l->phase;
+    voice_trigger(0, 100, SEQ_DEFAULT_NOTE);
+    check(l->phase == ph, "TRIG, RETRIGGER off: free, its own hit no restart");
+    par_set(PAR_LFOMODE1, LM_ONE);
+    run_ms(10);
+    ph = l->phase;
+    run_ms(50);
+    check(l->mode == LM_ONE && !l->run && l->phase == ph && ph == l->offset, "ONE: still at the offset until a hit");
+    voice_trigger(0, 100, SEQ_DEFAULT_NOTE);
+    check(l->run && !l->gone && l->phase == l->offset, "ONE: a hit starts it from the offset");
+    run_ms(3000);
+    check(!l->run && l->gone == 0xFFFFFFFFu && l->phase == l->offset - 1u, "ONE: one cycle, then still at its end");
+    par_set(PAR_LFOMODE1, LM_HALF);
+    run_ms(10);
+    voice_trigger(0, 100, SEQ_DEFAULT_NOTE);
+    run_ms(3000);
+    check(!l->run && l->gone == 0x80000000u, "HALF: half a cycle, then still");
+    par_set(PAR_LFOMODE1, LM_HOLD);
+    run_ms(10);
+    lo = l->hold;
+    ph = l->phase;
+    run_ms(37);
+    check(l->hold == lo && l->phase != ph, "HOLD: runs, its value held");
+    voice_trigger(0, 100, SEQ_DEFAULT_NOTE);
+    check(l->hold == lfo_wave(l, l->phase) && l->hold != lo, "HOLD: a hit takes its value then");
+    goto_mode(B_LFO, M_SOUND);
+    press(B_LFO);
+    press(B_LFO);
+    check(ui.sect == S_LFOM, "LFO MODE: the LFO button's third page");
+    turn(EN_K1, -3);
+    check(par[PAR_LFOMODE1] == LM_TRIG, "LFO MODE: back to TRIG by its knob");
+    shot("lfo-mode");
+
+    /* 14b: the global LFOs. MORPH by a one-shot saw over a bar from PLAY: the knob stays, the sound moves */
+    p4_reset();
+    kit_set_morph(0);
+    memset(gls, 0, sizeof gls);
+    gls[0].dest = GD_MORPH;
+    gls[0].depth = 127;
+    gls[0].len = 4;                                  /* (1 bar) */
+    gls[0].wave = LFO_SAW_UP;
+    gls[0].mode = GM_ONE;
+    gls[0].trig = GT_PLAY;
+    gls[1].len = 4;
+    gls[1].wave = LFO_SAW_UP;
+    run_ms(50);
+    check(morph_amt == 0 && !gl.l[0].run, "GLOBAL LFO ONE: waiting for PLAY");
+    start_now();
+    to_tick(192);
+    run_ms(20);
+    check(morph_amt > 100 && morph_amt < 160 && par[PAR_MORPH] == 0, "GLOBAL LFO: morph halfway at half a bar, knob at 0");
+    to_tick(384 + 96);
+    run_ms(20);
+    check(morph_amt >= 250 && !gl.l[0].run, "GLOBAL LFO ONE: morph to the end, then still");
+    kit_set_morph(100);
+    run_ms(20);
+    check(morph_amt == 255 && vp_get(PAR_MORPH) == 100, "GLOBAL LFO: from where the morph knob is");
+    gls[0].depth = -127;
+    run_ms(20);
+    check(morph_amt == 0, "GLOBAL LFO: a negative depth pulls morph down");
+    seq_stop_now();
+    kit_set_morph(0);
+    /* the speed: FREE, a bar at 120 BPM is 2 s; LFO 2 (no destination) runs the same */
+    gls[0].dest = GD_OFF;
+    gls[0].mode = GM_FREE;
+    run_ms(10);
+    ph = gl.l[0].phase;
+    run_ms(1000);
+    ph = gl.l[0].phase - ph;
+    check(ph > 0x7A000000u && ph < 0x86000000u, "GLOBAL LFO: a 1-bar cycle in 2 s at 120 BPM");
+    gls[0].len = NGLEN - 1u;                         /* (256 bars: about 8.5 minutes) */
+    run_ms(10);
+    ph = gl.l[0].phase;
+    run_ms(1000);
+    ph = gl.l[0].phase - ph;
+    check(ph > 7800000u && ph < 8900000u, "GLOBAL LFO: 256 bars, 1/512 of a cycle a second");
+    /* FILTER: the DJ filter both ways from its knob */
+    gls[0].dest = GD_FILTER;
+    gls[0].depth = 127;
+    gls[0].len = 0;                                  /* (1/16) */
+    lo = hi = 0;
+    for (i = 0; i < 200u; i++) {
+        run_ms(1);
+        lo = pf.dj_d < lo ? pf.dj_d : lo;
+        hi = pf.dj_d > hi ? pf.dj_d : hi;
+    }
+    check(lo < -50000 && hi > 50000 && pf.dj == 64, "GLOBAL LFO FILTER: the DJ filter both ways, its knob unmoved");
+    /* the effects: COMB and CRUSH by the LFO, at most as the key; FB PUSH */
+    gls[0].dest = GD_COMB;
+    gls[1].dest = GD_PUSH;
+    gls[1].depth = -127;
+    gls[1].wave = LFO_SAW_UP;
+    gls[1].len = 0;
+    ok = 0;
+    for (i = 0; i < 200u; i++) {
+        run_ms(1);
+        ok |= (gl.amt[GD_COMB] > 0 && gl.amt[GD_COMB] < 65536) << 0 | (fx.push > 0 && fx.push < 65536) << 1;
+    }
+    check(ok == 3u && !(pf.on & (1u << PF_COMB)), "GLOBAL LFO: COMB and FB PUSH come in by the LFO, no key");
+    /* HOLD, triggered each BAR: still within a bar */
+    gls[1].dest = GD_OFF;
+    gls[0].dest = GD_CRUSH;
+    gls[0].wave = LFO_SAW_UP;
+    gls[0].mode = GM_HOLD;
+    gls[0].trig = GT_BAR;
+    start_now();
+    to_tick(40);
+    lo = gl.out[0];
+    to_tick(300);
+    hi = gl.out[0];
+    to_tick(384 + 40);
+    check(lo == hi && gl.out[0] != lo, "GLOBAL LFO HOLD: its value held through a bar, a new one at the next");
+    seq_stop_now();
+    /* the pages, OCT+ to trigger, saved with the project */
+    goto_mode(B_ARP, M_PERF);
+    turn(EN_SELECT, (int32_t)PG_GLFO);
+    page_params(pp);
+    title_text(b, sizeof b, &pg, &np);
+    check(pp[0] == GLV(0, 0) && pp[3] == GLV(0, 3) && !strcmp(b, "GLOBAL LFO 1") && !perf_bank2(),
+          "PERF: GLOBAL LFO 1's page (DEST DEPTH SPEED WAVE), the first bank's keys");
+    turn(EN_K1, -20);
+    turn(EN_K1, 1);
+    turn(EN_K2, 10);
+    check(gls[0].dest == GD_MORPH && gls[0].depth == 127, "GLOBAL LFO: DEST and DEPTH by the knobs");
+    turn(EN_K2, -10);
+    check(gls[0].depth == 117, "GLOBAL LFO: DEPTH down");
+    turn(EN_SELECT, 1);
+    turn(EN_K1, -10);
+    turn(EN_K1, 3);
+    check(gls[0].mode == GM_ONE, "GLOBAL LFO 1: MODE ONE");
+    gl.l[0].gone = 0xFFFFFFFFu;
+    gl.l[0].run = 0;
+    press(B_OCTUP);
+    check(gl.l[0].run && !strcmp(ui.msg, "LFO 1 TRIGGERED") && !ui.copy, "OCT+ on its page: the LFO again");
+    shot("global-lfo");
+    {
+        int rc;
+        gls[1].dest = GD_JITTER;
+        gls[1].depth = -40;
+        gls[1].len = 9;
+        gls[1].phase = 33;
+        rc = proj_save(1, "GLFO    ");
+        memset(gls, 0, sizeof gls);
+        rc |= proj_load(1);
+        check(!rc && gls[0].dest == GD_MORPH && gls[0].mode == GM_ONE && gls[0].depth == 117 &&
+              gls[1].dest == GD_JITTER && gls[1].depth == -40 && gls[1].len == 9 && gls[1].phase == 33,
+              "GLOBAL LFOs: saved with the project");
+    }
+    memset(gls, 0, sizeof gls);
+    run_ms(20);
+    kit_set_morph(0);
+
+    /* 14c: CONFIG BUTTONS, Last page: each button opens where it was left */
+    goto_mode(B_HOME, M_HOME);
+    press(B_FX);
+    turn(EN_SELECT, 2);
+    press(B_HOME);
+    press(B_FX);
+    check(ui.mode == M_FX && ui.page == 0, "Last page NO: FX opens on its first page");
+    kset.pmem = 1;
+    turn(EN_SELECT, 2);
+    press(B_HOME);
+    press(B_FX);
+    check(ui.mode == M_FX && ui.page == 2, "Last page YES: FX opens where it was left");
+    goto_mode(B_GLO, M_CONFIG);
+    turn(EN_SELECT, (int32_t)NCONFIG - 1 - (int32_t)ui.page);
+    page_params(pp);
+    check(ui.page == NCONFIG - 1u && pp[0] == VP_PMEM, "CONFIG: BUTTONS, the last page");
+    shot("config-buttons");
+    press(B_FX);
+    press(B_GLO);
+    check(ui.mode == M_CONFIG && ui.page == NCONFIG - 1u, "GLO: back to CONFIG's last page");
+    press(B_GLO);
+    check(ui.mode == M_SOUND && ui.sect == S_MIX, "GLO again: round to MIX as before");
+    goto_mode(B_LFO, M_SOUND);
+    while (ui.sect != S_LFOM)
+        press(B_LFO);
+    press(B_FX);
+    press(B_LFO);
+    check(ui.mode == M_SOUND && ui.sect == S_LFOM, "LFO: back to LFO MODE");
+    press(B_LFO);
+    check(ui.sect == S_RANDOM, "LFO again: on as before");
+    goto_mode(B_ARP, M_EUCLID);
+    turn(EN_SELECT, 2 - (int32_t)ui.page);
+    press(B_HOME);
+    press(B_ARP);
+    check(ui.mode == M_EUCLID && ui.page == 2, "ARP: back to the generator's TRACK page");
+    press(B_ARP);
+    check(ui.mode == M_PERF, "ARP again: PERF");
+    kset.pmem = 0;
+    press(B_HOME);
+    press(B_FX);
+    check(ui.page == 0, "Last page NO again: the first page");
+    goto_mode(B_HOME, M_HOME);
+}
+
 /* ------------------------------------------------------- Phase 9 (0.8) --- */
 /* 9b, 9g: PERF's pages (the performance ones, then the macros, then PERFORM 2), MIX, the global sample rate */
 static void phase9_perf(void)
 {
-    static const char *const T[NPERF] = {"PERFORM", "PERFORM: MORE", "PERFORM: MIX", "PERFORM: MIX 2", "MACROS",
-                                         "MACRO SETUP", "PERFORM 2", "PERFORM 2: SETUP", "PERFORM 2: SETUP 2"};
+    static const char *const T[NPERF] = {"PERFORM", "PERFORM: MORE", "PERFORM: MIX", "PERFORM: MIX 2", "PERFORM 2",
+                                         "PERFORM 2: SETUP", "PERFORM 2: SETUP 2", "GLOBAL LFO 1", "GLOBAL LFO 1: MODE",
+                                         "GLOBAL LFO 2", "GLOBAL LFO 2: MODE", "MACROS", "MACRO SETUP"};
     pattern_t *p = &pat[0];
     uint16_t kp[4];
     uint32_t i, ok = 1, d0, d1;
@@ -1711,10 +1965,10 @@ static void phase9_perf(void)
         uint32_t pg, np;
         char b[40];
         title_text(b, sizeof b, &pg, &np);
-        ok &= !strcmp(b, T[i]) && pg == i && (i >= PG_PERF2) == (uint32_t)perf_bank2();
+        ok &= !strcmp(b, T[i]) && pg == i && (i >= PG_PERF2 && i < PG_GLFO) == (uint32_t)perf_bank2();
         turn(EN_SELECT, 1);
     }
-    check(ok, "PERF: its pages in order, PERFORM 2's bank last");
+    check(ok, "PERF: its pages in order, PERFORM 2's bank after the performance pages");
     turn(EN_SELECT, -(int32_t)NPERF);
     page_params(kp);
     check(kp[0] == PAR_BPM && kp[1] == PAR_ROLL && kp[2] == PAR_MORPH && kp[3] == PAR_VOICE_DECIMATION_ALL,
@@ -3075,6 +3329,7 @@ int main(int argc, char **argv)
     phase11_sound_solo();
     phase13_control_all();
     phase12_remote();
+    phase14();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;
 }

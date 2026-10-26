@@ -22,10 +22,12 @@
 
 enum { M_HOME, M_PATTERN, M_SONG, M_SOUND, M_STEP, M_PERF, M_EUCLID, M_FX, M_MIXER, M_CONFIG, M_SAVE, M_LOAD,
        M_LAST, M_RECOPT, M_KEYS, NMODE };
-enum { S_OSC, S_AEG, S_MOD, S_FM, S_CLICK, S_FILTER, S_LFO, S_MIX, S_SHAPE, S_RANDOM, S_XMOD, S_MODEL, NSECT };
-#define NSPG 24                                      /* the sound pages a track can have (sections x halves) */
+enum { S_OSC, S_AEG, S_MOD, S_FM, S_CLICK, S_FILTER, S_LFO, S_MIX, S_SHAPE, S_RANDOM, S_XMOD, S_MODEL, S_LFOM,
+       NSECT };
+#define NSPG 26                                      /* the sound pages a track can have (sections x halves) */
 static const char *const SECT_NAME[NSECT] = {"OSCILLATOR", "AMP EG", "MOD EG / VELO", "FM", "TRANSIENT", "FILTER",
-                                             "LFO", "MIX", "SHAPE", "RANDOM PER HIT", "CROSS MOD / CHOKE", "MODEL"};
+                                             "LFO", "MIX", "SHAPE", "RANDOM PER HIT", "CROSS MOD / CHOKE", "MODEL",
+                                             "LFO MODE"};
 enum { IO_KIT, IO_PATTERN, IO_SONG, IO_MORPH, IO_SOUND, IO_PROJECT, IO_FACTORY, NIO };   /* (FACTORY: LOAD, a kit bank) */
 static const char *const IO_NAME[NIO] = {"KIT", "PATTERN", "SONG", "MORPH", "SOUND", "PROJECT", "FACTORY"};
 #if KETTLE_FACTORY_KITS
@@ -46,7 +48,8 @@ enum { VP_BASE = 0x200, VP_NONE = VP_BASE, VP_IO_TYPE, VP_IO_SLOT, VP_NAME_POS, 
        VP_COND, VP_RAT_N, VP_RAT_RATE, VP_RAT_FADE, VP_ACTION, VP_GMODE, VP_GA, VP_GB, VP_GC, VP_CLOCK,
        VP_GX, VP_GY, VP_GCHAOS, VP_RAT_SHAPE, VP_BSTART, VP_BPITCH, VP_ROLL,
        VP_LINK, VP_LSTART, VP_LAMT, VP_DEPTH, VP_LWHEN, VP_LTGT, VP_LEFF, VP_LWIN, VP_KOCT, VP_KVEL, VP_KACC, VP_PKEEP, VP_KB_SRC,
-       VP_IO_SRC, VP_IO_TRACK, VP_DIR, VP_RCH, VP_RKNOBS, VP_CAKIT,
+       VP_IO_SRC, VP_IO_TRACK, VP_DIR, VP_RCH, VP_RKNOBS, VP_CAKIT, VP_EH2, VP_ER2, VP_EOP, VP_PMEM,
+       VP_GL, VP_GL_LAST = VP_GL + NGLFO * NGLSET - 1,   /* 0.13: the global LFOs' settings (gls: NGLSET each) */
        VP_P2, VP_P2_LAST = VP_P2 + 7 };
 /* the ACTION page's action (OCT+ does it); 0.10: those of the track's generator (gen_acts) */
 enum { ACT_NONE, ACT_DICE, ACT_COMMIT, ACT_UNDO, ACT_RESET, NACT };
@@ -98,6 +101,9 @@ static struct {
     uint32_t knob_ms[4];
     uint32_t trig_seen[NTRACK];
     uint32_t flash_ms[NTRACK];
+    uint8_t mpage[NMODE];            /* 0.13: CONFIG BUTTONS (kset.pmem): each mode's page when it was left, */
+    uint8_t gsect[NSECT], ghalf[NSECT];   /* .. each sound button's section (+ 1, 0 none) and half, */
+    uint8_t arp_m, glo_m;            /* .. the mode ARP and GLO showed last (pmem_save) */
 } ui = {.held_step = -1, .koct = 3, .knote = 0xFF};
 
 
@@ -128,6 +134,18 @@ static void perf_apply(void)
     pf.on = ui.pf_held | ui.pf_latch | ui.rm_held | ui.rm_latch;
     sq.drill = (uint8_t)(ui.drill_held | ui.drill_latch | ui.rm_drill);
 }
+/* 0.13: the main loop, each ms: morph moved by the global LFOs (perform.c gl.morph; a new mixture at most every
+ * 8 ms: snd_post_all) */
+static void glfo_morph(void)
+{
+    static uint32_t ms;
+    int32_t m = gl.morph;
+    if (m == morph_mod || fm1_ms - ms < 8u)
+        return;
+    ms = fm1_ms;
+    morph_mod = m;
+    morph_update();
+}
 /* 0.12: the remote (remote.c): its knobs' modes, what it has seen forgotten, what came in */
 enum { RK_PICKUP, RK_ABS, RK_REL, NRK };
 static void remote_reset(void);
@@ -147,11 +165,12 @@ static uint32_t track_voice(uint32_t t) { return t < 6u ? t : 5u; }
 static uint32_t track_page(uint32_t t) { return t; }
 /* Kettle's sections (S_SHAPE ..): the first of each six per-voice parameters, by half (0: none). MODEL: the DRUM
  * voices' only */
-static const uint16_t K_PAGES[4][8] = {{PAR_SHAPE1, PAR_DRIVE1, PAR_BITS1, PAR_TILT1},
+static const uint16_t K_PAGES[5][8] = {{PAR_SHAPE1, PAR_DRIVE1, PAR_BITS1, PAR_TILT1},
                                        {PAR_RND_PITCH1, PAR_RND_DECAY1, PAR_RND_FILTER1, PAR_RND_PAN1},
                                        {PAR_XSRC1, PAR_XMODE1, PAR_XAMT1, PAR_CHOKE1},
                                        {PAR_MODEL1, PAR_MDECAY1, PAR_MDAMP1, PAR_MMAT1,
-                                        PAR_MPOS1, PAR_MEXC1, PAR_MTENS1, 0}};
+                                        PAR_MPOS1, PAR_MEXC1, PAR_MTENS1, 0},
+                                       {PAR_LFOMODE1}};   /* (0.13) */
 /* the parameter on knob k of section s's half h for track t (0: none) */
 static uint32_t sect_par(uint32_t t, uint32_t s, uint32_t h, uint32_t k)
 {
@@ -167,7 +186,7 @@ static uint32_t sect_par(uint32_t t, uint32_t s, uint32_t h, uint32_t k)
 static uint32_t sect_group(uint32_t s)
 {
     static const uint8_t G[NSECT] = {S_OSC, S_AEG, S_AEG, S_OSC, S_OSC, S_FILTER, S_LFO, S_MIX, S_FILTER, S_LFO, S_LFO,
-                                     S_OSC};
+                                     S_OSC, S_LFO};
     return G[s];
 }
 
@@ -223,24 +242,40 @@ static const uint16_t P_STEP[4][4] = {{PAR_STEP_VOLUME, PAR_STEP_NOTE, PAR_STEP_
                                       {PAR_P1_DEST, PAR_P1_VAL, PAR_P2_DEST, PAR_P2_VAL},
                                       {VP_RAT_N, VP_RAT_RATE, VP_RAT_FADE, VP_RAT_SHAPE}};
 static const char *const STEP_TITLE[4] = {"STEP", "TIMING", "LOCKS", "RATCHET"};
-/* 0.8: the performance pages first, then the macros, then PERFORM 2 (its keys the second bank). PERFORM is the LXR's
- * PERFORMANCE page (BPM, roll, morph, sample rate); MIX rides the voices' volumes as the LXR's faders */
-#define NPERF 9u
+/* 0.8: the performance pages: PERFORM is the LXR's PERFORMANCE page (BPM, roll, morph, sample rate); MIX rides the
+ * voices' volumes as the LXR's faders. 0.13: in order, the performance pages (PERFORM 2's last: its keys the second
+ * bank), the global LFOs (each: DEST DEPTH SPEED WAVE, then MODE TRIG PHASE), the macros */
+#define NPERF 13u
 #define PG_MIX 2u
-#define PG_PERF2 6u                                  /* (the pages from here: PERFORM 2, its keys the second bank) */
+#define PG_PERF2 4u                                  /* (3 pages: PERFORM 2 and its setups, its keys the second bank) */
+#define PG_GLFO 7u                                   /* (4 pages: LFO 1, its mode, LFO 2, its mode) */
+#define PG_MACRO 11u                                 /* (2 pages: MACROS, MACRO SETUP) */
+#define GLV(n, k) (VP_GL + (n) * NGLSET + (k))
 static const uint16_t P_PERF[NPERF][4] = {{PAR_BPM, PAR_ROLL, PAR_MORPH, PAR_VOICE_DECIMATION_ALL},
                                           {VP_DJ, VP_REPEAT, PAR_SHUFFLE, VP_TAPE},
                                           {PAR_VOL1, PAR_VOL2, PAR_VOL3, PAR_VOL4},
                                           {PAR_VOL5, PAR_VOL6, PAR_FX_DRY_WET, PAR_REV_LEVEL},
-                                          {VP_M1, VP_M1 + 1, VP_M1 + 2, VP_M1 + 3},
-                                          {VP_MSEL, VP_MTARGET, VP_MMIN, VP_MMAX},
                                           {PAR_BPM, PAR_ROLL, PAR_MORPH, PAR_VOICE_DECIMATION_ALL},
                                           {VP_P2, VP_P2 + 1, VP_P2 + 2, VP_P2 + 3},
-                                          {VP_P2 + 4, VP_P2 + 5, VP_P2 + 6, VP_P2 + 7}};
-static const char *const PERF_TITLE[NPERF] = {"PERFORM", "PERFORM: MORE", "PERFORM: MIX", "PERFORM: MIX 2", "MACROS",
-                                              "MACRO SETUP", "PERFORM 2", "PERFORM 2: SETUP", "PERFORM 2: SETUP 2"};
+                                          {VP_P2 + 4, VP_P2 + 5, VP_P2 + 6, VP_P2 + 7},
+                                          {GLV(0, 0), GLV(0, 1), GLV(0, 2), GLV(0, 3)},
+                                          {GLV(0, 4), GLV(0, 5), GLV(0, 6), VP_NONE},
+                                          {GLV(1, 0), GLV(1, 1), GLV(1, 2), GLV(1, 3)},
+                                          {GLV(1, 4), GLV(1, 5), GLV(1, 6), VP_NONE},
+                                          {VP_M1, VP_M1 + 1, VP_M1 + 2, VP_M1 + 3},
+                                          {VP_MSEL, VP_MTARGET, VP_MMIN, VP_MMAX}};
+static const char *const PERF_TITLE[NPERF] = {"PERFORM", "PERFORM: MORE", "PERFORM: MIX", "PERFORM: MIX 2", "PERFORM 2",
+                                              "PERFORM 2: SETUP", "PERFORM 2: SETUP 2", "GLOBAL LFO 1",
+                                              "GLOBAL LFO 1: MODE", "GLOBAL LFO 2", "GLOBAL LFO 2: MODE", "MACROS",
+                                              "MACRO SETUP"};
+/* 0.13: the global LFO a PERF page sets (0, 1), -1 none */
+static int32_t glfo_page(void)
+{
+    uint32_t g = ui.page % NPERF;
+    return ui.mode == M_PERF && g >= PG_GLFO && g < PG_GLFO + 2u * NGLFO ? (int32_t)((g - PG_GLFO) / 2u) : -1;
+}
 static int perf_mix(void) { return ui.mode == M_PERF && (ui.page % NPERF == PG_MIX || ui.page % NPERF == PG_MIX + 1u); }
-static int perf_bank2(void) { return ui.mode == M_PERF && ui.page % NPERF >= PG_PERF2; }
+static int perf_bank2(void) { return ui.mode == M_PERF && ui.page % NPERF >= PG_PERF2 && ui.page % NPERF < PG_GLFO; }
 /* 0.10: ARP's second set of pages: GENERATOR (the type, then its settings: page_params), ACTION (GRIDS: and the
  * map), TRACK, BOUNCE, LINKS, LINK SETUP */
 #define NEUCLID 6u
@@ -284,7 +319,7 @@ static const uint16_t P_MIXER[NMIXER][4] = {{PAR_VOL1, PAR_VOL2, PAR_VOL3, PAR_V
                                             {PAR_REV_SEND1 + 4, PAR_REV_SEND1 + 5, PAR_REV_LEVEL, VP_NONE}};
 static const char *const MIXER_TITLE[NMIXER / 2u] = {"MIXER: VOLUME", "MIXER: PAN", "MIXER: FX SEND",
                                                      "MIXER: REVERB SEND"};
-#define NCONFIG 9u
+#define NCONFIG 10u
 static const uint16_t P_CONFIG[NCONFIG][4] = {
     {PAR_BPM, PAR_SHUFFLE, PAR_FOLLOW, PAR_PATTERN_MODE},
     {PAR_MIDI_CHAN_GLOBAL, PAR_MIDI_FILT_TX, PAR_MIDI_FILT_RX, PAR_MIDI_ROUTING},
@@ -294,9 +329,11 @@ static const uint16_t P_CONFIG[NCONFIG][4] = {
     {PAR_MIDI_NOTE5, PAR_MIDI_NOTE6, PAR_MIDI_NOTE7, VP_NONE},
     {VP_LEDS, VP_AUTOSAVE, VP_ACCEL, VP_PALETTE},
     {VP_RCH, VP_RKNOBS, VP_NONE, VP_NONE},
-    {VP_CAKIT, VP_NONE, VP_NONE, VP_NONE}};
+    {VP_CAKIT, VP_NONE, VP_NONE, VP_NONE},
+    {VP_PMEM, VP_NONE, VP_NONE, VP_NONE}};
 static const char *const CONFIG_TITLE[NCONFIG] = {"SEQUENCER", "MIDI", "MIDI CHANNELS", "MIDI CHANNELS", "MIDI NOTES",
-                                                  "MIDI NOTES", "DEVICE", "REMOTE", "CONTROL ALL"};
+                                                  "MIDI NOTES", "DEVICE", "REMOTE", "CONTROL ALL",
+                                                  "BUTTONS"};
 static const uint16_t P_NAME[4] = {VP_NAME_POS, VP_NAME_CHAR, VP_NAME_CASE, VP_NONE};
 static const uint16_t P_SONG[4] = {VP_SONG_PAT, VP_SONG_NUM, VP_NONE, VP_NONE};
 static const uint16_t P_PATTERN[4] = {PAR_PATTERN_MODE, PAR_SHUFFLE, VP_PKEEP, VP_NONE};
@@ -351,6 +388,10 @@ static void page_params(uint16_t out[4])
             out[1] = VP_GX;
             out[2] = VP_GY;
             out[3] = VP_GCHAOS;
+        } else if (ui.page % NEUCLID == PG_ACTION && g == GEN_EUCLID) {  /* 0.13: EUCLID's second pulse */
+            out[1] = VP_EH2;
+            out[2] = VP_ER2;
+            out[3] = VP_EOP;
         }
         return;
     }
@@ -531,7 +572,7 @@ static uint32_t vp_get(uint32_t p)
     case PAR_EUKLID_LENGTH: case PAR_EUKLID_STEPS: case PAR_EUKLID_ROTATION:
         return pt->gen[ui.track][p - PAR_EUKLID_LENGTH + 1u];
     case PAR_ROLL: return sq.roll_rate;
-    case PAR_MORPH: return morph_amt;
+    case PAR_MORPH: return par[PAR_MORPH];           /* (0.13: the knob; morph_amt has the LFOs' push) */
     case PAR_AUTOM_TRACK: return sq.lane;
     case VP_TRACK_VOL: return par[PAR_VOL1 + track_voice(ui.track)];
     case VP_FX_SUB:
@@ -557,6 +598,14 @@ static uint32_t vp_get(uint32_t p)
     case VP_RCH: return kset.remote > 16u ? 0u : kset.remote ? kset.remote : 16u;   /* (0: OFF) */
     case VP_RKNOBS: return kset.rknobs;
     case VP_CAKIT: return kset.cakit;
+    case VP_PMEM: return kset.pmem;
+    case VP_GL ... VP_GL_LAST: {
+        const uint32_t n = (p - VP_GL) / NGLSET, k = (p - VP_GL) % NGLSET;
+        const uint8_t f[NGLSET] = {gls[n].dest, (uint8_t)(gls[n].depth + 127), gls[n].len, gls[n].wave, gls[n].mode,
+                                   gls[n].trig, gls[n].phase};
+        return f[k];
+    }
+    case VP_EH2: case VP_ER2: case VP_EOP: return pt->eu2[ui.track][p - VP_EH2];
     case VP_MASTER: return (uint32_t)(master_q12 >> 5);
     case VP_DJ: return pf.dj;
     case VP_REPEAT: return pfs.repeat;
@@ -682,7 +731,14 @@ static uint32_t vp_max(uint32_t p)
     case VP_PALETTE: return NPALETTES - 1u;
     case VP_RCH: return 16;
     case VP_RKNOBS: return NRK - 1u;
-    case VP_CAKIT: return 1;
+    case VP_CAKIT: case VP_PMEM: return 1;
+    case VP_GL ... VP_GL_LAST: {
+        static const uint8_t MX[NGLSET] = {NGD - 1, 254, NGLEN - 1, NLFO - 1, NGM - 1, NGT - 1, 127};
+        return MX[(p - VP_GL) % NGLSET];
+    }
+    case VP_EH2: return shown_pat()->gen[ui.track][1] ? shown_pat()->gen[ui.track][1] : 16u;
+    case VP_ER2: return (shown_pat()->gen[ui.track][1] ? shown_pat()->gen[ui.track][1] : 16u) - 1u;
+    case VP_EOP: return NEUOP - 1u;
     case VP_MASTER: case VP_DJ: case VP_TAPE: case VP_M1: case VP_M1 + 1: case VP_M1 + 2: case VP_M1 + 3: return 127;
     case VP_REPEAT: case VP_MSEL: return 3;
     case VP_MTARGET: return NUM_MOD_TARGETS - 1u + NLOCK_K;
@@ -764,20 +820,27 @@ static void vp_set(uint32_t p, uint32_t v)
     case PAR_P2_VAL: sel_step()->p2v = (uint8_t)v; return;
     case PAR_EUKLID_LENGTH:
     case PAR_EUKLID_STEPS:
-    case PAR_EUKLID_ROTATION: {
-        uint8_t *g = pt->gen[ui.track];
+    case PAR_EUKLID_ROTATION:
+    case VP_EH2: case VP_ER2: case VP_EOP: {
+        uint8_t *g = pt->gen[ui.track], *e = pt->eu2[ui.track];
         if (p == PAR_EUKLID_LENGTH) {
             g[1] = (uint8_t)v;
             if (g[2] > v)
                 g[2] = (uint8_t)v;
             if (g[3] >= v)
                 g[3] = 0;
+            if (e[0] > v)                            /* (0.13: the second pulse's too) */
+                e[0] = (uint8_t)v;
+            if (e[1] >= v)
+                e[1] = 0;
         } else if (p == PAR_EUKLID_STEPS) {
             g[2] = (uint8_t)v;
-        } else {
+        } else if (p == PAR_EUKLID_ROTATION) {
             g[3] = (uint8_t)v;
+        } else {
+            e[p - VP_EH2] = (uint8_t)v;
         }
-        if (!g[2] && p != PAR_EUKLID_STEPS)          /* 0.10: nothing written until the hits are turned */
+        if (!g[2] && !e[0] && p != PAR_EUKLID_STEPS && p != VP_EH2)   /* 0.10: nothing written until hits are turned */
             return;
         if (ui.eu_undo != ui.track + 1u) {           /* (UNDO: the track before the first turn) */
             seq_undo_save(ui.track);
@@ -838,6 +901,20 @@ static void vp_set(uint32_t p, uint32_t v)
         return;
     case VP_RKNOBS: kset.rknobs = (uint8_t)v; remote_reset(); settings_later(); return;
     case VP_CAKIT: kset.cakit = (uint8_t)v; settings_later(); return;
+    case VP_PMEM: kset.pmem = (uint8_t)v; settings_later(); return;
+    case VP_GL ... VP_GL_LAST: {
+        const uint32_t n = (p - VP_GL) / NGLSET;
+        switch ((p - VP_GL) % NGLSET) {
+        case 0: gls[n].dest = (uint8_t)v; break;
+        case 1: gls[n].depth = (int8_t)((int32_t)v - 127); break;
+        case 2: gls[n].len = (uint8_t)v; break;
+        case 3: gls[n].wave = (uint8_t)v; break;
+        case 4: gls[n].mode = (uint8_t)v; break;
+        case 5: gls[n].trig = (uint8_t)v; break;
+        default: gls[n].phase = (uint8_t)v; break;
+        }
+        return;
+    }
     case VP_NONE: case VP_MASTER: return;
     case VP_DJ: pf.dj = (uint8_t)v; return;
     case VP_REPEAT: pfs.repeat = (uint8_t)v; return;
@@ -1110,10 +1187,27 @@ static void knob_turn(uint32_t k, int32_t n)
 }
 
 /* ------------------------------------------------------------ modes --- */
+static void pmem_save(void)                          /* 0.13: where the buttons were, as this page is left */
+{
+    if (ui.mode == M_SOUND) {
+        uint32_t g = sect_group(ui.sect);
+        ui.gsect[g] = (uint8_t)(ui.sect + 1u);
+        ui.ghalf[g] = ui.half;
+        if (g == S_MIX)
+            ui.glo_m = M_SOUND;
+    } else {
+        ui.mpage[ui.mode] = ui.page;
+    }
+    if (ui.mode == M_PERF || ui.mode == M_EUCLID)
+        ui.arp_m = ui.mode;
+    if (ui.mode == M_MIXER || ui.mode == M_CONFIG)
+        ui.glo_m = ui.mode;
+}
 static void mode_set(uint32_t m)
 {
     if (ui.mode != m) {
-        ui.page = 0;
+        pmem_save();
+        ui.page = kset.pmem ? ui.mpage[m] : 0u;      /* (0.13: the page it was on, with CONFIG BUTTONS) */
         ui.io_naming = 0;
         ui.sb_open = 0;                              /* (the sound browser: what it loaded stays) */
     }
@@ -1144,14 +1238,16 @@ static void mode_set(uint32_t m)
         ui.eu_undo = 0;
     }
     ui.mode = (uint8_t)m;
+    if (ui.page >= mode_pages())
+        ui.page = 0;
     ui.clear_open = 0;
     ui.force = 1;
     bank_fix();
 }
 static void sound_open(uint32_t s, int again)        /* a section button; again: its next section */
 {
-    static const uint8_t NEXT[NSECT] = {S_FM, S_MOD, S_AEG, S_CLICK, S_MODEL, S_SHAPE, S_RANDOM, S_MIX,
-                                        S_FILTER, S_XMOD, S_LFO, S_OSC};
+    static const uint8_t NEXT[NSECT] = {S_FM, S_MOD, S_AEG, S_CLICK, S_MODEL, S_SHAPE, S_LFOM, S_MIX,
+                                        S_FILTER, S_XMOD, S_LFO, S_OSC, S_RANDOM};
     if (ui.mode == M_SOUND && again) {
         if (sect_group(ui.sect) == s) {
             uint8_t l[NSPG][2];
@@ -1172,9 +1268,15 @@ static void sound_open(uint32_t s, int again)        /* a section button; again:
             return;
         }
     }
+    if (ui.mode == M_SOUND)                          /* (another button's sections: where this one was) */
+        pmem_save();
     mode_set(M_SOUND);
     ui.sect = (uint8_t)s;
     ui.half = 0;
+    if (kset.pmem && ui.gsect[s]) {                  /* 0.13: the section and half it showed last */
+        ui.sect = (uint8_t)(ui.gsect[s] - 1u);
+        ui.half = ui.ghalf[s];
+    }
     sound_fix();
 }
 
@@ -1812,6 +1914,13 @@ static void button_down(uint32_t b)
             ui.action = 0;
             return;
         }
+        if (glfo_page() >= 0) {                      /* 0.13: OCT+ on a global LFO's page: it starts again */
+            uint32_t n = (uint32_t)glfo_page();
+            glfo_ev |= (uint8_t)(GLE_KEY << n);
+            ui_message(gls[n].mode == GM_FREE ? "FREE: NO TRIGGER (SEE MODE)" : n ? "LFO 2 TRIGGERED"
+                                                                                    : "LFO 1 TRIGGERED");
+            return;
+        }
         if (ui.mode == M_SONG) {                      /* COPY in the song: insert a row (a copy of the one above) */
             song_insert_row(sq.song, ui.song_row);
             ui_message("ROW INSERTED");
@@ -1873,7 +1982,10 @@ static void button_down(uint32_t b)
             mode_set(M_EUCLID);
             return;
         }
-        mode_set(ui.mode == M_PERF ? M_EUCLID : M_PERF);
+        if (kset.pmem && ui.mode != M_PERF && ui.mode != M_EUCLID && ui.arp_m == M_EUCLID)
+            mode_set(M_EUCLID);                      /* (0.13: the pages ARP showed last) */
+        else
+            mode_set(ui.mode == M_PERF ? M_EUCLID : M_PERF);
         if (ui.mode == M_EUCLID)
             ui.perf = 0;
         return;
@@ -1913,6 +2025,8 @@ static void button_down(uint32_t b)
             }
         } else if (ui.mode == M_MIXER) {
             mode_set(M_CONFIG);
+        } else if (kset.pmem && ui.mode != M_CONFIG && (ui.glo_m == M_MIXER || ui.glo_m == M_CONFIG)) {
+            mode_set(ui.glo_m);                      /* (0.13: the pages GLO showed last) */
         } else {
             sound_open(S_MIX, 0);
         }
@@ -1968,6 +2082,7 @@ static void ui_input(void)
     uint32_t rel, pressed = fm1_input_edges(&rel), b, k, keys = fm1_in.notes;
     uint32_t down = keys & ~ui.keys, up = ui.keys & ~keys;
     int32_t n;
+    glfo_morph();                                    /* (0.13: the global LFOs' morph) */
     if ((ui.ca || ui.ca_ask) && kit_loads != ui.ca_loads) {   /* 0.11: a kit loaded: Control All ends (kept) */
         ui.ca = ui.ca_ask = 0;
         ui.force = 1;

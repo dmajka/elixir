@@ -35,6 +35,7 @@ typedef struct {
     uint8_t len[NTRACK];                         /* 1..64 (0: 16) */
     uint8_t clk[NTRACK];                         /* the track's clock: CLK_TICKS's index (CLK_1X: as the pattern) */
     uint8_t gen[NTRACK][4];                      /* its generator: GEN_* and its three settings (seq_gen_*) */
+    uint8_t eu2[NTRACK][3];                      /* 0.13: EUCLID's second pulse: hits (0 off), rotation, EU_* */
     uint8_t dir[NTRACK];                         /* 0.10: its direction (DIR_*) */
     uint8_t bnc[NTRACK];                         /* 0.6: its bounces: start (BNC_TICKS's index) | pitch + 12 << 2 */
     uint8_t shuffle, kit;
@@ -197,6 +198,10 @@ static struct {
     uint16_t greg[NTRACK];                       /* TURING's registers */
     uint8_t gpert[NTRACK];                       /* GRIDS: this time round's perturbation (its chaos) */
 } sq;
+/* 0.13: what triggers the global LFOs (perform.c glfo_block): PLAY, a pattern change, a bar; OCT+ on LFO n's page:
+ * GLE_KEY << n */
+enum { GLE_PLAY = 1, GLE_PATTERN = 2, GLE_BAR = 4, GLE_KEY = 8 };
+static volatile uint8_t glfo_ev;
 /* 0.10: the tracks silent: muted, or not soloed while any is */
 static uint32_t seq_mutes(void) { return sq.muted | (sq.solo ? ~(uint32_t)sq.solo & ((1u << NTRACK) - 1u) : 0u); }
 
@@ -252,6 +257,7 @@ static void seq_clear_track(uint32_t t, pattern_t *p)   /* seq_clearTrack */
     p->len[t] = 16;
     p->clk[t] = CLK_1X;
     memset(p->gen[t], 0, sizeof p->gen[t]);
+    memset(p->eu2[t], 0, sizeof p->eu2[t]);
     p->bnc[t] = BNC_DEFAULT;
     p->dir[t] = DIR_FWD;
 }
@@ -835,6 +841,7 @@ static void trk_copy(pattern_t *d, const pattern_t *s, uint32_t t)
     memcpy(d->rat[t], s->rat[t], sizeof d->rat[t]);
     memcpy(d->main[t], s->main[t], sizeof d->main[t]);
     memcpy(d->gen[t], s->gen[t], sizeof d->gen[t]);
+    memcpy(d->eu2[t], s->eu2[t], sizeof d->eu2[t]);
     d->len[t] = s->len[t];
     d->clk[t] = s->clk[t];
     d->bnc[t] = s->bnc[t];
@@ -876,6 +883,7 @@ static void seq_pattern_activate(void)               /* seq_setPendingPatternAct
         pat_revert = 0;
         pat_backup = pat[sq.pending];
         sq.active = sq.pending;
+        glfo_ev |= GLE_PATTERN;
         seq_set_shuffle_from(sq.active);
         if (par[PAR_PATTERN_MODE] == 2u)             /* SKIP_NEXT_KIT_AUTOLOAD (saving to a new slot) */
             par[PAR_PATTERN_MODE] = 1;
@@ -1077,6 +1085,8 @@ static void seq_tick_one(void)
 {
     uint32_t t;
     seq_stutter();
+    if (sq.running && sq.ticks % 384u == 0u)         /* (0.13: a bar, for the global LFOs) */
+        glfo_ev |= GLE_BAR;
     seq_advance(1);
     if (!sq.running)
         return;
@@ -1119,6 +1129,7 @@ static void seq_start(int reset)                     /* seq_setRunning(1) (+ seq
         sq.stut_on = 0;
         if (sq.song_mode)
             sq.song_pos = 0xFF;                      /* (seq_nextStep advances to 0) */
+        glfo_ev |= GLE_PLAY;
     }
     sq.running = 1;
     if (!sq.sync_ext)
@@ -1331,21 +1342,35 @@ static void song_delete_row(uint32_t song, uint32_t pos)   /* seq_deleteRow */
 /* ------------------------------------------------------- Euclid --- */
 /* the Euclidean generator: n hits over len steps, evenly (Bjorklund), rotated; it rewrites the track's steps and
  * length (EuklidGenerator.c: the same rhythms, built directly). 0.10: its settings the track's (gen[t] at
- * GEN_EUCLID: length, hits, rotation), and 0 hits none */
-static void euclid_generate(uint32_t t, pattern_t *p)
+ * GEN_EUCLID: length, hits, rotation), and 0 hits none. 0.13: a second pulse over the same length (eu2[t]: hits, 0
+ * off, and rotation) joined to the first by EU_OR, EU_XOR, EU_AND or EU_SUB (the first's hits less the second's) */
+enum { EU_OR, EU_XOR, EU_AND, EU_SUB, NEUOP };
+static uint64_t euclid_bits(uint32_t len, uint32_t n, uint32_t rot)
 {
-    uint32_t len = p->gen[t][1] ? p->gen[t][1] : 16u, n = p->gen[t][2], k, rot;
     uint64_t bits = 0;
-    if (len > NUM_STEPS)
-        len = NUM_STEPS;
+    uint32_t k;
     if (n > len)
         n = len;
     for (k = 0; k < len; k++)                        /* the hits where k x n / len steps over a whole number */
         if (((k * n) % len) < n)
             bits |= 1ull << k;
-    rot = p->gen[t][3] % len;
+    rot %= len;
     if (rot)
         bits = ((bits << rot) | (bits >> (len - rot))) & (len == 64u ? ~0ull : ((1ull << len) - 1u));
+    return bits;
+}
+static void euclid_generate(uint32_t t, pattern_t *p)
+{
+    uint32_t len = p->gen[t][1] ? p->gen[t][1] : 16u, k;
+    const uint8_t *e = p->eu2[t];
+    uint64_t bits, b2;
+    if (len > NUM_STEPS)
+        len = NUM_STEPS;
+    bits = euclid_bits(len, p->gen[t][2], p->gen[t][3]);
+    if (e[0]) {
+        b2 = euclid_bits(len, e[0], e[1]);
+        bits = e[2] == EU_XOR ? bits ^ b2 : e[2] == EU_AND ? bits & b2 : e[2] == EU_SUB ? bits & ~b2 : bits | b2;
+    }
     for (k = 0; k < 4u; k++)
         p->main[t][k] = (uint16_t)(bits >> (16u * k));
     p->len[t] = (uint8_t)len;
@@ -1548,6 +1573,9 @@ static void seq_dice(uint32_t t)
     seq_undo_save(t);
     if (len > NUM_STEPS)
         len = NUM_STEPS;
+    if (p->eu2[t][0])                                /* (0.13: two pulses joined: as many hits as they made) */
+        for (k = n = 0; k < len; k++)
+            n += (uint32_t)main_on(p, t, k);
     if (n > len)
         n = len;
     for (k = 0; k < 4u; k++)

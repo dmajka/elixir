@@ -29,6 +29,9 @@ typedef struct {
     int32_t rnd;                 /* S&H, Q16 */
     uint32_t rate;               /* the rate setting 0..1 (Q16), for a tempo change */
     uint8_t wave, retrig, sync;
+    uint8_t mode, run;           /* 0.13: LM_* (Kettle's LFO MODE); ONE, HALF: still running since the hit */
+    uint32_t gone;               /* .. ONE, HALF: the phase run since the hit */
+    int32_t hold;                /* .. HOLD: the value at the hit, Q16 */
 } lfo_t;
 
 typedef struct {
@@ -99,6 +102,13 @@ static int32_t hit_rand(void)
 
 /* -------------------------------------------------------------- LFO --- */
 enum { LFO_SINE, LFO_TRI, LFO_SAW_UP, LFO_SAW_DOWN, LFO_REC, LFO_NOISE, LFO_EXP_UP, LFO_EXP_DOWN, NLFO };
+/* 0.13: the LFO's mode, as Elektron's (Kettle's LFO MODE). What restarts it is the LXR's RETRIGGER voice; in HOLD,
+ * ONE and HALF with RETRIGGER off, its own voice's hits.
+ *   TRIG  the LXR's: a hit starts the cycle again from the offset (RETRIGGER off: it runs free)
+ *   HOLD  runs free; a hit takes its value then and holds it until the next
+ *   ONE   a hit starts it from the offset, it runs one cycle and stops at its end (still until the first hit)
+ *   HALF  the same, half a cycle */
+enum { LM_TRIG, LM_HOLD, LM_ONE, LM_HALF, NLFOMODE };
 static const uint8_t SYNC_SCALE_X4[12] = {0, 1, 2, 4, 8, 12, 16, 24, 32, 48, 64, 128};   /* lfo_calcPhaseInc's scaler x 4 */
 
 static void lfo_update_inc(lfo_t *l)                 /* lfo_setFreq / lfo_setSync */
@@ -117,10 +127,8 @@ static void lfo_recalc_sync(void)
     for (i = 0; i < NVOICE; i++)
         lfo_update_inc(&vc[i].lfo);
 }
-static int32_t lfo_calc(lfo_t *l)                    /* lfo_calc: 0..1, Q16 */
+static int32_t lfo_wave(lfo_t *l, uint32_t old)      /* the wave at the phase (from old: RANDOM's draw), 0..1, Q16 */
 {
-    uint32_t old = l->phase;
-    l->phase += l->inc;
     switch (l->wave) {
     case LFO_SINE:
         return (int32_t)((uint32_t)(LXR_SINE[l->phase >> 20] + 32767) * 65536u / 65534u);
@@ -150,12 +158,58 @@ static int32_t lfo_calc(lfo_t *l)                    /* lfo_calc: 0..1, Q16 */
         return 0;
     }
 }
+static int32_t lfo_calc(lfo_t *l)                    /* lfo_calc: 0..1, Q16 */
+{
+    uint32_t old = l->phase;
+    int32_t v;
+    if (l->mode >= LM_ONE) {                         /* 0.13: ONE, HALF: to the cycle's (half's) end, then still */
+        uint32_t end = l->mode == LM_ONE ? 0xFFFFFFFFu : 0x80000000u;
+        if (l->run) {
+            uint32_t d = end - l->gone < l->inc ? end - l->gone : l->inc;
+            l->phase += d;
+            l->gone += d;
+            l->run = l->gone < end;
+        }
+    } else {
+        l->phase += l->inc;
+    }
+    v = lfo_wave(l, old);
+    return l->mode == LM_HOLD ? l->hold : v;
+}
+static void lfo_mode_set(lfo_t *l, uint32_t m)       /* 0.13: ONE, HALF wait at the offset; HOLD from its value now */
+{
+    if (l->mode == m)
+        return;
+    l->mode = (uint8_t)m;
+    l->run = 0;
+    l->gone = 0;
+    if (m >= LM_ONE)
+        l->phase = l->offset;
+    l->hold = lfo_wave(l, l->phase);
+}
+static void lfo_hit(lfo_t *l)                        /* a trigger, as its mode takes it */
+{
+    if (l->mode == LM_HOLD) {
+        l->hold = lfo_wave(l, l->phase);
+        return;
+    }
+    l->phase = l->offset;
+    if (l->mode >= LM_ONE) {
+        l->gone = 0;
+        l->run = 1;
+        if (l->wave == LFO_NOISE)                    /* (a new value each one-shot) */
+            l->rnd = (int32_t)(noise_next() >> 16);
+    }
+}
 static void lfo_retrigger(uint32_t voice)            /* a voice was triggered: the LFOs that follow it restart */
 {
     uint32_t i;
-    for (i = 0; i < NVOICE; i++)
-        if (vc[i].lfo.retrig == voice + 1u)
-            vc[i].lfo.phase = vc[i].lfo.offset;
+    for (i = 0; i < NVOICE; i++) {
+        lfo_t *l = &vc[i].lfo;
+        uint32_t src = l->retrig ? l->retrig : l->mode != LM_TRIG ? i + 1u : 0u;
+        if (src == voice + 1u)
+            lfo_hit(l);
+    }
 }
 
 /* --------------------------------------------------------- triggers --- */

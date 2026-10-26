@@ -47,6 +47,7 @@
 enum { LS_OK, LS_BAD, LS_ARGS, LS_BUSY, LS_FLASH, LS_CRC, LS_SIZE, LS_EMPTY, LS_ORDER };
 #define LIB_PROTO 1u
 #define LIB_MAX 400u                                 /* a decoded message: a whole kit (KIT_LEN) and its header */
+_Static_assert(KIT_LEN + 16u <= LIB_MAX, "LIB_MAX: a kit (KL_PUT: 13 header bytes) must fit");
 
 static void lib_send(const uint8_t *wire, uint32_t n);   /* the hook: one F0 .. F7 message to the host */
 

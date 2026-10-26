@@ -22,22 +22,29 @@ Kettle is the Erica Synths LXR-02 firmware (GPL-3.0) ported to the M-VAVE FM-1 o
 - **0.9 (Phase 10):** the physical models replaced by a fixed-point port of Mutable Instruments Rings' modal resonator, string and FM voice, checked against Rings' own code. CPU on hardware still to be measured. See *Phase 10*.
 - **0.11 (Phase 13):** Control All: OCT+ held on a sound page, a knob moves that parameter on every track, relative; letting go asks: OCT+ reverts, OCT− keeps. See *Phase 13*.
 - **0.12 (Phase 12, 12a–12e):** the remote map for an 8-column controller (Launch Control XL): CONFIG → REMOTE channel and knob mode, knob rows on CCs 8–119, buttons on notes 36–93, feedback over USB; NRPN morph and roll rate fixed. The controller templates (12f) are still to make. See *Phase 12*.
+- **0.13 (Phase 14):** the LFO's modes (TRIG, HOLD, ONE, HALF); two global LFOs on morph, the DJ filter and PERF's effects, down to 256 bars a cycle; CONFIG → BUTTONS, Last page; Euclid's second pulse (OR, XOR, AND, SUB). See *Phase 14*.
 - **MIDI:** USB and TRS in, USB out. CC/NRPN control as on the LXR; clock out always on; clock in by turning the tempo below its minimum to "MIDI".
 - **Projects:** 4 slots plus an AUTO session slot in flash, 48 KB each, sparse encoding. Format version 7 since 0.9; versions 1 to 6 still load (6's models mapped to Rings').
 - **UI:** mapped to the FM-1's keys, buttons and knobs; SHIFT legend on screen; mixer under GLO.
 - **Firmware build:** `./build.sh` makes `build/kettle.fwsc` and passes Felucca's checks.
 - **Browser emulator:** `web/emu/build.sh`, tested in Chrome, with Web MIDI in and out, including clock.
 - **First hardware run (0.5.1):** installed on a real FM-1 from V15 with the install page (`web/make_site.py`); a battery display on CONFIG; autosave no longer makes a burst of noise after a stop. See *0.5.1* below.
-- **Tests:** render_test, compare_test, library_test (the library page's code against the device's), rings_compare (the models against Rings' float code) and ui_test (88 screens; the remote map; Control All; Rings' models; PERF's pages, MIX and KEYS; the kit library and sound browser; PERFORM 2; links between tracks; bouncing ratchets and the roll sweep; the output's hush and autosave's timing; the battery display; Grids' map; clocks, conditions, ratchets, generators, bar copy; locks, patterns, project save/load, a 0.1 project, sends, reverb, sound shaping, phaser, flanger, PERF's effects and macros, autosave failure, sync in) all pass.
+- **Tests:** render_test, compare_test, library_test (the library page's code against the device's), rings_compare (the models against Rings' float code) and ui_test (92 screens; Phase 14 (LFO modes, global LFOs, Last page, Euclid 2); the remote map; Control All; Rings' models; PERF's pages, MIX and KEYS; the kit library and sound browser; PERFORM 2; links between tracks; bouncing ratchets and the roll sweep; the output's hush and autosave's timing; the battery display; Grids' map; clocks, conditions, ratchets, generators, bar copy; locks, patterns, project save/load, a 0.1 project, sends, reverb, sound shaping, phaser, flanger, PERF's effects and macros, autosave failure, sync in) all pass.
 
-**Measured resources** (from the 0.9 build)
+**Measured resources** (from the 0.13 build, 2026-10-26; build.py's numbers. The build fails below 4 KB of RAM or 8 KB of pool spare, so "usable" is the free less that.)
 
-| | Used | Total | Free |
-|---|---|---|---|
-| Fast RAM | 41 KB | 72 KB | ~31 KB (Rings' string lines: 18 KB of it) |
-| Pool | 337 KB | 360 KB | ~23 KB |
-| App flash | 312 KB | 581 KB | ~269 KB |
-| Kit library (flash) | 72 KB at 0xEA000–0xFBFFF | | 128 kits + 128 sounds |
+| | Used | Total | Free | Usable |
+|---|---|---|---|---|
+| Fast RAM (.data + .bss) | 42,688 B | 73,728 B | 31,040 B | ~27 KB |
+| Pool (big buffers, same SRAM) | 347,268 B | 368,640 B | 21,372 B | ~13 KB |
+| App flash (image) | 331,904 B | 581,564 B | 249,660 B | ~244 KB |
+| Project slot | busy test project 35.8 KB | 48,896 B payload | ~13 KB | dense projects already fail (PROJECT TOO BIG) |
+| Kit library (flash) | 72 KB at 0xEA000–0xFBFFF | | 128 kits + 128 sounds | a kit entry holds 480 B (kit 377 B) |
+| Library SysEx message | a kit: 390 B | LIB_MAX 400 B | 10 B | (static assert; raising it costs ~3.3 B of RAM a byte) |
+
+Where it goes: RAM: Rings' lines 18 KB (`rg_line` 12 KB, `rg_stretch` 6 KB), `mdl` 3.4 KB, `sq` 2.3 KB, `vc` 2.1 KB, the audio buffer 2 KB. Pool: the 32 patterns 159 KB (5,099 B each), the FX bus's line 64 KB, the screen canvas 30 KB, the 64 kits 24 KB, REVERSE's recorder 11 KB, the reverb's combs 10 KB, the comb 8 KB, and three spare patterns (live generators, backup, undo) 15 KB. Phase 14 cost +292 B RAM, +1,168 B pool, +4.5 KB flash, 6 bytes a kit.
+
+Rules of thumb: a per-step byte costs 32 × 7 × 64 = 14 KB of pool (more than is usable); a per-track byte 224 B; a per-pattern byte 32 B; a per-voice kit parameter 6 B a kit (384 B of pool) and brings the library's message closer to LIB_MAX.
 
 **CPU on a real FM-1 (0.5, first measurement):** about 60% average and 64% peak with a busy pattern. The 122 LATE buffers seen then were not the engine's load (a 64% peak leaves a third of each buffer spare) but autosave's flash erases, which hold the processor; 0.5.1 no longer counts those. The load is on screen (bottom of the CONFIG pages: average, peak since CONFIG opened, late buffers since power-on). The browser emulator always shows 0%, because it doesn't model CPU time. The second core is unused (`FELUCCA_CPU2 0`); it's a reserve for heavy DSP (see *0.5.1*).
 
@@ -570,6 +577,18 @@ On Elektron boxes (Digitakt and others): hold TRK and turn a knob, and the same 
 - **Interactions.** Morph moves from the kit as it now is (the snapshot holds the kit, not the morph mixture). Macros and locks play over it as usual. Undo after a kit load during the hold: the load ends the hold.
 - **Tests.** ui_test: filter on all voices relative and clamped, a voice without the parameter left alone, paging during the hold, OCT− reverting everything since the first turn, release keeping, COPY not arming after a Control All turn, COPY still working with no turn.
 
+
+### Phase 14: LFO modes, global LFOs, page memory, Euclid's second pulse (built in 0.13)
+
+Requested 2026-10-26, with a resource report first (in *Where things stand*). None of the four was large: together +292 B of RAM, +1.2 KB of pool, +4.5 KB of flash.
+
+- **14a. The LFO's mode** (Elektron's FREE, TRIG, HOLD, ONE, HALF). The LXR's Retrigger already gives FREE (OFF) and TRIG, so the mode is a new per-voice Kettle parameter, `PAR_LFOMODE1` (NRPN 298–303, appended so older kits keep their layout): **TRIG** (default, the LXR's), **HOLD** (runs free, the value at each hit held: `lfo_t.hold`), **ONE** (a cycle from the hit, then still at its end: `run`, `gone`; still at the offset until the first hit), **HALF**. In HOLD, ONE and HALF, Retrigger OFF means the voice's own hits (else they'd do nothing). RANDOM draws a new value at each one-shot. On its own page, **LFO MODE**, after the LFO's two (the LFO button's third press); it locks per step, doesn't morph. KIT_LEN 371 → 377.
+- **14b. Two global LFOs** (perform.c `gls`, `gl`, `glfo_block` in the audio ISR). Destinations: MORPH, FILTER (the DJ filter both ways), LP, HP, FB PUSH, COMB, CRUSH, JITTER, CUTS, PUMP. Depth −127..127. Morph and FILTER move from their knobs (Elektron-like, either way); the effects fade in from off to what their key plays at its setting, a negative depth upside down; a key held still plays in full. FB PUSH, COMB, CRUSH, CUTS, PUMP and JITTER became amounts (0..1) rather than on/off for this (`pf_amount`; `fx.push` Q16). Speed: 1/16 to 256 bars, in 16ths of the clock (`tick_q16`: MIDI clock, TAPE STOP and HALF too); at 120 BPM 256 bars is ~8.5 minutes. Modes FREE TRIG HOLD ONE HALF; triggers PLAY, PATTERN (PLAY + pattern changes), BAR (PLAY + each bar), and OCT+ on its page (`glfo_ev`, set by seq.c). Morph: the knob is `par[PAR_MORPH]`, what sounds is `morph_amt` = knob + `morph_mod` (`morph_update`; the main loop posts a new mixture at most every 8 ms). The project saves the knob. Pages: PERF, GLOBAL LFO 1 (Dest Depth Speed Wave), its MODE (Mode Trig Phase), the same for LFO 2. PERF's order, at the user's request (2026-10-26: PERFORM and PERFORM 2 split by the macros and LFOs was confusing): the performance pages PERFORM, MORE, MIX, MIX 2, PERFORM 2, its SETUP, SETUP 2 (PG_PERF2 4: their keys the second bank), the global LFOs (PG_GLFO 7), the macros (PG_MACRO 11). Saved in the project (KGL1 after KPF2; project version 9).
+- **14c. Last page** (CONFIG → BUTTONS, `kset.pmem`, the settings' spare byte; default NO). A mode's page is kept when it's left (`ui.mpage`), a sound button's section and half (`gsect`, `ghalf`), and which of their modes ARP (PERF / generator) and GLO (Mix / mixer / CONFIG) showed last. HOME is left alone (it's the way to the grid).
+- **14d. Euclid's second pulse** (`pattern_t.eu2[t]`: hits, rotation, join; project version 9). On the ACTION page with EUCLID (as GRIDS has its map there): **Hits 2**, **Rotate 2**, **Join** OR / XOR / AND / SUB. Hits 2 at 0 is off, whatever the join. DICE keeps the number of hits the two made. +21 B a pattern.
+- **Decided without the user (to revisit):** the LFO mode on its own one-knob page; Retrigger OFF meaning "own voice" in HOLD/ONE/HALF; the global LFOs' destinations (macros left out: a macro writes the kit, so an LFO on one would rewrite the kit continuously); the effects as amounts; Euclid 2 on the ACTION page rather than a page of its own; HOME not remembered.
+- **Tests:** ui_test phase14 (Euclid 2's joins, rotation, off, saved; ONE waiting, starting, stopping at the end; HALF; HOLD; TRIG free with Retrigger off; the LFO MODE page; a global one-shot saw morphing over a bar from PLAY, the knob unmoved, from the knob, negative depth; the speed at 1 and 256 bars; FILTER both ways; COMB and FB PUSH by amount; HOLD per BAR; the pages, OCT+; saved with the project; Last page for FX, GLO→CONFIG, LFO, ARP, and off). library_test: KIT_LEN 377.
+- **Next:** the user tries it in the emulator, then on the unit (CPU: the two LFOs are a few multiplies a block; a fast LFO on MORPH re-posts the whole kit every 8 ms, as turning the morph knob does).
 
 - **303-style acid track:** about 33 KB of pattern memory at 64 patterns (less at 32), 1–2 voices' worth of CPU, and real UI work for track selection and note entry. Check charlesvestal's fm1-x0x (FM-1 303 firmware) and its licence first.
 - **More FX buses:** cheap for drive, ring mod or compressor; costly if each has its own delay.
