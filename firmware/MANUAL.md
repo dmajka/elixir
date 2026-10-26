@@ -1,6 +1,6 @@
 # Elixir manual
 
-Elixir is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 0.14: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Elixir adds.
+Elixir is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 0.14.1: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Elixir adds.
 
 Elixir is **unofficial**. It is not affiliated with or endorsed by Erica Synths, M-VAVE or Hügelton Instruments. It is free software under the GPL-3.0 (see *Licence and credits* at the end). Up to version 0.13 it was called **Kettle**.
 
@@ -344,7 +344,7 @@ The LXR's waveforms are SINE, TRI, SAW, SQUARE, NOISE and PWM; its transients SN
 
 ### The LFO's mode
 
-**LFO MODE** (LFO, after the LFO's two pages) sets how a hit starts the LFO, as on Elektron's machines. Retrigger (on the LFO page) still picks whose hits those are.
+**LFO MODE** (LFO, the page after the LFO's two) sets how a hit starts the LFO, as on Elektron's machines. Retrigger (on the LFO page) still picks whose hits those are.
 
 | Mode | Does |
 |---|---|
