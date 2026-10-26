@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-# Kettle: a built-in bank of LXR-02 kits from LOCAL .SND files, for a private build (firmware/src/kit.c,
-# KETTLE_FACTORY_KITS). The LXR-02's factory and Hrtl kits are not Kettle's to redistribute, so the output goes to
+# Elixir: a built-in bank of LXR-02 kits from LOCAL .SND files, for a private build (firmware/src/kit.c,
+# ELIXIR_FACTORY_KITS). The LXR-02's factory and Hrtl kits are not Elixir's to redistribute, so the output goes to
 # build/gen (never committed) and web/make_site.py refuses to publish a build that has it.
 #
 #   tools/gen_factory_kits.py OUT_H DIR[:DIR ...] [DIR ...]
@@ -38,7 +38,7 @@ def main():
     if len(sys.argv) < 3:
         sys.exit(__doc__ or "usage: gen_factory_kits.py OUT_H DIR [DIR ...]")
     out, seen, kits = Path(sys.argv[1]), set(), []
-    for d in [d for a in sys.argv[2:] for d in a.split(":") if d]:   # (KETTLE_KITS_DIR as it is: ':' between)
+    for d in [d for a in sys.argv[2:] for d in a.split(":") if d]:   # (ELIXIR_KITS_DIR as it is: ':' between)
         if not Path(d).is_dir():
             sys.exit(f"gen_factory_kits: no folder {d}")
         for name, data, f in kits_in(d):

@@ -1,10 +1,10 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle: the LXR-02's FX bus in fixed point: DRIVE (tube, fold, clip), RING modulator, COMPRESSOR and DELAY
+ * Elixir: the LXR-02's FX bus in fixed point: DRIVE (tube, fold, clip), RING modulator, COMPRESSOR and DELAY
  * (mono, ping pong). One effect at a time; the voices routed to FX feed it, its output joins the mix.
  * Ported from the LXR firmware, Core/Src/Soundengine/FxBus.c and DSPAudio/FX (Distortion.c, Ringmod.c,
  * Compressor.c, Delay.c), Copyright (C) 2012-2026 Erica Synths, GPL-3.0-only. (The LXR's reverb is compiled out
- * there, USE_REVERB 0; Kettle's is Felucca's, a bus of its own: reverb.c.) A voice's FX SEND sets how much of it
- * goes through the bus (voices.c mix_voice). Kettle adds two types after the LXR's (0.3): PHASER and FLANGER. */
+ * there, USE_REVERB 0; Elixir's is Felucca's, a bus of its own: reverb.c.) A voice's FX SEND sets how much of it
+ * goes through the bus (voices.c mix_voice). Elixir adds two types after the LXR's (0.3): PHASER and FLANGER. */
 
 enum { FX_OFF, FX_DRIVE, FX_RING, FX_COMP, FX_DELAY, FX_PHASER, FX_FLANGER, NFX };
 enum { DIST_TUBE, DIST_FOLD, DIST_RAT };

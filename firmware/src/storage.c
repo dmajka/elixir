@@ -12,12 +12,12 @@
  * Flash access goes through three hooks (also used by the host test):
  *   st_read(off, dst, n)   st_erase(off)   st_prog(off, src, n)
  */
-#define ST_MAGIC 0x4C54454Bu                   /* "KETL" */
+#define ST_MAGIC 0x4C54454Bu                   /* "KETL" (Kettle's, kept) */
 #define ST_SECTOR 4096u
 #define ST_PAYLOAD_OFF 256u
 #define ST_PAYLOAD_MAX (ST_SECTOR - ST_PAYLOAD_OFF)
 
-/* Kettle: storage.c keeps one small object, the device settings (A 0xFC000, B 0xFD000); the projects
+/* Elixir: storage.c keeps one small object, the device settings (A 0xFC000, B 0xFD000); the projects
  * (project.c) have their own slots in FL_DATA (0x97000..0xDEFFF) */
 enum { OBJ_SETTINGS, OBJ_COUNT };
 
@@ -154,7 +154,7 @@ static int st_write_to(uint32_t obj, const void *src, uint32_t len, int to)
     return 0;
 }
 
-static int st_save_to(uint32_t obj, const void *src, uint32_t len, int to)   /* (Kettle: hushed, storage_hw.c) */
+static int st_save_to(uint32_t obj, const void *src, uint32_t len, int to)   /* (Elixir: hushed, storage_hw.c) */
 {
     int rc;
     flash_hush();

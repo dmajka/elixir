@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Kettle host test: rings.c (Kettle's fixed-point port of Mutable Instruments Rings' resonators) against Rings'
+// Elixir host test: rings.c (Elixir's fixed-point port of Mutable Instruments Rings' resonators) against Rings'
 // own float code, fed the same signal: MODAL (rings::Resonator, 32 modes), STRING (rings::String with dispersion)
 // and FM (rings::FMVoice), over their parameters and pitches. Prints, for each, the correlation of the two outputs
 // and the error's level against the signal's; fails below 0.99 / above -30 dB. Rings' sources aren't in this tree
 // (MIT licence, github.com/pichenettes/eurorack and stmlib); tests/rings_compare.sh builds this with them, its
-// sample rate set to Kettle's. RG_DUMP=<part of a case's name> prints that case's level and correlation over time
+// sample rate set to Elixir's. RG_DUMP=<part of a case's name> prints that case's level and correlation over time
 // and its first samples (from RG_FROM, else the hit).
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <vector>
-#define private public                               // (their ramps and states: from where Kettle's start)
+#define private public                               // (their ramps and states: from where Elixir's start)
 #include "rings/dsp/fm_voice.h"
 #include "rings/dsp/resonator.h"
 #include "rings/dsp/string.h"
@@ -68,7 +68,7 @@ static void ref(int model, double f, double s, double b, double d, double p, int
       fm.set_feedback_amount(p);
       fm.set_position(0.0f);
       fm.set_damping(d);
-      if (k == 0) {                                  // Kettle's first block has no ramps: Rings' from its Init()
+      if (k == 0) {                                  // Elixir's first block has no ramps: Rings' from its Init()
         float mf = f * stmlib::SemitonesToRatio(stmlib::Interpolate(rings::lut_fm_frequency_quantizer, s, 128.0f));
         fm.previous_carrier_frequency_ = f;
         fm.previous_modulator_frequency_ = mf > 0.5f ? 0.5f : mf;
@@ -98,7 +98,7 @@ static void one(const char *name, int model, double hz, double s, double b, doub
       in[P + i] = ((int)(seed >> 9) / 4194304.0f - 1.0f) * 0.5f * expf(-i / 60.0f);
     }
   }
-  s = q16(s), b = q16(b), d = q16(d), p = q16(p);   // the knobs as Kettle holds them, the same on both sides
+  s = q16(s), b = q16(b), d = q16(d), p = q16(p);   // the knobs as Elixir holds them, the same on both sides
   ref(model, hz / 44100.0, s, b, d, p, env, in.data(), x.data());
   rg_core(model, hz / 44100.0, s, b, d, p, env, in.data(), N, y.data());
   double sxy = 0, sxx = 0, syy = 0, see = 0;
@@ -114,7 +114,7 @@ static void one(const char *name, int model, double hz, double s, double b, doub
     for (int w = 0; w < N; w += 2205) {
       double a = 0, b = 0, ab = 0, ma = 0, mb = 0;
       for (int i = w; i < w + 2205 && i < N; i++) a += x[i] * x[i], b += y[i] * y[i], ab += x[i] * y[i], ma += x[i], mb += y[i];
-      std::printf("    %5d ms  ref %7.1f  kettle %7.1f dB  corr %.3f\n", w * 1000 / 44100, 10 * std::log10(a / 2205 + 1e-30),
+      std::printf("    %5d ms  ref %7.1f  elixir %7.1f dB  corr %.3f\n", w * 1000 / 44100, 10 * std::log10(a / 2205 + 1e-30),
                   10 * std::log10(b / 2205 + 1e-30), ab / std::sqrt(a * b + 1e-30));
       std::printf("              mean %.6f %.6f\n", ma / 2205, mb / 2205);
     }

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Kettle library test: web/library.js against the device's own code (tests/library_bridge.c, the emulator's C):
+// Elixir library test: web/library.js against the device's own code (tests/library_bridge.c, the emulator's C):
 // info, kit import from LXR-02 .SND files, kit export, backup (read), restore (write) into another slot, load, and
 // the device's refusals (a damaged image, data out of order, an abandoned write).
 //   cc -O1 -std=gnu99 -w -I build/gen -I firmware/src -I firmware/hal tests/library_bridge.c -o build/library_bridge
@@ -191,7 +191,7 @@ check((await transport.request(message(0x01, 1, [5]).map((b, i, a) => (i === a.l
     i += 64;
   }
   ok &&= d[i] === 0x11 && d[i + 7] === 3 && d[i + 56] === 9 && d[i + 57 + 2] === 32 && d[i + 64] === 5;
-  check(ok, "an LXR pattern into Kettle's pattern 5, as in the file");
+  check(ok, "an LXR pattern into Elixir's pattern 5, as in the file");
   check(JSON.stringify(songWindow([0, 3, 40, 33, 64, 65], 32)) === JSON.stringify([31, 31, 8, 1, 64, 65]) &&
         JSON.stringify(songWindow([0, 3, 40, 64], 0)) === JSON.stringify([0, 3, 31, 64]), "a song's patterns, the half picked");
   await lib.songPut(2, [0, 1, 1, 2, 65, ...new Array(59).fill(64)]);

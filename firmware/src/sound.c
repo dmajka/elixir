@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle: the sound parameters. par[] is the LXR's activeParameters (the edit buffer: a kit's sound parameters,
+ * Elixir: the sound parameters. par[] is the LXR's activeParameters (the edit buffer: a kit's sound parameters,
  * then the step and global ones, same numbers as the LXR's ParamEnums, so a kit is the LXR's .SND data); snd_apply
  * sets the voices from a value as midiParser_ccHandler does (Core/Src/Soundengine/MIDI/MidiParser.c); the
  * modulation nodes (DSPAudio/modulationNode.c: velocity and LFO, one each per voice) and the sequencer's
@@ -11,7 +11,7 @@
  * applies what was posted at the start of its next block (snd_service). The sequencer and MIDI input run in the
  * ISR and apply at once. */
 
-/* Kettle's own sound parameters, after the LXR's numbering (NRPN n - 128 reaches them): each voice's sends to the
+/* Elixir's own sound parameters, after the LXR's numbering (NRPN n - 128 reaches them): each voice's sends to the
  * FX bus and to the reverb, and the reverb (0.2); each voice's sound shaping (0.3: voices.c). They belong to the kit
  * as the LXR's sound parameters do: a kit stores them after its END_OF_SOUND_PARAMETERS (KIT_LEN, kit_par), morph
  * moves them, a step locks them (all but the reverb's model). Six of each per-voice one, in voice order. */
@@ -53,7 +53,7 @@ static inline int par_sound(uint32_t p) { return p < END_OF_SOUND_PARAMETERS || 
 static inline uint32_t kit_par(uint32_t i) { return i < END_OF_SOUND_PARAMETERS ? i : i + KIT_GAP; }   /* index -> p */
 static inline uint32_t kit_idx(uint32_t p) { return p < END_OF_SOUND_PARAMETERS ? p : p - KIT_GAP; }   /* p -> index */
 
-static uint8_t par[NPAR];                        /* the edit buffer (activeParameters, then Kettle's) */
+static uint8_t par[NPAR];                        /* the edit buffer (activeParameters, then Elixir's) */
 static uint8_t morph_par[KIT_LEN];               /* the morph target kit (kit layout: kit_par) */
 static uint8_t morph_amt;                        /* 0..255 (PAR_MORPH): 0 = the kit as it is */
 
@@ -64,7 +64,7 @@ static uint8_t auto_val[NTRACK][3];
 
 /* a lock's destination code (12 bits: the step's byte, p1n / p2n, and 4 bits in the pattern's lhi, seq.c). Below
  * 256, the LXR's numbers: the parameter + 1 below 128 (its "stupid offset"), the parameter above, 0xFF none. From
- * 256, Kettle's parameters as they are. (0.2 stored Kettle's in the numbers the LXR leaves free, 247..254 and
+ * 256, Elixir's parameters as they are. (0.2 stored Elixir's in the numbers the LXR leaves free, 247..254 and
  * 221..227; project.c lock_v2 moves a version-2 project's locks over.) */
 static uint32_t autodest_to_par(uint32_t d)
 {
@@ -80,13 +80,13 @@ static uint32_t par_to_autodest(uint32_t p)
         return p < NPAR && p != PAR_REV_TYPE ? p : NO_AUTOMATION;
     return p == 0u ? NO_AUTOMATION : p < 127u ? p + 1u : p;
 }
-_Static_assert(NPAR < 4096 && NUM_PARAMS >= 256, "lock codes: 12 bits, Kettle's past the LXR's byte");
-#define NLOCK_K (NPAR - NUM_PARAMS - 1u)             /* Kettle's lockable parameters: all but PAR_REV_TYPE */
+_Static_assert(NPAR < 4096 && NUM_PARAMS >= 256, "lock codes: 12 bits, Elixir's past the LXR's byte");
+#define NLOCK_K (NPAR - NUM_PARAMS - 1u)             /* Elixir's lockable parameters: all but PAR_REV_TYPE */
 static inline int par_lockable(uint32_t p)
 {
     return par_sound(p) && !(p >= PAR_UNUSED_1 && p <= PAR_UNUSED_7) && par_to_autodest(p) != NO_AUTOMATION;
 }
-/* the lock targets the STEP page picks from: the LXR's (MOD_TARGETS), then Kettle's (PAR_REV_TYPE left out) */
+/* the lock targets the STEP page picks from: the LXR's (MOD_TARGETS), then Elixir's (PAR_REV_TYPE left out) */
 static uint32_t lock_target_par(uint32_t idx)
 {
     uint32_t p;
@@ -97,11 +97,11 @@ static uint32_t lock_target_par(uint32_t idx)
     p = NUM_PARAMS + idx - NUM_MOD_TARGETS;
     return p >= PAR_REV_TYPE ? p + 1u : p;
 }
-static uint32_t lock_target_idx(uint32_t p)          /* (Kettle's parameter p: its index there) */
+static uint32_t lock_target_idx(uint32_t p)          /* (Elixir's parameter p: its index there) */
 {
     return NUM_MOD_TARGETS + p - NUM_PARAMS - (p > PAR_REV_TYPE ? 1u : 0u);
 }
-/* the largest value of Kettle's parameters */
+/* the largest value of Elixir's parameters */
 static uint32_t par_max_k(uint32_t p)
 {
     if (p == PAR_REV_TYPE)

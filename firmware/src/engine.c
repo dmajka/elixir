@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle: the engine's block, in the audio ISR: the parameters the main loop posted, MIDI in, the sequencer's
+ * Elixir: the engine's block, in the audio ISR: the parameters the main loop posted, MIDI in, the sequencer's
  * clock, the six voices, the FX bus and the reverb, then the outputs summed, clipped as the LXR's 16-bit DAC clips
  * them, PERF's DJ filter (perform.c) and scaled by MASTER (the FM-1's volume pot: after the DAC, as the LXR's). */
 
@@ -50,7 +50,7 @@ static void engine_init(void)
         kit_init_values(kits[i]);
         memcpy(kit_names[i], "Init    ", KIT_NAME_LEN);
     }
-#if KETTLE_FACTORY_KITS
+#if ELIXIR_FACTORY_KITS
     kit_factory_fill();
 #endif
     kit_init_values(morph_par);

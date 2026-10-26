@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle: the LXR-02's six voices, their LFOs and the mixer, in fixed point.
+ * Elixir: the LXR-02's six voices, their LFOs and the mixer, in fixed point.
  * Ported from the LXR firmware, Core/Src/Soundengine/DSPAudio (DrumVoice.c, Snare.c, CymbalVoice.c, HiHat.c,
  * lfo.c, mixer.c), Copyright (C) 2012-2026 Erica Synths, GPL-3.0-only.
  *
@@ -7,11 +7,11 @@
  * operator FM); track 7 (index 6) plays the hi-hat voice with its open decay. Each voice: a transient generator,
  * an amp EG (repeat for claps), a filter, a waveshaper, a sample rate reducer, pan and an output (left/right/both).
  * The FM-1 has one stereo output: the LXR's two stereo pairs and four mono outs all go to it (a mono out to its
- * side), so a kit keeps its routing. Kettle's sends: FX SEND, how much of the voice goes through the FX bus instead
+ * side), so a kit keeps its routing. Elixir's sends: FX SEND, how much of the voice goes through the FX bus instead
  * of its output (127: all, the LXR's Out = FX BUS, which a kit from before the sends still means), and REVERB
  * SEND, the voice into the reverb (reverb.c) on top of that.
  *
- * Kettle's sound shaping (0.3), each voice: a choice of waveshaper for its DRIVE (the LXR's curve, or FOLD, CLIP,
+ * Elixir's sound shaping (0.3), each voice: a choice of waveshaper for its DRIVE (the LXR's curve, or FOLD, CLIP,
  * ASYM, RECTIFY: shape_block); after the sample rate reducer a bit reducer and a tilt EQ (post_block); random per
  * hit (pitch, decay, filter, pan: voice_trigger); a choke group (a hit fades the other voices of its group out in a
  * block); cross modulation from another voice (DUCK: its envelope turns this one down, FILTER: opens this one's
@@ -29,7 +29,7 @@ typedef struct {
     int32_t rnd;                 /* S&H, Q16 */
     uint32_t rate;               /* the rate setting 0..1 (Q16), for a tempo change */
     uint8_t wave, retrig, sync;
-    uint8_t mode, run;           /* 0.13: LM_* (Kettle's LFO MODE); ONE, HALF: still running since the hit */
+    uint8_t mode, run;           /* 0.13: LM_* (Elixir's LFO MODE); ONE, HALF: still running since the hit */
     uint32_t gone;               /* .. ONE, HALF: the phase run since the hit */
     int32_t hold;                /* .. HOLD: the value at the hit, Q16 */
 } lfo_t;
@@ -66,7 +66,7 @@ typedef struct {
     uint32_t dec_cnt;            /* the sample rate reducer, Q16 */
     int16_t dec_hold;
     lfo_t lfo;
-    /* Kettle's shaping (sound.c sets them) */
+    /* Elixir's shaping (sound.c sets them) */
     uint8_t bits, shape, tilt, choke_grp, xsrc, xmode;
     uint8_t rnd[4];              /* random per hit: pitch, decay, filter, pan amounts (0..127) */
     uint8_t choking;             /* choked: fading out (1), silent (2) until its next hit */
@@ -102,7 +102,7 @@ static int32_t hit_rand(void)
 
 /* -------------------------------------------------------------- LFO --- */
 enum { LFO_SINE, LFO_TRI, LFO_SAW_UP, LFO_SAW_DOWN, LFO_REC, LFO_NOISE, LFO_EXP_UP, LFO_EXP_DOWN, NLFO };
-/* 0.13: the LFO's mode, as Elektron's (Kettle's LFO MODE). What restarts it is the LXR's RETRIGGER voice; in HOLD,
+/* 0.13: the LFO's mode, as Elektron's (Elixir's LFO MODE). What restarts it is the LXR's RETRIGGER voice; in HOLD,
  * ONE and HALF with RETRIGGER off, its own voice's hits.
  *   TRIG  the LXR's: a hit starts the cycle again from the offset (RETRIGGER off: it runs free)
  *   HOLD  runs free; a hit takes its value then and holds it until the next

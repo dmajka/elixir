@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Kettle: the fixed-point tables of the sound engine (the FM-1 has no FPU).
+"""Elixir: the fixed-point tables of the sound engine (the FM-1 has no FPU).
 
   tools/gen_tables.py OUT.h
 

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle host test: the fixed-point voices against the LXR's own float voices (tests/lxrref). For each voice and
+ * Elixir host test: the fixed-point voices against the LXR's own float voices (tests/lxrref). For each voice and
  * a set of sounds (the init kit, and variations of oscillator, FM, filter, envelope and drive settings): trigger
  * both, render 0.4 s, compare the envelopes (RMS in 5.8 ms windows, dB) and, where no noise is in the sound, the
  * waveforms (correlation). Built by tests/run.sh with the LXR tree at LXR_SRC. */

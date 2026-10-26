@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
- * Kettle: Felucca's panel.c, the label of each matrix button and encoder (measured on the hardware), without its
+ * Elixir: Felucca's panel.c, the label of each matrix button and encoder (measured on the hardware), without its
  * settings. */
 enum { B_FX, B_SCL, B_ENV, B_LFO, B_EDIT, B_GLO, B_HOME, B_SAVE, B_ARP, B_SEQ, B_PLAY, B_REC,
        B_OCTDN, B_OCTUP, NB };

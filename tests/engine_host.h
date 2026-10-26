@@ -1,9 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle host tests: the sound engine, the sequencer, kits and MIDI built for the host, without the UI, the
+ * Elixir host tests: the sound engine, the sequencer, kits and MIDI built for the host, without the UI, the
  * flash or the hardware (the stubs the firmware's other files would give). Include after <stdint.h>. */
 #include <stdint.h>
 #include <string.h>
-#include "kettle_tables.h"
+#include "elixir_tables.h"
 #include "lxr_tables.h"
 #include "lxr_params.h"
 #include "grids_map.h"

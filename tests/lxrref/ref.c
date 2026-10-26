@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle tests: the LXR firmware's own float voices (Core/Src/Soundengine/DSPAudio, built for the host with the
+ * Elixir tests: the LXR firmware's own float voices (Core/Src/Soundengine/DSPAudio, built for the host with the
  * shims in shim/), as the reference the fixed-point port is compared with (compare_test.c). ref_set follows
  * MidiParser.c midiParser_ccHandler for the voices' parameters. Copyright of the voices: (C) 2012-2026 Erica Synths,
  * GPL-3.0-only. */

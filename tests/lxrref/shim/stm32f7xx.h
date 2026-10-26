@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle tests: what the LXR's DSP sources need of the STM32 HAL and CMSIS, for the host (the reference). */
+ * Elixir tests: what the LXR's DSP sources need of the STM32 HAL and CMSIS, for the host (the reference). */
 #pragma once
 #include <stdint.h>
 #include <math.h>

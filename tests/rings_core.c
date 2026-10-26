@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle host test, the fixed-point side of tests/rings_compare.cc: rings.c's three resonators (the emulator's
+ * Elixir host test, the fixed-point side of tests/rings_compare.cc: rings.c's three resonators (the emulator's
  * build of the firmware), fed a float signal, their output as float. */
 #define RINGS_TAP
-#include "../web/emu/kettle_web.c"
+#include "../web/emu/elixir_web.c"
 
 /* model 1 MODAL, 2 STRING, 3 FM; f: cycles a sample; s b d p: Rings' STRUCTURE BRIGHTNESS DAMPING POSITION (0..1);
  * env: FM's internal envelope triggered at the start. n: a multiple of BLOCK */

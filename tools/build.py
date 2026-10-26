@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-# Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments (Felucca's build; Kettle: its sources, one core,
+# Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments (Felucca's build; Elixir: its sources, one core,
 # its generated headers, no engines)
-"""Build Kettle: the app, the update loader and an installable .fwsc package.
+"""Build Elixir: the app, the update loader and an installable .fwsc package.
 
   tools/build.py [--release X.Y[-suffix]]
 
-Outputs in build/: kettle.bin (app), loader/ota.bin (update loader),
-kettle.fwsc (package). A release build (--release X.Y) writes kettle-X.Y.fwsc and a folder
+Outputs in build/: elixir.bin (app), loader/ota.bin (update loader),
+elixir.fwsc (package). A release build (--release X.Y) writes elixir-X.Y.fwsc and a folder
 release-X.Y/ with the package, the app, SHA256SUMS and the licence files.
 See README.md for the toolchain and the SDK.
 
@@ -51,8 +51,8 @@ SDK_SHA256 = {
 }
 
 PRODUCT = "FM-1_900"                # package identity; release builds are FM-1_9XY
-VERSION = None                      # KETTLE_VERSION for release builds (default: firmware/src/kettle.c)
-CPU2 = False                        # Kettle runs on one core (firmware/src/kettle.c FELUCCA_CPU2 0)
+VERSION = None                      # ELIXIR_VERSION for release builds (default: firmware/src/elixir.c)
+CPU2 = False                        # Elixir runs on one core (firmware/src/elixir.c FELUCCA_CPU2 0)
 
 
 def toolchain():
@@ -99,7 +99,7 @@ def generate():
     cmds = [[tools / "gen_aa_font.py", GEN / "ui_fonts.h", "--preset", "inter-tight"],
             [tools / "gen_aa_keycaps.py", GEN / "ui_keycaps.h"],
             [tools / "gen_ui_palettes.py", GEN / "ui_palettes.h"],
-            [tools / "gen_tables.py", GEN / "kettle_tables.h"]]
+            [tools / "gen_tables.py", GEN / "elixir_tables.h"]]
     procs = [subprocess.Popen([sys.executable, *map(str, c)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               text=True) for c in cmds]
     failed = []
@@ -184,9 +184,9 @@ def ld_regions():
 
 
 def factory_kits():
-    """KETTLE_KITS_DIR (folders, ':' between): a private build with those LXR-02 kits built in (0.7). The version
-    gets "+K", and web/make_site.py refuses to publish it: the kits aren't Kettle's to redistribute."""
-    dirs = os.environ.get("KETTLE_KITS_DIR", "")
+    """ELIXIR_KITS_DIR (folders, ':' between): a private build with those LXR-02 kits built in (0.7). The version
+    gets "+K", and web/make_site.py refuses to publish it: the kits aren't Elixir's to redistribute."""
+    dirs = os.environ.get("ELIXIR_KITS_DIR", "")
     if not dirs.strip(":"):
         return False
     subprocess.run([sys.executable, "tools/gen_factory_kits.py", "build/gen/factory_kits.h", dirs], check=True)
@@ -198,21 +198,21 @@ def build_app():
     flags.append(f'-DFELUCCA_ID="{PRODUCT}"')
     version = VERSION
     if factory_kits():
-        flags.append("-DKETTLE_FACTORY_KITS=1")
-        version = (version or re.search(r'#define KETTLE_VERSION "([^"]+)"',
-                                        (FW / "src" / "kettle.c").read_text()).group(1)) + "+K"
+        flags.append("-DELIXIR_FACTORY_KITS=1")
+        version = (version or re.search(r'#define ELIXIR_VERSION "([^"]+)"',
+                                        (FW / "src" / "elixir.c").read_text()).group(1)) + "+K"
     if version:
-        flags.append(f'-DKETTLE_VERSION="{version}"')
-    cmain = ("cc", *flags, "-c", FW / "src" / "kettle.c", "-o", OUT / "kettle.o")
+        flags.append(f'-DELIXIR_VERSION="{version}"')
+    cmain = ("cc", *flags, "-c", FW / "src" / "elixir.c", "-o", OUT / "elixir.o")
     (OUT / "fm1_cpu1.o").unlink(missing_ok=True)
     tc_all(("cc", "-c", FW / "crt0.S", "-o", OUT / "crt0.o"),
            ("cc", "-c", FW / "hal" / "fm1_vec.S", "-o", OUT / "fm1_vec.o"),
            ("cc", "-c", FW / "hal" / "fm1_isr.S", "-o", OUT / "fm1_isr.o"),
            *([("cc", "-c", FW / "hal" / "fm1_cpu1.S", "-o", OUT / "fm1_cpu1.o")] if CPU2 else []),
            cmain)
-    elf = OUT / "kettle.elf"
+    elf = OUT / "elixir.elf"
     tc("pi32v2/bin/ld", "-T", FW / "app.ld", OUT / "crt0.o", OUT / "fm1_vec.o", OUT / "fm1_isr.o",
-       *([OUT / "fm1_cpu1.o"] if CPU2 else []), OUT / "kettle.o", "-o", elf)
+       *([OUT / "fm1_cpu1.o"] if CPU2 else []), OUT / "elixir.o", "-o", elf)
     for sect in ("text.bin", "data.bin", "ramtext.bin", "c1text.bin"):
         (OUT / sect).unlink(missing_ok=True)
     *_, syms, dis, rt = tc_all(("common/bin/objcopy", "-O", "binary", "-j", ".text", elf, OUT / "text.bin"),
@@ -224,7 +224,7 @@ def build_app():
                                ("common/bin/objdump", "-d", elf),
                                ("common/bin/objdump", "-d", "-j", ".ram_text", *(("-j", ".c1_text") if CPU2 else ()),
                                 elf))
-    (OUT / "kettle.dis").write_text(dis)
+    (OUT / "elixir.dis").write_text(dis)
 
     def symv(name):
         return int(re.search(r"^([0-9a-f]+) .*\s" + name + r"$", syms, re.M).group(1), 16)
@@ -241,7 +241,7 @@ def build_app():
             img += b"\xff" * (load - APP_XIP - len(img))
             img += blob
     img += b"\xff" * (-len(img) % 4)
-    (OUT / "kettle.bin").write_bytes(img)
+    (OUT / "elixir.bin").write_bytes(img)
     return bytes(img), syms, dis, rt
 
 
@@ -365,14 +365,14 @@ def main():
     ap.add_argument("--release", metavar="X.Y", help="release build: identity FM-1_9XY, version string vX.Y")
     ap.add_argument("--sdk", type=Path, help="JieLi AC79 SDK checkout (default: $AC79_SDK)")
     a = ap.parse_args()
-    name = "kettle.fwsc"
+    name = "elixir.fwsc"
     if a.release:                   # one digit each: the identity has room for two (X.Y.Z and X.Y.Z.W keep X.Y's)
         m = re.fullmatch(r"(\d)\.(\d)(?:\.\d){0,2}(-[A-Za-z0-9]+)?", a.release)
         if not m:
             raise SystemExit(f"--release {a.release}: use X.Y, X.Y.Z, X.Y.Z.W or X.Y-suffix, one digit each")
         PRODUCT = "FM-1_9" + m[1] + m[2]
         VERSION = "v" + a.release.lower()      # e.g. v1.0, v1.1-rc1
-        name = f"kettle-{a.release}.fwsc"
+        name = f"elixir-{a.release}.fwsc"
     fm1pkg_make.SDK = a.sdk
     for rel, sha in SDK_SHA256.items():          # fail early without the SDK
         if hashlib.sha256(fm1pkg_make.sdk_file(rel)).hexdigest() != sha:
@@ -396,14 +396,14 @@ def main():
         raise SystemExit("build: checks failed")
     pkg = fm1pkg_make.ufw(fm1pkg_make.flash_image(img, fm1pkg_make.KEY), ota, PRODUCT)
     (OUT / name).write_bytes(pkg)
-    print(f"app      {OUT / 'kettle.bin'}  {len(img)} B")
+    print(f"app      {OUT / 'elixir.bin'}  {len(img)} B")
     print(f"loader   {LDR / 'ota.bin'}  {len(ota)} B")
     print(f"package  {OUT / name}  {len(pkg)} B, identity {PRODUCT}")
     if a.release:                   # what a release carries: the package, the app and every licence they need
         rel = OUT / f"release-{a.release}"
         shutil.rmtree(rel, ignore_errors=True)
         (rel / "LICENSES").mkdir(parents=True)
-        app = f"kettle-{a.release}-app.bin"
+        app = f"elixir-{a.release}-app.bin"
         (rel / name).write_bytes(pkg)
         (rel / app).write_bytes(img)
         (rel / "SHA256SUMS").write_text("".join(f"{hashlib.sha256(b).hexdigest()}  {n}\n"

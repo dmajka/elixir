@@ -25,7 +25,7 @@ static void audio_silence(void)                 /* IRQs off: the DMA would loop 
     for (i = 0; i < sizeof abuf / sizeof abuf[0]; i++)
         abuf[i] = 0;
 }
-/* Kettle 0.5.1: a save's erases and writes behind the output's hush (engine.c): faded out first (the audio ISR's ramp,
+/* Elixir 0.5.1: a save's erases and writes behind the output's hush (engine.c): faded out first (the audio ISR's ramp,
  * ~6 ms; 30 ms at most, as when the audio is stopped), faded back in after (storage.c st_save_to,
  * project.c proj_save) */
 static void flash_hush(void)

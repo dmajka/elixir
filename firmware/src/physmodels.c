@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle 0.6 - 0.8: the physical models of the DRUM voices (SKIN, BAR, BELL, PLATE, TUBE), as voices.c had them.
+ * Elixir 0.6 - 0.8: the physical models of the DRUM voices (SKIN, BAR, BELL, PLATE, TUBE), as voices.c had them.
  * Not built since 0.9 (rings.c took the MODEL section: the user didn't like how these sounded); kept for reference,
  * and to be put back as they were if wanted: include this in voices.c in rings.c's place, with sound.c's MODEL
  * plumbing and the 0.8 tests (git history: tests/ui_test.c phase5d). */

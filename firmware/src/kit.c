@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle: kits. 64 kit slots in RAM (the LXR's mainParameters: a kit is its sound parameters, the .SND layout, then
- * Kettle's: KIT_LEN, kit_par), each with an 8-character name; the edit buffer is par[] (sound.c). LOAD copies a slot
+ * Elixir: kits. 64 kit slots in RAM (the LXR's mainParameters: a kit is its sound parameters, the .SND layout, then
+ * Elixir's: KIT_LEN, kit_par), each with an 8-character name; the edit buffer is par[] (sound.c). LOAD copies a slot
  * into it, SAVE copies it (or, SAVE MORPH, the morph's mixture) into a slot; a project (project.c) keeps all of them in
  * flash. Ported from the LXR firmware, Core/Src/Preset (presetManager.c, initKit.c), Copyright (C) 2012-2026 Erica
  * Synths, GPL-3.0-only. */
@@ -32,7 +32,7 @@ static const uint8_t INIT_KIT[254] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00};
 
-/* Kettle's parameters in the init kit: 0 (no sends, no shaping), but the reverb (a medium ROOM, LEVEL 100) and the
+/* Elixir's parameters in the init kit: 0 (no sends, no shaping), but the reverb (a medium ROOM, LEVEL 100) and the
  * tilt EQs (64: flat) */
 static uint32_t init_kit_k(uint32_t p)
 {
@@ -126,8 +126,8 @@ static void out_migrate(uint8_t *out, uint8_t *send)
             send[i] = 127;
         }
 }
-/* a kit (kit layout) as Kettle reads it: the modulation targets indexes of MOD_TARGETS (preset_readDrumsetData's
- * check), no Out = FX BUS, Kettle's values in range */
+/* a kit (kit layout) as Elixir reads it: the modulation targets indexes of MOD_TARGETS (preset_readDrumsetData's
+ * check), no Out = FX BUS, Elixir's values in range */
 static void kit_sanitize(uint8_t *p)
 {
     uint32_t i;
@@ -143,9 +143,9 @@ static void kit_sanitize(uint8_t *p)
             p[i] = (uint8_t)init_kit_k(kit_par(i));
 }
 
-#if KETTLE_FACTORY_KITS
+#if ELIXIR_FACTORY_KITS
 /* 0.7: a bank of LXR-02 kits built in from a local folder (tools/gen_factory_kits.py; never in a public build: the
- * kits aren't Kettle's to give away). FACTORY_KITS[f]: the .SND file (8 name bytes, the LXR's 247). A fresh unit
+ * kits aren't Elixir's to give away). FACTORY_KITS[f]: the .SND file (8 name bytes, the LXR's 247). A fresh unit
  * starts with the first 64 in its slots; LOAD > FACTORY loads one into the edit buffer, or all into the slots. */
 #include "factory_kits.h"
 static void kit_factory_values(uint32_t f, uint8_t *p)

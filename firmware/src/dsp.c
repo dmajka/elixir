@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle: the LXR-02's DSP building blocks in fixed point (the FM-1 has no FPU).
+ * Elixir: the LXR-02's DSP building blocks in fixed point (the FM-1 has no FPU).
  * Ported from the LXR firmware, Core/Src/Soundengine/DSPAudio (Oscillator.c, transientGenerator.c, SlopeEg2.c,
  * Decay.c, snapEg.c, ResonantFilter.c, distortion.c), Copyright (C) 2012-2026 Erica Synths, GPL-3.0-only.
  *

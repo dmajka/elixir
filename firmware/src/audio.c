@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
- * Kettle: Felucca's I2S output (ALNK0 -> the codec) and its audio ISR: per half buffer (HALF_FRAMES), the
+ * Elixir: Felucca's I2S output (ALNK0 -> the codec) and its audio ISR: per half buffer (HALF_FRAMES), the
  * engine's blocks (engine.c, BLOCK each), then Q15 -> 24 bit. The load meter as Felucca's. */
 #define HALF_FRAMES 128u          /* two of the engine's blocks: 2.9 ms at 44.1 kHz */
 #define HALF_WORDS (HALF_FRAMES * 2u)

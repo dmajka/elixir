@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle: the kit library (0.8). Kits and single sounds kept in flash outside the projects, read one at a time, so
+ * Elixir: the kit library (0.8). Kits and single sounds kept in flash outside the projects, read one at a time, so
  * more of them cost no RAM: 128 kits and 128 sounds (one voice's settings), each with a name. LOAD and SAVE reach them
  * (a kit's source LIBRARY, the type SOUND), LOAD MORPH takes its target from there, the sound browser lists them, and
  * the library page backs them up (library.c).
@@ -299,7 +299,7 @@ static uint32_t kl_count(uint32_t kind)
 }
 
 /* ------------------------------------------------------------ sounds --- */
-/* A sound: one voice's settings, the kit's parameters of that voice (par_voice) in the kit's order, Kettle's after
+/* A sound: one voice's settings, the kit's parameters of that voice (par_voice) in the kit's order, Elixir's after
  * the LXR's. The three DRUM voices have the same list (D1's, D2's, D3's in step), so a drum's sound goes to any drum
  * track; the others only to their own. A sound's payload: its kind (SK_*), the voice it was taken from, the count, the
  * values. Moved to another drum, what pointed at its own voice (a velocity or LFO target, the LFO's retrigger, the
@@ -480,7 +480,7 @@ static void sb_build(uint32_t v)                     /* the list for voice v */
     for (i = 0; i < NUM_KITS; i++) {
         uint32_t n0 = sb_n, j, w;
         sb_add_kit(SB_SLOT, i, kits[i], v);
-#if KETTLE_FACTORY_KITS
+#if ELIXIR_FACTORY_KITS
         if (i < FACTORY_NKITS) {                     /* (a slot still as the factory kit it started with: once) */
             uint8_t a[SOUND_MAX], c[SOUND_MAX];
             kit_factory_values(i, k);
@@ -498,7 +498,7 @@ static void sb_build(uint32_t v)                     /* the list for voice v */
         (void)w;
 #endif
     }
-#if KETTLE_FACTORY_KITS
+#if ELIXIR_FACTORY_KITS
     for (i = 0; i < FACTORY_NKITS; i++) {
         kit_factory_values(i, k);
         sb_add_kit(SB_FACTORY, i, k, v);
@@ -530,7 +530,7 @@ static uint32_t sb_values(uint32_t e, uint32_t v, uint8_t *out, uint32_t *from)
     case SB_SLOT:
         return voice_get(kits[i], w, out);
     default:
-#if KETTLE_FACTORY_KITS
+#if ELIXIR_FACTORY_KITS
         kit_factory_values(i, k);
         return voice_get(k, w, out);
 #else
@@ -551,7 +551,7 @@ static void sb_label(uint32_t e, uint32_t v, char *name, char *tag, uint32_t n)
         (void)kl_name(KLK_KIT, i, name);
     else if (src == SB_SLOT)
         memcpy(name, kit_names[i], 8);
-#if KETTLE_FACTORY_KITS
+#if ELIXIR_FACTORY_KITS
     else
         kit_factory_name(i, name);
 #endif

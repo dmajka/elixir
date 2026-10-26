@@ -1,0 +1,81 @@
+/* SPDX-License-Identifier: GPL-3.0-only
+   Elixir's site (0.14): the front page, install and library pages. web/make_site.py copies it to the site's root
+   and puts the header (<!--NAV-->) and the pixel art (the potion and the word, from firmware/src/ui_draw.c) in. */
+:root {
+  --bg: #faf8f4; --fg: #1d1b18; --dim: #6a645a; --line: #e5dfd3; --card: #ffffff; --well: #f1ede5;
+  --accent: #a85f00; --accent-fill: #f0a43a; --accent-ink: #1d1b18; --warn: #a33a00;
+  --liquid: #f0a43a; --liquid-hi: #f8d394; --liquid-lo: #a8640f; --glass: rgba(29, 27, 24, .07);
+  --cork: #96603a; --spark: #e9a640; --shine: #ffffff; --shadow: rgba(240, 164, 58, .55);
+  --radius: 10px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131210; --fg: #f2ede3; --dim: #a29b8e; --line: #2d2a25; --card: #1b1a17; --well: #201e1b;
+    --accent: #f5b04f; --accent-fill: #f0a43a; --accent-ink: #1d1b18; --warn: #ff9a5c;
+    --glass: rgba(242, 237, 227, .08); --spark: #f8d394; --shadow: rgba(240, 164, 58, .45);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131210; --fg: #f2ede3; --dim: #a29b8e; --line: #2d2a25; --card: #1b1a17; --well: #201e1b;
+  --accent: #f5b04f; --accent-fill: #f0a43a; --accent-ink: #1d1b18; --warn: #ff9a5c;
+  --glass: rgba(242, 237, 227, .08); --spark: #f8d394; --shadow: rgba(240, 164, 58, .45);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); -webkit-font-smoothing: antialiased;
+       font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:hover { text-decoration-thickness: 2px; }
+h1, h2, h3 { line-height: 1.2; letter-spacing: -0.01em; }
+h2 { font-size: 28px; font-weight: 650; margin: 0 0 12px; }
+h3 { font-size: 18px; font-weight: 600; margin: 0 0 6px; }
+p { margin: 0 0 14px; }
+code { font: 0.88em ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--well); padding: 1px 5px;
+       border-radius: 4px; }
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+.narrow { max-width: 640px; }
+.dim { color: var(--dim); }
+.small { color: var(--dim); font-size: 14px; }
+.warn { color: var(--warn); }
+
+/* the header on every page */
+header.site { border-bottom: 1px solid var(--line); }
+header.site .wrap { display: flex; align-items: center; gap: 24px; min-height: 60px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--fg); text-decoration: none; font-weight: 650;
+         font-size: 19px; letter-spacing: 0.02em; }
+.brand svg { width: 26px; height: auto; }
+header.site nav { display: flex; gap: 20px; flex-wrap: wrap; margin-left: auto; font-size: 15px; }
+header.site nav a { color: var(--dim); text-decoration: none; padding: 4px 0; }
+header.site nav a:hover, header.site nav a[aria-current] { color: var(--fg); }
+header.site nav a[aria-current] { box-shadow: inset 0 -2px var(--accent-fill); }
+@media (max-width: 560px) { header.site .wrap { gap: 4px 16px; padding-top: 10px; padding-bottom: 10px; }
+                            header.site nav { margin-left: 0; gap: 14px; } }
+
+/* buttons, as links or as buttons */
+.btn, button { display: inline-block; font: inherit; font-size: 16px; font-weight: 600; line-height: 1.2;
+               padding: 11px 20px; border-radius: 8px; border: 1px solid transparent; cursor: pointer;
+               text-decoration: none; background: var(--accent-fill); color: var(--accent-ink); }
+.btn:hover, button:hover:not(:disabled) { filter: brightness(1.06); text-decoration: none; }
+.btn.alt, button.alt { background: transparent; color: var(--fg); border-color: var(--line); }
+.btn.alt:hover, button.alt:hover:not(:disabled) { border-color: var(--dim); }
+button:disabled { opacity: .35; cursor: default; }
+
+/* the pixel art: the potion and the word (svg, a class per colour) */
+.px-c { fill: var(--cork); } .px-o { fill: var(--fg); } .px-g { fill: var(--glass); } .px-h { fill: var(--shine); }
+.px-l { fill: var(--liquid); } .px-L { fill: var(--liquid-hi); } .px-d { fill: var(--liquid-lo); }
+.px-s { fill: var(--spark); } .px-w { fill: var(--fg); } .px-ws { fill: var(--shadow); }
+svg.pixel { shape-rendering: crispEdges; display: block; }
+
+/* the FM-1's screen */
+.screen { margin: 0; }
+.screen img { display: block; width: 100%; max-width: 360px; aspect-ratio: 1; border-radius: 6px;
+              background: #000; border: 8px solid #0b0b0a; box-shadow: 0 1px 0 var(--line), 0 12px 32px -18px rgba(0,0,0,.55); }
+.screen figcaption { font-size: 14px; color: var(--dim); margin-top: 8px; }
+
+footer.site { border-top: 1px solid var(--line); margin-top: 72px; padding: 28px 0 48px; font-size: 14px;
+              color: var(--dim); }
+footer.site p { margin-bottom: 8px; }
+footer.site a { color: inherit; }

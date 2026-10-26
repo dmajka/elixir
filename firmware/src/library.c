@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle: the library (0.7). A computer reads and writes what the unit holds, over USB MIDI SysEx: backing up and
+ * Elixir: the library (0.7). A computer reads and writes what the unit holds, over USB MIDI SysEx: backing up and
  * restoring projects, and kits in and out (an LXR-02 .SND file is a kit's name and its first 247 bytes). The page is
- * web/library.html; the browser emulator takes the same messages (kettle_web.c web_lib_in).
+ * web/library.html; the browser emulator takes the same messages (elixir_web.c web_lib_in).
  *
  * A message: F0 7D 'K' 'T' pack7(cmd tag payload.. chk) F7. pack7: 8-to-7, LSB first (as ota.c's). chk: ~ the sum of
  * cmd .. payload. The answer: cmd | 0x80, the same tag, a status (LS_*), its payload, chk. One message at a time: the
@@ -24,11 +24,11 @@
  *   25 SAVE slot, name[8]                     -> the session into the slot (4: the AUTO session)
  *   30 KIT_PUT idx, flags, name[8], n (2), data[n]
  *                                             -> the kit slot: data is the kit layout (kit.c), n up to KIT_LEN; past
- *                                                n, the LXR's part is 0 (as the LXR reads a short .SND) and Kettle's
+ *                                                n, the LXR's part is 0 (as the LXR reads a short .SND) and Elixir's
  *                                                its init values. Flags bit 0: load it into the edit buffer too
  *   31 KIT_GET idx                            -> idx, name[8], n (2) = KIT_LEN, the kit layout
  *   32 PAT_BEGIN idx                          -> 0.8, an LXR-02 pattern in (the page reads the .PAT): the pattern
- *                                                cleared (no shuffle, kit 1, Kettle's own settings off)
+ *                                                cleared (no shuffle, kit 1, Elixir's own settings off)
  *   33 PAT_STEPS idx, track, first, n (<= 32), steps[n] (7 bytes each: the LXR's Step), timing[n]
  *   34 PAT_END idx, main[7][4] (2 each), shuffle, len[7], kit
  *                                             -> the pattern complete (the playing one: as loaded)
@@ -124,7 +124,7 @@ static void lib_write_stop(void)
 
 static void lib_info(void)
 {
-    static const char V[] = KETTLE_VERSION;
+    static const char V[] = ELIXIR_VERSION;
     uint32_t l, i;
     lib_put(LIB_PROTO);
     for (i = 0; i < 8u; i++)
@@ -333,7 +333,7 @@ static uint32_t lib_kit_put(const uint8_t *a, uint32_t n)
         return LS_ARGS;
     if (n < 12u + cnt)
         return LS_BAD;
-    kit_init_values(kits[idx]);                      /* Kettle's part: the init kit's */
+    kit_init_values(kits[idx]);                      /* Elixir's part: the init kit's */
     for (i = 0; i < END_OF_SOUND_PARAMETERS; i++)   /* the LXR's part: as read, 0 past it */
         kits[idx][i] = i < cnt ? a[12 + i] : 0u;
     for (; i < cnt; i++)

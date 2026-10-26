@@ -1,18 +1,20 @@
-# Kettle
+# Elixir
 
 The Erica Synths LXR-02 drum machine's firmware, ported to the M-VAVE FM-1.
 
-Kettle runs the LXR-02's sound engine and sequencer on the FM-1. It has six voices on seven tracks (three drums, snare/clap, cymbal, closed and open hat), the FX bus, 32 patterns of 4 bars with parameter locks, flams and shifts, rolls, Euclid, morph, songs, kits and projects, and MIDI in/out with clock sync. On top of the LXR, each voice has an FX send and a reverb send, and the reverb is Felucca's (room, spring, hall). Each voice also has a waveshaper choice, a bit reducer, a tilt EQ, random-per-hit variation, a choke group and cross-modulation from another voice. The FX bus adds a phaser and a flanger. The three drum voices can also ring through a port of Mutable Instruments Rings' resonators (modal, string, FM). The keyboard can play a voice as an instrument (KEYS), a sound browser loads single sounds into a track, and a kit library in flash holds 128 kits and 128 sounds beyond the project. It is built on [Felucca](https://github.com/hugelton/Felucca)'s hardware layer, USB stack, updater, reverb and emulator.
+Elixir runs the LXR-02's sound engine and sequencer on the FM-1. It has six voices on seven tracks (three drums, snare/clap, cymbal, closed and open hat), the FX bus, 32 patterns of 4 bars with parameter locks, flams and shifts, rolls, Euclid, morph, songs, kits and projects, and MIDI in/out with clock sync. On top of the LXR, each voice has an FX send and a reverb send, and the reverb is Felucca's (room, spring, hall). Each voice also has a waveshaper choice, a bit reducer, a tilt EQ, random-per-hit variation, a choke group and cross-modulation from another voice. The FX bus adds a phaser and a flanger. The three drum voices can also ring through a port of Mutable Instruments Rings' resonators (modal, string, FM). The keyboard can play a voice as an instrument (KEYS), a sound browser loads single sounds into a track, and a kit library in flash holds 128 kits and 128 sounds beyond the project. It is built on [Felucca](https://github.com/hugelton/Felucca)'s hardware layer, USB stack, updater, reverb and emulator.
 
 The FM-1 has no FPU, so the LXR's floating-point DSP is rewritten in fixed point. `tests/compare_test.c` renders each voice with both engines and compares them: levels match to 0.1 dB, and the tonal voices correlate at 0.99–1.00. Noise-based sounds correlate lower only because the noise generator differs.
 
+**Formerly Kettle.** Elixir was called Kettle up to 0.13 (github.com/dmajka/kettle). A unit running Kettle updates to Elixir from the install page and keeps its projects, kit library and settings (see the manual's *Upgrading from Kettle*).
+
 **Unofficial.** Not affiliated with or endorsed by Erica Synths, M-VAVE or Hügelton Instruments.
 
-**[MANUAL.md](MANUAL.md)** documents everything: the controls, every page, and what Kettle adds to the LXR-02.
+**[MANUAL.md](MANUAL.md)** documents everything: the controls, every page, and what Elixir adds to the LXR-02.
 
 ## Controls
 
-| FM-1 control | Kettle |
+| FM-1 control | Elixir |
 |---|---|
 | White keys 1–16 | Steps of the shown bar · patterns (pattern page) · rolls, FILL and effects (PERF) |
 | Black keys 1–7 | Tracks D1 D2 D3 SN CY CH OH (select) · SHIFT + key: mute · SHIFT + GLO: solo the selected track |
@@ -121,11 +123,11 @@ The FX bus has two new types. **Phaser**: rate, depth, feedback, centre. **Flang
 ## MIDI and sync
 
 - **In:** USB MIDI and the TRS jack. Notes on each track's channel play its voice; the global channel plays the selected track. CC *n* sets parameter *n*−1 and NRPN reaches the rest, as on the LXR. CC0 picks a kit, program change 0–31 a pattern.
-- **Kettle's own parameters** (NRPN, six numbers per voice-based setting, in the order D1 D2 D3 SN CY HH): 174–179 FX send, 180–185 reverb send, 186 reverb size, 187 damping, 188 level, 189 model (0 room, 1 spring, 2 hall), 190–195 bits, 196–201 waveshaper, 202–207 tilt, 208–213 choke group, 214–219 random pitch, 220–225 random decay, 226–231 random filter, 232–237 random pan, 238–243 cross-mod source (0 none, 1–6), 244–249 cross-mod mode (0 duck, 1 filter, 2 ring), 250–255 cross-mod amount.
+- **Elixir's own parameters** (NRPN, six numbers per voice-based setting, in the order D1 D2 D3 SN CY HH): 174–179 FX send, 180–185 reverb send, 186 reverb size, 187 damping, 188 level, 189 model (0 room, 1 spring, 2 hall), 190–195 bits, 196–201 waveshaper, 202–207 tilt, 208–213 choke group, 214–219 random pitch, 220–225 random decay, 226–231 random filter, 232–237 random pan, 238–243 cross-mod source (0 none, 1–6), 244–249 cross-mod mode (0 duck, 1 filter, 2 ring), 250–255 cross-mod amount.
 - **Remote map** (CONFIG → REMOTE, channel 16 by default): rows of eight for a controller such as the Launch Control XL, columns 1–7 the tracks and 8 the master. Knobs on CCs 8–119 (volume, pan, filter, resonance, decay, pitch, drive, sends, sample rate, LFO, random, macros, plus master tempo, morph, DJ filter, FX and reverb), buttons on notes 36–93 (mute, solo, select, rolls, DRILL, PERF's effects held or latched, PLAY, REC, patterns). Knobs PICKUP, ABS or REL. Values and button states go back out over USB. Under REC a knob records locks on its own track. The table is in the manual (§15).
 - **Out:** USB MIDI. The FM-1 has no MIDI out jack.
 - **Clock out:** always sent, 24 PPQ, plus start/stop.
-- **Clock in:** turn the tempo below its minimum to **MIDI**. Kettle then follows incoming clock and start/continue/stop.
+- **Clock in:** turn the tempo below its minimum to **MIDI**. Elixir then follows incoming clock and start/continue/stop.
 
 ## Try it in the browser
 
@@ -139,33 +141,33 @@ The emulator runs the firmware's own C sources compiled to WebAssembly, on a sim
 
 ## Library: backup, restore, LXR-02 kits
 
-`web/library.html` (the site's `library/`) talks to Kettle over USB MIDI SysEx (`firmware/src/library.c`, protocol in its header; `web/library.js`). It backs up and restores projects, imports LXR-02 .SND kits, imports a whole LXR-02 project folder (kits, patterns in V1–V3 formats, songs; Kettle's 32 patterns take one half of the LXR's 64), and backs up and restores the kit library (`.ktlb`); the emulator page has the same under **Library**.
+`web/library.html` (the site's `library/`) talks to Elixir over USB MIDI SysEx (`firmware/src/library.c`, protocol in its header; `web/library.js`). It backs up and restores projects, imports LXR-02 .SND kits, imports a whole LXR-02 project folder (kits, patterns in V1–V3 formats, songs; Elixir's 32 patterns take one half of the LXR's 64), and backs up and restores the kit library (`.ktlb`); the emulator page has the same under **Library**.
 
-**Kit library** (`firmware/src/kitlib.c`): 128 kits and 128 single sounds in flash at 0xEA000–0xFBFFF, outside the projects, read one at a time (no RAM per kit). PRESETS' kit browser shows it with KNOB 1 at From LIBRARY, SAVE / LOAD → KIT and MORPH reach it with KNOB 3 (To / From LIBRARY), SAVE / LOAD → SOUND saves or loads one track's sound, and the sound browser lists it. Writes are a log with a commit record written last, so a write cut short leaves the slot as it was. That flash area is outside Kettle's updater and the stock firmware's known store; that the stock V15 leaves it alone is not yet confirmed on a unit, so back the library up before installing other firmware. The library page and the emulator's Library import LXR-02 kits into it or into the slots (a folder: its subfolders too); in the emulator, kits can be tried first and the library downloaded for the FM-1.
+**Kit library** (`firmware/src/kitlib.c`): 128 kits and 128 single sounds in flash at 0xEA000–0xFBFFF, outside the projects, read one at a time (no RAM per kit). PRESETS' kit browser shows it with KNOB 1 at From LIBRARY, SAVE / LOAD → KIT and MORPH reach it with KNOB 3 (To / From LIBRARY), SAVE / LOAD → SOUND saves or loads one track's sound, and the sound browser lists it. Writes are a log with a commit record written last, so a write cut short leaves the slot as it was. That flash area is outside Elixir's updater and the stock firmware's known store; that the stock V15 leaves it alone is not yet confirmed on a unit, so back the library up before installing other firmware. The library page and the emulator's Library import LXR-02 kits into it or into the slots (a folder: its subfolders too); in the emulator, kits can be tried first and the library downloaded for the FM-1.
 
-The LXR-02's factory and Hrtl kits can't be redistributed, but a private build can include your own copies: `KETTLE_KITS_DIR=dir:dir ./build.sh` (and `web/emu/build.sh`) generates `build/gen/factory_kits.h` (`tools/gen_factory_kits.py`). The version gets "+K", a fresh unit starts with those kits, LOAD has a FACTORY type, and `web/make_site.py` refuses to publish the build.
+The LXR-02's factory and Hrtl kits can't be redistributed, but a private build can include your own copies: `ELIXIR_KITS_DIR=dir:dir ./build.sh` (and `web/emu/build.sh`) generates `build/gen/factory_kits.h` (`tools/gen_factory_kits.py`). The version gets "+K", a fresh unit starts with those kits, LOAD has a FACTORY type, and `web/make_site.py` refuses to publish the build.
 
 ## Build the firmware
 
 Same requirements as Felucca: the JieLi pi32v2 toolchain (`~/.jieli/toolchain`), the JieLi AC79 SDK (`~/fw-AC79_AIoT_SDK`), Python 3 with Pillow and fontTools, and Docker on macOS (the toolchain is Linux x86-64).
 
 ```sh
-PYTHON=/path/to/python ./build.sh       # -> build/kettle.fwsc
+PYTHON=/path/to/python ./build.sh       # -> build/elixir.fwsc
 ```
 
 ## Install
 
-`web/make_site.py` makes Kettle's site in `build/site` (after `./build.sh` and `web/emu/build.sh`): the install page (Web MIDI, Chrome or Edge: a device check, official V15 first, Kettle, and back to V15), the emulator (`try/`), the manual as a page (`manual/`), and the package, source and licences (`firmware/`). Any static host serves it. For GitHub Pages, `tools/publish_site.sh` builds it and commits it to the `gh-pages` branch (then `git push origin gh-pages`; Settings → Pages → Deploy from a branch: `gh-pages`, root). The source is at https://github.com/dmajka/kettle (`REPO` in `web/make_site.py`; the pages link it). Install the official V15 first (see the manual's section 1).
+`web/make_site.py` makes Elixir's site in `build/site` (after `./build.sh` and `web/emu/build.sh`): the front page (`web/index.html`, `web/site.css`; its screens in `web/shots/`, made from ui_test's by `tools/site_shots.py`), the install page at `install/` (Web MIDI, Chrome or Edge: a device check, official V15 first, Elixir, and back to V15), the emulator (`try/`), the manual as a page (`manual/`), and the package, source and licences (`firmware/`). Any static host serves it. For GitHub Pages, `tools/publish_site.sh` builds it and commits it to the `gh-pages` branch (then `git push origin gh-pages`; Settings → Pages → Deploy from a branch: `gh-pages`, root). The source is at https://github.com/dmajka/elixir (`REPO` in `web/make_site.py`; the pages link it). Install the official V15 first (see the manual's section 1).
 
-Or install `build/kettle.fwsc` over USB:
+Or install `build/elixir.fwsc` over USB:
 
 ```sh
-python3 tools/fm1_install.py build/kettle.fwsc
+python3 tools/fm1_install.py build/elixir.fwsc
 ```
 
-To go back, install the official firmware file (`fm1_install.py FM-1.fwsc`) or any other alternative firmware. Kettle stores its projects and settings in the same flash region Felucca uses for its own data, so installing Kettle replaces data saved by Felucca.
+To go back, install the official firmware file (`fm1_install.py FM-1.fwsc`) or any other alternative firmware. Elixir stores its projects and settings in the same flash region Felucca uses for its own data, so installing Elixir replaces data saved by Felucca.
 
-Projects saved by older versions load in newer ones. Kettle 0.1 had 64 patterns; newer versions keep the first 32, and songs that pointed past them play pattern 32 instead. Projects do not load in older versions than the one that saved them.
+Projects saved by older versions load in newer ones. Elixir 0.1 had 64 patterns; newer versions keep the first 32, and songs that pointed past them play pattern 32 instead. Projects do not load in older versions than the one that saved them.
 
 ## Tests
 
@@ -177,13 +179,14 @@ cc -O1 -std=gnu99 -w -I build/gen -I firmware/src -I firmware/hal tests/ui_test.
 ```sh
 cc -O1 -std=gnu99 -w -I build/gen -I firmware/src -I firmware/hal tests/library_bridge.c -o build/library_bridge
 node tests/library_test.mjs [LXR project folder]   # the library page's code against the device's
+node tests/install_test.mjs                          # the install page's updater against simulated FM-1s
 ```
 
 ```sh
 EURORACK=path/to/eurorack STMLIB=path/to/stmlib tests/rings_compare.sh   # the models against Rings' own code
 ```
 
-`render_test` plays every voice and counts the MIDI clock. `ui_test` drives the panel as a user would (programming a beat, sound pages, locks, patterns, songs, saving and loading a project, MIDI sync in) and writes a screenshot of each screen to `build/shots/`. It also checks the sends, the reverb, the sound shaping, the phaser and flanger, loads a Kettle 0.1 project (`tests/data/proj_v1.bin`), and prints how big a busy and a dense project get. `compare_test` checks the voices against the original LXR DSP sources and needs the LXR repository (see its header). `library_test` runs the library page's own code against the device's through `library_bridge`: kits in and out, backups, restores, LXR projects (the LXR kits from `../lxr-02_kits` if there, or the project folder given), and the kit library. `rings_compare` renders the models with Kettle's fixed-point port and with Rings' float code (github.com/pichenettes/eurorack and stmlib, not in this tree; the script sets their sample rate to Kettle's 44.1 kHz in a copy) over pitches and settings, and fails below a correlation of 0.99 or above an error of −30 dB.
+`render_test` plays every voice and counts the MIDI clock. `ui_test` drives the panel as a user would (programming a beat, sound pages, locks, patterns, songs, saving and loading a project, MIDI sync in) and writes a screenshot of each screen to `build/shots/`. It also checks the sends, the reverb, the sound shaping, the phaser and flanger, loads a Elixir 0.1 project (`tests/data/proj_v1.bin`), and prints how big a busy and a dense project get. `compare_test` checks the voices against the original LXR DSP sources and needs the LXR repository (see its header). `library_test` runs the library page's own code against the device's through `library_bridge`: kits in and out, backups, restores, LXR projects (the LXR kits from `../lxr-02_kits` if there, or the project folder given), and the kit library. `install_test` runs the install page's updater (`web/fm1ota.js`) and device check (`web/install.js`) with the built package against simulated FM-1s over a mock Web MIDI: Kettle to Elixir (also when the computer keeps the name Kettle, a Windows-style port name, a release build's identity, a write cut off and resumed), Elixir to Elixir and V15 to Elixir, other MIDI gear left alone. `rings_compare` renders the models with Elixir's fixed-point port and with Rings' float code (github.com/pichenettes/eurorack and stmlib, not in this tree; the script sets their sample rate to Elixir's 44.1 kHz in a copy) over pitches and settings, and fails below a correlation of 0.99 or above an error of −30 dB.
 
 ## Licence
 

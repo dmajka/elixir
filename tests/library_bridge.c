@@ -1,12 +1,12 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle host bridge for tests/library_test.mjs: the emulator's device (kettle_web.c) with the library, on stdin and
+ * Elixir host bridge for tests/library_test.mjs: the emulator's device (elixir_web.c) with the library, on stdin and
  * stdout. A line in: a SysEx message in hex (or "run MS": the device runs MS milliseconds; "flash": the NOR's write
  * count; "pat N": pattern N's steps, timing, mains, lengths, shuffle and kit in hex; "song N": song N's 64 entries;
  * "boot": the power-on scan of the kit library again). A line out: the answer in hex ("-" for none), or the value.
  *   cc -O1 -std=gnu99 -w -I build/gen -I firmware/src -I firmware/hal tests/library_bridge.c -o build/library_bridge */
 #include <stdio.h>
 #include <stdlib.h>
-#include "../web/emu/kettle_web.c"
+#include "../web/emu/elixir_web.c"
 
 int main(void)
 {

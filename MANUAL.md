@@ -1,8 +1,8 @@
-# Kettle manual
+# Elixir manual
 
-Kettle is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 0.13: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Kettle adds.
+Elixir is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 0.14: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Elixir adds.
 
-Kettle is **unofficial**. It is not affiliated with or endorsed by Erica Synths, M-VAVE or Hügelton Instruments. It is free software under the GPL-3.0 (see *Licence and credits* at the end).
+Elixir is **unofficial**. It is not affiliated with or endorsed by Erica Synths, M-VAVE or Hügelton Instruments. It is free software under the GPL-3.0 (see *Licence and credits* at the end). Up to version 0.13 it was called **Kettle**.
 
 ---
 
@@ -25,7 +25,7 @@ Kettle is **unofficial**. It is not affiliated with or endorsed by Erica Synths,
 15. [MIDI](#15-midi)
 16. [Settings (CONFIG) and the CPU meter](#16-settings-config-and-the-cpu-meter)
 17. [Reference tables](#17-reference-tables)
-18. [How Kettle differs from the LXR-02](#18-how-kettle-differs-from-the-lxr-02)
+18. [How Elixir differs from the LXR-02](#18-how-elixir-differs-from-the-lxr-02)
 19. [Troubleshooting](#19-troubleshooting)
 20. [Licence and credits](#20-licence-and-credits)
 - [Appendix: the remote map at a glance](#appendix-the-remote-map-at-a-glance)
@@ -36,40 +36,46 @@ Kettle is **unofficial**. It is not affiliated with or endorsed by Erica Synths,
 
 ### Status
 
-Kettle has been tested extensively in its browser emulator and with host tests (the same C sources compiled for a computer), and **it has run on one real FM-1 so far** (October 2026). There, a busy pattern used about 60% of the processor on average, with a 64% peak. Kettle shows its load on screen (see [the CPU meter](#16-settings-config-and-the-cpu-meter)); reports from other FM-1s are welcome. Versions 0.6 to 0.9 (PERFORM 2, the models, KEYS, the kit library) have so far only run in the emulator: their load on the FM-1 hasn't been measured yet. The models (Rings', from 0.9) are the heaviest part, so watch the CPU meter with two or three drum voices on a model, or with PERFORM 2 effects on.
+Elixir has been tested extensively in its browser emulator and with host tests (the same C sources compiled for a computer), and **it has run on one real FM-1 so far** (October 2026). There, a busy pattern used about 60% of the processor on average, with a 64% peak. Elixir shows its load on screen (see [the CPU meter](#16-settings-config-and-the-cpu-meter)); reports from other FM-1s are welcome. Versions 0.6 to 0.9 (PERFORM 2, the models, KEYS, the kit library) have so far only run in the emulator: their load on the FM-1 hasn't been measured yet. The models (Rings', from 0.9) are the heaviest part, so watch the CPU meter with two or three drum voices on a model, or with PERFORM 2 effects on.
 
 ### Before the first install: official V15
 
-Put the FM-1 on M-VAVE's official firmware **V15** before installing Kettle for the first time. This is what everyone who makes FM-1 firmware recommends. Kettle's package, like Felucca's, is built for V15's flash layout and update loader, and V15 is the firmware you return to.
+Put the FM-1 on M-VAVE's official firmware **V15** before installing Elixir for the first time. This is what everyone who makes FM-1 firmware recommends. Elixir's package, like Felucca's, is built for V15's flash layout and update loader, and V15 is the firmware you return to.
 
-The install page has a **Check my FM-1** button. It asks the FM-1 what it runs: `FM-1_015` is official V15, `FM-1_9xx` is an alternative firmware (Felucca or Kettle), and anything else is an older official version. If it isn't V15, get V15 (`FM-1.fwsc`) from M-VAVE's download page and install it with the page's **Official V15** section, or with M-VAVE's own updater.
+The install page has a **Check my FM-1** button. It asks the FM-1 what it runs: `FM-1_015` is official V15, `FM-1_9xx` is an alternative firmware (Felucca, Kettle or Elixir), and anything else is an older official version. If it isn't V15, get V15 (`FM-1.fwsc`) from M-VAVE's download page and install it with the page's **Official V15** section, or with M-VAVE's own updater.
 
 ### Installing
 
-Use the Kettle install page (`index.html` of the Kettle site) in Chrome or Edge. Connect the FM-1 straight to the computer with a USB data cable, close other apps that use MIDI, and press **Install Kettle**. Allow MIDI (SysEx) when the browser asks. The page sends the package, waits for the FM-1 to restart and checks that it now runs Kettle. Don't unplug the cable or close the page while it writes.
+Use the Elixir install page (`install/` on the Elixir site) in Chrome or Edge. Connect the FM-1 straight to the computer with a USB data cable, close other apps that use MIDI, and press **Install Elixir**. Allow MIDI (SysEx) when the browser asks. The page sends the package, waits for the FM-1 to restart and checks that it now runs Elixir. Don't unplug the cable or close the page while it writes.
 
 From a terminal, `tools/fm1_install.py` does the same. It needs Python 3 with `mido` and `python-rtmidi`:
 
 ```sh
-python3 tools/fm1_install.py kettle.fwsc
+python3 tools/fm1_install.py elixir.fwsc
 ```
+
+### Upgrading from Kettle
+
+Elixir was called **Kettle** up to version 0.13. It is the same firmware under a new name, so update it as you would any Elixir release: skip V15 and install Elixir over Kettle from Elixir's install page. Your projects, kit library and settings stay where they are and load as before. Backups made with Kettle's library page (`.ktbk`, `.ktp`, `.ktlb`) restore on Elixir; the file types keep their names.
+
+The FM-1's USB name changes from "Kettle" to "Elixir". Some computers keep showing the old name for a while; Elixir's install and library pages, and `fm1_install.py`, find the FM-1 under either name. Kettle's old install page only looks for "Kettle", so use Elixir's from now on.
 
 ### Going back
 
-Install the official `FM-1.fwsc` (V15) with the install page's **Official V15** section, or with `fm1_install.py FM-1.fwsc`. Kettle has no backup of its own: copy anything you want to keep before you go back. (The page checks that the file is the unmodified V15, so a damaged or wrong file can't be written.)
+Install the official `FM-1.fwsc` (V15) with the install page's **Official V15** section, or with `fm1_install.py FM-1.fwsc`. Elixir has no backup of its own: copy anything you want to keep before you go back. (The page checks that the file is the unmodified V15, so a damaged or wrong file can't be written.)
 
-Kettle keeps its projects and settings in the same flash area Felucca uses for its own data, so **installing Kettle replaces anything saved by Felucca** (back it up with Felucca's own page first), and installing something else afterwards replaces Kettle's projects.
+Elixir keeps its projects and settings in the same flash area Felucca uses for its own data, so **installing Elixir replaces anything saved by Felucca** (back it up with Felucca's own page first), and installing something else afterwards replaces Elixir's projects.
 
 ### If something goes wrong
 
-How an update works decides what can be recovered. The firmware that is running (official, Felucca or Kettle) answers the installer, checks the package and starts the FM-1's **update loader**. The loader writes the new firmware and restarts. So:
+How an update works decides what can be recovered. The firmware that is running (official, Felucca, Kettle or Elixir) answers the installer, checks the package and starts the FM-1's **update loader**. The loader writes the new firmware and restarts. So:
 
-- **An install was cut off** (cable pulled, page closed, computer asleep): the FM-1 stays in update mode, waiting for the loader's write. Plug it in and press Install again (or run `fm1_install.py` again). It finishes the write. This works for Kettle and for V15.
-- **Kettle runs but something is wrong** (it misbehaves, it's too slow, you don't like it): install V15 from the page. Kettle answers the installer like any other firmware.
-- **Kettle crashes as it starts** (it never reaches the grid): this is the case to worry about, because no firmware is left to answer the installer. Kettle's boot guard notices two crashed starts in a row and sends the FM-1 to the chip's own **UBOOT** mode on the next start. UBOOT is built into the chip and survives any firmware, but neither the install page nor `fm1_install.py` can write from it. Recovery then needs Leo Kuroshita's [FM-1-transporter](https://github.com/kurogedelic/FM-1-transporter): a Seeed XIAO RP2040 board wired to the FM-1's USB lines, which can rewrite its flash.
+- **An install was cut off** (cable pulled, page closed, computer asleep): the FM-1 stays in update mode, waiting for the loader's write. Plug it in and press Install again (or run `fm1_install.py` again). It finishes the write. This works for Elixir and for V15.
+- **Elixir runs but something is wrong** (it misbehaves, it's too slow, you don't like it): install V15 from the page. Elixir answers the installer like any other firmware.
+- **Elixir crashes as it starts** (it never reaches the grid): this is the case to worry about, because no firmware is left to answer the installer. Elixir's boot guard notices two crashed starts in a row and sends the FM-1 to the chip's own **UBOOT** mode on the next start. UBOOT is built into the chip and survives any firmware, but neither the install page nor `fm1_install.py` can write from it. Recovery then needs Leo Kuroshita's [FM-1-transporter](https://github.com/kurogedelic/FM-1-transporter): a Seeed XIAO RP2040 board wired to the FM-1's USB lines, which can rewrite its flash.
 - **Hold OCT− and OCT+ together for 5 seconds** to enter UBOOT by hand (the screen shows UBOOT). This is only useful with the Transporter. Turning the FM-1 off and on should leave it, but this hasn't been tried on hardware.
 
-Kettle has installed and started on one real FM-1, from V15, with the install page. That is still very little testing: install it knowing that a start-up crash would need the Transporter to undo.
+Elixir has installed and started on one real FM-1, from V15, with the install page. That is still very little testing: install it knowing that a start-up crash would need the Transporter to undo.
 
 ---
 
@@ -93,7 +99,7 @@ Kettle has installed and started on one real FM-1, from V15, with the install pa
 
 The FM-1's keyboard has 16 white keys and 11 black keys, numbered left to right in this manual.
 
-| Control | What it does in Kettle |
+| Control | What it does in Elixir |
 |---|---|
 | **White keys 1–16** | The 16 steps of the bar on screen. On the pattern page: patterns. In PERF: rolls and effects. |
 | **Black keys 1–7** | Select a track: D1 D2 D3 SN CY CH OH. SHIFT + key: mute / unmute it. |
@@ -141,7 +147,7 @@ The FM-1's keyboard has 16 white keys and 11 black keys, numbered left to right 
 
 ## 4. Tracks and voices
 
-Kettle has the LXR-02's six voices on seven tracks:
+Elixir has the LXR-02's six voices on seven tracks:
 
 | Track | Key | Voice |
 |---|---|---|
@@ -151,7 +157,7 @@ Kettle has the LXR-02's six voices on seven tracks:
 | CH | black 6 | Closed hi-hat: three-operator FM |
 | OH | black 7 | Open hi-hat: the same voice as CH with its open decay; one cuts the other |
 
-Every voice has a transient generator (click), an amp envelope, a filter, a waveshaper, a sample-rate reducer, pan and an output, plus Kettle's additions: sends, bit reduction, tilt EQ, waveshaper choice, random per hit, choke groups and cross modulation.
+Every voice has a transient generator (click), an amp envelope, a filter, a waveshaper, a sample-rate reducer, pan and an output, plus Elixir's additions: sends, bit reduction, tilt EQ, waveshaper choice, random per hit, choke groups and cross modulation.
 
 ---
 
@@ -247,7 +253,7 @@ MIDI notes played while in step edit set the selected step's note.
 A lock sets one parameter to a different value on one step, for example a higher filter cutoff on the last kick of the bar. Each step can hold **two** locks.
 
 - **The quick way:** on any sound page (EDIT, ENV, SCL, LFO, GLO, the mixer), hold a step key and turn a knob. The step turns on if it was off, and the knob's card shows the locked value in the accent colour.
-- **On the LOCKS page:** choose any lockable parameter (any voice's sound parameter, the FX bus, the sends, the reverb, Kettle's shaping parameters) and its value.
+- **On the LOCKS page:** choose any lockable parameter (any voice's sound parameter, the FX bus, the sends, the reverb, Elixir's shaping parameters) and its value.
 
 Every sound parameter can be locked except the reverb's model.
 
@@ -291,7 +297,7 @@ The FM-1's keys have no velocity, so KEYS sets it: **Velocity** (KNOB 2) is the 
 
 ## 8. Patterns, banks and songs
 
-Kettle has **32 patterns** in two banks of 16, and **64 songs**.
+Elixir has **32 patterns** in two banks of 16, and **64 songs**.
 
 ### The pattern page (HOME, press again)
 
@@ -326,12 +332,12 @@ Select a track, then press a sound button. Pressing the same button again moves 
 | **Oscillator** (EDIT) | Coarse, Fine, Waveform, Pulse width | Coarse, Fine, Noise frequency, Mix / Waveform, Pulse width | Coarse, Fine, Waveform, Pulse width (OH: no pulse width) |
 | **FM** (EDIT) | Amount, Frequency, Waveform, Mode (FM or mix) | – | Mod 1 & 2 frequency and gain / their waveforms |
 | **Transient** (EDIT) | Waveform, Volume, Frequency | same | same |
-| **Model** (EDIT, Kettle's) | Model, Decay, Bright, Struct / Position, Exciter, Tension (see *Models* below) | – | – |
+| **Model** (EDIT, Elixir's) | Model, Decay, Bright, Struct / Position, Exciter, Tension (see *Models* below) | – | – |
 | **Amp EG** (ENV) | Attack, Decay, Slope | Attack, Decay, Repeat count (claps), Slope | Attack, Decay (CH: closed; OH: open), Repeat (cymbal), Slope |
 | **Mod EG / velocity** (ENV) | Pitch EG: Decay, Slope, Amount / Velocity: destination, amount, volume mod | same | Velocity: destination, amount, volume mod |
 | **Filter** (SCL) | Frequency, Resonance, Type (LP HP BP UNITY BP NOTCH PEAK LP2 OFF), Overdrive | same | same |
 | **LFO** (LFO) | Frequency, Clock sync, Amount, Waveform / Retrigger, Offset, Destination voice, Destination parameter | same | same |
-| **LFO mode** (LFO, Kettle's) | Mode (TRIG, HOLD, ONE, HALF: see below) | same | same |
+| **LFO mode** (LFO, Elixir's) | Mode (TRIG, HOLD, ONE, HALF: see below) | same | same |
 | **Mix** (GLO) | Volume, Pan, Sample rate, Drive / Output, Length, MIDI channel, MIDI note | same | same |
 
 The LXR's waveforms are SINE, TRI, SAW, SQUARE, NOISE and PWM; its transients SNAP, OFFSET, CLICK, CLICK 2, TICK, KICK, RIM, DRIP, HAT, CLAP, KICK 2, SNARE, TOM and SNAP 2. Each voice has one LFO, which can modulate any parameter of any voice; the velocity destination can be any of the voice's own parameters.
@@ -349,7 +355,7 @@ The LXR's waveforms are SINE, TRI, SAW, SQUARE, NOISE and PWM; its transients SN
 
 In HOLD, ONE and HALF, Retrigger OFF means the LFO's own voice's hits. A RANDOM wave draws a new value at each one-shot. The mode is part of the kit and can be locked per step; it doesn't morph.
 
-### Kettle's sound pages
+### Elixir's sound pages
 
 **Shape** (SCL, after the filter):
 
@@ -414,7 +420,7 @@ On a track's sound pages (or in KEYS), turn **PRESETS**: a list of sounds that t
 As on Elektron's boxes: hold **OCT+** on a sound page and turn a knob, and that parameter moves on every track. The title reads **CONTROL ALL**. Turn the filter's frequency and the whole kit gets darker.
 
 - **Relative.** Each voice moves by the knob's steps from its own value, clamped to its range, so the voices keep their differences. The card shows the selected track's value.
-- **The same parameter** is the one with the same name in the same section: the filter's frequency on each voice, the amp EG's decay (the closed hat's and the open hat's decay both). A voice without it is left alone: FM moves only Drum 1–3, a model only the drums. Kettle's own pages (shape, random, cross mod) move every voice. The hats share a voice, so it moves once.
+- **The same parameter** is the one with the same name in the same section: the filter's frequency on each voice, the amp EG's decay (the closed hat's and the open hat's decay both). A voice without it is left alone: FM moves only Drum 1–3, a model only the drums. Elixir's own pages (shape, random, cross mod) move every voice. The hats share a voice, so it moves once.
 - **Page while you hold.** The sound buttons and SELECT still page: hold OCT+, turn the filter, press ENV, turn the decay. Everything you change during the hold is one move.
 - **Keep or revert.** When you let go of OCT+, a dialog asks **REVERT THE KIT?** and the changes keep sounding until you answer. Press **OCT+** again (the default) to put the whole kit back as it was before the first turn (**CONTROL ALL REVERTED**), or **OCT−** to keep the changes (**CONTROL ALL KEPT**). So a thumb slipping off OCT+ doesn't keep anything by accident. While the dialog is open, the knobs, keys and other buttons do nothing, except PLAY and REC. You can also press OCT− while still holding OCT+ to revert at once, then turn again to start a new one. As on Elektron, the kit is the working copy: RELOAD (SHIFT + key 13) or loading the kit goes back further.
 - **COPY still works.** Until a knob turns, OCT+ is COPY as before (track, bar). Once a knob has turned, the voice keys select a track and the bar keys show a bar; nothing is copied on release.
@@ -440,7 +446,7 @@ The bars show the current page's values, with each voice's level on the volume p
 
 ### Sends
 
-- **FX send** sets how much of the voice goes *through* the FX bus instead of straight to its output. At 127 all of it does. (This is the LXR's "Out = FX BUS"; kits from the LXR or from older Kettle versions that used it load as FX send 127.)
+- **FX send** sets how much of the voice goes *through* the FX bus instead of straight to its output. At 127 all of it does. (This is the LXR's "Out = FX BUS"; kits from the LXR or from older Elixir versions that used it load as FX send 127.)
 - **Reverb send** feeds the voice into the reverb, on top of its output.
 
 ### The FX bus (FX)
@@ -472,11 +478,11 @@ A separate send bus after the FX bus, from Felucca: **ROOM** (a Freeverb-style r
 
 ## 11. Kits and morph
 
-A kit is every sound parameter of all six voices (including the sends, the reverb and Kettle's shaping). Kettle holds **64 kits**.
+A kit is every sound parameter of all six voices (including the sends, the reverb and Elixir's shaping). Elixir holds **64 kits**.
 
 - **Browse and load:** turn **PRESETS**. The kit list opens on the 64 slots, or on the kit library if you browsed that last. **KNOB 1** switches it: **From: SLOTS** or **From: LIBRARY** (the library's kits, L1 …, empty ones left out; from 0.9.2). Turn PRESETS to choose, press **OCT+** to load. It closes by itself after 6 seconds. (On a sound page, PRESETS browses single sounds instead: the [sound browser](#the-sound-browser).)
 - **Load / save:** SHIFT + white key 8 opens LOAD KIT; SAVE opens SAVE KIT (see [saving](#14-saving)).
-- **LXR-02 kits:** kits from an LXR-02 SD card (.SND files) come in through the [library page](#backing-up-restoring-and-lxr-02-kits). A voice the LXR routed to its FX bus comes in with FX SEND 127, which sounds the same. Kettle's own settings (sends, reverb, shaping, models) start at their defaults. A whole LXR project (kits, patterns, songs) comes in the same way.
+- **LXR-02 kits:** kits from an LXR-02 SD card (.SND files) come in through the [library page](#backing-up-restoring-and-lxr-02-kits). A voice the LXR routed to its FX bus comes in with FX SEND 127, which sounds the same. Elixir's own settings (sends, reverb, shaping, models) start at their defaults. A whole LXR project (kits, patterns, songs) comes in the same way.
 - **The kit library:** besides the 64 slots, the FM-1 keeps **128 kits and 128 single sounds** in its flash, apart from the projects: loading another project leaves them. SAVE → KIT with **To: LIBRARY** (KNOB 3) saves there; LOAD → KIT with **From: LIBRARY** loads one into the sound being edited (SAVE → KIT keeps it in a slot). SAVE / LOAD → SOUND does the same for one track's sound (KNOB 3: the track). The library page backs the library up.
 
   **Slots or library?** The slots are the project's kits, as on the LXR-02: patterns name their kit by slot number (the pattern page's Kit change on AUTO loads it), and loading another project brings its own 64. The library is a collection that stays whatever project is loaded: the place for kits you want everywhere, such as the LXR-02's factory kits or your favourites. Browse it with PRESETS, use a kit from it as the morph target directly, or take single voices from it with the sound browser. To give a pattern a library kit, load it and save it into a slot (SAVE → KIT, To SLOTS).
@@ -594,7 +600,7 @@ On the LINKS page, KNOB 1 picks the link (the row of 8 at the top shows which ar
 
 Start shows EDITED once you change the link; turning it back to – clears the link. On the grid, a small mark by a track's name shows that a link joins it.
 
-**How they work.** On each tick, Kettle first decides every track's hit (steps, chance, conditions, generators). Then it applies the links in order, 1 to 8, each one seeing what the links before it did. Then the hits play. So a link can point either way between two tracks, and loops are fine: if link 1 has D1 duck D2 and link 2 has D2 duck D1, link 1 wins. A flam's or ratchet's later hits keep what the links decided for its first hit, and the extra hits a link makes (TRIG) don't set off other links.
+**How they work.** On each tick, Elixir first decides every track's hit (steps, chance, conditions, generators). Then it applies the links in order, 1 to 8, each one seeing what the links before it did. Then the hits play. So a link can point either way between two tracks, and loops are fine: if link 1 has D1 duck D2 and link 2 has D2 duck D1, link 1 wins. A flam's or ratchet's later hits keep what the links decided for its first hit, and the extra hits a link makes (TRIG) don't set off other links.
 
 **A worked example: a hat line that breathes.**
 1. Program four kicks on D1 (steps 1, 5, 9, 13) and closed hats on every step of CH.
@@ -603,7 +609,7 @@ Start shows EDITED once you change the link; turning it back to – clears the l
 4. KNOB 1 to link 3, then on LINK SETUP set When to **SN hit**, Target **CH**, Effect **RATCH**, Window **NEXT**. Add a snare on 5 and 13: the hat after it rattles.
 5. Back on LINKS, turn **Depth** down to 0% and up again while it plays: the system fades out to the plain pattern and back.
 
-Links, their depth and the bounce settings are saved with the pattern (project format 6). Kettle 0.5 and earlier projects load with no links.
+Links, their depth and the bounce settings are saved with the pattern (project format 6). Elixir 0.5 and earlier projects load with no links.
 
 ---
 
@@ -731,32 +737,32 @@ Press **SAVE** for the save page, SAVE again for the load page (SHIFT + SAVE ope
 
 ### Projects
 
-A project is everything: all 64 kits, the 32 patterns, the 64 songs, the settings, the sound as it is, the morph target, the macros. Kettle keeps **four projects** in the FM-1's flash.
+A project is everything: all 64 kits, the 32 patterns, the 64 songs, the settings, the sound as it is, the morph target, the macros. Elixir keeps **four projects** in the FM-1's flash.
 
-**The session saves itself.** When AUTOSAVE is on (CONFIG → DEVICE), Kettle saves the session (all the patterns, with their edits, the kits and the rest) while stopped, once 8 seconds have passed since you stopped or last changed something and the sound (reverb and delay tails too) has died away. It loads it at power-on. The FM-1 runs on a battery, so this means nothing is lost when it switches off. If something keeps sounding (a frozen delay, pads played live), it saves anyway after 30 seconds of rest.
+**The session saves itself.** When AUTOSAVE is on (CONFIG → DEVICE), Elixir saves the session (all the patterns, with their edits, the kits and the rest) while stopped, once 8 seconds have passed since you stopped or last changed something and the sound (reverb and delay tails too) has died away. It loads it at power-on. The FM-1 runs on a battery, so this means nothing is lost when it switches off. If something keeps sounding (a frozen delay, pads played live), it saves anyway after 30 seconds of rest.
 
 Writing to flash stalls the FM-1's processor for a moment, so every save (automatic or from the SAVE page) fades the output out, writes, and fades it back in: a save while something sounds is a short gap, not a click or noise. (Before 0.5.1 the save could come right after a stop and chopped the reverb tail into a burst of noise.)
 
 A project has 48 KB. A typical one uses a fraction of that (a busy test project, every pattern 32 steps long on all tracks with every kit edited, takes about 33 KB), but a completely dense one can be too big: saving then shows **PROJECT TOO BIG** and nothing is written. If the automatic session save fails this way, the screen shows **AUTOSAVE: PROJECT TOO BIG** and it doesn't try again until something changes. Clearing unused patterns or tracks makes room.
 
-Projects saved by older Kettle versions load in newer ones (the first 32 of 0.1's 64 patterns). Projects don't load in older versions than the one that saved them.
+Projects saved by older Elixir versions load in newer ones (the first 32 of 0.1's 64 patterns). Projects don't load in older versions than the one that saved them.
 
 ### Backing up, restoring and LXR-02 kits
 
-The **library page** (`library/` on Kettle's site, from 0.7) connects to the FM-1 over USB MIDI in Chrome or Edge. It can:
+The **library page** (`library/` on Elixir's site, from 0.7) connects to the FM-1 over USB MIDI in Chrome or Edge. It can:
 
-- **Back up** every project and the session to one file on the computer (`.ktbk`), or download one project (`.ktp`). Kettle's own updates keep your projects. Installing V15 or another firmware may not, so back up first.
+- **Back up** every project and the session to one file on the computer (`.ktbk`), or download one project (`.ktp`). Elixir's own updates keep your projects. Installing V15 or another firmware may not, so back up first.
 - **Restore** a backup or a project file, into the slots it came from or into a chosen slot, and load it. The old project stays in place until the restore has been written and checked, so pulling the cable halfway loses nothing.
 - **Import LXR-02 kits** into the kit slots or (from 0.9.1) the kit library: pick .SND files, or a folder. A folder takes the .SND files in it **and in all its subfolders**, other files left out, so picking an SD card's top folder takes every project's kits, project by project. They fill from the number you choose, leaving out Init and empty kits: up to 64 into the slots, 128 into the library, and the page tells you how many didn't fit. Into the slots, save the project afterwards (SAVE → PROJECT) or let AUTOSAVE keep them; the library keeps them at once. (Chrome asks to "upload" a folder's files: the page only reads them, and sends nothing but the kits to your FM-1.)
-- **Import a whole LXR-02 project** (from 0.8): pick one project's folder from the SD card, not the whole card (the page refuses a folder holding several). Its kits go into the kit slots by their numbers (so each pattern still finds its kit), its patterns into Kettle's patterns and its songs into the songs, replacing what's playing; then save the project. Kettle has 32 patterns to the LXR's 64, so you pick which half (a song step on the other half plays pattern 32). The factory and DLC projects' demo patterns come in this way.
+- **Import a whole LXR-02 project** (from 0.8): pick one project's folder from the SD card, not the whole card (the page refuses a folder holding several). Its kits go into the kit slots by their numbers (so each pattern still finds its kit), its patterns into Elixir's patterns and its songs into the songs, replacing what's playing; then save the project. Elixir has 32 patterns to the LXR's 64, so you pick which half (a song step on the other half plays pattern 32). The factory and DLC projects' demo patterns come in this way.
 - **Back up and restore the kit library** (from 0.8, a `.ktlb` file).
 - **Export kits** as LXR-02 .SND files (the LXR's parameters only).
 
-While a restore is being written, the output is silent and saving is held off. If the computer stops sending, Kettle gives up after 10 seconds.
+While a restore is being written, the output is silent and saving is held off. If the computer stops sending, Elixir gives up after 10 seconds.
 
 The emulator has the same functions under **Library**, below the panel, so you can try kits before they go on the FM-1: import them into the emulator's kit library, browse them with PRESETS, then download the kit library (`.ktlb`) and restore it onto the FM-1 from the library page. The emulator holds what the FM-1 holds (64 slots, 128 library kits); to try more, import the next batch over them.
 
-**Built-in kit bank (private builds only).** The LXR-02's factory and Hrtl kits can't be shipped with Kettle, but you can build them into your own copy: `KETTLE_KITS_DIR=folder:folder:… ./build.sh` (and `web/emu/build.sh`), with folders of .SND files from your LXR-02 SD card or its downloads. Such a build:
+**Built-in kit bank (private builds only).** The LXR-02's factory and Hrtl kits can't be shipped with Elixir, but you can build them into your own copy: `ELIXIR_KITS_DIR=folder:folder:… ./build.sh` (and `web/emu/build.sh`), with folders of .SND files from your LXR-02 SD card or its downloads. Such a build:
 - shows its version as "v0.7+K";
 - starts a fresh unit with the bank's first 64 kits in the kit slots;
 - adds a **FACTORY** type on the LOAD page. OCT+ loads the chosen kit into the sound you're editing (SAVE → KIT keeps it in a slot); the last entry, **ALL > SLOTS**, puts the first 64 into the slots.
@@ -771,17 +777,17 @@ The site builder refuses to publish a "+K" build.
 
 - **Notes:** each track has a MIDI channel (CONFIG: MIDI CHANNELS). A note on a track's channel plays it. With the track's MIDI note set to ANY, it plays at the note's pitch; with a note set, only that note triggers it. Notes on the **global channel** play the selected track.
 - **Notes out:** the sequencer sends each track's hits on its channel.
-- **CC:** CC *n* sets parameter *n* − 1, as on the LXR. **NRPN** (CC 99 / 98, data entry CC 6) reaches every parameter: NRPN *n* sets parameter *n* + 128. The tables are [below](#the-sound-by-cc): the LXR's sound by CC, the rest by NRPN, and Kettle's own parameters.
-- **CC 0** loads a kit. **Program change** 0–31 on the global channel queues a pattern; Kettle sends one when its pattern changes.
+- **CC:** CC *n* sets parameter *n* − 1, as on the LXR. **NRPN** (CC 99 / 98, data entry CC 6) reaches every parameter: NRPN *n* sets parameter *n* + 128. The tables are [below](#the-sound-by-cc): the LXR's sound by CC, the rest by NRPN, and Elixir's own parameters.
+- **CC 0** loads a kit. **Program change** 0–31 on the global channel queues a pattern; Elixir sends one when its pattern changes.
 - **Clock out:** always on, 24 PPQ, with start and stop.
-- **Clock in:** turn the tempo all the way down to **MIDI**. Kettle then follows incoming clock, start, continue and stop. The header shows MIDI and the measured tempo.
+- **Clock in:** turn the tempo all the way down to **MIDI**. Elixir then follows incoming clock, start, continue and stop. The header shows MIDI and the measured tempo.
 - **Filters** (CONFIG: MIDI): what is received and sent: N notes, R clock and start/stop, C CC and NRPN, P program change.
 - **Route:** TRS>USB forwards the jack's input to USB (soft thru).
 - **Remote** (CONFIG: REMOTE, channel 16 by default): a second map, made for an 8-column controller such as Novation's Launch Control XL. See below.
 
 ### The remote map
 
-Everything on the **remote channel** goes to this map and nowhere else (the LXR's CC map and the notes ignore it, and the MIDI filters don't apply). It reaches what the LXR's map can't: mutes, solo, morph, tempo, the DJ filter, PERF's effects, Kettle's sends. Set the remote channel to one no track and not the global channel uses; the REMOTE page warns if it's shared. The whole map on one page, laid out as the controller is: [the appendix](#appendix-the-remote-map-at-a-glance).
+Everything on the **remote channel** goes to this map and nowhere else (the LXR's CC map and the notes ignore it, and the MIDI filters don't apply). It reaches what the LXR's map can't: mutes, solo, morph, tempo, the DJ filter, PERF's effects, Elixir's sends. Set the remote channel to one no track and not the global channel uses; the REMOTE page warns if it's shared. The whole map on one page, laid out as the controller is: [the appendix](#appendix-the-remote-map-at-a-glance).
 
 Everything comes in **rows of eight**: columns 1–7 are the tracks **D1 D2 D3 SN CY CH OH**, column 8 the **master**. CH and OH both act on the hat voice, except their decays.
 
@@ -826,7 +832,7 @@ The effects are PERF's (see [Performance mode](#13-performance-mode-perf)); they
 
 **Recording:** under REC with the sequencer playing, a track's knob records locks on its own track, as a panel knob does on the selected track. The master column records nothing.
 
-**Feedback:** when a value on the map changes from anywhere (the panel, a kit or pattern load, MIDI), Kettle sends its CC back on the remote channel, so encoder rings and motorless displays can follow. Button states go back as their notes: velocity 127 on, 0 off. These cover mutes, solo, the selected track, the rolls, the effects, PLAY and REC. A lock playing back isn't sent: the values are the kit's. Out is USB only, so feedback reaches the controller only when both are on a USB host (a computer or a USB MIDI host such as the mioXL), not with the controller's DIN out straight into the FM-1's TRS input.
+**Feedback:** when a value on the map changes from anywhere (the panel, a kit or pattern load, MIDI), Elixir sends its CC back on the remote channel, so encoder rings and motorless displays can follow. Button states go back as their notes: velocity 127 on, 0 off. These cover mutes, solo, the selected track, the rolls, the effects, PLAY and REC. A lock playing back isn't sent: the values are the kit's. Out is USB only, so feedback reaches the controller only when both are on a USB host (a computer or a USB MIDI host such as the mioXL), not with the controller's DIN out straight into the FM-1's TRS input.
 
 **Connecting:** a controller with a DIN out into the TRS input (with a TRS-to-DIN adapter: check the FM-1's TRS type), or both over a USB host. The FM-1 and the Launch Control XL are both USB devices, so neither plugs straight into the other.
 
@@ -900,7 +906,7 @@ In PERF, SHIFT + a white key latches it instead.
 
 ### The sound by CC
 
-Each CC is received on its voice's track channel or on the global channel (10 by default). A CC with no voice (FX bus, global sample rate) is received on any of Kettle's channels. To control everything from one channel, send every CC on the global channel. The values go in as they are, so set list-type controls (waveform, filter type) to the range shown and pans to 0–127 with 63/64 as the centre. CH and OH share the HH voice: a CC for HH acts on both, except the two decays. CY and HH have three oscillators: Wave 2 and 3 are their FM oscillators' waveforms.
+Each CC is received on its voice's track channel or on the global channel (10 by default). A CC with no voice (FX bus, global sample rate) is received on any of Elixir's channels. To control everything from one channel, send every CC on the global channel. The values go in as they are, so set list-type controls (waveform, filter type) to the range shown and pans to 0–127 with 63/64 as the centre. CH and OH share the HH voice: a CC for HH acts on both, except the two decays. CY and HH have three oscillators: Wave 2 and 3 are their FM oscillators' waveforms.
 
 | Parameter | D1 | D2 | D3 | SN | CY | HH |
 |---|---|---|---|---|---|---|
@@ -965,7 +971,7 @@ NRPN *n* sets parameter *n* + 128: send CC 99 = *n* ÷ 128, CC 98 = *n* mod 128,
 
 NRPN 120 (morph, 0–127 for 0–255) and 119 (roll rate, 0–13) act as the panel's knobs do (from 0.12). The DJ filter, repeat, tape, the PERFORM 2 effects, mutes and solo aren't in this map: use [the remote map](#the-remote-map).
 
-### Kettle's parameters by NRPN
+### Elixir's parameters by NRPN
 
 Six numbers per voice-based setting, in the order D1 D2 D3 SN CY HH.
 
@@ -1010,7 +1016,7 @@ The LXR's own parameters keep their CC and NRPN numbers.
 
 ---
 
-## 18. How Kettle differs from the LXR-02
+## 18. How Elixir differs from the LXR-02
 
 What changed in the port:
 
@@ -1022,7 +1028,7 @@ What changed in the port:
 - **Fixed-point sound engine.** The FM-1 has no floating-point unit, so the LXR's DSP was rewritten in fixed point. Tests compare every voice with the LXR's own code: levels match within 0.1 dB and tonal voices are near identical. Noise-based sounds differ only because the noise generator differs.
 - **Sequencer details:** each track's flams and shifts only affect that track (the LXR's could swallow other tracks' notes); a step sends one MIDI note; MIDI clock out stays on the unshuffled grid; the faster and triplet roll rates play at their rate.
 
-What Kettle adds:
+What Elixir adds:
 
 - **Sound:** Control All (OCT+ held, a knob: every track); LFO modes (hold, one-shot, half); FX and reverb sends per voice; three reverbs; waveshaper choice; bits; tilt EQ; random per hit; choke groups; cross modulation; phaser and flanger; Rings' resonators on the drum voices; a sound browser and a kit library.
 - **Performance:** PERF with fill, repeat, freeze, throws, feedback push, tape stop, filter sweeps, a DJ filter, four macros, the voices' volumes on two pages, PERFORM 2 and two global LFOs (morph, the DJ filter, the effects, down to 256 bars a cycle); KEYS, to play a voice from the keyboard.
@@ -1038,19 +1044,19 @@ What Kettle adds:
 | A change to the pattern disappeared after switching patterns | The pattern page's Edits is on DROP (the LXR's way): unsaved changes go on a switch. Set it to KEEP (the default), or save with SAVE → PATTERN first. RELOAD also undoes a pattern's changes. |
 | No sound from a voice | Is it muted (dark key)? Its volume (mixer)? FX send at 127 with the FX bus on a quiet setting? A choke group cutting it? Cross mod DUCK? |
 | FREEZE does nothing | The FX bus must be set to DELAY, and something must be sent to it (FX send or THROW FX). |
-| Tempo shows MIDI and nothing plays | Tempo is turned to MIDI: Kettle waits for MIDI clock. Turn the tempo up. |
+| Tempo shows MIDI and nothing plays | Tempo is turned to MIDI: Elixir waits for MIDI clock. Turn the tempo up. |
 | A generator's track keeps changing | That's the generator. Freeze it, COMMIT what you like, or set it to OFF. |
 | AUTOSAVE: PROJECT TOO BIG | The session doesn't fit a project slot. Clear unused patterns or tracks. |
 | Clicks or LATE on the CPU meter | If PEAK is well below 100%, something else held the processor; please report what you were doing. If PEAK nears 100%, the engine is out of time: turn off the reverb (sends to 0), use a simpler FX type, or fewer cross-mods, and please report the CPU numbers. |
 | A burst of noise a few seconds after stopping | Fixed in 0.5.1 (the autosave chopped the reverb tail). If you still hear it, turn AUTOSAVE off and please report it. |
 | An install stopped half way | Plug the FM-1 in and press Install again: it finishes the write ([section 1](#if-something-goes-wrong)). |
-| The FM-1 doesn't start Kettle | After two failed starts the boot guard puts it in UBOOT. Recovery from there needs the FM-1-transporter ([section 1](#if-something-goes-wrong)). Please report it. |
+| The FM-1 doesn't start Elixir | After two failed starts the boot guard puts it in UBOOT. Recovery from there needs the FM-1-transporter ([section 1](#if-something-goes-wrong)). Please report it. |
 
 ---
 
 ## 20. Licence and credits
 
-Kettle is free software under the **GNU General Public License, version 3** (GPL-3.0-only). See `LICENSE` and `NOTICE.md`.
+Elixir is free software under the **GNU General Public License, version 3** (GPL-3.0-only). See `LICENSE` and `NOTICE.md`.
 
 It is built from:
 
@@ -1092,7 +1098,7 @@ The [remote map](#the-remote-map) laid out as the controller is: the tracks acro
 | Macros, PERFORM 2 | **104** Macro 1 | **105** Macro 2 | **106** Macro 3 | **107** Macro 4 | **108** DRILL | **109** JITTER | **110** CUTS | **111** PUMP |
 | Random decay | **112** | **113** | **114** | **115** | **116** | **117** | **118** | **119** Repeat length |
 
-**Buttons: the note numbers** (note on: pressed; note off or velocity 0: released). Mute, solo and the latched effects toggle; the others act while held, except select, PLAY / STOP, REC and the patterns, which act on the press. Their lights follow the state: Kettle sends each note back, velocity 127 on and 0 off.
+**Buttons: the note numbers** (note on: pressed; note off or velocity 0: released). Mute, solo and the latched effects toggle; the others act while held, except select, PLAY / STOP, REC and the patterns, which act on the press. Their lights follow the state: Elixir sends each note back, velocity 127 on and 0 off.
 
 <!-- grid -->
 | | D1 | D2 | D3 | SN | CY | CH | OH | Master |

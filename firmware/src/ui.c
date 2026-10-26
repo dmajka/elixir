@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle: the panel. The LXR-02's front (Core/Src/buttonHandler.c, menu/menu.c; Copyright (C) 2012-2026 Erica
+ * Elixir: the panel. The LXR-02's front (Core/Src/buttonHandler.c, menu/menu.c; Copyright (C) 2012-2026 Erica
  * Synths, GPL-3.0-only) on the FM-1's controls:
  *
  *   white keys 1..16   the 16 step buttons (steps of the shown bar; patterns; in PERF 1..7 rolls, 8 FILL, 9..16
@@ -11,7 +11,7 @@
  *   OCT+               COPY (held, + a track, a bar, a pattern); SHIFT + COPY = CLEAR; OK in the dialogs;
  *                      held on a sound page, a knob: CONTROL ALL (let go: OCT+ reverts, OCT- keeps)
  *   EDIT ENV SCL LFO GLO   the sound sections (SHIFT GLO: solo the track): OSC > FM > CLICK, AMP EG > MOD, FILTER > SHAPE, LFO > RANDOM >
- *                      CROSS MOD (Kettle's: their pages are K_PAGES), MIX > MIXER (volume,
+ *                      CROSS MOD (Elixir's: their pages are K_PAGES), MIX > MIXER (volume,
  *                      pan, FX send, reverb send) > CONFIG (the CPU load at the bottom)
  *   FX  SEQ  ARP  HOME  SAVE   FX bus > reverb; step edit (again: its next page); PERF > GENERATOR; GRID >
  *                      PATTERNS > SONG; SAVE > LOAD
@@ -30,7 +30,7 @@ static const char *const SECT_NAME[NSECT] = {"OSCILLATOR", "AMP EG", "MOD EG / V
                                              "LFO MODE"};
 enum { IO_KIT, IO_PATTERN, IO_SONG, IO_MORPH, IO_SOUND, IO_PROJECT, IO_FACTORY, NIO };   /* (FACTORY: LOAD, a kit bank) */
 static const char *const IO_NAME[NIO] = {"KIT", "PATTERN", "SONG", "MORPH", "SOUND", "PROJECT", "FACTORY"};
-#if KETTLE_FACTORY_KITS
+#if ELIXIR_FACTORY_KITS
 #define IO_LOAD_LAST IO_FACTORY
 #else
 #define IO_LOAD_LAST IO_PROJECT
@@ -163,7 +163,7 @@ static void ui_message(const char *s)
 static uint32_t track_voice(uint32_t t) { return t < 6u ? t : 5u; }
 /* the LXR's edit page of a track (VOICE1_PAGE .. VOICE7_PAGE) */
 static uint32_t track_page(uint32_t t) { return t; }
-/* Kettle's sections (S_SHAPE ..): the first of each six per-voice parameters, by half (0: none). MODEL: the DRUM
+/* Elixir's sections (S_SHAPE ..): the first of each six per-voice parameters, by half (0: none). MODEL: the DRUM
  * voices' only */
 static const uint16_t K_PAGES[5][8] = {{PAR_SHAPE1, PAR_DRIVE1, PAR_BITS1, PAR_TILT1},
                                        {PAR_RND_PITCH1, PAR_RND_DECAY1, PAR_RND_FILTER1, PAR_RND_PAN1},
@@ -525,7 +525,7 @@ static uint32_t lock_idx_of(uint32_t d)
     uint32_t i;
     if (!d)
         return 0;
-    if (d >= NUM_PARAMS)                              /* Kettle's: after the LXR's targets */
+    if (d >= NUM_PARAMS)                              /* Elixir's: after the LXR's targets */
         return lock_target_idx(d);
     for (i = 1; i < NUM_MOD_TARGETS; i++)              /* the first target of the parameter (in its voice) */
         if (MOD_TARGETS[i][1] == d && (par_voice(d) == 0xFFu || (i >= MOD_TARGET_VOICE[par_voice(d)][0] &&
@@ -1079,7 +1079,7 @@ static uint32_t ca_par(uint32_t u, uint32_t k)
 {
     const uint16_t *a = LXR_PAGES[track_page(ui.track)][ui.sect], *b;
     uint32_t j = ui.half * 4u + k, i, t, n = 0;
-    if (ui.sect >= S_SHAPE)                          /* (Kettle's: blocks of six, the voice's own) */
+    if (ui.sect >= S_SHAPE)                          /* (Elixir's: blocks of six, the voice's own) */
         return sect_par(u, ui.sect, ui.half, k);
     if (!(t = ca_name(a[j])))
         return 0;
@@ -1403,7 +1403,7 @@ static void io_ok(void)
         ui_message(rc == 0 ? "SOUND LOADED" : rc == -2 ? "NOT THIS TRACK'S KIND" : "EMPTY SLOT");
         break;
     }
-#if KETTLE_FACTORY_KITS
+#if ELIXIR_FACTORY_KITS
     case IO_FACTORY:
         if (s >= FACTORY_NKITS) {                     /* ALL: the bank's first 64 into the slots */
             kit_factory_fill();

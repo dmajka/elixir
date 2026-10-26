@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-# Kettle: extract the LXR firmware's parameter model into firmware/src/lxr_params.h.
+# Elixir: extract the LXR firmware's parameter model into firmware/src/lxr_params.h.
 #
 #   tools/gen_lxr_params.py LXR_SRC [OUT]
 #

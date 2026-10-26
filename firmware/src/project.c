@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle: projects in flash. A project is what the LXR keeps on its SD card per project folder: the 64 kits, the
+ * Elixir: projects in flash. A project is what the LXR keeps on its SD card per project folder: the 64 kits, the
  * patterns (32 here, 64 on the LXR), the 64 songs and the global settings; here also the edit buffer and the morph
  * target, so a project comes back exactly as it was saved. Four project slots and the AUTO slot (the session, saved
  * while stopped and idle, loaded at power-on: the FM-1 runs on a battery, and the LXR would lose an unsaved session at
@@ -18,7 +18,7 @@
 #define PROJ_USER 4u                                /* projects 0..3 */
 #define PROJ_AUTO 4u                                /* the session */
 #define PROJ_NLOG 5u
-#define PROJ_MAGIC 0x4A52504Bu                      /* "KPRJ" */
+#define PROJ_MAGIC 0x4A52504Bu                      /* "KPRJ" (Kettle's, kept: its projects load) */
 #define PROJ_VERSION 9u                             /* (1 .. 8 still load: proj_read_payload) */
 #define PROJ_PAYLOAD (PROJ_SLOT - 256u)
 
@@ -111,10 +111,10 @@ static void pr_bytes(void *p, uint32_t n)
 }
 
 /* ------------------------------------------------------------ format --- */
-/* Version 2 (Kettle 0.2): 32 patterns; Kettle's parameters (the sends, the reverb) in the edit buffer and the
+/* Version 2 (Elixir 0.2): 32 patterns; Elixir's parameters (the sends, the reverb) in the edit buffer and the
  * kits; every count written, so a later version can add to the end of a part; a step as a mask of the fields that
  * differ from an empty step's, then those fields. Version 3 (0.3): the same, and a step's locks' high bits (SF_HI,
- * seq.c lhi); more of Kettle's parameters (their counts say so). Version 2 still loads (lock_v2 moves Kettle's locks
+ * seq.c lhi); more of Elixir's parameters (their counts say so). Version 2 still loads (lock_v2 moves Elixir's locks
  * to their numbers), and so does version 1 (64 patterns, a step all of its 8 bytes): its first 32 patterns, songs
  * pointing past them to the last one, a voice's Out = FX BUS as FX SEND 127. Version 4 (0.5): a track's clock
  * and generator after its length (CLK_1X and GEN_OFF before), a step's condition and ratchet (SF_X). Version 5
@@ -304,7 +304,7 @@ static void proj_write_payload(void)
     }
 }
 
-/* a version-2 lock code: Kettle's parameters were at the numbers the LXR leaves free (247..254: PAR_FX_SEND1 ..,
+/* a version-2 lock code: Elixir's parameters were at the numbers the LXR leaves free (247..254: PAR_FX_SEND1 ..,
  * 221..227: the next 7); now at their own (lock_set) */
 static void lock_v2(pattern_t *p, uint32_t t, uint32_t k, uint32_t lane)
 {
@@ -372,7 +372,7 @@ static int proj_read_payload(uint32_t ver)
     pr_bytes(tag, 4);
     if (memcmp(tag, ver < 2u ? "KPR1" : ver < 3u ? "KPR2" : ver < 4u ? "KPR3" : ver < 5u ? "KPR4" : "KPR5", 4))
         return -32;
-    kit_init_par();                                 /* (Kettle's parameters a version-1 project lacks) */
+    kit_init_par();                                 /* (Elixir's parameters a version-1 project lacks) */
     n = ver < 2u ? NUM_PARAMS : pr_u16();
     pr_bytes(par, n < NPAR ? n : NPAR);
     pr_skip(n > NPAR ? n - NPAR : 0u);
@@ -740,7 +740,7 @@ static void autosave_poll(void)
 }
 
 /* ------------------------------------------------------- settings --- */
-#define SET_MAGIC 0x3154454Bu                       /* "KET1" */
+#define SET_MAGIC 0x3154454Bu                       /* "KET1" (Kettle's, kept) */
 /* 0.8: kvel, kacc: the keys' velocity and accent (seq.c key_vel, key_acc; 0, as settings before 0.8 hold: 100, 127).
  * 0.9: pdrop: a pattern's unsaved edits dropped when another plays (the LXR's way; 0, the default: kept).
  * 0.12: remote: the remote's channel 1..16, 17 off (0, as settings before 0.12 hold: 16); rknobs: its knobs (RK_*);
@@ -749,8 +749,8 @@ static void autosave_poll(void)
 typedef struct {
     uint32_t magic;
     uint8_t palette, leds, autosave, accel, project, kvel, kacc, pdrop, remote, rknobs, cakit, pmem;
-} kettle_settings_t;
-static kettle_settings_t kset = {SET_MAGIC, 2, 1, 1, 1, 0xFF, 100, 127, 0, 0, 0, 0, 0};   /* (palette 2: AMBER) */
+} elixir_settings_t;
+static elixir_settings_t kset = {SET_MAGIC, 2, 1, 1, 1, 0xFF, 100, 127, 0, 0, 0, 0, 0};   /* (palette 2: AMBER) */
 static uint8_t settings_dirty;
 static uint32_t settings_ms;
 static void settings_later(void)
@@ -770,7 +770,7 @@ static void settings_poll(void)                     /* queued: written stopped, 
 static void persist_boot(void)                      /* power-on: the flash, the settings, the projects, the session */
 {
     uint32_t f = irq_save();
-    kettle_settings_t s;
+    elixir_settings_t s;
     flash_ok = FL_FAR(fl_jedec_ram)() == 0x856014u;  /* the expected 1 MiB part, else RAM only */
     irq_restore(f);
     pj.loaded = 0xFF;

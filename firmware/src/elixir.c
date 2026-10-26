@@ -1,11 +1,11 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle: the Erica Synths LXR-02 drum machine's firmware (its sound engine, sequencer and MIDI, GPL-3.0-only,
+ * Elixir: the Erica Synths LXR-02 drum machine's firmware (its sound engine, sequencer and MIDI, GPL-3.0-only,
  * Copyright (C) 2012-2026 Erica Synths) ported to the M-VAVE FM-1, on Felucca's FM-1 hardware layer (GPL-3.0-only,
  * Copyright (C) 2026 Leo Kuroshita, Hügelton Instruments). An unofficial port: not affiliated with, endorsed by
  * or supported by Erica Synths or M-VAVE.
  * One compilation unit (the HAL is header-only); each file uses what the files above it define. */
-#ifndef KETTLE_VERSION
-#define KETTLE_VERSION "v0.13"
+#ifndef ELIXIR_VERSION
+#define ELIXIR_VERSION "v0.14"
 #endif
 #define FELUCCA_FLASH 1
 #define FELUCCA_OTA 1
@@ -18,7 +18,7 @@
 #ifndef FELUCCA_ID
 #define FELUCCA_ID "FM-1_900"            /* the package identity the updaters check (build.py) */
 #endif
-#define FELUCCA_VERSION KETTLE_VERSION
+#define FELUCCA_VERSION ELIXIR_VERSION
 
 /* ------------------------------------------------------------- HAL --- */
 #include <stdint.h>
@@ -38,7 +38,7 @@ static volatile uint32_t fm1_ms;        /* milliseconds since boot (TIMER5) */
 struct { uint32_t magic, failed, pending; } bootguard __attribute__((section(".noinit")));
 
 /* ------------------------------------------------- tables, display --- */
-#include "kettle_tables.h"               /* generated (tools/gen_tables.py) */
+#include "elixir_tables.h"               /* generated (tools/gen_tables.py) */
 #include "lxr_tables.h"
 #include "lxr_params.h"
 #include "grids_map.h"

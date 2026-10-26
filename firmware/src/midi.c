@@ -1,11 +1,11 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle: MIDI. In: USB and the TRS jack (usb.c, midi_uart.c fill midi_in_q), handled in the audio ISR at a
+ * Elixir: MIDI. In: USB and the TRS jack (usb.c, midi_uart.c fill midi_in_q), handled in the audio ISR at a
  * block start. Out: USB (the FM-1 has no MIDI out jack): the sequencer's notes, MIDI clock, start / stop and
  * program changes. As the LXR (Core/Src/Soundengine/MIDI/MidiParser.c, sequencer.c; Copyright (C) 2012-2026
  * Erica Synths, GPL-3.0-only):
  *   - each track has a channel (MIDI page) and a note: ANY plays the voice at the received note, a note plays it
  *     (at the default pitch) on that note only; the global channel plays the selected track;
- *   - CC n sets parameter n - 1 (the LXR's CC map), NRPN n (CC 99 / 98, data entry CC 6) parameter n + 128 (Kettle's
+ *   - CC n sets parameter n - 1 (the LXR's CC map), NRPN n (CC 99 / 98, data entry CC 6) parameter n + 128 (Elixir's
  *     own after the LXR's: NRPN 174..189, sound.c), CC 0 loads a kit; the channel: the parameter's voice's, the
  *     global one, or (no voice) any of them; Out = FX BUS (the LXR's) sets the voice's FX SEND to 127;
  *   - program change 0..31 on the global channel queues a pattern;

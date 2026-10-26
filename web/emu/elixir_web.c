@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments (the design: Felucca's web/emu/felucca_web.c,
  * after X0X's browser build, charlesvestal/fm1-x0x, GPL-3.0)
- * Kettle in the browser: the firmware's sources compiled to WebAssembly and run in an AudioWorklet against a
+ * Elixir in the browser: the firmware's sources compiled to WebAssembly and run in an AudioWorklet against a
  * simulated FM-1:
  *   - the device clock: TIMER4 ticks (24 MHz) and fm1_ms advance with the audio the worklet asks for; the audio
  *     ISR (audio.c fm1_alnk0_irq, the real one) renders each I2S half as the DMA would ask for it, and the main loop
@@ -18,9 +18,9 @@
 #undef memset                            /* the firmware's own (libc.c), apart from the host's */
 #undef memcpy
 #undef memcmp
-#define memset kettle_memset
-#define memcpy kettle_memcpy
-#define memcmp kettle_memcmp
+#define memset elixir_memset
+#define memcpy elixir_memcpy
+#define memcmp elixir_memcmp
 
 #define __attribute__(x)
 #define FELUCCA_FLASH 1
@@ -29,8 +29,8 @@
 #define FELUCCA_UAC 0
 #define FELUCCA_UART 1
 #define FELUCCA_CPU2 0
-#ifndef KETTLE_VERSION
-#define KETTLE_VERSION "WEB"
+#ifndef ELIXIR_VERSION
+#define ELIXIR_VERSION "WEB"
 #endif
 #define RING_PUBLISH() ((void)0)
 #define POOL
@@ -102,7 +102,7 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
 static void lcd_sync(void) {}
 
 /* ----------------------------------------------------------- the sources --- */
-#include "kettle_tables.h"
+#include "elixir_tables.h"
 #include "lxr_tables.h"
 #include "lxr_params.h"
 #include "grids_map.h"
@@ -213,7 +213,7 @@ static void web_power_on(void)                  /* main.c fm1_main's boot */
     audio_init();
     fm1_led_dim_level(kset.leds == 1u);
     fm1_led_anim_start(kset.leds != 0u);
-    web_boot_ms = fm1_ms + 600u;
+    web_boot_ms = fm1_ms + 1200u;
     web_booted = 1;
 }
 static void web_frame(void)                      /* one pass of main.c's loop */

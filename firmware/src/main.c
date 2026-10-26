@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
- * Kettle: boot and the main loop, after Felucca's main.c. TIMER5 (10 kHz) scans the panel and polls USB and the
+ * Elixir: boot and the main loop, after Felucca's main.c. TIMER5 (10 kHz) scans the panel and polls USB and the
  * TRS MIDI input; ALNK0 renders the audio (audio.c); the main loop runs the UI (~60 frames a second), the storage
  * and the update entry. OCT- + OCT+ held 5 s: UBOOT (the FM-1's own update mode, as Felucca). */
 extern uint32_t _data_start[], _data_end[], _data_load[], _bss_start[], _bss_end[];
@@ -52,7 +52,7 @@ static void fm1_fault(const fm1_crash_t *c)
     uint32_t t0;
     fm1_audio_stop();
     lcd_fill(0, 0, 240, 240, RGB(120, 0, 0));
-    draw_text_line(0, 8, 240, &AF_M, "KETTLE CRASH", RGB(255, 255, 255), RGB(120, 0, 0), 1);
+    draw_text_line(0, 8, 240, &AF_M, "ELIXIR CRASH", RGB(255, 255, 255), RGB(120, 0, 0), 1);
     hexs(b, c->vec);
     draw_text_line(10, 40, 220, &AF_M, b, RGB(255, 255, 255), RGB(120, 0, 0), 0);
     hexs(b, c->pc);
@@ -82,7 +82,7 @@ static void uboot_watch(void)                     /* OCT- + OCT+ held 5 s: the F
     }
 }
 
-static void kettle_boot(void)                     /* the instrument at power-on */
+static void elixir_boot(void)                     /* the instrument at power-on */
 {
     palette_apply();
     engine_init();
@@ -101,7 +101,7 @@ static void fm1_main(void)
     fm1_input_init();
     fm1_adc_init();
     panel_init();
-    kettle_boot();
+    elixir_boot();
     master_boot();
     audio_init();
     usb_start();
@@ -111,7 +111,7 @@ static void fm1_main(void)
     fm1_timer5_start(isr_timer5, 4);              /* above ALNK0 (3): the scan nests into the render */
     fm1_guard_lock_top();
     fm1_irq_enable_all();
-    for (ms = 0; ms < 600u; ms += 10u) {          /* the splash */
+    for (ms = 0; ms < 1200u; ms += 10u) {         /* the splash (0.14: 1.2 s, to see the potion) */
         fm1_delay_ms(10);
         master_poll();
     }

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle host test: render a beat with the init kit (and every voice alone) to WAV, check the levels and that
+ * Elixir host test: render a beat with the init kit (and every voice alone) to WAV, check the levels and that
  * every voice sounds, the clock's tempo and the MIDI clock out.
  *   cc -O2 -I build/gen -I firmware/src tests/render_test.c -o build/render_test && build/render_test build/ */
 #include <stdio.h>

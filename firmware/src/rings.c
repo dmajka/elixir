@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle 0.9: the DRUM voices' MODEL section, a port of Mutable Instruments Rings' resonators (rings/dsp: part.cc,
+ * Elixir 0.9: the DRUM voices' MODEL section, a port of Mutable Instruments Rings' resonators (rings/dsp: part.cc,
  * resonator.cc, string.cc, fm_voice.cc, plucker.h, follower.h, limiter.h, and stmlib/dsp; Copyright 2015 Emilie
  * Gillet, MIT licence) to fixed point (the FM-1 has no FPU). Three of Rings' models:
  *   MODAL   Rings' modal resonator: a bank of band-pass modes, their spread STRUCTURE (stiffness), their decay DECAY
@@ -13,7 +13,7 @@
  * Rings is by its audio input: EXCITER sets the share (0: Rings' alone, 127: the voice's alone). The pitch is the
  * voice's (its pitch EG, random, TENSION: up at the hit, falling back). Rings' ODD and EVEN outputs are summed (its
  * output with one jack patched), through its limiter. Left out: the sympathetic strings (several strings a voice:
- * the CPU), Rings' reverb (Kettle has its own) and its polyphony (a drum voice is one).
+ * the CPU), Rings' reverb (Elixir has its own) and its polyphony (a drum voice is one).
  *
  * The modes a voice runs: 32, 24 with two voices on MODAL, 16 with three (Rings: 60, 28, 12 by polyphony). The
  * string's line holds 43 Hz and up; lower, the string runs at a lower rate, as Rings' does below 23 Hz. Signals Q20

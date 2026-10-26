@@ -45,7 +45,7 @@ static inline void *fl_far(void *p) { void *volatile q = p; return q; }
 #define FL_AUTO_HI      0x000E7000u                /* the OTA staging */
 #define FL_VBANK_LO     0x000E7000u                /* 1.4.1: the FM6 voice bank (fm6_vbank.c), the sector above */
 #define FL_VBANK_HI     0x000E8000u                /* (below the stock OTA's VM backup, 0xE8000: never written) */
-#define FL_KLIB_LO      0x000EA000u                /* Kettle 0.8: the kit library (kitlib.c), the package's USR area */
+#define FL_KLIB_LO      0x000EA000u                /* Elixir 0.8: the kit library (kitlib.c), the package's USR area */
 #define FL_KLIB_HI      0x000FC000u
 /* [off, off + n) inside [lo, hi), without wrapping: off + n can overflow, and
  * the 1 MiB part ignores the high address bits, so a wrapped range lands low. */

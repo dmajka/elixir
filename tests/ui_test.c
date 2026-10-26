@@ -1,11 +1,11 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle host test: the browser build (web/emu/kettle_web.c) natively: boot, play with the panel as a user would,
+ * Elixir host test: the browser build (web/emu/elixir_web.c) natively: boot, play with the panel as a user would,
  * check what the sequencer and the sound did, and write the screen of each step to build/shots/NN-name.ppm.
  *   cc -O1 -I build/gen -I firmware/src tests/ui_test.c -o build/ui_test && build/ui_test build/shots */
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include "../web/emu/kettle_web.c"
+#include "../web/emu/elixir_web.c"
 
 static const char *shots = "build/shots";
 static int shot_n, fails;
@@ -270,7 +270,7 @@ static void phase2(void)
         }
         printf("  snare dry %.0f, PHASER %.0f, FLANGER %.0f (rms)\n", dry, r[0], r[1]);
     }
-    /* a version-2 lock (Kettle's parameters at the LXR's free numbers) moves to its own number */
+    /* a version-2 lock (Elixir's parameters at the LXR's free numbers) moves to its own number */
     {
         pattern_t *p = &pat[0];
         lock_set(p, 0, 5, 0, 247);
@@ -2653,7 +2653,7 @@ static void phase13_control_all(void)
                                                          : par[q] == k0[i];
     }
     check(ok, "CONTROL ALL on FM: D1..D3 moved, the voices without it untouched");
-    /* a Kettle parameter (blocks of six): bits on every voice */
+    /* a Elixir parameter (blocks of six): bits on every voice */
     press(B_SCL);
     press(B_SCL);
     check(ui.sect == S_SHAPE, "SCL again: SHAPE");
@@ -2663,7 +2663,7 @@ static void phase13_control_all(void)
     press(B_OCTDN);
     for (v = 0, ok = 1; v < NVOICE; v++)
         ok &= par[PAR_BITS1 + v] == 2u;
-    check(ok, "CONTROL ALL on a Kettle parameter: every voice's bits");
+    check(ok, "CONTROL ALL on a Elixir parameter: every voice's bits");
     /* COPY still works when no knob is turned; a turn on a page that isn't a sound page edits as usual */
     hold(B_OCTUP);
     black(1);
@@ -2910,7 +2910,7 @@ int main(int argc, char **argv)
     web_boot();
     run_ms(200);
     shot("splash");
-    run_ms(800);
+    run_ms(1400);
     shot("home");
     /* program a beat on the grid: kick 1 5 9 13 */
     for (t = 0; t < 16; t += 4)
@@ -3062,7 +3062,7 @@ int main(int argc, char **argv)
     run_ms(40);
     check(sq.pending < NUM_PATTERN, "program change 40 is ignored");
     press(B_HOME);
-    /* the lock numbers of Kettle's parameters go both ways */
+    /* the lock numbers of Elixir's parameters go both ways */
     {
         uint32_t p, ok = 1;
         for (p = NUM_PARAMS; p < PAR_REV_TYPE; p++)
@@ -3070,7 +3070,7 @@ int main(int argc, char **argv)
         for (p = 1; p < END_OF_SOUND_PARAMETERS; p++)
             if (par_lockable(p) && p != 127u)          /* (127: the LXR's own clash, 126 and 127 both 127) */
                 ok &= autodest_to_par(par_to_autodest(p)) == p;
-        check(ok && !par_lockable(PAR_REV_TYPE), "lock numbers: the LXR's and Kettle's");
+        check(ok && !par_lockable(PAR_REV_TYPE), "lock numbers: the LXR's and Elixir's");
     }
     /* Out = FX BUS from MIDI (NRPN 215 - 128): the voice's FX send at 127, its output STEREO */
     {
@@ -3081,7 +3081,7 @@ int main(int argc, char **argv)
         run_ms(40);
         check(par[PAR_AUDIO_OUT2] == 0 && par[PAR_FX_SEND1 + 1] == 127 && vc[1].fx_send >= 32767,
               "MIDI Out = FX BUS: FX send 127");
-        n = PAR_REV_SEND1 + 2u - 128u;                 /* NRPN reaches Kettle's own */
+        n = PAR_REV_SEND1 + 2u - 128u;                 /* NRPN reaches Elixir's own */
         web_midi(0xB0 | ch, 99, n >> 7);
         web_midi(0xB0 | ch, 98, n & 127u);
         web_midi(0xB0 | ch, 6, 90);
@@ -3107,7 +3107,7 @@ int main(int argc, char **argv)
             if (k == 0)
                 par[PAR_AUDIO_OUT1] = 6;               /* the LXR's way */
             else
-                par[PAR_FX_SEND1] = 127;               /* Kettle's */
+                par[PAR_FX_SEND1] = 127;               /* Elixir's */
             snd_post_all();
             snd_service();
             voice_trigger(0, 120, SEQ_DEFAULT_NOTE);
@@ -3214,7 +3214,7 @@ int main(int argc, char **argv)
         usb.config = 1;
         run_ms(100);
     }
-    /* projects: version 2 keeps Kettle's parameters and the locks */
+    /* projects: version 2 keeps Elixir's parameters and the locks */
     {
         int rc;
         uint32_t send = par[PAR_REV_SEND1], ln = lock_get(&pat[sq.active], 0, 2, 0), ln2 = lock_get(&pat[sq.active], 0, 2, 1);
@@ -3229,7 +3229,7 @@ int main(int argc, char **argv)
               lock_get(&pat[sq.active], 0, 2, 0) == ln && lock_get(&pat[sq.active], 0, 2, 1) == ln2,
               "project load: sends, reverb, locks");
     }
-    /* projects: a version-1 project (64 patterns, tests/data/proj_v1.bin, made by Kettle 0.1) loads */
+    /* projects: a version-1 project (64 patterns, tests/data/proj_v1.bin, made by Elixir 0.1) loads */
     {
         FILE *f = fopen("tests/data/proj_v1.bin", "rb");
         uint8_t img[0x4000];

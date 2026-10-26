@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle: PERF's effects (0.4). The panel (ui.c) holds or latches them in pf.on, the audio ISR applies them at
+ * Elixir: PERF's effects (0.4). The panel (ui.c) holds or latches them in pf.on, the audio ISR applies them at
  * each block's start (perf_block) and on the master (perf_master):
  *   FILL       the steps play whatever their probability (seq.c sq.fill)
  *   STUTTER    the sequencer's play position loops at the REPEAT length (1/4 .. 1/32) from the next point of that

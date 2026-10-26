@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-# Kettle: extract the LXR firmware's ROM tables into firmware/src/lxr_tables.h.
+# Elixir: extract the LXR firmware's ROM tables into firmware/src/lxr_tables.h.
 #
 #   tools/gen_lxr_tables.py LXR_SRC [OUT]
 #

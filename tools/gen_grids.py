@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-# Kettle: Grids' drum map into firmware/src/grids_map.h.
+# Elixir: Grids' drum map into firmware/src/grids_map.h.
 #
 #   tools/gen_grids.py GRIDS_RESOURCES_CC [OUT]
 #

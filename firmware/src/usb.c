@@ -352,13 +352,13 @@ static const uint8_t STR0[4] = {4, 3, 0x09, 0x04};
 static const uint8_t STR1[] = {42, 3, 'H', 0, 0xFC, 0, 'g', 0, 'e', 0, 'l', 0, 't', 0, 'o', 0, 'n', 0, ' ', 0, 'I', 0,
                                'n', 0, 's', 0, 't', 0, 'r', 0, 'u', 0, 'm', 0, 'e', 0, 'n', 0, 't', 0, 's', 0};
 #else
-static const uint8_t STR1[] = {14, 3, 'K', 0, 'e', 0, 't', 0, 't', 0, 'l', 0, 'e', 0};
+static const uint8_t STR1[] = {14, 3, 'E', 0, 'l', 0, 'i', 0, 'x', 0, 'i', 0, 'r', 0};
 #endif
 #ifdef FELUCCA_LOADER
 static const uint8_t STR2[] = {30, 3, 'F', 0, 'e', 0, 'l', 0, 'u', 0, 'c', 0, 'c', 0, 'a', 0, ' ', 0, 'U', 0, 'p', 0,
                                'd', 0, 'a', 0, 't', 0, 'e', 0};
 #else
-static const uint8_t STR2[] = {14, 3, 'K', 0, 'e', 0, 't', 0, 't', 0, 'l', 0, 'e', 0};   /* Kettle: the product name */
+static const uint8_t STR2[] = {14, 3, 'E', 0, 'l', 0, 'i', 0, 'x', 0, 'i', 0, 'r', 0};   /* Elixir: the product name (Kettle's until 0.13) */
 #endif
 
 static int get_desc(uint32_t wvalue, const uint8_t **d, uint16_t *l)

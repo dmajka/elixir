@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle: the screen (240 x 240), drawn with Felucca's renderer (gfx.c: anti-aliased Inter Tight, the palettes).
+ * Elixir: the screen (240 x 240), drawn with Felucca's renderer (gfx.c: anti-aliased Inter Tight, the palettes).
  *   0..23    header: the pattern (and the one queued), the kit, the tempo, play / record
  *   24..43   the title: the track, the page, a message
  *   44..171  the body: the step grid of the shown bar (7 tracks x 16 steps, the bar keys below), or the page's own
@@ -640,7 +640,7 @@ static void draw_song(int32_t y0)
 
 static void io_slot_name(char *b, uint32_t n, uint32_t type, uint32_t s)
 {
-#if KETTLE_FACTORY_KITS
+#if ELIXIR_FACTORY_KITS
     if (type == IO_FACTORY) {
         if (s >= FACTORY_NKITS) {
             put_str(b, "ALL > SLOTS", n);
@@ -1651,10 +1651,72 @@ static void ui_draw(void)
     ui.force = 0;
 }
 
+/* 0.14: the splash, an 8-bit potion and ELIXIR in pixel letters. Each map character is a 5 px square:
+ * c cork, o glass outline, g glass, h shine, l liquid (the theme), L its light, d its dark, s a sparkle */
+static const char POTION[18][23] = {
+    ".....s...cccc.........",
+    ".........cccc......s..",
+    "........oooooo....sss.",
+    ".........ohgo......s..",
+    ".........ohgo.........",
+    ".s.......oggo.........",
+    "sss.....oggggo........",
+    ".s.....oggggggo.......",
+    "......oggggggggo......",
+    ".....oLLLLLLLLLLo.....",
+    "....ollhlllllllllo....",
+    "....olhlllllllLllo...s",
+    "....olhllllllllllo....",
+    "....olhllllLlllllo....",
+    "....ollllllllllLlo....",
+    ".....oldddddddddo.....",
+    "......oddddddddo......",
+    ".......oooooooo.......",
+};
+/* E L I X I R, 7 rows each, a bit per column (MSB the left one), and their widths */
+static const uint8_t WORD[6][7] = {
+    {0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F}, {0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x1F},
+    {0x07, 0x02, 0x02, 0x02, 0x02, 0x02, 0x07}, {0x11, 0x11, 0x0A, 0x04, 0x0A, 0x11, 0x11},
+    {0x07, 0x02, 0x02, 0x02, 0x02, 0x02, 0x07}, {0x1E, 0x11, 0x11, 0x1E, 0x14, 0x12, 0x11},
+};
+static const uint8_t WORD_W[6] = {5, 5, 3, 5, 3, 5};
+
+static void draw_word(uint32_t x, uint32_t y, uint32_t px, uint16_t c)
+{
+    uint32_t i, r, k;
+    for (i = 0; i < 6u; i++) {
+        for (r = 0; r < 7u; r++)
+            for (k = 0; k < WORD_W[i]; k++)
+                if (WORD[i][r] >> (WORD_W[i] - 1u - k) & 1u)
+                    lcd_fill(x + k * px, y + r * px, px, px, c);
+        x += (WORD_W[i] + 2u) * px;
+    }
+}
+
 static void draw_splash(void)
 {
+    const uint16_t white = RGB(255, 255, 255), black = RGB(0, 0, 0);
+    uint32_t r, k;
     lcd_fill(0, 0, 240, 240, T_BG);
-    draw_text_box(0, 84, 240, &AF_L, "KETTLE", T_THEME, 1);
-    draw_text_box(0, 124, 240, &AF_S, "LXR-02 drum engine for the FM-1", T_TEXT, 1);
-    draw_text_box(0, 142, 240, &AF_S, "unofficial port, " KETTLE_VERSION, T_MID, 1);
+    for (r = 0; r < 18u; r++)
+        for (k = 0; k < 22u; k++) {
+            uint16_t c;
+            switch (POTION[r][k]) {
+            case 'c': c = RGB(150, 96, 52); break;
+            case 'o': c = T_TEXT; break;
+            case 'g': c = ux_mix(T_BG, T_TEXT, 14); break;
+            case 'h': c = white; break;
+            case 'l': c = T_THEME; break;
+            case 'L': c = ux_mix(T_THEME, white, 45); break;
+            case 'd': c = ux_mix(T_THEME, black, 35); break;
+            case 's': c = ux_mix(T_THEME, white, 60); break;
+            default: continue;
+            }
+            lcd_fill(65u + k * 5u, 10u + r * 5u, 5, 5, c);
+        }
+    draw_word(33, 117, 5, ux_mix(T_THEME, T_BG, 45));           /* (36 columns: 180 px; a shadow, then the word) */
+    draw_word(30, 114, 5, T_TEXT);
+    draw_text_box(0, 160, 240, &AF_M, "drum machine", T_TEXT, 1);
+    draw_text_box(0, 192, 240, &AF_S, "the LXR-02's engine on the FM-1", T_MID, 1);
+    draw_text_box(0, 209, 240, &AF_S, "unofficial port, " ELIXIR_VERSION, T_MID, 1);
 }

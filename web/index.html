@@ -1,0 +1,237 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only
+     Elixir's front page (0.14). web/make_site.py fills in the header (NAV), the pixel art (POTION, WORD), the
+     version (VERSION) and the source link (REPO), and copies site.css and shots/ beside it. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elixir - drum machine firmware for M-VAVE FM-1</title>
+<meta name="description" content="Elixir: free drum machine firmware for the M-VAVE FM-1. The Erica Synths LXR-02's sound engine and sequencer, ported and extended.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="site.css">
+<style>
+  .hero { display: grid; grid-template-columns: 1fr 300px; gap: 48px; align-items: center; padding: 64px 0 56px; }
+  .hero .word { width: 100%; max-width: 420px; margin: 0 0 6px; }
+  .hero .word svg { width: 100%; height: auto; }
+  .hero .kicker { font-size: 15px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase;
+                  color: var(--dim); margin: 0 0 22px; }
+  .hero .lede { font-size: 22px; line-height: 1.45; margin: 0 0 14px; max-width: 34em; }
+  .hero .lede + p { color: var(--dim); max-width: 36em; }
+  .hero .art svg { width: 100%; max-width: 300px; height: auto; margin: 0 auto; }
+  .actions { display: flex; gap: 12px; flex-wrap: wrap; margin: 26px 0 16px; }
+  .meta { font-size: 14px; color: var(--dim); }
+  .pill { display: inline-block; font-size: 12px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase;
+          padding: 2px 8px; border-radius: 99px; border: 1px solid var(--accent); color: var(--accent);
+          margin-right: 8px; vertical-align: 1px; }
+  @media (max-width: 760px) {
+    .hero { grid-template-columns: 1fr; gap: 24px; padding: 36px 0 40px; }
+    .hero .art { order: -1; }
+    .hero .art svg { max-width: 180px; margin: 0; }
+    .hero .lede { font-size: 19px; }
+  }
+
+  section.band { padding: 56px 0; border-top: 1px solid var(--line); }
+  .intro { max-width: 720px; margin-bottom: 36px; }
+  .intro p { color: var(--dim); font-size: 18px; }
+
+  .feature { display: grid; grid-template-columns: 300px 1fr; gap: 40px; align-items: center; margin: 0 0 48px; }
+  .feature:last-child { margin-bottom: 0; }
+  .feature:nth-child(odd) { grid-template-columns: 1fr 300px; }
+  .feature:nth-child(odd) .screen { order: 2; }
+  .feature h3 { font-size: 22px; margin-bottom: 10px; }
+  .feature p { color: var(--dim); max-width: 36em; }
+  .feature ul { margin: 0; padding-left: 20px; color: var(--dim); }
+  .feature li { margin-bottom: 4px; }
+  @media (max-width: 760px) {
+    .feature, .feature:nth-child(odd) { grid-template-columns: 1fr; gap: 16px; }
+    .feature:nth-child(odd) .screen { order: 0; }
+    .feature .screen img { max-width: 280px; }
+  }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 22px; }
+  .card p { margin: 0; color: var(--dim); font-size: 15px; }
+
+  .specs { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 4px 40px; padding: 0;
+           margin: 0; list-style: none; }
+  .specs li { padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .specs b { display: block; font-weight: 600; }
+  .specs span { color: var(--dim); font-size: 15px; }
+  .proof { margin-top: 28px; padding: 18px 22px; border-radius: var(--radius); background: var(--well);
+           font-size: 15px; color: var(--dim); }
+  .proof strong { color: var(--fg); }
+
+  .strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+  @media (max-width: 760px) { .strip { grid-template-columns: repeat(2, 1fr); } }
+
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; counter-reset: s; }
+  .steps .card { display: flex; flex-direction: column; }
+  .steps .card p { flex: 1; margin-bottom: 16px; }
+  .steps .card .btn { align-self: flex-start; }
+  .steps h3::before { counter-increment: s; content: counter(s); display: inline-grid; place-items: center;
+                      width: 26px; height: 26px; margin-right: 10px; border-radius: 50%; font-size: 14px;
+                      background: var(--accent-fill); color: var(--accent-ink); vertical-align: 1px; }
+  @media (max-width: 760px) { .steps { grid-template-columns: 1fr; } }
+  .note { margin-top: 20px; padding: 16px 20px; border-left: 3px solid var(--accent-fill); background: var(--well);
+          border-radius: 0 var(--radius) var(--radius) 0; font-size: 15px; }
+  .note p { margin: 0; }
+</style>
+</head>
+<body>
+<!--NAV-->
+<main class="wrap">
+
+  <section class="hero">
+    <div>
+      <h1 class="word" aria-label="Elixir"><!--WORD--></h1>
+      <p class="kicker">Drum machine firmware for the M-VAVE FM-1</p>
+
+      <p>Elixir is free, open-source alternative firmware that ports the Erica Synths LXR-02's six-voice engine, FX bus and
+        sequencer to the FM-1, then adds sends and reverb, a sound browser, sequencing generators and a
+        performance mode made for playing live.</p>
+      <div class="actions">
+        <a class="btn" href="try/">Try it in your browser</a>
+        <a class="btn alt" href="install/">Install on your FM-1</a>
+        <a class="btn alt" href="manual/">Read the manual</a>
+      </div>
+      <p class="meta"><span class="pill">Test release</span>Version <!--VERSION--> · GPL-3.0 · unofficial, not
+        affiliated with Erica Synths or M-VAVE</p>
+    </div>
+    <div class="art" aria-hidden="true"><!--POTION--></div>
+  </section>
+
+  <section class="band">
+    <div class="intro">
+      <h2>The LXR-02, all of it</h2>
+      <p>Everything that made the LXR-02 a favourite is here, laid out on the FM-1's keys, buttons and four knobs.
+        Kits and projects from an LXR-02 come across over USB.</p>
+    </div>
+    <ul class="specs">
+      <li><b>Six voices on seven tracks</b><span>Three drums, snare/clap, cymbal, closed and open hat, each with
+        its oscillator, FM, transient, filter, envelopes and LFO.</span></li>
+      <li><b>The FX bus</b><span>Drive (tube, fold, rat), ring mod, compressor and delay.</span></li>
+      <li><b>32 patterns of 4 bars</b><span>Parameter locks on any step, flams, shifts, rolls and probability.</span></li>
+      <li><b>Kits, morph and songs</b><span>64 kits per project, morphing between two kits, songs that chain
+        patterns.</span></li>
+      <li><b>MIDI in and out</b><span>USB and TRS in, USB out; clock sync both ways; the LXR's CC and NRPN map.</span></li>
+      <li><b>Your LXR-02 kits</b><span>Import .SND kits or a whole LXR-02 project folder (kits, patterns and songs)
+        from the library page.</span></li>
+    </ul>
+    <p class="proof"><strong>Checked against the original.</strong> The FM-1 has no floating-point unit, so the
+      LXR's DSP is rewritten in fixed point. A test renders every voice with both engines: levels match to within
+      0.1 dB, and the tonal voices correlate at 0.99–1.00.</p>
+  </section>
+
+  <section class="band">
+    <div class="intro">
+      <h2>What Elixir adds</h2>
+      <p>New sound, sequencing and performance features, all of them saved with your kits and
+        projects, and most of them lockable per step.</p>
+    </div>
+
+    <div class="feature">
+      <figure class="screen"><img src="shots/grids.png" alt="The GRIDS MAP page over a pattern of seven tracks" width="240" height="240" loading="lazy"></figure>
+      <div>
+        <h3>Sequencing generators</h3>
+        <p>Every track can have a generator, playing a live copy you can commit, undo or reset:</p>
+        <ul>
+          <li>Euclid, with a second pulse joined by OR, XOR, AND or SUB</li>
+          <li>Mutate, a Turing machine, and cellular automata</li>
+          <li>Emilie Gillet's Grids drum map</li>
+        </ul>
+        <p>Each track also has its own length, clock (from /4 to x4) and direction: forward, reverse, ping-pong,
+          random or a random walk. Add step conditions and ratchets that bounce like a dropped ball, and a
+          pattern turns into polyrhythms.</p>
+      </div>
+    </div>
+
+    <div class="feature">
+      <figure class="screen"><img src="shots/perform.png" alt="The PERFORM 2 page: keys for drill, cuts, pump, comb, crush and reverse" width="240" height="240" loading="lazy"></figure>
+      <div>
+        <h3>Made for playing live</h3>
+        <p>PERF turns the sixteen white keys into performance controls. Hold for rolls, fills, beat repeat, delay
+          freeze, reverb and FX throws, tape stop and filter sweeps; a second bank adds drill, half time, cuts,
+          pump, comb, crush and reverse. A DJ filter, four macros and a mixer sit on the knobs.</p>
+      </div>
+    </div>
+
+    <div class="feature">
+      <figure class="screen"><img src="shots/links.png" alt="The LINKS page: when D1 hits, CH chance −60% on the next step" width="240" height="240" loading="lazy"></figure>
+      <div>
+        <h3>Tracks that react to each other</h3>
+        <p>Links read like a sentence: <em>when D1 hits, CH chance −60%, on the next step.</em> The kick ducks the
+          hats, the open hat answers only when the closed hat rests, a snare hit makes the next hat rattle. Up to
+          eight links per pattern turn a loop into a small system.</p>
+      </div>
+    </div>
+
+    <div class="cards">
+      <div class="card"><h3>Sends and reverb</h3><p>An FX-bus send and a reverb send on every voice. Room,
+        spring and hall reverb after the FX bus, plus a phaser and flanger on the bus.</p></div>
+      <div class="card"><h3>Sound shaping</h3><p>Five waveshapers, a bit reducer and tilt EQ per voice;
+        random-per-hit pitch, decay, filter and pan; choke groups; duck, filter or ring modulation from another
+        voice.</p></div>
+      <div class="card"><h3>Global LFOs</h3><p>Two tempo-synced LFOs, up to 256 bars long, on morph, the DJ
+        filter or the effects. A one-shot saw over 64 bars turns one kit into another while you play.</p></div>
+      <div class="card"><h3>Play it as an instrument</h3><p>KEYS plays any voice chromatically and records into the
+        steps. Control All moves a parameter on every track at once, as on Elektron boxes.</p></div>
+      <div class="card"><h3>Sound browser</h3><p>Browse presets for a single track: every kick, snare or hat
+        from your kits and the kit library, gathered in one list, each heard on the track as you go. Keep one and
+        the rest of the kit stays as it is. Plus a library of 128 kits and 128 sounds beyond the project.</p></div>
+      <div class="card"><h3>Back up over USB</h3><p>The library page backs up and restores projects and the kit
+        library, and brings in LXR-02 kits and projects. No drivers, just the browser.</p></div>
+      <div class="card"><h3>Controller map</h3><p>A ready-made map for eight-column controllers such as Novation's
+        Launch Control XL: mixer, sound and performance controls, with feedback.</p></div>
+      <div class="card"><h3>Try it first</h3><p>The emulator runs the firmware's own C code in your browser, with
+        Web MIDI in and out. What you hear there is what the FM-1 plays.</p></div>
+      <div class="card"><h3>Rings resonators</h3><p>The three drum voices can ring through a fixed-point port of
+        Mutable Instruments Rings: modal resonator, string and FM voice. Experimental.</p></div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="intro"><h2>On the FM-1's screen</h2></div>
+    <div class="strip">
+      <figure class="screen"><img src="shots/pattern.png" alt="The pattern grid playing" width="240" height="240" loading="lazy"><figcaption>The pattern grid</figcaption></figure>
+      <figure class="screen"><img src="shots/global-lfo.png" alt="A global LFO's mode page" width="240" height="240" loading="lazy"><figcaption>A global LFO</figcaption></figure>
+      <figure class="screen"><img src="shots/mixer.png" alt="The mixer's volume page" width="240" height="240" loading="lazy"><figcaption>The mixer</figcaption></figure>
+      <figure class="screen"><img src="shots/keys.png" alt="KEYS: the keyboard playing a voice" width="240" height="240" loading="lazy"><figcaption>KEYS</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="band" id="start">
+    <div class="intro">
+      <h2>Get started</h2>
+      <p>You need an M-VAVE FM-1, a USB data cable, and Chrome or Edge on a computer.</p>
+    </div>
+    <div class="steps">
+      <div class="card"><h3>Try it</h3><p>Play Elixir in the browser with your computer keyboard, the mouse or a
+        MIDI controller. Nothing to install.</p><a class="btn alt" href="try/">Open the emulator</a></div>
+      <div class="card"><h3>Install it</h3><p>The install page checks your FM-1, puts the official V15 firmware on
+        first if needed, then installs Elixir. The way back to V15 is on the same page.</p>
+        <a class="btn" href="install/">Install Elixir</a></div>
+      <div class="card"><h3>Learn it</h3><p>The manual starts with a beat in two minutes, then covers every page,
+        button and knob.</p><a class="btn alt" href="manual/">Read the manual</a></div>
+    </div>
+    <div class="note"><p><strong>Running Kettle?</strong> Elixir was called Kettle up to version 0.13. Install Elixir
+      over it from the <a href="install/">install page</a>: your projects, kit library and settings are kept.</p></div>
+    <p class="small" style="margin-top:20px">This is a test release with little testing on real FM-1s so far.
+      Read the notes on the <a href="install/">install page</a> before you install; there is no warranty.</p>
+  </section>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <p>Elixir ports the LXR-02 firmware (Erica Synths, after Julian Schmidt's Sonic Potions LXR, GPL-3.0) to the FM-1
+      on Felucca's hardware layer, USB, updater and emulator (Leo Kuroshita, Hügelton Instruments, GPL-3.0), with
+      Grids' drum map (Emilie Gillet, GPL-3.0-or-later) and a port of Rings (Emilie Gillet, MIT).</p>
+    <p><a href="firmware/LICENSE">GPL-3.0</a>, no warranty · <a href="firmware/NOTICE.md">Notice</a> ·
+      <a href="firmware/">Files and source</a><!--REPO--></p>
+    <p>Elixir is unofficial and not affiliated with or endorsed by Erica Synths, M-VAVE or Hügelton Instruments.
+      "Erica Synths" and "LXR-02" are trademarks of Erica Synths; "M-VAVE" and "FM-1" are trademarks of their
+      owner.</p>
+  </div>
+</footer>
+</body>
+</html>

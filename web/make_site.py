@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-# Kettle's site (GitHub Pages or any static host), after Felucca's web/make_site.py (Copyright (C) 2026 Leo Kuroshita
+# Elixir's site (GitHub Pages or any static host), after Felucca's web/make_site.py (Copyright (C) 2026 Leo Kuroshita
 # (@kurogedelic), Hügelton Instruments):
 #
-#   index.html                  the install page: web/install.html with fm1pkg.js, fm1ota.js and the package inlined
+#   index.html                  the front page (web/index.html; 0.14), site.css, favicon.svg, shots/ (its screens)
+#   install/                    the install page: web/install.html with fm1pkg.js, fm1ota.js, install.js and the
+#                               package's details inlined (the front page until 0.13)
 #   try/                        the emulator (build/emu: run web/emu/build.sh first)
 #   library/                    backup, restore and LXR-02 kit import over Web MIDI (web/library.html, library.js)
 #   manual/index.html           MANUAL.md as a page
-#   firmware/                   kettle-VER.fwsc, kettle-VER-src.tar.gz (the source, as the GPL asks), MANUAL.md,
+#   firmware/                   elixir-VER.fwsc, elixir-VER-src.tar.gz (the source, as the GPL asks), MANUAL.md,
 #                               LICENSE, NOTICE.md, LICENSES/, and a page listing them
 #
-#   web/make_site.py [PACKAGE.fwsc] [OUT_DIR]      (default: build/kettle.fwsc build/site)
+#   web/make_site.py [PACKAGE.fwsc] [OUT_DIR]      (default: build/elixir.fwsc build/site)
 import html
 import json
 import re
@@ -20,10 +22,85 @@ import tarfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-REPO = "https://github.com/dmajka/kettle"   # the source repository's URL, once public: the pages link it
+REPO = "https://github.com/dmajka/elixir"   # the source repository's URL, once public: the pages link it
 BLOCKS, BLK, KEEP = 20, 0x30, 0x2F
 SRC = ["build.sh", "LICENSE", "LICENSES", "NOTICE.md", "README.md", "ROADMAP.md", "MANUAL.md",
        "firmware", "tools", "tests", "web", "assets"]
+
+
+# the header on every page: depth 0 at the root, 1 a folder down; here: the page's own link
+NAV = [("try/", "Try it"), ("install/", "Install"), ("manual/", "Manual"), ("library/", "Library")]
+
+
+def nav(depth, here=None):
+    up = "../" * depth
+    links = "".join(f'<a href="{up}{href}"' + (' aria-current="page"' if href == here else "") + f">{text}</a>"
+                    for href, text in NAV)
+    if REPO:
+        links += f'<a href="{REPO}">Source</a>'
+    return (f'<header class="site"><div class="wrap"><a class="brand" href="{up or "./"}">{potion_svg(small=True)}'
+            f"Elixir</a><nav>{links}</nav></div></header>")
+
+
+# the pixel art: the splash's potion and word (firmware/src/ui_draw.c POTION, WORD, WORD_W), as svg, a class a colour
+def pixel_art():
+    c = (ROOT / "firmware/src/ui_draw.c").read_text()
+    potion = re.findall(r'"([.a-zA-Z]{22})"', c[c.index("POTION[18][23]"):c.index("WORD[6][7]")])
+    rows = re.findall(r"\{(0x[0-9A-F]{2}(?:, 0x[0-9A-F]{2}){6})\}", c[c.index("WORD[6][7]"):])
+    word = [[int(x, 16) for x in r.split(", ")] for r in rows]
+    widths = [int(x) for x in re.search(r"WORD_W\[6\] = \{([^}]*)\}", c)[1].split(",")]
+    if len(potion) != 18 or len(word) != 6:
+        raise SystemExit("firmware/src/ui_draw.c: POTION or WORD not found")
+    return potion, word, widths
+
+
+def rects(cells):                                    # {class: [(x, y)]} -> svg paths, a run of cells a rectangle
+    out = []
+    for cls, pts in cells.items():
+        d, pts = [], sorted(set(pts), key=lambda p: (p[1], p[0]))
+        i = 0
+        while i < len(pts):
+            x, y = pts[i]
+            n = 1
+            while i + n < len(pts) and pts[i + n] == (x + n, y):
+                n += 1
+            d.append(f"M{x} {y}h{n}v1h-{n}z")
+            i += n
+        out.append(f'<path class="px-{cls}" d="{"".join(d)}"/>')
+    return "".join(out)
+
+
+def potion_svg(small=False):
+    potion = pixel_art()[0]
+    cells = {}
+    for y, row in enumerate(potion):
+        for x, ch in enumerate(row):
+            if ch != "." and not (small and ch == "s"):
+                cells.setdefault(ch, []).append((x, y))
+    box = "4 0 14 18" if small else "0 0 22 18"   # (small: the flask alone)
+    return f'<svg class="pixel" viewBox="{box}" aria-hidden="true">{rects(cells)}</svg>'
+
+
+def word_svg():
+    _, word, widths = pixel_art()
+    cells, x0 = {"ws": [], "w": []}, 0
+    for glyph, w in zip(word, widths):
+        for y, bits in enumerate(glyph):
+            for k in range(w):
+                if bits >> (w - 1 - k) & 1:
+                    cells["w"].append((x0 + k, y))
+        x0 += w + 2
+    width = x0 - 2
+    shadow = rects({"ws": cells["w"]}).replace("<path", '<path transform="translate(0.6 0.6)"')
+    return (f'<svg class="pixel" viewBox="0 0 {width + 1} 8" role="img" aria-label="Elixir">'
+            f"{shadow}{rects({'w': cells['w']})}</svg>")
+
+
+def favicon():
+    css = ".px-c{fill:#96603a}.px-o{fill:#1d1b18}.px-g{fill:#fff}.px-h{fill:#fff}.px-l{fill:#f0a43a}" \
+          ".px-L{fill:#f8d394}.px-d{fill:#a8640f}"
+    return potion_svg(small=True).replace('class="pixel" ', 'xmlns="http://www.w3.org/2000/svg" ', 1) \
+        .replace(">", f"><style>{css}</style>", 1)
 
 
 def strip_module(src):
@@ -37,7 +114,7 @@ def product_of(raw):
 
 
 def version():
-    m = re.search(r'#define KETTLE_VERSION "([^"]+)"', (ROOT / "firmware/src/kettle.c").read_text())
+    m = re.search(r'#define ELIXIR_VERSION "([^"]+)"', (ROOT / "firmware/src/elixir.c").read_text())
     return m[1]
 
 
@@ -69,7 +146,7 @@ def cells(row):
 
 def markdown(md):
     """md -> (title, body, heads): heads the (level, id, text) of its h2s and h3s, for the side bar"""
-    lines, out, i, title, heads, grid = md.split("\n"), [], 0, "Kettle manual", [], False
+    lines, out, i, title, heads, grid = md.split("\n"), [], 0, "Elixir manual", [], False
     while i < len(lines):
         ln = lines[i]
         if ln.strip() == "<!-- grid -->":
@@ -215,8 +292,8 @@ PAGE = """<!doctype html>
 {toc}
 </details></aside>
 <main>
-<nav class="top"><a href="../">Install</a> <a href="../try/">Try in the browser</a>
-  <a href="../firmware/">Files</a></nav>
+<nav class="top"><a href="../">Elixir</a> <a href="../try/">Try it</a> <a href="../install/">Install</a>
+  <a href="../library/">Library</a> <a href="../firmware/">Files</a></nav>
 {body}
 </main>
 </div>
@@ -254,9 +331,9 @@ PAGE = """<!doctype html>
 def files_page(entries):
     li = "".join(f'<li><a href="{n}">{n}</a> <span>{d}</span></li>' for n, d in entries)
     return ('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
-            "<title>Kettle files</title><style>body{font:16px/1.6 -apple-system,Arial,sans-serif;max-width:640px;"
+            "<title>Elixir files</title><style>body{font:16px/1.6 -apple-system,Arial,sans-serif;max-width:640px;"
             "margin:0 auto;padding:32px 16px}a{color:inherit}span{color:#777;font-size:14px}</style>"
-            '<h1>Kettle files</h1><ul>' + li + '</ul><p><a href="../">Back to the install page</a></p>\n')
+            '<h1>Elixir files</h1><ul>' + li + '</ul><p><a href="../">Elixir</a> · <a href="../install/">Install</a></p>\n')
 
 
 def main(pkg, out):
@@ -269,39 +346,55 @@ def main(pkg, out):
         raise SystemExit(f"{pkg}: no Felucca loader in it "
                          "(a package patched from an official one carries vendor files)")
     emu = ROOT / "build/emu"
-    if not (emu / "kettle.wasm").exists():
+    if not (emu / "elixir.wasm").exists():
         raise SystemExit("no build/emu: run web/emu/build.sh first")
-    # 0.7: never publish a build with LXR-02 kits built in (KETTLE_KITS_DIR: they aren't Kettle's to give away). Its
+    # 0.7: never publish a build with LXR-02 kits built in (ELIXIR_KITS_DIR: they aren't Elixir's to give away). Its
     # version ends in "+K", and the splash's string carries it into the app image and the emulator.
     private = re.compile(rb"unofficial port, [^\0]*\+K\0")
-    for f in (pkg.with_name("kettle.bin"), emu / "kettle.wasm"):
+    for f in (pkg.with_name("elixir.bin"), emu / "elixir.wasm"):
         if f.exists() and private.search(f.read_bytes()):
-            raise SystemExit(f"{f}: built with KETTLE_KITS_DIR (LXR-02 kits): rebuild without it before publishing")
+            raise SystemExit(f"{f}: built with ELIXIR_KITS_DIR (LXR-02 kits): rebuild without it before publishing")
     if out.exists():
         shutil.rmtree(out)
     fw, man = out / "firmware", out / "manual"
     for d in (fw, man):
         d.mkdir(parents=True)
 
-    name = f"kettle-{ver}.fwsc"
+    name = f"elixir-{ver}.fwsc"
     shutil.copy(pkg, fw / name)
+    repo = f' · <a href="{REPO}" target="_blank" rel="noopener">GitHub</a>' if REPO else ""
+
+    # 0.14: the front page at the root, the install page at install/
+    shutil.copy(ROOT / "web/site.css", out / "site.css")
+    shutil.copytree(ROOT / "web/shots", out / "shots")
+    (out / "favicon.svg").write_text(favicon(), encoding="utf-8")
+    front = (ROOT / "web/index.html").read_text(encoding="utf-8")
+    for mark, text in (("<!--NAV-->", nav(0)), ("<!--WORD-->", word_svg()), ("<!--POTION-->", potion_svg()),
+                       ("<!--VERSION-->", html.escape(ver)), ("<!--REPO-->", repo)):
+        if front.count(mark) != 1:
+            raise SystemExit(f"web/index.html must contain {mark} once")
+        front = front.replace(mark, text)
+    (out / "index.html").write_text(front, encoding="utf-8")
+
     page = (ROOT / "web/install.html").read_text(encoding="utf-8")
-    lib = "\n".join(strip_module((ROOT / "web" / f).read_text(encoding="utf-8")) for f in ("fm1pkg.js", "fm1ota.js"))
-    meta = json.dumps({"version": ver, "product": product, "pkg": "firmware/" + name})
-    for mark in ("/*LIB*/", "/*META*/"):
+    lib = "\n".join(strip_module((ROOT / "web" / f).read_text(encoding="utf-8"))
+                    for f in ("fm1pkg.js", "fm1ota.js", "install.js"))
+    meta = json.dumps({"version": ver, "product": product, "pkg": "../firmware/" + name})
+    for mark in ("/*LIB*/", "/*META*/", "<!--NAV-->"):
         if page.count(mark) != 1:
             raise SystemExit(f"web/install.html must contain {mark} once")
-    repo = f' · <a href="{REPO}" target="_blank" rel="noopener">GitHub</a>' if REPO else ""
-    page = page.replace("<!--REPO-->", repo)
-    (out / "index.html").write_text(page.replace("/*LIB*/", lib).replace("/*META*/", meta), encoding="utf-8")
+    page = page.replace("<!--REPO-->", repo).replace("<!--NAV-->", nav(1, "install/"))
+    (out / "install").mkdir()
+    (out / "install/index.html").write_text(page.replace("/*LIB*/", lib).replace("/*META*/", meta), encoding="utf-8")
 
     (out / "library").mkdir()                        # 0.7: the library page (backup, restore, LXR kits)
-    shutil.copy(ROOT / "web/library.html", out / "library/index.html")
+    (out / "library/index.html").write_text((ROOT / "web/library.html").read_text(encoding="utf-8")
+                                            .replace("<!--NAV-->", nav(1, "library/")), encoding="utf-8")
     shutil.copy(ROOT / "web/library.js", out / "library/library.js")
 
     shutil.copytree(emu, out / "try")
     t = (out / "try/index.html").read_text(encoding="utf-8")
-    back = '<footer>\n  <a href="../">Install Kettle</a> · <a href="../manual/">Manual</a><br>\n'
+    back = '<footer>\n  <a href="../">Elixir</a> · <a href="../install/">Install</a> · <a href="../manual/">Manual</a><br>\n'
     t = t.replace("<footer>\n", back, 1)
     (out / "try/index.html").write_text(t, encoding="utf-8")
 
@@ -315,26 +408,26 @@ def main(pkg, out):
     shutil.copytree(ROOT / "LICENSES", fw / "LICENSES")
     lic = sorted(p.name for p in (fw / "LICENSES").glob("*.txt"))
     (fw / "LICENSES/index.html").write_text(
-        '<!doctype html><meta charset="utf-8"><title>Kettle licences</title><h1>Licence texts</h1><ul>' +
+        '<!doctype html><meta charset="utf-8"><title>Elixir licences</title><h1>Licence texts</h1><ul>' +
         "".join(f'<li><a href="{n}">{n}</a></li>' for n in lic) + '</ul><p><a href="../LICENSE">LICENSE (GPL-3.0)</a>'
         ' · <a href="../NOTICE.md">NOTICE.md</a></p>\n', encoding="utf-8")
-    src = f"kettle-{ver}-src.tar.gz"
+    src = f"elixir-{ver}-src.tar.gz"
     skip = lambda ti: None if re.search(r"(__pycache__|\.dSYM|\.DS_Store)", ti.name) else ti
     with tarfile.open(fw / src, "w:gz") as tf:
         for f in SRC:
-            tf.add(ROOT / f, arcname=f"kettle-{ver}/{f}", filter=skip)
+            tf.add(ROOT / f, arcname=f"elixir-{ver}/{f}", filter=skip)
     (fw / "index.html").write_text(files_page([
         (name, f"the firmware package ({len(raw)} B, identity {product})"),
         (src, "the complete source (GPL-3.0)"),
         ("MANUAL.md", "the manual as Markdown"),
-        ("LICENSE", "GPL-3.0"), ("NOTICE.md", "what Kettle is built from"), ("LICENSES/", "the other licence texts")]),
+        ("LICENSE", "GPL-3.0"), ("NOTICE.md", "what Elixir is built from"), ("LICENSES/", "the other licence texts")]),
         encoding="utf-8")
     (out / ".nojekyll").write_text("")              # GitHub Pages: serve the files as they are
-    print(f"site: {out}: index.html, try/, manual/, firmware/{name} ({len(raw)} B, {product}), firmware/{src}")
+    print(f"site: {out}: index.html, install/, library/, try/, manual/, firmware/{name} ({len(raw)} B, {product}), firmware/{src}")
 
 
 if __name__ == "__main__":
     a = sys.argv[1:]
     if len(a) > 2:
         sys.exit("usage: web/make_site.py [PACKAGE.fwsc] [OUT_DIR]")
-    main(a[0] if a else ROOT / "build/kettle.fwsc", a[1] if len(a) > 1 else ROOT / "build/site")
+    main(a[0] if a else ROOT / "build/elixir.fwsc", a[1] if len(a) > 1 else ROOT / "build/site")

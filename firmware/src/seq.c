@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle: the LXR-02's sequencer. 32 patterns (the LXR's 64, halved for RAM: 3.6 KB each) of 7 tracks x 64 steps (4
+ * Elixir: the LXR-02's sequencer. 32 patterns (the LXR's 64, halved for RAM: 3.6 KB each) of 7 tracks x 64 steps (4
  * bars of 16), each step with velocity, note, probability, two automation locks, flam (x2 .. x8) and a shift of -7..+7
  * eighths of a step; per track a length of 1..64; per pattern a shuffle and a kit. 64 songs of 64 entries (a pattern,
  * END or LOOP). Rolls, live recording of notes and automation, mutes, the Euclidean generator, MIDI clock in and out.
@@ -216,7 +216,7 @@ static uint32_t ui_pattern(void);                    /* the pattern it shows */
 
 /* ------------------------------------------------------------ steps --- */
 /* a step's lock (lane 0, 1): its 12-bit destination code (sound.c autodest_to_par): the step's byte and its 4 high
- * bits in lhi (Kettle's parameters, 302 and on) */
+ * bits in lhi (Elixir's parameters, 302 and on) */
 static uint32_t lock_get(const pattern_t *p, uint32_t t, uint32_t k, uint32_t lane)
 {
     const step_t *s = &p->step[t][k];

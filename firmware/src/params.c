@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle: what the UI knows of a parameter: its name, its voice, its range and how its value reads. From the
+ * Elixir: what the UI knows of a parameter: its name, its voice, its range and how its value reads. From the
  * LXR's parameter model (lxr_params.h: the names and the value types of menu.c, the pages of menuPages.h, the
  * modulation targets of Cc2Text.c; Copyright (C) 2012-2026 Erica Synths, GPL-3.0-only), with the LXR's 3-letter
- * value lists spelled out for a larger screen; and Kettle's own parameters (sound.c: the sends, the reverb). */
+ * value lists spelled out for a larger screen; and Elixir's own parameters (sound.c: the sends, the reverb). */
 
 static uint8_t par_text_of[NPAR];                /* TEXT_* (its name), from the pages and the target list */
 static uint8_t par_voice_of[NPAR];               /* the voice 0..5 a sound parameter belongs to, 0xFF none */
@@ -69,7 +69,7 @@ static const char *const L_MODEL[] = {"LXR", "MODAL", "STRING", "FM"};   /* (0.9
 static const char *const L_BITS[] = {"OFF", "15", "14", "13", "12", "11", "10", "9", "8", "7", "6", "5", "4", "3",
                                      "2", "1"};
 static const char *const L_LFOMODE[] = {"TRIG", "HOLD", "ONE", "HALF"};   /* (0.13: voices.c LM_*) */
-enum { MENU_REV_MODEL = 27, MENU_SHAPE, MENU_XMODE, MENU_CHOKE, MENU_BITS, MENU_MODEL, MENU_LFOMODE };   /* (Kettle's) */
+enum { MENU_REV_MODEL = 27, MENU_SHAPE, MENU_XMODE, MENU_CHOKE, MENU_BITS, MENU_MODEL, MENU_LFOMODE };   /* (Elixir's) */
 #define LIST(a) {a, sizeof a / sizeof a[0]}
 static const struct { const char *const *s; uint8_t n; } MENUS[] = {
     [MENU_FILTER] = LIST(L_FILTER), [MENU_WAVEFORM] = LIST(L_WAVE), [MENU_AUDIO_OUT] = LIST(L_OUT),
@@ -85,7 +85,7 @@ static const struct { const char *const *s; uint8_t n; } MENUS[] = {
 static const char *const VOICE_NAME[NTRACK] = {"DRUM 1", "DRUM 2", "DRUM 3", "SNARE", "CYMBAL", "CL HAT", "OP HAT"};
 static const char *const VOICE_SHORT[NTRACK] = {"D1", "D2", "D3", "SN", "CY", "CH", "OH"};
 
-/* Kettle's parameters (sound.c): the groups of six per-voice ones and the single ones, in their order; each
+/* Elixir's parameters (sound.c): the groups of six per-voice ones and the single ones, in their order; each
  * {first, size, its value type DTYPE_* | MENU_* << 8, long name, category, short name, the name a lock shows} */
 static const struct { uint16_t first; uint8_t n; uint16_t dtype; const char *nm[4]; } K_PARS[] = {
     {PAR_FX_SEND1, 6, DTYPE_0B127, {"FX send", "Send", "fxs", "FX"}},
@@ -243,7 +243,7 @@ static void note_name(char *b, uint32_t n)
     put_int(b + (NOTE_NAMES[n % 12u][1] ? 2 : 1), (int32_t)(n / 12u) - 1);
 }
 
-/* a modulation target: the voice and the parameter's name (lock targets past the LXR's: Kettle's, lock_target_par) */
+/* a modulation target: the voice and the parameter's name (lock targets past the LXR's: Elixir's, lock_target_par) */
 static void mod_target_name(char *b, uint32_t idx, int with_voice, uint32_t max)
 {
     uint32_t p, v;

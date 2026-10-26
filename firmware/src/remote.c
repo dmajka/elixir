@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Kettle: the remote map (0.12), for an 8-column controller (a Novation Launch Control XL). On the remote channel
+ * Elixir: the remote map (0.12), for an 8-column controller (a Novation Launch Control XL). On the remote channel
  * (CONFIG: REMOTE; midi.c hands over what came in on it), a row of eight: columns 1..7 the tracks D1 D2 D3 SN CY CH OH
  * (CH and OH both the hat voice, but for their decays), column 8 the master.
  *   knobs, CC 8 + 8 x row + column:

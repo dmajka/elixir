@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
- * Kettle: Felucca's reverb (Felucca/firmware/src/fx.c: ROOM, SPRING, HALL in ~12 KB of shared buffers) as a send
+ * Elixir: Felucca's reverb (Felucca/firmware/src/fx.c: ROOM, SPRING, HALL in ~12 KB of shared buffers) as a send
  * bus after the FX bus. Each voice feeds it by its REVERB SEND (voices.c rev_in); its return, scaled by LEVEL, joins
  * the mix in stereo (HALL's side signal to the left and from the right). The parameters (sound.c): PAR_REV_TYPE,
  * PAR_REV_SIZE, PAR_REV_DAMP, PAR_REV_LEVEL, kit parameters as the FX bus's are. Felucca runs it on blocks of 32
@@ -94,9 +94,9 @@ static struct {                          /* HALL's state (in the pool) */
 } hl POOL;
 #define rev_side (hl.sd)
 
-/* ROOM (type 0): 4 damped combs + 2 allpasses (Freeverb-like, mono), added to out. Kettle: the loops' products
+/* ROOM (type 0): 4 damped combs + 2 allpasses (Freeverb-like, mono), added to out. Elixir: the loops' products
  * round towards zero (Felucca's floor them and its master's DC blocker takes out the offset they leave, -33 here
- * for ever after a hit; Kettle has no DC blocker) */
+ * for ever after a hit; Elixir has no DC blocker) */
 static __attribute__((noinline)) void rev_room(const int32_t *in_, int32_t *out, uint32_t n)
 {
     uint32_t i, k;

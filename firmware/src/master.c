@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
- * Kettle: Felucca's MASTER pot: read before the audio starts (the first block at its level), then smoothed per UI
+ * Elixir: Felucca's MASTER pot: read before the audio starts (the first block at its level), then smoothed per UI
  * frame; the curve x^2 (Felucca's master_of_pot) into the engine's master_q12. */
 static int32_t master_knob = 512 * 16;
 static inline uint32_t master_of_pot(uint32_t k10) { return (k10 * k10) >> 8; }
@@ -12,7 +12,7 @@ static void master_poll(void)
         master_q12 = (int32_t)master_of_pot((uint32_t)(master_knob / 16));
     }
 }
-/* Kettle 0.5.1: the battery, as Felucca reads it (its main loop, ui_draw.c batt_level): ADC channel 3 (the battery's
+/* Elixir 0.5.1: the battery, as Felucca reads it (its main loop, ui_draw.c batt_level): ADC channel 3 (the battery's
  * divider) through a slow IIR, the stock firmware's thresholds 531 / 561 / 591 for 0..3 bars. On USB power it charges
  * (Felucca shows a bolt): 4 */
 static int32_t batt_raw;

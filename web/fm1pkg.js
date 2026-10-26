@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
-// Kettle: copied from Felucca's web/, unchanged.
+// Elixir: copied from Felucca's web/, unchanged.
 //
 // FM-1 .fwsc packages in the browser: the package identity and the image the
 // device reads during an update.
