@@ -1785,6 +1785,10 @@ static void phase14(void)
     turn(EN_K1, -3);
     check(par[PAR_LFOMODE1] == LM_TRIG, "LFO MODE: back to TRIG by its knob");
     shot("lfo-mode");
+    turn(EN_SELECT, -1);                             /* 0.14: SELECT's order too: the LFO's pages, LFO MODE, MIX */
+    check(ui.sect == S_LFO && ui.half == 1, "SELECT: before LFO MODE, the LFO's second page");
+    turn(EN_SELECT, 2);
+    check(ui.sect == S_MIX && ui.half == 0, "SELECT: after LFO MODE, MIX");
 
     /* 14b: the global LFOs. MORPH by a one-shot saw over a bar from PLAY: the knob stays, the sound moves */
     p4_reset();

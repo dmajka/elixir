@@ -206,12 +206,22 @@ static int sect_half_used(uint32_t t, uint32_t s, uint32_t h)
     }
     return 0;
 }
+/* the sections in page order (0.14: LFO MODE right after the LFO's pages; the numbers stay, they are saved) */
+static const uint8_t SECT_ORDER[NSECT] = {S_OSC, S_AEG, S_MOD, S_FM, S_CLICK, S_FILTER, S_LFO, S_LFOM, S_MIX,
+                                          S_SHAPE, S_RANDOM, S_XMOD, S_MODEL};
+static uint32_t sect_rank(uint32_t s)
+{
+    uint32_t i;
+    for (i = 0; i < NSECT && SECT_ORDER[i] != s; i++)
+        ;
+    return i;
+}
 /* the sound pages in order: (section, half) that hold something for this track */
 static uint32_t sound_pages(uint8_t list[NSPG][2])
 {
-    uint32_t s, h, n = 0;
-    for (s = 0; s < NSECT; s++)
-        for (h = 0; h < 2u; h++)
+    uint32_t i, s, h, n = 0;
+    for (i = 0; i < NSECT; i++)
+        for (s = SECT_ORDER[i], h = 0; h < 2u; h++)
             if (sect_half_used(ui.track, s, h)) {
                 list[n][0] = (uint8_t)s;
                 list[n][1] = (uint8_t)h;
@@ -227,7 +237,7 @@ static void sound_fix(void)                          /* a section this track has
         if (l[i][0] == ui.sect && l[i][1] == ui.half)
             return;
     for (i = 0; i < n; i++)
-        if (l[i][0] >= ui.sect) {
+        if (sect_rank(l[i][0]) >= sect_rank(ui.sect)) {
             ui.sect = l[i][0];
             ui.half = l[i][1];
             return;

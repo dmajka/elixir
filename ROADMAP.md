@@ -23,6 +23,7 @@ Elixir (called Kettle until 0.13) is the Erica Synths LXR-02 firmware (GPL-3.0) 
 - **0.11 (Phase 13):** Control All: OCT+ held on a sound page, a knob moves that parameter on every track, relative; letting go asks: OCT+ reverts, OCT− keeps. See *Phase 13*.
 - **0.12 (Phase 12, 12a–12e):** the remote map for an 8-column controller (Launch Control XL): CONFIG → REMOTE channel and knob mode, knob rows on CCs 8–119, buttons on notes 36–93, feedback over USB; NRPN morph and roll rate fixed. The controller templates (12f) are still to make. See *Phase 12*.
 - **0.14 (Phase 15):** renamed Elixir (Kettle until 0.13); a pixel-potion title screen; the install and library pages find the FM-1 under either name, so Kettle units update in place (`tests/install_test.mjs`); a new front page for the site. See *Phase 15*.
+- **0.14.1:** LFO MODE moved to the page right after the LFO's two pages (it was the last sound page); SELECT follows a fixed section order.
 - **0.13 (Phase 14):** the LFO's modes (TRIG, HOLD, ONE, HALF); two global LFOs on morph, the DJ filter and PERF's effects, down to 256 bars a cycle; CONFIG → BUTTONS, Last page; Euclid's second pulse (OR, XOR, AND, SUB). See *Phase 14*.
 - **MIDI:** USB and TRS in, USB out. CC/NRPN control as on the LXR; clock out always on; clock in by turning the tempo below its minimum to "MIDI".
 - **Projects:** 4 slots plus an AUTO session slot in flash, 48 KB each, sparse encoding. Format version 7 since 0.9; versions 1 to 6 still load (6's models mapped to Rings').
@@ -591,7 +592,7 @@ Requested 2026-10-26, with a resource report first (in *Where things stand*). No
 - **Tests:** ui_test phase14 (Euclid 2's joins, rotation, off, saved; ONE waiting, starting, stopping at the end; HALF; HOLD; TRIG free with Retrigger off; the LFO MODE page; a global one-shot saw morphing over a bar from PLAY, the knob unmoved, from the knob, negative depth; the speed at 1 and 256 bars; FILTER both ways; COMB and FB PUSH by amount; HOLD per BAR; the pages, OCT+; saved with the project; Last page for FX, GLO→CONFIG, LFO, ARP, and off). library_test: KIT_LEN 377.
 - **Next:** the user tries it in the emulator, then on the unit (CPU: the two LFOs are a few multiplies a block; a fast LFO on MORPH re-posts the whole kit every 8 ms, as turning the morph knob does).
 
-### Phase 15: Elixir — getting ready to share it (built in 0.14, except 15d)
+### Phase 15: Elixir — getting ready to share it (done in 0.14)
 
 Requested 2026-10-26: the project gets a new name and a front page, ready for other people.
 
