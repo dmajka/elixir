@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments (Felucca's worklet; Kettle: its flash areas,
+// Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments (Felucca's worklet; Elixir: its flash areas,
 // MIDI out, the processor's name)
 // Felucca in an AudioWorklet: felucca.wasm is the whole FM-1 firmware against a simulated FM-1
 // (web/emu/felucca_web.c). Each render quantum asks it for 128 frames, which runs the device's clock forward;
@@ -9,7 +9,7 @@
 // The flash the page keeps: storage.c's areas (projects, user presets and their FM6 patches, the user sample
 // slots 0x97000..0xDFFFF; the autosave 0xE5000..0xE6FFF (1.2) and FM6's voice bank 0xE7000 (1.4.1); the settings and
 // the second FM6 copy 0xFC000..0xFFFFF), only the sectors that hold something (an erased sector is all 0xFF). {offset: bytes}
-export const STORE_AREAS = [[0x97000, 0xDF000], [0xEA000, 0xFC000], [0xFC000, 0xFE000]];   // Kettle: the projects, the kit library, the settings
+export const STORE_AREAS = [[0x97000, 0xDF000], [0xEA000, 0xFC000], [0xFC000, 0xFE000]];   // Elixir: the projects, the kit library, the settings
 export function storeSectors(nor) {
   const out = {};
   for (const [a, b] of STORE_AREAS)
@@ -167,5 +167,5 @@ if (typeof registerProcessor === "function") {
       return true;
     }
   }
-  registerProcessor("kettle", Felucca);
+  registerProcessor("elixir", Felucca);
 }

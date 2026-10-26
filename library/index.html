@@ -1,36 +1,24 @@
 <!doctype html>
 <!-- SPDX-License-Identifier: GPL-3.0-only
-     Kettle's library page (0.7): back up and restore the FM-1's projects, import LXR-02 kits (.SND), export kits.
+     Elixir's library page (0.7): back up and restore the FM-1's projects, import LXR-02 kits (.SND), export kits.
      0.8: the kit library (back up, restore, kits into it), LXR-02 projects (kits, patterns, songs).
      Talks to firmware/src/library.c over Web MIDI SysEx (web/library.js). web/make_site.py puts it at library/. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kettle library</title>
+<title>Elixir library</title>
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../site.css">
 <style>
-  :root { --bg: #fff; --fg: #000; --dim: #6b6b6b; --line: #ddd; --warn: #a33a00; }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --bg: #000; --fg: #fff; --dim: #999; --line: #333; --warn: #ff9a5c; }
-  }
-  :root[data-theme="dark"] { --bg: #000; --fg: #fff; --dim: #999; --line: #333; --warn: #ff9a5c; }
-  body { margin: 0; background: var(--bg); color: var(--fg);
-         font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; }
-  main { max-width: 640px; margin: 0 auto; padding: 48px 16px; }
-  h1 { font-size: 28px; font-weight: 600; margin: 0; }
-  h2 { font-size: 17px; font-weight: 600; margin: 36px 0 8px; padding-top: 20px; border-top: 1px solid var(--line); }
+  main { padding-top: 40px; padding-bottom: 16px; }
+  h1 { font-size: 32px; font-weight: 650; margin: 0 0 8px; }
+  h2 { font-size: 19px; font-weight: 600; margin: 40px 0 10px; padding-top: 24px; border-top: 1px solid var(--line); }
   h3 { font-size: 15px; font-weight: 600; margin: 20px 0 6px; }
   p { margin: 0 0 14px; }
-  a { color: inherit; }
-  nav { margin: 6px 0 28px; }
-  nav a { margin-right: 16px; }
-  button { font: inherit; background: var(--fg); color: var(--bg); border: 0; padding: 8px 20px; cursor: pointer; }
-  button.alt { background: none; color: var(--fg); border: 1px solid var(--fg); padding: 4px 12px; font-size: 14px; }
-  button:disabled { opacity: .3; cursor: default; }
+  button.alt { padding: 5px 12px; font-size: 14px; }
   select, input[type=number] { font: inherit; font-size: 14px; }
   input[type=file] { font-size: 14px; max-width: 100%; }
-  .small { color: var(--dim); font-size: 13px; }
-  .warn { color: var(--warn); }
   table { width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 14px; }
   td, th { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); }
   th { font-weight: 600; color: var(--dim); }
@@ -39,20 +27,19 @@
   .kits a { text-decoration: none; }
   .kits .n { color: var(--dim); display: inline-block; width: 2em; }
   #status { min-height: 1.6em; font-weight: 600; }
-  progress { width: 100%; height: 8px; display: block; accent-color: var(--fg); margin: 8px 0; }
+  progress { width: 100%; height: 8px; display: block; accent-color: var(--accent-fill); margin: 8px 0; }
   .off { opacity: .35; pointer-events: none; }
   label { margin-right: 12px; white-space: nowrap; }
-  footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--line); }
 </style>
 </head>
 <body>
-<main>
-  <h1>Kettle library</h1>
+<header class="site"><div class="wrap"><a class="brand" href="../"><svg class="pixel" viewBox="4 0 14 18" aria-hidden="true"><path class="px-c" d="M9 0h4v1h-4zM9 1h4v1h-4z"/><path class="px-o" d="M8 2h6v1h-6zM9 3h1v1h-1zM12 3h1v1h-1zM9 4h1v1h-1zM12 4h1v1h-1zM9 5h1v1h-1zM12 5h1v1h-1zM8 6h1v1h-1zM13 6h1v1h-1zM7 7h1v1h-1zM14 7h1v1h-1zM6 8h1v1h-1zM15 8h1v1h-1zM5 9h1v1h-1zM16 9h1v1h-1zM4 10h1v1h-1zM17 10h1v1h-1zM4 11h1v1h-1zM17 11h1v1h-1zM4 12h1v1h-1zM17 12h1v1h-1zM4 13h1v1h-1zM17 13h1v1h-1zM4 14h1v1h-1zM17 14h1v1h-1zM5 15h1v1h-1zM16 15h1v1h-1zM6 16h1v1h-1zM15 16h1v1h-1zM7 17h8v1h-8z"/><path class="px-h" d="M10 3h1v1h-1zM10 4h1v1h-1zM7 10h1v1h-1zM6 11h1v1h-1zM6 12h1v1h-1zM6 13h1v1h-1z"/><path class="px-g" d="M11 3h1v1h-1zM11 4h1v1h-1zM10 5h2v1h-2zM9 6h4v1h-4zM8 7h6v1h-6zM7 8h8v1h-8z"/><path class="px-L" d="M6 9h10v1h-10zM14 11h1v1h-1zM11 13h1v1h-1zM15 14h1v1h-1z"/><path class="px-l" d="M5 10h2v1h-2zM8 10h9v1h-9zM5 11h1v1h-1zM7 11h7v1h-7zM15 11h2v1h-2zM5 12h1v1h-1zM7 12h10v1h-10zM5 13h1v1h-1zM7 13h4v1h-4zM12 13h5v1h-5zM5 14h10v1h-10zM16 14h1v1h-1zM6 15h1v1h-1z"/><path class="px-d" d="M7 15h9v1h-9zM7 16h8v1h-8z"/></svg>Elixir</a><nav><a href="../try/">Try it</a><a href="../install/">Install</a><a href="../manual/">Manual</a><a href="../library/" aria-current="page">Library</a><a href="https://github.com/dmajka/elixir">Source</a></nav></div></header>
+<main class="wrap narrow">
+  <h1>Elixir library</h1>
   <p>Back up what's on your FM-1, put it back, and bring in kits from an LXR-02.</p>
-  <nav><a href="../">Install</a> <a href="../try/">Try it in the browser</a> <a href="../manual/">Manual</a></nav>
-  <p class="small">Chrome or Edge (Web MIDI). Kettle 0.7 or later on the FM-1, connected with a USB data cable. Close
-    other apps that use MIDI and allow MIDI (SysEx) when the browser asks.</p>
-  <p><button id="connect">Connect to Kettle</button></p>
+  <p class="small">Chrome or Edge (Web MIDI). Elixir on the FM-1 (or Kettle 0.7 or later, its former name),
+    connected with a USB data cable. Close other apps that use MIDI and allow MIDI (SysEx) when the browser asks.</p>
+  <p><button id="connect">Connect to Elixir</button></p>
   <p id="status"></p>
   <progress id="bar" max="1" value="0" hidden></progress>
 
@@ -62,7 +49,7 @@
 
   <h2>Back up</h2>
   <p>Saves every project, and the session, to one file on this computer. Do this before installing other firmware
-    (V15 or another): Kettle's own updates keep your projects, other firmware may not.</p>
+    (V15 or another): Elixir's own updates keep your projects, other firmware may not.</p>
   <p><label><input type="checkbox" id="savefirst" checked> first save what's on the unit now into the session slot</label></p>
   <p><button id="backup">Back up everything</button></p>
 
@@ -78,7 +65,7 @@
   <p><input type="file" id="restore" accept=".ktbk,.ktp"></p>
 
   <h2>Kit slots or the kit library?</h2>
-  <p>Kettle keeps kits in two places, both in the FM-1's flash:</p>
+  <p>Elixir keeps kits in two places, both in the FM-1's flash:</p>
   <ul>
     <li><b>The kit slots</b> (64) belong to the project, like the LXR-02's. Patterns name their kit by slot number
       (with the pattern page's Kit change on AUTO, a pattern loads its kit), and the slots are saved with the project
@@ -94,7 +81,7 @@
   <p class="small">Picking a folder below takes the .SND files in it <b>and in all its subfolders</b>, nothing else:
     one project's folder (PROJ00 …), or an SD card's top folder for every project's kits, project by project. Chrome
     asks to "upload" the folder's files: the page only reads them here and sends the kits to your FM-1, nothing else
-    leaves this computer. An LXR voice routed to the FX bus comes in as FX SEND 127 (the same sound); Kettle's own
+    leaves this computer. An LXR voice routed to the FX bus comes in as FX SEND 127 (the same sound); Elixir's own
     settings (sends, reverb, shaping, models) start at their defaults.</p>
 
   <h2>Kit library</h2>
@@ -109,7 +96,7 @@
   <h3>In the library</h3>
   <p>On the FM-1, SAVE → KIT or MORPH with To LIBRARY saves into it, SAVE → SOUND a single sound. Click a kit to
     download it as an LXR-02 .SND file. Back the library up before installing other firmware; a backup restores onto
-    any Kettle, the emulator's too.</p>
+    any Elixir, the emulator's too.</p>
   <p id="libsum" class="small"></p>
   <ul class="kits" id="libkits"></ul>
   <p><button id="libbackup">Back up the kit library</button></p>
@@ -126,24 +113,26 @@
   <p><label>A folder <input type="file" id="snddir" webkitdirectory></label></p>
   <h3>Import an LXR-02 project</h3>
   <p>Pick one project folder from an LXR-02 SD card (PROJ00 …), not the whole card: its kits go into the kit slots by
-    their numbers (so each pattern still finds its kit), its patterns into Kettle's patterns, its songs into the songs.
-    It replaces what's playing; save the project on the FM-1 afterwards. Kettle has 32 patterns to the LXR's 64: pick
+    their numbers (so each pattern still finds its kit), its patterns into Elixir's patterns, its songs into the songs.
+    It replaces what's playing; save the project on the FM-1 afterwards. Elixir has 32 patterns to the LXR's 64: pick
     which half.</p>
   <p><label>Patterns <select id="lxrhalf"><option value="0">1–32</option><option value="32">33–64</option></select></label></p>
   <p><label>A project folder <input type="file" id="lxrdir" webkitdirectory></label></p>
   <p class="small">A song's steps on a pattern from the other half play pattern 32 instead.</p>
   <h3>The slots on the FM-1</h3>
   <p>The playing project's 64 kits. Click one to download it as an LXR-02 .SND file (the LXR's parameters only:
-    Kettle's own aren't in that format).</p>
+    Elixir's own aren't in that format).</p>
   <ul class="kits" id="kits"></ul>
   </div>
 
-  <footer class="small">
-    Kettle is free software (GPL-3.0), unofficial and not affiliated with or endorsed by Erica Synths, M-VAVE or
+</main>
+<footer class="site">
+  <div class="wrap narrow">
+    Elixir is free software (GPL-3.0), unofficial and not affiliated with or endorsed by Erica Synths, M-VAVE or
     Hügelton Instruments. "Erica Synths" and "LXR-02" are trademarks of Erica Synths; "M-VAVE" and "FM-1" are
     trademarks of their owner. Kits you import are yours to use; this page sends them only to your FM-1.
-  </footer>
-</main>
+  </div>
+</footer>
 <script type="module">
 import { Library, midiTransport, sndFiles, sndBytes, packBackup, unpackBackup, checkImage, SLOT_NAMES, KL_KIT, KL_SOUND,
          packKitLib, unpackKitLib, lxrProject, importLxrProject } from "./library.js";
@@ -161,7 +150,8 @@ function download(bytes, name) {
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);
 }
 const stamp = () => new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
-const safe = (s) => (s || "kettle").replace(/[^A-Za-z0-9_-]+/g, "_");
+const kettle = (v) => { const m = /(\d+)\.(\d+)/.exec(v || ""); return !!m && +m[1] === 0 && +m[2] < 14; };   // (0.13 and before)
+const safe = (s) => (s || "elixir").replace(/[^A-Za-z0-9_-]+/g, "_");
 
 async function job(fn) {
   if (busy) return;
@@ -190,7 +180,7 @@ async function refresh() {
     $("libkits").innerHTML = lk.map((e) => `<li><span class="n">${e.slot + 1}</span><a href="#" data-lib="${e.slot}">` +
       `${e.name.replace(/[<&]/g, "") || "–"}</a></li>`).join("");
   } catch (_) {
-    $("libsum").textContent = "This Kettle has no kit library (0.8 or later has).";
+    $("libsum").textContent = "This FM-1 has no kit library (Elixir, or Kettle 0.8 or later, has).";
   }
 }
 
@@ -198,14 +188,14 @@ $("connect").addEventListener("click", () => job(async () => {
   if (!navigator.requestMIDIAccess) throw new Error("This browser has no Web MIDI: use Chrome or Edge.");
   say("Asking for MIDI access …");
   const access = await navigator.requestMIDIAccess({ sysex: true });
-  say("Looking for Kettle …");
+  say("Looking for Elixir …");
   const t = await midiTransport(access);
-  if (!t) throw new Error("Kettle 0.7 or later wasn't found. Is the FM-1 on, running Kettle, and connected by USB? " +
+  if (!t) throw new Error("Elixir (or Kettle 0.7 or later) wasn't found. Is the FM-1 on, running Elixir, and connected by USB? " +
     "Ports seen: " + ([...access.inputs.values()].map((i) => i.name).join(", ") || "none"));
   lib = new Library(t);
   await refresh();
   $("dev").classList.remove("off");
-  say(`Connected: Kettle ${info.version} on ${t.name}.`);
+  say(`Connected: ${kettle(info.version) ? "Kettle" : "Elixir"} ${info.version} on ${t.name}.`);
 }));
 
 $("slots").addEventListener("click", (e) => {
@@ -235,7 +225,7 @@ $("backup").addEventListener("click", () => job(async () => {
     entries.push({ slot: l, img: await lib.readProject(l, bar) });
   }
   if (!entries.length) throw new Error("Nothing is saved on the FM-1 yet.");
-  download(packBackup(entries), `kettle-backup-${stamp()}.ktbk`);
+  download(packBackup(entries), `elixir-backup-${stamp()}.ktbk`);
   say(`Backed up ${entries.length} (${entries.map((e) => SLOT_NAMES[e.slot]).join(", ")}).`);
   await refresh();
 }));
@@ -300,7 +290,7 @@ $("lxrdir").addEventListener("change", (e) => {
 $("libbackup").addEventListener("click", () => job(async () => {
   const entries = await lib.libBackup(bar);
   if (!entries.length) throw new Error("The kit library is empty.");
-  download(packKitLib(entries), `kettle-kits-${stamp()}.ktlb`);
+  download(packKitLib(entries), `elixir-kits-${stamp()}.ktlb`);
   say(`Backed up ${entries.length} kits and sounds.`);
 }));
 $("librestore").addEventListener("change", (e) => {

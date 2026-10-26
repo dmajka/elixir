@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Kettle's library (0.7): the protocol of firmware/src/library.c, LXR-02 kit files and backup files, for the library
+// Elixir's library (0.7): the protocol of firmware/src/library.c, LXR-02 kit files and backup files, for the library
 // page (Web MIDI to an FM-1) and the emulator (its WebAssembly). No DOM here.
 //
 // A transport is { request(wire: Uint8Array) -> Promise<Uint8Array | null> }: one SysEx message out, the answer
@@ -71,7 +71,7 @@ export class Library {
       }
       return r.data;
     }
-    throw new Error("no answer from Kettle");
+    throw new Error("no answer from Elixir");
   }
 
   async info() {
@@ -128,7 +128,7 @@ export class Library {
   loadProject(slot) { return this.call(0x24, [slot]); }
   saveProject(slot, name) { return this.call(0x25, [slot, ...nameBytes(name)]); }
 
-  // data: the kit layout (an LXR .SND's 247 bytes, or a whole Kettle kit)
+  // data: the kit layout (an LXR .SND's 247 bytes, or a whole Elixir kit)
   kitPut(idx, name, data, loadNow = false) {
     return this.call(0x30, [idx, loadNow ? 1 : 0, ...nameBytes(name), data.length & 255, data.length >> 8, ...data]);
   }
@@ -200,7 +200,7 @@ export function packKitLib(entries) {
 }
 export function unpackKitLib(buf) {
   const b = new Uint8Array(buf);
-  if (!(b[0] === 0x4b && b[1] === 0x54 && b[2] === 0x4c && b[3] === 0x42)) throw new Error("not a Kettle kit library");
+  if (!(b[0] === 0x4b && b[1] === 0x54 && b[2] === 0x4c && b[3] === 0x42)) throw new Error("not a Elixir kit library");
   const n = rd32(b, 4), out = [];
   let i = 8;
   for (let k = 0; k < n; k++) {
@@ -228,9 +228,9 @@ function crc32(bytes) {                              // zlib's, as storage.c's
 
 // a project image: the header's magic, its own CRC, the payload's length and CRC
 export function checkImage(img) {
-  if (!(img instanceof Uint8Array) || img.length < 257) return { ok: false, why: "not a Kettle project" };
+  if (!(img instanceof Uint8Array) || img.length < 257) return { ok: false, why: "not a Elixir project" };
   const h = img.subarray(0, 48);                    // (proj_hdr_t: 48 bytes, its own CRC last)
-  if (rd32(h, 0) !== MAGIC) return { ok: false, why: "not a Kettle project" };
+  if (rd32(h, 0) !== MAGIC) return { ok: false, why: "not a Elixir project" };
   if (rd32(h, 44) !== crc32(h.subarray(0, 44))) return { ok: false, why: "the project's header is damaged" };
   const len = rd32(h, 16);
   if (img.length !== 256 + len) return { ok: false, why: "the project file is cut short" };
@@ -254,7 +254,7 @@ export function packBackup(entries) {
 export function unpackBackup(buf) {                  // -> [{ slot, img }] (also takes a single project image)
   const b = new Uint8Array(buf);
   if (rd32(b, 0) === MAGIC) return [{ slot: -1, img: b }];
-  if (!(b[0] === 0x4b && b[1] === 0x54 && b[2] === 0x42 && b[3] === 0x4b)) throw new Error("not a Kettle backup");
+  if (!(b[0] === 0x4b && b[1] === 0x54 && b[2] === 0x42 && b[3] === 0x4b)) throw new Error("not a Elixir backup");
   const n = rd32(b, 4), out = [];
   let i = 8;
   for (let k = 0; k < n; k++) {
@@ -292,7 +292,7 @@ export async function sndFiles(files, { skipInit = true } = {}) {
                       || (a.number ?? 999) - (b.number ?? 999) || a.file.localeCompare(b.file));
   return kits;
 }
-// a kit as an LXR-02 .SND file (its first 247 bytes: Kettle's own settings aren't in the LXR's format)
+// a kit as an LXR-02 .SND file (its first 247 bytes: Elixir's own settings aren't in the LXR's format)
 export function sndBytes(name, data) {
   const out = new Uint8Array(8 + LXR_PARAMS);
   out.set(nameBytes(name).map((c) => c), 0);
@@ -336,7 +336,7 @@ export function parseSng(buf, fileName = "") {
   return { name: nameOf(b.subarray(0, 8)).replace(/\0/g, "").trim(), entries: [...b.subarray(8, 72)],
            number: m ? +m[1] : null, file: fileName };
 }
-// a song's entries for Kettle's 32 patterns: LXR's patterns from `first` (0 or 32) are 0..31; the rest the last
+// a song's entries for Elixir's 32 patterns: LXR's patterns from `first` (0 or 32) are 0..31; the rest the last
 export function songWindow(entries, first) {
   return entries.map((e) => (e >= 64 ? e : e >= first && e < first + 32 ? e - first : 31));
 }
@@ -367,7 +367,7 @@ export async function lxrProject(files) {
   return { kits: kits.filter((k) => k.number !== null && k.number < 64), pats: pats.filter((p) => p.number !== null).sort(byNum),
            songs: songs.filter((s) => s.number !== null && s.number < 64).sort(byNum) };
 }
-// an LXR project into Kettle: its kits into their slots (so the patterns' kit numbers still name them), its patterns
+// an LXR project into Elixir: its kits into their slots (so the patterns' kit numbers still name them), its patterns
 // from `first` (0: 1..32, 32: 33..64) into the patterns, its songs (those not empty)
 export async function importLxrProject(lib, proj, first = 0, onProgress = () => {}) {
   const pats = proj.pats.filter((p) => p.number >= first && p.number < first + 32);
@@ -382,11 +382,11 @@ export async function importLxrProject(lib, proj, first = 0, onProgress = () => 
 
 // ----------------------------------------------------------------------------------------- transports ---
 
-// Web MIDI: the FM-1's port (Kettle names itself "Kettle"), SysEx allowed
+// Web MIDI: the FM-1's port (Elixir names itself "Elixir", Kettle "Kettle"), SysEx allowed
 export async function midiTransport(access, log = () => {}) {
   const outs = [...access.outputs.values()];
   for (const input of access.inputs.values()) {
-    if (input.state === "disconnected" || !/kettle|fm-1|felucca|usb-midi/i.test(input.name || "")) continue;
+    if (input.state === "disconnected" || !/elixir|kettle|fm-1|felucca|usb-midi/i.test(input.name || "")) continue;
     const output = outs.find((o) => o.name === input.name && o.state !== "disconnected");
     if (!output) continue;
     await input.open();
