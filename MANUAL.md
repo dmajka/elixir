@@ -2,7 +2,7 @@
 
 Elixir is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 0.15: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Elixir adds.
 
-Elixir is **unofficial**. It is not affiliated with or endorsed by Erica Synths, M-VAVE or Hügelton Instruments. It is free software under the GPL-3.0 (see *Licence and credits* at the end). Up to version 0.13 it was called **Kettle**.
+Elixir is **unofficial**. It is not affiliated with or endorsed by Erica Synths, M-VAVE or Hügelton Instruments. It is free software under the GPL-3.0 (see *Licence and credits* at the end).
 
 ---
 
@@ -44,7 +44,7 @@ The Rings and Plaits models are **experimental**: they are not part of the LXR-0
 
 Put the FM-1 on M-VAVE's official firmware **V15** before installing Elixir for the first time. This is what everyone who makes FM-1 firmware recommends. Elixir's package, like Felucca's, is built for V15's flash layout and update loader, and V15 is the firmware you return to.
 
-The install page has a **Check my FM-1** button. It asks the FM-1 what it runs: `FM-1_015` is official V15, `FM-1_9xx` is an alternative firmware (Felucca, Kettle or Elixir), and anything else is an older official version. If it isn't V15, get V15 (`FM-1.fwsc`) from M-VAVE's download page and install it with the page's **Official V15** section, or with M-VAVE's own updater.
+The install page has a **Check my FM-1** button. It asks the FM-1 what it runs: `FM-1_015` is official V15, `FM-1_9xx` is an alternative firmware (Felucca or Elixir), and anything else is an older official version. If it isn't V15, get V15 (`FM-1.fwsc`) from M-VAVE's download page and install it with the page's **Official V15** section, or with M-VAVE's own updater.
 
 ### Installing
 
@@ -56,12 +56,6 @@ From a terminal, `tools/fm1_install.py` does the same. It needs Python 3 with `m
 python3 tools/fm1_install.py elixir.fwsc
 ```
 
-### Upgrading from Kettle
-
-Elixir was called **Kettle** up to version 0.13. It is the same firmware under a new name, so update it as you would any Elixir release: skip V15 and install Elixir over Kettle from Elixir's install page. Your projects, kit library and settings stay where they are and load as before. Backups made with Kettle's library page (`.ktbk`, `.ktp`, `.ktlb`) restore on Elixir; the file types keep their names.
-
-The FM-1's USB name changes from "Kettle" to "Elixir". Some computers keep showing the old name for a while; Elixir's install and library pages, and `fm1_install.py`, find the FM-1 under either name. Kettle's old install page only looks for "Kettle", so use Elixir's from now on.
-
 ### Going back
 
 Install the official `FM-1.fwsc` (V15) with the install page's **Official V15** section, or with `fm1_install.py FM-1.fwsc`. Elixir has no backup of its own: copy anything you want to keep before you go back. (The page checks that the file is the unmodified V15, so a damaged or wrong file can't be written.)
@@ -70,7 +64,7 @@ Elixir keeps its projects and settings in the same flash area Felucca uses for i
 
 ### If something goes wrong
 
-How an update works decides what can be recovered. The firmware that is running (official, Felucca, Kettle or Elixir) answers the installer, checks the package and starts the FM-1's **update loader**. The loader writes the new firmware and restarts. So:
+How an update works decides what can be recovered. The firmware that is running (official, Felucca or Elixir) answers the installer, checks the package and starts the FM-1's **update loader**. The loader writes the new firmware and restarts. So:
 
 - **An install was cut off** (cable pulled, page closed, computer asleep): the FM-1 stays in update mode, waiting for the loader's write. Plug it in and press Install again (or run `fm1_install.py` again). It finishes the write. This works for Elixir and for V15.
 - **Elixir runs but something is wrong** (it misbehaves, it's too slow, you don't like it): install V15 from the page. Elixir answers the installer like any other firmware.
