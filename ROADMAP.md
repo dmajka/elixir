@@ -24,6 +24,7 @@ Elixir (called Kettle until 0.13) is the Erica Synths LXR-02 firmware (GPL-3.0) 
 - **0.12 (Phase 12, 12a–12e):** the remote map for an 8-column controller (Launch Control XL): CONFIG → REMOTE channel and knob mode, knob rows on CCs 8–119, buttons on notes 36–93, feedback over USB; NRPN morph and roll rate fixed. The controller templates (12f) are still to make. See *Phase 12*.
 - **0.14 (Phase 15):** renamed Elixir (Kettle until 0.13); a pixel-potion title screen; the install and library pages find the FM-1 under either name, so Kettle units update in place (`tests/install_test.mjs`); a new front page for the site. See *Phase 15*.
 - **0.15 (Phases 16 and 17a–17c, released 2026-10-27):** Plaits' sixteen original engines as models on D1–D3 (experimental, as Rings'); the second core renders D1–D3 (stock kits ~27% CPU on core 0, was ~45%), guarded, with a one-core fallback; at most two models at once (one on one core); CONFIG → LOAD, the load by part and the cores; morph refreshed as a sweep; Plaits' speech words found at boot. Tested on the unit through 0.15-test1 to test4. The manual says the models are experimental and not in the LXR-02. See *Phase 16*, *Phase 17*.
+- **Planned (research 2026-10-27): Phases 18–23:** groundwork (SRAM, the effects a block behind), a global scale, note lengths, density, a third global LFO, a melody generator, a tape/dub delay, a plate reverb, dirt. See *Phases 18–23*.
 - **0.14.1:** LFO MODE moved to the page right after the LFO's two pages (it was the last sound page); SELECT follows a fixed section order.
 - **0.13 (Phase 14):** the LFO's modes (TRIG, HOLD, ONE, HALF); two global LFOs on morph, the DJ filter and PERF's effects, down to 256 bars a cycle; CONFIG → BUTTONS, Last page; Euclid's second pulse (OR, XOR, AND, SUB). See *Phase 14*.
 - **MIDI:** USB and TRS in, USB out. CC/NRPN control as on the LXR; clock out always on; clock in by turning the tempo below its minimum to "MIDI".
@@ -795,6 +796,143 @@ On the host the effects are cheap. On the FM-1 the user saw them push a 75–82%
 **Effort.** 17a and 17b: a session plus hardware rounds. 17c: a session (the HAL does the hard part). 17d: a session. 17e: open-ended.
 
 **Credits.** Starting core 1 safely and the misread guard: X0X (Charles Vestal), Melodee (keremimo), Jangada (zednaked), all GPL-3.0, already credited in `fm1_cpu1.h`. The split and the effects-a-block-behind approach: JIANT (juanjiant-bit), credited in the code and NOTICE.md when used.
+
+### Phases 18–23 (research, 2026-10-27): scales, melody, density, a third LFO, better delay, reverb and dirt
+
+Asked 2026-10-27, as research: what each idea would cost on the FM-1 (CPU, RAM, flash, project and kit space) and in what order to build them. Nothing here is built yet. Most of it belongs on core 0, because core 1 is busy with D1–D3.
+
+**The budget today (the 0.15 build, `nm build/elixir.elf`)**
+
+| | Used | Total | Free | Usable (above build.py's guards) |
+|---|---|---|---|---|
+| Fast RAM (.data + .bss) | 66,004 B | 73,728 B | 7,724 B | ~3.6 KB |
+| Pool | 347,268 B | 368,640 B | 21,372 B | ~13 KB |
+| App flash | 439,504 B | 581,564 B | ~142 KB | ~140 KB |
+| A kit | 377 B | the library's message: KIT_LEN + 16 ≤ LIB_MAX 400 | 7 B | then LIB_MAX must grow (`lib` is in the pool: ~3.3 B of pool a byte) |
+| Project slot | busy 35.8 KB | 48.9 KB | ~13 KB | dense projects already fail |
+
+The RAM / pool line only splits one SRAM, so the real spare is ~17 KB in all. Flash and CPU are not the limit for anything below; **SRAM is**, and only the delay line and the reverb need much of it.
+
+**CPU.** 1% of the CPU line is 29 µs of the 2.9 ms half buffer, about 10,400 cycles at 360 MHz: **~80 cycles a sample**. Measured on the unit (Phase 17): a plain LXR voice ~6%, the delay 3%, Felucca's reverb 4–5% plus ~5% of send mixing under MIXER; stock kits ~27% on core 0; core 1's worst (two models, morphing) 62% average, 71% peak.
+
+**The catch: the effects sit on the critical path.** Each block core 0 renders SN–HH, *waits* for core 1's D1–D3, then runs the mixer, the FX bus and the reverb (`voices_block`). With two heavy models the block is ~71% (core 1) + ~15% (mixer, FX, reverb) + the sequencer: roughly 10% to spare. Every percent added to the effects adds to that worst case directly, even though core 0 sits idle for ~50% of the block while it waits. With plain kits there is plenty of room (~70%).
+
+**Estimates** (target cycles from the ~80 cycles/sample rule and the measured parts; ± half. "Pool" includes the three spare patterns, so a per-pattern byte costs 35 B)
+
+| Feature | CPU (core 0) | RAM | Pool | Flash | Project / kit |
+|---|---|---|---|---|---|
+| 1A Global scale (quantizer) | ~0 (a table look-up per hit) | ~16 B | 64 B (root + scale per pattern) or 0 (per project) | ~1 KB | 2 B project or pattern; 7 B per pattern for the tracks' follow flags (245 B pool) |
+| 1B Melody generator | ~0 (per hit, ~200 cycles) | ~300 B (7 tracks' loop memory and state) | ~1.5 KB (6 settings × 7 tracks × 35 patterns) | 4–6 KB | settings per track per pattern |
+| 1B' Note length (gate) | ~0 | ~30 B | 0 (3 spare bits per step, see below) | ~1.5 KB | 1 B per voice (gate mode), or none |
+| 1C Third global LFO | ~0.05% | ~40 B | 0 | <0.5 KB | 7 B project (format bump) |
+| 1D Density / chance | ~0 | ~16 B | ~250 B (a per-track chance per pattern) | ~1.5 KB | 1–2 B project |
+| 2A Tape / dub echo (in the FX bus's line) | 3–4% (today's delay 3%) | ~100 B | 0 (the same 64 KB line) | ~3 KB | ~4 B kit |
+| 2A' Pitch-shifted repeats | +1–2% | ~40 B | +4 KB (a 2048-sample window) | ~1 KB | 1 B kit |
+| 2A'' Echo into the reverb | +0.3% (plus the reverb, then running) | 0 | 0 | small | 1 B kit |
+| 2B Dattorro plate (Clouds), half rate | 3–5% (HALL, also half rate, is 4–5%) | ~100 B | +10.6 KB (scaled) or +20.8 KB (Clouds' lengths) | ~2 KB | 1–2 B kit |
+| 2C Master dirt stage (stereo) | 1–2% (2× oversampled: 3–4%) | ~60 B | 0 | ~1.5 KB | ~3 B kit |
+| 2C' More per-voice shaper modes | ~0 (one curve replaces another) | 0 | 0 | ~1 KB | 0 (the shaper byte exists) |
+| 18b Effects a block behind | ~0 (saves up to ~15% of the worst case) | ~1 KB (a block of sends, twice) | 0 | small | 0 |
+
+Every row is cheap except two: the plate needs 10–21 KB of SRAM and the effects need the critical-path fix (18b) before they grow. The kit's 7 spare bytes run out after about two features: raising LIB_MAX by 16–32 B is part of 18.
+
+#### Phase 18: groundwork (do first)
+
+- **18a. Find SRAM.** The candidates, each to verify before it is used:
+  - **The RAMTEXT gap.** `app.ld` gives RAMTEXT 0x01C00000–0x01C06000; `.ram_text` and `.c1_text` end at 0x01C00C34, so ~21 KB of it is unused, plus 8 KB at 0x01C06000–0x01C08000 kept "for RAM-run debug". Check that nothing uses it while the app runs: the boot ROM, the SPL, core 1's start, the update loader (it runs only after the app is gone). If it's free, a `.ram_buf` section there holds the plate's lines.
+  - **The stacks.** 24 KB user + 8 KB system (0x01C74000–0x01C7C000). Paint them at boot and show the high-water mark on LOAD; a few KB may come back.
+  - Last resorts, with costs: a union of COMB's line (8 KB) and REVERSE's recorder (11 KB), so the two can't play together; the screen canvas (30 KB) drawn in bands (a big change).
+- **18b. The effects a block behind, on core 0, while it waits** (JIANT's idea, as 17d, but on core 0). While core 1 renders D1–D3, core 0 renders SN–HH and then runs the FX bus and the reverb on the *previous* block's sends; after the wait, only the mixer. The wet sound is one block (1.45 ms) late, which is inaudible. The delay reads one block shorter so synced echoes land exactly. The worst case drops by ~10–15%, and new effects fill core 0's idle time instead of adding to the block. It needs JIANT's output range check (mute, clear the lines, one core). render_test: the effects' output, one block late, bit for bit.
+- **18c. Room in the kit.** LIB_MAX 400 → 432 (one static assert, ~100 B of pool), so the FX work below can add kit parameters. Kits in the library's flash entries (480 B) already have room.
+- **One-core units.** Everything here also lands on a unit that fell back to one core; 17f's governor (shed load in a fixed order) becomes more important. Suggested order: the plate to HALL, the pitch shifter off, oversampling off.
+
+#### Phase 19: global musical functions (scale, note length, density, a third LFO)
+
+- **19a. A global scale.** A root (C … B) and a scale. The list (16, each a 12-bit mask plus a weight per degree for 20's generator, in flash):
+  - CHROMATIC (off: as today), MAJOR, MINOR, DORIAN, PHRYGIAN, MIXOLYDIAN, LYDIAN, HARMONIC MINOR, MINOR PENTATONIC, MAJOR PENTATONIC, BLUES;
+  - chord tones, useful for dub techno and for bass: MINOR 7 (1 ♭3 5 ♭7), FIFTHS (1 5);
+  - a few exotic: PHRYGIAN DOMINANT (Hijaz), HIRAJOSHI, PELOG (5-note approximation), WHOLE TONE.
+  - **What it quantizes**, on the tracks that follow it: the steps' notes, KEYS, random pitch per hit (then whole scale degrees instead of a continuous bend), the links' PITCH, the bounces' drift, DRILL's and the ratchets' random notes, the melody generator. MIDI notes in, optionally.
+  - **KEYS in scale:** the 16 white keys play the scale's degrees, two octaves and more, so nothing on the keyboard is out of key. A natural fit for the FM-1.
+  - **How a voice stays in key.** A voice's pitch is its tune (coarse) plus the step's note − 60 (`osc_recalc`). Two ways, a choice for the user (below): *absolute*, quantizing the sounding semitone (tune + note), so every following voice is in key whatever its tuning, but a drum tuned off the scale moves by a semitone; or *relative*, quantizing only the note's offset, so kits sound as before but each voice must be tuned to the root by ear. Fine tune is kept either way.
+  - Off by default (CHROMATIC), so no kit or project changes sound until a scale is chosen. Follow per track on the TRACK page, by default D1–D3 on, SN–HH off.
+  - **Decided (the user, 2026-10-27): absolute**, with follow per track; **per pattern** (root + scale, 2 B a pattern). A blank pattern (empty, or cleared) starts with the scale last chosen: the project keeps that last root and scale (2 B), and selecting, clearing or first editing an empty pattern copies them in. Copying a pattern copies its scale.
+- **19b. Note length.** Today a hit runs the amp EG's attack and decay and nothing ends it; MIDI's note-off waits for the next hit.
+  - **A GATE mode per voice** (the amp EG page): attack, then hold for the note's length, then the decay. OFF is the LXR's (the default, so kits are unchanged). Plaits' LPG stays open while held, so P VA or P WTABLE can play a held bass note or pad.
+  - **A length per step:** AUTO (the EG's), 1/32, 1/16, 1/8, dotted 1/8, 1/4, 1/2, TIE (to the next note: legato). Eight values, 3 bits, and there are spare bits in every step: `cond` uses 6 of its 8 (44 conditions), `prob` 7 (0–100), `note` 7. Using cond's top 2 bits and prob's top bit costs no pool. To check: every reader masks them (`cond_ok`, the `rnd > prob` tests, project.c's `c < NCOND` on load, LXR import), and project.c saves them (a step flag when set, so projects grow only where lengths are used).
+  - MIDI out sends the note-off at the length's end, so Elixir can sequence a synth over USB with real lengths.
+- **19c. A third global LFO.** `NGLFO` 2 → 3, two more PERF pages (decided: 15 in all, plus 19d's DENSITY page: 16), 7 B more of project (format version 10). New destinations, for all three: DENSITY (19d), TRANSPOSE (scale degrees, 19a), the melody's CHANGE and SPREAD (20), the delay's feedback and time warp, the reverb send, and **a macro** (MACRO 1–4: through the macros the LFO reaches any lockable parameter; applied every 8 blocks to keep it cheap).
+- **19d. Density across all tracks** (designed with the user, 2026-10-27). One control that makes a pattern more minimal one way and builds it up the other, from a knob or a global LFO.
+  - **A DENSITY page on PERF** (after MORE). KNOB 1 **DENSITY**, −64 … +63 shown as −100 … +100% (0: as programmed). KNOB 2 **GHOST**: the velocity of added notes (default 40). KNOB 3 **BUILD**: what the positive side adds: CHANCE (only raises the steps' chances to 100%), GHOSTS (then fills empty steps), RATCHETS (then also adds ratchets of 2 to the strongest hits). Saved with the project, so it holds across pattern changes, as a performance control should.
+  - **Excluding tracks, any number, no extra screens:** on the DENSITY page the black track keys 1–7 don't select tracks, they toggle each track's exclusion. The page draws a row of the seven track names, excluded ones crossed out (like the mute row). Default: none excluded; press D1 to keep the kick as programmed. 7 bits in the project. (SHIFT + a track key still mutes, as everywhere.)
+  - **Thinning, musically (negative side):** steps drop in a fixed order, weakest first: off-beat 16ths before 8ths before beats, quiet before loud, among equals a per-pattern random order (as Grids' density). Turning it down then thins the groove steadily and doesn't flicker at random; the first step of each bar goes last. Locks, conditions and ratchets of the steps kept are untouched.
+  - **Building up (positive side):** the chances of the existing steps rise towards 100% first, then (BUILD) ghost notes fill empty steps at the GHOST velocity in the reverse order (the strongest empty positions first: 8ths, then 16ths), at the track's last played note (or the melody's, Phase 20, if it runs on that track).
+  - **A global LFO destination DENSITY** (19c), from the knob's position either way by the depth: a 64-bar triangle breathes the whole pattern from sparse to busy.
+  - The generators follow it: GRIDS' and TURING's own densities move with it on tracks not excluded.
+  - Not done (simpler): a per-track CHANCE moved by Control All. The global knob and the exclusions cover the use; it can come later if wanted (~250 B of pool).
+  - Cost: CPU ~0 (a compare per step), RAM ~16 B, project 3 B, flash ~2 KB.
+
+#### Phase 20: a melody generator
+
+The rhythm generators decide *when* a track plays; this decides *which note*. It goes on its own page after GENERATOR (MELODY), separate from the generator slot, so EUCLID, GRIDS or TURING can make the rhythm while MELODY makes the notes, on the same track.
+
+- **The engine: Mutable Instruments Marbles' X section** (MIT, Emilie Gillet, as Rings and Plaits): random values with SPREAD (range), BIAS (register: low … high) and STEPS (from smooth to quantized to the scale, and then to fewer, stronger degrees: at the top only the root and fifth: Marbles' weighted scales), and **DÉJÀ VU**: 0 new notes each time, the middle a loop of LENGTH notes (1–16) that changes now and then, the top a locked loop. Déjà vu is what makes it evolve and still sound like a phrase. A global LFO on it lets a melody wander away and come home over 64 bars.
+- **Shapes** (KNOB 1 on the page): RANDOM (Marbles), WALK (steps of one or two degrees, weighted: smooth lines, good for bass), ARP (the scale's chord tones up, down, up-down), MOTIF (a 4-note motif from the random source, transposed, inverted or reversed each bar, ending on the root every 4 bars: call and response).
+- **Note lengths:** LENGTH (the usual length) and LEN VAR (how often a note gets a shorter or longer length or a tie, weighted towards musical values). Uses 19b's gate, so it needs 19b first, and 19a's scale.
+- **Live, like TURING:** the pattern doesn't change; COMMIT writes the notes and lengths into the steps (UNDO takes it back). Saved per track per pattern (6 settings).
+- **Where it sounds good:** D1–D3 with tuned models (Plaits VA, WTABLE, FM, CHORDS, STRING; Rings), SN's tonal oscillator. The hats, less so.
+- Cost: nothing on the CPU; ~300 B RAM, ~1.5 KB pool, 4–6 KB flash. Credit Marbles (MIT) in NOTICE.md and LICENSES/.
+
+#### Phase 21: the delay (dub echo, sync, glitch)
+
+The FX bus has one 64 KB line (`fxbuf`, 0.74 s mono, 2 × 0.37 s ping-pong at 44.1 kHz) and runs one effect at a time. There's no SRAM for a second line, so the new delay is new DELAY **types** in the same line, beside the LXR's NORMAL and PINGPONG, which stay exactly as they are (LXR kits sound the same).
+
+- **21a. TAPE (and TAPE PP, ping-pong).** The line is stored at half rate (22.05 kHz, as HALL already runs): **1.49 s mono, 0.74 s a side**, in the same memory. A tape echo is dark anyway (the tail stops near 10 kHz). In the feedback: a low cut (~100 Hz: the repeats thin out instead of booming), TONE (low-pass), saturation (soft, rising with feedback, so feedback past 100% grows into a controlled roar instead of clipping: dub), and WOW and FLUTTER (two slow random LFOs on the read position). Changing the time glides the read head, as a tape's motor does (the pitch bends), instead of today's crossfade.
+- **21b. Time as note values.** With SYNC on, TIME steps through 1/32, 1/16T, 1/16, 1/8T, dotted 1/16, 1/8, 1/4T, dotted 1/8, 1/4, 1/2T, dotted 1/4, 1/2, at the tempo (MIDI clock too). What fits: TAPE 1.49 s holds a dotted 1/4 down to 61 BPM and a 1/2 down to 81; NORMAL 0.74 s holds a 1/4 down to 81 BPM but a dotted 1/4 only above 122. A value too long shows as such and plays at half. A tempo change glides.
+- **21c. Into the reverb.** ECHO → REVERB (0–127): the echo's output fed to the reverb's send, the classic dub chain (echo, then spring or plate). A PERF throw on it too (THROW ECHO).
+- **21d. Glitch, from the same line (IDM).** A GLITCH amount: the chance each repeat is changed. The changes: STUTTER (the repeat loops its first 1/32 or 1/64), REVERSE (the repeat played backwards: a window read the other way), SKIP (a random earlier slice instead of the last one), HALF (read at half speed, an octave down). STUTTER, REVERSE, SKIP and HALF only read the line in other ways: no memory, little CPU.
+- **21e. Pitch-shifted repeats** (optional, +4 KB, +1–2%): Clouds' pitch shifter (two crossfaded read heads over a 2048-sample window) in the feedback: each repeat +12, +7, −12 or a detune. Shimmer when it feeds the plate.
+- **Decided (the user, 2026-10-27):** all of 21a–21e as proposed.
+- **The one-slot problem:** with the FX bus on DELAY, it can't also drive. 23b (a drive before any FX type) solves that for dirty echoes.
+- Kit: TAPE reuses P1–P4 (time, wow, tone, feedback); new bytes for SYNC, saturation, ECHO → REVERB and GLITCH (~4 B, so after 18c).
+- Reference: XoX (Charles Vestal, GPL-3.0, already credited) has a tape delay send on this same hardware; read it before writing 21a. FM1 Open (M-VAVE's official open firmware, 2026-10) has delay and reverb sends; check its licence before borrowing anything.
+
+#### Phase 22: a plate reverb (Clouds' Dattorro)
+
+- **The design:** Clouds' reverb (MIT; Rings and Elements use the same one), Jon Dattorro's plate: four input allpasses, then a figure eight of two branches, each two allpasses, a delay and a one-pole low-pass, read through two slow LFOs. Ten lines, 16,375 samples at Clouds' 32 kHz (`FxEngine<16384, FORMAT_12_BIT>`). Its knobs map onto the reverb page's: SIZE → the decay ("reverb time"), DAMP → the low-pass, plus DIFFUSION; LEVEL as now.
+- **Add it, don't replace:** PLATE as a fourth model after ROOM, SPRING and HALL. One model runs at a time and they share one buffer, so adding costs the same memory as replacing, and kits made with Felucca's models keep their sound. (Replacing Felucca's reverb would also change every saved kit's sound.)
+- **Rate and memory** (the decision for 22):
+  - at half rate (22.05 kHz, as HALL) with Clouds' lengths scaled to it: the same plate as Clouds, 11.3 K samples, 22.6 KB: **+10.6 KB** over today's reverb buffers (~12 KB). Fits in today's pool, with ~2.5 KB left.
+  - at half rate with Clouds' lengths as they are: a tank 45% larger (longer, darker, bigger modes: very dub), 32.8 KB: **+20.8 KB**. Needs 18a's RAMTEXT gap.
+  - Full rate (44.1 kHz) would need 45 KB: not possible.
+  - **Decided (the user, 2026-10-27): Clouds' own plate, small** (the first: lengths scaled to 22.05 kHz, +10.6 KB). As resource-efficient as possible; the bigger tank is not built. Added as the fourth model beside ROOM, SPRING and HALL (the recommendation; the same memory as replacing, and saved kits keep their sound). Credit Clouds (MIT) in NOTICE.md and LICENSES/.
+- CPU: 3–5% (as HALL); with 18b it runs in core 0's wait.
+- `tests/`: a reverb_compare against Clouds' float code, as for Rings and Plaits.
+- SPACE (PERF) holds its tail as it does the others.
+
+#### Phase 23: dirt
+
+What's already there: per voice, a shaper (LXR, FOLD, CLIP, ASYM, RECTIFY), drive, bits; the FX bus's DRIVE (tube, fold, rat); PERF's CRUSH on the master. None of it is touched.
+
+- **23a. More per-voice shaper modes** (free: the shaper byte exists, one curve replaces another): FUZZ (high gain into a hard clip, a little gating), TAPE (soft, with a high cut), SINE FOLD (a sine wavefolder: West Coast), BITE (Elektron-style overdrive). On D1–D3 this runs on core 1, the rest on core 0.
+- **23b. A drive before the FX bus** (a DIRT setting on the FX bus, any type): drive into the tape echo, into the phaser. ~1%. This also solves 21's one-slot problem.
+- **23c. A master DIRT stage** (global, part of the kit, as Digitakt's master overdrive): TAPE, TUBE, FUZZ, DIODE, FOLD, with DRIVE, TONE and MIX (parallel: keeps the kick's punch), before the DJ filter. 1–2% stereo; FUZZ and FOLD alias, so a 2× oversampled option (+1.5%). Off by default.
+- **Decided (the user, 2026-10-27): all three.** 23a (new per-voice shaper modes), 23b (a drive before the FX bus) and 23c, the master stage kept simple: **TYPE and AMOUNT** (off at 0; the tone and the dry/wet mix set by each type, so two knobs and 2 kit bytes). A TONE knob can come later if a type needs it.
+
+**Order (recommended):** 18 (a, b, c) → 19 (a, b, then c, d) → 20 → 21 (a, b, c, then d, e) → 22 → 23. 19 and 20 are cheap and independent of the FX; 21 and 22 need 18. 21 before 22 because the delay costs no memory and 21c makes the existing reverbs dub-capable at once.
+
+**Decided (the user, 2026-10-27)**
+1. Scale: absolute, follow per track (D1–D3 on by default).
+2. Scale per pattern; a blank pattern starts with the scale last chosen.
+3. MELODY on its own page, beside any rhythm generator.
+4. Density: a DENSITY page on PERF (minimal one way, built up the other: chances, ghosts, ratchets), a global LFO destination, any tracks excluded with the track keys on that page (none by default). See 19d.
+5. The plate: Clouds' original, small (+10.6 KB), as a fourth model. The delay: all of 21 as proposed.
+6. The third LFO: two more PERF pages.
+7. Dirt: new per-voice shapes, a drive before the FX bus, and a master stage with TYPE and AMOUNT.
+
+**Still open (small, for when each phase starts):** whether the RAMTEXT gap (18a) is really free; BUILD's RATCHETS option on 19d (keep or drop after hearing it); the melody's shapes beyond RANDOM and WALK (ARP, MOTIF) if 20 runs long; a TONE knob on the master dirt.
+
+**Next session:** start Phase 18 (18a: verify the RAMTEXT gap and measure the stacks; 18b: the effects a block behind; 18c: LIB_MAX), then 19.
 
 ### Other ideas
 

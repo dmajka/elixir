@@ -76,6 +76,13 @@
   .note { margin-top: 20px; padding: 16px 20px; border-left: 3px solid var(--accent-fill); background: var(--well);
           border-radius: 0 var(--radius) var(--radius) 0; font-size: 15px; }
   .note p { margin: 0; }
+
+  .updates { display: grid; gap: 16px; }
+  .updates .card h3 { font-size: 18px; margin-bottom: 8px; }
+  .updates .card h3 span { color: var(--dim); font-weight: 400; font-size: 15px; margin-left: 8px; }
+  .updates h4 { font-size: 14px; margin: 12px 0 4px; color: var(--dim); text-transform: uppercase; letter-spacing: .04em; }
+  .updates ul { margin: 0; padding-left: 20px; color: var(--dim); font-size: 15px; }
+  .updates li { margin-bottom: 4px; }
 </style>
 </head>
 <body>
@@ -219,6 +226,48 @@
       over it from the <a href="install/">install page</a>: your projects, kit library and settings are kept.</p></div>
     <p class="small" style="margin-top:20px">This is a test release with little testing on real FM-1s so far.
       Read the notes on the <a href="install/">install page</a> before you install; there is no warranty.</p>
+  </section>
+
+  <!-- The updates log: one card per release, newest first. Add the new release's card at each site build. -->
+  <section class="band" id="updates">
+    <div class="intro"><h2>Updates</h2><p>What each release added and fixed.</p></div>
+    <div class="updates">
+      <div class="card"><h3>0.15<span>27 October 2026</span></h3>
+        <h4>New</h4>
+        <ul>
+          <li>Plaits' sixteen original engines (virtual analog, waveshaping, FM, grain, additive, wavetable, chords,
+            speech, swarm, noise, particles, string, modal, bass drum, snare, hi-hat) as models on D1–D3, with
+            Harmonic, Timbre, Morph, Colour (a low-pass gate), Aux and Env. Experimental, as the Rings models are.</li>
+          <li>The FM-1's second core renders the three drum voices. The LXR-02's kits use about 27% of the first
+            core, down from about 45%. A unit whose second core misbehaves falls back to one core on its own.</li>
+          <li>Up to two models play at once (one on a unit running one core); a third plays as the LXR voice and its
+            MODEL page says so.</li>
+          <li>CONFIG → LOAD: the load by part (voices, mixer, FX bus, reverb, sequencer) and the state of both
+            cores.</li>
+        </ul>
+        <h4>Fixed</h4>
+        <ul>
+          <li>Morphing, or a global LFO on morph, no longer overloads the processor: the kit now changes over a few
+            blocks instead of all at once.</li>
+          <li>The second core no longer switches off the first time the SPEECH engine plays.</li>
+          <li>The LOAD page could show impossible numbers (over 1000%) while morphing.</li>
+        </ul>
+      </div>
+      <div class="card"><h3>0.14.1<span>26 October 2026</span></h3>
+        <h4>Changed</h4>
+        <ul>
+          <li>LFO MODE comes right after the LFO's two pages instead of last among the sound pages.</li>
+        </ul>
+      </div>
+      <div class="card"><h3>0.14<span>26 October 2026</span></h3>
+        <h4>New</h4>
+        <ul>
+          <li>The first release as Elixir: a new title screen and this site, with the install steps on their own
+            page, the manual as a page and the emulator.</li>
+          <li>The install and library pages check what your FM-1 runs before they write anything.</li>
+        </ul>
+      </div>
+    </div>
   </section>
 </main>
 

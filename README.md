@@ -6,7 +6,7 @@ Elixir runs the LXR-02's sound engine and sequencer on the FM-1. It has six voic
 
 The FM-1 has no FPU, so the LXR's floating-point DSP is rewritten in fixed point. `tests/compare_test.c` renders each voice with both engines and compares them: levels match to 0.1 dB, and the tonal voices correlate at 0.99–1.00. Noise-based sounds correlate lower only because the noise generator differs.
 
-**Formerly Kettle.** Elixir was called Kettle up to 0.13 (github.com/dmajka/kettle). A unit running Kettle updates to Elixir from the install page and keeps its projects, kit library and settings (see the manual's *Upgrading from Kettle*).
+**Formerly Kettle.** Elixir was called Kettle up to 0.13 (github.com/dmajka/kettle). A unit running Kettle updates to Elixir from the install page and keeps its projects, kit library and settings.
 
 **Unofficial.** Not affiliated with or endorsed by Erica Synths, M-VAVE or Hügelton Instruments.
 
