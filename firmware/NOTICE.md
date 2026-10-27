@@ -11,6 +11,10 @@ It is derived from:
 
 - **Rings** and **stmlib**, Copyright 2012–2015 Emilie Gillet, MIT licence (`LICENSES/MIT-Rings.txt`). The DRUM voices' models (`firmware/src/rings.c`, its tables `firmware/src/rings_tables.h` from `tools/gen_rings_tables.py`) are a fixed-point port of Rings' modal resonator, string and FM voice, its exciters, limiter and the stmlib DSP they use.
 
+- **Plaits** and **stmlib**, Copyright 2016–2023 Emilie Gillet, MIT licence (`LICENSES/MIT-Plaits.txt`). The DRUM voices' P models (`firmware/src/plaits.c`, `firmware/src/plaits_va.c`, the tables `firmware/src/plaits_tables.h` from `tools/gen_plaits_tables.py`) are a fixed-point port of Plaits' sixteen original engines and the oscillators, drums, noise, physical models, speech and stmlib DSP they use.
+
+- **The second core** (0.15): starting the FM-1's second core and guarding against units whose second core misreads (`firmware/hal/fm1_cpu1.h`, `fm1_cpu1.S`, from Felucca's hardware layer) come from **X0X** (Charles Vestal, github.com/charlesvestal/fm1-x0x), **Melodee** (keremimo, github.com/keremimo/melodee) and **Jangada** (zednaked, github.com/zednaked/jangada), all GPL-3.0.
+
 Other parts:
 
 - Inter Tight (UI font), SIL Open Font License 1.1 (`LICENSES/OFL-InterTight.txt`).
