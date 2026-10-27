@@ -5,6 +5,7 @@
  * and the update entry. OCT- + OCT+ held 5 s: UBOOT (the FM-1's own update mode, as Felucca). */
 extern uint32_t _data_start[], _data_end[], _data_load[], _bss_start[], _bss_end[];
 extern uint32_t _pool_start[], _pool_end[], _rt_start[], _rt_end[], _rt_load[];
+extern uint32_t _c1_start[], _c1_end[], _c1_load[];
 
 void fm1_timer5_irq(void)
 {
@@ -50,6 +51,8 @@ static void fm1_fault(const fm1_crash_t *c)
 {
     char b[12];
     uint32_t t0;
+    if (bootguard.c2)
+        bootguard.c2 = 2;                         /* a crash with two cores: the next start is one core */
     fm1_audio_stop();
     lcd_fill(0, 0, 240, 240, RGB(120, 0, 0));
     draw_text_line(0, 8, 240, &AF_M, "ELIXIR CRASH", RGB(255, 255, 255), RGB(120, 0, 0), 1);
@@ -82,6 +85,54 @@ static void uboot_watch(void)                     /* OCT- + OCT+ held 5 s: the F
     }
 }
 
+/* 17b: the second core (hal/fm1_cpu1.h; 17c: it renders D1-D3, voices.c). Started at power-on, before the audio and
+ * the timers (Felucca's order: started later it never reaches its entry), through the chip's ROM, so the PC limits
+ * are open meanwhile. One core instead, for the whole power-on, after a crash or a hang (the watchdog) while two ran,
+ * a boot that died in its first 30 s, or no answer; with REC held at power-on (cores_held); and from the first bad
+ * read, missed deadline or fault (cores_poll). On one core only one model plays (rings.c model_cap) */
+static uint32_t crash_at_boot;
+static void cores_boot(void)
+{
+    uint32_t crashed = bootguard.c2 == 2u || (bootguard.c2 == 1u && (fm1_boot.p3_rst & 4u));
+    crash_at_boot = fm1_crash.magic == FM1_CRASH_MAGIC ? fm1_crash.count : 0;
+    bootguard.c2 = 0;
+    model_cap = 1;                                /* (one core until it answers) */
+    if (crashed || bootguard.failed) {
+        cores_why = CW_CRASH;
+        return;
+    }
+    fm1_guard_pc_open();
+    if (fm1_cpu1_start() == 0) {
+        cores_why = CW_TWO;
+        model_cap = 2;
+        bootguard.c2 = 1;
+    } else {
+        cores_why = CW_NOSTART;
+    }
+    fm1_guard_enable(FM1_GUARD_PC);
+}
+static void cores_held(void)                      /* REC held at power-on (after the first scans): one core */
+{
+    if (cores_why != CW_TWO || !(fm1_in.buttons & (1u << panel.btn[B_REC])))
+        return;
+    fm1_irq_off();                                /* (no job in flight: the audio ISR hands one over and waits for it) */
+    fm1_cpu1_hold();
+    fm1_irq_on();
+    bootguard.c2 = 0;
+    model_cap = 1;
+    cores_why = CW_HELD;
+}
+static void cores_poll(void)
+{
+    if (cores_why != CW_TWO || !*(volatile uint8_t *)&fm1_c1_gave_up)
+        return;
+    bootguard.c2 = 0;
+    model_cap = 1;                                /* (voices.c model_limit: from the next block) */
+    cores_why = fm1_crash.magic == FM1_CRASH_MAGIC && fm1_crash.core == 1u && fm1_crash.count != crash_at_boot ? CW_FAULT
+              : fm1_c1_gave_up == 1u ? CW_BAD : CW_NOANS;
+    ui_message("SECOND CORE OFF: CONFIG");
+}
+
 static void elixir_boot(void)                     /* the instrument at power-on */
 {
     palette_apply();
@@ -103,6 +154,7 @@ static void fm1_main(void)
     panel_init();
     elixir_boot();
     master_boot();
+    cores_boot();
     audio_init();
     usb_start();
     uart_midi_init();
@@ -114,9 +166,15 @@ static void fm1_main(void)
     for (ms = 0; ms < 1200u; ms += 10u) {         /* the splash (0.14: 1.2 s, to see the potion) */
         fm1_delay_ms(10);
         master_poll();
+        if (ms == 50u)
+            cores_held();
     }
     lcd_fill(0, 0, 240, 240, T_BG);
     ui.force = 1;
+    if (cores_why == CW_HELD) {
+        fm1_input_edges(0);                       /* (REC's press: not a REC) */
+        ui_message("ONE CORE (REC HELD)");
+    }
     for (;;) {
         uint32_t m = fm1_ms;
         fm1_wdt_feed();
@@ -127,6 +185,7 @@ static void fm1_main(void)
         }
         master_poll();
         batt_poll();
+        cores_poll();
         uboot_watch();
         lib_service();                            /* 0.7: the library's messages (library.c) */
         ota_service();                            /* the M-UPGRADE handshake (the web installer, M-VAVE's updater) */
@@ -162,6 +221,8 @@ static void fm1_main(void)
 void fm1_cstart(void)
 {
     uint32_t *s, *d;
+    fm1_cpu1_halt();                              /* (as Felucca's): a second core still running from before this reset
+                                                   * would read the RAM cleared below */
     fm1_time_init();
     fm1_reset_reason();
     fm1_wdt_arm(0x0D);
@@ -169,6 +230,7 @@ void fm1_cstart(void)
         bootguard.magic = BOOTGUARD_MAGIC;
         bootguard.failed = 0;
         bootguard.pending = 0;
+        bootguard.c2 = 0;
     }
     if (bootguard.pending)
         bootguard.failed++;
@@ -187,6 +249,8 @@ void fm1_cstart(void)
         *d = *s;
     for (s = _rt_load, d = _rt_start; d < _rt_end; s++, d++)
         *d = *s;                                  /* the flash driver's code that runs from RAM */
+    for (s = _c1_load, d = _c1_start; d < _c1_end; s++, d++)
+        *d = *s;                                  /* the second core's waiting loop (hal/fm1_cpu1.h) */
     fm1_mailbox_clear();
     fm1_guard_enable(FM1_GUARD_STACK | FM1_GUARD_WRITE | FM1_GUARD_BUS | FM1_GUARD_PC);
     fm1_main();

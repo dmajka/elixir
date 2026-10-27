@@ -80,8 +80,10 @@ typedef struct {
 } voice_t;
 
 static voice_t vc[NVOICE];
-/* 0.9: the DRUM voices' MODEL section: Rings' resonators (rings.c; 0.6's physical models: physmodels.c, not built) */
+/* 0.9: the DRUM voices' MODEL section: Rings' resonators (rings.c; 0.6's physical models: physmodels.c, not built);
+ * 0.15: Plaits' engines (plaits.c) */
 #include "rings.c"
+#include "plaits.c"
 
 static uint32_t decim_rate[NVOICE + 1];          /* [6]: ALL (the PERF page's global reducer). Q16 */
 static modnode_t velo_mod[NVOICE], lfo_mod[NVOICE];
@@ -263,7 +265,9 @@ static void voice_trigger(uint32_t track, uint32_t vel, uint32_t note)
     /* random per hit: pitch (up to an octave either way, the amount squared: fine at small amounts), decay (x0.5 ..
      * x2 of its time), cutoff (up to half its range either way) */
     v->rp = v->rnd[0] ? (uint32_t)exp2_q16(hit_rand() * v->rnd[0] * v->rnd[0] * 2 / 16129) : 65536u;   /* (Q16 oct) */
-    if (vi <= V_DRUM3 && mdl[vi].type)                   /* (0.6: a model's strike, at the hit's pitch) */
+    if (vi <= V_DRUM3 && mdl[vi].type >= MD_PL0)         /* (0.15: a Plaits engine's) */
+        pl_trigger(vi, vel);
+    else if (vi <= V_DRUM3 && mdl[vi].type)              /* (0.6: a model's strike, at the hit's pitch) */
         model_trigger(vi, vel, (uint32_t)(((uint64_t)v->osc.note_inc * v->rp) >> 16));
     if (v->rnd[1]) {
         uint32_t base = vi == V_HAT ? v->aeg.dec : v->dec_base;
@@ -382,6 +386,11 @@ static void drum_block(voice_t *v, int16_t *buf)     /* calcDrumVoiceSyncBlock *
     int16_t mb[BLOCK];
     uint32_t i, vi = (uint32_t)(v - vc);
     int32_t g, step;
+    if (vi <= V_DRUM3 && mdl[vi].type >= MD_PL0) {   /* 0.15: a Plaits engine (plaits.c): its own sound */
+        pl_block(vi, v, buf);
+        svf_block(&v->flt, v->ftype, buf);
+        goto shape;
+    }
     if (vi <= V_DRUM3 && mdl[vi].type) {             /* 0.9: a model (rings.c), excited by the voice's own sound */
         if (mdl[vi].exc) {                           /* (EXCITER: the oscillators, transient and amp EG) */
             osc_block(&v->mod, mb, v->fm1, 0, 0, v->pwm);
@@ -603,24 +612,13 @@ static void xmod_block(uint32_t vi, int16_t *out)
     }
 }
 
-/* one block of the six voices into mix_l / mix_r (Q15, unsaturated) */
-static void voices_block(void)
+/* voices lo .. hi - 1 into vbuf, with their decimation, bits, tilt and output envelope. 0.15 (17c): D1-D3 are the
+ * second core's job (c1_drums) while core 0 renders SN, CY and HH: a voice's render touches only its own state (each
+ * oscillator and model has its own noise, dsp.c), so the sound is the same on either core, in either order */
+static void voices_render(uint32_t lo, uint32_t hi)
 {
-    int16_t buf[BLOCK];
     uint32_t i, vi;
-    modnodes_block();                                /* reset the targets, velocity and LFO modulation */
-    voice_filter_mods();                             /* random per hit, cross modulation's FILTER */
-    for (vi = 0; vi < NVOICE; vi++) {
-        voice_async(vi);
-    }
-    for (i = 0; i < BLOCK; i++) {
-        mix_l[i] = mix_r[i] = 0;
-        fx_l[i] = fx_r[i] = 0;
-        rev_in[i] = 0;
-    }
-    rev_fed = 0;
-    voice_active = 0;
-    for (vi = 0; vi < NVOICE; vi++) {                /* render */
+    for (vi = lo; vi < hi; vi++) {
         voice_t *v = &vc[vi];
         int16_t *b = vbuf[vi];
         int32_t pk = 0;
@@ -643,6 +641,67 @@ static void voices_block(void)
         if (v->choking == 2u)
             pk = 0;
         venv[vi] = pk > venv[vi] ? pk : venv[vi] - (venv[vi] >> 5);   /* (release ~45 ms) */
+    }
+}
+#if FELUCCA_CPU2
+static uint32_t c1_ticks;                            /* the second core's last job, TIMER4 (written there, read after
+                                                      * the wait) */
+static void c1_drums(uint32_t arg)                   /* (runs on the second core) */
+{
+    uint32_t t0 = fm1_ticks();
+    (void)arg;
+    voices_render(V_DRUM1, V_SNARE);
+    c1_ticks = fm1_ticks() - t0;
+}
+#endif
+#ifdef VOICES_SWAP
+static uint8_t voices_swap;                          /* (host tests: SN-HH first, as two cores may finish them) */
+#endif
+
+/* one block of the six voices into mix_l / mix_r (Q15, unsaturated) */
+static void voices_block(void)
+{
+    int16_t buf[BLOCK];
+    uint32_t i, vi;
+    modnodes_block();                                /* reset the targets, velocity and LFO modulation */
+    voice_filter_mods();                             /* random per hit, cross modulation's FILTER */
+    for (vi = 0; vi < NVOICE; vi++) {
+        voice_async(vi);
+    }
+    model_limit();                                   /* (model_cap may have changed: main.c) */
+    for (i = 0; i < BLOCK; i++) {
+        mix_l[i] = mix_r[i] = 0;
+        fx_l[i] = fx_r[i] = 0;
+        rev_in[i] = 0;
+    }
+    rev_fed = 0;
+    voice_active = 0;
+    LOAD_MARK(LD_SEQ);
+#if FELUCCA_CPU2
+    if (fm1_cpu1_run(c1_drums, 0)) {                 /* D1-D3 on the second core, SN-HH here meanwhile */
+        voices_render(V_SNARE, NVOICE);
+        LOAD_MARK(LD_SNHH);
+        if (fm1_cpu1_wait() == 0) {
+            LOAD_MARK(LD_WAIT);
+            ld_acc[LD_D13] += c1_ticks;
+        } else {                                     /* it misread or didn't answer: held from now on, D1-D3 here */
+            LOAD_MARK(LD_WAIT);
+            voices_render(V_DRUM1, V_SNARE);
+            LOAD_MARK(LD_D13);
+        }
+    } else
+#endif
+#ifdef VOICES_SWAP
+    if (voices_swap) {
+        voices_render(V_SNARE, NVOICE);
+        voices_render(V_DRUM1, V_SNARE);
+    } else
+#endif
+    {
+        voices_render(V_DRUM1, V_SNARE);
+        LOAD_MARK(LD_D13);
+        voices_render(V_SNARE, NVOICE);
+        LOAD_MARK(LD_SNHH);
     }
     for (vi = 0; vi < NVOICE; vi++) {                /* cross modulation, choke, the mixer */
         voice_t *v = &vc[vi];
@@ -684,8 +743,11 @@ static void voices_block(void)
             mix_l[i] = (mix_l[i] * 13107) >> 15;
             mix_r[i] = (mix_r[i] * 13107) >> 15;
         }
+    LOAD_MARK(LD_MIX);
     fxbus_process();
+    LOAD_MARK(LD_FX);
     reverb_process();
+    LOAD_MARK(LD_REV);
 }
 
 static void voices_init(void)                       /* initDrumVoice, Snare_init, Cymbal_init, HiHat_init */
@@ -699,6 +761,9 @@ static void voices_init(void)                       /* initDrumVoice, Snare_init
         v->osc.wave = (uint8_t)(i <= V_DRUM3 ? W_TRI + i : W_TRI);
         v->mod.wave = (uint8_t)(i >= V_CYM ? W_SINE : W_TRI);
         v->mod2.wave = W_NOISE;
+        v->osc.rng = 0x9E3779B9u + 0x01000193u * (3u * i);   /* (each its own, never 0) */
+        v->mod.rng = 0x9E3779B9u + 0x01000193u * (3u * i + 1u);
+        v->mod2.rng = 0x9E3779B9u + 0x01000193u * (3u * i + 2u);
         if (i == V_SNARE)
             v->mod.wave = W_NOISE;                   /* the snare's noise (Snare_calcSyncBlock: calcNoiseBlock) */
         v->fm1 = v->fm2 = 16384;

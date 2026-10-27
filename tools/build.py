@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-# Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments (Felucca's build; Elixir: its sources, one core,
+# Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments (Felucca's build; Elixir: its sources, two cores,
 # its generated headers, no engines)
 """Build Elixir: the app, the update loader and an installable .fwsc package.
 
@@ -52,7 +52,7 @@ SDK_SHA256 = {
 
 PRODUCT = "FM-1_900"                # package identity; release builds are FM-1_9XY
 VERSION = None                      # ELIXIR_VERSION for release builds (default: firmware/src/elixir.c)
-CPU2 = False                        # Elixir runs on one core (firmware/src/elixir.c FELUCCA_CPU2 0)
+CPU2 = True                         # 0.15 (Phase 17): the second core is built in (firmware/src/elixir.c FELUCCA_CPU2 1)
 
 
 def toolchain():

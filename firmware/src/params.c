@@ -65,7 +65,10 @@ static const char *const L_REVMODEL[] = {"ROOM", "SPRING", "HALL"};
 static const char *const L_SHAPE[] = {"LXR", "FOLD", "CLIP", "ASYM", "RECTIFY"};
 static const char *const L_XMODE[] = {"DUCK", "FILTER", "RING"};
 static const char *const L_CHOKE[] = {"OFF", "1", "2", "3", "4"};
-static const char *const L_MODEL[] = {"LXR", "MODAL", "STRING", "FM"};   /* (0.9: Rings' models, rings.c) */
+static const char *const L_MODEL[] = {"LXR", "MODAL", "STRING", "FM",   /* (0.9: Rings' models, rings.c) */
+                                      "P VA", "P WSHAPE", "P FM", "P GRAIN", "P ADDTV", "P WTABLE", "P CHORD",
+                                      "P SPEECH", "P SWARM", "P NOISE", "P PARTCL", "P STRING", "P MODAL", "P BD",
+                                      "P SD", "P HH"};   /* (0.15: Plaits' engines, plaits.c) */
 static const char *const L_BITS[] = {"OFF", "15", "14", "13", "12", "11", "10", "9", "8", "7", "6", "5", "4", "3",
                                      "2", "1"};
 static const char *const L_LFOMODE[] = {"TRIG", "HOLD", "ONE", "HALF"};   /* (0.13: voices.c LM_*) */
@@ -129,7 +132,21 @@ static uint32_t par_k_voice(uint32_t p)              /* a per-voice one's voice,
     r = par_k(p);
     return K_PARS[r].n == 6u ? p - K_PARS[r].first : 0xFFu;
 }
-static const char *par_name_k(uint32_t p, uint32_t which) { return K_PARS[par_k(p)].nm[which]; }
+/* 0.15: the MODEL knobs of a voice on a Plaits engine are its (long, category, short, 8 letters) */
+static const char *pl_knob_name(uint32_t p, uint32_t which)
+{
+    static const char *const N[6][4] = {{"Harmonic", "Plaits", "hrm", "Harmonic"}, {"Timbre", "Plaits", "tmb", "Timbre"},
+                                        {"Morph", "Plaits", "mrp", "Morph"}, {"Colour", "Plaits", "col", "LPGColor"},
+                                        {"Aux", "Plaits", "aux", "AuxMix"}, {"Env", "Plaits", "env", "EnvAmt"}};
+    if (p < PAR_MDECAY1 || p >= PAR_LFOMODE1 || (p - PAR_MDECAY1) % 6u >= 3u || mdl[(p - PAR_MDECAY1) % 6u].want < MD_PL0)
+        return 0;
+    return N[(p - PAR_MDECAY1) / 6u][which];
+}
+static const char *par_name_k(uint32_t p, uint32_t which)
+{
+    const char *n = pl_knob_name(p, which);
+    return n ? n : K_PARS[par_k(p)].nm[which];
+}
 
 static uint32_t par_dtype(uint32_t p)
 {

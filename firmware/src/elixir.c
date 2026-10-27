@@ -5,7 +5,7 @@
  * or supported by Erica Synths or M-VAVE.
  * One compilation unit (the HAL is header-only); each file uses what the files above it define. */
 #ifndef ELIXIR_VERSION
-#define ELIXIR_VERSION "v0.14.1"
+#define ELIXIR_VERSION "v0.15"
 #endif
 #define FELUCCA_FLASH 1
 #define FELUCCA_OTA 1
@@ -13,8 +13,8 @@
 #define FELUCCA_CDC 0
 #define FELUCCA_UAC 0
 #define FELUCCA_UART 1
-#define FELUCCA_CPU2 0
-#define FM1_CPU1_USED 0
+#define FELUCCA_CPU2 1                   /* 17b: the second core, started at power-on (main.c cores_boot, audio.c) */
+#define FM1_CPU1_USED 1
 #ifndef FELUCCA_ID
 #define FELUCCA_ID "FM-1_900"            /* the package identity the updaters check (build.py) */
 #endif
@@ -26,6 +26,7 @@
 #include "fm1_sys.h"
 #include "fm1_irq.h"
 #include "fm1_guard.h"
+#include "fm1_cpu1.h"
 #include "fm1_input.h"
 #include "fm1_timer.h"
 #include "fm1_audio.h"
@@ -34,8 +35,11 @@
 #define RING_PUBLISH() __asm__ volatile("" ::: "memory")
 #define POOL __attribute__((section(".pool")))
 static volatile uint32_t fm1_ms;        /* milliseconds since boot (TIMER5) */
-#define BOOTGUARD_MAGIC 0x42475244u
-struct { uint32_t magic, failed, pending; } bootguard __attribute__((section(".noinit")));
+#define BOOTGUARD_MAGIC 0x42475245u     /* (0.15: c2 added) */
+/* c2 (main.c cores_boot): 1 = two cores run, 2 = and then a crash: the next start is one core */
+struct { uint32_t magic, failed, pending, c2; } bootguard __attribute__((section(".noinit")));
+static uint32_t load_clock(void);       /* 17a: audio.c; dsp.c LOAD_MARK */
+#define LOAD_CLOCK load_clock
 
 /* ------------------------------------------------- tables, display --- */
 #include "elixir_tables.h"               /* generated (tools/gen_tables.py) */

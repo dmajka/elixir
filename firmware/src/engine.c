@@ -42,6 +42,9 @@ static void engine_init(void)
     uint32_t i;
     params_init();
     voices_init();
+    pl_words_scan();                                /* (0.15: Plaits' speech words, found once here: ~7 ms on the FM-1,
+                                                     * which in a block, the first time SPEECH played, passed the second
+                                                     * core's deadline and left the FM-1 on one core) */
     fxbus_init();
     reverb_init();
     perf_init();
@@ -99,4 +102,5 @@ static void engine_block(int32_t *out)
         out_gain = g;
         quiet_blocks = pk > QUIET_LEVEL ? 0u : quiet_blocks + (quiet_blocks < 0xFFFFFFu);
     }
+    LOAD_MARK(LD_MIX);                              /* (the master's: the mixer's) */
 }

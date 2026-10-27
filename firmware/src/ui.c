@@ -135,7 +135,7 @@ static void perf_apply(void)
     sq.drill = (uint8_t)(ui.drill_held | ui.drill_latch | ui.rm_drill);
 }
 /* 0.13: the main loop, each ms: morph moved by the global LFOs (perform.c gl.morph; a new mixture at most every
- * 8 ms: snd_post_all) */
+ * 8 ms: snd_post_morph) */
 static void glfo_morph(void)
 {
     static uint32_t ms;
@@ -329,7 +329,7 @@ static const uint16_t P_MIXER[NMIXER][4] = {{PAR_VOL1, PAR_VOL2, PAR_VOL3, PAR_V
                                             {PAR_REV_SEND1 + 4, PAR_REV_SEND1 + 5, PAR_REV_LEVEL, VP_NONE}};
 static const char *const MIXER_TITLE[NMIXER / 2u] = {"MIXER: VOLUME", "MIXER: PAN", "MIXER: FX SEND",
                                                      "MIXER: REVERB SEND"};
-#define NCONFIG 10u
+#define NCONFIG 11u
 static const uint16_t P_CONFIG[NCONFIG][4] = {
     {PAR_BPM, PAR_SHUFFLE, PAR_FOLLOW, PAR_PATTERN_MODE},
     {PAR_MIDI_CHAN_GLOBAL, PAR_MIDI_FILT_TX, PAR_MIDI_FILT_RX, PAR_MIDI_ROUTING},
@@ -340,10 +340,12 @@ static const uint16_t P_CONFIG[NCONFIG][4] = {
     {VP_LEDS, VP_AUTOSAVE, VP_ACCEL, VP_PALETTE},
     {VP_RCH, VP_RKNOBS, VP_NONE, VP_NONE},
     {VP_CAKIT, VP_NONE, VP_NONE, VP_NONE},
-    {VP_PMEM, VP_NONE, VP_NONE, VP_NONE}};
+    {VP_PMEM, VP_NONE, VP_NONE, VP_NONE},
+    {VP_NONE, VP_NONE, VP_NONE, VP_NONE}};
 static const char *const CONFIG_TITLE[NCONFIG] = {"SEQUENCER", "MIDI", "MIDI CHANNELS", "MIDI CHANNELS", "MIDI NOTES",
                                                   "MIDI NOTES", "DEVICE", "REMOTE", "CONTROL ALL",
-                                                  "BUTTONS"};
+                                                  "BUTTONS", "LOAD"};
+#define CF_LOAD 10u                                   /* 17a, 17b: the load by part, the cores (ui_draw.c draw_load) */
 static const uint16_t P_NAME[4] = {VP_NAME_POS, VP_NAME_CHAR, VP_NAME_CASE, VP_NONE};
 static const uint16_t P_SONG[4] = {VP_SONG_PAT, VP_SONG_NUM, VP_NONE, VP_NONE};
 static const uint16_t P_PATTERN[4] = {PAR_PATTERN_MODE, PAR_SHUFFLE, VP_PKEEP, VP_NONE};
@@ -1241,8 +1243,12 @@ static void mode_set(uint32_t m)
     } else if (m != M_SOUND) {
         ui.kplay = 0;                                /* (the sound pages keep playing them) */
     }
-    if (m == M_CONFIG && ui.mode != M_CONFIG)
-        audio_max_us = 0;                            /* (the CPU meter's peak: from now) */
+    if (m == M_CONFIG && ui.mode != M_CONFIG) {
+        uint32_t i;
+        audio_max_us = 0;                            /* (the CPU meter's peaks: from now) */
+        for (i = 0; i < NLD; i++)
+            ld_pk[i] = 0;
+    }
     if (m != ui.mode) {
         ui.action = 0;
         ui.eu_undo = 0;

@@ -1407,7 +1407,7 @@ static double rg_hit(uint32_t md, uint32_t dec, uint32_t bright, uint32_t mat, u
     uint32_t k, i;
     memset(&v, 0, sizeof v);
     memset(&mdl[1], 0, sizeof mdl[1]);
-    mdl[1].type = (uint8_t)md;
+    mdl[1].want = mdl[1].type = (uint8_t)md;
     mdl[1].dec = (uint8_t)dec;
     mdl[1].damp = (uint8_t)bright;
     mdl[1].mat = (uint8_t)mat;
@@ -1415,7 +1415,7 @@ static double rg_hit(uint32_t md, uint32_t dec, uint32_t bright, uint32_t mat, u
     mdl[1].exc = (uint8_t)exc;
     v.osc.inc = (uint32_t)(hz / FS * 4294967296.0);
     model_reset(&mdl[1], 1);                         /* (as a block would, the model new: before the hit) */
-    noise_rng = 0x9E3779B9u;                         /* (the plucker's noise: the same each run) */
+    rg_rng = 0x9E3779B9u;                            /* (the plucker's noise: the same each run) */
     model_trigger(1, vel, v.osc.inc);
     for (k = 0; k < n; k += BLOCK) {
         int16_t b[BLOCK];
@@ -1596,6 +1596,23 @@ static void phase5d(void)
         run_ms(20);
         check(rc == 0 && par[PAR_MODEL1] == MD_STRING && par[PAR_MPOS1] == 30u && mdl[0].type == MD_STRING,
               "project: the model's parameters");
+    }
+    {   /* 0.15 (17c): two models play at once; D3's, the third, plays as an LXR voice, and its MODEL page says so */
+        par_set(PAR_MODEL1 + 1, MD_MODAL);
+        par_set(PAR_MODEL1 + 2, MD_PL0);
+        run_ms(20);
+        check(mdl[0].type == MD_STRING && mdl[1].type == MD_MODAL && mdl[2].type == 0 && mdl[2].want == MD_PL0,
+              "the models' limit: D3's, the third, plays as LXR");
+        ui.track = 2;
+        run_ms(100);
+        check(ui.sect == S_MODEL, "D3: its MODEL section");
+        shot("model-limit");
+        par_set(PAR_MODEL1 + 1, 0);
+        run_ms(20);
+        check(mdl[2].type == MD_PL0, "the models' limit: D3's plays once D2's goes");
+        par_set(PAR_MODEL1 + 2, 0);
+        run_ms(20);
+        ui.track = 0;
     }
     /* a project before 0.9 (version 6): its models MEMBRANE BAR BELL PLATE to MODAL, TUBE to STRING */
     {
@@ -1922,15 +1939,45 @@ static void phase14(void)
     press(B_FX);
     check(ui.mode == M_FX && ui.page == 2, "Last page YES: FX opens where it was left");
     goto_mode(B_GLO, M_CONFIG);
-    turn(EN_SELECT, (int32_t)NCONFIG - 1 - (int32_t)ui.page);
+    turn(EN_SELECT, (int32_t)CF_LOAD - 1 - (int32_t)ui.page);
     page_params(pp);
-    check(ui.page == NCONFIG - 1u && pp[0] == VP_PMEM, "CONFIG: BUTTONS, the last page");
+    check(ui.page == CF_LOAD - 1u && pp[0] == VP_PMEM, "CONFIG: BUTTONS");
     shot("config-buttons");
     press(B_FX);
     press(B_GLO);
-    check(ui.mode == M_CONFIG && ui.page == NCONFIG - 1u, "GLO: back to CONFIG's last page");
+    check(ui.mode == M_CONFIG && ui.page == CF_LOAD - 1u, "GLO: back to CONFIG's last page");
     press(B_GLO);
     check(ui.mode == M_SOUND && ui.sect == S_MIX, "GLO again: round to MIX as before");
+    {   /* 0.15 (17a, 17b): CONFIG > LOAD, the last page: each part's load, the cores. The emulator measures none
+         * and has one core; the figures here are set as the FM-1 would have them */
+        static const uint16_t AVG[NLD] = {10, 105, 77, 8, 13, 15, 20}, PK[NLD] = {20, 133, 90, 10, 18, 28, 40};
+        uint32_t i;
+        goto_mode(B_GLO, M_CONFIG);
+        turn(EN_SELECT, (int32_t)CF_LOAD - (int32_t)ui.page);
+        page_params(pp);
+        check(ui.page == NCONFIG - 1u && ui.page == CF_LOAD && pp[0] == VP_NONE && pp[3] == VP_NONE,
+              "CONFIG: LOAD, the last page, no knobs");
+        check(cores_why == CW_BUILD && c1_stack() == 0, "the emulator: one core (no second core built in)");
+        run_ms(100);
+        shot("config-load-emu");
+        for (i = 0; i < NLD; i++) {
+            ld_q8[i] = AVG[i];
+            ld_pk[i] = PK[i];
+        }
+        cores_why = CW_TWO;
+        run_ms(100);
+        shot("config-load");
+        cores_why = CW_BAD;
+        run_ms(100);
+        shot("config-load-bad");
+        press(B_FX);                             /* leaving CONFIG and coming back: the peaks start again */
+        goto_mode(B_GLO, M_CONFIG);
+        for (i = 0; i < NLD; i++)
+            check(ld_pk[i] == 0, "CONFIG opened: the parts' peaks cleared");
+        for (i = 0; i < NLD; i++)
+            ld_q8[i] = 0;
+        cores_why = CW_BUILD;
+    }
     goto_mode(B_LFO, M_SOUND);
     while (ui.sect != S_LFOM)
         press(B_LFO);
@@ -2685,7 +2732,18 @@ static void phase13_control_all(void)
         morph_par[i] = par[kit_par(i)];
     for (v = 0; v < NVOICE; v++)
         morph_par[kit_idx(PAR_FILTER_FREQ_1 + v)] = (uint8_t)(90u + v);
+    snd_service();
     kit_set_morph(255);
+    {   /* 0.15: morph moved: a sweep of the kit, SND_MSTEP parameters a block (sound.c snd_morph_sweep), not all at once */
+        uint32_t b = 0, ok = 1;
+        do {
+            snd_service();
+            b++;
+        } while (snd_mi && b < 20u);
+        for (v = 0; v < NVOICE; v++)
+            ok &= vc[v].flt.fval == q16_of(par_base(PAR_FILTER_FREQ_1 + v)) && par_base(PAR_FILTER_FREQ_1 + v) != par[PAR_FILTER_FREQ_1 + v];
+        check(ok && b == (KIT_LEN + SND_MSTEP - 2u) / SND_MSTEP, "MORPH moved: the kit refreshed over 8 blocks, each filter at its mix");
+    }
     run_ms(20);
     vp_set(VP_CAKIT, 0);
     black(0);

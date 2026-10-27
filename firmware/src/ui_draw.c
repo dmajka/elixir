@@ -915,9 +915,52 @@ static void draw_links(int32_t y0)
     cv_text(232 - text_w(&AF_S, b), 96, &AF_S, b, pt->cdepth ? T_MID : T_ACCENT);
 }
 
+/* 17a-17c: CONFIG > LOAD. Each part's share of a half buffer (2.9 ms; audio.c): the average, the peak since CONFIG
+ * opened, a bar with the peak's tick (with two cores D1-D3 is the second core's). Below, the cores: CORES 2 with core
+ * 0's wait for the second and the second's stack, or CORES 1 and why */
+static void draw_load(void)
+{
+    static const uint8_t ORDER[NLD - 1u] = {LD_D13, LD_SNHH, LD_MIX, LD_FX, LD_REV, LD_SEQ};
+    static const char *const PART[NLD] = {"SEQ, MOD", "D1-D3", "SN-HH", "MIXER", "FX BUS", "REVERB", "WAIT"};
+    static const char *const WHY[] = {"", "ONE-CORE BUILD", "REC HELD AT POWER-ON", "BAD READ", "NO ANSWER",
+                                      "FAULT", "SINCE A CRASH", "NO START"};
+    char b[40];
+    uint32_t k;
+    for (k = 0; k < NLD - 1u; k++) {
+        uint32_t i = ORDER[k], a = (ld_q8[i] * 100u + 128u) >> 8, pk = (ld_pk[i] * 100u + 128u) >> 8;
+        int32_t y = 6 + (int32_t)k * 13, w = (int32_t)(a > 100u ? 100u : a), wp = (int32_t)(pk > 100u ? 100u : pk);
+        cv_text(10, y, &AF_S, PART[i], T_TEXT);
+        put_str(put_int(b, (int32_t)a), "%", 2);
+        cv_text_r(104, y, &AF_S, b, T_TEXT, T_BG);
+        put_str(put_int(b, (int32_t)pk), "%", 2);
+        cv_text_r(144, y, &AF_S, b, T_MID, T_BG);
+        cv_rect(152, y + 4, 80, 4, T_SURF);
+        cv_rect(152, y + 4, w * 80 / 100, 4, T_THEME);
+        if (wp)
+            cv_rect(152 + wp * 78 / 100, y + 3, 2, 6, T_ACCENT);
+    }
+    if (cores_why == CW_TWO) {
+        put_str(b, "CORES 2  WAIT ", sizeof b);
+        put_int(b + str_len(b), (int32_t)((ld_q8[LD_WAIT] * 100u + 128u) >> 8));
+        cat(b, "%  STACK ", sizeof b);
+        put_int(b + str_len(b), (int32_t)c1_stack());
+        cat(b, " B", sizeof b);
+        cv_text(10, 86, &AF_S, b, c1_stack() > 3584u ? T_REC : T_MID);
+    } else {
+        put_str(b, "CORES 1: ", sizeof b);
+        cat(b, WHY[cores_why < sizeof WHY / sizeof WHY[0] ? cores_why : 0], sizeof b);
+        cv_text(10, 86, &AF_S, b, cores_why >= CW_BAD ? T_REC : T_MID);
+    }
+}
+
 static void draw_config_help(int32_t y0)
 {
     (void)y0;
+    if (ui.page % NCONFIG == CF_LOAD) {
+        draw_load();
+        draw_cpu(104);
+        return;
+    }
     switch (ui.page % NCONFIG) {
     case 0:
         cv_text(10, 8, &AF_S, "TEMPO: turn it to the bottom for MIDI", T_TEXT);
@@ -1002,6 +1045,10 @@ static void draw_sound(int32_t y0)
             par_format(v, p, vp_get(p), sizeof v);
             cv_text_fit(x + 64, y + CAP_IN(S, 17), &AF_S, v, act ? T_TEXT : T_DIM, act ? T_SURF : T_BG, 46);
         }
+    if (ui.sect == S_MODEL && track_voice(ui.track) <= 2u && mdl[track_voice(ui.track)].want &&
+        !mdl[track_voice(ui.track)].type)           /* 0.15: over the models' limit (rings.c model_limit) */
+        cv_text(6, 88, &AF_S, model_cap == 1u ? "1 MODEL ON ONE CORE: PLAYS AS LXR" : "OVER 2 MODELS: PLAYS AS LXR",
+                T_REC);
     if (ui.copy) {                                   /* 0.11: Control All: what OCT- and letting go do */
         cv_text(6, 106, &AF_S, ui.ca ? "LET GO: KEEP OR REVERT" : "KNOB: ALL TRACKS   TRACK KEY: COPY", T_ACCENT);
         return;
@@ -1018,7 +1065,9 @@ static void draw_sound(int32_t y0)
 }
 static uint32_t sound_sig(void)
 {
-    uint32_t k, h, s = sig_add(ui.track, ui.sect | ui.half << 4 | ui.bar << 6 | ui.copy << 8 | ui.ca << 9);
+    uint32_t k, h, s = sig_add(ui.track, ui.sect | ui.half << 4 | ui.bar << 6 | ui.copy << 8 | ui.ca << 9 |
+                                         (uint32_t)mdl[0].type << 10 | (uint32_t)mdl[1].type << 16 |
+                                         (uint32_t)mdl[2].type << 22);
     const pattern_t *pt = shown_pat();
     for (h = 0; h < 2u; h++)
         for (k = 0; k < 4u; k++) {
@@ -1120,6 +1169,12 @@ static void draw_body(void)
             fn = draw_config_help;
             s = sig_add(9, ui.page | (uint32_t)remote_ch << 8);
             s = sig_add(s, cpu_pct() | cpu_peak_pct() << 8 | audio_late << 16 | (uint32_t)batt_level() << 28);
+            if (ui.page % NCONFIG == CF_LOAD) {
+                uint32_t i;
+                for (i = 0; i < NLD; i++)
+                    s = sig_add(s, ld_q8[i] | (uint32_t)ld_pk[i] << 16);
+                s = sig_add(s, cores_why | c1_stack() << 8);
+            }
             break;
         case M_SOUND:
             fn = draw_sound;

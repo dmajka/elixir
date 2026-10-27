@@ -23,6 +23,7 @@ Elixir (called Kettle until 0.13) is the Erica Synths LXR-02 firmware (GPL-3.0) 
 - **0.11 (Phase 13):** Control All: OCT+ held on a sound page, a knob moves that parameter on every track, relative; letting go asks: OCT+ reverts, OCT− keeps. See *Phase 13*.
 - **0.12 (Phase 12, 12a–12e):** the remote map for an 8-column controller (Launch Control XL): CONFIG → REMOTE channel and knob mode, knob rows on CCs 8–119, buttons on notes 36–93, feedback over USB; NRPN morph and roll rate fixed. The controller templates (12f) are still to make. See *Phase 12*.
 - **0.14 (Phase 15):** renamed Elixir (Kettle until 0.13); a pixel-potion title screen; the install and library pages find the FM-1 under either name, so Kettle units update in place (`tests/install_test.mjs`); a new front page for the site. See *Phase 15*.
+- **0.15 (Phases 16 and 17a–17c, released 2026-10-27):** Plaits' sixteen original engines as models on D1–D3 (experimental, as Rings'); the second core renders D1–D3 (stock kits ~27% CPU on core 0, was ~45%), guarded, with a one-core fallback; at most two models at once (one on one core); CONFIG → LOAD, the load by part and the cores; morph refreshed as a sweep; Plaits' speech words found at boot. Tested on the unit through 0.15-test1 to test4. The manual says the models are experimental and not in the LXR-02. See *Phase 16*, *Phase 17*.
 - **0.14.1:** LFO MODE moved to the page right after the LFO's two pages (it was the last sound page); SELECT follows a fixed section order.
 - **0.13 (Phase 14):** the LFO's modes (TRIG, HOLD, ONE, HALF); two global LFOs on morph, the DJ filter and PERF's effects, down to 256 bars a cycle; CONFIG → BUTTONS, Last page; Euclid's second pulse (OR, XOR, AND, SUB). See *Phase 14*.
 - **MIDI:** USB and TRS in, USB out. CC/NRPN control as on the LXR; clock out always on; clock in by turning the tempo below its minimum to "MIDI".
@@ -31,7 +32,7 @@ Elixir (called Kettle until 0.13) is the Erica Synths LXR-02 firmware (GPL-3.0) 
 - **Firmware build:** `./build.sh` makes `build/elixir.fwsc` and passes Felucca's checks.
 - **Browser emulator:** `web/emu/build.sh`, tested in Chrome, with Web MIDI in and out, including clock.
 - **First hardware run (0.5.1):** installed on a real FM-1 from V15 with the install page (`web/make_site.py`); a battery display on CONFIG; autosave no longer makes a burst of noise after a stop. See *0.5.1* below.
-- **Tests:** render_test, compare_test, library_test (the library page's code against the device's), install_test (the install page's updater against simulated FM-1s, Kettle to Elixir), rings_compare (the models against Rings' float code) and ui_test (92 screens; Phase 14 (LFO modes, global LFOs, Last page, Euclid 2); the remote map; Control All; Rings' models; PERF's pages, MIX and KEYS; the kit library and sound browser; PERFORM 2; links between tracks; bouncing ratchets and the roll sweep; the output's hush and autosave's timing; the battery display; Grids' map; clocks, conditions, ratchets, generators, bar copy; locks, patterns, project save/load, a 0.1 project, sends, reverb, sound shaping, phaser, flanger, PERF's effects and macros, autosave failure, sync in) all pass.
+- **Tests:** render_test, compare_test, library_test (the library page's code against the device's), install_test (the install page's updater against simulated FM-1s, Kettle to Elixir), rings_compare (the models against Rings' float code) and ui_test (96 screens; CONFIG → LOAD and the cores, the models' limit; Phase 14 (LFO modes, global LFOs, Last page, Euclid 2); the remote map; Control All; Rings' models; PERF's pages, MIX and KEYS; the kit library and sound browser; PERFORM 2; links between tracks; bouncing ratchets and the roll sweep; the output's hush and autosave's timing; the battery display; Grids' map; clocks, conditions, ratchets, generators, bar copy; locks, patterns, project save/load, a 0.1 project, sends, reverb, sound shaping, phaser, flanger, PERF's effects and macros, autosave failure, sync in) all pass.
 
 **Measured resources** (from the 0.13 build, 2026-10-26; build.py's numbers. The build fails below 4 KB of RAM or 8 KB of pool spare, so "usable" is the free less that.)
 
@@ -48,7 +49,7 @@ Where it goes: RAM: Rings' lines 18 KB (`rg_line` 12 KB, `rg_stretch` 6 KB), `md
 
 Rules of thumb: a per-step byte costs 32 × 7 × 64 = 14 KB of pool (more than is usable); a per-track byte 224 B; a per-pattern byte 32 B; a per-voice kit parameter 6 B a kit (384 B of pool) and brings the library's message closer to LIB_MAX.
 
-**CPU on a real FM-1 (0.5, first measurement):** about 60% average and 64% peak with a busy pattern. The 122 LATE buffers seen then were not the engine's load (a 64% peak leaves a third of each buffer spare) but autosave's flash erases, which hold the processor; 0.5.1 no longer counts those. The load is on screen (bottom of the CONFIG pages: average, peak since CONFIG opened, late buffers since power-on). The browser emulator always shows 0%, because it doesn't model CPU time. The second core is unused (`FELUCCA_CPU2 0`); it's a reserve for heavy DSP (see *0.5.1*).
+**CPU on a real FM-1 (0.5, first measurement):** about 60% average and 64% peak with a busy pattern. The 122 LATE buffers seen then were not the engine's load (a 64% peak leaves a third of each buffer spare) but autosave's flash erases, which hold the processor; 0.5.1 no longer counts those. The load is on screen (bottom of the CONFIG pages: average, peak since CONFIG opened, late buffers since power-on). The browser emulator always shows 0%, because it doesn't model CPU time. From 0.15-test2 the second core renders D1–D3 (Phase 17c); the load by part is on CONFIG → LOAD (17a).
 
 **Rules of thumb**
 - Per-track settings cost almost nothing. Per-step data multiplies: 64 patterns × 7 tracks × 64 steps means 1 bit per step ≈ 3.5 KB and 1 byte ≈ 28 KB. At 32 patterns, halve those.
@@ -608,6 +609,209 @@ Requested 2026-10-26: the project gets a new name and a front page, ready for ot
 - **15d. The repository:** github.com/dmajka/kettle → github.com/dmajka/elixir. The user renames it on GitHub (Settings → General → Repository name); then `git remote set-url origin https://github.com/dmajka/elixir.git`. GitHub redirects the old repository URL, but not the old Pages site: dmajka.github.io/kettle/ stops working.
 - **15e. The front page:** the site's home page becomes a page about Elixir (what it is, what it adds to the LXR-02's engine, try it in the browser, install), with the install steps on their own page (`install/`). A pixel-potion theme for the art only; the text plain and easy to read. Built: `web/index.html` and `web/site.css` (shared by the front, install and library pages; light and dark), real screens from ui_test (`tools/site_shots.py` → `web/shots/`), a header on every page. Checked in Chrome, desktop and phone width.
 - **Decided without the user (to revisit):** the backup files keep `.ktbk`/`.ktp`/`.ktlb`; the version is 0.14 (not 1.0); the splash's length; the front page's wording and which screens it shows.
+
+### Phase 16 (built 2026-10-26, released in 0.15): Plaits' engines as models
+
+**Released in 0.15 (2026-10-27), with Phase 17's second core; the status below is the prototype's (2026-10-26).**
+- All 16 original engines are ported to fixed point: `firmware/src/plaits.c` (helpers, the percussion engines, the voice glue) and `plaits_va.c` (the pitched engines), tables `plaits_tables.h` (`tools/gen_plaits_tables.py`). They are MODEL entries 4–19 (`P VA` … `P HH`) on D1–D3; the knobs read Harmonic, Timbre, Morph / Colour, Aux, Env on those voices. No kit format change.
+- `tests/plaits_compare.sh` (with Plaits and stmlib checkouts) holds each engine to Plaits' float code: 5 settings × 4 pitches each. BD, SD, string, particle, additive and wavetable match sample by sample (correlation ≥ 0.98). The others are checked by level (±1.5 dB) because their detail drifts apart over time (noise clocks, beating chords, FM feedback, float phase rounding). Known gaps: two MODAL cases at full timbre and morph are 1.9 dB low; NOISE at n72 with full timbre is 1.9 dB off.
+- Departures from Plaits: one string per voice (Plaits has three); one shared particle diffuser, owned by the first voice on PARTICLE (the others play dry); speech words are decoded from the bitstream as they play, not loaded (14 KB a voice saved), and a word bank is silent until its first hit after a bank change (Plaits scans its frames); no prosody or speed; COLOUR 0 is a plain VCA.
+- Build: image 435,840 B; RAM .data+.bss 61,152 of 73,728 B (the 16 KB diffuser is in fast RAM); pool unchanged. CPU not measured yet (the emulator shows none): that is the next step on hardware, worst case three voices on the heaviest engines (chords, speech, additive, swarm).
+- render_test renders each engine on D1 (all sound, none clip); ui_test passes unchanged. MANUAL: §9's Plaits section in 0.15.
+- **First hardware load test (2026-10-26, the user):** a Plaits engine on one track with other sounds, 65–76%; two models on D1/D2 (Plaits + Plaits, or Plaits + Rings) with delay, reverb and a global LFO on morph, peaks over 110% and the sound breaks up; the same without morphing, 75%, peaks 75–82%.
+  - **Cause of the morph overload (not Plaits itself):** every morph step (each 8 ms with a global LFO on morph) re-applied all 377 kit parameters inside one audio block, about as much work as a whole block of a busy kit (host: ~4 µs against 6–10 µs). Before Plaits the kit's headroom hid it. Fixed: morph now refreshes as a sweep, 48 parameters a block over 8 blocks (under 6 ms), and only those the kit and the target differ in (`sound.c snd_morph_sweep`); a lock is found through a bitmap (`auto_lk`) rather than a search of every lock for every parameter. A morph step's block now costs ≤ 0.4 µs more on the host (≤ 7% of a block). Kit loads still refresh at once. To re-measure on hardware.
+  - **The second core** (D1–D3, or the models, rendered on core 2) is the real headroom, and a Phase of its own. The AC79's second core misreads memory now and then on some units (found by the Melodee and fm1-x0x developers); JIANT (github.com/juanjiant-bit/JIANT, `firmware/hal/fm1_multicore.h`, from 0.6.71) runs it guarded: a check word on each job, a deadline, falling back to one core for the rest of the power-on on a bad read, no answer or a fault; output range checks on the effects; REC at power-on for one core; the reason under ABOUT. Melodee and fm1-x0x are GPL-3.0 as Elixir, so their method can be reused with credit. Elixir's build checker currently asserts "one core: no second-core code".
+
+Requested 2026-10-26 as research only: how feasible is Mutable Instruments **Plaits** as another voice, given the resources and the interface? The user's view: not as a new track, because the FM-1's sequencer screen is already full. Read from github.com/pichenettes/eurorack at f4cfa76 (2026-10-12), `plaits/`. Not built.
+
+**What Plaits is, in code terms**
+- 24 engines in three banks (the 1.2 firmware): **VA VCF, phase distortion, 6-op FM ×3 (DX7 banks), wave terrain, string machine, chiptune**; **VA, waveshaping, 2-op FM, grain/formant, additive, wavetable, chords, speech**; **swarm, filtered noise, particle noise, inharmonic string, modal resonator, analog bass drum, analog snare, analog hi-hat**. One engine plays at a time.
+- A voice's controls (`dsp/voice.h`, `Patch`): engine, note, **harmonics, timbre, morph**, the **LPG's decay and colour**, and how much the internal decay envelope moves FM, timbre and morph (the attenuverters' job when the trigger is patched and the CV isn't). Two outputs, OUT and AUX (AUX is a variant: a sub, the other half of a stereo pair, a raw oscillator…). A trigger strikes the low-pass gate; without one the voice drones.
+- The DSP is float throughout, at 48 kHz in blocks of 12 (`kMaxBlockSize` 24), on a 72 MHz Cortex-M4 with an FPU. About 16,000 lines of DSP (`engine` 3.4k, `engine2` 1.5k, `speech` 3.1k, `oscillator` 2.4k, `fm` 2.0k, `drums` 1.1k, `physical_modelling` 1.0k, `fx` 0.9k, the rest smaller), against the ~3,000 lines of Rings that Phase 10 ported.
+- **Licence: MIT**, as Rings. Its notice joins `LICENSES/` and NOTICE.md; GPL-3.0 for the whole is fine.
+
+**Where it goes: as models, not as a track.** The MODEL section (EDIT, after the transient) already turns a drum voice into something else (Rings' MODAL, STRING, FM), struck by the voice's hits. Plaits' engines join that menu. Then:
+- **No new track, no change to the sequencer screen.** The track keeps its steps, locks, conditions, ratchets, generators, KEYS, filter, shape, sends, random per hit and cross mod. A new (8th) track would need a black key (all eleven are taken: seven tracks, four bars) and ~23 KB of pool for its steps over 32 patterns, where ~13 KB is usable.
+- **No kit format change.** The model parameters are already blocks of six (`PAR_MODEL1` … in sound.c) with seven knobs: Model, Decay, Bright, Struct, Position, Exciter, Tension. Plaits needs seven too: **Model, Harmonics, Timbre, Morph** on the first row, **Decay** (the LPG's), **Colour**, **Aux** (OUT to AUX) and **Env** (the internal envelope's amount on timbre and morph, as one knob) on the second. The same bytes, named per model on screen (as Elektron's machines do). Only the Model list grows (`NMODEL`), so kits stay 377 B and the library's message (390 of LIB_MAX 400) doesn't move. Kits saved with a Plaits model play LXR on older versions (sound.c already reads a model number past `NMODEL` as 0).
+- **Locks for free.** Every model knob locks per step already, so a timbre or morph lock per step, the way Plaits is usually sequenced with CV, needs nothing new. Macros and the global LFOs' kit destinations reach them the same way.
+- **Pitch** from the voice's Coarse/Fine, the step's note, the pitch EG and KEYS, as the Rings models take it. Velocity strikes the LPG harder.
+- **Which voices.** D1–D3 first, as Rings. The kit already holds model bytes for SN, CY and HH (unused); opening the MODEL page on them is UI work, but their memory isn't there (below).
+
+**Resources** (estimates from reading the code; nothing measured)
+- **RAM.** Plaits gives all its engines one 16 KB buffer (`shared_buffer`, re-initialised on an engine change), and the largest single user is the particle engine's diffuser (8,192 × 16 bit = 16 KB). The others need far less: the inharmonic string 1,024 + 256 samples (5 KB at 32 bit), the string machine's ensemble 1,024 samples (4 KB), the six-op FM's two voices and a bank of 32 patches (~4 KB), the rest a few hundred bytes. A drum voice plays Rings **or** Plaits, so a voice's Plaits state can share the memory its Rings lines already take (`rg_line` + `rg_stretch`: 6 KB per drum voice in fast RAM). With the particle diffuser shortened to fit (or its reverb taken by Elixir's own), **D1–D3 need little new RAM**: the engines' small states, perhaps 1–2 KB. SN, CY and HH would need ~6 KB each, which the pool (13 KB usable) has room for once, not three times.
+- **Flash** (~244 KB usable). The tables: the wavetables (`wav_integrated_waves`, 25,344 × 16 bit = 50 KB), the DX7 banks 12 KB, the speech engine's LPC words ~14 KB, the rest a few KB. The code, in fixed point, maybe 60–100 KB for all 24. All of Plaits might just fit, and leave little for anything after; a chosen set is safer.
+- **CPU.** On a real FM-1, 0.5 measured ~60% average, 64% peak; the Rings models (0.9) are still unmeasured, and that's the first step here too. Plaits' engines by weight (reading the code): **light** VA, waveshaping, 2-op FM, the three analog drums, filtered noise, chiptune, phase distortion (about an LXR voice each); **medium** wavetable, wave terrain, grain/formant, inharmonic string, modal, particle, VA VCF; **heavy** chords, additive (36 harmonics), swarm (8 voices), speech, six-op FM (12 operators a sample), string machine. Three heavy engines at once could pass the budget; a cap (say, one heavy engine, else the model falls back to its light form), or the second core (`FELUCCA_CPU2`, see *0.5.1*) for the models, are the ways out.
+- **Fixed point.** The FM-1 has no FPU, so each engine is rewritten as Rings was (no float, 32-bit divisors, Q formats with headroom where feedback needs it), at 44.1 kHz rather than 48 (`kCorrectedSampleRate` and the tables retuned), in Elixir's 64-sample blocks (run as 64, or as Plaits' 12-sample steps where its parameter interpolation needs them). `rings.c` already has the stmlib pieces (SVF, pitch steps, the string and resonator: Plaits' inharmonic string and modal engines are close relatives of Rings').
+
+**Steps, if chosen**
+- **16a. Measure first.** CPU on the unit with three drums on MODAL (owed since 0.9), so the budget is known.
+- **16b. The frame:** the voice around the engines (`voice.cc`): note and parameter handling, the decay envelope and its amounts, the LPG (decay, colour) and its bypass for engines that envelope themselves, the AUX blend. The MODEL page's per-model labels. `tests/plaits_compare` against Plaits' float code (`EURORACK=…` as `rings_compare.sh`), same thresholds (correlation 0.99, −30 dB).
+- **16c. First set: the drum-friendly, light engines.** Analog bass drum, snare and hi-hat (with their synthetic variants on AUX), VA, waveshaping, 2-op FM, filtered noise, particle (shortened), inharmonic string and modal. Small tables; no 50 KB wavetable yet. About Phase 10's size twice over.
+- **16d. Second set:** wavetable, grain/formant, chords, additive, swarm, speech: the flash and the heavy CPU.
+- **16e. Third set (the 1.2 bank):** VA VCF, phase distortion, six-op FM (the three built-in banks; loading your own DX7 banks over SysEx later, through the library), wave terrain, string machine, chiptune.
+- Each set: ui_test (pitch, each knob moving the sound, locks, a project with the model), compare test, the CPU meter on the unit.
+
+**To decide with the user:** which engines (all 24, or a set: the drums and a few tonal ones); D1–D3 only, or SN/CY/HH too; the LPG on (Plaits' character) or the voice's own amp EG; a CPU cap or the second core; whether the model menu names them with a P: prefix (P:VA, P:CHRD, P:SPCH …) after LXR, MODAL, STRING, FM.
+
+**Decided with the user (2026-10-26)**
+- **The 16 original engines**, the ones Plaits shipped with in 2018: eight pitched (VA, waveshaping, 2-op FM, grain/formant, additive, wavetable, chords, speech) and eight noise and percussion (swarm, filtered noise, particle, inharmonic string, modal, bass drum, snare, hi-hat). The 1.2 firmware's third bank (VA VCF, phase distortion, six-op FM, wave terrain, string machine, chiptune: 24 models, 22 engines) is left for later. Steps 16c and 16d cover the 16; 16e is the later option.
+- **D1–D3 only.**
+- **The voice's own amp EG** (proposed; the user is open to the LPG). Plaits' percussion engines (inharmonic string, modal, the three drums) envelope themselves and bypass the LPG anyway (`already_enveloped`), so it only matters for the pitched engines, noise, particle and swarm. There the LPG ties brightness to level, as a vactrol does: a plain VCA plus the voice's filter is close but not the same. The LPG is cheap (one filter and a gain a sample), so it's ported, driven by the amp EG instead of Plaits' own ping envelope: **Colour** 0 is a plain VCA (the default), higher closes the LPG's filter with the amp EG. One envelope, the ENV pages as on every other model, and the vactrol sound when wanted. The amp EG's decay also drives Plaits' internal envelope (the **Env** knob's amount on timbre and morph). The second row is then **Colour, Aux, Env** (three of the seven bytes; Plaits' own decay knob isn't needed).
+- **Built for one core, all three tracks, no cap**, then measured on the unit before deciding to keep it, cap it or move it to the second core (16f). The models' rendering is written as one call per voice from the start, so moving it is a small change.
+
+**Sizes, engine by engine** (2026-10-26). Code: Plaits' float code compiled with clang -Os for arm64, each engine with the oscillators and helpers it inlines (a proxy: the fixed-point code on the pi32v2 may be 1–1.5 times this). Tables: from `resources.cc` and the speech files. RAM: each engine's buffer from the allocator; a voice's buffer can sit in the 6 KB its Rings lines already take (it plays Rings or Plaits, not both). State: the engine's own members, a few hundred bytes each, ~1.5 KB a voice for the largest kept as a union.
+
+| Engine | Code | Tables | RAM buffer a voice | CPU (by reading) |
+|---|---|---|---|---|
+| VA | 2.8 KB | – | 0.1 KB | light |
+| Waveshaping | 1.5 KB | 2.6 KB (5 shapers) + 4 KB (folds) | 0.1 KB | light |
+| 2-op FM | 0.9 KB | (sine, shared) | – | light |
+| Grain / formant | 3.0 KB | – | – | medium |
+| Additive | 1.9 KB | – | 0.2 KB | heavy (36 harmonics) |
+| Wavetable | 1.9 KB | **50.7 KB** (`wav_integrated_waves`) | 0.2 KB | medium |
+| Chords | 2.9 KB | – | 0.2 KB | heavy |
+| Speech | 6.5 KB (3 synths) | **11.1 KB** (LPC words) + 0.9 KB | ~1 KB | heavy |
+| Swarm | 1.6 KB | – | ~0.5 KB | heavy (8 voices) |
+| Filtered noise | 1.4 KB | – | 0.1 KB | light |
+| Particle | 2.0 KB | – | **16 KB** (its diffuser, 8,093 samples × 16 bit) | medium |
+| Inharmonic string | 3.9 KB | 0.3 KB | 5 KB (1,024 + 256 samples × 32 bit) | medium |
+| Modal | 2.3 KB | – | 0.1 KB | medium |
+| Bass drum | 3.2 KB | – | – | light |
+| Snare | 2.9 KB | – | – | light |
+| Hi-hat | 3.7 KB | – | 0.2 KB | light |
+| Shared (sine, SVF, stiffness, downsampler) | – | ~4 KB | | |
+| **All 16** | **~42 KB** (fixed point: ~45–65 KB) | **~74 KB** | | |
+
+- **Flash: all 16 fit.** ~120–140 KB of the ~244 KB usable, leaving ~100 KB. Wavetable is the one large item (51 KB); without it, ~70–90 KB. Some tables Elixir already has (sine, `rings_tables.h`'s SVF and stiffness) are shared.
+- **RAM: all fit but particle.** Its diffuser (the reverb-like smear at high timbre) is 16 KB a voice; three would be 48 KB, and fast RAM has ~27 KB usable. Options: (a) **one diffuser**, ~16 KB of fast RAM, for the first of D1–D3 that is on PARTICLE; the others play it dry; (b) the diffuser in 8 bits, 8 KB a voice: one in the 6 KB Rings slot doesn't fit, two would need ~16 KB more; (c) shorter delays (3 × ~2 KB in the Rings slots) and a smaller smear. (a) is proposed: the sound is kept where it plays, and it's the only engine over its slot.
+- **CPU:** not knowable before 16a; light engines are about an LXR voice each, heavy ones several.
+
+**16f. The second core, if the measurement asks for it.** (2026-10-26: it does. Now **Phase 17**, below; this is the first sketch.) `firmware/hal/fm1_cpu1.h` is already in the tree (from X0X 1.0.5, hardened by Melodee's and Jangada's work): start, a one-job mailbox, a check word, and a fall back to one core on units whose core 1 misreads RAM. `FELUCCA_CPU2` is 0 today. The work:
+- Turn it on: `FELUCCA_CPU2 1`, start core 1 at boot, a CONFIG line showing whether it runs (and its stack use, `fm1_cpu1_stack_used`).
+- In the audio ISR: hand core 1 "render D1–D3" (the voices and their models, so the Rings EXCITER's input stays with its voice), render SN, CY, HH on core 0, wait, then the cross mod, the mixer and the FX as now. DUCK and RING read the sources' blocks after the wait; FILTER already uses the previous block.
+- What both cores could touch: the voices' noise generator (`noise_rng` in dsp.c, one xorshift for every voice) becomes one per core; the sequencer's (`seq_rand`) runs before the hand-over and stays as it is; kit posts from the main loop already land between blocks; the voice structs are each one core's during a block.
+- The code is small (under an hour of a session: the HAL does the hard part). The time is on the unit: the emulator models neither CPU time nor core 1, so the test is the CPU meter, the late buffers, and core 1 left running a busy pattern for hours (the misreads come under load, now and then), plus an install-and-check round trip for each fix.
+- **The catch:** a unit whose core 1 misreads falls back to one core and then runs late if the models need two. So even with the second core, the one-core path needs a way down when the load is too high, e.g. the heavy engines (additive, chords, speech, swarm) refused on a second and third voice. Decided after 16a.
+
+**Steps, revised:** 16a measure (Rings on three drums); 16b the frame (the amp EG driving the LPG and Plaits' internal envelope, AUX, the labels, `plaits_compare`); 16c the eight percussion and noise engines, particle's shared diffuser; 16d the eight pitched engines; then on the unit with three heavy engines at once, and 16f if needed. 16e (the 1.2 bank) later, if wanted.
+
+### Phase 17 (17a–17c released in 0.15, 2026-10-27): the second core
+
+**First hardware round (the user, 0.15-test1, 2026-10-27).** Init kit, even hits on every track, no delay: CPU 39%, peak 45%; D1-D3 18%, SN-HH 18%, MIXER 4% (a plain LXR voice ~6%). One model on D1, D1-D3 becomes: Rings MODAL 42/44% (peak), STRING 27/30, FM 24/25; P VA 33/36, P ADDTV 38/40, P NOISE 39/41, P PARTCL 38/39. Two MODALs (D1, D2): 55/57 (24 modes each, modal_budget). MODAL + FM: 49/52. MODAL + P VA: total over 100%, the sound breaks up (no crash). Delay 3%, reverb 4/5% plus ~5% more under MIXER (the reverb sends, mix_voice). Core 1 with the test job: CORES 2, JOB 144 us, MISREADS 0; core 0's CPU 42%/44% with it, 41%/42% with REC held at power-on: the cores barely slow each other.
+- **Decided (the user):** D1-D3 on core 1 (the fixed split), and at most two models at once: the user first suggested models on D2/D3 only, then chose the cap (P BD belongs on D1). Remove voices only if two cores aren't enough.
+
+**17c, built in 0.15-test2 (2026-10-27).**
+- `voices_render(lo, hi)` (voices.c) renders voices into `vbuf`; each block core 0 hands core 1 `c1_drums` (D1-D3), renders SN-HH, waits, then the mixer, FX and reverb as before. A failed hand-over or wait (the HAL holds core 1) renders D1-D3 on core 0 in the same block. The test job is gone.
+- What both cores touched: the voices' noise (one `noise_rng` for all) is now one xorshift per oscillator (`osc_t.rng`, seeded in `voices_init`) and one for Rings' models (`rg_rng`); `noise_rng` is left to the sequencer and the LFOs (core 0, before the hand-over). Plaits' `pl_rng`, the word scan and the particle diffuser are D1-D3's only, so core 1's. The voices' noise sequences changed (compare_test's noise cases were already uncorrelated by design).
+- **The models' limit:** `mdl[].want` is the kit's model (sound.c), `mdl[].type` the one that plays: `model_limit` (rings.c), each block and at each change, lets the first `model_cap` (2; 1 on one core, main.c) in D1, D2, D3 order play and the rest play as LXR. The MODEL page says OVER 2 MODELS: PLAYS AS LXR (or 1 MODEL ON ONE CORE). `model_reset` keeps 8 bytes now (the knobs and want; render_test caught it wiping `want`).
+- LOAD: with two cores D1-D3 is core 1's time (`c1_ticks`); `LD_WAIT`, core 0's wait for it, and core 1's stack (`fm1_cpu1_stack_used`, red over 3.5 KB) on the cores line. Host estimate of core 1's deepest stack (drum_block, model_block, modal_run): ~1.5 KB of 4 KB.
+- Tests: render_test renders a beat (MODAL on D1, P NOISE on D2, D3 on noise) in two processes, D1-D3 first and SN-HH first, and requires the same output bit for bit (it fails with the old shared noise); and the limit (a third model plays LXR; D3's plays when D1's goes; one core, one). ui_test 96 screens (the MODEL page over the limit). compare_test, install_test, library_test pass.
+- Cost: RAM .data+.bss 66,004 B; pool back to 347,268 B (no test table); image 439,504 B.
+- **On the unit (next):** the same kits as the first round: CPU, D1-D3 (core 1), WAIT, STACK; two heavy models (MODAL + P VA, P ADDTV + P NOISE) with delay and reverb, morphing; the soak (hours, CORES 2); REC held: one model plays, CPU as before. Then 17d (the effects a block behind on core 1) only if core 0 is the slower half.
+
+**Second hardware round (the user, 0.15-test2, 2026-10-27).** Stock kits: CPU ~27%, down from ~45% on one core. The most on core 1: D1-D3 62%, peak 71%, with two Plaits/Rings models and morph; CPU never over 100%. A meter bug: REVERB up to 4088% (peak) while morphing, the sound fine. `load_clock` read TIMER4 and TIMER5's nested ticks apart, so a TIMER5 tick between them stepped the clock back and a short part wrapped below 0. Fixed in 0.15-test3: the two reread until TIMER5 didn't come between, a negative step counts 0, a part at most 4 halves.
+
+**Third round (the user, 0.15-test3, 2026-10-27).** No major problems; two models play without overload. But now and then, turning MODEL through the Plaits engines, the second core switched off (the MODEL page's "1 MODEL ON ONE CORE"). Cause: Plaits' speech word scan (`pl_words_scan`), done the first time SPEECH played after power-on, inside a block: 62 us on the host, ~12 blocks' worth, so ~7 ms on the FM-1, past the 4 ms deadline (`fm1_cpu1_wait`): NO ANSWER, one core. Fixed in 0.15-test4: the scan runs at boot (`engine_init`), as 17c's plan had it; render_test checks it. The other engines' first blocks after a switch (host, second visits): no one-off cost. Core 1's deepest stack from the firmware's disassembly: ~2.5 KB of the 3.8 KB the stack limit allows (voices_render's frame 1.6 KB, everything inlined).
+
+**17a and 17b, built in 0.15-test1 (2026-10-26; measured above).** (The test job below was replaced by D1-D3 in test2.)
+- **17a, the load by part:** CONFIG → LOAD (the last CONFIG page, no knobs): D1-D3, SN-HH, MIXER (cross mod, choke, the mixer, the master and the ISR's output scaling), FX BUS, REVERB, SEQ, MOD (the rest: parameters, MIDI, PERF, the sequencer, modulation), each as a share of the half buffer (2.9 ms, as the CPU line), average (32 halves, as `cpu_q8`) and peak since CONFIG opened, with a bar. `LOAD_MARK` (dsp.c) at the part boundaries in `voices_block` and `engine_block`, TIMER4 less TIMER5's nested ticks; the host and the emulator count nothing (no `LOAD_CLOCK`).
+- **17b, core 1 on, guarded, a test job:** `FELUCCA_CPU2 1` (elixir.c, build.py `CPU2 = True`). `cores_boot` (main.c) starts it before the audio and the timers; each half the audio ISR hands it `c1_test_job` (4 passes of an order-sensitive sum over a 4 KB table in the pool, filled at boot; core 0 knows the answer), renders as before, then waits. A wrong sum counts as a **MISREAD** (shown; the core is kept, so the soak test counts them). The HAL's guard (check word, 4 ms deadline) holds core 1 at the first bad job or missed deadline: one core until power-off, "SECOND CORE OFF: CONFIG". LOAD shows `CORES 2  JOB n us  MISREADS n`, or `CORES 1:` and the reason (REC HELD AT POWER-ON, BAD READ, NO ANSWER, FAULT, SINCE A CRASH, NO START).
+  - REC held at power-on: core 1 is held ~50 ms into the splash (it has to start before the timers, and the keys are read only after), "ONE CORE (REC HELD)".
+  - Crash-loop guard: `bootguard.c2` (`.noinit`, magic changed to 0x42475245 as the struct grew) is 1 while two cores run; a crash (`fm1_fault`) makes it 2. At the next start, 2, or 1 after a watchdog reset, or `bootguard.failed`: that session is one core (SINCE A CRASH), the one after tries two again.
+  - `fm1_cstart` holds core 1 first and copies `.c1_text`, as Felucca's.
+- **Cost:** RAM .data+.bss 65,908 B (+4.8 KB: core 1's stacks 4.3 KB, the mailbox); pool +4 KB (the test table); image 439,344 B.
+- **Tests:** ui_test 95 screens (LOAD with one core, two, and a bad read; the parts' peaks cleared when CONFIG opens; BUTTONS is now the second-last page); render_test, install_test, library_test pass; the emulator builds.
+- **On the unit (the next step):**
+  1. CONFIG → LOAD with plain kits, then with two and three models (Plaits and Rings), delay and reverb on, morphing: note each part's average and peak. That decides 17c (fixed or measured split) and 17d (the effects a block behind) and the governor's order (17f).
+  2. Compare the CPU line with core 1 on and with REC held at power-on: if core 0's load rises with core 1 running its job, the cores slow each other (the shared flash cache, the bus).
+  3. The soak: a busy pattern for hours; CORES should stay 2 and MISREADS 0. Note JOB (us).
+  4. Updates, UBOOT and a crash still work with core 1 running (the reset paths hold it first).
+
+**Why.** The first hardware test of Phase 16 (above): with the morph fix, two models on D1/D2 morph cleanly, but delay and/or reverb on top still pass 100%. The FM-1's AC791N has two cores and Elixir uses one. The goal is headroom: the models and the effects together, and room left to improve the reverb or delay. One firmware for every unit, no separate one-core build.
+
+**What is known about the hardware**
+- **The driver is already in the tree:** `firmware/hal/fm1_cpu1.h` (Felucca's, from X0X 1.0.5 by Charles Vestal, with Melodee's and Jangada's findings; all GPL-3.0). It covers starting core 1 through the chip's ROM, a one-job mailbox with each core's writes on its own cache lines, a check word on each job, a 4 ms deadline, holding core 1 again, and its stack use. The HAL also holds core 1 before every reset path (`fm1_sys.h`), with the bus traps handled, which fixed Felucca's "1 in 6 updates crashed with 2ND CORE ON". Today `FELUCCA_CPU2 0`, and build.py checks that no second-core code is linked; that check becomes "second core built in".
+- **Units that misread.** On some FM-1s, core 1 now and then reads a word of RAM wrong, more often under load (fm1-x0x#10, measured by Jangada; Melodee 1.0.1). The guard, which every firmware that ships two cores now uses (Melodee, JIANT, X0X):
+  - Core 1 runs a job only when its check word matches.
+  - A bad read, a missed deadline or a fault holds core 1, and core 0 plays everything, losing at most one block.
+  - That unit then stays on one core until power-off.
+  - JIANT also range-checks the effects' output: far out of range, the block is muted, the lines cleared and core 1 stopped.
+- **The clock.** The FM-1's boot loader sets 360 MHz, and Elixir never touches it.
+  - The claim the user read is that the chip is rated for 320 MHz and M-VAVE runs it at 360. No public JieLi datasheet confirms or denies that.
+  - What is on record (Melodee's notes): 1.3.0 retuned the clock to 320 MHz at every start. On some units, often the ones with second-core trouble, that retune failed, and two failed starts in a row put the FM-1 in UBOOT. 1.3.2 went back to "never touch the clock", and 1.3.4 removed the 320 MHz option.
+  - So the risky step is changing the clock, not running at 360. The second-core trouble and the failed retunes may come from marginal parts, which the guard above handles.
+  - Elixir keeps 360 MHz and never changes the PLL. Dropping to 320 MHz would also cost 11% of the speed this phase is meant to win.
+- **One package.** Melodee first shipped standard and single-core packages, then retired the single-core one once its guard was in (its installer offers dual-core only). JIANT ships one. Elixir does the same: one `.fwsc`, with the core count decided at run time.
+
+**Where the time goes** (host profile, 2026-10-26: a 7-track pattern with every voice playing; host microseconds, so only the shares carry over, and they must be re-measured on the unit in 17a)
+
+| Kit | Block | D1–D3 | SN, CY, HH | FX bus (delay) | Reverb | Rest |
+|---|---|---|---|---|---|---|
+| Plain LXR voices, no effects | 4.7 µs | 55% | 41% | 1% | 0% | 3% |
+| Plain, delay + reverb | 5.0 µs | 49% | 37% | 3% | 6% | 5% |
+| Plaits PARTCL + STRING, delay + reverb | 6.6 µs | 61% | 28% | 3% | 5% | 3% |
+| Plaits PARTCL + Rings MODAL, delay + reverb | 11.3 µs | 77% | 17% | 1% | 3% | 2% |
+| Plaits ADDTV + SWARM, delay + hall | 9.5 µs | 73% | 20% | 2% | 3% | 2% |
+
+On the host the effects are cheap. On the FM-1 the user saw them push a 75–82% kit over 100%, so the FM-1's costs differ: its memory (the 64 KB delay line and the reverb's combs are in the pool) and its 64-bit multiplies. That is why 17a comes first.
+
+**Steps**
+- **17a. Measure the parts on the unit (one core).** A load breakdown on CONFIG: D1–D3, SN–HH, the mixer and cross mod, the FX bus, the reverb, and the sequencer and the rest, each as a share of the 0.73 ms block (TIMER4, as the CPU line). Small, no risk, and it decides 17c and 17d.
+- **17b. Core 1 on, guarded, doing nothing yet.**
+  - Started at boot.
+  - ABOUT / CONFIG shows `CORES 2`, or `CORES 1` with the reason: HELD AT POWER-ON, BAD READ, NO ANSWER, FAULT, SINCE A CRASH or NO START.
+  - Holding a key at power-on (to choose) runs that session on one core.
+  - Crash-loop guard (Melodee's): a reset while two cores ran makes the next start one core (the `.noinit` bootguard word survives a reset).
+  - A soak test: hours of a busy pattern with core 1 running an idle job every block, counting bad reads.
+- **17c. Split the voices between the cores.** Two ways:
+  - **Fixed: D1–D3 on core 1** (the user's suggestion), the rest on core 0. Simple, and with plain voices nearly even (about 49/51). With two heavy models, core 1 has three quarters of the work, so a block finishes only about 25% sooner.
+  - **Measured (JIANT's way, recommended):** each voice's render time over the last blocks. Each block, the voices are split greedily so the two cores finish together; a voice is never split. About the same code, and good balance whatever the kit: plain, one model, three models.
+  - **Either way:**
+    - Core 0 hands core 1 its voices, renders its own, and waits.
+    - Then, as today on core 0: cross mod, choke, ducking, the mixer, the FX and the master.
+    - Shared state is made per voice:
+      - the voices' noise generator (`noise_rng`, dsp.c);
+      - Plaits' word scan (`pl_words_scan`, moved to boot so two speech voices can't race);
+      - the particle diffuser's owner (already one voice).
+    - A host test plays a whole song one-core and split several ways, and checks the output is identical, bit for bit (JIANT has the same test). The voices' outputs then don't depend on which core rendered them.
+- **17d. The effects on core 1, a block behind** (JIANT 0.6.75). The FX bus and the reverb process the previous block's sends while core 0 renders the voices. Only the wet signal is 0.73 ms late, which is inaudible; the dry sound is unchanged. With 17c this lets the effects overlap the voices instead of waiting after them. It also needs an output range check (mute, clear the lines, one core).
+- **17e. Use the room** (only after 17c and 17d are measured, and not beyond what one core can still play, 17f). Candidates:
+  - a better reverb (a denser plate or FDN; the hall's tail);
+  - a stereo or modulated delay;
+  - the second FX bus (0.5.1's idea);
+  - the heaviest Plaits engines on all three voices;
+  - the 1.2 bank (16e: six-op FM, the string machine…).
+- **17f. The one-core path stays playable.** A unit that falls back must not crackle.
+  - The CPU line shows when a block ran late.
+  - A governor sheds load in a fixed order when one core can't keep up. The order is decided after 17a. Candidates: the reverb to a cheaper form, the heavy Plaits engines at reduced quality (fewer chord voices, fewer additive harmonics), a second heavy engine refused.
+  - The manual says which units this applies to and how to check (ABOUT).
+
+**Risks and unknowns**
+- **Flash.** Both cores fetch code from the same flash cache. The speed-up may be well under 2×; 17b's idle job and 17c's first split will show it.
+- **Flash erases** (saves) still stop everything. The output already fades around them.
+- **Misreads.** Only a soak test shows how often a given unit misreads. The guard limits the cost to one block of glitch and one core afterwards.
+- **The emulator** models neither CPU time nor core 1. It can run the split sequentially, which checks the logic and the bit-identical output but not the timing, so the timing tests happen on the unit, with an install round trip per fix.
+
+**Effort.** 17a and 17b: a session plus hardware rounds. 17c: a session (the HAL does the hard part). 17d: a session. 17e: open-ended.
+
+**Credits.** Starting core 1 safely and the misread guard: X0X (Charles Vestal), Melodee (keremimo), Jangada (zednaked), all GPL-3.0, already credited in `fm1_cpu1.h`. The split and the effects-a-block-behind approach: JIANT (juanjiant-bit), credited in the code and NOTICE.md when used.
+
+### Other ideas
+
+- **More projects on the unit** (asked 2026-10-26). Today there are 4 projects and the session, each in a fixed 48 KiB slot, 6 slots in all (288 KiB at 0x97000; the spare slot makes a save safe if the power is cut), whatever their size. Measured with the firmware's own encoder:
+
+  | Project | Saved size |
+  |---|---|
+  | Empty | 8.5 KB |
+  | 8 patterns × 16 steps, a few accents, notes and locks, 8 kits | 11 KB |
+  | 16 × 16, half the hits accented, 2 melodic tracks, 20% locked, 16 kits | 14 KB |
+  | 32 × 16, the same, 32 kits | 20 KB |
+  | 32 × 32, the same | 23 KB |
+  | ui_test's "busy" one: 32 × 32, every step with its own velocity and note, every kit edited | 35.8 KB |
+  | 32 × 64, every step with velocity and note, half locked | 46 KB |
+  | ui_test's "dense" one: every field of every step | PROJECT TOO BIG |
+
+  Packing projects by size (a log over the same 288 KiB, one free slot's worth kept for safe saves) would hold about 10–20 typical projects instead of 4. That means a project format and storage change, and a phase of its own. The library page's backups already keep any number on a computer.
 
 - **303-style acid track:** about 33 KB of pattern memory at 64 patterns (less at 32), 1–2 voices' worth of CPU, and real UI work for track selection and note entry. Check charlesvestal's fm1-x0x (FM-1 303 firmware) and its licence first.
 - **More FX buses:** cheap for drive, ring mod or compressor; costly if each has its own delay.

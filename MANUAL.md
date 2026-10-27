@@ -1,6 +1,6 @@
 # Elixir manual
 
-Elixir is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 0.14.1: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Elixir adds.
+Elixir is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 0.15: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Elixir adds.
 
 Elixir is **unofficial**. It is not affiliated with or endorsed by Erica Synths, M-VAVE or Hügelton Instruments. It is free software under the GPL-3.0 (see *Licence and credits* at the end). Up to version 0.13 it was called **Kettle**.
 
@@ -36,7 +36,9 @@ Elixir is **unofficial**. It is not affiliated with or endorsed by Erica Synths,
 
 ### Status
 
-Elixir has been tested extensively in its browser emulator and with host tests (the same C sources compiled for a computer), and **it has run on one real FM-1 so far** (October 2026). There, a busy pattern used about 60% of the processor on average, with a 64% peak. Elixir shows its load on screen (see [the CPU meter](#16-settings-config-and-the-cpu-meter)); reports from other FM-1s are welcome. Versions 0.6 to 0.9 (PERFORM 2, the models, KEYS, the kit library) have so far only run in the emulator: their load on the FM-1 hasn't been measured yet. The models (Rings', from 0.9) are the heaviest part, so watch the CPU meter with two or three drum voices on a model, or with PERFORM 2 effects on.
+Elixir has been tested extensively in its browser emulator and with host tests (the same C sources compiled for a computer), and **it has run on one real FM-1 so far** (October 2026). From 0.15 it uses both of the FM-1's processor cores: the second renders the three drum voices. With the LXR-02's own kits it uses about 27% of the first core (about 45% before 0.15, on one core), and two drum voices on Rings or Plaits models with morphing peaked at about 70% of the second. Elixir shows its load on screen (see [the CPU meter](#16-settings-config-and-the-cpu-meter) and [the LOAD page](#the-load-page)); reports from other FM-1s are welcome, especially from units whose second core switches off (the LOAD page says why).
+
+The Rings and Plaits models are **experimental**: they are not part of the LXR-02, they are still being tested, and they may change in later versions (see [Models](#models-rings-and-plaits-drum-13-experimental)).
 
 ### Before the first install: official V15
 
@@ -385,9 +387,15 @@ Each hit varies by up to the amount set: pitch up to an octave either way at 127
 - **Mode:** **DUCK** (this voice drops while the source sounds: sidechain), **FILTER** (the source's level opens this voice's filter), **RING** (the two multiplied).
 - **Choke:** a group 1–4. A hit on any voice in the group fades the others in that group out (within 1.5 ms). The hats already choke each other, since they share a voice.
 
-### Models: Rings (Drum 1–3)
+### Models: Rings and Plaits (Drum 1–3, experimental)
 
-The three DRUM voices have a second engine: a port of the resonators of Mutable Instruments' **Rings**, struck by the voice. It is set in the **MODEL** section (EDIT, after the transient; drum tracks only):
+**Experimental.** The models are not part of the LXR-02: they are Elixir's own addition, ported from two Mutable Instruments Eurorack modules, **Rings** (from 0.9) and **Plaits** (from 0.15). They are still being tested on the FM-1, they use far more of the processor than the LXR's voices, and their sound and settings may change in later versions, so a kit that uses them may sound different after an update. Everything else in Elixir works without them.
+
+The three DRUM voices have more engines than the LXR's own. They are set in the **MODEL** section (EDIT, after the transient; drum tracks only). Model **LXR** is the LXR's engine (the default); **MODAL**, **STRING** and **FM** are Rings' resonators, struck by the voice; the sixteen **P …** models are Plaits' engines (below).
+
+#### Rings
+
+A port of the resonators of Mutable Instruments' **Rings**. Its knobs:
 
 | | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
@@ -406,6 +414,46 @@ The three DRUM voices have a second engine: a port of the resonators of Mutable 
 **Velocity** sets how hard it's struck.
 
 The modes a MODAL voice runs drop as more drums use MODAL: 32 with one, 24 with two, 16 with three (Rings does the same with its polyphony). STRING plays down to 43 Hz at full bandwidth; below that it runs at a lower rate, as Rings' does at its lowest. A limiter keeps every model below full scale. Rings' sympathetic strings, its other models and its reverb aren't ported.
+
+#### Plaits
+
+A port of the sixteen original engines of Mutable Instruments' **Plaits** (its first two banks; the six engines Plaits added in its 1.2 firmware aren't ported). The voice strikes the engine at each hit, as Plaits plays with its TRIGGER patched; velocity is the hit's accent. On a P model the MODEL section's knobs become Plaits':
+
+| | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
+|---|---|---|---|---|
+| Row 1 | Model | Harmonic | Timbre | Morph |
+| Row 2 | Colour | Aux | Env | |
+
+- **Harmonic, Timbre, Morph:** Plaits' three main knobs. What they do depends on the engine (the table below). They can be locked per step, which is how Plaits is often sequenced with CV.
+- **Pitch:** the voice's Coarse and Fine, the step's note, the pitch EG and KEYS, as on the other models.
+- **Colour:** Plaits' low-pass gate. At 0 (the default) the engine goes through the voice's amp EG as through a plain VCA; turned up, its filter also closes as the amp EG falls, the sound darkening as it dies away, as a vactrol does. The drum, string and modal engines shape their own decay (Morph), so the amp EG and Colour don't apply to them.
+- **Aux:** Plaits has two outputs, OUT and AUX (a variant of the sound, listed below). Aux blends from OUT (0) to AUX (127).
+- **Env:** how far the amp EG opens Timbre and Morph at each hit (Plaits' internal envelope, patched to its TIMBRE and MORPH inputs).
+
+| Model | Plaits engine | Harmonic | Timbre | Morph | AUX |
+|---|---|---|---|---|---|
+| P VA | Two virtual-analog oscillators | detune between them | pulse width, then sync | saw shape | the two, synced |
+| P WSHAPE | Waveshaper and wavefolder | shaper curve | fold amount | asymmetry | another folder |
+| P FM | Two-operator FM | ratio | FM index | feedback | sub-oscillator |
+| P GRAIN | Formant / grains | formant ratio | formant frequency | formant width | windowed sines |
+| P ADDTV | Additive (harmonics) | bumps in the spectrum | most prominent harmonic | bump shape | organ harmonics only |
+| P WTABLE | Wavetables | bank | row | column | lo-fi (5-bit) |
+| P CHORD | Chords | chord type | inversion | waveform | the chord's root |
+| P SPEECH | Speech | vowels, then word banks | species (formant shift) | phoneme or word | raw vocal cords |
+| P SWARM | Eight sawtooth swarm | pitch spread | grain density | grain length | sine swarm |
+| P NOISE | Clocked filtered noise | filter LP → BP → HP | clock rate | resonance | two band-passes |
+| P PARTCL | Particle noise | frequency spread | density | filter: diffuse, then resonant | raw dust |
+| P STRING | Inharmonic string | inharmonicity, material | brightness | decay | raw exciter |
+| P MODAL | Modal resonator | material | brightness | decay | raw exciter |
+| P BD | Analog bass drum | attack, drive | brightness | decay | a synthetic kick |
+| P SD | Analog snare | tone against noise | the head's modes | decay | a synthetic snare |
+| P HH | Analog hi-hat | metal against noise | high-pass | decay | a synthetic hat |
+
+Where the port differs from Plaits: P STRING plays one string a voice (Plaits overlaps three); P PARTCL's diffuser (its reverb-like smear) belongs to the first drum voice on P PARTCL, and the others play it dry; P SPEECH has no prosody or speed control; Plaits' sustain modes (with nothing patched to TRIGGER) and its user wavetables aren't ported. In the first measurements on an FM-1, P NOISE, P ADDTV and P PARTCL cost the most (each about three LXR voices), P VA a little less; Rings' MODAL is heavier than any of them, STRING and FM lighter.
+
+#### Both
+
+**Two models at once.** The models are much heavier than the LXR's voices, so at most two of D1–D3 play a model at a time (from 0.15). They play on the FM-1's second core. A third, counted in D1, D2, D3 order, plays as an LXR voice, and its MODEL page says **OVER 2 MODELS: PLAYS AS LXR** in red. It keeps its setting and plays its model again as soon as another drum goes back to LXR. On an FM-1 running on one core (see [the LOAD page](#the-load-page)), only one model plays.
 
 The model replaces the oscillators, transient and amp EG in the output: the model's own Decay sets how long the voice sounds. Everything after the oscillator still applies: the filter, drive and shape, bits, tilt, sends, LFO, random per hit and cross modulation. The model's settings are part of the kit and can be locked per step; Model itself doesn't morph: the voice keeps its own kit's engine while the other knobs morph.
 
@@ -851,13 +899,27 @@ GLO three times (past Mix and the mixer) opens CONFIG. Turn SELECT for its pages
 | DEVICE | LEDs (OFF / LOW / HIGH glow), Autosave, Accel (fast knob turns move further), Colours (screen palette) |
 | REMOTE | Channel (OFF, 1–16; 16 by default), Knobs (PICKUP / ABS / REL): see [the remote map](#the-remote-map) |
 | CONTROL ALL | Morph: BOTH KITS (the default: with morph on, the morph target moves too) or KIT ONLY; see [Control All](#control-all-every-track-at-once) |
-| BUTTONS | Last page: NO (the default) or YES. With YES, a button opens the page it showed when you left it: on CONFIG's last page, press FX, then GLO, and you're back on CONFIG's last page. It works for SEQ, FX, ARP (PERF or the generator pages, whichever you were on), GLO (Mix, the mixer or CONFIG) and the sound buttons (the section and row). Pressed again, a button moves on as always. HOME still goes to the grid. |
+| BUTTONS | Last page: NO (the default) or YES. With YES, a button opens the page it showed when you left it: on CONFIG's BUTTONS page, press FX, then GLO, and you're back on BUTTONS. It works for SEQ, FX, ARP (PERF or the generator pages, whichever you were on), GLO (Mix, the mixer or CONFIG) and the sound buttons (the section and row). Pressed again, a button moves on as always. HOME still goes to the grid. |
+| LOAD | No knobs: where the processor's time goes, and the cores; see [the LOAD page](#the-load-page) |
 
 ### The CPU meter
 
 The bottom of every CONFIG page shows the audio engine's load: **CPU** (the average), **PEAK** (the highest since CONFIG was opened) and, if it ever happens, **LATE** (audio buffers that were computed too late, counted since power-on: these would be heard as clicks). The text turns red above 85%. A buffer can be late because the engine ran out of time, or because something else held the processor; saves to flash no longer count (0.5.1), since they are not the engine's load.
 
 To measure, open CONFIG while a dense pattern plays with the FX bus and reverb on, and note the numbers. The browser emulator always shows 0%, because it doesn't model CPU time.
+
+### The LOAD page
+
+CONFIG's last page splits the CPU figure by part, each as a share of the time an audio buffer lasts (2.9 ms): **D1-D3** (the three drum voices, with their models), **SN-HH** (snare, cymbal, hi-hat), **MIXER** (cross modulation, choke, the mixer and the master), **FX BUS**, **REVERB**, and **SEQ, MOD** (the sequencer, MIDI, PERF, the LFOs and the rest). The first number is the average, the second the peak since CONFIG was opened; the bar shows the average with the peak as a tick. On one core the parts add up to about the CPU figure. The emulator shows 0 everywhere.
+
+Below them, the cores. The FM-1's processor has two cores, and from 0.15 Elixir uses both: the second renders D1–D3 (with their models) while the first renders SN, CY and HH, then mixes everything and runs the effects. With two cores, **D1-D3** is the second core's time, so the parts no longer add up to CPU. **CORES 2** shows **WAIT**, the time the first core waits for the second (if it grows, D1–D3 are the slower half), and **STACK**, the memory the second core has used for its work (red past 3.5 KB of 4 KB). **CORES 1** says why the second core isn't running; D1–D3 then render on the first core, and only one model plays:
+
+| Reason | |
+|---|---|
+| REC HELD AT POWER-ON | Hold REC while switching on to run that session on one core. |
+| BAD READ, NO ANSWER, FAULT | The second core misread its job, stopped answering or crashed; the FM-1 carried on with one core (at most one buffer of glitch) and shows SECOND CORE OFF: CONFIG. Until power-off. Some FM-1s do this now and then under load: please report it. |
+| SINCE A CRASH | The last session crashed or hung while two cores ran, or the last start failed early: this session runs on one core, the next tries two again. |
+| NO START | The second core didn't answer at power-on. |
 
 ### The battery
 
@@ -1030,10 +1092,12 @@ What changed in the port:
 
 What Elixir adds:
 
-- **Sound:** Control All (OCT+ held, a knob: every track); LFO modes (hold, one-shot, half); FX and reverb sends per voice; three reverbs; waveshaper choice; bits; tilt EQ; random per hit; choke groups; cross modulation; phaser and flanger; Rings' resonators on the drum voices; a sound browser and a kit library.
+- **Sound:** Control All (OCT+ held, a knob: every track); LFO modes (hold, one-shot, half); FX and reverb sends per voice; three reverbs; waveshaper choice; bits; tilt EQ; random per hit; choke groups; cross modulation; phaser and flanger; a sound browser and a kit library.
+- **Models (experimental):** Rings' resonators and Plaits' sixteen engines on the drum voices, two at a time. Not in the LXR-02.
 - **Performance:** PERF with fill, repeat, freeze, throws, feedback push, tape stop, filter sweeps, a DJ filter, four macros, the voices' volumes on two pages, PERFORM 2 and two global LFOs (morph, the DJ filter, the effects, down to 256 bars a cycle); KEYS, to play a voice from the keyboard.
 - **Sequencing:** trig conditions, ratchets, per-track clocks, generators (mutate, Turing machine, cellular automata, Grids, Euclid with a second pulse), dice, commit and undo, and copying a bar across all tracks.
-- **Safety:** the automatic session save, a CPU meter, and backup and restore over USB (the library page).
+- **Safety:** the automatic session save, a CPU meter with the load by part, and backup and restore over USB (the library page).
+- **Both cores:** the FM-1's second core renders the drum voices (from 0.15), guarded: a unit whose second core misbehaves carries on with one.
 
 ---
 
@@ -1063,14 +1127,16 @@ It is built from:
 - **The LXR-02 firmware**, © 2012–2026 Erica Synths, GPL-3.0, itself built on Julian Schmidt's original Sonic Potions LXR: the sound engine, parameters, kit format, sequencer, MIDI and front-panel functions.
 - **Felucca**, © 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments, GPL-3.0: the FM-1 hardware layer, boot, screen, graphics, USB, storage, updater, browser emulator and the reverb.
 - **Grids**, © 2011–2012 Emilie Gillet, GPL-3.0-or-later (used under GPL-3.0): the drum map and its reading.
-- **Rings** and **stmlib**, © 2012–2015 Emilie Gillet, MIT licence: the drum voices' models (a fixed-point port).
+- **Rings** and **stmlib**, © 2012–2015 Emilie Gillet, MIT licence: the drum voices' Rings models (a fixed-point port).
+- **Plaits**, © 2016–2023 Emilie Gillet, MIT licence: the drum voices' P models (a fixed-point port).
+- **X0X** (Charles Vestal), **Melodee** (keremimo) and **Jangada** (zednaked), GPL-3.0: starting the FM-1's second core and guarding against units that misread (through Felucca's hardware layer).
 - **Inter Tight** (the screen's font) and **DotGothic16** (the emulator page), SIL Open Font License 1.1.
 
 "Erica Synths" and "LXR-02" are trademarks of Erica Synths; "M-VAVE" and "FM-1" are trademarks of their owner.
 
 ### Building and testing
 
-See `README.md`: building the firmware (`./build.sh`), the browser emulator (`web/emu/build.sh`), and the host tests (`render_test`, `ui_test`, `compare_test`, `rings_compare`, the library tests).
+See `README.md`: building the firmware (`./build.sh`), the browser emulator (`web/emu/build.sh`), and the host tests (`render_test`, `ui_test`, `compare_test`, `rings_compare`, `plaits_compare`, the library tests).
 
 ---
 

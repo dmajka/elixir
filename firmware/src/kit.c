@@ -107,7 +107,7 @@ static void morph_update(void)
     if (morph_amt == a)
         return;
     morph_amt = (uint8_t)a;
-    snd_post_all();
+    snd_post_morph();                                /* (0.15: paced, sound.c snd_morph_sweep) */
 }
 static void kit_set_morph(uint32_t amt)              /* PAR_MORPH 0..255 */
 {

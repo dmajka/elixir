@@ -61,6 +61,7 @@ static uint8_t morph_amt;                        /* 0..255 (PAR_MORPH): 0 = the 
 #define NO_AUTOMATION 0xFFu
 static uint16_t auto_par[NTRACK][3];             /* 0 = none (lanes 0, 1: the step's locks; 2: a link's DECAY) */
 static uint8_t auto_val[NTRACK][3];
+static uint32_t auto_lk[(NPAR + 31u) / 32u];       /* 0.15: the parameters a lock holds (auto_lk_update) */
 
 /* a lock's destination code (12 bits: the step's byte, p1n / p2n, and 4 bits in the pattern's lhi, seq.c). Below
  * 256, the LXR's numbers: the parameter + 1 below 128 (its "stupid offset"), the parameter above, 0xFF none. From
@@ -140,10 +141,11 @@ static int morph_excluded(uint32_t p)            /* the outputs and the modulati
 static uint32_t par_base(uint32_t p)
 {
     uint32_t t, k;
-    for (t = 0; t < NTRACK; t++)
-        for (k = 0; k < 3u; k++)
-            if (auto_par[t][k] == p && p)
-                return auto_val[t][k];
+    if (p < NPAR && auto_lk[p >> 5] & 1u << (p & 31u))    /* (0.15: a lock's, found without the search at every other) */
+        for (t = 0; t < NTRACK; t++)
+            for (k = 0; k < 3u; k++)
+                if (auto_par[t][k] == p)
+                    return auto_val[t][k];
     if (par_sound(p) && morph_amt && !morph_excluded(p))
         return morph_lerp(par[p], morph_par[kit_idx(p)], morph_amt);
     return par[p];
@@ -489,7 +491,8 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
         vc[p - PAR_XAMT1].xamt = f >> 1;
         break;
     case PAR_MODEL1: case PAR_MODEL1 + 1: case PAR_MODEL1 + 2:   /* (the DRUM voices only) */
-        mdl[p - PAR_MODEL1].type = (uint8_t)pick(itg < NMODEL ? itg : 0u, (uint32_t)f, mod, NMODEL);
+        mdl[p - PAR_MODEL1].want = (uint8_t)pick(itg < NMODEL ? itg : 0u, (uint32_t)f, mod, NMODEL);
+        model_limit();
         break;
     case PAR_LFOMODE1: case PAR_LFOMODE1 + 1: case PAR_LFOMODE1 + 2: case PAR_LFOMODE1 + 3: case PAR_LFOMODE1 + 4:
     case PAR_LFOMODE1 + 5:
@@ -572,16 +575,27 @@ static void voice_filter_mods(void)
 }
 
 /* ------------------------------------------------- automation nodes --- */
+static void auto_lk_update(void)
+{
+    uint32_t t, k;
+    memset(auto_lk, 0, sizeof auto_lk);
+    for (t = 0; t < NTRACK; t++)
+        for (k = 0; k < 3u; k++)
+            if (auto_par[t][k])
+                auto_lk[auto_par[t][k] >> 5] |= 1u << (auto_par[t][k] & 31u);
+}
 /* automationNode.c: a triggered step's two locks. The lane's last parameter goes back to its value first */
 static void auto_set(uint32_t track, uint32_t lane, uint32_t dest, uint32_t val)
 {
     uint32_t old = auto_par[track][lane], p = autodest_to_par(dest);
     auto_par[track][lane] = 0;
+    auto_lk_update();
     if (old)
         snd_refresh(old);
     if (p && par_sound(p)) {
         auto_par[track][lane] = (uint16_t)p;
         auto_val[track][lane] = (uint8_t)val;
+        auto_lk_update();
         snd_apply(p, val, q16_of(val), 0);
     }
 }
@@ -597,7 +611,7 @@ static void auto_clear_all(void)
 #define SNDQ 256u
 static uint16_t sndq[SNDQ];
 static volatile uint32_t sndq_w, sndq_r;
-static volatile uint8_t snd_all;                    /* refresh every sound parameter (a kit load, morph) */
+static volatile uint8_t snd_all;                    /* refresh every sound parameter (a kit load) */
 static void snd_post(uint32_t p)
 {
     if (sndq_w - sndq_r >= SNDQ) {
@@ -609,6 +623,30 @@ static void snd_post(uint32_t p)
     sndq_w++;
 }
 static void snd_post_all(void) { snd_all = 1; }
+/* 0.15: morph moved: the parameters it mixes (the kit's and the target's apart) refreshed a few at each block, as a
+ * sweep through the kit (SND_MSTEP each: 8 blocks, under 6 ms), not all in one block (that alone cost about a block
+ * of a busy kit's time: a global LFO on morph, every 8 ms, clicked). Moved again while one runs: another after it */
+#define SND_MSTEP 48u
+static volatile uint8_t snd_morph;                  /* (the main loop's: moved since the sweep began) */
+static uint16_t snd_mi;                             /* the sweep's next kit index, 0 = none running */
+static void snd_post_morph(void) { snd_morph = 1; }
+static void snd_morph_sweep(void)
+{
+    uint32_t n;
+    if (!snd_mi) {
+        if (!snd_morph)
+            return;
+        snd_morph = 0;
+        snd_mi = 1;
+    }
+    for (n = 0; n < SND_MSTEP && snd_mi < KIT_LEN; n++, snd_mi++) {
+        uint32_t p = kit_par(snd_mi);
+        if (par[p] != morph_par[snd_mi] && !morph_excluded(p))
+            snd_refresh(p);
+    }
+    if (snd_mi >= KIT_LEN)
+        snd_mi = 0;
+}
 
 static void seq_tempo_changed(void);               /* (seq.c) */
 static void snd_service(void)                       /* the audio ISR, at a block start */
@@ -617,10 +655,13 @@ static void snd_service(void)                       /* the audio ISR, at a block
         uint32_t p;
         snd_all = 0;
         sndq_r = sndq_w;
+        snd_morph = 0;
+        snd_mi = 0;
         for (p = 1; p < KIT_LEN; p++)
             snd_refresh(kit_par(p));
         return;
     }
+    snd_morph_sweep();
     while (sndq_r != sndq_w) {
         uint32_t p;
         RING_PUBLISH();

@@ -9,7 +9,19 @@
  * this port. Where the LXR's float code relies on a hardware quirk (a negative float converted to unsigned is 0 on
  * the Cortex-M7), the port does the same so the voices sound as they do there. */
 
-static inline int32_t sat16(int32_t v) { return v > 32767 ? 32767 : v < -32768 ? -32768 : v; }
+/* 17a: the load by part (audio.c, CONFIG > LOAD). LOAD_MARK(p) ends part p: the time since the last mark is its.
+ * Only on the FM-1 (elixir.c: LOAD_CLOCK, TIMER4 less TIMER5's nested ticks); the host and the emulator count none.
+ * 17c: with two cores LD_D13 is the second core's time (voices.c), and LD_WAIT core 0's wait for it */
+enum { LD_SEQ, LD_D13, LD_SNHH, LD_MIX, LD_FX, LD_REV, LD_WAIT, NLD };
+#ifdef LOAD_CLOCK
+static uint32_t ld_t, ld_acc[NLD];
+#define LOAD_MARK(p) do { uint32_t n_ = LOAD_CLOCK(); \
+                             ld_acc[p] += (int32_t)(n_ - ld_t) > 0 ? n_ - ld_t : 0u; ld_t = n_; } while (0)
+#else
+#define LOAD_MARK(p) ((void)0)
+#endif
+
+static inline int32_t sat16(int32_t v){ return v > 32767 ? 32767 : v < -32768 ? -32768 : v; }
 static inline int32_t clamp32(int32_t v, int32_t lo, int32_t hi) { return v < lo ? lo : v > hi ? hi : v; }
 static inline int32_t iabs(int32_t v) { return v < 0 ? -v : v; }
 static inline int32_t mulq16(int32_t a, int32_t b) { return (int32_t)(((int64_t)a * b) >> 16); }
@@ -35,16 +47,20 @@ static inline uint32_t lut1024u(const uint32_t *t, uint32_t q16)
 }
 
 /* ------------------------------------------------------------ random --- */
-static uint32_t noise_rng = 0x9E3779B9u;            /* the LXR's hardware RNG: here xorshift32 */
-static inline uint32_t noise_next(void)
+/* the LXR's hardware RNG: here xorshift32. noise_next for the sequencer and the LFOs (core 0, before the voices
+ * render); 0.15: each oscillator and each model has its own state, so a voice's noise doesn't depend on which voices
+ * rendered before it or on which core (17c: D1-D3 render on the second core) */
+static inline uint32_t xs32(uint32_t *s)
 {
-    uint32_t x = noise_rng;
+    uint32_t x = *s;
     x ^= x << 13;
     x ^= x >> 17;
     x ^= x << 5;
-    noise_rng = x;
+    *s = x;
     return x;
 }
+static uint32_t noise_rng = 0x9E3779B9u;
+static inline uint32_t noise_next(void) { return xs32(&noise_rng); }
 
 /* -------------------------------------------------------- oscillator --- */
 enum { W_SINE, W_TRI, W_SAW, W_REC, W_NOISE, W_PWM, NWAVE };
@@ -56,6 +72,7 @@ typedef struct {
     uint16_t midi_freq;          /* coarse << 8 | fine (0..127 each) */
     uint8_t wave, tab, base_note;
     int16_t out;                 /* noise: the value held until the phase wraps */
+    uint32_t rng;                /* noise: its own generator (voices_init seeds it) */
 } osc_t;
 
 static const int16_t *const WT[] = {0, LXR_TRI[0], LXR_SAW[0], LXR_REC[0], 0, LXR_SAW[0]};
@@ -159,7 +176,7 @@ static void osc_block(osc_t *o, int16_t *buf, int32_t gain, const int16_t *fm, i
             uint32_t last = ph;
             ph += inc;
             if (last > ph)
-                out = (int16_t)noise_next();
+                out = (int16_t)xs32(&o->rng);
             buf[i] = (int16_t)((out * gain) >> 15);
         }
         o->out = (int16_t)out;

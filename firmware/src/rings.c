@@ -25,7 +25,7 @@
 
 #include "rings_tables.h"
 
-enum { MD_LXR, MD_MODAL, MD_STRING, MD_FM, NMODEL };
+enum { MD_LXR, MD_MODAL, MD_STRING, MD_FM, MD_PL0, NMODEL = MD_PL0 + 16 };   /* (0.15: Plaits' 16, plaits.c) */
 #define RG_MODES 32u
 #define RG_LINE 1024u                                /* the string (Rings: 2048 at 48 kHz; lower, it runs slower) */
 #define RG_STRETCH 512u                              /* .. its dispersion's all-pass */
@@ -37,6 +37,8 @@ typedef struct { int32_t g, rg, h, s1, s2; } rg_svf_t;   /* stmlib's Svf: g, r +
                                                      /* Q20: a low cutoff's g hp would round to nothing) */
 typedef struct {
     uint8_t type, dec, damp, mat, pos, exc, tens;    /* the knobs: DECAY BRIGHT STRUCTURE POSITION EXCITER TENSION */
+    uint8_t want;                                    /* 0.15: the kit's model (sound.c); type: the one that plays
+                                                      * (model_limit) */
     uint8_t ran, strum;                              /* the model its state is for; a hit to excite at the block */
     int32_t vel, ten;                                /* the hit's velocity Q15; TENSION's pitch, Q16 over 1 */
     int32_t peak;                                    /* the limiter's, Q20 */
@@ -147,7 +149,8 @@ static inline int32_t rg_svf(rg_svf_t *s, int32_t in, uint32_t mode)
     s->s2 = u + lp;
     return ((mode == SVF_LP ? lp : mode == SVF_BP ? bp : hp) + 32) >> 6;
 }
-static int32_t rg_noise(void) { return (int32_t)noise_next() >> 11; }   /* -1 .. 1, Q20 */
+static uint32_t rg_rng = 0x2545F491u;                /* (the models' own: D1-D3 only, one core renders them in order) */
+static int32_t rg_noise(void) { return (int32_t)xs32(&rg_rng) >> 11; }   /* -1 .. 1, Q20 */
 static int32_t soft_clip(int32_t x)                 /* linear to 0.75 of full scale, then bending to it */
 {
     int32_t a = x < 0 ? -x : x, d;
@@ -554,10 +557,10 @@ static void fm_run(model_t *m, uint32_t f, int32_t s, int32_t b, int32_t d, int3
 /* ------------------------------------------------------------ the voice --- */
 static void model_reset(model_t *m, uint32_t vi)
 {
-    uint8_t keep[7];
-    memcpy(keep, &m->type, 7);
+    uint8_t keep[8];                                 /* (the knobs and want: the kit's) */
+    memcpy(keep, &m->type, 8);
     memset(m, 0, sizeof *m);
-    memcpy(&m->type, keep, 7);
+    memcpy(&m->type, keep, 8);
     m->ran = m->type;
     m->peak = RG_ONE >> 1;
     m->src = 1 << 24;                                /* (a hit's first sample, at once) */
@@ -574,6 +577,18 @@ static void model_trigger(uint32_t vi, uint32_t vel, uint32_t inc)
     m->strum = 1;
     m->vel = (int32_t)(vel * 32767u / 127u);
     m->ten = (int32_t)(m->tens * (uint32_t)m->vel >> 7);
+}
+/* 0.15 (17c): at most model_cap models play at once, the first in D1, D2, D3 order; the others play as LXR voices.
+ * 2 (D1-D3 render on the second core, voices.c); 1 on one core (main.c), where two can pass 100% */
+static uint8_t model_cap = 2;
+static void model_limit(void)
+{
+    uint32_t k, n = 0;
+    for (k = 0; k < 3u; k++) {
+        uint8_t t = n < model_cap ? mdl[k].want : 0u;
+        n += t != 0u;
+        mdl[k].type = t;
+    }
 }
 static uint32_t modal_budget(void)                   /* the modes a MODAL voice runs (Rings: by its polyphony) */
 {
