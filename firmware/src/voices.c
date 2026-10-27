@@ -603,6 +603,45 @@ static void xmod_block(uint32_t vi, int16_t *out)
     }
 }
 
+/* one voice's block: rendered, reduced, post-processed into vbuf[vi], its venv decayed (core 0 or core 1:
+ * voices_block hands the heavy half to the second core; each voice owns its vbuf and venv slots) */
+static void voice_render_one(uint32_t vi)
+{
+    voice_t *v = &vc[vi];
+    int16_t *b = vbuf[vi];
+    uint32_t i;
+    int32_t pk = 0;
+    if (vi <= V_DRUM3)
+        drum_block(v, b);
+    else if (vi == V_SNARE)
+        snare_block(v, b);
+    else
+        metal_block(v, b, vi == V_CYM ? 32768 : 16384);
+#ifdef VOICE_CAPTURE
+    VOICE_CAPTURE(vi, b);                        /* (host tests: the voice before the mixer) */
+#endif
+    decimate(v, b, (uint32_t)(((uint64_t)decim_rate[vi] * decim_rate[NVOICE]) >> 16));
+    post_block(v, b);
+    for (i = 0; i < BLOCK; i += 2) {
+        int32_t a = iabs(b[i]);
+        if (a > pk)
+            pk = a;
+    }
+    if (v->choking == 2u)
+        pk = 0;
+    venv[vi] = pk > venv[vi] ? pk : venv[vi] - (venv[vi] >> 5);   /* (release ~45 ms) */
+}
+
+#if FM1_CPU1_USED
+/* core 1's job: its share of the voices' blocks, from the flash as the self-test ran (cpu1.c) */
+static void cpu1_render(uint32_t vi0)
+{
+    uint32_t vi;
+    for (vi = vi0; vi < NVOICE; vi++)
+        voice_render_one(vi);
+}
+#endif
+
 /* one block of the six voices into mix_l / mix_r (Q15, unsaturated) */
 static void voices_block(void)
 {
@@ -620,29 +659,19 @@ static void voices_block(void)
     }
     rev_fed = 0;
     voice_active = 0;
-    for (vi = 0; vi < NVOICE; vi++) {                /* render */
-        voice_t *v = &vc[vi];
-        int16_t *b = vbuf[vi];
-        int32_t pk = 0;
-        if (vi <= V_DRUM3)
-            drum_block(v, b);
-        else if (vi == V_SNARE)
-            snare_block(v, b);
-        else
-            metal_block(v, b, vi == V_CYM ? 32768 : 16384);
-#ifdef VOICE_CAPTURE
-        VOICE_CAPTURE(vi, b);                        /* (host tests: the voice before the mixer) */
+#if FM1_CPU1_USED
+    /* the second core's share, handed over before our own render (its writes to vbuf and venv are read only
+     * after cpu1_wait): the heavy voices (SNARE, CYM, HAT). A timeout holds it: their block here */
+    if (cpu1_run(cpu1_render, V_SNARE)) {
+        for (vi = 0; vi < V_SNARE; vi++)
+            voice_render_one(vi);
+        if (cpu1_wait() != 0)
+            for (vi = V_SNARE; vi < NVOICE; vi++)
+                voice_render_one(vi);
+    } else
 #endif
-        decimate(v, b, (uint32_t)(((uint64_t)decim_rate[vi] * decim_rate[NVOICE]) >> 16));
-        post_block(v, b);
-        for (i = 0; i < BLOCK; i += 2) {
-            int32_t a = iabs(b[i]);
-            if (a > pk)
-                pk = a;
-        }
-        if (v->choking == 2u)
-            pk = 0;
-        venv[vi] = pk > venv[vi] ? pk : venv[vi] - (venv[vi] >> 5);   /* (release ~45 ms) */
+    for (vi = 0; vi < NVOICE; vi++) {                /* render */
+        voice_render_one(vi);
     }
     for (vi = 0; vi < NVOICE; vi++) {                /* cross modulation, choke, the mixer */
         voice_t *v = &vc[vi];

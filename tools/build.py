@@ -52,7 +52,7 @@ SDK_SHA256 = {
 
 PRODUCT = "FM-1_900"                # package identity; release builds are FM-1_9XY
 VERSION = None                      # ELIXIR_VERSION for release builds (default: firmware/src/elixir.c)
-CPU2 = False                        # Elixir runs on one core (firmware/src/elixir.c FELUCCA_CPU2 0)
+CPU2 = True                         # the second core: hal/fm1_cpu1.S, cpu1.c, voices.c's split render
 
 
 def toolchain():

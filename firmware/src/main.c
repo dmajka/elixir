@@ -4,6 +4,9 @@
  * TRS MIDI input; ALNK0 renders the audio (audio.c); the main loop runs the UI (~60 frames a second), the storage
  * and the update entry. OCT- + OCT+ held 5 s: UBOOT (the FM-1's own update mode, as Felucca). */
 extern uint32_t _data_start[], _data_end[], _data_load[], _bss_start[], _bss_end[];
+#if FM1_CPU1_USED
+extern uint32_t _c1_load[], _c1_start[], _c1_end[];   /* core 1's code in RAM (app.ld, hal/fm1_cpu1.S) */
+#endif
 extern uint32_t _pool_start[], _pool_end[], _rt_start[], _rt_end[], _rt_load[];
 
 void fm1_timer5_irq(void)
@@ -95,6 +98,7 @@ static void fm1_main(void)
     persist_boot();
     if (flash_ok)
         ota_boot_cleanup();                       /* the staging area an update left */
+    cpu1_boot();                                  /* the second core, before the audio and the timers */
     lcd_init();
     palette_apply();
     draw_splash();
@@ -163,6 +167,9 @@ void fm1_cstart(void)
 {
     uint32_t *s, *d;
     fm1_time_init();
+    fm1_supplies_stock();                       /* (SLOOP 2.7 / X0X 1.0.9) VDC14 1.60 V, SYSVDD 1.38 V, as
+                                                 * M-VAVE's firmware: at the boot loader's voltages, both cores
+                                                 * running, some units read the flash and the SRAM wrong */
     fm1_reset_reason();
     fm1_wdt_arm(0x0D);
     if (bootguard.magic != BOOTGUARD_MAGIC) {
@@ -187,6 +194,10 @@ void fm1_cstart(void)
         *d = *s;
     for (s = _rt_load, d = _rt_start; d < _rt_end; s++, d++)
         *d = *s;                                  /* the flash driver's code that runs from RAM */
+#if FM1_CPU1_USED
+    for (s = _c1_load, d = _c1_start; d < _c1_end; s++, d++)
+        *d = *s;                                  /* core 1's waiting loop and entry: into RAM (app.ld) */
+#endif
     fm1_mailbox_clear();
     fm1_guard_enable(FM1_GUARD_STACK | FM1_GUARD_WRITE | FM1_GUARD_BUS | FM1_GUARD_PC);
     fm1_main();

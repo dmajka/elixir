@@ -13,8 +13,8 @@
 #define FELUCCA_CDC 0
 #define FELUCCA_UAC 0
 #define FELUCCA_UART 1
-#define FELUCCA_CPU2 0
-#define FM1_CPU1_USED 0
+#define FELUCCA_CPU2 1
+#define FM1_CPU1_USED 1
 #ifndef FELUCCA_ID
 #define FELUCCA_ID "FM-1_900"            /* the package identity the updaters check (build.py) */
 #endif
@@ -26,6 +26,7 @@
 #include "fm1_sys.h"
 #include "fm1_irq.h"
 #include "fm1_guard.h"
+#include "fm1_cpu1.h"                           /* the second core (FM1_CPU1_USED) */
 #include "fm1_input.h"
 #include "fm1_timer.h"
 #include "fm1_audio.h"
@@ -36,6 +37,9 @@
 static volatile uint32_t fm1_ms;        /* milliseconds since boot (TIMER5) */
 #define BOOTGUARD_MAGIC 0x42475244u
 struct { uint32_t magic, failed, pending; } bootguard __attribute__((section(".noinit")));
+
+/* --------------------------------------------------- the second core --- */
+#include "cpu1.c"                               /* fm1_cpu1.h's jobs: the render hands core 1 its share */
 
 /* ------------------------------------------------- tables, display --- */
 #include "elixir_tables.h"               /* generated (tools/gen_tables.py) */
