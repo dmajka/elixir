@@ -28,6 +28,22 @@ static uint32_t c1_stack(void)
     return 0;
 #endif
 }
+/* 18a: the main stacks' deepest use since power-on, in bytes: the user stack (24 KB) and the supervisor's (8 KB).
+ * main.c stacks_paint marks them at power-on; LOAD scans for the first word changed */
+#ifdef STACK_MARK
+static uint32_t stack_depth(const uint32_t *lo, const uint32_t *top)
+{
+    const uint32_t *p = lo;
+    while (p < top && *p == STACK_MARK)
+        p++;
+    return (uint32_t)(top - p) * 4u;
+}
+static uint32_t ustack_used(void) { return stack_depth((const uint32_t *)(uintptr_t)_ustack_lo, (const uint32_t *)(uintptr_t)_guard1); }
+static uint32_t sstack_used(void) { return stack_depth((const uint32_t *)(uintptr_t)_sstack_lo, (const uint32_t *)(uintptr_t)_sstack_top); }
+#else
+static uint32_t ustack_used(void) { return 0; }
+static uint32_t sstack_used(void) { return 0; }
+#endif
 #ifdef LOAD_CLOCK
 /* TIMER4 less the ticks TIMER5 spent nested in this ISR. The two read again if TIMER5 came between them: else the
  * clock stepped back by a scan (TIMER5's ticks counted, the time not), a short part's time wrapped below 0 and it

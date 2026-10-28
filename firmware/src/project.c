@@ -19,7 +19,7 @@
 #define PROJ_AUTO 4u                                /* the session */
 #define PROJ_NLOG 5u
 #define PROJ_MAGIC 0x4A52504Bu                      /* "KPRJ" (Kettle's, kept: its projects load) */
-#define PROJ_VERSION 9u                             /* (1 .. 8 still load: proj_read_payload) */
+#define PROJ_VERSION 10u                            /* (1 .. 9 still load: proj_read_payload) */
 #define PROJ_PAYLOAD (PROJ_SLOT - 256u)
 
 typedef struct {
@@ -120,7 +120,11 @@ static void pr_bytes(void *p, uint32_t n)
  * and generator after its length (CLK_1X and GEN_OFF before), a step's condition and ratchet (SF_X). Version 5
  * (0.5): a pattern's GRIDS map (X, Y, chaos) after its shuffle and kit (0 before). Version 8 (0.10): a track's
  * direction after its bounce (DIR_FWD before). Version 9 (0.13): a track's second Euclid pulse after its direction
- * (none before); the global LFOs after PERFORM 2's settings (KGL1). */
+ * (none before); the global LFOs after PERFORM 2's settings (KGL1). Version 10 (0.16): a pattern's scale (root, scale,
+ * the tracks that follow it) after its links (CHROMATIC, D1-D3 before); a track's melody (8 B) after its second Euclid
+ * pulse (off before); a step's length in its condition's and
+ * chance's top bits; three global LFOs (two before: the third off); the scale last chosen, DENSITY and STUTTER after
+ * the LFOs (KSC1; STUTTER off before). */
 #define SF_VOL 0x01u
 #define SF_PROB 0x02u
 #define SF_NOTE 0x04u
@@ -144,6 +148,9 @@ static int track_is_default(const pattern_t *p, uint32_t t)
         p->clk[t] != CLK_1X || p->gen[t][0] || p->gen[t][1] || p->gen[t][2] || p->gen[t][3] ||
         p->bnc[t] != BNC_DEFAULT || p->dir[t] != DIR_FWD || p->eu2[t][0] || p->eu2[t][1] || p->eu2[t][2])
         return 0;
+    for (k = 0; k < NML; k++)
+        if (p->mel[t][k])
+            return 0;
     for (k = 0; k < NUM_STEPS; k++)
         if (step_diff(p, t, k))
             return 0;
@@ -207,7 +214,8 @@ static void proj_write_payload(void)
         for (k = 0; k < NLINK; k++)
             if (p->link[k][1] & 15u)
                 lm |= 1u << k;
-        if (p->shuffle || p->kit || p->gx || p->gy || p->gchaos || lm || p->cdepth != 127u)
+        if (p->shuffle || p->kit || p->gx || p->gy || p->gchaos || lm || p->cdepth != 127u || p->sroot || p->scale ||
+            p->sfollow != SFOLLOW_DEFAULT)
             tm |= 0x80u;
         pw_byte(tm);
         if (tm & 0x80u) {
@@ -221,6 +229,9 @@ static void proj_write_payload(void)
             for (k = 0; k < NLINK; k++)
                 if (lm & (1u << k))
                     pw_bytes(p->link[k], 4);
+            pw_byte(p->sroot);                      /* (version 10: the scale) */
+            pw_byte(p->scale);
+            pw_byte(p->sfollow);
         }
         for (t = 0; t < NTRACK; t++) {
             uint8_t bits[8] = {0};
@@ -232,6 +243,7 @@ static void proj_write_payload(void)
             pw_byte(p->bnc[t]);
             pw_byte(p->dir[t]);
             pw_bytes(p->eu2[t], 3);
+            pw_bytes(p->mel[t], NML);               /* (version 10: the melody) */
             for (k = 0; k < 4u; k++)
                 pw_u16(p->main[t][k]);
             for (k = 0; k < NUM_STEPS; k++)
@@ -302,6 +314,18 @@ static void proj_write_payload(void)
         pw_byte(gls[i].trig);
         pw_byte(gls[i].phase);
     }
+    pw_bytes("KSC1", 4);                            /* 19: the scale last chosen, DENSITY, STUTTER (0.16) */
+    pw_byte(10);
+    pw_byte(scl_last.root);
+    pw_byte(scl_last.scale);
+    pw_byte((uint8_t)pfs.dens);
+    pw_byte(pfs.ghost);
+    pw_byte(pfs.build);
+    pw_byte(pfs.dex);
+    pw_byte(pfs.st_chance);
+    pw_byte(pfs.st_size);
+    pw_byte(pfs.st_len);
+    pw_byte(pfs.st_vary);
 }
 
 /* a version-2 lock code: Elixir's parameters were at the numbers the LXR leaves free (247..254: PAR_FX_SEND1 ..,
@@ -344,8 +368,8 @@ static void pr_step(uint32_t ver, pattern_t *p, uint32_t t, uint32_t k)
     if (m & SF_HI)
         p->lhi[t][k] = (uint8_t)pr_byte();
     if (m & SF_X) {
-        uint32_t c = pr_byte();
-        p->cond[t][k] = (uint8_t)(c < NCOND ? c : 0u);
+        uint32_t c = pr_byte();                      /* (version 10: the length in the top bits) */
+        p->cond[t][k] = (uint8_t)((c & COND_MASK) < NCOND ? c : c & ~COND_MASK);
         p->rat[t][k] = (uint8_t)(pr_byte() & (ver >= 6u ? 0xFFu : 0x7Fu));   /* (version 6: RAT_BOUNCE) */
     }
     if (ver == 2u) {
@@ -425,6 +449,7 @@ static int proj_read_payload(uint32_t ver)
     }
     kit_sanitize(morph_par);
     out_migrate(&par[PAR_AUDIO_OUT1], &par[PAR_FX_SEND1]);
+    scl_last.root = scl_last.scale = 0;             /* (a pattern without a scale: CHROMATIC; KSC1 sets the last) */
     npat = ver < 2u ? 64u : pr_byte();
     for (i = 0; i < npat; i++) {                    /* (patterns past NUM_PATTERN: read into pat_backup, dropped) */
         pattern_t *p = i < NUM_PATTERN ? &pat[i] : &pat_backup;
@@ -447,6 +472,13 @@ static int proj_read_payload(uint32_t ver)
                 for (k = 0; k < NLINK; k++)
                     if (lm & (1u << k))
                         pr_bytes(p->link[k], 4);
+            }
+            if (ver >= 10u) {
+                p->sroot = (uint8_t)(pr_byte() % 12u);
+                p->scale = (uint8_t)pr_byte();
+                p->sfollow = (uint8_t)(pr_byte() & ((1u << NTRACK) - 1u));
+                if (p->scale >= NSCALE)
+                    p->scale = SC_CHROM;
             }
         }
         for (t = 0; t < NTRACK; t++) {
@@ -478,6 +510,11 @@ static int proj_read_payload(uint32_t ver)
                 pr_bytes(p->eu2[t], 3);
                 if (p->eu2[t][2] >= NEUOP)
                     p->eu2[t][2] = EU_OR;
+            }
+            if (ver >= 10u) {
+                pr_bytes(p->mel[t], NML);
+                if (p->mel[t][ML_SHAPE] >= NMEL)
+                    p->mel[t][ML_SHAPE] = MEL_OFF;
             }
             for (k = 0; k < 4u; k++)
                 p->main[t][k] = (uint16_t)pr_u16();
@@ -551,6 +588,25 @@ static int proj_read_payload(uint32_t ver)
                 gls[i].trig = (uint8_t)(b[5] < NGT ? b[5] : GT_PLAY);
                 gls[i].phase = (uint8_t)(b[6] & 127u);
             }
+        }
+    }
+    if (!pr.err && pr.pos + 4u <= pr.end) {
+        pr_bytes(tag, 4);
+        if (!memcmp(tag, "KSC1", 4)) {               /* 19: the scale last chosen, DENSITY; STUTTER */
+            uint8_t b[10] = {0, 0, 0, 40, DB_GHOSTS, 0, 0, 1, 2, SV_OFF};
+            n = pr_byte();
+            pr_bytes(b, n < 10u ? n : 10u);
+            pr_skip(n > 10u ? n - 10u : 0u);
+            scl_last.root = (uint8_t)(b[0] % 12u);
+            scl_last.scale = (uint8_t)(b[1] < NSCALE ? b[1] : SC_CHROM);
+            pfs.dens = (int8_t)clamp32((int8_t)b[2], -64, 63);
+            pfs.ghost = (uint8_t)(b[3] & 127u ? b[3] & 127u : 1u);
+            pfs.build = (uint8_t)(b[4] < NDB ? b[4] : DB_GHOSTS);
+            pfs.dex = (uint8_t)(b[5] & ((1u << NTRACK) - 1u));
+            pfs.st_chance = (uint8_t)(b[6] & 127u);
+            pfs.st_size = (uint8_t)(b[7] < NSTSIZE ? b[7] : 1u);
+            pfs.st_len = (uint8_t)(b[8] < NSTLEN ? b[8] : 2u);
+            pfs.st_vary = (uint8_t)(b[9] < NSV ? b[9] : SV_OFF);
         }
     }
     return pr.err;
@@ -695,6 +751,7 @@ static uint32_t session_sig(void)                   /* FNV-1a over what a projec
     SIG(morph_par, sizeof morph_par);
     SIG(&pfs, sizeof pfs);
     SIG(gls, sizeof gls);
+    SIG(&scl_last, sizeof scl_last);
 #undef SIG
     return s;
 }
@@ -745,12 +802,16 @@ static void autosave_poll(void)
  * 0.9: pdrop: a pattern's unsaved edits dropped when another plays (the LXR's way; 0, the default: kept).
  * 0.12: remote: the remote's channel 1..16, 17 off (0, as settings before 0.12 hold: 16); rknobs: its knobs (RK_*);
  * cakit: Control All moves the kit only, not the morph target too (0, the default: both).
- * 0.13: pmem: a button opens the page it showed last (ui.c pmem_*; 0, the default: its first) */
+ * 0.13: pmem: a button opens the page it showed last (ui.c pmem_*; 0, the default: its first).
+ * 0.16: remote is the TRACKS channel (0: 15), rglobal the GLOBAL one (1..16, 17 off, 0: 16); settings from before
+ * (16 bytes) start both at their defaults, or both off if the remote was */
+#define SET_LEN_015 16u
 typedef struct {
     uint32_t magic;
-    uint8_t palette, leds, autosave, accel, project, kvel, kacc, pdrop, remote, rknobs, cakit, pmem;
+    uint8_t palette, leds, autosave, accel, project, kvel, kacc, pdrop, remote, rknobs, cakit, pmem, rglobal;
 } elixir_settings_t;
-static elixir_settings_t kset = {SET_MAGIC, 2, 1, 1, 1, 0xFF, 100, 127, 0, 0, 0, 0, 0};   /* (palette 2: AMBER) */
+static elixir_settings_t kset = {SET_MAGIC, 2, 1, 1, 1, 0xFF, 100, 127, 0, 0, 0, 0, 0, 0};   /* (palette 2: AMBER) */
+static uint8_t remote_of(uint32_t v, uint32_t dflt) { return (uint8_t)(v > 16u ? 0xFFu : v ? v - 1u : dflt - 1u); }
 static uint8_t settings_dirty;
 static uint32_t settings_ms;
 static void settings_later(void)
@@ -770,19 +831,27 @@ static void settings_poll(void)                     /* queued: written stopped, 
 static void persist_boot(void)                      /* power-on: the flash, the settings, the projects, the session */
 {
     uint32_t f = irq_save();
-    elixir_settings_t s;
+    elixir_settings_t s = kset;
+    int n;
     flash_ok = FL_FAR(fl_jedec_ram)() == 0x856014u;  /* the expected 1 MiB part, else RAM only */
     irq_restore(f);
     pj.loaded = 0xFF;
     if (!flash_ok)
         return;
-    if (st_load(OBJ_SETTINGS, &s, sizeof s) == (int)sizeof s && s.magic == SET_MAGIC)
+    n = st_load(OBJ_SETTINGS, &s, sizeof s);
+    if (n >= (int)SET_LEN_015 && s.magic == SET_MAGIC) {
+        if (n < (int)sizeof s) {                     /* (before 0.16: one remote channel; the map is new) */
+            s.remote = s.remote > 16u ? 17u : 0u;
+            s.rglobal = s.remote;
+        }
         kset = s;
+    }
     autosave_on = kset.autosave;
     key_vel = kset.kvel ? kset.kvel : 100u;
     key_acc = kset.kacc ? kset.kacc : 127u;
     pat_keep = !kset.pdrop;
-    remote_ch = (uint8_t)(kset.remote > 16u ? 0xFFu : kset.remote ? kset.remote - 1u : 15u);
+    remote_ch = remote_of(kset.remote, 15u);
+    remote_gch = remote_of(kset.rglobal, 16u);
     proj_scan();
     kl_scan();
 }

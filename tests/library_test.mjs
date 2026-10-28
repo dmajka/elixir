@@ -37,7 +37,7 @@ const expectStatus = async (p, st, what) => {
 // 1. info
 let info = await lib.info();
 console.log(`  info: proto ${info.proto}, ${info.version}, ${info.nlog} projects, ${info.nkits} kits of ${info.kitLen}`);
-check(info.proto === 1 && info.nlog === 5 && info.nkits === 64 && info.kitLen === 377, "info");
+check(info.proto === 1 && info.nlog === 5 && info.nkits === 64 && info.kitLen === 398, "info");   // (0.16: 377 + 21 bytes)
 
 // 2. LXR kits in
 let kits = [];

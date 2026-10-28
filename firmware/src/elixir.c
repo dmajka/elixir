@@ -5,7 +5,7 @@
  * or supported by Erica Synths or M-VAVE.
  * One compilation unit (the HAL is header-only); each file uses what the files above it define. */
 #ifndef ELIXIR_VERSION
-#define ELIXIR_VERSION "v0.15"
+#define ELIXIR_VERSION "v0.16"
 #endif
 #define FELUCCA_FLASH 1
 #define FELUCCA_OTA 1
@@ -34,12 +34,14 @@
 #include "fm1_lcd_hw.h"
 #define RING_PUBLISH() __asm__ volatile("" ::: "memory")
 #define POOL __attribute__((section(".pool")))
+#define RAMBUF __attribute__((section(".ram_buf")))   /* 18a: zeroed, in RAMTEXT after the RAM code (app.ld) */
 static volatile uint32_t fm1_ms;        /* milliseconds since boot (TIMER5) */
 #define BOOTGUARD_MAGIC 0x42475245u     /* (0.15: c2 added) */
 /* c2 (main.c cores_boot): 1 = two cores run, 2 = and then a crash: the next start is one core */
 struct { uint32_t magic, failed, pending, c2; } bootguard __attribute__((section(".noinit")));
 static uint32_t load_clock(void);       /* 17a: audio.c; dsp.c LOAD_MARK */
 #define LOAD_CLOCK load_clock
+#define STACK_MARK 0x57AC57ACu          /* 18a: the stacks' unused words (main.c stacks_paint, audio.c) */
 
 /* ------------------------------------------------- tables, display --- */
 #include "elixir_tables.h"               /* generated (tools/gen_tables.py) */

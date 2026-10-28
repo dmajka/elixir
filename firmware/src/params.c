@@ -57,12 +57,16 @@ static const char *const L_MIXFM[] = {"FM", "MIX"};
 static const char *const L_FX[] = {"OFF", "DRIVE", "RING", "COMP", "DELAY", "PHASER", "FLANGER"};
 static const char *const L_DIST[] = {"TUBE", "FOLD", "CLIP"};
 static const char *const L_RATIO[] = {"1:1", "2:1", "3:1", "4:1", "6:1", "8:1"};
-static const char *const L_DELAY[] = {"MONO", "PING PONG"};
+static const char *const L_DELAY[] = {"MONO", "PING PONG", "TAPE", "TAPE PP"};   /* (21: TAPE's) */
+static const char *const L_DPITCH[] = {"OFF", "+12", "+7", "-12", "DETUNE"};
+static const char *const L_DIRT[] = {"TAPE", "TUBE", "FUZZ", "DIODE", "FOLD"};   /* (23c: fxbus.c DT_*) */
+static const char *const L_CRATIO[] = {"OFF", "1.5:1", "2:1", "3:1", "4:1", "6:1", "10:1", "LIMIT"};   /* (0.16) */
+static const char *const L_CSRC[] = {"MIX", "D1", "D2", "D3", "SN", "CY", "HH"};
 static const char *const L_PATMODE[] = {"OFF", "AUTO"};
 static const char *const L_FLAM[] = {"OFF", "x2", "x3", "x4", "x6", "x8"};
 static const char *const L_OFFON[] = {"OFF", "ON"};
-static const char *const L_REVMODEL[] = {"ROOM", "SPRING", "HALL"};
-static const char *const L_SHAPE[] = {"LXR", "FOLD", "CLIP", "ASYM", "RECTIFY"};
+static const char *const L_REVMODEL[] = {"ROOM", "SPRING", "HALL", "PLATE"};
+static const char *const L_SHAPE[] = {"LXR", "FOLD", "CLIP", "ASYM", "RECTIFY", "FUZZ", "TAPE", "SINE FOLD", "BITE"};
 static const char *const L_XMODE[] = {"DUCK", "FILTER", "RING"};
 static const char *const L_CHOKE[] = {"OFF", "1", "2", "3", "4"};
 static const char *const L_MODEL[] = {"LXR", "MODAL", "STRING", "FM",   /* (0.9: Rings' models, rings.c) */
@@ -72,7 +76,8 @@ static const char *const L_MODEL[] = {"LXR", "MODAL", "STRING", "FM",   /* (0.9:
 static const char *const L_BITS[] = {"OFF", "15", "14", "13", "12", "11", "10", "9", "8", "7", "6", "5", "4", "3",
                                      "2", "1"};
 static const char *const L_LFOMODE[] = {"TRIG", "HOLD", "ONE", "HALF"};   /* (0.13: voices.c LM_*) */
-enum { MENU_REV_MODEL = 27, MENU_SHAPE, MENU_XMODE, MENU_CHOKE, MENU_BITS, MENU_MODEL, MENU_LFOMODE };   /* (Elixir's) */
+enum { MENU_REV_MODEL = 27, MENU_SHAPE, MENU_XMODE, MENU_CHOKE, MENU_BITS, MENU_MODEL, MENU_LFOMODE, MENU_GATE,
+       MENU_DPITCH, MENU_DIRT, MENU_CRATIO, MENU_CSRC };   /* (Elixir's) */
 #define LIST(a) {a, sizeof a / sizeof a[0]}
 static const struct { const char *const *s; uint8_t n; } MENUS[] = {
     [MENU_FILTER] = LIST(L_FILTER), [MENU_WAVEFORM] = LIST(L_WAVE), [MENU_AUDIO_OUT] = LIST(L_OUT),
@@ -83,7 +88,8 @@ static const struct { const char *const *s; uint8_t n; } MENUS[] = {
     [MENU_PAT_MODE] = LIST(L_PATMODE), [MENU_STEP_FLAM] = LIST(L_FLAM), [MENU_AUDIO_OUT_FX] = LIST(L_OUT),
     [MENU_REV_MODEL] = LIST(L_REVMODEL), [MENU_SHAPE] = LIST(L_SHAPE), [MENU_XMODE] = LIST(L_XMODE),
     [MENU_CHOKE] = LIST(L_CHOKE), [MENU_BITS] = LIST(L_BITS), [MENU_MODEL] = LIST(L_MODEL),
-    [MENU_LFOMODE] = LIST(L_LFOMODE),
+    [MENU_LFOMODE] = LIST(L_LFOMODE), [MENU_GATE] = LIST(L_OFFON), [MENU_DPITCH] = LIST(L_DPITCH),
+    [MENU_DIRT] = LIST(L_DIRT), [MENU_CRATIO] = LIST(L_CRATIO), [MENU_CSRC] = LIST(L_CSRC),
 };
 static const char *const VOICE_NAME[NTRACK] = {"DRUM 1", "DRUM 2", "DRUM 3", "SNARE", "CYMBAL", "CL HAT", "OP HAT"};
 static const char *const VOICE_SHORT[NTRACK] = {"D1", "D2", "D3", "SN", "CY", "CH", "OH"};
@@ -116,6 +122,22 @@ static const struct { uint16_t first; uint8_t n; uint16_t dtype; const char *nm[
     {PAR_MEXC1, 6, DTYPE_0B127, {"Exciter", "Model", "mex", "Exciter"}},
     {PAR_MTENS1, 6, DTYPE_0B127, {"Tension", "Model", "mtn", "Tension"}},
     {PAR_LFOMODE1, 6, DTYPE_MENU | MENU_LFOMODE << 8, {"Mode", "LFO", "lfm", "LFO mode"}},
+    {PAR_GATE1, 6, DTYPE_MENU | MENU_GATE << 8, {"Gate", "Amp EG", "gat", "Gate"}},
+    {PAR_DSYNC, 1, DTYPE_MENU | MENU_GATE << 8, {"Sync", "Delay", "dsy", "D sync"}},
+    {PAR_DSAT, 1, DTYPE_0B127, {"Saturate", "Delay", "dsa", "D satur"}},
+    {PAR_ECHOREV, 1, DTYPE_0B127, {"Echo>Rev", "Delay", "e>r", "Echo>Rev"}},
+    {PAR_GLITCH, 1, DTYPE_0B127, {"Glitch", "Delay", "gli", "Glitch"}},
+    {PAR_DPITCH, 1, DTYPE_MENU | MENU_DPITCH << 8, {"Pitch", "Delay", "dpi", "D pitch"}},
+    {PAR_FXDIRT, 1, DTYPE_0B127, {"Bus dirt", "Dirt", "bdt", "Bus dirt"}},
+    {PAR_MDIRT, 1, DTYPE_MENU | MENU_DIRT << 8, {"Master", "Dirt", "mdt", "Dirt type"}},
+    {PAR_MDIRT_AMT, 1, DTYPE_0B127, {"Amount", "Dirt", "dam", "Dirt amt"}},
+    {PAR_MC_RATIO, 1, DTYPE_MENU | MENU_CRATIO << 8, {"Ratio", "Comp", "crt", "C ratio"}},
+    {PAR_MC_THR, 1, DTYPE_0B127, {"Thresh", "Comp", "cth", "C thresh"}},
+    {PAR_MC_ATK, 1, DTYPE_0B127, {"Attack", "Comp", "cat", "C attack"}},
+    {PAR_MC_REL, 1, DTYPE_0B127, {"Release", "Comp", "crl", "C releas"}},
+    {PAR_MC_SRC, 1, DTYPE_MENU | MENU_CSRC << 8, {"Sidechain", "Comp", "csc", "C sidech"}},
+    {PAR_MC_GAIN, 1, DTYPE_0B127, {"Makeup", "Comp", "cmk", "C makeup"}},
+    {PAR_MC_MIX, 1, DTYPE_0B127, {"Mix", "Comp", "cmx", "C mix"}},
 };
 static uint32_t par_k(uint32_t p)                    /* its row in K_PARS (p >= NUM_PARAMS) */
 {

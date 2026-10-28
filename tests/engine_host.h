@@ -9,6 +9,7 @@
 #include "grids_map.h"
 #define RING_PUBLISH() __asm__ volatile("" ::: "memory")
 #define POOL                             /* (the firmware: .pool, the big zeroed RAM) */
+#define RAMBUF                           /* (the firmware: .ram_buf, zeroed RAM in RAMTEXT) */
 
 /* usb.c's MIDI rings, as the firmware has them */
 #define MQ 64u

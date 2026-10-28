@@ -34,7 +34,22 @@
  * tempo (the clock: MIDI's too, TAPE STOP, HALF). MODE as Elektron's: FREE, TRIG (restarts), HOLD (runs, its value
  * held at each trigger), ONE (a cycle from the trigger, then still), HALF (half of one); TRIG the triggers: PLAY,
  * PATTERN (PLAY and each pattern change), BAR (PLAY and each bar); OCT+ on its page triggers it too. PHASE: where a
- * trigger starts it. The audio ISR runs them (glfo_block); morph is the main loop's (ui.c glfo_morph). */
+ * trigger starts it. The audio ISR runs them (glfo_block); morph is the main loop's (ui.c glfo_morph).
+ * 19c: a third global LFO, and more for them to move, each from where it is set either way by the depth: DENSITY
+ * (19d), TRANSPOSE (the scale's degrees, up to 7 either way: seq.c scale_fit), the melody's CHANGE and SPREAD
+ * (Phase 20), the delay's feedback and time (+-1/4 of its range, moved every 16 blocks), the reverb sends (x0 .. x2),
+ * and the four macros (MACRO 1..4: through them any lockable parameter; while playing, the main loop's: ui.c
+ * glfo_macros).
+ * 19d: DENSITY (the DENSITY page, the project's): -64..63, thins the steps the weakest first or builds them up
+ * (seq.c dens_*): the chances, then ghost notes at GHOST's velocity, then (BUILD RATCHETS) ratchets; the tracks it
+ * leaves alone (the black keys on its page).
+ * 0.16: STUTTER (its own PERF page, the project's: KSC1): the master's slices repeated, from REVERSE's recorder (so
+ * mono, 22 kHz: no more memory). At each LENGTH of the clock a burst comes at CHANCE's odds (or a global LFO's, the
+ * larger; OCT+ held on the page: at the next SIZE, as long as it is held): the slice of SIZE from there plays as it
+ * is, recorded, then repeats until LENGTH is over. VARY changes each SIZE of the burst: SHRINK (the slice halved,
+ * down to an eighth: a roll that speeds up), PITCH DN / UP (a semitone more each time), REVERSE (every other one
+ * backwards), RANDOM (one of those a burst). In time: the repeats count samples from the burst's start, so they stay
+ * on the grid. */
 
 enum { PF_FILL, PF_STUT, PF_FREEZE, PF_THROW_R, PF_THROW_F, PF_PUSH, PF_TAPE, PF_SWEEP_LP, PF_SWEEP_HP, NPF };
 enum { PF_HALF = NPF, PF_JITTER, PF_CUTS, PF_SHORT, PF_PUMP, PF_COMB, PF_SPACE, PF_CRUSH, PF_REVERSE, NPF2 };
@@ -44,6 +59,11 @@ enum { PF_HALF = NPF, PF_JITTER, PF_CUTS, PF_SHORT, PF_PUMP, PF_COMB, PF_SPACE, 
 static int16_t comb_buf[COMB_LEN] POOL;
 static int16_t rec_buf[REC_LEN] POOL;
 #define NMACRO 4
+enum { SV_OFF, SV_SHRINK, SV_PDOWN, SV_PUP, SV_REV, SV_RAND, NSV };   /* (0.16: STUTTER's VARY) */
+#define NSTSIZE 7u                                   /* SIZE: 1/8 1/16 1/16T 1/32 1/32T 1/64, RANDOM (1/16 .. 1/64) */
+#define NSTLEN 5u                                    /* LENGTH: 1/16 1/8 1/4 1/2 1 bar */
+static const uint8_t ST_SIZE[NSTSIZE - 1u] = {48, 24, 16, 12, 8, 6};   /* (ticks) */
+static const uint16_t ST_LEN[NSTLEN] = {24, 48, 96, 192, 384};
 static struct {
     volatile uint32_t on;                            /* the effects held or latched (bit PF_*) */
     volatile uint8_t throw_v;                        /* the voice THROW sends */
@@ -68,6 +88,17 @@ static struct {
     int32_t rec_half;
     uint32_t rv_end, rv_len, rv_pos;
     int32_t rv_mix;
+    /* 0.16: STUTTER: OCT+ held on its page (the panel's); the burst (0 none, 1 the first SIZE: live, recorded, 2
+     * repeating), its VARY, the clock it last saw (ticks; stopped: its own), the slice (start in the recorder, its
+     * length at 22 kHz), the SIZEs left, the samples left of this one (Q16), the read position (Q16, 22 kHz), its
+     * speed (Q16), the SIZEs played, the mix (Q15) */
+    volatile uint8_t st_hold;
+    uint8_t st_on, st_mode;
+    uint32_t st_tk, st_last, st_acc;
+    uint32_t st_start, st_n, st_units, st_rep;
+    int64_t st_left, st_uq;                          /* (a SIZE, Q16 samples) */
+    uint32_t st_pos, st_rate;
+    int32_t st_mix;
 } pf;
 /* the project's: the macros and the effects' settings */
 static struct {
@@ -77,15 +108,23 @@ static struct {
     /* 0.6: PERFORM 2: DRILL's density, JITTER's most, CUTS' density, PUMP's depth, COMB's note (MIDI) and feedback,
      * CRUSH's amount (0..127 each, but the note), REVERSE's length (1/16 1/8 1/4) */
     uint8_t drill, jitter, cuts, pump, comb_note, comb_fb, crush, rev_len;
+    /* 19d: DENSITY, the ghosts' velocity, BUILD (DB_*), the tracks left out (bit t) (KSC1) */
+    int8_t dens;
+    uint8_t ghost, build, dex;
+    /* 0.16: STUTTER: CHANCE 0..127, SIZE, LENGTH, VARY (ST_SIZE, ST_LEN, SV_*) (KSC1) */
+    uint8_t st_chance, st_size, st_len, st_vary;
 } pfs;
 #define NPF2SET 8u                                   /* (KPF2: the bytes from drill) */
 static const uint8_t REPEAT_TICKS[4] = {96, 48, 24, 12};
 
 /* 0.13: the global LFOs */
-enum { GD_OFF, GD_MORPH, GD_FILTER, GD_LP, GD_HP, GD_PUSH, GD_COMB, GD_CRUSH, GD_JITTER, GD_CUTS, GD_PUMP, NGD };
+enum { GD_OFF, GD_MORPH, GD_FILTER, GD_LP, GD_HP, GD_PUSH, GD_COMB, GD_CRUSH, GD_JITTER, GD_CUTS, GD_PUMP,
+       GD_DENSITY, GD_TRANSPOSE, GD_MCHANGE, GD_MSPREAD, GD_DFB, GD_DTIME, GD_RSEND, GD_MACRO1,
+       GD_STUT = GD_MACRO1 + NMACRO, NGD };          /* (0.16: STUTTER's chance, from 0 as the effects) */
+#define NGBI (GD_STUT - GD_DENSITY)                  /* (19c: the ones moved either way, gl.bi) */
 enum { GM_FREE, GM_TRIG, GM_HOLD, GM_ONE, GM_HALF, NGM };
 enum { GT_PLAY, GT_PATTERN, GT_BAR, NGT };
-#define NGLFO 2u
+#define NGLFO 3u
 #define NGLEN 19u
 static const uint16_t GL_LEN[NGLEN] = {1, 2, 4, 8, 16, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048,
                                        4096};       /* SPEED: a cycle, in 16ths (1/16 .. 256 bars) */
@@ -102,6 +141,7 @@ static struct {
     int32_t dj;                                      /* the DJ filter moved by them, -65536 .. 65536 */
     int32_t amt[NGD];                                /* each effect's amount from them, 0 .. 65536 */
     volatile int32_t morph;                          /* morph moved by them, -255 .. 255 (the main loop's) */
+    volatile int32_t bi[NGBI];                       /* 19c: GD_DENSITY .. moved either way, -65536 .. 65536 */
 } gl;
 
 static void perf_defaults(void)
@@ -118,6 +158,10 @@ static void perf_defaults(void)
     pfs.comb_fb = 100;
     pfs.crush = 64;
     pfs.rev_len = 1;                                 /* 1/8 */
+    pfs.ghost = 40;                                  /* 19d */
+    pfs.build = DB_GHOSTS;
+    pfs.st_size = 1;                                 /* (STUTTER: 1/16 over a 1/4) */
+    pfs.st_len = 2;
     for (c = 0; c < NGLFO; c++) {                    /* 0.13: the global LFOs: off, a triangle over 4 bars */
         memset(&gls[c], 0, sizeof gls[c]);
         gls[c].len = 7;
@@ -144,7 +188,7 @@ static void glfo_block(void)
     static const uint8_t LM_OF[NGM] = {LM_TRIG, LM_TRIG, LM_HOLD, LM_ONE, LM_HALF};
     static const uint8_t TRIG_EV[NGT] = {GLE_PLAY, GLE_PLAY | GLE_PATTERN, GLE_PLAY | GLE_BAR};
     uint32_t ev = glfo_ev, n;
-    int32_t morph = 0;
+    int32_t morph = 0, bi[NGBI] = {0};
     glfo_ev = 0;
     gl.dj = 0;
     memset(gl.amt, 0, sizeof gl.amt);
@@ -177,6 +221,9 @@ static void glfo_block(void)
             morph += d * x / 32768;                  /* (127 x 65536 / 32768: about 255) */
         } else if (g == GD_FILTER) {
             gl.dj += (int32_t)(((int64_t)d * (2 * x - 65536)) / 127);
+        } else if (g >= GD_DENSITY && g < GD_STUT) {                /* (19c: either way from where it is) */
+            bi[g - GD_DENSITY] = clamp32(bi[g - GD_DENSITY] + (int32_t)(((int64_t)d * (2 * x - 65536)) / 127), -65536,
+                                         65536);
         } else {                                     /* the rest from 0 by |depth|; a negative one upside down */
             int32_t a = (d > 0 ? x : 65536 - x) * (d > 0 ? d : -d) / 127;
             if (g == GD_LP)
@@ -188,6 +235,8 @@ static void glfo_block(void)
         }
     }
     gl.morph = clamp32(morph, -255, 255);
+    for (n = 0; n < NGBI; n++)
+        gl.bi[n] = bi[n];
 }
 /* an effect's amount, 0 .. 65536: its key (held, latched, the remote's) the most, else the LFOs' */
 static uint32_t pf_amount(uint32_t on, uint32_t bit, uint32_t g)
@@ -201,6 +250,19 @@ static void perf_block(void)
     uint32_t on = pf.on, v, a;
     int32_t target, step;
     glfo_block();
+    {                                                /* 19c, 19d: DENSITY, TRANSPOSE, the delay, the reverb sends */
+        int32_t t = gl.bi[GD_TRANSPOSE - GD_DENSITY] * 7;
+        sq.dens = (int8_t)clamp32(pfs.dens + gl.bi[0] / 1024, -64, 63);
+        sq.dghost = pfs.ghost;
+        sq.dbuild = (uint8_t)(pfs.build < NDB ? pfs.build : DB_GHOSTS);
+        sq.dex = pfs.dex;
+        sq.transp = (int8_t)((t + (t < 0 ? -32768 : 32768)) / 65536);
+        sq.mchg = (int8_t)(gl.bi[GD_MCHANGE - GD_DENSITY] / 1024);   /* (20: the melodies' DEJA VU, SPREAD) */
+        sq.mspr = (int8_t)(gl.bi[GD_MSPREAD - GD_DENSITY] / 1024);
+        fx.lfo_fb = gl.bi[GD_DFB - GD_DENSITY];
+        fx.lfo_time = gl.bi[GD_DTIME - GD_DENSITY];
+        rev_g = (uint32_t)(65536 + gl.bi[GD_RSEND - GD_DENSITY]);
+    }
     sq.fill = (on >> PF_FILL) & 1u;
     sq.half = (on >> PF_HALF) & 1u;
     a = pf_amount(on, PF_JITTER, GD_JITTER);         /* (0.13: the global LFOs' amounts, a key's the most) */
@@ -237,6 +299,7 @@ static void perf_block(void)
     sq.stut_len = REPEAT_TICKS[pfs.repeat & 3u];
     fx.freeze = (on >> PF_FREEZE) & 1u;
     fx.push = (int32_t)pf_amount(on, PF_PUSH, GD_PUSH);
+    fx.throw_echo = (uint8_t)((on >> PF_THROW_R) & 1u);   /* (21c: THROW REV throws the echoes in too) */
     for (v = 0; v < NVOICE; v++) {
         vc[v].throw_rev = (uint8_t)(v == pf.throw_v && ((on >> PF_THROW_R) & 1u));
         vc[v].throw_fx = (uint8_t)(v == pf.throw_v && ((on >> PF_THROW_F) & 1u));
@@ -260,10 +323,11 @@ static void perf_block(void)
                                                                         : target;
 }
 
-/* 0.6: PERFORM 2 on the master, in this order: COMB, CUTS, CRUSH, then the recorder and REVERSE */
+static void stutter(int16_t *l, int16_t *r);
+/* 0.6: PERFORM 2 on the master, in this order: COMB, CUTS, CRUSH, (0.16) STUTTER, then the recorder and REVERSE */
 static void perf2_master(int16_t *l, int16_t *r)
 {
-    uint32_t on = pf.on, i, a;
+    uint32_t on = pf.on, i, a, st_was;
     a = pf_amount(on, PF_COMB, GD_COMB);
     if (a) {                                         /* COMB: y = x (1 - fb) 4 + fb lp(y[n - D]); out x / 2 + y (0.13:
                                                       * by the amount, a: x + (y - x / 2) a) */
@@ -316,6 +380,8 @@ static void perf2_master(int16_t *l, int16_t *r)
             r[i] = (int16_t)pf.cr_r;
         }
     }
+    st_was = pf.st_on;                               /* 0.16: STUTTER, then the recorder (its first SIZE recorded) */
+    stutter(l, r);
     /* REVERSE: the recorder (mono, every other sample) stops while it plays; the part from its end backwards, again
      * and again, 64-sample fades at its ends and in and out */
     if ((on >> PF_REVERSE) & 1u && !pf.rv_len) {
@@ -339,10 +405,109 @@ static void perf2_master(int16_t *l, int16_t *r)
         }
         if (!tgt && !pf.rv_mix)
             pf.rv_len = 0;
-    } else {
+    } else if (st_was != 2u || pf.st_on != 2u) {    /* (0.16: STUTTER's repeats hold it too) */
         for (i = 0; i < BLOCK; i += 2) {
             rec_buf[pf.rec_w] = (int16_t)((l[i] + r[i] + l[i + 1u] + r[i + 1u]) >> 2);
             pf.rec_w = pf.rec_w + 1u < REC_LEN ? pf.rec_w + 1u : 0u;
+        }
+    }
+}
+
+/* 0.16: STUTTER, on the master before the recorder (perf2_master) */
+static uint32_t st_ticks(void)                       /* the clock: the sequencer's ticks, stopped its own */
+{
+    if (sq.running)
+        return sq.ticks;
+    pf.st_acc += BLOCK << 16;
+    while (sq.tick_q16 && pf.st_acc >= sq.tick_q16) {
+        pf.st_acc -= sq.tick_q16;
+        pf.st_tk++;
+    }
+    return pf.st_tk;
+}
+static void st_unit(void)                            /* a SIZE of the burst starts: how this one reads the slice */
+{
+    static const uint16_t SEMI[13] = {65535, 61857, 58385, 55108, 52015, 49096, 46340, 43740, 41285, 38967, 36780,
+                                      34716, 32768};  /* (2^(-k/12), Q16) */
+    uint32_t k = pf.st_rep - 1u < 12u ? pf.st_rep - 1u : 12u;   /* (the first repeat as it was) */
+    pf.st_pos = 0;
+    pf.st_rate = pf.st_mode == SV_PDOWN ? SEMI[k] : pf.st_mode == SV_PUP ? (65536u << 16) / SEMI[k] : 65536u;
+}
+static void st_start(uint32_t i)                     /* a burst from sample i of this block (the recorder's next) */
+{
+    uint32_t sz = pfs.st_size < NSTSIZE - 1u ? ST_SIZE[pfs.st_size] : ST_SIZE[1u + seq_rand() % 5u];
+    uint32_t lt = ST_LEN[pfs.st_len < NSTLEN ? pfs.st_len : 2u], h = 0;
+    uint64_t uq = (uint64_t)sz * sq.tick_q16;        /* (a SIZE: Q16 samples) */
+    while ((uq >> 17) > REC_LEN - BLOCK) {           /* (too long for the recorder: a half, a quarter ..) */
+        uq >>= 1;
+        h++;
+    }
+    pf.st_n = (uint32_t)(uq >> 17) < 32u ? 32u : (uint32_t)(uq >> 17);   /* (22 kHz samples) */
+    pf.st_uq = (int64_t)uq;
+    pf.st_units = (lt > sz ? lt / sz : 2u) << h;
+    pf.st_left += (int64_t)uq;
+    pf.st_start = (pf.rec_w + i / 2u) % REC_LEN;
+    pf.st_rep = 0;
+    pf.st_mode = (uint8_t)(pfs.st_vary == SV_RAND ? SV_SHRINK + seq_rand() % 4u : pfs.st_vary % NSV);
+    pf.st_on = 1;
+}
+static void stutter(int16_t *l, int16_t *r)
+{
+    uint32_t tk = st_ticks(), last = pf.st_last, i;
+    uint32_t a = (uint32_t)pfs.st_chance * 65536u / 127u, sz, lt;
+    if ((uint32_t)gl.amt[GD_STUT] > a)
+        a = (uint32_t)gl.amt[GD_STUT];
+    pf.st_last = tk;
+    if (tk < last)                                   /* (PLAY: the clock from 0) */
+        last = tk;
+    sz = pfs.st_size < NSTSIZE - 1u ? ST_SIZE[pfs.st_size] : 6u;
+    lt = ST_LEN[pfs.st_len < NSTLEN ? pfs.st_len : 2u];
+    if (!pf.st_on) {
+        if (pf.st_hold ? tk / sz != last / sz : a && tk / lt != last / lt && (seq_rand() & 0xFFFFu) < a) {
+            pf.st_left = 0;
+            st_start(0);
+        } else if (!pf.st_mix) {
+            return;
+        }
+    }
+    for (i = 0; i < BLOCK; i++) {
+        int32_t v = 0;
+        if (pf.st_on) {
+            pf.st_left -= 65536;
+            if (pf.st_left <= 0) {                   /* (the next SIZE, counted from the burst's start: in time) */
+                pf.st_on = 2;                        /* (recorded: the recorder holds it now) */
+                pf.st_rep++;
+                if (pf.st_rep >= pf.st_units && !pf.st_hold) {
+                    pf.st_on = 0;
+                    if (a && (seq_rand() & 0xFFFFu) < a)   /* (again at once: the next LENGTH's chance) */
+                        st_start(i);
+                } else {
+                    pf.st_left += pf.st_uq;
+                    st_unit();
+                }
+            }
+        }
+        if (pf.st_on == 2u) {
+            uint32_t n = pf.st_mode == SV_SHRINK ? pf.st_n >> (pf.st_rep < 4u ? pf.st_rep - 1u : 3u) : pf.st_n;
+            uint32_t p = pf.st_pos >> 16, f = pf.st_pos & 0xFFFFu, e = n - p < p ? n - p : p, k;
+            int32_t x0, x1;
+            if (pf.st_mode == SV_REV && (pf.st_rep & 1u) == 0u)
+                p = n - 1u - p;
+            k = (pf.st_start + p) % REC_LEN;
+            x0 = rec_buf[k];
+            x1 = rec_buf[k + 1u < REC_LEN ? k + 1u : 0u];
+            v = x0 + (((x1 - x0) * (int32_t)(f >> 1)) >> 15);
+            if (e < 16u)                             /* (16-sample fades at the slice's ends) */
+                v = v * (int32_t)e / 16;
+            pf.st_pos += pf.st_rate >> 1;            /* (the recorder at half rate) */
+            if ((pf.st_pos >> 16) >= n)
+                pf.st_pos -= n << 16;
+        }
+        pf.st_mix += pf.st_on == 2u ? (pf.st_mix < 32767 ? 1024 : 0) : (pf.st_mix > 0 ? -1024 : 0);
+        pf.st_mix = clamp32(pf.st_mix, 0, 32767);
+        if (pf.st_mix) {
+            l[i] = (int16_t)(l[i] + (((v - l[i]) * pf.st_mix) >> 15));
+            r[i] = (int16_t)(r[i] + (((v - r[i]) * pf.st_mix) >> 15));
         }
     }
 }

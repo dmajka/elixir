@@ -34,6 +34,7 @@
 #endif
 #define RING_PUBLISH() ((void)0)
 #define POOL
+#define RAMBUF
 static volatile uint32_t fm1_ms;
 struct { uint32_t magic, failed, pending; } bootguard;
 #define BOOTGUARD_MAGIC 0x42475244u

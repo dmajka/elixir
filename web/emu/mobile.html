@@ -1,0 +1,485 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only
+     Elixir's emulator for phones (0.16): the same firmware (elixir.wasm) and worklet as the emulator page
+     (index.html), with a touch layout drawn for a drum machine: one screen high, the FM-1's knobs and buttons, its
+     black keys in a row and the white keys as square pads, the screen as large as the rest leaves. After the idea of hb3p8's fm1-mobile-emu
+     (GPL-3.0); no code of it is used. It keeps its saves where the emulator page does (this browser), so kits
+     imported on either are on both. @BASE@ is where the emulator's files are (make_site.py). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="robots" content="noindex">   <!-- (unlisted while it is tried out) -->
+<meta name="theme-color" content="#121214">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Elixir">
+<title>Elixir mobile</title>
+<meta name="description" content="Elixir, the LXR-02 drum machine firmware for the M-VAVE FM-1, on your phone: the same code the instrument runs, laid out for touch.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 rx=%223%22/%3E%3Crect x=%224%22 y=%224%22 width=%228%22 height=%228%22 fill=%22%23fff%22/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #0b0b0c; --part: #232326; --edge: #343438; --ink: #e9e9ec; --mid: #8d8d93; --dim: #5b5b61;
+  --lit: #fff4d6; --green: #5fe08a; --rec: #ff453a; --accent: #f4d04a;
+  --t0: #ff7038; --t1: #ffa62c; --t2: #f4d04a; --t3: #7cd25c; --t4: #3ec6c8; --t5: #509cf0; --t6: #a87cf2; --bar: #7fb0d8;
+  --gap: 6px; --knob: clamp(30px, 9vw, 42px); --btn: clamp(30px, 4.6vh, 40px); --blk: clamp(30px, 4.8vh, 42px);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overscroll-behavior: none; overflow: hidden; }
+body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; letter-spacing: .03em;
+       -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+/* one screen high: 100dvh is what Safari's bars leave; the screen takes the room the controls don't */
+.app { display: flex; flex-direction: column; gap: var(--gap); height: 100vh; height: 100dvh; max-width: 560px; margin: 0 auto;
+       padding: max(6px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right))
+       max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); }
+.bar { display: flex; align-items: center; gap: 10px; min-height: 28px; flex: none; }
+.bar b { font-size: 14px; letter-spacing: .06em; }
+.bar small { color: var(--mid); font-weight: 500; }
+.bar .sp { flex: 1; }
+.bar button, .sheet button, .sheet .file { font: inherit; color: var(--ink); background: var(--part); border: 1px solid var(--edge);
+       border-radius: 8px; padding: 6px 11px; }
+.L, .R { display: flex; flex-direction: column; gap: var(--gap); min-height: 0; }
+.L { flex: 1; }
+.R { flex: none; }
+.hold { flex: 1; min-height: 0; display: grid; place-items: center; }
+.scr { width: 240px; height: 240px; padding: 6px; border-radius: 12px; background: #050506;
+       box-shadow: 0 0 0 1px #000, 0 0 24px rgba(244, 208, 74, .06), inset 0 0 0 1px #1f1f22; }
+.scr canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; image-rendering: crisp-edges;
+              border-radius: 3px; background: #000; }
+.row { display: grid; gap: var(--gap); flex: none; }
+/* the knobs, as on the FM-1: SELECT, ALGORITHM, PRESETS (and VOL) on the left, KNOB 1-4 on the right; drag up or down */
+.knobs { grid-template-columns: repeat(4, minmax(0, 1fr)) 6px repeat(4, minmax(0, 1fr)); gap: 2px; align-items: end; }
+.kn { display: flex; flex-direction: column; align-items: center; gap: 3px; touch-action: none; cursor: ns-resize; min-width: 0; }
+.kn .face { position: relative; width: var(--knob); height: var(--knob); border-radius: 50%;
+            background: radial-gradient(circle at 50% 30%, #47474b 0%, #232326 48%, #101011 100%);
+            box-shadow: 0 0 0 1px #070707, 0 3px 6px #000c, inset 0 1px 1px #ffffff1c; }
+.kn .face::after { content: ""; position: absolute; inset: 17%; border-radius: 50%;
+                   background: radial-gradient(circle at 50% 35%, #2d2d30, #151516 75%); box-shadow: 0 1px 2px #0008; }
+.kn .ind { position: absolute; inset: 0; z-index: 1; }
+.kn .ind::before { content: ""; position: absolute; left: calc(50% - 1.5px); top: 7%; width: 3px; height: 30%; border-radius: 2px;
+                   background: var(--accent); box-shadow: 0 0 5px #f4d04a88; }
+.kn.vol .face::before { content: ""; position: absolute; inset: -4px; border-radius: 50%;
+  background: conic-gradient(from -135deg, var(--accent) 0 calc(var(--level, .68) * 270deg), #3d3d41 0 270deg, transparent 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px)); }
+.kn .nm { font-size: 9.5px; color: var(--mid); white-space: nowrap; overflow: hidden; max-width: 100%; letter-spacing: .02em; }
+.kn.on .nm { color: var(--accent); }
+/* the buttons, two rows of seven as on the FM-1, lit as its are */
+.btns { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.c { position: relative; touch-action: none; border-radius: 8px; background: var(--part); border: 1px solid var(--edge);
+     display: grid; place-content: center; text-align: center; transition: background .05s, box-shadow .05s; }
+.b { height: var(--btn); padding: 0 2px; }
+.b .nm { font-size: 11px; }
+.b.rec .nm { color: var(--rec); }
+.b.dim { background: #2a2925; }
+.b.breath { animation: breath 1.13s ease-in-out infinite; }
+.b.lit { background: var(--lit); }
+.b.lit .nm { color: #1d1d1f; }
+.b.green { background: var(--green); }
+.b.green .nm { color: #0d2414; }
+.held { box-shadow: 0 0 0 2px var(--lit); }
+@keyframes breath { 0%, 100% { background: var(--part); } 50% { background: #6c675a; } }
+/* the keys: the 11 black ones in a row (tracks, then bars, as on the FM-1), the 16 white ones as square pads; each
+   with a light along its bottom, as the FM-1's slit */
+.blacks { grid-template-columns: repeat(7, minmax(0, 1fr)) 4px repeat(4, minmax(0, 1fr)); gap: 4px; }
+.steps { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+.p { background: #1a1a1d; border-radius: 8px; }
+.blacks .p { height: var(--blk); background: #141416; }
+.steps .p { aspect-ratio: 1; max-height: 52px; }
+.p .nm { font-size: 10.5px; color: var(--mid); margin-bottom: 4px; }
+.blacks .p .nm { font-size: 10px; color: var(--col); }
+.p::after { content: ""; position: absolute; left: 22%; right: 22%; bottom: 5px; height: 3px; border-radius: 2px;
+            background: #2c2c30; transition: background .05s, box-shadow .05s; }
+.p.dim::after { background: #55555b; }
+.p.mid::after { background: #8a8a90; }
+.p.breath::after { animation: slit 1.13s ease-in-out infinite; }
+.p.lit { background: #26262a; }
+.p.lit::after { background: var(--col, var(--lit)); box-shadow: 0 0 10px var(--col, var(--lit)); }
+.p.lit .nm { color: var(--ink); }
+.blacks .p.lit .nm { color: var(--col); }
+.steps .p:nth-child(4n+1) { background: #202024; }
+@keyframes slit { 0%, 100% { background: #2c2c30; } 50% { background: #b9b9be; } }
+.p.held { background: #303036; }
+.gap { pointer-events: none; }
+/* landscape: the screen on the left, the controls on the right */
+@media (orientation: landscape) {
+  .app { max-width: none; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr);
+         column-gap: 14px; }
+  .bar { grid-column: 1 / -1; }
+  .L { height: 100%; }
+  .R { justify-content: center; max-width: 640px; }
+  :root { --knob: clamp(28px, 8.5vh, 44px); --btn: clamp(26px, 7.6vh, 40px); --blk: clamp(26px, 7.8vh, 42px); }
+  .steps .p { aspect-ratio: auto; height: clamp(28px, 9vh, 52px); }
+}
+/* switching on; the kits sheet */
+.start { position: fixed; inset: 0; display: grid; place-content: center; justify-items: center; gap: 14px; padding: 24px;
+         background: rgba(5, 5, 6, .86); text-align: center; z-index: 5; }
+.start[hidden] { display: none; }
+.start button { font: inherit; font-size: 18px; padding: 14px 34px; border-radius: 12px; border: 0; background: var(--accent); color: #1b1a12; }
+.start p { margin: 0; max-width: 30em; color: var(--mid); font-weight: 500; line-height: 1.5; }
+.sheet { position: fixed; left: 0; right: 0; bottom: 0; max-height: 82vh; overflow: auto; z-index: 6; background: #18181b;
+         border-top: 1px solid var(--edge); border-radius: 16px 16px 0 0; padding: 16px max(16px, env(safe-area-inset-right))
+         max(18px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); font-weight: 500; line-height: 1.5;
+         transform: translateY(105%); transition: transform .2s; -webkit-user-select: text; user-select: text; }
+.sheet.open { transform: none; }
+.sheet h2 { margin: 0 0 6px; font-size: 16px; }
+.sheet h3 { margin: 14px 0 4px; font-size: 13px; }
+.sheet p { margin: 8px 0; color: #c8c8cc; }
+.sheet a { color: var(--mid); }
+.sheet .file { display: inline-block; position: relative; overflow: hidden; }
+.sheet .file input { position: absolute; inset: 0; opacity: 0; }
+.sheet label.o { display: block; margin: 6px 0; color: var(--mid); }
+.sheet select, .sheet input[type=number] { font: inherit; background: var(--part); color: var(--ink); border: 1px solid var(--edge); border-radius: 6px; }
+.sheet .fine { color: var(--dim); font-size: 11px; }
+#kstatus { color: var(--accent); min-height: 1.5em; }
+@media (prefers-reduced-motion: reduce) { .b.breath, .p.breath::after { animation: none; } .sheet { transition: none; } }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <div class="bar"><b>ELIXIR</b><small>@VERSION@</small><span class="sp"></span>
+    <button id="kitsbtn" type="button">Kits</button></div>
+  <div class="L">
+    <div class="hold" id="hold"><div class="scr" id="scr"><canvas id="screen" width="240" height="240" role="img" aria-label="The screen"></canvas></div></div>
+  </div>
+  <div class="R">
+    <div class="row knobs" id="knobs"></div>
+    <div class="row btns" id="btns"></div>
+    <div class="row blacks" id="blacks"></div>
+    <div class="row steps" id="steps"></div>
+  </div>
+</div>
+
+<div class="start" id="start"><button id="go" type="button">Switch on</button>
+  <p id="status">The FM-1 running Elixir, in your browser. Turn your phone sideways for a wider layout. Saves and kits stay in this browser.</p></div>
+
+<div class="sheet" id="sheet" role="dialog" aria-label="Kits">
+  <h2>Kits</h2>
+  <p>Bring LXR-02 kits (.SND files) in. They stay in this browser, with your saved projects, until you clear its data.
+    On an iPhone, pick several .SND files in Files, or a <b>.zip</b> of a kit folder or a whole SD card.</p>
+  <label class="o">Into <select id="kdest"><option value="lib">the kit library (128)</option><option value="slots">the kit slots (64)</option></select>
+    from number <input id="kfirst" type="number" min="1" max="128" value="1" style="width:4.2em"></label>
+  <label class="o"><input id="kskip" type="checkbox" checked> leave out Init and empty kits</label>
+  <p><span class="file">Pick .SND or .zip<input id="kfiles" type="file" accept=".snd,.SND,.zip,application/zip" multiple></span></p>
+  <p>Then turn <b>PRESETS</b> for the kit browser, <b>KNOB 1</b> to switch between the slots and the library, and
+    <b>OCT+</b> to load one. SAVE → PROJECT keeps kits loaded into slots with a project.</p>
+  <p><button id="kbackup" type="button">Download the kit library</button> (.ktlb: the library page puts it on an FM-1)</p>
+  <p><span class="file">Restore a kit library<input id="krestore" type="file" accept=".ktlb"></span></p>
+  <p id="kstatus"></p>
+  <h3>Playing it</h3>
+  <p>Drag a knob up or down. The black keys are the FM-1's: D1 … OH select a track, 1–4 show a bar. OCT− is SHIFT,
+    OCT+ is COPY / OK; hold one with a finger and press with another for combinations.</p>
+  <p class="fine"><a href="@SITE@">Elixir</a> · <a href="@BASE@index.html">Full emulator</a> · <a href="@SITE@manual/">Manual</a> · GPL-3.0 ·
+    an unofficial port of the Erica Synths LXR-02 firmware, not affiliated with Erica Synths or M-VAVE</p>
+  <p><button id="kclose" type="button">Close</button></p>
+</div>
+
+<script type="module">
+import { Library, sndFiles, KL_KIT, packKitLib, unpackKitLib } from "@BASE@library.js";
+const BASE = "@BASE@";
+// panel.c's labels (bit = label) and encoder roles, as the emulator page
+const B = { FX: 0, SCL: 1, ENV: 2, LFO: 3, EDIT: 4, GLO: 5, HOME: 6, SAVE: 7, ARP: 8, SEQ: 9, PLAY: 10, REC: 11, "OCT-": 12, "OCT+": 13 };
+const EN = { SELECT: 0, ALGORITHM: 1, PRESETS: 2, "KNOB 1": 3, "KNOB 2": 4, "KNOB 3": 5, "KNOB 4": 6 };
+const PLAY_GREEN = 14;
+const WHITE = [0, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 24, 26];   // key k: k semitones above F3
+const BLACK = [1, 3, 5, 8, 10, 13, 15, 17, 20, 22, 25];
+const STORE = "elixir-emu-flash", OLD = (k) => k.replace("elixir-", "kettle-");
+const ROWS = [["OCT-", "FX", "SCL", "ENV", "LFO", "EDIT", "GLO"], ["OCT+", "HOME", "SAVE", "ARP", "SEQ", "PLAY", "REC"]];
+const SUB = { FX: "FX", SCL: "FILTER", ENV: "AMP", LFO: "LFO", EDIT: "OSC", GLO: "MIX", HOME: "GRID", SAVE: "SAVE",
+              ARP: "PERF", SEQ: "STEP", PLAY: "", REC: "", "OCT-": "SHIFT", "OCT+": "COPY/OK" };
+const TRACKS = ["D1", "D2", "D3", "SN", "CY", "CH", "OH"];
+
+let node = null, btnMask = 0, keyMask = 0;
+const send = (m) => { if (node) node.port.postMessage(m); };
+const held = new Map();                                    // pointer -> {btn} | {key}
+const buttons = [], keys = [];
+const div = (cls, parent, html = "") => { const d = document.createElement("div"); d.className = cls; d.innerHTML = html; parent.appendChild(d); return d; };
+const buzz = () => { try { navigator.vibrate?.(6); } catch {} };
+
+// ------------------------------------------------------------------ the controls
+function sync() {
+  let b = 0, k = 0;
+  for (const h of held.values()) { if (h.btn !== undefined) b |= 1 << h.btn; else k |= 1 << h.key; }
+  if (b !== btnMask) { btnMask = b; send({ type: "buttons", mask: b }); }
+  if (k !== keyMask) { keyMask = k; send({ type: "keys", mask: k }); }
+  for (const x of buttons) x.el.classList.toggle("held", !!(b & (1 << x.bit)));
+  for (const x of keys) if (x) x.el.classList.toggle("held", !!(k & (1 << x.k)));
+}
+function press(el, what) {
+  el.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    el.setPointerCapture(e.pointerId);
+    held.set(e.pointerId, what);
+    buzz();
+    sync();
+  });
+  const up = (e) => { if (held.delete(e.pointerId)) sync(); };
+  for (const t of ["pointerup", "pointercancel", "lostpointercapture"]) el.addEventListener(t, up);
+  el.addEventListener("contextmenu", (e) => e.preventDefault());
+}
+for (const row of ROWS)
+  for (const n of row) {
+    const el = div("c b" + (n === "REC" ? " rec" : ""), document.getElementById("btns"), `<span class="nm">${n.replace("-", "−")}</span>`);
+    buttons.push({ el, bit: B[n] });
+    press(el, { btn: B[n] });
+  }
+const blacks = document.getElementById("blacks");
+BLACK.forEach((k, j) => {
+  if (j === 7) div("gap", blacks);
+  const el = div("c p", blacks, `<span class="nm">${j < 7 ? TRACKS[j] : j - 6}</span>`);
+  el.style.setProperty("--col", j < 7 ? `var(--t${j})` : "var(--bar)");
+  el.setAttribute("aria-label", j < 7 ? `track ${TRACKS[j]}` : `bar ${j - 6}`);
+  keys[k] = { el, k };
+  press(el, { key: k });
+});
+WHITE.forEach((k, i) => {
+  const el = div("c p", document.getElementById("steps"), `<span class="nm">${i + 1}</span>`);
+  keys[k] = { el, k };
+  press(el, { key: k });
+});
+// a knob: drag up (or right) for clockwise, ~10 px a detent; the indicator turns 15 degrees a detent
+function knob(parent, name, onTurn, cls = "") {
+  const el = div("kn" + cls, parent, `<span class="face"><span class="ind"></span></span><span class="nm">${name}</span>`);
+  el.setAttribute("role", "slider");
+  el.setAttribute("aria-label", name);
+  const ind = el.querySelector(".ind");
+  let drag = null, angle = 0;
+  el.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    el.setPointerCapture(e.pointerId);
+    drag = { x: e.clientX, y: e.clientY, acc: 0 };
+    el.classList.add("on");
+  });
+  el.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = drag.y - e.clientY;
+    drag.acc += Math.abs(dx) > Math.abs(dy) ? dx : dy;
+    drag.x = e.clientX;
+    drag.y = e.clientY;
+    const n = Math.trunc(drag.acc / 10);
+    if (n) { drag.acc -= n * 10; const a = onTurn(n); angle = a ?? angle + 15 * n; ind.style.transform = `rotate(${angle}deg)`; }
+  });
+  const end = () => { drag = null; el.classList.remove("on"); };
+  for (const t of ["pointerup", "pointercancel"]) el.addEventListener(t, end);
+  el.addEventListener("contextmenu", (e) => e.preventDefault());
+  return { el, ind };
+}
+const knobs = document.getElementById("knobs");
+for (const n of ["SELECT", "ALGORITHM", "PRESETS"]) knob(knobs, n === "ALGORITHM" ? "ALGO" : n === "PRESETS" ? "PRESET" : n, (d) => send({ type: "enc", role: EN[n], n: d }));
+// VOL: the one absolute knob (the master level, 0..1023), shown as an arc
+let volume = 700;
+try { volume = Math.max(0, Math.min(1023, +(localStorage.getItem("elixir-mobile-vol") ?? 700))); } catch {}
+const volAngle = () => -135 + 270 * volume / 1023;
+const vk = knob(knobs, "VOL", (d) => {
+  volume = Math.max(0, Math.min(1023, volume + d * 16));
+  vk.el.style.setProperty("--level", volume / 1023);
+  send({ type: "master", value: volume });
+  try { localStorage.setItem("elixir-mobile-vol", volume); } catch {}
+  return volAngle();
+}, " vol");
+vk.el.style.setProperty("--level", volume / 1023);
+vk.ind.style.transform = `rotate(${volAngle()}deg)`;
+div("gap", knobs);
+["KNOB 1", "KNOB 2", "KNOB 3", "KNOB 4"].forEach((n) => knob(knobs, n, (d) => send({ type: "enc", role: EN[n], n: d })));
+// the screen as large as the room the controls leave, in whole firmware pixels where that costs little
+const hold = document.getElementById("hold"), scr = document.getElementById("scr");
+function fit() {
+  const land = matchMedia("(orientation: landscape)").matches;
+  const room = land ? Math.min(hold.clientHeight, innerWidth * 0.5) : Math.min(hold.clientWidth, hold.clientHeight);
+  const dpr = devicePixelRatio || 1, inner = room - 12, whole = Math.floor(inner * dpr / 240) * 240 / dpr;
+  const side = Math.max(120, (whole >= inner * 0.9 ? whole : inner) + 12);
+  scr.style.width = scr.style.height = `${Math.floor(side)}px`;
+}
+new ResizeObserver(fit).observe(hold);
+addEventListener("resize", fit);
+fit();
+
+// ------------------------------------------------------------------ the screen and the lights
+const ctx = document.getElementById("screen").getContext("2d"), img = ctx.createImageData(240, 240);
+function drawScreen(fb) {
+  const d = img.data;
+  for (let i = 0; i < 240 * 240; i++) {
+    const v = fb[i], p = ((v >> 8) | (v << 8)) & 0xFFFF;
+    d[i * 4] = ((p >> 11) & 31) * 255 / 31;
+    d[i * 4 + 1] = ((p >> 5) & 63) * 255 / 63;
+    d[i * 4 + 2] = (p & 31) * 255 / 31;
+    d[i * 4 + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+}
+function drawLights([litB, litK, dimB, dimK, , brB = 0, brK = 0, midK = 0]) {
+  for (const x of buttons) {
+    const bit = 1 << x.bit, green = x.bit === B.PLAY && (litB & (1 << PLAY_GREEN));
+    x.el.classList.toggle("lit", !!(litB & bit) && !green);
+    x.el.classList.toggle("green", !!green);
+    x.el.classList.toggle("dim", !!(dimB & bit));
+    x.el.classList.toggle("breath", !!(brB & bit));
+  }
+  for (const x of keys) {
+    if (!x) continue;
+    const bit = 1 << x.k;
+    x.el.classList.toggle("lit", !!(litK & bit));
+    x.el.classList.toggle("dim", !!(dimK & bit));
+    x.el.classList.toggle("breath", !!(brK & bit));
+    x.el.classList.toggle("mid", !!(midK & bit));
+  }
+}
+
+// ------------------------------------------------------------------ the flash, kept in this browser (as index.html)
+function loadFlash() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORE) || localStorage.getItem(OLD(STORE)) || "{}"), out = {};
+    for (const [off, b64] of Object.entries(raw)) out[off] = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    return out;
+  } catch { return {}; }
+}
+function saveFlash(sectors) {
+  try {
+    const raw = {};
+    for (const [off, u8] of Object.entries(sectors)) {
+      let s = "";
+      for (let i = 0; i < u8.length; i += 4096) s += String.fromCharCode.apply(null, u8.subarray(i, i + 4096));
+      raw[off] = btoa(s);
+    }
+    localStorage.setItem(STORE, JSON.stringify(raw));
+    return true;
+  } catch { return false; }
+}
+
+// ------------------------------------------------------------------ switching on
+let wake = null;
+async function keepAwake() { try { wake = await navigator.wakeLock?.request("screen"); } catch {} }
+async function switchOn() {
+  const go = document.getElementById("go"), status = document.getElementById("status");
+  go.disabled = true;
+  go.textContent = "Starting…";
+  try {
+    if (navigator.audioSession) navigator.audioSession.type = "playback";   // (iPhone: sound with the silent switch on)
+    const ac = new AudioContext({ sampleRate: 44100, latencyHint: "interactive" });
+    const [wasm] = await Promise.all([
+      fetch(BASE + "elixir.wasm").then((r) => { if (!r.ok) throw new Error(`elixir.wasm: ${r.status}`); return r.arrayBuffer(); }),
+      ac.audioWorklet.addModule(BASE + "worklet.js")]);
+    node = new AudioWorkletNode(ac, "elixir", { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
+    node.connect(ac.destination);
+    await new Promise((res, rej) => {
+      node.port.onmessage = (e) => {
+        const m = e.data;
+        if (m.type === "ready") res();
+        else if (m.type === "error") rej(new Error(m.message));
+        else if (m.type === "lib") { const w = libWait.get(m.id); libWait.delete(m.id); if (w) w(m.wire); }
+        else if (m.type === "frame") {
+          if (m.fb) drawScreen(m.fb);
+          if (m.leds) drawLights(m.leds);
+          if (m.sectors) saveFlash(m.sectors);
+        }
+      };
+      node.port.postMessage({ type: "load", wasm, sectors: loadFlash(), master: volume }, [wasm]);
+    });
+    await ac.resume();
+    document.getElementById("start").hidden = true;
+    send({ type: "visible", on: !document.hidden });
+    keepAwake();
+    document.addEventListener("visibilitychange", () => {
+      send({ type: "visible", on: !document.hidden });
+      if (!document.hidden) { ac.resume(); keepAwake(); }
+    });
+  } catch (err) {
+    node = null;
+    go.disabled = false;
+    go.textContent = "Switch on";
+    status.textContent = "Could not start: " + (err && err.message || err) + ". A current Safari, Chrome or Firefox should work.";
+  }
+}
+document.getElementById("go").addEventListener("click", switchOn);
+
+// ------------------------------------------------------------------ kits: .SND files or a .zip, into the library
+const libWait = new Map();
+let libId = 0;
+const lib = new Library({
+  request(wire) {
+    if (!node) return Promise.resolve(null);
+    const id = ++libId;
+    return new Promise((res) => {
+      const tm = setTimeout(() => { libWait.delete(id); res(null); }, 3000);
+      libWait.set(id, (w) => { clearTimeout(tm); res(w); });
+      node.port.postMessage({ type: "lib", id, wire });
+    });
+  },
+});
+const $ = (id) => document.getElementById(id), say = (s) => { $("kstatus").textContent = s; };
+const sheet = $("sheet");
+$("kitsbtn").addEventListener("click", () => sheet.classList.add("open"));
+$("kclose").addEventListener("click", () => sheet.classList.remove("open"));
+$("kdest").addEventListener("change", () => { $("kfirst").max = $("kdest").value === "lib" ? 128 : 64; });
+// a .zip's .SND files (stored or deflated; the browser's own inflate), as sndFiles takes them
+async function zipFiles(file) {
+  const b = new Uint8Array(await file.arrayBuffer()), v = new DataView(b.buffer), out = [];
+  let e = b.length - 22;
+  while (e >= 0 && v.getUint32(e, true) !== 0x06054b50) e--;
+  if (e < 0) throw new Error("not a zip file");
+  let p = v.getUint32(e + 16, true);
+  const n = v.getUint16(e + 10, true), dec = new TextDecoder();
+  for (let i = 0; i < n && v.getUint32(p, true) === 0x02014b50; i++) {
+    const method = v.getUint16(p + 10, true), csize = v.getUint32(p + 20, true), nl = v.getUint16(p + 28, true);
+    const xl = v.getUint16(p + 30, true), cl = v.getUint16(p + 32, true), lo = v.getUint32(p + 42, true);
+    const name = dec.decode(b.subarray(p + 46, p + 46 + nl));
+    p += 46 + nl + xl + cl;
+    if (!/\.snd$/i.test(name) || /(^|\/)(__MACOSX|\._)/.test(name)) continue;
+    const start = lo + 30 + v.getUint16(lo + 26, true) + v.getUint16(lo + 28, true), raw = b.subarray(start, start + csize);
+    let data;
+    if (method === 0) data = raw.slice();
+    else if (method === 8) data = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer());
+    else continue;
+    const base = name.split("/").pop();
+    out.push({ name: base, webkitRelativePath: name, arrayBuffer: async () => data.buffer });
+  }
+  return out;
+}
+$("kfiles").addEventListener("change", async (ev) => {
+  const picked = [...ev.target.files];
+  ev.target.value = "";
+  if (!node) { say("Switch Elixir on first."); return; }
+  try {
+    let files = [];
+    for (const f of picked) files = files.concat(/\.zip$/i.test(f.name) ? await zipFiles(f) : [f]);
+    const kits = await sndFiles(files, { skipInit: $("kskip").checked }), toLib = $("kdest").value === "lib";
+    if (!kits.length) { say("No LXR-02 kit files (.SND) there."); return; }
+    const max = toLib ? 128 : 64, first = Math.max(1, Math.min(max, +$("kfirst").value || 1)) - 1;
+    const n = Math.min(kits.length, max - first);
+    for (let i = 0; i < n; i++) {
+      if (toLib) await lib.libPut(KL_KIT, first + i, kits[i].name, kits[i].data);
+      else await lib.kitPut(first + i, kits[i].name, kits[i].data, i === 0);
+      say(`Importing ${i + 1} of ${n}: ${kits[i].name}`);
+    }
+    say(`${n} kits in ${toLib ? "the library" : "the slots"}, ${first + 1}–${first + n}` +
+        `${kits.length > n ? ` (${kits.length - n} more didn't fit)` : ""}. They are kept in this browser.`);
+  } catch (err) { say("Import stopped: " + err.message); }
+});
+$("kbackup").addEventListener("click", async () => {
+  if (!node) { say("Switch Elixir on first."); return; }
+  try {
+    const entries = await lib.libBackup();
+    if (!entries.length) { say("The kit library is empty."); return; }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([packKitLib(entries)], { type: "application/octet-stream" }));
+    a.download = `elixir-kits-mobile-${new Date().toISOString().slice(0, 10)}.ktlb`;
+    a.click();
+    say(`Downloaded ${entries.length} kits and sounds.`);
+  } catch (err) { say("Download failed: " + err.message); }
+});
+$("krestore").addEventListener("change", async (ev) => {
+  const f = ev.target.files[0];
+  ev.target.value = "";
+  if (!f || !node) { if (!node) say("Switch Elixir on first."); return; }
+  try {
+    const entries = unpackKitLib(await f.arrayBuffer());
+    await lib.libRestore(entries, (d, t) => say(`Restoring: ${Math.round(100 * d / t)}%`));
+    say(`Restored ${entries.length} kits and sounds into the kit library.`);
+  } catch (err) { say("Restore failed: " + err.message); }
+});
+document.addEventListener("gesturestart", (e) => e.preventDefault());   // (Safari: no pinch zoom on the panel)
+</script>
+</body>
+</html>

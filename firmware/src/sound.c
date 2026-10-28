@@ -22,9 +22,10 @@ enum {
     PAR_REV_SIZE = PAR_REV_SEND1 + 6,
     PAR_REV_DAMP,
     PAR_REV_LEVEL,                               /* the reverb's return */
-    PAR_REV_TYPE,                                /* ROOM SPRING HALL (not lockable) */
+    PAR_REV_TYPE,                                /* ROOM SPRING HALL PLATE (not lockable) */
     PAR_BITS1,                                   /* bit reduction 0 (16 bits) .. 15 (1 bit) */
-    PAR_SHAPE1 = PAR_BITS1 + 6,                  /* the waveshaper: the LXR's, FOLD, CLIP, ASYM, RECTIFY */
+    PAR_SHAPE1 = PAR_BITS1 + 6,                  /* the waveshaper: the LXR's, FOLD, CLIP, ASYM, RECTIFY; 23a: FUZZ,
+                                                  * TAPE, SINE FOLD, BITE */
     PAR_TILT1 = PAR_SHAPE1 + 6,                  /* tilt EQ, 64 flat */
     PAR_CHOKE1 = PAR_TILT1 + 6,                  /* choke group 0 (none) .. 4 */
     PAR_RND_PITCH1 = PAR_CHOKE1 + 6,             /* random per hit: pitch, decay, filter, pan */
@@ -45,7 +46,25 @@ enum {
     PAR_MEXC1 = PAR_MPOS1 + 6,
     PAR_MTENS1 = PAR_MEXC1 + 6,
     PAR_LFOMODE1 = PAR_MTENS1 + 6,               /* 0.13: the LFO's mode (voices.c LM_*: TRIG HOLD ONE HALF) */
-    NPAR = PAR_LFOMODE1 + 6
+    PAR_GATE1 = PAR_LFOMODE1 + 6,                /* 19b: GATE: the amp EG held for the note's length (off: the LXR's) */
+    PAR_DSYNC = PAR_GATE1 + 6,                   /* 21: the delay's SYNC (TIME as note values), SATURATE (TAPE), ECHO >
+                                                  * REVERB, GLITCH (TAPE), PITCH (TAPE: the repeats shifted) */
+    PAR_DSAT,
+    PAR_ECHOREV,
+    PAR_GLITCH,
+    PAR_DPITCH,
+    PAR_FXDIRT,                                  /* 23b: the FX bus's drive, before its type (0: off) */
+    PAR_MDIRT,                                   /* 23c: the master's DIRT: its TYPE (fxbus.c DT_*), AMOUNT (0: off) */
+    PAR_MDIRT_AMT,
+    PAR_MC_RATIO,                                /* 0.16: the master COMPRESSOR (fxbus.c mc): RATIO (0: off), THRESHOLD,
+                                                  * ATTACK, RELEASE, SIDECHAIN (0: the mix, 1..6 a voice), MAKEUP, MIX */
+    PAR_MC_THR,
+    PAR_MC_ATK,
+    PAR_MC_REL,
+    PAR_MC_SRC,
+    PAR_MC_GAIN,
+    PAR_MC_MIX,
+    NPAR
 };
 #define KIT_LEN (END_OF_SOUND_PARAMETERS + NPAR - NUM_PARAMS)
 #define KIT_GAP (NUM_PARAMS - END_OF_SOUND_PARAMETERS)
@@ -106,7 +125,7 @@ static uint32_t lock_target_idx(uint32_t p)          /* (Elixir's parameter p: i
 static uint32_t par_max_k(uint32_t p)
 {
     if (p == PAR_REV_TYPE)
-        return 2;
+        return NREV - 1u;
     if (p >= PAR_BITS1 && p < PAR_BITS1 + 6u)
         return 15;
     if (p >= PAR_SHAPE1 && p < PAR_SHAPE1 + 6u)
@@ -121,6 +140,18 @@ static uint32_t par_max_k(uint32_t p)
         return NMODEL - 1u;
     if (p >= PAR_LFOMODE1 && p < PAR_LFOMODE1 + 6u)
         return NLFOMODE - 1u;
+    if (p >= PAR_GATE1 && p < PAR_GATE1 + 6u)
+        return 1;
+    if (p == PAR_DSYNC)
+        return 1;
+    if (p == PAR_DPITCH)
+        return NDPITCH - 1u;
+    if (p == PAR_MDIRT)
+        return NDIRT - 1u;
+    if (p == PAR_MC_RATIO)
+        return NCRATIO - 1u;
+    if (p == PAR_MC_SRC)
+        return NVOICE;
     return 127;
 }
 
@@ -134,7 +165,8 @@ static int morph_excluded(uint32_t p)            /* the outputs and the modulati
 {
     return (p >= PAR_AUDIO_OUT1 && p <= PAR_AUDIO_OUT6) || (p >= PAR_VEL_DEST_1 && p <= PAR_VEL_DEST_6) ||
            (p >= PAR_VOICE_LFO1 && p <= PAR_TARGET_LFO6) || p == PAR_FX_TYPE || p == PAR_MORPH_KIT_DEST ||
-           p == PAR_REV_TYPE || (p >= PAR_MODEL1 && p < PAR_MODEL1 + 6u) || (p >= PAR_LFOMODE1 && p < NPAR);
+           p == PAR_REV_TYPE || (p >= PAR_MODEL1 && p < PAR_MODEL1 + 6u) || (p >= PAR_LFOMODE1 && p <= PAR_DSYNC) ||
+           p == PAR_DPITCH || p == PAR_MDIRT || p == PAR_MC_RATIO || p == PAR_MC_SRC;
 }
 
 /* the value a parameter sounds with: an automation lock, else the kit's (morphed) */
@@ -450,12 +482,46 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
         break;
     case PAR_FX_DELAY_TYPE:
         if (fx.delay_type != itg) {
-            fx.delay_type = (uint8_t)(itg ? DELAY_PINGPONG : DELAY_NORMAL);
+            int was = is_tape();
+            fx.delay_type = (uint8_t)(itg < NDELAY ? itg : DELAY_NORMAL);
+            if (was != is_tape()) {                  /* (21: the line at another rate: from silence) */
+                memset(fxbuf, 0, sizeof fxbuf);
+                memset(&tp, 0, sizeof tp);
+            }
             fxbus_update();
         }
         break;
+    case PAR_DSYNC:
+        fx.d_sync = (uint8_t)(itg != 0u);
+        fxbus_update();
+        break;
+    case PAR_DSAT:
+        fx.d_sat = (int32_t)(itg & 127u);
+        break;
+    case PAR_ECHOREV:
+        fx.d_echorev = f;
+        break;
+    case PAR_GLITCH:
+        fx.d_glitch = (int32_t)(itg & 127u) * 516;
+        break;
+    case PAR_DPITCH:
+        fx.d_pitch = (uint8_t)(itg < NDPITCH ? itg : DP_OFF);
+        break;
+    case PAR_FXDIRT:
+        dirt.bus = f;
+        break;
+    case PAR_MDIRT:
+        dirt.type = (uint8_t)(itg < NDIRT ? itg : DT_TAPE);
+        break;
+    case PAR_MDIRT_AMT:
+        dirt.amt = f;
+        break;
+    case PAR_MC_RATIO: case PAR_MC_THR: case PAR_MC_ATK: case PAR_MC_REL: case PAR_MC_SRC: case PAR_MC_GAIN:
+    case PAR_MC_MIX:
+        mc_set(p - PAR_MC_RATIO, itg);
+        break;
     case PAR_REV_TYPE:
-        rv.type = (uint8_t)(itg < 3u ? itg : 0u);
+        rv.type = (uint8_t)(itg < NREV ? itg : 0u);
         break;
     case PAR_REV_SIZE:
         rv.size = (uint8_t)(itg & 127u);
@@ -497,6 +563,11 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
     case PAR_LFOMODE1: case PAR_LFOMODE1 + 1: case PAR_LFOMODE1 + 2: case PAR_LFOMODE1 + 3: case PAR_LFOMODE1 + 4:
     case PAR_LFOMODE1 + 5:
         lfo_mode_set(&vc[p - PAR_LFOMODE1].lfo, pick(itg < NLFOMODE ? itg : 0u, (uint32_t)f, mod, NLFOMODE));
+        break;
+    case PAR_GATE1: case PAR_GATE1 + 1: case PAR_GATE1 + 2: case PAR_GATE1 + 3: case PAR_GATE1 + 4: case PAR_GATE1 + 5:
+        vc[p - PAR_GATE1].gate = (uint8_t)(pick(itg ? 1u : 0u, (uint32_t)f, mod, 2) != 0u);
+        if (!vc[p - PAR_GATE1].gate)                 /* (off: a note held lets go) */
+            voice_hold(p - PAR_GATE1, 0);
         break;
     default:
         if (p >= PAR_MDECAY1 && p < PAR_LFOMODE1 && (p - PAR_MDECAY1) % 6u < 3u) {   /* the model's knobs, 0..127 */

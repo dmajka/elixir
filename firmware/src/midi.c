@@ -12,8 +12,9 @@
  *   - MIDI clock / start / continue / stop drive the sequencer when BPM is MIDI;
  *   - the filters (RX / TX: N notes, R realtime, C CC, P program change) and the soft thru (TRS in -> USB out:
  *     M2U, M2A; the LXR's routes to its DIN out have no jack here);
- *   - 0.12: the remote channel (CONFIG: REMOTE): its CCs and notes go to the remote map (remote.c, the main loop)
- *     and nowhere else, past the filters; the remote's feedback goes out from here. */
+ *   - 0.12: the remote channels (CONFIG: REMOTE; 0.16: two, TRACKS and GLOBAL): their CCs and notes go to the
+ *     remote map (remote.c, the main loop) and nowhere else, past the filters; the remote's feedback goes out from
+ *     here. */
 
 enum { MF_NOTE = 1, MF_RT = 2, MF_CC = 4, MF_PC = 8 };
 enum { MR_OFF, MR_U2M, MR_M2M, MR_A2M, MR_M2U, MR_M2A };
@@ -24,10 +25,10 @@ static uint16_t nrpn_num;
 static volatile uint8_t midi_seen;                  /* MIDI arrived (the UI's indicator) */
 static volatile uint16_t midi_cc_par;               /* the last parameter MIDI changed + 1 (the UI shows it) */
 
-/* 0.12: the remote: its channel (0..15, 0xFF off; the settings set it), what came in on it for the main loop
- * (remote.c), what the main loop sends back (its feedback) */
+/* 0.12: the remote: its channels (0..15, 0xFF off; the settings set them; 0.16: TRACKS' and GLOBAL's), what came in
+ * on them for the main loop (remote.c), what the main loop sends back (its feedback) */
 #define RQ 64u
-static volatile uint8_t remote_ch = 15u;
+static volatile uint8_t remote_ch = 14u, remote_gch = 15u;
 static volatile uint32_t rin_q[RQ], rout_q[RQ];
 static volatile uint8_t rin_w, rin_r, rout_w, rout_r;
 static void remote_in_post(uint32_t pkt)             /* (the audio ISR) */
@@ -71,6 +72,13 @@ static void midi_out_note(uint32_t t, uint32_t note, uint32_t vel)   /* seq_send
     midi_send(0x90u | midi_track_ch(t), n, vel);
     midi_note_on_of[t] = (uint8_t)n;
     midi_note_mask |= (uint8_t)(1u << t);
+}
+static void midi_out_legato(uint32_t t, uint32_t note, uint32_t vel)   /* 19b: a tied note's next: on, then the old off */
+{
+    uint32_t old = midi_note_on_of[t], held = (midi_note_mask >> t) & 1u;
+    midi_out_note(t, note, vel);
+    if (held && midi_note_on_of[t] != old)
+        midi_send(0x80u | midi_track_ch(t), old, 0);
 }
 static void midi_out_note_off(uint32_t t)            /* seq_midiNoteOff (sent even if TX N went off meanwhile) */
 {
@@ -201,7 +209,8 @@ static void midi_message(uint32_t pkt, uint32_t src)   /* midiParser_parseMidiMe
     midi_seen = 1;
     if (src == 2u && (route == MR_M2U || route == MR_M2A))   /* soft thru: the TRS input to USB */
         midi_out_event(pkt);
-    if (st < 0xF0u && (st & 15u) == remote_ch && ((st & 0xE0u) == 0x80u || (st & 0xF0u) == 0xB0u)) {
+    if (st < 0xF0u && ((st & 15u) == remote_ch || (st & 15u) == remote_gch) &&
+        ((st & 0xE0u) == 0x80u || (st & 0xF0u) == 0xB0u)) {
         remote_in_post(pkt);                         /* 0.12: the remote's notes and CCs */
         return;
     }
@@ -242,16 +251,23 @@ static void midi_message(uint32_t pkt, uint32_t src)   /* midiParser_parseMidiMe
 }
 
 /* 0.8: the notes the panel plays (KEYS; SHIFT + 1..7 audition), posted by the main loop: the audio ISR plays them at
- * its next block as a MIDI note in would be (MIDI out, recorded under REC; an audition is not recorded) */
+ * its next block as a MIDI note in would be (MIDI out, recorded under REC; an audition is not recorded). 19: in the
+ * track's scale (and TRANSPOSE); KEYS' notes hold a GATE voice (KF_HOLD) until the key's release (KF_REL) */
 #define KQ 8u
-#define KQ_NOREC 0x1000000u
+#define KF_REC 1u
+#define KF_HOLD 2u
+#define KF_REL 4u
+#define KQ_NOREC (1u << 24)
+#define KQ_HOLD (1u << 25)
+#define KQ_REL (1u << 26)
 static volatile uint32_t key_q[KQ];
 static volatile uint8_t key_w, key_r;
-static void key_note_post(uint32_t t, uint32_t note, uint32_t vel, int rec)
+static void key_note_post(uint32_t t, uint32_t note, uint32_t vel, uint32_t f)
 {
     if ((uint8_t)(key_w - key_r) >= KQ || t >= NTRACK)
         return;
-    key_q[key_w % KQ] = t | (note & 127u) << 8 | (vel & 127u) << 16 | (rec ? 0u : KQ_NOREC);
+    key_q[key_w % KQ] = t | (note & 127u) << 8 | (vel & 127u) << 16 | (f & KF_REC ? 0u : KQ_NOREC) |
+                        (f & KF_HOLD ? KQ_HOLD : 0u) | (f & KF_REL ? KQ_REL : 0u);
     RING_PUBLISH();
     key_w++;
 }
@@ -261,8 +277,16 @@ static void key_service(void)
         uint32_t e = key_q[key_r % KQ], t = e & 7u, note = (e >> 8) & 127u, vel = (e >> 16) & 127u;
         RING_PUBLISH();
         key_r++;
+        if (e & KQ_REL) {
+            voice_hold(t, 0);
+            midi_out_note_off(t);
+            continue;
+        }
+        note = scale_fit(t, note, 0);
         midi_out_note_off(t);
         voice_trigger(t, vel ? vel : 1u, note);
+        if (e & KQ_HOLD)
+            voice_hold(t, 1);
         if (!(e & KQ_NOREC))
             seq_add_note(t, vel ? vel : 1u, note);
         midi_out_note(t, note, vel ? vel : 1u);

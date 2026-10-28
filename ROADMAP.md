@@ -24,7 +24,8 @@ Elixir (called Kettle until 0.13) is the Erica Synths LXR-02 firmware (GPL-3.0) 
 - **0.12 (Phase 12, 12a–12e):** the remote map for an 8-column controller (Launch Control XL): CONFIG → REMOTE channel and knob mode, knob rows on CCs 8–119, buttons on notes 36–93, feedback over USB; NRPN morph and roll rate fixed. The controller templates (12f) are still to make. See *Phase 12*.
 - **0.14 (Phase 15):** renamed Elixir (Kettle until 0.13); a pixel-potion title screen; the install and library pages find the FM-1 under either name, so Kettle units update in place (`tests/install_test.mjs`); a new front page for the site. See *Phase 15*.
 - **0.15 (Phases 16 and 17a–17c, released 2026-10-27):** Plaits' sixteen original engines as models on D1–D3 (experimental, as Rings'); the second core renders D1–D3 (stock kits ~27% CPU on core 0, was ~45%), guarded, with a one-core fallback; at most two models at once (one on one core); CONFIG → LOAD, the load by part and the cores; morph refreshed as a sweep; Plaits' speech words found at boot. Tested on the unit through 0.15-test1 to test4. The manual says the models are experimental and not in the LXR-02. See *Phase 16*, *Phase 17*.
-- **Planned (research 2026-10-27): Phases 18–23:** groundwork (SRAM, the effects a block behind), a global scale, note lengths, density, a third global LFO, a melody generator, a tape/dub delay, a plate reverb, dirt. See *Phases 18–23*.
+- **0.16-test1 (Phases 18–23, built 2026-10-27, not yet tried on the unit):** groundwork (the effects a block behind on core 0, LIB_MAX), a scale per pattern that the tracks follow, note lengths and GATE, a third global LFO, DENSITY on PERF, a melody generator (after Marbles), a tape/dub delay (TAPE, TAPE PP, SYNC, ECHO > REVERB, GLITCH, PITCH), Clouds' plate as the reverb's fourth model, dirt (four more shapes, the bus's drive, a master DIRT). See *Phases 18–23*.
+- **0.16-test2 (built 2026-10-27, after the first try of test1):** the FX pages in order (REVERB, FX BUS, the type's parameters, DELAY: DUB and DELAY: SEND only on DELAY, DIRT); the remote map reworked onto two channels, TRACKS (15) and GLOBAL (16), every number used once per channel (mute and solo had shared CCs with knobs), buttons as CCs or notes, feedback the way a button last arrived, DENSITY's amount and track toggles added, random decay dropped, 0.15 settings migrated; the HYRULE palette (appended: saved ids stay); the site's LFO count fixed (three).
 - **0.14.1:** LFO MODE moved to the page right after the LFO's two pages (it was the last sound page); SELECT follows a fixed section order.
 - **0.13 (Phase 14):** the LFO's modes (TRIG, HOLD, ONE, HALF); two global LFOs on morph, the DJ filter and PERF's effects, down to 256 bars a cycle; CONFIG → BUTTONS, Last page; Euclid's second pulse (OR, XOR, AND, SUB). See *Phase 14*.
 - **MIDI:** USB and TRS in, USB out. CC/NRPN control as on the LXR; clock out always on; clock in by turning the tempo below its minimum to "MIDI".
@@ -836,7 +837,17 @@ The RAM / pool line only splits one SRAM, so the real spare is ~17 KB in all. Fl
 
 Every row is cheap except two: the plate needs 10–21 KB of SRAM and the effects need the critical-path fix (18b) before they grow. The kit's 7 spare bytes run out after about two features: raising LIB_MAX by 16–32 B is part of 18.
 
-#### Phase 18: groundwork (do first)
+#### Phase 18: groundwork (built in 0.16-test1, 2026-10-27)
+
+**Built.**
+- **18a.** The RAMTEXT gap is free: the AC79 SDK's own apps (`cpu/wl82/sdk_ld_sfc.c`) put ordinary RAM from 0x01C00000 (the TLB only with the MMU, which Elixir doesn't use), the boot ROM leaves nothing there, and the update loader runs only after a reset (its own map, 0x01C0A800). The 8 KB above it is *not* free: crt0 writes its status record at 0x01C07F00. A `.ram_buf` section (app.ld, `RAMBUF`, zeroed in `fm1_cstart`) now follows the RAM code there, and holds the reverb's buffers (ROOM's combs and allpasses, HALL's state: 13,156 B): the pool gets 13 KB back. build.py reports it (`RAMTEXT: code 3124 B, .ram_buf 13156 B, 8296 B free`). On the unit: any reverb that sounds as before proves the RAM.
+- **The stacks:** `stacks_paint` (main.c) marks the user (24 KB) and supervisor (8 KB) stacks at power-on below where it runs; CONFIG → LOAD shows their deepest use (`STACKS u + s B`, red past three quarters) under the cores line. To read on the unit after a busy session.
+- **18b. The effects a block behind, on core 0 while it waits** (`fx_early`, voices.c). Core 0 renders SN–HH, then runs the reverb on the *last* block's send (its return into `rev_wl`/`rev_wr`, added after the mixer: one block, 1.45 ms, late) and the delay's reads, then waits for core 1, then the mixer and the rest of the FX bus. The FX bus is an insert (a voice's dry part and its bus part meet in the mix), so it can't be a block late; only the delay's reads move: `delay_far` checks that every read of the block is a block or more behind the write head (delays from ~1.5 ms), and then `delay_reads` reads the echoes early, exactly as the loop would (no latency; shorter delays read between the writes as before). One core does the same in the same order, so the sound doesn't depend on the cores. JIANT's range check on the reverb's return: past 2^22, the lines are cleared and the block muted.
+- **18c.** LIB_MAX 400 → 432.
+- **Tests:** render_test renders every voice through the delay (a time change, a crossfade and a waiting time) with the reads early and with the effects all after the mixer (`FX_NOW`): the same bit for bit, 50 of 64 blocks read early; and each reverb model's return (the dry run subtracted) is the same one block later, bit for bit.
+- **Cost:** RAM .data+.bss 66,004 B as 0.15; pool 334,212 B (−13 KB); image 440,672 B.
+
+**The plan, as written before it was built:**
 
 - **18a. Find SRAM.** The candidates, each to verify before it is used:
   - **The RAMTEXT gap.** `app.ld` gives RAMTEXT 0x01C00000–0x01C06000; `.ram_text` and `.c1_text` end at 0x01C00C34, so ~21 KB of it is unused, plus 8 KB at 0x01C06000–0x01C08000 kept "for RAM-run debug". Check that nothing uses it while the app runs: the boot ROM, the SPL, core 1's start, the update loader (it runs only after the app is gone). If it's free, a `.ram_buf` section there holds the plate's lines.
@@ -846,7 +857,18 @@ Every row is cheap except two: the plate needs 10–21 KB of SRAM and the effect
 - **18c. Room in the kit.** LIB_MAX 400 → 432 (one static assert, ~100 B of pool), so the FX work below can add kit parameters. Kits in the library's flash entries (480 B) already have room.
 - **One-core units.** Everything here also lands on a unit that fell back to one core; 17f's governor (shed load in a fixed order) becomes more important. Suggested order: the plate to HALL, the pitch shifter off, oversampling off.
 
-#### Phase 19: global musical functions (scale, note length, density, a third LFO)
+#### Phase 19: global musical functions (built in 0.16-test1, 2026-10-27)
+
+**Built.**
+- **19a. Scales.** 17 scales (the list below has 17: CHROMATIC and 16), as 12-bit masks in seq.c (`SCALE_MASK`); the Marbles weights wait for Phase 20. Per pattern: ROOT, SCALE and FOLLOW (a bit per track, D1–D3 by default) on a new EUCLID page, SCALE (the pages: GENERATOR, ACTION, TRACK, SCALE, BOUNCE, LINKS; FOLLOW also on TRACK's KNOB 4). Absolute, as decided: `scale_fit` takes the voice's sounding semitone (its coarse tune + the note) to the nearest degree (a tie: the lower) and moves the note by the difference, so fine tune is kept. It quantizes whatever the sequencer plays through `seq_trigger` (the steps' notes, the links' pitch, ratchets, bounces), random pitch per hit (whole degrees, up to 7 either way), the ghosts, KEYS, and MIDI notes in (key_service). KEYS: the white keys play the degrees from the root at or below F3 (`key_scale_note`), the black keys stay chromatic. A blank pattern takes the project's last scale (`scl_last`, KSC1).
+- **19b. Note length.** GATE per voice (the amp EG page, `PAR_GATE1..`): the attack's top held (`EG_H`) while the note lasts. A step's length in cond's top 2 bits and prob's top bit (`step_len`), on STEP TIMING's KNOB 4: AUTO, 1/32, 1/16, 1/8, 1/8., 1/4, 1/2, TIE. A set length sends MIDI's note-off at its end (AUTO keeps the LXR's: the next tick); TIE slides into the next note (`voice_legato`: the pitch, nothing struck; MIDI: the new note on, then the old off). Every reader masks the bits (`step_cond`, `step_prob`, the library's import).
+- **19c. LFO 3**, PERF pages 9–11, and the new destinations DENSITY, TRANSPOSE (±7 degrees), the delay's FEEDBACK and TIME (±1/4 of the time, moved every 16 blocks), the REVERB send, MACRO 1–4 (every 8 ms while playing), and MELODY CHANGE / SPREAD (Phase 20). The new ones move either way from where they are (`gl.bi`).
+- **19d. DENSITY**, PERF page 3: DENSITY, GHOST VEL, BUILD; the black keys leave tracks out (struck through on the page), as designed. Thinning by a fixed rank (place in the bar, velocity, a per-pattern order); at −100% only the bar's first steps are left. GRIDS and TURING tracks get their density pushed instead (`gen_dens`). Saved with the project (KSC1).
+- **Project format 10:** the pattern's scale (only when not default), the step lengths (in cond's and prob's bits, already saved), KSC1 (6 B), LFO 3 in KGL1.
+- **Tests:** ui_test phase19 (the scales, KEYS in scale, a cleared pattern's scale, the project round trip, GATE and the MIDI note-off at a 1/4's end, TIE, DENSITY's order, ghosts and ratchets, the DENSITY page, LFO 3 on TRANSPOSE and LFO 2 on DENSITY); render_test as Phase 18 (bit for bit).
+- **Cost:** RAM .data+.bss 66,252 B (+248); pool 335,700 B (+1.5 KB); image 446,568 B (+5.9 KB).
+
+**The plan, as written before it was built:**
 
 - **19a. A global scale.** A root (C … B) and a scale. The list (16, each a 12-bit mask plus a weight per degree for 20's generator, in flash):
   - CHROMATIC (off: as today), MAJOR, MINOR, DORIAN, PHRYGIAN, MIXOLYDIAN, LYDIAN, HARMONIC MINOR, MINOR PENTATONIC, MAJOR PENTATONIC, BLUES;
@@ -872,7 +894,20 @@ Every row is cheap except two: the plate needs 10–21 KB of SRAM and the effect
   - Not done (simpler): a per-track CHANCE moved by Control All. The global knob and the exclusions cover the use; it can come later if wanted (~250 B of pool).
   - Cost: CPU ~0 (a compare per step), RAM ~16 B, project 3 B, flash ~2 KB.
 
-#### Phase 20: a melody generator
+#### Phase 20: a melody generator (built in 0.16-test1, 2026-10-27)
+
+**Built.**
+- **Where:** two pages after ACTION on the generator's set (ARP twice): MELODY (SHAPE, SPREAD, BIAS, STEPS) and MELODY: LOOP (DÉJÀ VU, LOOP 1–16, LENGTH, LEN VAR). 8 B per track per pattern (`pattern_t mel`, ML_*), saved in the version 10 track block. Beside any rhythm generator or none: it doesn't play from the live copy (`gpat`), it picks the note as each hit plays (`step_hit` → `mel_note`), so grid edits are heard at once.
+- **The notes:** degrees of the pattern's scale (19a), thinned by STEPS: every degree, then the chord tones (root, third, fifth, seventh), the triad, root and fifth at the top (weights by interval: root 4, fifth 3, third 2, seventh 1). The root sits at the voice's tune (as 19a's absolute scale), BIAS moves the centre ±1 octave, SPREAD the range (to ±1 octave either side, wider with ARP). RANDOM: a bell round BIAS. WALK: one or two degrees up or down from the last, back the other way at the range's edge. ARP UP / DN / U/D: the chord tones. MOTIF: four notes, then up two degrees, inverted round the first, backwards ending on the root (16 notes); a new motif with DÉJÀ VU's chance.
+- **DÉJÀ VU:** the chance of a new note in the loop's place is ((127 − DV) / 127)³: 0 always new, the middle "now and then" (~12%), 127 locked. The loop keeps semitones and is read through STEPS as it is now, so turning STEPS up simplifies a looping phrase.
+- **LENGTH / LEN VAR:** 19b's lengths; LEN VAR the chance of another (1/16, 1/8, 1/8., 1/4, TIE, 1/32, weighted to the first).
+- **COMMIT / UNDO / RESET** on ACTION whenever a melody runs: COMMIT writes the notes and lengths as they last played (`mel_n`, `mel_l`, kept after STOP) into the steps; RESET starts the melody (and its loop) again. The melody stays on after COMMIT (turn SHAPE OFF to keep the steps' notes).
+- **The global LFOs:** MELODY CHANGE (DÉJÀ VU down, so more new notes) and MELODY SPREAD, either way.
+- **Credit:** after the design of Marbles' X section (MIT, `LICENSES/MIT-Marbles.txt`); no Marbles code copied. The weighted scale tables and Marbles' beta distributions are left out (simpler).
+- **Tests:** ui_test phase20: the pages and defaults, RANDOM in the scale and changing, a locked loop of 4, STEPS at the top (root and fifth only), WALK's steps, ARP UP, MOTIF's fourth phrase, a length held, COMMIT and UNDO, the project, LFO on CHANGE.
+- **Cost:** RAM .data+.bss 66,572 B (+320); pool 338,556 B (+2.9 KB: the patterns' 8 B a track, `mel_n`, `mel_l`); image 449,736 B (+3.2 KB). CPU: a few hundred cycles a hit.
+
+**The plan, as written before it was built:**
 
 The rhythm generators decide *when* a track plays; this decides *which note*. It goes on its own page after GENERATOR (MELODY), separate from the generator slot, so EUCLID, GRIDS or TURING can make the rhythm while MELODY makes the notes, on the same track.
 
@@ -883,7 +918,20 @@ The rhythm generators decide *when* a track plays; this decides *which note*. It
 - **Where it sounds good:** D1–D3 with tuned models (Plaits VA, WTABLE, FM, CHORDS, STRING; Rings), SN's tonal oscillator. The hats, less so.
 - Cost: nothing on the CPU; ~300 B RAM, ~1.5 KB pool, 4–6 KB flash. Credit Marbles (MIT) in NOTICE.md and LICENSES/.
 
-#### Phase 21: the delay (dub echo, sync, glitch)
+#### Phase 21: the delay (dub echo, sync, glitch) (built in 0.16-test1, 2026-10-27)
+
+**Built.**
+- **21a. TAPE, TAPE PP:** DELAY's MODE 2 and 3 (`fx_tape`, fxbus.c). The line at half rate in the same `fxbuf` (1.49 s mono, 0.74 s a side), the block's input pairs averaged in, the echoes read between samples and interpolated back up. P1 TIME (10 ms to the most, squared), P2 WOW (wow: a random drift every ~0.19 s up to ±1.8 ms; flutter ~6 Hz up to ±0.14 ms), P3 TONE, P4 FEEDBACK to 115%. In the loop: low cut ~100 Hz, TONE, PITCH, then a cubic soft clip whose ceiling SATURATE lowers from full scale to a quarter (feedback past 100% grows into a bounded roar: tested, the last second of 4 s at 115% peaks at 4,500). A time change glides the read head (~90 ms: the pitch bends). NORMAL and PINGPONG untouched (render_test bit for bit); the 18b early reads stay theirs. Switching to or from a TAPE type clears the line (another rate).
+- **21b. SYNC** (all four modes): TIME's 12 steps are the note values; too long for the line, halved (the card shows `1/2 /2`, `/4`). A tempo change re-sets a synced NORMAL/PINGPONG time (crossfaded, `fx_tempo`); TAPE glides there. All in 32-bit arithmetic (`sync_len`).
+- **21c. ECHO > REVERB** (all modes): the echoes into the reverb's send (`rev_in`; the reverb runs a block behind anyway). **THROW ECHO:** both PERF banks' keys are taken, so THROW REV, held while the bus is on DELAY, also throws the echoes into the reverb (dub's move).
+- **21d. GLITCH** (TAPE modes): at each repeat (the delay's length), GLITCH's chance of STUTTER (its first 1/32 or 1/64 at the tempo, looped), REVERSE, SKIP (1–3 slices earlier) or HALF (half speed), faded 32 samples in and out; skipped when the line can't hold it.
+- **21e. PITCH** (TAPE modes): OFF, +12, +7, −12, DETUNE (+12 cents), two crossfaded heads over a 2,048-sample window (1,024 a side in PP; `ps_buf`, 4 KB pool) in the feedback: each repeat shifted again. Tested: 441 Hz back at ~870 Hz on the second repeat.
+- **Kit:** 5 bytes (`PAR_DSYNC`, `PAR_DSAT`, `PAR_ECHOREV`, `PAR_GLITCH`, `PAR_DPITCH`); SATURATE, ECHO > REVERB and GLITCH morph, SYNC and PITCH don't. Pages: FX's 4th (DELAY: DUB: SYNC, SATURATE, GLITCH, PITCH) and 5th (DELAY: SEND: ECHO > REV). TAPE's P2 is named WOW.
+- **Tests:** ui_test phase21 (SYNC 1/8 on NORMAL and TAPE: 11,025 samples; the second echo; TAPE PP's sides; the roar bounded; GLITCH and PITCH bounded; PITCH +12's frequency; ECHO > REVERB; the pages). The cost: TAPE PP with everything on, 0.65 µs a block on the host (~65 µs on the unit by the rule of thumb, ~4% of a block): **to measure on the unit** (LOAD).
+- **Cost:** RAM 66,688 B (+116); pool 342,984 B (+4.4 KB); image 452,528 B (+2.8 KB).
+- **Not done:** the XoX and FM1 Open delays weren't read before writing it; the design follows the plan.
+
+**The plan, as written before it was built:**
 
 The FX bus has one 64 KB line (`fxbuf`, 0.74 s mono, 2 × 0.37 s ping-pong at 44.1 kHz) and runs one effect at a time. There's no SRAM for a second line, so the new delay is new DELAY **types** in the same line, beside the LXR's NORMAL and PINGPONG, which stay exactly as they are (LXR kits sound the same).
 
@@ -897,7 +945,16 @@ The FX bus has one 64 KB line (`fxbuf`, 0.74 s mono, 2 × 0.37 s ping-pong at 44
 - Kit: TAPE reuses P1–P4 (time, wow, tone, feedback); new bytes for SYNC, saturation, ECHO → REVERB and GLITCH (~4 B, so after 18c).
 - Reference: XoX (Charles Vestal, GPL-3.0, already credited) has a tape delay send on this same hardware; read it before writing 21a. FM1 Open (M-VAVE's official open firmware, 2026-10) has delay and reverb sends; check its licence before borrowing anything.
 
-#### Phase 22: a plate reverb (Clouds' Dattorro)
+#### Phase 22: a plate reverb (Clouds' Dattorro) (built in 0.16-test1, 2026-10-27)
+
+**Built.**
+- **PLATE**, the reverb's fourth MODEL (`rev_plate`, reverb.c): Clouds' reverb as it is (the 4 diffusers, the first smeared by its 0.5 Hz LFO inside its loop; the figure eight of two branches, the first read through the 0.3 Hz LFO), at half rate (22.05 kHz, as HALL) with Clouds' lengths × 0.689 (11,283 samples). The lines: the diffusers in ROOM's allpass buffer, two in its combs, four in `pl_buf` (11.9 KB pool). SIZE: Clouds' reverb time 0.35–0.98 (SPACE 0.995: it holds); DAMP: the low-pass; diffusion fixed at Clouds' 0.625 (no new knob); LEVEL as the others. Mid and side out (left from one branch, right from the other).
+- **Fixed point:** int16 lines at 16,384 to the unit (finer than Clouds' own 12-bit format; 2× headroom on a send in at 0.2). The products round to the nearest while loud (towards zero, the tail died far sooner than Clouds' float) and towards zero once quiet (`plt.lo`: it ends in exact silence and sleeps, no limit cycle). The low-passes are written towards their input (no stuck DC).
+- **Level:** PL_OUT 6, near HALL's (a 490 Hz burst a little under, a kick's tail ~3 dB over).
+- **Tests:** `tests/reverb_compare.sh` (Clouds' reverb.h in a copy, lengths scaled, LFO swings off, float lines; run with `EURORACK=… STMLIB=…`): correlation 0.98–0.998 over the first second at three settings, the energy at 0.5/1/2 s within 0.5–2× of Clouds' where it is above the lines' floor. ui_test: the reverb loop now covers PLATE; phase22 (it rings and dies away, sleeps by 10 s at SIZE 64, a stereo return, SPACE holds, the page). The cost: 0.5 µs a block on the host (SPRING's; HALL 0.25): ~3.5% of a block on the unit by the rule of thumb, on core 0 while the second core renders.
+- **Cost:** RAM 66,784 B (+96); pool 354,892 B (+11.9 KB, 13.7 KB left); image 454,896 B (+2.4 KB).
+
+**The plan, as written before it was built:**
 
 - **The design:** Clouds' reverb (MIT; Rings and Elements use the same one), Jon Dattorro's plate: four input allpasses, then a figure eight of two branches, each two allpasses, a delay and a one-pole low-pass, read through two slow LFOs. Ten lines, 16,375 samples at Clouds' 32 kHz (`FxEngine<16384, FORMAT_12_BIT>`). Its knobs map onto the reverb page's: SIZE → the decay ("reverb time"), DAMP → the low-pass, plus DIFFUSION; LEVEL as now.
 - **Add it, don't replace:** PLATE as a fourth model after ROOM, SPRING and HALL. One model runs at a time and they share one buffer, so adding costs the same memory as replacing, and kits made with Felucca's models keep their sound. (Replacing Felucca's reverb would also change every saved kit's sound.)
@@ -910,7 +967,17 @@ The FX bus has one 64 KB line (`fxbuf`, 0.74 s mono, 2 × 0.37 s ping-pong at 44
 - `tests/`: a reverb_compare against Clouds' float code, as for Rings and Plaits.
 - SPACE (PERF) holds its tail as it does the others.
 
-#### Phase 23: dirt
+#### Phase 23: dirt (built in 0.16-test1, 2026-10-27)
+
+**Built.**
+- **23a. Four more SHAPEs** per voice (`shape_block`, voices.c; NSHAPE 9): FUZZ (a gain of 4–56 into a hard clip, the quietest of the tail gated down), TAPE (a cubic soft clip, `soft3`, then a high cut from ~11 kHz to ~5 kHz with DRIVE), SINE FOLD (a sine of the input: West Coast folds, two turns at the most), BITE (the highs pushed, then a biased soft clip harder with DRIVE, its DC taken out). One more state per voice (`sh_z`). LXR kits are untouched (their shapes are the first five).
+- **23b. BUS DIRT** (`dirt_bus`, fxbus.c): the FX bus's input driven before its type, any type (OFF too: the bus as a drive), a gain of 1–8 into `soft3`, the level trimmed back as it rises. Dirty echoes and phasers at last (21's one-slot problem).
+- **23c. The master's DIRT** (`dirt_master`, on the mix before it is saturated to 16 bits and before the DJ filter, engine.c): TYPE (TAPE, TUBE, FUZZ, DIODE, FOLD) and AMOUNT (0: off, nothing touched). Each type's gain, high cut, dry/wet (FUZZ and FOLD parallel: the kick's punch kept) and level trim follow the amount; the wet part fades in over the first quarter (no step). Not oversampled (FUZZ and FOLD alias a little; the 2× option is left for later).
+- **Kit:** 3 bytes (`PAR_FXDIRT`, `PAR_MDIRT`, `PAR_MDIRT_AMT`); the amounts morph and lock, the TYPE doesn't morph. The page: FX's 6th, DIRT (BUS DIRT, MASTER, AMOUNT).
+- **Tests:** ui_test phase23 (each new shape bounded and adding harmonics; each master type bounded and within ±6 dB of the dry level; AMOUNT 0 and BUS DIRT 0 bit for bit; BUS DIRT drives; the parameters set the stages; the page). render_test unchanged (off: bit for bit). The cost on the host: the master 0.22–0.36 µs a block (~2.5% on the unit by the rule of thumb), a shape 0.05–0.10 µs a voice.
+- **Cost:** RAM 66,820 B (+36); pool 355,088 B (+196); image 456,464 B (+1.6 KB).
+
+**The plan, as written before it was built:**
 
 What's already there: per voice, a shaper (LXR, FOLD, CLIP, ASYM, RECTIFY), drive, bits; the FX bus's DRIVE (tube, fold, rat); PERF's CRUSH on the master. None of it is touched.
 
@@ -932,7 +999,40 @@ What's already there: per voice, a shaper (LXR, FOLD, CLIP, ASYM, RECTIFY), driv
 
 **Still open (small, for when each phase starts):** whether the RAMTEXT gap (18a) is really free; BUILD's RATCHETS option on 19d (keep or drop after hearing it); the melody's shapes beyond RANDOM and WALK (ARP, MOTIF) if 20 runs long; a TONE knob on the master dirt.
 
-**Next session:** start Phase 18 (18a: verify the RAMTEXT gap and measure the stacks; 18b: the effects a block behind; 18c: LIB_MAX), then 19.
+**Next session:** 0.16 RELEASED 2026-10-28 (tag v0.16): Phases 18–23, the master compressor, STUTTER, SYNC's detent, and the unlisted mobile view (`mobile/`). To do: the user's unit test of 0.16 (the LOAD with TAPE PP, PLATE, the master DIRT and the compressor at once; STUTTER's mono repeats in a stereo mix); the mobile view on a real phone, then publicise it; the remote map for the compressor and STUTTER. Later: the LCXL templates (12f), BUILD's RATCHETS (keep or drop), a TONE knob on the master DIRT, a 2× oversampled FUZZ/FOLD, the second-screen mirror (below).
+
+#### 0.16-test3 (built 2026-10-28): a master compressor, STUTTER, SYNC's detent
+
+Asked 2026-10-28 (the user's last FX round before 0.16).
+- **SYNC with TAPE "only one time".** Not reproduced: on the host and in the emulator every delay mode steps through all 12 note values (the card and the echo's time both checked at 120 BPM: TAPE's 1/16T 3,675 samples … 1/2 22,050 at half rate). What was there: a value took ~5 detents (0..127 over 12 values, 2 a detent), and TAPE glides to a new time over ~90 ms. Changed: with SYNC on, TIME moves a note value a detent (`sync_detent`, ui.c; locks too). To ask the user: the tempo, the mode, and whether a global LFO, a lock or morph was on TIME.
+- **The master COMPRESSOR** (`comp_master`, fxbus.c; the mix after the FX bus and reverb, before the master's DIRT). Kit bytes `PAR_MC_RATIO` … `PAR_MC_MIX` (7, KIT_LEN 398): RATIO (OFF, 1.5:1 … 10:1, LIMIT; OFF by default: nothing touched), THRESHOLD 0 … −48 dB, ATTACK 0.1 … 100 ms, RELEASE 20 ms … 2 s, SIDECHAIN (MIX or D1 … HH), MAKEUP 0 … +24 dB, MIX. A peak follower each sample (Q27, Q24 coefficients), the gain every 8 samples (log2, a 6 dB soft knee) ramped. **Sidechained to a voice**, that voice's dry part is mixed into `mc_kl`/`mc_kr` (voices.c `mix_voice`'s new outputs) and added back after the gain: the kick isn't ducked by itself (decided without the user: what ducking is for). FX pages 7 and 8 (MASTER COMP, COMP: SIDECHAIN) with a gain-reduction meter. RATIO and SIDECHAIN don't morph.
+- **STUTTER** (`stutter`, perform.c), PERF's page 4 (PERFORM: STUTTER): CHANCE, SIZE (1/8 … 1/64, triplets, RANDOM), LENGTH (1/16 … 1 bar), VARY (OFF, SHRINK, PITCH DN, PITCH UP, REVERSE, RANDOM). Every PERF key is taken (two banks of 9), so it has no key: OCT+ held on its page stutters at the next SIZE; a new global LFO destination STUTTER (GD_STUT, appended after the macros, unipolar) raises the chance. A burst: the first SIZE plays live while REVERSE's recorder (5,512 samples, mono, 22 kHz: no new memory) takes it, then the recorder holds and the slice repeats; the SIZEs are counted in samples from the burst's start (Q16), so it stays on the grid. The decision is at each LENGTH (the sequencer's ticks; stopped, its own clock), and again at a burst's end. Saved in KSC1 (6 → 10 bytes). Mono and dark (the recorder's), and a 1/8 below 120 BPM plays at half: noted in the manual.
+- **Tests:** ui_test phase_016t3 (the detent both ways; COMP OFF bit for bit, 4:1 at −24 dB on a −6 dB sine: −13.6 dB (−13.5), D1 keyed ducks the rest and not its own part, back when D1 stops; STUTTER: the second 1/16 against the first 0.997, each VARY bounded, CHANCE 0 stops, the LFO destination, the page, OCT+ held, the project). render_test, library_test (KIT_LEN 398), install_test pass.
+- **Cost:** RAM .data+.bss 67,612 B (+792: the key buffers and state); pool 355,552 B (+464); image 463,288 B (+6.8 KB). CPU: the compressor ~25 cycles a sample when on (~0.3%); STUTTER only while repeating, less.
+- **To check on the unit:** the LOAD with the compressor on; how STUTTER's mono repeats sit in a stereo mix.
+
+#### A bigger screen (research, 2026-10-28)
+
+**Built: the mobile view** (`web/emu/mobile.html` → the site's `mobile/`, 0.16). It runs the same wasm and worklet as the full emulator; no code from hb3p8/fm1-mobile-emu (GPL-3.0, the same design: AudioWorklet, wasm, WebGL screen, PWA). **Unlisted:** no link to it anywhere on the site and `noindex`, while the user tries it on a phone; publicise it (nav link, home page) when the user is happy with it. Revised 2026-10-28 at the user's request, to look like the FM-1:
+- round knobs as fm1-mobile-emu's (drag up or down, 10 px a detent): SELECT, ALGO, PRESET and VOL (absolute, an arc) on the left, KNOB 1–4 on the right, in one row;
+- the buttons in the FM-1's two rows of seven, with their own names only;
+- the 11 black keys in one row as on the unit (D1 … OH, then bars 1–4): no separate bar row;
+- the white keys as 2 × 8 square pads;
+- one screen high (`100dvh`, which leaves out Safari's bars), the screen taking what the controls leave, in whole firmware pixels when that costs ≤ 10%. No HOLD or MENU keys.
+- a Kits sheet imports LXR-02 .SND files or a .zip of them into the library or the slots, and backs up or restores a .ktlb. Kits are kept in the browser, in the same storage as the full emulator. The help and the links are in the sheet.
+
+Checked in Chrome at 393 × 659 (iPhone 15 Safari's room), 375 × 548 (iPhone SE) and 852 × 330 (landscape): nothing scrolls; on the SE the screen is 246 px and the pads 40 px. The zip reader matches all 64 HRTL kits byte for byte, deflated and stored. Not yet tried on a real phone.
+
+**Not built: a second screen for the unit** (asked about Paleotone's method):
+- **What the hardware allows.** The FM-1 can't drive a screen itself: its MCU has no DisplayPort or HDMI, and the 5–7″ USB-C monitors need one or a DisplayLink driver on a host. So a plug-in screen needs a host: an Android phone or tablet, a computer, or a Raspberry Pi with a 5″/7″ panel running Chromium. The FM-1 connects to it over USB MIDI, which is how Paleotone does it (MIDI out of the firmware, a companion app drawing). iPhone Safari has no Web MIDI, so on iOS this needs a native app (CoreMIDI sees the FM-1 class-compliant over USB-C) or nothing.
+- **Mirror the pixels (the cheapest way).** Every draw goes through a canvas strip and `cv_blit`/`cv_blit_from`, which already call `GFX_HOOK_BLIT` (gfx.c; the host tests hook in there, a no-op in the firmware). So only changed strips are drawn: the dirty rectangles come for free. A hook would send each strip as SysEx: x, y, w, h and the pixels, run-length coded (the UI is flat colours, so RLE on RGB565 should shrink it about 5–20×), 7-bit packed.
+  - Cost: a full 240 × 240 frame is 115 KB raw, ~132 KB as SysEx, and maybe 10–25 KB coded. A typical frame (a card's value, the playhead) is a few hundred bytes. USB full-speed MIDI moves well over that.
+  - Firmware: a TX queue (~2–4 KB RAM, which we have) and ~1.5 KB of code. Lowest priority behind clock and notes: drop a strip and send a full refresh later rather than delay MIDI. Off by default, a GLO setting (SCREEN OUT).
+  - The companion: a page on the site (`screen/`, Web MIDI: desktop Chrome/Edge, Android Chrome) that paints the strips scaled, with no smoothing.
+  - It could be built and tested in the emulator first: the wasm's hook can post the same SysEx to a second window.
+- **Send the state, draw on the far side** (Paleotone-like, richer). The companion would draw its own bigger UI (all 64 steps, the whole kit) from a state stream, using parameter NRPNs plus the step data. More to send and a lot more firmware, as the Paleotone author found, and two UIs to keep in step. Not worth it while the mirror would do.
+- **Or no unit at all.** The mobile view on a Pi or tablet with a 7″ touch panel is Elixir on a bigger screen today. The FM-1 could then be its controller over the existing remote map (TRACKS ch 15, GLOBAL ch 16), but the sound would come from the host.
+- **Recommendation if wanted:** a phase for the mirror (emulator first, then the unit: measure the USB load with clock and notes running), then the `screen/` page.
 
 ### Other ideas
 

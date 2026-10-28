@@ -53,6 +53,12 @@ static uint32_t pj_len(uint32_t l)                   /* a project's payload in f
     return proj_exists(l) && !hdr_read((uint32_t)pj.phys[l], &h) ? h.len : 0u;
 }
 static void check(int ok, const char *what);
+static void fx_goto(uint32_t g)                      /* 0.16: FX's page g (FXPG_*), as shown */
+{
+    uint32_t i;
+    for (i = 0; i < 8u && fx_page() != g; i++)
+        turn(EN_SELECT, fx_page() < g ? 1 : -1);
+}
 static void goto_mode(uint32_t b, uint32_t m)        /* press b until the mode is m */
 {
     uint32_t i;
@@ -332,6 +338,7 @@ static void phase2(void)
     shot("step-locks-tilt");
     press(B_SEQ);
     press(B_FX);
+    fx_goto(FXPG_BUS);
     turn(EN_K1, -10);
     turn(EN_K1, 5);
     check(par[PAR_FX_TYPE] == FX_PHASER, "FX: PHASER");
@@ -758,7 +765,7 @@ static void phase4(void)
     seq_gen_loop(0);
     check(gpat.main[0][0] == ((1u << 6) | (1u << 10)), "CELLULAR rule 90: the row after");
     /* the track page; the step pages: condition, ratchet */
-    turn(EN_SELECT, 2);
+    turn(EN_SELECT, (int32_t)PG_TRACK - (int32_t)ui.page);
     turn(EN_K2, 3);
     check(p->clk[0] == CLK_1X + 3, "TRACK: clock x2");
     shot("track-clock");
@@ -951,7 +958,7 @@ static void phase5a(void)
     shot("step-bounce");
     press(B_SEQ);
     goto_mode(B_ARP, M_EUCLID);
-    turn(EN_SELECT, 3);
+    turn(EN_SELECT, (int32_t)PG_BOUNCE);
     turn(EN_K1, 1);
     turn(EN_K2, -5);
     check((p->bnc[0] & 3u) == 2u && (p->bnc[0] >> 2) == 7u, "BOUNCE: from 1/16, -5 semitones");
@@ -1987,10 +1994,10 @@ static void phase14(void)
     press(B_LFO);
     check(ui.sect == S_RANDOM, "LFO again: on as before");
     goto_mode(B_ARP, M_EUCLID);
-    turn(EN_SELECT, 2 - (int32_t)ui.page);
+    turn(EN_SELECT, (int32_t)PG_TRACK - (int32_t)ui.page);
     press(B_HOME);
     press(B_ARP);
-    check(ui.mode == M_EUCLID && ui.page == 2, "ARP: back to the generator's TRACK page");
+    check(ui.mode == M_EUCLID && ui.page == PG_TRACK, "ARP: back to the generator's TRACK page");
     press(B_ARP);
     check(ui.mode == M_PERF, "ARP again: PERF");
     kset.pmem = 0;
@@ -2004,9 +2011,10 @@ static void phase14(void)
 /* 9b, 9g: PERF's pages (the performance ones, then the macros, then PERFORM 2), MIX, the global sample rate */
 static void phase9_perf(void)
 {
-    static const char *const T[NPERF] = {"PERFORM", "PERFORM: MORE", "PERFORM: MIX", "PERFORM: MIX 2", "PERFORM 2",
-                                         "PERFORM 2: SETUP", "PERFORM 2: SETUP 2", "GLOBAL LFO 1", "GLOBAL LFO 1: MODE",
-                                         "GLOBAL LFO 2", "GLOBAL LFO 2: MODE", "MACROS", "MACRO SETUP"};
+    static const char *const T[NPERF] = {"PERFORM", "PERFORM: MORE", "PERFORM: DENSITY", "PERFORM: STUTTER", "PERFORM: MIX",
+                                         "PERFORM: MIX 2", "PERFORM 2", "PERFORM 2: SETUP", "PERFORM 2: SETUP 2",
+                                         "GLOBAL LFO 1", "GLOBAL LFO 1: MODE", "GLOBAL LFO 2", "GLOBAL LFO 2: MODE",
+                                         "GLOBAL LFO 3", "GLOBAL LFO 3: MODE", "MACROS", "MACRO SETUP"};
     pattern_t *p = &pat[0];
     uint16_t kp[4];
     uint32_t i, ok = 1, d0, d1;
@@ -2589,7 +2597,7 @@ static void phase11(void)
     seq_clear_track(0, p);
     /* the TRACK page's direction; project version 8 */
     goto_mode(B_ARP, M_EUCLID);
-    turn(EN_SELECT, 2);
+    turn(EN_SELECT, (int32_t)PG_TRACK);
     page_params(pp);
     check(pp[0] == PAR_TRACK_LENGTH && pp[1] == VP_CLOCK && pp[2] == VP_DIR, "TRACK: length, clock, direction");
     turn(EN_K3, -10);
@@ -2783,9 +2791,12 @@ static void phase13_control_all(void)
     snd_post_all();
 }
 
-/* 0.12 (Phase 12): the remote map on its channel (16), its knob modes, its buttons, its feedback; NRPN morph and roll */
+/* 0.12 (Phase 12; 0.16: two channels): the remote map, TRACKS on 15 and GLOBAL on 16, its knob modes, its buttons
+ * (as CCs or notes), its feedback; NRPN morph and roll */
 static void rcc(uint32_t cc, uint32_t v) { web_midi(0xB0 | remote_ch, cc, v); run_ms(10); }
-static void rnote(uint32_t n, int on) { web_midi((on ? 0x90 : 0x80) | remote_ch, n, on ? 100 : 0); run_ms(10); }
+static void gcc(uint32_t cc, uint32_t v) { web_midi(0xB0 | remote_gch, cc, v); run_ms(10); }
+static void gnote(uint32_t n, int on) { web_midi((on ? 0x90 : 0x80) | remote_gch, n, on ? 100 : 0); run_ms(10); }
+static void gbtn(uint32_t n) { gcc(n, 127); gcc(n, 0); }   /* a global button pressed and let go, as CCs */
 static int fb_seen(uint32_t st, uint32_t d1, uint32_t d2)   /* the remote's feedback since the last call has it */
 {
     uint32_t i, n = web_midi_out_take(), *o = web_midi_out(), hit = 0;
@@ -2796,12 +2807,32 @@ static int fb_seen(uint32_t st, uint32_t d1, uint32_t d2)   /* the remote's feed
 static void phase12_remote(void)
 {
     pattern_t *p = &pat[0];
-    uint32_t ch, i, ok, bpm, t;
+    uint32_t ch, i, ok, bpm, t, j, seen[128] = {0};
     p4_reset();
     kit_init_par();
     snd_post_all();
+    vp_set(VP_RCH, 15);
+    vp_set(VP_RCH2, 16);
+    check(remote_ch == 14u && remote_gch == 15u && kset.remote == 15u && kset.rglobal == 16u,
+          "REMOTE: TRACKS on 15, GLOBAL on 16");
     vp_set(VP_RCH, 16);
-    check(remote_ch == 15u && kset.remote == 16u, "REMOTE: channel 16");
+    check(remote_ch == 14u, "REMOTE: TRACKS can't take GLOBAL's channel (turned past it)");
+    vp_set(VP_RCH, 15);
+    /* no number twice on a channel: TRACKS' knobs 8..103, buttons 104..119; GLOBAL's 8..47, 48..111 */
+    for (i = 0; i < RM_NTK; i++)
+        seen[RM_CC0 + i]++;
+    for (i = 0; i < RM_NTB; i++)
+        seen[RM_TB0 + i]++;
+    for (i = ok = 0; i < 128u; i++)
+        ok |= seen[i] > 1u || (seen[i] && (i < 8u || i >= 120u));
+    memset(seen, 0, sizeof seen);
+    for (i = 0; i < RM_NGK; i++)
+        seen[RM_CC0 + i]++;
+    for (i = 0; i < RM_NGB; i++)
+        seen[RM_GB0 + i]++;
+    for (i = 0; i < 128u; i++)
+        ok |= seen[i] > 1u || (seen[i] && (i < 8u || i >= 120u));
+    check(!ok, "the remote map: each number once a channel, within 8..119");
     vp_set(VP_RKNOBS, RK_ABS);
     goto_mode(B_GLO, M_CONFIG);
     while (ui.page != 7u)
@@ -2809,11 +2840,11 @@ static void phase12_remote(void)
     run_ms(50);
     shot("remote-config");
     goto_mode(B_HOME, M_HOME);
-    /* ABS: a track's knobs and the master column, scaled to their ranges */
+    /* ABS: a track's knobs and GLOBAL's, scaled to their ranges */
     rcc(24, 127);
-    rcc(8 + 7, 127);
-    rcc(88 + 7, 127);
-    rcc(24 + 7, 0);
+    gcc(16, 127);
+    gcc(8 + 2, 127);
+    gcc(8 + 4, 0);
     check(par[PAR_FILTER_FREQ_1] == 127 && par[PAR_FX_DRY_WET] == vp_max(PAR_FX_DRY_WET) && morph_amt == 255 &&
           pf.dj == 0, "ABS: D1's filter, FX dry/wet, morph, DJ filter from the remote");
     pf.dj = 64;
@@ -2821,16 +2852,21 @@ static void phase12_remote(void)
     rcc(40 + 5, 11);
     rcc(40 + 6, 22);
     check(par[PAR_VELOD6_CLOSED] == 11 && par[PAR_VELOD6_OPEN] == 22, "CH's decay, OH's decay: each its own");
+    track_select(2);
+    rcc(56 + 7, 99);
+    check(par[PAR_DRIVE1 + 2] == vp_min(PAR_DRIVE1 + 2) + (99u * (vp_max(PAR_DRIVE1 + 2) - vp_min(PAR_DRIVE1 + 2)) + 63u) / 127u,
+          "column 8: the selected track (D3's drive)");
     i = par[PAR_FILTER_FREQ_1];
     rcc(38, 5);                                      /* (the LXR's CC 38 is D1's filter: here OH's resonance) */
     check(par[PAR_FILTER_FREQ_1] == i && par[PAR_RESO_6] == 5, "the remote channel: the remote map, not the LXR's");
-    rcc(48 + 7, 0);
+    gcc(8, 0);
     check(par[PAR_BPM] == 60, "the tempo knob: 60 BPM at 0, never MIDI sync");
-    rcc(48 + 7, 60);
+    gcc(8, 60);
     check(par[PAR_BPM] == 120, "120 BPM at 60");
-    rcc(104, 127);
-    rcc(104 + 4, 10);
-    check(pfs.drill == 10, "the macro row: DRILL's density");
+    gcc(32 + 4, 10);
+    gcc(24 + 4, 0);
+    check(pfs.drill == 10 && pfs.dens == -64, "GLOBAL: DRILL's setting, DENSITY");
+    gcc(24 + 4, 64);
     /* PICKUP: nothing until the pot passes the value; again after the value moves elsewhere */
     vp_set(VP_RKNOBS, RK_PICKUP);
     par[PAR_VOL1] = 64;
@@ -2860,48 +2896,64 @@ static void phase12_remote(void)
     rcc(32, 127);
     ok &= par[PAR_RESO_1] == 49;
     bpm = par[PAR_BPM];
-    rcc(48 + 7, 66);
+    gcc(8, 66);
     check(ok && par[PAR_BPM] == bpm + 2u, "REL: 64 +/- n, two's complement, the tempo a BPM a step");
     vp_set(VP_RKNOBS, RK_PICKUP);
-    /* buttons: mute, solo, select, held FILL, a roll, DRILL, an effect held and latched, PLAY, patterns */
+    /* buttons, as CCs (a Launch Control's custom template) and as notes: mute, solo on TRACKS */
     sq.muted = sq.solo = 0;
-    rnote(36 + 1, 1);
-    rnote(36 + 1, 0);
-    rnote(44 + 3, 1);
-    rnote(52 + 4, 1);
-    check(sq.muted == 2u && sq.solo == 8u && ui.track == 4, "buttons: D2 muted, SN soloed, CY selected");
+    rcc(104 + 1, 127);
+    rcc(104 + 1, 0);
+    web_midi(0x90 | remote_ch, 112 + 3, 127);
+    run_ms(10);
+    web_midi(0x80 | remote_ch, 112 + 3, 0);
+    run_ms(10);
+    i = par[PAR_VOL1 + 1];
+    check(sq.muted == 2u && sq.solo == 8u && par[PAR_VOL1 + 1] == i, "TRACKS: D2 muted (a CC), SN soloed (a note)");
+    track_select(4);
+    rcc(104 + 7, 127);
+    check(sq.muted == (2u | 16u), "TRACKS: column 8's mute, the selected track's (CY)");
     sq.muted = sq.solo = 0;
-    rnote(52 + 7, 1);
+    /* GLOBAL: select, held FILL, a roll, DRILL, an effect held and latched, DENSITY's tracks, patterns */
+    gbtn(64 + 4);
+    check(ui.track == 4, "GLOBAL: CY selected");
+    gcc(48 + 2, 127);
     ok = (pf.on >> PF_FILL) & 1u;
-    rnote(52 + 7, 0);
+    gcc(48 + 2, 0);
     check(ok && !((pf.on >> PF_FILL) & 1u), "FILL while held");
-    rnote(60, 1);
+    gnote(72, 1);
     ok = sq.roll & 1u;
-    rnote(60, 0);
-    rnote(68 + 2, 1);
+    gnote(72, 0);
+    gcc(80 + 2, 127);
     ok &= (sq.drill >> 2) & 1u;
-    rnote(68 + 2, 0);
+    gcc(80 + 2, 0);
     check(ok && !(sq.roll & 1u) && !sq.drill, "a roll and a DRILL while held");
-    rnote(76 + 1, 1);
+    gcc(88, 127);
     ok = (pf.on >> PF_HALF) & 1u;
-    rnote(76 + 1, 0);
-    rnote(84 + 6, 1);
-    rnote(84 + 6, 0);
+    gcc(88, 0);
+    gbtn(96 + 7);
     ok &= !((pf.on >> PF_HALF) & 1u) && ((pf.on >> PF_CRUSH) & 1u);
     goto_mode(B_ARP, M_PERF);
     goto_mode(B_HOME, M_HOME);                       /* (leaving PERF lets the panel's latches go, not the remote's) */
     ok &= (pf.on >> PF_CRUSH) & 1u;
-    rnote(84 + 6, 1);
+    gbtn(96 + 7);
     check(ok && !((pf.on >> PF_CRUSH) & 1u), "HALF held; CRUSH latched (past PERF), then off");
-    rnote(93, 1);
+    pfs.dex = 0;
+    gbtn(104);
+    gbtn(104 + 3);
+    ok = pfs.dex == 9u;
+    gbtn(104 + 3);
+    ok &= pfs.dex == 1u;
+    gbtn(104 + 7);
+    check(ok && !pfs.dex, "GLOBAL: DENSITY's tracks left out (D1, SN), back in, all back in");
+    gbtn(56 + 5);
     check(sq.active == 1, "the next pattern");
-    rnote(92, 1);
+    gbtn(56 + 4);
     check(sq.active == 0, "the previous pattern");
     /* REC: a track's knob records a lock on its own track */
     for (i = 0; i < 16u; i++)
         main_set(p, 2, i, 1);
     pat_backup = *p;
-    rnote(36 + 7, 1);
+    gbtn(48);
     check(sq.running, "PLAY from the remote");
     sq.rec = 1;
     vp_set(VP_RKNOBS, RK_ABS);
@@ -2912,19 +2964,23 @@ static void phase12_remote(void)
         ok |= lock_get(p, 2, i, 0) == par_to_autodest(PAR_FILTER_FREQ_1 + 2) ||
               lock_get(p, 2, i, 1) == par_to_autodest(PAR_FILTER_FREQ_1 + 2);
     check(ok, "REC: D3's filter knob locks D3's steps");
-    rnote(36 + 7, 1);
+    gbtn(48);
     check(!sq.running, "STOP from the remote");
     /* feedback: a panel change, a mute; nothing back for what the remote itself sent */
     run_ms(100);
     (void)fb_seen(0, 0, 0);
     par_set(PAR_FILTER_FREQ_1 + 1, 77);
-    sq.muted = 4u;
+    par_set(PAR_REV_SIZE, 127);
     run_ms(30);
     ch = 0xB0u | remote_ch;
-    ok = fb_seen(ch, 25, 77);
-    sq.muted = 0;
-    run_ms(30);
-    check(ok, "feedback: D2's filter changed on the panel goes back as CC 25");
+    j = web_midi_out_take();
+    {
+        uint32_t *o = web_midi_out();
+        for (i = ok = 0; i < j; i++)
+            ok |= (o[i] >> 8 & 0xFFu) == ch && ((o[i] >> 16) & 127u) == 25u && (o[i] >> 24) == 77u ? 1u
+                : (o[i] >> 8 & 0xFFu) == (0xB0u | remote_gch) && ((o[i] >> 16) & 127u) == 25u && (o[i] >> 24) == 127u ? 2u : 0u;
+    }
+    check(ok == 3u, "feedback: D2's filter (TRACKS CC 25), the reverb's size (GLOBAL CC 25)");
     rcc(16, 33);
     run_ms(30);
     check(!fb_seen(ch, 16, 33), "no echo of what the remote sent");
@@ -2937,10 +2993,22 @@ static void phase12_remote(void)
         printf("  a kit load: %u remote CCs back\n", cc);
         check(cc > 0, "feedback after a kit load");
     }
-    sq.muted = 1u << 2;
-    run_ms(30);
-    check(fb_seen(0x90u | remote_ch, 36 + 2, 127), "feedback: D3 muted lights its mute button");
-    sq.muted = 0;
+    sq.muted = 1u << 2;                              /* (D2's mute came as a CC: its light goes back as one) */
+    sq.solo = 1u << 3;                               /* (SN's solo came as a note: as a note) */
+    run_ms(40);
+    j = web_midi_out_take();
+    {
+        uint32_t *o = web_midi_out();
+        int m_cc = 0, s_note = 0, s_cc = 0;
+        for (i = 0; i < j; i++) {
+            uint32_t st = o[i] >> 8 & 0xFFu, d1 = (o[i] >> 16) & 127u, d2 = o[i] >> 24;
+            m_cc |= st == (0xB0u | remote_ch) && d1 == 104u + 2u && d2 == 127u;
+            s_note |= st == (0x90u | remote_ch) && d1 == 112u + 3u && d2 == 127u;
+            s_cc |= st == (0xB0u | remote_ch) && d1 == 112u + 3u;
+        }
+        check(m_cc && s_note && !s_cc, "feedback: D3's mute light (a CC: never heard, both), SN's solo as a note");
+    }
+    sq.muted = sq.solo = 0;
     /* NRPN morph (120) and roll rate (119) do what the panel does (12a) */
     ch = (par[PAR_MIDI_CHAN_GLOBAL] - 1u) & 15u;
     web_midi(0xB0 | ch, 99, 0);
@@ -2951,16 +3019,1098 @@ static void phase12_remote(void)
     run_ms(20);
     check(morph_amt == 255 && sq.roll_rate == 5, "NRPN morph and roll rate take effect");
     kit_set_morph(0);
-    /* OFF: the channel is a plain one again */
+    /* OFF: the channels are plain ones again */
     vp_set(VP_RCH, 0);
+    vp_set(VP_RCH2, 0);
     par[PAR_RESO_1] = 9;
-    web_midi(0xB0 | 15, 32, 100);
+    web_midi(0xB0 | 14, 32, 100);
     run_ms(20);
-    check(remote_ch == 0xFFu && kset.remote == 17u && par[PAR_RESO_1] == 9, "REMOTE OFF: nothing from the map");
-    vp_set(VP_RCH, 16);
+    check(remote_ch == 0xFFu && remote_gch == 0xFFu && kset.remote == 17u && par[PAR_RESO_1] == 9,
+          "REMOTE OFF: nothing from the map");
+    vp_set(VP_RCH, 15);
+    vp_set(VP_RCH2, 16);
     vp_set(VP_RKNOBS, RK_PICKUP);
+    {   /* settings from 0.15 (16 bytes, one remote channel: 16): both channels at their defaults, the rest kept */
+        elixir_settings_t k = kset, old = kset;
+        old.remote = 16;
+        old.leds = 0;
+        st_save(OBJ_SETTINGS, &old, SET_LEN_015);
+        kset.leds = 2;
+        persist_boot();
+        check(remote_ch == 14u && remote_gch == 15u && kset.leds == 0, "0.15's settings: TRACKS 15, GLOBAL 16");
+        kset = k;
+        st_save(OBJ_SETTINGS, &kset, sizeof kset);
+        persist_boot();
+    }
     kit_init_par();
     snd_post_all();
+}
+
+/* ------------------------------------------------------ Phase 19 (0.16) --- */
+static uint32_t midi_offs(uint32_t ch, uint32_t *ons)  /* the MIDI out since the last call: note-offs (and ons) on ch */
+{
+    uint32_t n = web_midi_out_take(), i, off = 0, on = 0;
+    for (i = 0; i < n; i++) {
+        uint32_t st = (web_mo[i] >> 8) & 0xFFu, v = web_mo[i] >> 24;
+        if ((st & 15u) != ch)
+            continue;
+        if ((st & 0xF0u) == 0x80u || ((st & 0xF0u) == 0x90u && !v))
+            off++;
+        else if ((st & 0xF0u) == 0x90u)
+            on++;
+    }
+    if (ons)
+        *ons = on;
+    return off;
+}
+static void phase19(void)
+{
+    pattern_t *p = &pat[0];
+    uint16_t pp[4];
+    uint32_t i, c, ons, pg, np;
+    char b[40];
+    p4_reset();
+    sq.muted = 0;
+    kset.accel = 0;
+    /* 19a: the scales */
+    check(scale_q(SC_MAJOR, 0, 61, 0) == 60 && scale_q(SC_MAJOR, 0, 60, 1) == 62 && scale_q(SC_MAJOR, 0, 60, -1) == 59 &&
+              scale_q(SC_MAJOR, 0, 64, 2) == 67 && scale_q(SC_MINOR, 9, 61, 0) == 60 && scale_q(SC_MINPENT, 9, 59, 0) == 60 && scale_q(SC_MINPENT, 9, 58, 0) == 57,
+          "scale_q: the nearest degree (a tie the lower), degrees on");
+    check(scale_q(SC_CHROM, 0, 61, 0) == 61 && scale_q(SC_WHOLE, 0, 61, 0) == 60 && scale_q(SC_FIFTHS, 2, 62, 1) == 69,
+          "scale_q: CHROMATIC as it is, WHOLE TONE, FIFTHS");
+    check(p->scale == SC_CHROM && p->sfollow == SFOLLOW_DEFAULT, "a new pattern: CHROMATIC, D1-D3 follow");
+    goto_mode(B_ARP, M_EUCLID);
+    while (ui.page)
+        turn(EN_SELECT, -1);
+    turn(EN_SELECT, (int32_t)PG_SCALE);
+    page_params(pp);
+    title_text(b, sizeof b, &pg, &np);
+    check(pp[0] == VP_SROOT && pp[1] == VP_SCALE && pp[2] == VP_SFOLLOW, "EUCLID: the SCALE page, ROOT SCALE FOLLOW");
+    turn(EN_K1, 2);                                  /* D */
+    turn(EN_K2, SC_DORIAN);
+    check(p->sroot == 2 && p->scale == SC_DORIAN && scl_last.root == 2 && scl_last.scale == SC_DORIAN,
+          "SCALE: D DORIAN, the project's last");
+    shot("scale-page");
+    turn(EN_K2, SC_HMINOR - SC_DORIAN);              /* (the widest names) */
+    shot("scale-harm-min");
+    turn(EN_K2, SC_PHRDOM - SC_HMINOR);
+    shot("scale-phr-dom");
+    turn(EN_K2, SC_DORIAN - SC_PHRDOM);
+    {
+        uint32_t cs = (uint32_t)(vc[0].osc.midi_freq >> 8), n = scale_fit(0, SEQ_DEFAULT_NOTE + 1u, 0);
+        int32_t s = (int32_t)cs + (int32_t)n - SEQ_DEFAULT_NOTE;
+        check(((SCALE_MASK[SC_DORIAN] >> (uint32_t)(((s - 2) % 12 + 12) % 12)) & 1u) && (n == SEQ_DEFAULT_NOTE ||
+              n == SEQ_DEFAULT_NOTE + 1u || n == SEQ_DEFAULT_NOTE + 2u),
+              "scale_fit: D1's note in D DORIAN from its tune");
+        check(scale_fit(4, SEQ_DEFAULT_NOTE + 1u, 0) == SEQ_DEFAULT_NOTE + 1u, "scale_fit: D5 doesn't follow");
+    }
+    /* KEYS in the scale: white keys the degrees */
+    black(0);
+    hold(B_OCTDN);
+    press(B_EDIT);
+    release(B_OCTDN);
+    check(ui.mode == M_KEYS, "KEYS");
+    {
+        int ok = 1;
+        int32_t cs = (int32_t)(vc[0].osc.midi_freq >> 8), last = -1;
+        for (i = 0; i < 8u; i++) {
+            int32_t n = key_scale_note(i), s = cs + n - SEQ_DEFAULT_NOTE;
+            ok &= (int)((SCALE_MASK[SC_DORIAN] >> (uint32_t)(((s - 2) % 12 + 12) % 12)) & 1u) && n > last;
+            last = n;
+        }
+        check(ok, "KEYS: the white keys climb D DORIAN's degrees");
+        white(1);
+        run_ms(10);
+        check(ui.knote == (uint8_t)key_scale_note(1), "KEYS: white key 2 plays the second degree");
+    }
+    shot("keys-scale");
+    /* a blank pattern takes the scale last chosen */
+    seq_clear_pattern(&pat[3]);
+    check(pat[3].sroot == 2 && pat[3].scale == SC_DORIAN, "a cleared pattern: the scale last chosen");
+    {
+        int rc = proj_save(1, "SCALE   ");
+        p->scale = SC_CHROM;
+        p->sroot = 0;
+        p->sfollow = 0x55;
+        scl_last.root = scl_last.scale = 0;
+        rc |= proj_load(1);
+        p = &pat[0];
+        check(!rc && p->sroot == 2 && p->scale == SC_DORIAN && p->sfollow == SFOLLOW_DEFAULT && scl_last.scale == SC_DORIAN,
+              "project v10: the scale, FOLLOW, the last scale");
+    }
+    p4_reset();
+    p = &pat[0];
+    p->scale = SC_CHROM;
+    scl_last.root = scl_last.scale = 0;
+
+    /* 19b: a step's length; GATE holds the voice for it, MIDI's note-off at its end */
+    check(PROJ_VERSION == 10, "project version 10");
+    main_set(p, 0, 0, 1);
+    p->cond[0][0] = COND_FILL;
+    p->step[0][0].prob = 77;
+    step_len_set(p, 0, 0, LEN_8);
+    check(step_len(p, 0, 0) == LEN_8 && step_cond(p, 0, 0) == COND_FILL && step_prob(&p->step[0][0]) == 77,
+          "a step's length: in cond's and prob's top bits");
+    step_len_set(p, 0, 0, LEN_TIE);
+    check(step_len(p, 0, 0) == LEN_TIE && step_cond(p, 0, 0) == COND_FILL && step_prob(&p->step[0][0]) == 77,
+          "TIE beside the condition and chance");
+    p->cond[0][0] = 0;
+    p->step[0][0].prob = 100;
+    step_len_set(p, 0, 0, LEN_4);
+    par_set(PAR_GATE1, 1);
+    par_set(PAR_MIDI_FILT_TX, par[PAR_MIDI_FILT_TX] | MF_NOTE);
+    run_ms(20);
+    midi_offs(0, 0);
+    play_from_start();
+    run_ms(60);
+    check(vc[0].aeg.hold && vc[0].aeg.state == EG_H, "GATE: the 1/4 holds the attack's top");
+    check(midi_offs(midi_track_ch(0), 0) == 0u, "a 1/4: no MIDI note-off at the step's end");
+    run_ms(500);                                     /* (a 1/4 at 120: 500 ms) */
+    check(!vc[0].aeg.hold && vc[0].aeg.state != EG_H, "GATE: let go at the length's end");
+    check(midi_offs(midi_track_ch(0), 0) == 1u, "the MIDI note-off at the length's end");
+    press(B_PLAY);
+    par_set(PAR_GATE1, 0);
+    /* TIE: the next note slides there, struck once */
+    step_len_set(p, 0, 0, LEN_TIE);
+    main_set(p, 0, 1, 1);
+    p->step[0][1].note = SEQ_DEFAULT_NOTE + 7u;
+    step_len_set(p, 0, 1, LEN_4);                    /* (AUTO's MIDI note-off would come the next tick, as the LXR's) */
+    run_ms(20);
+    midi_offs(0, 0);
+    c = trig_count[0];
+    play_from_start();
+    while (sq.idx[0] < 1 || sq.tph[0] < 2u)
+        run_ms(1);
+    run_ms(20);
+    check(trig_count[0] == c + 2u && vc[0].osc.base_note == SEQ_DEFAULT_NOTE + 7u, "TIE: the next note's pitch");
+    check(vc[0].aeg.state != EG_A || vc[0].aeg.hold, "TIE: not struck again");
+    i = midi_offs(midi_track_ch(0), &ons);
+    check(ons == 2u && i == 1u, "TIE in MIDI: the new note on, then the old off");
+    press(B_PLAY);
+    shot("step-tie");
+    seq_clear_track(0, p);
+
+    /* 19d: DENSITY: thinning drops the weakest first, the bar's first steps last */
+    for (i = 0; i < 16u; i++) {
+        main_set(p, 0, i, 1);
+        p->step[0][i].volume = 100;
+    }
+    sq.dens = -40;
+    sq.dex = 0;
+    {
+        uint32_t kept = 0, d1 = 0;
+        for (i = 0; i < 16u; i++)
+            kept += !dens_drop(p, 0, i);
+        check(!dens_drop(p, 0, 0) && !dens_drop(p, 0, 4) && dens_drop(p, 0, 1) && kept == 4u,
+              "DENSITY -40: the beats kept, the 16ths gone");
+        sq.dex = 1;
+        for (i = 0; i < 16u; i++)
+            d1 += dens_drop(p, 0, i);
+        check(d1 == 0u, "DENSITY: a track left out keeps its steps");
+        sq.dex = 0;
+        sq.dens = -64;
+        check(!dens_drop(p, 0, 0) && dens_drop(p, 0, 4), "DENSITY at its least: the bar's first step alone");
+    }
+    seq_clear_track(0, p);
+    main_set(p, 0, 0, 1);
+    sq.dens = 63;
+    sq.dbuild = DB_RATCHETS;
+    {
+        uint32_t g = 0;
+        for (i = 1; i < 16u; i++)
+            g += dens_ghost(p, 0, i);
+        check(g >= 12u && dens_rat(p, 0, 0), "DENSITY up, RATCHETS: ghosts in the empty steps, a ratchet on the hit");
+        sq.dens = 20;
+        g = 0;
+        for (i = 1; i < 16u; i++)
+            g += dens_ghost(p, 0, i);
+        check(dens_part(0) == 256u && g < 12u && !dens_rat(p, 0, 0), "a third of the way: the chances, a few ghosts");
+    }
+    sq.dens = 0;
+    check(gen_dens(0, 60) == 60, "DENSITY 0: a GRIDS density as it is");
+    sq.dens = 20;
+    check(gen_dens(0, 60) == 100 && gen_dens(0, 120) == 127, "DENSITY: GRIDS' density pushed");
+    sq.dens = 0;
+    /* the DENSITY page: KNOB 1 DENSITY, the black keys leave tracks out */
+    goto_mode(B_ARP, M_PERF);
+    while (ui.page)
+        turn(EN_SELECT, -1);
+    turn(EN_SELECT, (int32_t)PG_DENS);
+    check(perf_dens(), "PERF: the DENSITY page");
+    page_params(pp);
+    check(pp[0] == VP_DENS && pp[1] == VP_GHOST && pp[2] == VP_BUILD, "DENSITY: DENSITY GHOSTS BUILD");
+    turn(EN_K1, -20);
+    black(2);
+    run_ms(10);
+    check(pfs.dens == -20 && sq.dens == -20 && (pfs.dex & 4u) && sq.dex == pfs.dex, "DENSITY -20, D3 left out");
+    shot("perf-density");
+    black(2);
+    check(!(pfs.dex & 4u), "DENSITY: a black key again, D3 back in");
+    /* 19c: LFO 3 on TRANSPOSE and DENSITY */
+    {
+        int32_t lo = 99, hi = -99, dl = 99, dh = -99;
+        gls[2].dest = GD_TRANSPOSE;
+        gls[2].depth = 127;
+        gls[2].len = 0;
+        gls[2].wave = LFO_TRI;
+        gls[2].mode = GM_FREE;
+        gls[1].dest = GD_DENSITY;
+        gls[1].depth = 64;
+        gls[1].len = 0;
+        gls[1].wave = LFO_TRI;
+        gls[1].mode = GM_FREE;
+        play_from_start();
+        for (i = 0; i < 60u; i++) {
+            run_ms(10);
+            lo = sq.transp < lo ? sq.transp : lo;
+            hi = sq.transp > hi ? sq.transp : hi;
+            dl = sq.dens < dl ? sq.dens : dl;
+            dh = sq.dens > dh ? sq.dens : dh;
+        }
+        printf("  LFO 3 TRANSPOSE %d..%d; LFO 2 DENSITY %d..%d\n", lo, hi, dl, dh);
+        check(lo <= -6 && hi >= 6, "LFO 3: TRANSPOSE up and down 7 degrees");
+        check(dl < -20 && dh > -20, "LFO 2: DENSITY either way from the knob's");
+        shot("perf-lfo3");
+        press(B_PLAY);
+        {
+            int rc = proj_save(1, "LFO3    ");
+            gls[2].dest = 0;
+            pfs.dens = 0;
+            pfs.dex = 0x40;
+            rc |= proj_load(1);
+            check(!rc && gls[2].dest == GD_TRANSPOSE && gls[2].depth == 127 && pfs.dens == -20 && pfs.dex == 0,
+                  "project: LFO 3, DENSITY (KSC1)");
+        }
+        memset(gls, 0, sizeof gls);
+        pfs.dens = 0;
+        run_ms(20);
+    }
+    press(B_HOME);
+    p4_reset();
+}
+
+/* ------------------------------------------------------ Phase 20 (0.16) --- */
+static uint32_t mel_hits(uint32_t n, uint8_t *out)   /* D1's first n notes (n <= 16) from the start, as they played */
+{
+    uint32_t i, c = trig_count[0], ms = 0;
+    play_from_start();
+    while (trig_count[0] - c < n && ms < 20000u) {
+        run_ms(2);
+        ms += 2;
+    }
+    for (i = 0; i < n; i++)
+        out[i] = (uint8_t)(mel_n[0][i] & 127u);
+    return trig_count[0] - c >= n ? n : 0u;
+}
+static int32_t pc_of(uint32_t note)                  /* D1's note's pitch class, sounding */
+{
+    int32_t s = (int32_t)(vc[0].osc.midi_freq >> 8) + (int32_t)note - SEQ_DEFAULT_NOTE;
+    return (s % 12 + 12) % 12;
+}
+static void phase20(void)
+{
+    pattern_t *p = &pat[0];
+    uint16_t pp[4];
+    uint8_t nt[32];
+    uint32_t i, k, pg, np, ok;
+    char b[40];
+    p4_reset();
+    p = &pat[0];
+    sq.muted = 0;
+    kset.accel = 0;
+    for (i = 0; i < 16u; i++)
+        main_set(p, 0, i, 1);
+    p->scale = SC_MINPENT;
+    p->sroot = 9;                                    /* A minor pentatonic: A C D E G */
+    black(0);
+    goto_mode(B_ARP, M_EUCLID);
+    while (ui.page)
+        turn(EN_SELECT, -1);
+    turn(EN_SELECT, (int32_t)PG_MELODY);
+    page_params(pp);
+    title_text(b, sizeof b, &pg, &np);
+    check(pp[0] == VP_MEL + ML_SHAPE && pp[3] == VP_MEL + ML_STEPS && !strcmp(b, "MELODY"),
+          "EUCLID: MELODY after ACTION: SHAPE SPREAD BIAS STEPS");
+    turn(EN_K1, 1);
+    check(p->mel[0][ML_SHAPE] == MEL_RANDOM && p->mel[0][ML_LOOP] == 8 && p->mel[0][ML_SPREAD] == MEL_DEFAULT[ML_SPREAD],
+          "MELODY: RANDOM, its settings from their defaults");
+    shot("melody");
+    turn(EN_SELECT, 1);
+    title_text(b, sizeof b, &pg, &np);
+    page_params(pp);
+    check(pp[0] == VP_MEL + ML_DEJA && pp[1] == VP_MEL + ML_LOOP && !strcmp(b, "MELODY: LOOP"), "MELODY: LOOP page");
+    shot("melody-loop");
+    /* RANDOM, DEJA VU 0: notes in the scale, changing */
+    k = mel_hits(16, nt);
+    press(B_PLAY);
+    {
+        uint32_t dist = 0, j;
+        ok = k == 16u;
+        for (i = 0; i < k; i++) {
+            int32_t c = pc_of(nt[i]);
+            ok &= (SCALE_MASK[SC_MINPENT] >> (uint32_t)((c - 9 + 12) % 12)) & 1u;
+            for (j = 0; j < i && nt[j] != nt[i]; j++)
+                ;
+            dist += j == i;
+        }
+        printf("  MELODY RANDOM: %u notes, %u different\n", k, dist);
+        check(ok, "RANDOM: every note in A minor pentatonic");
+        check(dist >= 4u, "RANDOM, DEJA VU 0: the notes change");
+    }
+    /* DEJA VU 127, LOOP 4: a locked loop of 4 */
+    p->mel[0][ML_DEJA] = 127;
+    p->mel[0][ML_LOOP] = 4;
+    k = mel_hits(16, nt);
+    press(B_PLAY);
+    for (ok = k == 16u, i = 4; i < k; i++)
+        ok &= nt[i] == nt[i - 4u];
+    check(ok, "DEJA VU 127, LOOP 4: the same four notes round");
+    /* STEPS at the top: the root and the fifth */
+    p->mel[0][ML_DEJA] = 0;
+    p->mel[0][ML_STEPS] = 127;
+    p->mel[0][ML_SPREAD] = 127;
+    k = mel_hits(16, nt);
+    press(B_PLAY);
+    for (ok = k == 16u, i = 0; i < k; i++)
+        ok &= pc_of(nt[i]) == 9 || pc_of(nt[i]) == 4;
+    check(ok, "STEPS 127: only A and E");
+    /* WALK: a degree or two at a time */
+    p->mel[0][ML_SHAPE] = MEL_WALK;
+    p->mel[0][ML_STEPS] = 0;
+    p->mel[0][ML_SPREAD] = 64;
+    k = mel_hits(16, nt);
+    press(B_PLAY);
+    {
+        uint8_t set[12];
+        int32_t n = (int32_t)mel_set(0, set), c = (int32_t)(vc[0].osc.midi_freq >> 8);
+        for (ok = k == 16u, i = 1; i < k; i++) {
+            int32_t a = mel_deg(set, n, c + nt[i - 1u] - SEQ_DEFAULT_NOTE - 9);
+            int32_t d = mel_deg(set, n, c + nt[i] - SEQ_DEFAULT_NOTE - 9) - a;
+            ok &= d >= -2 && d <= 2 && d != 0;
+        }
+        check(ok, "WALK: a degree or two from the last, every note");
+    }
+    /* ARP UP: rising chord tones, round again */
+    p->mel[0][ML_SHAPE] = MEL_ARP_UP;
+    p->mel[0][ML_SPREAD] = 30;
+    k = mel_hits(16, nt);
+    press(B_PLAY);
+    {
+        uint32_t up = 0, down = 0;
+        for (i = 1; i < k; i++) {
+            up += nt[i] > nt[i - 1u];
+            down += nt[i] < nt[i - 1u];
+        }
+        printf("  ARP UP: %u up, %u down (%u %u %u %u %u)\n", up, down, nt[0], nt[1], nt[2], nt[3], nt[4]);
+        check(up > down * 2u && down >= 1u, "ARP UP: up, then round again");
+    }
+    /* MOTIF: every fourth phrase backwards, ending on the root */
+    p->mel[0][ML_SHAPE] = MEL_MOTIF;
+    p->mel[0][ML_DEJA] = 127;
+    p->mel[0][ML_SPREAD] = 64;
+    k = mel_hits(16, nt);
+    press(B_PLAY);
+    check(k == 16u && pc_of(nt[15]) == 9 && nt[12] == nt[3] && nt[13] == nt[2] && nt[14] == nt[1],
+          "MOTIF: the fourth phrase backwards, on the root");
+    /* LENGTH: the melody's length onto the note; COMMIT writes the notes in, UNDO takes them back */
+    p->mel[0][ML_SHAPE] = MEL_RANDOM;
+    p->mel[0][ML_DEJA] = 0;
+    p->mel[0][ML_LEN] = LEN_8;
+    k = mel_hits(16, nt);
+    check(sq.glen[0] > 0u, "LENGTH 1/8: the note held for its length");
+    press(B_PLAY);
+    while (ui.page != PG_ACTION)
+        turn(EN_SELECT, -1);
+    page_params(pp);
+    check(pp[0] == VP_ACTION && vp_max(VP_ACTION) == 3, "ACTION with a melody: COMMIT, UNDO, RESET");
+    turn(EN_K1, 1);
+    press(B_OCTUP);
+    for (ok = 1, i = 0; i < 16u; i++)
+        ok &= p->step[0][i].note == (mel_n[0][i] & 127u) && step_len(p, 0, i) == mel_l[0][i];
+    if (!ok)
+        printf("  COMMIT: note %u / %u, len %u / %u, action %u\n", p->step[0][1].note, mel_n[0][1], step_len(p, 0, 1),
+               mel_l[0][1], ui.action);
+    check(ok && ui.action == ACT_NONE, "COMMIT: the melody's notes and lengths into the steps");
+    turn(EN_K1, 2);
+    press(B_OCTUP);
+    check(p->step[0][0].note == SEQ_DEFAULT_NOTE && step_len(p, 0, 0) == LEN_AUTO && p->mel[0][ML_SHAPE] == MEL_RANDOM,
+          "UNDO: the steps back, the melody on");
+    /* the project, and the global LFOs' CHANGE and SPREAD */
+    {
+        int rc = proj_save(1, "MELODY  ");
+        memset(p->mel[0], 0, NML);
+        rc |= proj_load(1);
+        p = &pat[0];
+        check(!rc && p->mel[0][ML_SHAPE] == MEL_RANDOM && p->mel[0][ML_LEN] == LEN_8, "project: the melody");
+    }
+    {
+        int32_t lo = 99, hi = -99;
+        gls[0].dest = GD_MCHANGE;
+        gls[0].depth = 127;
+        gls[0].len = 0;
+        gls[0].wave = LFO_TRI;
+        gls[0].mode = GM_FREE;
+        play_from_start();
+        for (i = 0; i < 60u; i++) {
+            run_ms(10);
+            lo = sq.mchg < lo ? sq.mchg : lo;
+            hi = sq.mchg > hi ? sq.mchg : hi;
+        }
+        press(B_PLAY);
+        check(lo < -50 && hi > 50, "LFO: MELODY CHANGE either way");
+        memset(gls, 0, sizeof gls);
+        run_ms(20);
+    }
+    press(B_HOME);
+    p4_reset();
+}
+
+/* ------------------------------------------------------ Phase 21 (0.16) --- */
+#include <time.h>
+static int16_t p21_l[FS * 4], p21_r[FS * 4];
+static uint32_t p21_sine;                            /* (fx_alone: the noise a sine of this many Hz instead) */
+/* the FX bus alone for n blocks (the engine idle): a click into the left (and right) at sample 0, the output */
+static void fx_alone(uint32_t blocks, int32_t cl, int32_t cr, uint32_t noise)
+{
+    uint32_t b, i, r = 12345u;
+    for (b = 0; b < blocks; b++) {
+        fxbus_early();
+        for (i = 0; i < BLOCK; i++) {
+            int32_t nz = 0;
+            if (b * BLOCK + i < noise && p21_sine) {
+                nz = (int32_t)(8000.0 * sin(2.0 * M_PI * p21_sine * (b * BLOCK + i) / FS));
+            } else if (b * BLOCK + i < noise) {
+                r = r * 1664525u + 1013904223u;
+                nz = (int32_t)(r >> 20) - 2048;
+            }
+            fx_l[i] = (int16_t)((b == 0u && i == 0u ? cl : 0) + nz);
+            fx_r[i] = (int16_t)((b == 0u && i == 0u ? cr : 0) + nz);
+            mix_l[i] = mix_r[i] = 0;
+            rev_in[i] = 0;
+        }
+        rev_fed = 0;
+        fxbus_process();
+        if (b * BLOCK + BLOCK <= sizeof p21_l / sizeof p21_l[0])
+            for (i = 0; i < BLOCK; i++) {
+                p21_l[b * BLOCK + i] = (int16_t)sat16(mix_l[i]);
+                p21_r[b * BLOCK + i] = (int16_t)sat16(mix_r[i]);
+            }
+    }
+}
+static uint32_t first_peak(const int16_t *s, uint32_t from, uint32_t to, int32_t thr)
+{
+    uint32_t i, best = 0;
+    int32_t m = thr;
+    for (i = from; i < to; i++)
+        if (abs(s[i]) > m) {
+            m = abs(s[i]);
+            best = i;
+        }
+    return best;
+}
+static void fx_fresh(uint32_t dtype)
+{
+    par_set(PAR_FX_TYPE, FX_OFF);
+    run_ms(5);
+    par_set(PAR_FX_TYPE, FX_DELAY);
+    par_set(PAR_FX_DELAY_TYPE, dtype);
+    par_set(PAR_FX_DRY_WET, 100);
+    par_set(PAR_FX_ROUTING, R_ST1);
+    run_ms(10);
+    fxbus_process();                                 /* (the type's change: the line from silence) */
+}
+static void phase21(void)
+{
+    uint32_t i, at, at2;
+    int32_t pk;
+    p4_reset();
+    par_set(PAR_BPM, 120);
+    /* 21b: SYNC on NORMAL: 1/8 at 120 BPM, 11025 samples */
+    fx_fresh(DELAY_NORMAL);
+    par_set(PAR_DSYNC, 1);
+    par_set(PAR_FX_P1, 58);                          /* (TIME 58: 1/8) */
+    par_set(PAR_FX_P4, 40);
+    par_set(PAR_FX_P3, 100);
+    run_ms(10);
+    fx_fresh(DELAY_NORMAL);
+    fx_alone(400, 20000, 20000, 0);
+    at = first_peak(p21_l, 100, 20000, 2000);
+    printf("  NORMAL, SYNC 1/8 at 120: the echo at %u (11025)\n", at);
+    check(at >= 11024u && at <= 11027u, "SYNC: NORMAL's echo a 1/8 later");
+    /* 21a: TAPE: the same time at half rate */
+    fx_fresh(DELAY_TAPE);
+    fx_alone(400, 20000, 20000, 0);
+    at = first_peak(p21_l, 100, 20000, 1000);
+    printf("  TAPE, SYNC 1/8: the echo at %u\n", at);
+    check(at >= 11020u && at <= 11032u, "TAPE: the echo a 1/8 later (half rate)");
+    {
+        int32_t e1 = abs(p21_l[at]), e2 = abs(p21_l[first_peak(p21_l, at + 5000u, at + 16000u, 0)]);
+        printf("  TAPE: echo 1 %d, echo 2 %d\n", e1, e2);
+        check(e2 < e1 && e2 > e1 / 8, "TAPE: the second echo quieter (FEEDBACK 40)");
+    }
+    /* TAPE PP: left first, then right */
+    fx_fresh(DELAY_TAPEPP);
+    fx_alone(800, 20000, 0, 0);
+    at = first_peak(p21_l, 100, 20000, 1000);
+    at2 = first_peak(p21_r, 100, 30000, 1000);
+    printf("  TAPE PP: left echo at %u, right at %u\n", at, at2);
+    check(at >= 11020u && at <= 11032u && at2 >= 22040u && at2 <= 22064u, "TAPE PP: left, then right a 1/8 later");
+    /* feedback past 100%, SATURATE: a roar that stays bounded */
+    fx_fresh(DELAY_TAPE);
+    par_set(PAR_FX_P4, 127);
+    par_set(PAR_DSAT, 127);
+    par_set(PAR_FX_P3, 100);
+    run_ms(10);
+    fx_alone(2700, 0, 0, 4410);                      /* (100 ms of noise, then 4 s) */
+    for (pk = 0, i = FS * 3u; i < FS * 4u; i++)
+        pk = abs(p21_l[i]) > pk ? abs(p21_l[i]) : pk;
+    printf("  TAPE FEEDBACK 115%%, SATURATE 127: the last second's peak %d\n", pk);
+    check(pk > 1000 && pk < 12000, "TAPE past 100%: it grows into a bounded roar");
+    /* GLITCH, PITCH: they run, bounded */
+    par_set(PAR_FX_P4, 90);
+    par_set(PAR_DSAT, 20);
+    par_set(PAR_GLITCH, 127);
+    par_set(PAR_DPITCH, DP_UP12);
+    run_ms(10);
+    fx_fresh(DELAY_TAPE);
+    fx_alone(2700, 0, 0, 22050);
+    for (pk = 0, i = FS; i < FS * 4u; i++)
+        pk = abs(p21_l[i]) > pk ? abs(p21_l[i]) : pk;
+    printf("  TAPE GLITCH 127, PITCH +12: peak %d\n", pk);
+    check(pk > 200 && pk < 32767, "GLITCH, PITCH: echoes, bounded");
+    {   /* PITCH +12: the second repeat an octave up (441 Hz in, 882 Hz back) */
+        uint32_t zc = 0;
+        par_set(PAR_GLITCH, 0);
+        par_set(PAR_FX_P4, 100);
+        par_set(PAR_FX_P3, 127);
+        par_set(PAR_FX_P2, 0);
+        run_ms(10);
+        fx_fresh(DELAY_TAPE);
+        p21_sine = 441;
+        fx_alone(600, 0, 0, 4410);
+        p21_sine = 0;
+        {   /* (the strongest frequency over the repeat, 300 .. 1500 Hz) */
+            double best = 0;
+            uint32_t hz;
+            for (hz = 300; hz <= 1500u; hz += 3u) {
+                double re = 0, im = 0, m;
+                for (i = 22050u + 1000u; i < 22050u + 3205u; i++) {
+                    re += p21_l[i] * cos(2.0 * M_PI * hz * i / FS);
+                    im += p21_l[i] * sin(2.0 * M_PI * hz * i / FS);
+                }
+                m = re * re + im * im;
+                if (m > best) {
+                    best = m;
+                    zc = hz;
+                }
+            }
+        }
+        printf("  PITCH +12: the second repeat at %u Hz (882)\n", zc);
+        check(zc > 860u && zc < 905u, "PITCH +12: the repeat an octave up");
+    }
+    /* 21c: ECHO > REVERB */
+    par_set(PAR_ECHOREV, 127);
+    par_set(PAR_GLITCH, 0);
+    par_set(PAR_DPITCH, DP_OFF);
+    run_ms(10);
+    fx_fresh(DELAY_TAPE);
+    {
+        int32_t any = 0;
+        uint32_t b;
+        fx_alone(1, 20000, 20000, 0);
+        for (b = 0; b < 200u && !any; b++) {
+            fx_alone(1, 0, 0, 0);
+            for (i = 0; i < BLOCK; i++)
+                any |= rev_in[i];
+        }
+        check(any && rev_fed, "ECHO > REVERB: the echoes into the reverb's send");
+    }
+    /* the cost: TAPE PP with everything on, a block on the host */
+    par_set(PAR_GLITCH, 127);
+    par_set(PAR_DPITCH, DP_UP7);
+    par_set(PAR_FX_P2, 127);
+    run_ms(10);
+    fx_fresh(DELAY_TAPEPP);
+    {
+        struct timespec a, b;
+        double us;
+        clock_gettime(CLOCK_MONOTONIC, &a);
+        fx_alone(4000, 0, 0, 1u << 30);
+        clock_gettime(CLOCK_MONOTONIC, &b);
+        us = ((b.tv_sec - a.tv_sec) * 1e9 + (b.tv_nsec - a.tv_nsec)) / 1e3 / 4000.0;
+        printf("  TAPE PP, everything on: %.2f us a block on the host (with the test's own fill)\n", us);
+    }
+    par_set(PAR_FX_P1, 127);                         /* (the screens: 1/2 at 120 is 1 s, NORMAL's 0.74 s: /2) */
+    par_set(PAR_BPM, 60);
+    run_ms(20);
+    goto_mode(B_FX, M_FX);
+    fx_goto(FXPG_PARS);
+    shot("fx-tape");
+    fx_goto(FXPG_DUB);
+    {
+        uint16_t pp[4];
+        page_params(pp);
+        check(pp[0] == PAR_DSYNC && pp[3] == PAR_DPITCH, "FX: DELAY: DUB, SYNC .. PITCH");
+    }
+    shot("fx-delay-dub");
+    turn(EN_SELECT, 1);
+    shot("fx-delay-send");
+    par_set(PAR_FX_DELAY_TYPE, DELAY_NORMAL);
+    run_ms(20);
+    fx_goto(FXPG_PARS);
+    shot("fx-normal-sync-half");
+    press(B_HOME);
+    par_set(PAR_BPM, 120);
+    par_set(PAR_FX_TYPE, FX_OFF);
+    par_set(PAR_DSYNC, 0);
+    par_set(PAR_DSAT, 0);
+    par_set(PAR_ECHOREV, 0);
+    par_set(PAR_GLITCH, 0);
+    par_set(PAR_DPITCH, 0);
+    par_set(PAR_FX_DELAY_TYPE, 0);
+    run_ms(20);
+}
+
+/* 22: PLATE (Clouds' reverb) rings after a hit, dies away and sleeps; SPACE holds its tail */
+static double p22_hit(uint32_t space_at, uint32_t from, uint32_t to, uint32_t blocks)
+{
+    double e = 0;
+    uint32_t i, j;
+    voices_init();
+    fxbus_init();
+    reverb_init();
+    kit_init_par();
+    par[PAR_VELOD1] = 20;
+    par[PAR_REV_TYPE] = 3;
+    par[PAR_REV_SIZE] = 64;
+    par[PAR_REV_SEND1] = 127;
+    snd_post_all();
+    snd_service();
+    voice_trigger(0, 127, SEQ_DEFAULT_NOTE);
+    for (i = 0; i < blocks; i++) {
+        if (i == space_at)
+            space_on = 1;
+        voices_block();
+        for (j = 0; j < 64u; j++)
+            if (i >= from && i < to)
+                e += (double)mix_l[j] * mix_l[j] + (double)mix_r[j] * mix_r[j];
+    }
+    return e;
+}
+static void phase22(void)
+{
+    double e1 = p22_hit(~0u, 200, 400, 400), e2 = p22_hit(~0u, 2200, 2400, 7000), s1, s2;
+    int32_t side = 0;
+    uint32_t i;
+    printf("  PLATE: tail %.3g, at 3.2 s %.3g; asleep at 10 s: %u\n", e1, e2, rv.idle);
+    check(e1 > 1e6 && e2 < e1 * 0.01, "PLATE rings and dies away");
+    check(rv.idle == 255, "PLATE: silent at the end, the reverb asleep");
+    p22_hit(~0u, 0, 0, 300);
+    for (i = 0; i < BLOCK; i++)
+        side |= rev_side[i];
+    check(side != 0, "PLATE: a stereo return (its two branches)");
+    s1 = p22_hit(150, 600, 800, 800);
+    s2 = p22_hit(150, 2200, 2400, 2400);
+    printf("  PLATE, SPACE: at 0.9 s %.3g, at 3.2 s %.3g\n", s1, s2);
+    check(s2 > s1 * 0.2, "PLATE: SPACE holds the tail");
+    space_on = 0;
+    reverb_init();
+    voices_init();
+    kit_load_ram(kit_loaded);
+    snd_service();
+    goto_mode(B_HOME, M_HOME);
+    par_set(PAR_REV_TYPE, 3);
+    press(B_FX);
+    fx_goto(FXPG_REV);
+    run_ms(40);
+    check(rv.type == 3, "the reverb page: PLATE");
+    shot("reverb-plate");
+    press(B_HOME);
+    par_set(PAR_REV_TYPE, 0);
+    run_ms(20);
+}
+
+/* 23: DIRT. a: the new shapes, bounded, each its own; b: the bus's drive; c: the master's, each type bounded, near the
+ * dry level, off at 0 */
+static double p23_h3(const int32_t *x, uint32_t n)   /* the 3rd harmonic's share of a 441 Hz tone (100 samples) */
+{
+    double c = 0, s = 0, e = 0;
+    uint32_t i;
+    for (i = 0; i < n; i++) {
+        c += x[i] * cos(2 * M_PI * 3 * i / 100.0);
+        s += x[i] * sin(2 * M_PI * 3 * i / 100.0);
+        e += (double)x[i] * x[i];
+    }
+    return (c * c + s * s) * 2 / n / (e + 1);
+}
+static void phase_016t2(void)                        /* 0.16-test2: FX's page order; the HYRULE palette */
+{
+    static const uint8_t OFF[] = {FXPG_REV, FXPG_BUS, FXPG_DIRT, FXPG_COMP, FXPG_COMP2};
+    static const uint8_t PH[] = {FXPG_REV, FXPG_BUS, FXPG_PARS, FXPG_DIRT, FXPG_COMP, FXPG_COMP2};
+    static const uint8_t DL[] = {FXPG_REV, FXPG_BUS, FXPG_PARS, FXPG_DUB, FXPG_SEND, FXPG_DIRT, FXPG_COMP, FXPG_COMP2};
+    static const struct { uint32_t type; const uint8_t *pg; uint32_t n; } C[3] = {
+        {FX_OFF, OFF, 5}, {FX_PHASER, PH, 6}, {FX_DELAY, DL, 8}};
+    uint32_t k, i, ok;
+    uint8_t l[NFXPG];
+    press(B_HOME);
+    press(B_FX);
+    for (k = 0; k < 3u; k++) {
+        par_set(PAR_FX_TYPE, C[k].type);
+        ok = fx_shown(l) == C[k].n && mode_pages() == C[k].n;
+        for (i = 0; ok && i < C[k].n; i++)
+            ok = l[i] == C[k].pg[i];
+        check(ok, "FX: the pages in order, the reverb first and the type's pages together");
+        ui.page = 0;
+        ok = 1;
+        for (i = 0; i < C[k].n; i++) {               /* SELECT walks them in that order */
+            ok &= fx_page() == C[k].pg[i];
+            turn(EN_SELECT, 1);
+        }
+        check(ok, "FX: SELECT walks the pages in order");
+    }
+    fx_goto(FXPG_PARS);
+    ui.force = 1;
+    run_ms(100);
+    shot("fx-order-delay");
+    par_set(PAR_FX_TYPE, FX_OFF);
+    for (k = 0; k < NPALETTES && strcmp(UI_PALETTES[k].name, "HYRULE"); k++)
+        ;
+    check(k == NPALETTES - 1u, "HYRULE: the last palette (saved ids stay)");
+    vp_set(VP_PALETTE, k);
+    ui.page = 0;
+    press(B_HOME);
+    ui.force = 1;
+    run_ms(100);
+    shot("palette-hyrule");
+    press(B_FX);
+    fx_goto(FXPG_REV);
+    ui.force = 1;
+    run_ms(100);
+    shot("palette-hyrule-fx");
+    vp_set(VP_PALETTE, 0);
+}
+
+static void phase23(void)
+{
+    static const char *const SN[4] = {"FUZZ", "TAPE", "SINE FOLD", "BITE"};
+    int32_t x[6400], y[6400];
+    uint32_t i, k, t;
+    double rms_d = 0;
+    for (i = 0; i < 6400u; i++) {
+        x[i] = (int32_t)(16000 * sin(2 * M_PI * i / 100.0));
+        rms_d += (double)x[i] * x[i];
+    }
+    rms_d = sqrt(rms_d / 6400);
+    /* 23a */
+    for (k = 0; k < 4u; k++) {
+        voice_t v;
+        int16_t b[BLOCK];
+        int32_t pk = 0;
+        double h3;
+        memset(&v, 0, sizeof v);
+        v.shape = (uint8_t)(SH_FUZZ + k);
+        v.drive = 40000;
+        for (i = 0; i < 6400u; i += BLOCK) {
+            for (t = 0; t < BLOCK; t++)
+                b[t] = (int16_t)x[i + t];
+            shape_block(&v, b);
+            for (t = 0; t < BLOCK; t++) {
+                y[i + t] = b[t];
+                pk = abs(b[t]) > pk ? abs(b[t]) : pk;
+            }
+        }
+        h3 = p23_h3(y + 6300, 100);
+        printf("  shape %-9s peak %d, 3rd harmonic %.3f\n", SN[k], pk, h3);
+        check(pk > 4000 && pk <= 32768, "23a: a new shape sounds, bounded");
+        check(h3 > 0.002, "23a: a new shape adds harmonics");
+        check(strcmp(L_SHAPE[SH_FUZZ + k], SN[k]) == 0, "23a: the shape's name");
+    }
+    check(par_max_k(PAR_SHAPE1) == NSHAPE - 1u && NSHAPE == 9u, "23a: nine shapes");
+    /* 23c: the master's DIRT */
+    for (k = 0; k < NDIRT; k++) {
+        double rms = 0, h3;
+        int32_t pk = 0;
+        memset(&dirt, 0, sizeof dirt);
+        dirt.type = (uint8_t)k;
+        dirt.amt = 65536;
+        for (i = 0; i < 6400u; i += BLOCK) {
+            int32_t l[BLOCK], r[BLOCK];
+            for (t = 0; t < BLOCK; t++)
+                l[t] = r[t] = x[i + t];
+            dirt_master(l, r);
+            for (t = 0; t < BLOCK; t++) {
+                y[i + t] = l[t];
+                rms += (double)l[t] * l[t];
+                pk = abs(l[t]) > pk ? abs(l[t]) : pk;
+            }
+        }
+        rms = sqrt(rms / 6400);
+        h3 = p23_h3(y + 6300, 100);
+        printf("  master DIRT %-5s peak %d, level %+.1f dB, 3rd harmonic %.3f\n", L_DIRT[k], pk,
+               20 * log10(rms / rms_d), h3);
+        check(pk <= 40000 && rms > rms_d * 0.5 && rms < rms_d * 2.0, "23c: DIRT bounded, near the dry level");
+        check(h3 > 0.002, "23c: DIRT adds harmonics");
+    }
+    {
+        int32_t l[BLOCK], r[BLOCK];
+        int same = 1;
+        memset(&dirt, 0, sizeof dirt);
+        dirt.type = DT_FUZZ;
+        for (t = 0; t < BLOCK; t++)
+            l[t] = r[t] = x[t] * 3;
+        dirt_master(l, r);
+        for (t = 0; t < BLOCK; t++)
+            same &= l[t] == x[t] * 3;
+        check(same, "23c: AMOUNT 0: the master untouched");
+    }
+    /* 23b: the bus's drive, before its type (OFF here: the bus as it is) */
+    {
+        double e0 = 0, h0, h1;
+        int16_t keep[BLOCK];
+        int32_t a[BLOCK];
+        fx.route = 0;
+        for (t = 0; t < BLOCK; t++)
+            fx_l[t] = fx_r[t] = keep[t] = (int16_t)x[t];
+        dirt.bus = 0;
+        dirt_bus();
+        for (t = 0; t < BLOCK; t++)
+            e0 += fx_l[t] == keep[t] ? 0 : 1;
+        check(e0 == 0, "23b: bus DIRT 0: the bus untouched");
+        for (t = 0; t < BLOCK; t++)
+            a[t] = keep[t];
+        h0 = p23_h3(a, 100 < BLOCK ? 100 : BLOCK);
+        dirt.bus = 65536;
+        dirt_bus();
+        for (t = 0; t < BLOCK; t++)
+            a[t] = fx_l[t];
+        h1 = p23_h3(a, 100 < BLOCK ? 100 : BLOCK);
+        printf("  bus DIRT 127: the 3rd harmonic %.3f (dry %.3f)\n", h1, h0);
+        check(h1 > h0 + 0.002, "23b: bus DIRT drives the bus");
+        memset(&dirt, 0, sizeof dirt);
+    }
+    /* the kit: the three bytes, the page */
+    p4_reset();
+    par_set(PAR_FXDIRT, 50);
+    par_set(PAR_MDIRT, DT_DIODE);
+    par_set(PAR_MDIRT_AMT, 90);
+    run_ms(20);
+    check(dirt.bus > 0 && dirt.type == DT_DIODE && dirt.amt > 40000, "23: the DIRT parameters set the stages");
+    check(morph_excluded(PAR_MDIRT) && !morph_excluded(PAR_MDIRT_AMT), "23: DIRT's type doesn't morph, its amount does");
+    goto_mode(B_HOME, M_HOME);
+    press(B_FX);
+    fx_goto(FXPG_DIRT);
+    run_ms(40);
+    shot("fx-dirt");
+    press(B_HOME);
+    par_set(PAR_FXDIRT, 0);
+    par_set(PAR_MDIRT, 0);
+    par_set(PAR_MDIRT_AMT, 0);
+    run_ms(20);
+    check(!dirt.bus && !dirt.amt, "23: DIRT off again");
+}
+
+/* 0.16-test3: TIME with SYNC a note value a detent; the master COMPRESSOR and its SIDECHAIN; STUTTER */
+static void phase_016t3(void)
+{
+    uint32_t i, k, ok;
+    /* SYNC: each detent of TIME the next note value, both ways */
+    p4_reset();
+    fx_fresh(DELAY_TAPE);
+    par_set(PAR_DSYNC, 1);
+    par_set(PAR_FX_P1, 0);
+    run_ms(20);
+    press(B_HOME);
+    press(B_FX);
+    fx_goto(FXPG_PARS);
+    for (ok = 1, i = 0; i < NSYNCV - 1u; i++) {
+        uint32_t a = (par[PAR_FX_P1] * 65536u / 127u * NSYNCV) >> 16, b;
+        turn(EN_K1, 1);
+        b = (par[PAR_FX_P1] * 65536u / 127u * NSYNCV) >> 16;
+        ok &= b == a + 1u;
+    }
+    check(ok, "SYNC: TIME a note value a detent, up to 1/2");
+    turn(EN_K1, -3);
+    check(((par[PAR_FX_P1] * 65536u / 127u * NSYNCV) >> 16) == NSYNCV - 4u, "SYNC: .. and back down");
+    par_set(PAR_DSYNC, 0);
+    par_set(PAR_FX_TYPE, FX_OFF);
+    run_ms(20);
+    /* the COMPRESSOR: OFF leaves the mix alone; 4:1 at -24 dB takes ~3/4 of the excess; a key ducks the rest, not
+     * itself */
+    {
+        int32_t l[BLOCK], r[BLOCK], kl[BLOCK];
+        double g;
+        par_set(PAR_MC_RATIO, 0);
+        run_ms(5);
+        for (i = 0; i < BLOCK; i++)
+            l[i] = r[i] = (int32_t)(16000 * sin(2 * M_PI * i / 32.0));
+        comp_master(l, r);
+        for (ok = 1, i = 0; i < BLOCK; i++)
+            ok &= l[i] == (int32_t)(16000 * sin(2 * M_PI * i / 32.0));
+        check(ok && mc.gr == 0, "COMP: RATIO OFF: the mix as it was");
+        par_set(PAR_MC_RATIO, 4);                    /* (4:1) */
+        par_set(PAR_MC_THR, 63);                     /* (-24 dB) */
+        par_set(PAR_MC_ATK, 0);
+        par_set(PAR_MC_REL, 30);
+        par_set(PAR_MC_SRC, 0);
+        par_set(PAR_MC_GAIN, 0);
+        par_set(PAR_MC_MIX, 127);
+        run_ms(5);
+        for (k = 0; k < 400u; k++) {                 /* (a sine at -6 dB: 18 dB over, 13.5 dB taken) */
+            for (i = 0; i < BLOCK; i++)
+                l[i] = r[i] = (int32_t)(16384 * sin(2 * M_PI * (k * BLOCK + i) / 32.0));
+            comp_master(l, r);
+        }
+        for (g = 0, i = 0; i < BLOCK; i++)
+            g = fabs((double)l[i]) > g ? fabs((double)l[i]) : g;
+        g = 20 * log10(g / 16384);
+        printf("  COMP 4:1 at -24 dB, a sine at -6 dB: %.1f dB (-13.5), GR %.1f dB\n", g, mc.gr * 6.02 / 65536);
+        check(g < -11.5 && g > -15.5, "COMP: 4:1 takes 3/4 of what is over");
+        /* a key: D1's sound, its dry part kept out */
+        par_set(PAR_MC_SRC, 1);
+        run_ms(5);
+        check(mc_key == 1u, "COMP: SIDECHAIN D1: D1's dry part is kept out");
+        for (k = 0; k < 40u; k++) {
+            for (i = 0; i < BLOCK; i++) {
+                vbuf[0][i] = (int16_t)(k < 20u ? 30000 * (i & 1 ? 1 : -1) : 0);   /* (D1 loud, then silent) */
+                l[i] = r[i] = 8000;
+                mc_kl[i] = mc_kr[i] = kl[i] = 12345;
+            }
+            comp_master(l, r);
+            if (k == 19u) {
+                printf("  COMP keyed by D1: the rest at %d (8000), D1's own %d (12345)\n", l[0] - kl[0], kl[0]);
+                check(l[0] - kl[0] < 3000, "COMP: D1's hit ducks the rest");
+            }
+        }
+        par_set(PAR_MC_REL, 0);
+        run_ms(5);
+        for (k = 0; k < 200u; k++) {
+            for (i = 0; i < BLOCK; i++) {
+                vbuf[0][i] = 0;
+                l[i] = r[i] = 8000;
+                mc_kl[i] = mc_kr[i] = 0;
+            }
+            comp_master(l, r);
+        }
+        check(l[0] > 7800, "COMP: D1 silent, the rest back");
+        par_set(PAR_MC_RATIO, 4);
+        run_ms(5);
+        mc.gr = 9 << 16 / 6;
+        press(B_HOME);
+        press(B_FX);
+        fx_goto(FXPG_COMP);
+        shot("comp");
+        fx_goto(FXPG_COMP2);
+        shot("comp-sidechain");
+        press(B_HOME);
+        par_set(PAR_MC_RATIO, 0);
+        par_set(PAR_MC_SRC, 0);
+        run_ms(5);
+        check(mc_key == 0u, "COMP: OFF: no key");
+    }
+    /* STUTTER: CHANCE 100%, 1/16 over a 1/4, the clock stopped (its own): the first 1/16 live, then it again */
+    {
+        static int16_t in[FS], out[FS];
+        int16_t l[BLOCK], r[BLOCK];
+        uint32_t n = 0, b, rr = 777u;
+        double c, xx, yy, xy;
+        par_set(PAR_BPM, 120);
+        run_ms(5);
+        memset(&pf, 0, sizeof pf);
+        pf.cut_g = 32767;
+        pf.cut_open = 1;
+        pf.dj = 64;
+        pfs.st_chance = 127;
+        pfs.st_size = 1;
+        pfs.st_len = 2;
+        pfs.st_vary = SV_OFF;
+        for (b = 0; b < FS / BLOCK; b++) {
+            for (i = 0; i < BLOCK; i++) {
+                rr = rr * 1664525u + 1013904223u;
+                l[i] = r[i] = in[b * BLOCK + i] = (int16_t)(((b * BLOCK + i) % 400u < 200u ? 6000 : -6000) +
+                                                            (int32_t)(rr >> 22) - 512);
+            }
+            perf2_master(l, r);
+            for (i = 0; i < BLOCK; i++)
+                out[b * BLOCK + i] = l[i];
+            if (pf.st_on && !n)
+                n = b * BLOCK;                       /* (where the burst started) */
+        }
+        {
+            uint32_t len = 5512u, s0 = n + len + 200u;    /* (a 1/16 at 120: 5512 samples; the second, after its fade) */
+            for (xx = yy = xy = 0, i = 0; i < 4000u; i++) {
+                double x = in[n + 200u + i], y = out[s0 + i];
+                xx += x * x;
+                yy += y * y;
+                xy += x * y;
+            }
+            c = xy / sqrt(xx * yy + 1);
+            printf("  STUTTER 1/16: the burst at %u, its second 1/16 against the first: %.3f\n", n, c);
+            check(n < 5512u * 4u && c > 0.9, "STUTTER: the first 1/16 again");
+        }
+        for (k = SV_SHRINK; k < NSV; k++) {          /* (each VARY, the RANDOM size: it plays, bounded) */
+            int32_t pk = 0;
+            uint32_t bursts = 0;
+            pfs.st_vary = (uint8_t)k;
+            pfs.st_size = (uint8_t)(k == SV_RAND ? NSTSIZE - 1u : k - 1u);
+            for (b = 0; b < 2u * FS / BLOCK; b++) {
+                for (i = 0; i < BLOCK; i++) {
+                    rr = rr * 1664525u + 1013904223u;
+                    l[i] = r[i] = (int16_t)((int32_t)(rr >> 18) - 8192);
+                }
+                perf2_master(l, r);
+                bursts += pf.st_on == 2u;
+                for (i = 0; i < BLOCK; i++)
+                    pk = abs(l[i]) > pk ? abs(l[i]) : pk;
+            }
+            printf("  STUTTER VARY %u: %u blocks repeating, peak %d\n", k, bursts, pk);
+            check(bursts > 100u && pk <= 8192, "STUTTER: each VARY repeats, bounded");
+        }
+        pfs.st_size = 1;
+        pfs.st_vary = SV_OFF;
+        pfs.st_chance = 0;
+        for (b = 0; b < 400u; b++)
+            perf2_master(l, r);
+        check(!pf.st_on && !pf.st_mix, "STUTTER: CHANCE 0: no more bursts");
+        gls[0].dest = GD_STUT;                       /* (a global LFO on it) */
+        gls[0].depth = 127;
+        gls[0].mode = GM_FREE;
+        gls[0].wave = LFO_TRI;
+        gls[0].phase = 64;
+        run_ms(50);
+        check(gl.amt[GD_STUT] > 0, "STUTTER: a global LFO moves its chance");
+        gls[0].dest = GD_OFF;
+        gls[0].depth = 0;
+        /* the page; OCT+ held there; the project keeps it */
+        p4_reset();
+        goto_mode(B_ARP, M_PERF);
+        ui.page = PG_STUT;
+        ui.force = 1;
+        run_ms(40);
+        {
+            uint16_t kp[4];
+            page_params(kp);
+            check(kp[0] == VP_STCH && kp[3] == VP_STVARY, "STUTTER: its page, CHANCE .. VARY");
+        }
+        hold(B_OCTUP);
+        check(pf.st_hold, "STUTTER: OCT+ held on its page");
+        run_ms(400);
+        check(pf.st_on != 0u, "STUTTER: .. stutters");
+        shot("stutter");
+        release(B_OCTUP);
+        check(!pf.st_hold && !ui.copy, "STUTTER: OCT+ let go (not COPY)");
+        pfs.st_chance = 50;
+        pfs.st_size = 4;
+        pfs.st_len = 3;
+        pfs.st_vary = SV_PDOWN;
+        {
+            int rc = proj_save(1, "STUTTER ");
+            perf_defaults();
+            rc |= proj_load(1);
+            check(rc == 0 && pfs.st_chance == 50 && pfs.st_size == 4 && pfs.st_len == 3 && pfs.st_vary == SV_PDOWN,
+                  "STUTTER: the project keeps its settings");
+            perf_defaults();
+        }
+    }
 }
 
 int main(int argc, char **argv)
@@ -3016,6 +4166,7 @@ int main(int argc, char **argv)
     press(B_GLO);
     shot("config");
     press(B_FX);
+    fx_goto(FXPG_BUS);
     turn(EN_K1, 4);                                   /* DELAY */
     check(par[PAR_FX_TYPE] == FX_DELAY, "FX type to DELAY");
     shot("fx");
@@ -3185,16 +4336,16 @@ int main(int argc, char **argv)
     /* the reverb: each model rings after the voice, then dies away, and sleeps */
     {
         uint32_t m, i;
-        for (m = 0; m < 4u; m++) {
+        for (m = 0; m <= NREV; m++) {
             double e1 = 0, e2 = 0, dry = 0;
             voices_init();
             fxbus_init();
             reverb_init();
             kit_init_par();
             par[PAR_VELOD1] = 20;                      /* a short kick */
-            par[PAR_REV_TYPE] = (uint8_t)(m < 3u ? m : 0u);
+            par[PAR_REV_TYPE] = (uint8_t)(m < NREV ? m : 0u);
             par[PAR_REV_SIZE] = 90;
-            par[PAR_REV_SEND1] = m < 3u ? 127 : 0;     /* (4th: no send, no tail) */
+            par[PAR_REV_SEND1] = m < NREV ? 127 : 0;   /* (the last: no send, no tail) */
             snd_post_all();
             snd_service();
             voice_trigger(0, 127, SEQ_DEFAULT_NOTE);
@@ -3211,8 +4362,8 @@ int main(int argc, char **argv)
                 }
             }
             printf("  reverb %-6s tail %.1f dB, at 3.2 s %.1f dB (below the hit)\n",
-                   m < 3u ? L_REVMODEL[m] : "none", 10 * log10((e1 + 1) / (dry + 1)), 10 * log10((e2 + 1) / (dry + 1)));
-            if (m < 3u)
+                   m < NREV ? L_REVMODEL[m] : "none", 10 * log10((e1 + 1) / (dry + 1)), 10 * log10((e2 + 1) / (dry + 1)));
+            if (m < NREV)
                 check(e1 > dry * 1e-4 && e2 < e1 * 0.1, "the reverb rings and dies away");
             else
                 check(e1 == 0 && rv.idle == 255, "no send: no tail, the reverb asleep");
@@ -3253,7 +4404,7 @@ int main(int argc, char **argv)
     shot("step-locks-send");
     press(B_SEQ);
     press(B_FX);
-    turn(EN_SELECT, 2);
+    fx_goto(FXPG_REV);
     turn(EN_K1, 2);
     check(par[PAR_REV_TYPE] == 2 && rv.type == 2, "the reverb page: HALL");
     run_ms(100);
@@ -3392,6 +4543,13 @@ int main(int argc, char **argv)
     phase13_control_all();
     phase12_remote();
     phase14();
+    phase19();
+    phase20();
+    phase21();
+    phase22();
+    phase23();
+    phase_016t2();
+    phase_016t3();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;
 }

@@ -156,7 +156,18 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
             put_str(b, EUCLID_TITLE[ui.page % NEUCLID], n);
         }
         break;
-    case M_FX: put_str(b, ui.page % 3u == 2u ? "REVERB" : "FX BUS", n); break;
+    case M_FX: {
+        static const char *const T[NFXPG] = {"REVERB", "FX BUS", "", "DELAY: DUB", "DELAY: SEND", "DIRT",
+                                             "MASTER COMP", "COMP: SIDECHAIN"};
+        uint32_t g = fx_page();
+        if (g == FXPG_PARS) {                        /* (the type's knobs: named after it) */
+            put_str(b, "FX BUS: ", n);
+            put_str(b + 8, L_FX[par[PAR_FX_TYPE] < NFX ? par[PAR_FX_TYPE] : 0], n - 8u);
+        } else {
+            put_str(b, T[g], n);
+        }
+        break;
+    }
     case M_MIXER: put_str(b, MIXER_TITLE[(ui.page % NMIXER) / 2u], n); break;
     case M_CONFIG: put_str(b, CONFIG_TITLE[ui.page % NCONFIG], n); break;
     case M_SAVE: put_str(b, "SAVE ", n); put_str(b + 5, IO_NAME[ui.io_type], n - 5); break;
@@ -245,7 +256,8 @@ static uint32_t col_sig(uint32_t c)
     for (t = 0; t < NTRACK; t++) {
         const pattern_t *pt = view_pat(t);
         const step_t *x = &pt->step[t][st];
-        s = sig_add(s, (uint32_t)pt->cond[t][st] | (uint32_t)pt->rat[t][st] << 8 | (pt == &gpat) << 16);
+        s = sig_add(s, (uint32_t)pt->cond[t][st] | (uint32_t)pt->rat[t][st] << 8 | (pt == &gpat) << 16 |
+                           (uint32_t)(x->prob >> 7) << 17);
         s = sig_add(s, main_on(pt, t, st) | (st < track_len(pt, t)) << 1 |
                            (sq.running && sq.idx[t] == (int8_t)st) << 2);
         if (main_on(pt, t, st))
@@ -278,7 +290,7 @@ static void draw_col(uint32_t c)
             uint32_t vel = x->volume & STEP_VOLUME_MASK, h = 4u + vel * 8u / 127u;
             uint16_t fill = ux_mix(play ? T_SEL : bg, col, 45 + (int32_t)vel * 55 / 127);
             int32_t top = y + (int32_t)(ROW_H - h) / 2;
-            if (x->prob < 100u && x->prob) {        /* a chance: an outline */
+            if (step_prob(x) < 100u && step_prob(x)) {   /* a chance: an outline */
                 cv_rrect(1, top, CELL_W - 2, (int32_t)h, 2, fill, play ? T_SEL : bg);
                 cv_rect(3, top + 2, CELL_W - 6, (int32_t)h - 4, play ? T_SEL : bg);
             } else {
@@ -290,8 +302,12 @@ static void draw_col(uint32_t c)
                 cv_rect(CELL_W - 4, y + 1, 3, 3, T_ACCENT);
             if ((pt->timing[t][st] >> 4) != 7u)      /* shifted: a tick under it */
                 cv_rect((pt->timing[t][st] >> 4) < 7u ? 1 : CELL_W - 3, y + ROW_H - 2, 2, 1, T_TEXT);
-            if (pt->cond[t][st])                     /* a trig condition: a dot top left */
+            if (step_cond(pt, t, st))                /* a trig condition: a dot top left */
                 cv_rect(1, y + 1, 3, 3, T_THEME);
+            if (step_len(pt, t, st) == LEN_TIE)      /* 19b: tied: a line on into the next step */
+                cv_rect(CELL_W - 3, y + ROW_H / 2, 3, 2, T_ACCENT);
+            else if (step_len(pt, t, st))            /* .. a length: a line at its right edge */
+                cv_rect(CELL_W - 2, top + 1, 1, (int32_t)h - 2, T_TEXT);
             if (pt->rat[t][st] & 7u)                 /* a ratchet: a bar under it, longer with more hits */
                 cv_rect(2, y + ROW_H - 1, 1 + (int32_t)(pt->rat[t][st] & 7u), 1, T_ACCENT);
         } else {
@@ -495,12 +511,29 @@ static void draw_perf(int32_t y0)
         cv_rect(44, 102, (int32_t)(tape_q16 * 186u >> 16), 4, T_REC);
     } else if (glfo_page() >= 0) {                   /* 0.13: the global LFOs as they move */
         for (i = 0; i < NGLFO; i++) {
-            int32_t x = 6 + (int32_t)i * 118;
+            static const char *const L[NGLFO] = {"L1", "L2", "L3"};
+            int32_t x = 6 + (int32_t)i * 78;
             int on = gls[i].dest != GD_OFF && gls[i].depth;
-            cv_text(x, 98, &AF_S, i ? "L2" : "L1", (int32_t)i == glfo_page() ? T_THEME : T_MID);
-            cv_rect(x + 20, 102, 90, 4, T_SURF);
-            cv_rect(x + 20, 102, (int32_t)((uint32_t)gl.out[i] * 90u >> 16), 4, on ? T_ACCENT : T_DIM);
+            cv_text(x, 98, &AF_S, L[i], (int32_t)i == glfo_page() ? T_THEME : T_MID);
+            cv_rect(x + 20, 102, 52, 4, T_SURF);
+            cv_rect(x + 20, 102, (int32_t)((uint32_t)gl.out[i] * 52u >> 16), 4, on ? T_ACCENT : T_DIM);
         }
+    } else if (perf_stut()) {                        /* 0.16: STUTTER: the burst as it plays, a box a SIZE */
+        uint32_t u = pf.st_on ? pf.st_units : 0u, k;
+        cv_text(6, 98, &AF_S, pf.st_on == 2u ? "STUTTER" : pf.st_on ? "LIVE" : "", pf.st_on ? T_ACCENT : T_DIM);
+        for (k = 0; k < u && k < 16u; k++)
+            cv_rect(80 + (int32_t)k * 9, 100, 7, 7, k < pf.st_rep ? T_ACCENT : k == pf.st_rep ? T_THEME : T_SURF);
+    } else if (perf_dens()) {                        /* 19d: the tracks DENSITY moves (left out: struck through) */
+        for (i = 0; i < NTRACK; i++) {
+            int32_t x = 6 + (int32_t)i * 33;
+            int out = (pfs.dex >> i) & 1u;
+            cv_text(x + 4, 98, &AF_S, VOICE_SHORT[i], out ? T_DIM : TRACK_COL[i]);
+            if (out)
+                cv_rect(x + 2, 98 + 7, 22, 1, T_TEXT);
+        }
+        cv_rect(26, 118, 186, 2, T_SURF);            /* (where DENSITY is, the LFOs' push in it) */
+        cv_rect(118, 115, 2, 8, T_LINE);
+        cv_rect(118 + sq.dens * 92 / 64 - 2, 115, 5, 8, sq.dens ? T_ACCENT : T_MID);
     }
     b[0] = 0;
     for (i = 0; i < NPF2; i++)                       /* what is on, by name */
@@ -511,6 +544,10 @@ static void draw_perf(int32_t y0)
         }
     if (ui.shift)
         cv_text(6, 112, &AF_S, "SHIFT + KEY: LATCH (AGAIN: OFF)", T_MID);
+    else if (perf_dens())
+        return;
+    else if (perf_stut())
+        cv_text(6, 112, &AF_S, pf.st_hold ? "HELD: STUTTERING" : "OCT+ HELD: STUTTER NOW", pf.st_hold ? T_ACCENT : T_MID);
     else if (b[0])
         cv_text_fit(6, 112, &AF_S, b, T_ACCENT, T_BG, 228);
     else if (glfo_page() >= 0)
@@ -753,18 +790,45 @@ static void draw_mixer(int32_t y0)
     }
 }
 
+static void draw_comp(void)                          /* 0.16: the master compressor: its settings, the gain it takes */
+{
+    static const char *const SRC[NVOICE + 1u] = {"THE MIX", "D1", "D2", "D3", "SN", "CY", "HH"};
+    char b[32];
+    int32_t gr = mc.gr, db10 = (int32_t)(((int64_t)gr * 602) >> 16), w;   /* (log2 to tenths of a dB) */
+    cv_text(10, 6, &AF_S, "RATIO", T_MID);
+    cv_text(10, 20, &AF_M, L_CRATIO[mc.ratio < NCRATIO ? mc.ratio : 0], mc.ratio ? T_THEME : T_DIM);
+    cv_text(120, 6, &AF_S, "SIDECHAIN", T_MID);
+    cv_text(120, 22, &AF_S, SRC[mc.src <= NVOICE ? mc.src : 0], mc.src ? TRACK_COL[mc.src - 1u] : T_TEXT);
+    cv_text(10, 50, &AF_S, "GAIN REDUCTION", T_MID);
+    cv_rect(10, 68, 220, 10, T_SURF);                /* (0 .. -24 dB, from the right) */
+    w = db10 * 220 / 240;
+    w = w > 220 ? 220 : w;
+    if (w > 0)
+        cv_rect(230 - w, 68, w, 10, T_ACCENT);
+    b[0] = '-';
+    put_int(b + 1, db10 / 10);
+    put_str(b + str_len(b), ".", sizeof b - str_len(b));
+    put_int(b + str_len(b), db10 % 10);
+    put_str(b + str_len(b), " dB", sizeof b - str_len(b));
+    cv_text(10, 86, &AF_S, mc.ratio ? b : "OFF: RATIO TURNS IT ON", mc.ratio ? T_TEXT : T_DIM);
+    cv_text(10, 104, &AF_S, mc.src ? "THE KEY'S OWN SOUND IS NOT DUCKED" : "", T_MID);
+}
 static void draw_fx(int32_t y0)
 {
     char b[24];
     uint32_t i;
-    int rev = ui.page % 3u == 2u;
+    int rev = fx_page() == FXPG_REV;
     (void)y0;
+    if (fx_page() >= FXPG_COMP) {
+        draw_comp();
+        return;
+    }
     cv_text(10, 6, &AF_S, rev ? "MODEL" : "TYPE", T_MID);
-    cv_text(10, 20, &AF_M, rev ? L_REVMODEL[rv.type % 3u] : L_FX[fx.type < NFX ? fx.type : 0], T_THEME);
+    cv_text(10, 20, &AF_M, rev ? L_REVMODEL[rv.type % NREV] : L_FX[fx.type < NFX ? fx.type : 0], T_THEME);
     if (!rev && fx.type == FX_DRIVE)
         cv_text(120, 22, &AF_S, L_DIST[fx.dist_type % 3u], T_TEXT);
     else if (!rev && fx.type == FX_DELAY)
-        cv_text(120, 22, &AF_S, L_DELAY[fx.delay_type & 1u], T_TEXT);
+        cv_text(120, 22, &AF_S, L_DELAY[fx.delay_type < NDELAY ? fx.delay_type : 0], T_TEXT);
     else if (!rev && fx.type == FX_COMP)
         cv_text(120, 22, &AF_S, L_RATIO[fx.ratio % 6u], T_TEXT);
     cv_text(10, 50, &AF_S, rev ? "REVERB SENDS" : "FX SENDS", T_MID);
@@ -928,7 +992,7 @@ static void draw_load(void)
     uint32_t k;
     for (k = 0; k < NLD - 1u; k++) {
         uint32_t i = ORDER[k], a = (ld_q8[i] * 100u + 128u) >> 8, pk = (ld_pk[i] * 100u + 128u) >> 8;
-        int32_t y = 6 + (int32_t)k * 13, w = (int32_t)(a > 100u ? 100u : a), wp = (int32_t)(pk > 100u ? 100u : pk);
+        int32_t y = 4 + (int32_t)k * 12, w = (int32_t)(a > 100u ? 100u : a), wp = (int32_t)(pk > 100u ? 100u : pk);
         cv_text(10, y, &AF_S, PART[i], T_TEXT);
         put_str(put_int(b, (int32_t)a), "%", 2);
         cv_text_r(104, y, &AF_S, b, T_TEXT, T_BG);
@@ -945,11 +1009,20 @@ static void draw_load(void)
         cat(b, "%  STACK ", sizeof b);
         put_int(b + str_len(b), (int32_t)c1_stack());
         cat(b, " B", sizeof b);
-        cv_text(10, 86, &AF_S, b, c1_stack() > 3584u ? T_REC : T_MID);
+        cv_text(10, 77, &AF_S, b, c1_stack() > 3584u ? T_REC : T_MID);
     } else {
         put_str(b, "CORES 1: ", sizeof b);
         cat(b, WHY[cores_why < sizeof WHY / sizeof WHY[0] ? cores_why : 0], sizeof b);
-        cv_text(10, 86, &AF_S, b, cores_why >= CW_BAD ? T_REC : T_MID);
+        cv_text(10, 77, &AF_S, b, cores_why >= CW_BAD ? T_REC : T_MID);
+    }
+    {   /* 18a: the main stacks' deepest use (24 KB, 8 KB); red past three quarters */
+        uint32_t u = ustack_used(), sv = sstack_used();
+        put_str(b, "STACKS ", sizeof b);
+        put_int(b + str_len(b), (int32_t)u);
+        cat(b, " + ", sizeof b);
+        put_int(b + str_len(b), (int32_t)sv);
+        cat(b, " B", sizeof b);
+        cv_text(10, 90, &AF_S, b, u > 18432u || sv > 6144u ? T_REC : T_MID);
     }
 }
 
@@ -988,14 +1061,16 @@ static void draw_config_help(int32_t y0)
         cv_text(10, 22, &AF_S, "A NOTE: only that note triggers it", T_TEXT);
         break;
     case 7: {                                        /* 0.12: the remote; a channel it shares with a track warned of */
-        uint32_t t, clash = remote_ch == midi_global_ch();
-        for (t = 0; t < NTRACK; t++)
-            clash |= remote_ch == midi_track_ch(t);
-        cv_text(10, 8, &AF_S, "A controller on this channel: knob rows", T_TEXT);
-        cv_text(10, 22, &AF_S, "CC 8-119, buttons notes 36-93 (manual)", T_TEXT);
+        uint32_t t, clash = 0;
+        for (t = 0; t <= NTRACK; t++) {
+            uint32_t c = t < NTRACK ? midi_track_ch(t) : midi_global_ch();
+            clash |= (remote_ch < 16u && c == remote_ch) || (remote_gch < 16u && c == remote_gch);
+        }
+        cv_text(10, 8, &AF_S, "TRACKS: the tracks' knobs, mute, solo", T_TEXT);
+        cv_text(10, 22, &AF_S, "GLOBAL: PERF, FX, density (manual)", T_TEXT);
         cv_text(10, 40, &AF_S, "PICKUP: a pot acts once it passes", T_TEXT);
         cv_text(10, 54, &AF_S, "the value. REL: encoders (64 +/- n)", T_TEXT);
-        if (clash && remote_ch < 16u)
+        if (clash)
             cv_text(10, 76, &AF_S, "SHARES A TRACK'S OR THE GLOBAL CHANNEL", T_REC);
         else
             cv_text(10, 76, &AF_S, "Values go back to it over USB.", T_MID);
@@ -1101,8 +1176,13 @@ static void draw_body(void)
         s = sig_add(s, sq.roll | ui.roll_latch << 8 | seq_mutes() << 16 | ui.shift << 24);
         s = sig_add(s, pfs.repeat | ui.track << 4 | (uint32_t)(pf.dj_d + 65536) >> 10 << 8 | (tape_q16 >> 11) << 20);
         if (glfo_page() >= 0)                        /* (0.13: the LFOs' bars, which page) */
-            s = sig_add(s, (uint32_t)gl.out[0] >> 11 | (uint32_t)gl.out[1] >> 11 << 8 | ui.page << 16 |
-                               (uint32_t)gls[0].dest << 20 | (uint32_t)gls[1].dest << 24);
+            s = sig_add(sig_add(s, (uint32_t)gl.out[0] >> 11 | (uint32_t)gl.out[1] >> 11 << 8 |
+                                       (uint32_t)gl.out[2] >> 11 << 16 | ui.page << 24),
+                        (uint32_t)gls[0].dest | (uint32_t)gls[1].dest << 8 | (uint32_t)gls[2].dest << 16);
+        if (perf_dens())                             /* (19d: the tracks left out, DENSITY in use) */
+            s = sig_add(s, pfs.dex | (uint32_t)(uint8_t)sq.dens << 8 | 1u << 16);
+        if (perf_stut())                             /* (0.16: STUTTER: a burst, its repeat, held) */
+            s = sig_add(s, pf.st_on | pf.st_rep << 2 | (uint32_t)pf.st_hold << 12 | 2u << 16);
     } else if (ui.shift && !ui.clear_open) {
         fn = draw_shift_legend;
         s = 1;
@@ -1155,7 +1235,9 @@ static void draw_body(void)
             uint32_t v;
             fn = draw_fx;
             s = sig_add(8, fx.type | fx.dist_type << 4 | fx.delay_type << 8 | fx.ratio << 12 | par[PAR_FX_DRY_WET] << 16);
-            s = sig_add(s, ui.page % 3u | rv.type << 4 | (uint32_t)par[PAR_REV_LEVEL] << 8);
+            s = sig_add(s, fx_page() | rv.type << 4 | (uint32_t)par[PAR_REV_LEVEL] << 8);
+            if (fx_page() >= FXPG_COMP)              /* (0.16: the compressor's gain reduction, a quarter dB) */
+                s = sig_add(s, (uint32_t)(mc.gr >> 12) | mc.ratio << 16 | mc.src << 20);
             for (v = 0; v < NVOICE; v++)
                 s = sig_add(s, par[PAR_FX_SEND1 + v] | (uint32_t)par[PAR_REV_SEND1 + v] << 8);
             break;
@@ -1167,13 +1249,14 @@ static void draw_body(void)
             break;
         case M_CONFIG:
             fn = draw_config_help;
-            s = sig_add(9, ui.page | (uint32_t)remote_ch << 8);
+            s = sig_add(9, ui.page | (uint32_t)remote_ch << 8 | (uint32_t)remote_gch << 16);
             s = sig_add(s, cpu_pct() | cpu_peak_pct() << 8 | audio_late << 16 | (uint32_t)batt_level() << 28);
             if (ui.page % NCONFIG == CF_LOAD) {
                 uint32_t i;
                 for (i = 0; i < NLD; i++)
                     s = sig_add(s, ld_q8[i] | (uint32_t)ld_pk[i] << 16);
                 s = sig_add(s, cores_why | c1_stack() << 8);
+                s = sig_add(s, ustack_used() | sstack_used() << 16);
             }
             break;
         case M_SOUND:
@@ -1211,7 +1294,8 @@ static void draw_body(void)
 static void card_name(char *b, uint32_t n, uint32_t p)
 {
     if (p >= PAR_FX_P1 && p <= PAR_FX_P4) {
-        put_str(b, FX_P_NAME[fx.type < NFX ? fx.type : 0][p - PAR_FX_P1], n);
+        put_str(b, fx.type == FX_DELAY && is_tape() && p == PAR_FX_P2 ? "Wow"
+                   : FX_P_NAME[fx.type < NFX ? fx.type : 0][p - PAR_FX_P1], n);
         return;
     }
     switch (p) {
@@ -1230,13 +1314,30 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_PKEEP: put_str(b, "Edits", n); return;
     case VP_ACCEL: put_str(b, "Accel", n); return;
     case VP_PALETTE: put_str(b, "Colours", n); return;
-    case VP_RCH: put_str(b, "Channel", n); return;
+    case VP_RCH: put_str(b, "Tracks", n); return;
+    case VP_RCH2: put_str(b, "Global", n); return;
     case VP_RKNOBS: put_str(b, "Knobs", n); return;
     case VP_CAKIT: put_str(b, "Morph", n); return;
     case VP_PMEM: put_str(b, "Last page", n); return;
     case VP_EH2: put_str(b, "Hits 2", n); return;
     case VP_ER2: put_str(b, "Rotate 2", n); return;
     case VP_EOP: put_str(b, "Join", n); return;
+    case VP_DENS: put_str(b, "Density", n); return;
+    case VP_GHOST: put_str(b, "Ghost vel", n); return;
+    case VP_BUILD: put_str(b, "Build", n); return;
+    case VP_STCH: put_str(b, "Chance", n); return;
+    case VP_STSIZE: put_str(b, "Size", n); return;
+    case VP_STLEN: put_str(b, "Length", n); return;
+    case VP_STVARY: put_str(b, "Vary", n); return;
+    case VP_SROOT: put_str(b, "Root", n); return;
+    case VP_SCALE: put_str(b, "Scale", n); return;
+    case VP_SFOLLOW: put_str(b, "Follow", n); return;
+    case VP_LEN: put_str(b, "Length", n); return;
+    case VP_MEL ... VP_MEL_LAST: {
+        static const char *const M[NML] = {"Shape", "Spread", "Bias", "Steps", "Deja vu", "Loop", "Length", "Len var"};
+        put_str(b, M[p - VP_MEL], n);
+        return;
+    }
     case VP_GL ... VP_GL_LAST: {
         static const char *const N[NGLSET] = {"Dest", "Depth", "Speed", "Wave", "Mode", "Trig", "Phase"};
         put_str(b, N[(p - VP_GL) % NGLSET], n);
@@ -1365,6 +1466,10 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     }
     put_str(b, par_name(p), n);
 }
+/* 19a: the scales' names (seq.c SC_*) */
+static const char *const SCALE_NAME[NSCALE] = {"CHROM", "MAJOR", "MINOR", "DORIAN", "PHRYG", "MIXOLYD",
+                                               "LYDIAN", "H MINOR", "MIN PNT", "MAJ PNT", "BLUES", "MINOR 7",
+                                               "FIFTHS", "PHR DOM", "HIRAJO", "PELOG", "WHOLE T"};   /* (52 px at most) */
 /* a trig condition's name */
 static void cond_name(char *b, uint32_t c, uint32_t n)
 {
@@ -1383,8 +1488,54 @@ static void cond_name(char *b, uint32_t c, uint32_t n)
     put_str(b + str_len(b), ":", n - str_len(b));
     put_int(b + str_len(b), (int32_t)bb);
 }
+static void put_ms(char *b, uint32_t ms10)           /* a time: 0.9 ms, 12 ms, 1.25 s */
+{
+    char *e;
+    if (ms10 < 100u) {
+        e = put_int(b, (int32_t)(ms10 / 10u));
+        *e++ = '.';
+        put_str(put_int(e, (int32_t)(ms10 % 10u)), " ms", 4);
+    } else if (ms10 < 10000u) {
+        put_str(put_int(b, (int32_t)(ms10 / 10u)), " ms", 4);
+    } else {
+        e = put_int(b, (int32_t)(ms10 / 10000u));
+        *e++ = '.';
+        two_digits(e, ms10 % 10000u / 100u);
+        put_str(e + 2, " s", 3);
+    }
+}
 static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
 {
+    switch (p) {                                     /* (0.16: the master compressor) */
+    case PAR_MC_THR: put_str(put_int(b, -(int32_t)((127u - v) * 48u + 63u) / 127), " dB", 4); return;
+    case PAR_MC_ATK: {
+        uint32_t tq = (uint32_t)(((uint64_t)289014u * (uint32_t)exp2_q16((int32_t)(v & 127u) * 5143)) >> 16);
+        put_ms(b, ((((tq >> 8) * 100u) / 441u) + 128u) >> 8);
+        return;
+    }
+    case PAR_MC_REL: put_ms(b, (uint32_t)(((uint64_t)882u * (uint32_t)exp2_q16((int32_t)(v & 127u) * 3428)) >> 16) * 100u / 441u);
+        return;
+    case PAR_MC_GAIN: b[0] = '+'; put_str(put_int(b + 1, (int32_t)((v * 24u + 63u) / 127u)), " dB", 4); return;
+    case PAR_MC_MIX: put_str(put_int(b, (int32_t)(v * 100u / 127u)), "%", 2); return;
+    default: break;
+    }
+    if (p == PAR_FX_P1 && fx.type == FX_DELAY && fx.d_sync) {   /* (21b: SYNC: a note value; /2 when it plays at half) */
+        static const char *const NV[NSYNCV] = {"1/32", "1/16T", "1/16", "1/8T", "1/16.", "1/8", "1/4T", "1/8.", "1/4",
+                                               "1/2T", "1/4.", "1/2"};
+        uint32_t t = v * 65536u / 127u, i = (t * NSYNCV) >> 16, k = 1;
+        uint64_t mx = is_tape() ? (uint64_t)tape_max() << 17
+                    : fx.delay_type == DELAY_NORMAL ? D_HI_MAX : (uint64_t)D_HI_MAX * 48 / 100, sm;
+        i = i < NSYNCV ? i : NSYNCV - 1u;
+        sm = sync_len(i);
+        for (; sm > mx; sm >>= 1)
+            k <<= 1;
+        put_str(b, NV[i], n);
+        if (k > 1u) {                                /* (too long for the line: played at a half, a quarter ..) */
+            put_str(b + str_len(b), " /", n - str_len(b));
+            put_int(b + str_len(b), (int32_t)k);
+        }
+        return;
+    }
     switch (p) {
     case VP_NONE: b[0] = 0; return;
     case VP_IO_TYPE: put_str(b, IO_NAME[v % NIO], n); return;
@@ -1409,7 +1560,7 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
     case VP_AUTOSAVE: case VP_ACCEL: put_str(b, v ? "ON" : "OFF", n); return;
     case VP_PKEEP: put_str(b, v ? "KEEP" : "DROP", n); return;
     case VP_PALETTE: put_str(b, UI_PALETTES[v % NPALETTES].name, n); return;
-    case VP_RCH: if (v) put_int(b, (int32_t)v); else put_str(b, "OFF", n); return;
+    case VP_RCH: case VP_RCH2: if (v) put_int(b, (int32_t)v); else put_str(b, "OFF", n); return;
     case VP_RKNOBS: put_str(b, v == RK_ABS ? "ABS" : v == RK_REL ? "REL" : "PICKUP", n); return;
     case VP_CAKIT: put_str(b, v ? "KIT ONLY" : "BOTH KITS", n); return;
     case VP_PMEM: put_str(b, v ? "YES" : "NO", n); return;
@@ -1417,7 +1568,9 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
         switch ((p - VP_GL) % NGLSET) {
         case 0: {
             static const char *const D[NGD] = {"OFF", "MORPH", "FILTER", "LP", "HP", "FB PUSH", "COMB", "CRUSH",
-                                               "JITTER", "CUTS", "PUMP"};
+                                               "JITTER", "CUTS", "PUMP", "DENSITY", "TRANSPOSE", "MEL CHANGE",
+                                               "MEL SPREAD", "DELAY FB", "DELAY TIME", "REV SEND", "MACRO 1",
+                                               "MACRO 2", "MACRO 3", "MACRO 4", "STUTTER"};
             put_str(b, D[v < NGD ? v : 0], n);
             return;
         }
@@ -1451,6 +1604,61 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
         default: put_int(b, (int32_t)v); return;
         }
     case VP_EH2: if (v) put_int(b, (int32_t)v); else put_str(b, "OFF", n); return;
+    case VP_DENS: {                                  /* (-64..63 as -100 .. +100%) */
+        int32_t d = (int32_t)v - 64, pc = d < 0 ? d * 100 / 64 : d * 100 / 63;
+        if (pc > 0)
+            b[0] = '+';
+        put_str(put_int(b + (pc > 0), pc), "%", 2);
+        return;
+    }
+    case VP_GHOST: put_int(b, (int32_t)v); return;
+    case VP_STCH: put_str(put_int(b, (int32_t)(v * 100u / 127u)), "%", 2); return;
+    case VP_STSIZE: {
+        static const char *const Z[NSTSIZE] = {"1/8", "1/16", "1/16T", "1/32", "1/32T", "1/64", "RANDOM"};
+        put_str(b, Z[v < NSTSIZE ? v : 1u], n);
+        return;
+    }
+    case VP_STLEN: {
+        static const char *const L[NSTLEN] = {"1/16", "1/8", "1/4", "1/2", "1 BAR"};
+        put_str(b, L[v < NSTLEN ? v : 2u], n);
+        return;
+    }
+    case VP_STVARY: {
+        static const char *const V[NSV] = {"OFF", "SHRINK", "PITCH DN", "PITCH UP", "REVERSE", "RANDOM"};
+        put_str(b, V[v < NSV ? v : 0], n);
+        return;
+    }
+    case VP_BUILD: {
+        static const char *const B[NDB] = {"CHANCE", "GHOSTS", "RATCHETS"};
+        put_str(b, B[v < NDB ? v : 0], n);
+        return;
+    }
+    case VP_SROOT: {
+        static const char *const R[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+        put_str(b, R[v % 12u], n);
+        return;
+    }
+    case VP_SCALE: put_str(b, SCALE_NAME[v < NSCALE ? v : 0], n); return;
+    case VP_SFOLLOW: put_str(b, v ? "ON" : "OFF", n); return;
+    case VP_LEN: case VP_MEL + ML_LEN: {
+        static const char *const L[NLEN] = {"AUTO", "1/32", "1/16", "1/8", "1/8.", "1/4", "1/2", "TIE"};
+        put_str(b, L[v < NLEN ? v : 0], n);
+        return;
+    }
+    case VP_MEL + ML_SHAPE: {
+        static const char *const S[NMEL] = {"OFF", "RANDOM", "WALK", "ARP UP", "ARP DN", "ARP U/D", "MOTIF"};
+        put_str(b, S[v < NMEL ? v : 0], n);
+        return;
+    }
+    case VP_MEL + ML_BIAS: {                          /* (the register: -100 .. +100%, 0 the root's octave) */
+        int32_t d = (int32_t)v - 64, pc = d < 0 ? d * 100 / 64 : d * 100 / 63;
+        if (pc > 0)
+            b[0] = '+';
+        put_str(put_int(b + (pc > 0), pc), "%", 2);
+        return;
+    }
+    case VP_MEL + ML_SPREAD: case VP_MEL + ML_STEPS: case VP_MEL + ML_DEJA: case VP_MEL + ML_LOOP:
+    case VP_MEL + ML_LVAR: put_int(b, (int32_t)v); return;
     case VP_ER2: put_int(b, (int32_t)v); return;
     case VP_EOP: {
         static const char *const O[NEUOP] = {"OR", "XOR", "AND", "SUB"};
@@ -1459,7 +1667,7 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
     }
     case VP_FX_SUB:
         put_str(b, fx.type == FX_DRIVE ? L_DIST[v % 3u] : fx.type == FX_RING ? L_WAVE[v % NWAVE]
-                   : fx.type == FX_COMP ? L_RATIO[v % 6u] : fx.type == FX_DELAY ? L_DELAY[v & 1u] : "-", n);
+                   : fx.type == FX_COMP ? L_RATIO[v % 6u] : fx.type == FX_DELAY ? L_DELAY[v < NDELAY ? v : 0] : "-", n);
         return;
     case VP_TRACK_VOL: case VP_MASTER: put_int(b, (int32_t)v); return;
     case VP_COND: cond_name(b, v, n); return;
@@ -1539,8 +1747,8 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
     }
     case VP_ACTION: {                                 /* (v: the track's generator's actions' 1.., gen_acts) */
         static const char *const A[NACT] = {"-", "DICE", "COMMIT", "UNDO", "RESET"};
-        uint8_t a[3];
-        uint32_t na = gen_acts(shown_pat()->gen[ui.track][0], a);
+        uint8_t a[NGACT];
+        uint32_t na = gen_acts(shown_pat(), ui.track, a);
         put_str(b, A[v && v <= na ? a[v - 1u] : 0], n);
         return;
     }

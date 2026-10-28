@@ -7,21 +7,23 @@
  * samples (CTL); here a block is the engine's BLOCK (64): the drifts' increments are per block, and HALL's half
  * rate block (HL_NC) is 32 samples. Felucca's comments, abridged where they spoke of its other effects. */
 
+#define NREV 4u                          /* the models (22: PLATE the fourth) */
 static inline int32_t mulq15(int32_t a, int32_t b) { return (a * b) >> 15; }
 /* m / 2^sh rounded towards zero (a product that feeds back must not floor: a loop of floors holds an offset and a
  * little noise for ever) */
 static inline int32_t sh_tz(int32_t m, uint32_t sh) { return (m + ((m >> 31) & ((1 << sh) - 1))) >> sh; }
+static inline int32_t sh_rn(int32_t m, uint32_t sh) { return (m + (1 << (sh - 1u))) >> sh; }   /* (to nearest: PLATE's tail) */
 
 static const uint16_t REV_COMB[4] = {1116, 1188, 1277, 1356};
 static const uint16_t REV_AP[2] = {556, 441};
-static int16_t rev_comb[1116 + 1188 + 1277 + 1356] POOL;
+static int16_t rev_comb[1116 + 1188 + 1277 + 1356] RAMBUF;   /* (18a: in RAMTEXT) */
 static union {                          /* ROOM's allpasses; SPRING's allpass chain (int32: no clamps) */
     int16_t ap[556 + 441];
     int32_t sp[(556 + 441) / 2];
-} rev_u POOL;
+} rev_u RAMBUF;
 #define rev_ap (rev_u.ap)
 static struct {
-    uint8_t type, size, damp;            /* the parameters: the model (0 ROOM, 1 SPRING, 2 HALL), SIZE, DAMP */
+    uint8_t type, size, damp;            /* the parameters: the model (0 ROOM, 1 SPRING, 2 HALL, 3 PLATE), SIZE, DAMP */
     int32_t level;                       /* the return, Q15 */
     uint8_t rtype;                       /* the model running */
     uint8_t idle;                        /* blocks with no send and a silent tail (it sleeps: no work) */
@@ -91,7 +93,7 @@ static struct {                          /* HALL's state (in the pool) */
     int32_t sd[BLOCK];                   /* the block's left minus right */
     int32_t bx[HL_NC], l[HL_NC], r[HL_NC];   /* the block at half the rate: the diffused send, left, right */
     int16_t y[HL_NL][HL_NC];             /* the lines' ends, then what goes back into them */
-} hl POOL;
+} hl RAMBUF;
 #define rev_side (hl.sd)
 
 /* ROOM (type 0): 4 damped combs + 2 allpasses (Freeverb-like, mono), added to out. Elixir: the loops' products
@@ -340,6 +342,128 @@ static __attribute__((noinline)) void rev_hall(const int32_t *in_, int32_t *out,
     hl.side = 1;
 }
 
+/* PLATE (type 3, 22): Clouds' reverb (Mutable Instruments Clouds, clouds/dsp/fx/reverb.h, Emilie Gillet, MIT;
+ * Rings and Elements use the same): Jon Dattorro's plate, the Griesinger topology. The send -> 4 allpass diffusers
+ * (the first smeared by a slow LFO inside its own loop) -> a figure eight of two branches, each a delay (the other
+ * branch's, read with a krt gain; the first through a slow LFO, a chorus on the tail), a one-pole low-pass, 2
+ * allpasses, then its delay: the left out of the first branch, the right of the second. Clouds runs at 32 kHz; here
+ * at half rate (22.05 kHz, as HALL) with its lengths scaled to it (x 0.689: the same plate, 11,283 samples), in
+ * fixed point, finer than Clouds' 12-bit format (a line's int16 holds 16384 to the unit: 2x headroom, the send in at
+ * 0.2). The lines: the 4 diffusers in ROOM's allpass buffer, two in its combs, four in pl_buf (the pool). SIZE:
+ * the decay (Clouds' reverb time, 0.35 .. 0.98; SPACE 0.995), DAMP: the low-pass (none .. ~900 Hz), Clouds'
+ * diffusion (0.625) as it is. Elixir: the loops' products round to the nearest (towards zero, the tail died far
+ * sooner than Clouds' float), towards zero once the return is quiet (it ends in silence: no limit cycle) */
+#define PL_N 10u
+enum { PL_AP1, PL_AP2, PL_AP3, PL_AP4, PL_D1A, PL_D1B, PL_DEL1, PL_D2A, PL_D2B, PL_DEL2 };
+static const uint16_t PL_LEN[PL_N] = {78, 112, 166, 275, 1139, 1404, 2350, 1318, 1146, 3295};   /* (Clouds' x 0.689) */
+static int16_t pl_buf[1139 + 2350 + 1318 + 1146] POOL;   /* D1A, DEL1, D2A, D2B */
+_Static_assert(78 + 112 + 166 + 275 <= sizeof rev_u.ap / 2u && 1404 + 3295 <= sizeof rev_comb / 2u,
+               "PLATE: the diffusers in ROOM's allpasses, D1B and DEL2 in its combs");
+#define PL_KAP 20480                     /* Clouds' diffusion, 0.625 (Q15) */
+#define PL_GAIN 6554                     /* the send in (Clouds' input gain 0.2; Q15) */
+#define PL_QUIET 24u                     /* the outputs below it (Q14 x 2, ~-60 dB): the products towards zero */
+#define PL_OUT 6                         /* the outputs' gain: about HALL's level (a kick's tail, a snare's) */
+#ifndef PL_SW1                           /* the LFOs' swings, samples (Clouds' 60 and 100, scaled; the host's compare
+                                          * sets them to 0) */
+#define PL_SW1 41u
+#define PL_SW2 69u
+#endif
+#define PL_LFO1 ((uint32_t)(0.5 * BLOCK / FS * 4294967296.0))   /* Clouds' LFOs: 0.5 Hz (the diffuser), 0.3 Hz */
+#define PL_LFO2 ((uint32_t)(0.3 * BLOCK / FS * 4294967296.0))
+static struct {
+    int16_t *b[PL_N];                    /* the lines */
+    uint16_t p[PL_N];                    /* their heads (each a sample back, as Clouds' write pointer) */
+    int32_t lp1, lp2, x, m, s;           /* the branches' low-passes; the send's last sample; the last mid, side */
+    uint32_t ph1, ph2;
+    uint8_t lo;                          /* the last block was quiet: towards zero (as HALL's lo) */
+} plt;
+static void plate_lines(void)
+{
+    static const uint8_t WHERE[PL_N] = {0, 0, 0, 0, 2, 1, 2, 2, 2, 1};   /* rev_u.ap, rev_comb, pl_buf */
+    int16_t *at[3] = {rev_u.ap, rev_comb, pl_buf};
+    uint32_t k;
+    for (k = 0; k < PL_N; k++) {
+        plt.b[k] = at[WHERE[k]];
+        at[WHERE[k]] += PL_LEN[k];
+    }
+}
+static inline int32_t pl_rd(uint32_t k, uint32_t d)   /* line k, d samples back (d < its length) */
+{
+    uint32_t i = plt.p[k] + d;
+    return plt.b[k][i >= PL_LEN[k] ? i - PL_LEN[k] : i];
+}
+static inline void pl_wr(uint32_t k, uint32_t d, int32_t v)
+{
+    uint32_t i = plt.p[k] + d;
+    plt.b[k][i >= PL_LEN[k] ? i - PL_LEN[k] : i] = (int16_t)clamp32(v, -32768, 32767);
+}
+static inline int32_t pl_sh(int32_t m, uint32_t sh)   /* the loops' products: to the nearest, or towards zero */
+{
+    return plt.lo ? sh_tz(m, sh) : sh_rn(m, sh);
+}
+static inline int32_t pl_interp(uint32_t k, uint32_t d8)   /* .. d8 / 256 samples back, between samples */
+{
+    int32_t a = pl_rd(k, d8 >> 8), b = pl_rd(k, (d8 >> 8) + 1u);
+    return a + pl_sh((b - a) * (int32_t)(d8 & 255u), 8);
+}
+static inline int32_t pl_ap(uint32_t k, int32_t acc, int32_t g)   /* an allpass: Read TAIL x g, WriteAllPass x -g */
+{
+    int32_t r = pl_rd(k, PL_LEN[k] - 1u);
+    acc += pl_sh(r * g, 15);
+    pl_wr(k, 0, acc);
+    return pl_sh(clamp32(acc, -32768, 32767) * -g, 15) + r;
+}
+static __attribute__((noinline)) void rev_plate(const int32_t *in_, int32_t *out, uint32_t n)
+{
+    int32_t krt = space_on ? 32604 : 11469 + (int32_t)rv.size * 162;   /* 0.35 .. 0.98 (Q15) */
+    int32_t klp = 32767 - (int32_t)rv.damp * 193, xp = plt.x, mp = plt.m, sp = plt.s, lp1 = plt.lp1, lp2 = plt.lp2;
+    uint32_t i, k, l1, l2, pk = 0;
+    (void)n;
+    if (!plt.b[0])
+        plate_lines();
+    plt.ph1 += PL_LFO1;
+    plt.ph2 += PL_LFO2;
+    l1 = (uint32_t)(sine_at(plt.ph1) + 32768) >> 1;   /* (0 .. 32767: Clouds' cosines, 0 .. 1) */
+    l2 = (uint32_t)(sine_at(plt.ph2) + 32768) >> 1;
+    for (i = 0; i < HL_NC; i++) {
+        int32_t x = (xp + 2 * in_[2u * i] + in_[2u * i + 1u]) >> 2, acc, ap, wl, wr, mm, ss;   /* (1 2 1) */
+        xp = in_[2u * i + 1u];
+        for (k = 0; k < PL_N; k++)
+            plt.p[k] = (uint16_t)(plt.p[k] ? plt.p[k] - 1u : PL_LEN[k] - 1u);
+        acc = pl_interp(PL_AP1, (7u << 8) + ((PL_SW1 * l1) >> 7));   /* the smear: AP1 into itself, 69 back */
+        pl_wr(PL_AP1, 69, acc);
+        acc = mulq15(clamp32(x, -262143, 262143), PL_GAIN) >> 1;   /* (Q15 audio -> the lines' Q14) */
+        acc = pl_ap(PL_AP1, acc, PL_KAP);
+        acc = pl_ap(PL_AP2, acc, PL_KAP);
+        acc = pl_ap(PL_AP3, acc, PL_KAP);
+        ap = pl_ap(PL_AP4, acc, PL_KAP);
+        acc = clamp32(ap + pl_sh(pl_interp(PL_DEL2, (3225u << 8) + ((PL_SW2 * l2) >> 7)) * krt, 15), -32768, 32767);
+        lp1 = acc + pl_sh((lp1 - acc) * (32767 - klp), 15);   /* (towards the input: no stuck DC) */
+        acc = pl_ap(PL_D1A, lp1, -PL_KAP);
+        acc = pl_ap(PL_D1B, acc, PL_KAP);
+        pl_wr(PL_DEL1, 0, acc);
+        wl = 2 * clamp32(acc, -32768, 32767);
+        acc = clamp32(ap + pl_sh(pl_rd(PL_DEL1, PL_LEN[PL_DEL1] - 1u) * krt, 15), -32768, 32767);
+        lp2 = acc + pl_sh((lp2 - acc) * (32767 - klp), 15);
+        acc = pl_ap(PL_D2A, lp2, PL_KAP);
+        acc = pl_ap(PL_D2B, acc, -PL_KAP);
+        pl_wr(PL_DEL2, 0, acc);
+        wr = 2 * clamp32(acc, -32768, 32767);
+        mm = ((wl + wr) * PL_OUT) >> 2;              /* (Q14 x 2: back to the others' level) */
+        ss = ((wl - wr) * PL_OUT) >> 2;
+        out[2u * i] += (mp + mm) >> 1;               /* back to 44.1 kHz, between samples */
+        out[2u * i + 1u] += mm;
+        rev_side[2u * i] = (sp + ss) >> 1;
+        rev_side[2u * i + 1u] = ss;
+        mp = mm;
+        sp = ss;
+        pk |= (uint32_t)iabs(wl) | (uint32_t)iabs(wr);
+    }
+    plt.x = xp, plt.m = mp, plt.s = sp, plt.lp1 = lp1, plt.lp2 = lp2;
+    plt.lo = pk < PL_QUIET;
+    hl.side = 1;
+}
+
 /* the reverb's buffers and states to silence (the model changed) */
 static void rev_clear(void)
 {
@@ -354,11 +478,16 @@ static void rev_clear(void)
         hl.lp[i] = hl.le[i] = 0;
     rv.sp_lp = rv.sp_hp = rv.sp_he = 0;
     hl.x = hl.m = hl.s = hl.hp = hl.he = 0;
+    for (i = 0; i < sizeof pl_buf / 2u; i++)
+        pl_buf[i] = 0;
+    plt.lp1 = plt.lp2 = plt.x = plt.m = plt.s = 0;
 }
 
 static void rev_model(const int32_t *in_, int32_t *out, uint32_t n)   /* the model running, added to out */
 {
-    if (rv.rtype == 2u)
+    if (rv.rtype == 3u)
+        rev_plate(in_, out, n);
+    else if (rv.rtype == 2u)
         rev_hall(in_, out, n);
     else if (rv.rtype)
         rev_spring(in_, out, n);
@@ -384,13 +513,20 @@ static __attribute__((noinline)) void rev_switch(const int32_t *in_, int32_t *we
     rv.rtype = (uint8_t)rt;
 }
 
-/* the voices' block (voices_block, after the FX bus): the send through the model, the return into the mix. With
- * no send and a return below 4 for 255 blocks (0.37 s), it sleeps (the voices' CPU back); a send wakes it */
+/* 18b: the reverb runs a block behind, on core 0 while the second core renders D1-D3 (voices.c fx_early): the
+ * last block's send (rev_in, rev_fed: the mixer fills them again after this) through the model, the return into
+ * rev_wl / rev_wr, which reverb_add puts into this block's mix. One block late (1.45 ms) is inaudible on a send. With
+ * no send and a return below 4 for 255 blocks (0.37 s), it sleeps (the voices' CPU back); a send wakes it. A return
+ * far past any level the models reach (a corrupted line) clears them and mutes the block (JIANT's range check) */
+static int32_t rev_wl[BLOCK] POOL, rev_wr[BLOCK] POOL;   /* the return, for the mix */
+static uint8_t rev_out;                             /* rev_wl / rev_wr hold a return */
+#define REV_WILD (1 << 22)
 static void reverb_process(void)
 {
     int32_t *wet = rev_wet;
-    uint32_t i, rt = rv.type < 3u ? rv.type : 0u;
+    uint32_t i, rt = rv.type < NREV ? rv.type : 0u;
     int32_t pk = 0;
+    rev_out = 0;
     if (rev_fed || space_on)
         rv.idle = 0;
     else if (rv.idle >= 255u)
@@ -404,14 +540,29 @@ static void reverb_process(void)
         rev_model(rev_in, wet, BLOCK);
     for (i = 0; i < BLOCK; i++) {
         int32_t w = wet[i], s = hl.side ? rev_side[i] : 0;
-        mix_l[i] += mulq16(w + s, rv.level << 1);
-        mix_r[i] += mulq16(w - s, rv.level << 1);
+        rev_wl[i] = mulq16(w + s, rv.level << 1);
+        rev_wr[i] = mulq16(w - s, rv.level << 1);
         pk |= iabs(w) | iabs(s);
     }
+    if (pk >= REV_WILD) {
+        rev_clear();
+        return;
+    }
+    rev_out = 1;
     if (!rev_fed && pk < 4)                          /* (silent: count towards sleep, 255 = asleep) */
         rv.idle = (uint8_t)(rv.idle + 1u);
     else if (!rev_fed)
         rv.idle = 0;
+}
+static void reverb_add(void)                         /* the return into the mix (after the mixer and SPACE's dip) */
+{
+    uint32_t i;
+    if (!rev_out)
+        return;
+    for (i = 0; i < BLOCK; i++) {
+        mix_l[i] += rev_wl[i];
+        mix_r[i] += rev_wr[i];
+    }
 }
 
 static void reverb_init(void)

@@ -1,6 +1,6 @@
 # Elixir manual
 
-Elixir is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 0.15: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Elixir adds.
+Elixir is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 0.16: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Elixir adds.
 
 Elixir is **unofficial**. It is not affiliated with or endorsed by Erica Synths, M-VAVE or Hügelton Instruments. It is free software under the GPL-3.0 (see *Licence and credits* at the end).
 
@@ -19,7 +19,7 @@ Elixir is **unofficial**. It is not affiliated with or endorsed by Erica Synths,
 9. [Shaping the sound](#9-shaping-the-sound)
 10. [Mixer, sends, FX bus and reverb](#10-mixer-sends-fx-bus-and-reverb)
 11. [Kits and morph](#11-kits-and-morph)
-12. [Generating tracks: generators (Euclid, Grids …), directions, track clocks](#12-generating-tracks)
+12. [Generating tracks: generators (Euclid, Grids …), melody, scale, directions, track clocks](#12-generating-tracks)
 13. [Performance mode (PERF)](#13-performance-mode-perf)
 14. [Saving: kits, patterns, songs, projects](#14-saving)
 15. [MIDI](#15-midi)
@@ -37,6 +37,8 @@ Elixir is **unofficial**. It is not affiliated with or endorsed by Erica Synths,
 ### Status
 
 Elixir has been tested extensively in its browser emulator and with host tests (the same C sources compiled for a computer), and **it has run on one real FM-1 so far** (October 2026). From 0.15 it uses both of the FM-1's processor cores: the second renders the three drum voices. With the LXR-02's own kits it uses about 27% of the first core (about 45% before 0.15, on one core), and two drum voices on Rings or Plaits models with morphing peaked at about 70% of the second. Elixir shows its load on screen (see [the CPU meter](#16-settings-config-and-the-cpu-meter) and [the LOAD page](#the-load-page)); reports from other FM-1s are welcome, especially from units whose second core switches off (the LOAD page says why).
+
+0.16 adds the scale, note lengths, the melody generator, DENSITY, a third global LFO, the tape delay, the plate reverb, dirt, a master compressor with sidechain and STUTTER. They are tested on the host and in the emulator; on the unit they are new, so please report the CPU figures with the tape delay, the plate and the master DIRT running together.
 
 The Rings and Plaits models are **experimental**: they are not part of the LXR-02, they are still being tested, and they may change in later versions (see [Models](#models-rings-and-plaits-drum-13-experimental)).
 
@@ -217,7 +219,7 @@ Press **SEQ**. Tap a white key to select a step (its key breathes; tap it again 
 | Page | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
 | STEP | Velocity | Note | Chance | Condition |
-| TIMING | Flam | Shift | – | – |
+| TIMING | Flam | Shift | Length | – |
 | LOCKS | Lock 1 parameter | its value | Lock 2 parameter | its value |
 | RATCHET | Hits | Rate (bouncing: Curve) | Fade | Shape |
 
@@ -225,6 +227,7 @@ Press **SEQ**. Tap a white key to select a step (its key breathes; tap it again 
 - **Chance:** the probability the step plays (PERF's FILL key plays it anyway).
 - **Flam:** OFF, x2, x3, x4, x6, x8: the step repeats evenly inside its length.
 - **Shift:** −7 … +7 eighths of a step, early or late.
+- **Length** (from 0.16): how long the note lasts. **AUTO** (the default) is the LXR's: the voice's own envelope, and MIDI's note-off at the next tick. **1/32, 1/16, 1/8, 1/8., 1/4, 1/2** hold the note that long: a voice with **Gate** on (the amp EG's next page, see [section 9](#elixirs-sound-pages)) holds its attack's top until then, and MIDI out sends the note-off at the end, so a synth over USB plays real lengths. **TIE** slides into the next note: its pitch changes, nothing is struck again (MIDI: the new note on, then the old one off). A tied step shows a line into the next one on the grid.
 - **Ratchet:** the step plays Hits times, evenly at Rate (1/32, 1/48, 1/64, 1/24). Fade: FLAT, DOWN or UP.
 
 ### Bouncing ratchets
@@ -287,6 +290,8 @@ Press **REC** (it lights), then **PLAY**.
 
 **SHIFT + EDIT** turns the keyboard into an instrument for the selected track (ALGORITHM picks the track): the white and black keys play its voice chromatically, as on a piano, from F at the octave set (KNOB 1, **Octave**: F3 by default). SHIFT + EDIT again goes back to the grid. Under REC each note is written into the nearest step with its note and velocity, as a MIDI note would be, and it goes out on USB MIDI too. The sound pages opened from KEYS keep the keys playing, so you can play and tweak at once; PRESETS opens the [sound browser](#the-sound-browser).
 
+**In a scale:** when the pattern has a scale (ARP → SCALE, [section 12](#scale)) and the track follows it, the white keys play the scale's degrees upwards from the root at or below F3, so every white key is in key; the black keys stay chromatic.
+
 The FM-1's keys have no velocity, so KEYS sets it: **Velocity** (KNOB 2) is the velocity of a key, and of PERF's rolls and SHIFT + white keys 1–7. **Accent** (KNOB 3) is the velocity of a key played with SHIFT held. Both are kept in the settings.
 
 ---
@@ -329,7 +334,7 @@ Select a track, then press a sound button. Pressing the same button again moves 
 | **FM** (EDIT) | Amount, Frequency, Waveform, Mode (FM or mix) | – | Mod 1 & 2 frequency and gain / their waveforms |
 | **Transient** (EDIT) | Waveform, Volume, Frequency | same | same |
 | **Model** (EDIT, Elixir's) | Model, Decay, Bright, Struct / Position, Exciter, Tension (see *Models* below) | – | – |
-| **Amp EG** (ENV) | Attack, Decay, Slope | Attack, Decay, Repeat count (claps), Slope | Attack, Decay (CH: closed; OH: open), Repeat (cymbal), Slope |
+| **Amp EG** (ENV; then Elixir's GATE page) | Attack, Decay, Slope | Attack, Decay, Repeat count (claps), Slope | Attack, Decay (CH: closed; OH: open), Repeat (cymbal), Slope |
 | **Mod EG / velocity** (ENV) | Pitch EG: Decay, Slope, Amount / Velocity: destination, amount, volume mod | same | Velocity: destination, amount, volume mod |
 | **Filter** (SCL) | Frequency, Resonance, Type (LP HP BP UNITY BP NOTCH PEAK LP2 OFF), Overdrive | same | same |
 | **LFO** (LFO) | Frequency, Clock sync, Amount, Waveform / Retrigger, Offset, Destination voice, Destination parameter | same | same |
@@ -359,9 +364,11 @@ In HOLD, ONE and HALF, Retrigger OFF means the LFO's own voice's hits. A RANDOM 
 |---|---|---|---|
 | Shape | Drive | Bits | Tilt |
 
-- **Shape** chooses the waveshaper the voice's **Drive** goes into: **LXR** (the original curve; the default), **FOLD** (folds back from full scale), **CLIP** (hard clip), **ASYM** (soft on top, clipped below: even harmonics), **RECTIFY** (full-wave: an octave up). For all but LXR, the drive sets a gain of 1× to 8×.
+- **Shape** chooses the waveshaper the voice's **Drive** goes into: **LXR** (the original curve; the default), **FOLD** (folds back from full scale), **CLIP** (hard clip), **ASYM** (soft on top, clipped below: even harmonics), **RECTIFY** (full-wave: an octave up). From 0.16 also **FUZZ** (a lot of gain into a hard clip; the very end of a tail is gated away), **TAPE** (a soft clip that darkens as the drive rises), **SINE FOLD** (the input through a sine: smooth West Coast folds, more of them with more drive) and **BITE** (the highs pushed into a lopsided overdrive: odd and even harmonics). For all but LXR, the drive sets a gain of 1× to 8× (FUZZ adds its own on top).
 - **Bits:** OFF, then 15 down to 1. Works after the sample-rate reducer (Mix page) for a full bitcrusher.
 - **Tilt:** a one-knob EQ around 700 Hz. 0 is flat, + brighter, − darker.
+
+**Gate** (ENV, after the amp EG; from 0.16): **OFF** (the LXR's: a hit runs the attack and the decay, whatever the step) or **ON**: the voice holds the top of its attack for the step's **Length** (step edit's TIMING page), then decays. With Length AUTO a gated voice plays as before. Part of the kit; it doesn't morph. A Plaits model's low-pass gate stays open while it holds, so P VA or P WTABLE can play a held bass note or a pad.
 
 **Random per hit** (LFO, after the LFO's two pages):
 
@@ -369,7 +376,7 @@ In HOLD, ONE and HALF, Retrigger OFF means the LFO's own voice's hits. A RANDOM 
 |---|---|---|---|
 | Pitch | Decay | Filter | Pan |
 
-Each hit varies by up to the amount set: pitch up to an octave either way at 127 (small amounts are subtle, for humanising), decay from half to double, filter cutoff up to half its range either way, pan across the field.
+Each hit varies by up to the amount set: pitch up to an octave either way at 127 (on a track that follows a scale, whole degrees of it, up to 7 either way) (small amounts are subtle, for humanising), decay from half to double, filter cutoff up to half its range either way, pan across the field.
 
 **Cross mod / choke** (LFO, next):
 
@@ -493,13 +500,18 @@ The bars show the current page's values, with each voice's level on the volume p
 
 ### The FX bus (FX)
 
-One effect at a time.
+One effect at a time. The pages come in order: the reverb first, then the bus and the selected effect's pages together, then DIRT, then the master compressor's two pages. Only the pages that apply are shown: with the bus OFF there are no parameters, and the two DELAY pages are there only when the bus is a DELAY.
 
 | Page | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
-| FX BUS | Type | Dry/Wet | Output | the type's mode |
-| (parameters) | P1 | P2 | P3 | P4 |
 | REVERB | Model | Size | Damping | Level |
+| FX BUS | Type | Dry/Wet | Output | the type's mode |
+| FX BUS: *type* | P1 | P2 | P3 | P4 |
+| DELAY: DUB (DELAY only) | Sync | Saturate | Glitch | Pitch |
+| DELAY: SEND (DELAY only) | Echo>Rev | – | – | – |
+| DIRT | Bus dirt | – | Master | Amount |
+| MASTER COMP | Thresh | Ratio | Attack | Release |
+| COMP: SIDECHAIN | Sidechain | Makeup | Mix | – |
 
 | Type | Mode | P1 | P2 | P3 | P4 |
 |---|---|---|---|---|---|
@@ -507,14 +519,52 @@ One effect at a time.
 | RING | the carrier waveform | Frequency | – | – | – |
 | COMP | ratio 1:1 … 8:1 | Attack | Release | Threshold | Gain |
 | DELAY | MONO / PING PONG | Time | Range | Tone | Feedback |
+| DELAY | TAPE / TAPE PP | Time | Wow | Tone | Feedback (to 115%) |
 | PHASER | – | Rate | Depth | Feedback | Centre |
 | FLANGER | – | Rate | Depth | Feedback (below the middle: negative) | Delay |
 
 The phaser and flanger sound strongest at DRY/WET 50%. Output sends the bus to stereo or one side.
 
+### The tape delay (from 0.16)
+
+DELAY has two more modes beside the LXR's MONO and PING PONG (which sound as before): **TAPE** and **TAPE PP** (ping-pong, left then right). They keep the line at half the sample rate, so it holds twice as long (1.49 s, 0.74 s a side in PP) and the repeats are darker, as a tape echo's are. **Wow** drifts the tape's speed slowly and adds a little flutter. In the feedback loop the lows are cut (the repeats thin out instead of booming), **Tone** darkens them, and a soft clip keeps them in check, so **Feedback** past 100% grows into a roar that stays bounded: dub. Changing the time bends the pitch as the tape's motor catches up, instead of the crossfade MONO and PING PONG use.
+
+The **DELAY: DUB** page (all four modes unless noted):
+
+- **Sync:** ON turns Time into note values at the tempo: 1/32, 1/16T, 1/16, 1/8T, 1/16., 1/8, 1/4T, 1/8., 1/4, 1/2T, 1/4., 1/2. Each detent of the Time knob moves to the next value. A value too long for the line plays at half (the card shows /2 or /4). A tempo change follows.
+- **Saturate** (TAPE modes): how hard the loop's soft clip bites: from clean to a quarter of full scale.
+- **Glitch** (TAPE modes): the chance that each repeat is changed: **STUTTER** (its first 1/32 or 1/64 looped), **REVERSE** (played backwards), **SKIP** (an earlier slice instead), or **HALF** (half speed: an octave down).
+- **Pitch** (TAPE modes): each repeat shifted again: **+12**, **+7**, **−12** or **DETUNE** (a few cents), so the echoes climb or fall. Into the plate it shimmers.
+
+**DELAY: SEND** has **Echo>Rev**: the echoes fed into the reverb, the classic dub chain (echo, then spring or plate). PERF's **THROW REV** key also throws the echoes into the reverb while held, when the bus is on DELAY.
+
+The new settings are part of the kit; Sync and Pitch don't morph.
+
+### Dirt (from 0.16)
+
+The **DIRT** page (the FX bus's last) has two drives, both off at 0:
+
+- **Bus dirt** drives whatever goes into the FX bus before its effect, whatever the type: dirty echoes, a driven phaser. With the type OFF the bus is just a drive for the voices you send to it.
+- **Master** and **Amount** put a drive on the whole mix, before the DJ filter: **TAPE** (soft, darker as it rises), **TUBE** (soft and lopsided: warm even harmonics), **FUZZ** (a hard clip, mixed in parallel so the kick keeps its punch), **DIODE** (the LXR's diode curve) or **FOLD** (a sine fold, in parallel). Amount sets the drive, and each type's tone and mix follow it; the level is trimmed as it rises so it stays near the dry sound.
+
+They are part of the kit; the amounts morph and can be locked per step, the Master type doesn't morph. The per-voice shapes (SCL → Shape) are the third kind of dirt.
+
+### Master compressor and sidechain (from 0.16)
+
+A compressor on the whole mix, after the FX bus and the reverb and before the master's DIRT. It is off until **Ratio** is set (OFF by default), so kits sound as before.
+
+- **Thresh:** 0 to −48 dB. **Ratio:** OFF, 1.5:1, 2:1, 3:1, 4:1, 6:1, 10:1, LIMIT. The knee is soft (6 dB).
+- **Attack:** 0.1 ms to 100 ms. **Release:** 20 ms to 2 s. For ducking, the release is the pump: an eighth or a quarter note's worth breathes with the tempo.
+- **Sidechain:** what the compressor listens to. **MIX** (the default) makes it a bus compressor that glues the mix. A track (**D1 … HH**) makes it duck everything else whenever that track plays. That track's own dry sound is kept out of the gain, so a kick ducks the pads, hats and echoes and keeps its own punch. Its FX and reverb sends are still ducked.
+- **Makeup:** 0 to +24 dB after the compression. **Mix:** dry and compressed together (parallel compression) below 100%.
+
+The page shows the gain reduction as it happens. The settings are part of the kit; Ratio and Sidechain don't morph, the rest do and can be locked per step.
+
+**Classic kick ducking:** Sidechain D1, Ratio 4:1 or 6:1, Thresh −24 dB or lower, Attack 0.1 to 1 ms, Release about 150 to 250 ms. Send a long pad, a bass or the reverb up loud and hear it pump. PERFORM 2's PUMP is the quick, fixed version of this on a key.
+
 ### Reverb
 
-A separate send bus after the FX bus, from Felucca: **ROOM** (a Freeverb-style room), **SPRING** (one spring of a spring tank: chirps and drips), **HALL** (a dense, smooth, stereo hall). Size sets the length, Damping the darkness, Level the return. When nothing is fed to it and its tail has died away, it stops processing to save CPU.
+A separate send bus after the FX bus, from Felucca: **ROOM** (a Freeverb-style room), **SPRING** (one spring of a spring tank: chirps and drips), **HALL** (a dense, smooth, stereo hall). From 0.16 also **PLATE**: Mutable Instruments Clouds' reverb (Jon Dattorro's plate), long and lush, with a slow shimmer in its tail; checked against Clouds' own code (`tests/reverb_compare.sh`). Size sets the length, Damping the darkness, Level the return. PERFORM 2's SPACE holds any of them. When nothing is fed to it and its tail has died away, it stops processing to save CPU.
 
 ---
 
@@ -534,13 +584,16 @@ A kit is every sound parameter of all six voices (including the sends, the rever
 
 ## 12. Generating tracks
 
-Press **ARP** twice (past PERF). Turn SELECT for six pages. The first four are for the selected track; the last two (the links) are for the pattern:
+Press **ARP** twice (past PERF). Turn SELECT for nine pages. Most are for the selected track; SCALE's root and scale and the links are for the pattern:
 
 | Page | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
 | GENERATOR | Generator | the generator's settings … | | |
 | ACTION | Action | GRIDS: Map X · EUCLID: Hits 2 | Map Y · Rotate 2 | Chaos · Join |
-| TRACK | Length | Clock | Direction | – |
+| MELODY | Shape | Spread | Bias | Steps |
+| MELODY: LOOP | Deja vu | Loop | Length | Len var |
+| TRACK | Length | Clock | Direction | Follow |
+| SCALE | Root | Scale | Follow | – |
 | BOUNCE | Bounce | Bnc pitch | – | – |
 | LINKS | Link (1–8) | Start | Amount | Depth |
 | LINK SETUP | When | Target | Effect | Window |
@@ -584,6 +637,33 @@ On the ACTION page, turn **Action** (KNOB 1) to pick one; the title then reads *
 | **COMMIT** | MUTATE, TURING, CELLULAR, GRIDS | Writes the generator's live track into the pattern |
 | **UNDO** | all | Takes back the last DICE, COMMIT or Euclid change on this track. UNDO again redoes it. |
 | **RESET** | MUTATE, TURING, CELLULAR, GRIDS | Starts the generator's live track again from the pattern |
+
+When a melody runs on the track (below), COMMIT and RESET are there too, whatever the generator: COMMIT writes the notes and lengths the melody last played into the steps (UNDO takes it back), RESET starts the melody and its loop again.
+
+### Melody (from 0.16)
+
+The rhythm generators decide *when* a track plays; MELODY decides *which note*. It runs beside any generator, or none, so EUCLID or GRIDS can make the rhythm while MELODY makes the notes, on the same track. It picks each note as the hit plays, so steps you tap are heard at once. The design follows Mutable Instruments Marbles' X section (no Marbles code is used).
+
+The notes are degrees of the pattern's scale (SCALE page, below; with CHROMATIC, every semitone), the root at the voice's tune.
+
+| Knob | Does |
+|---|---|
+| **Shape** | **OFF** (the default: the steps' own notes), **RANDOM** (a bell round Bias), **WALK** (one or two degrees up or down from the last: smooth lines, good for bass), **ARP UP**, **ARP DN**, **ARP U/D** (the chord tones), **MOTIF** (a 4-note motif, then moved up two degrees, inverted, played backwards ending on the root; a new motif now and then) |
+| **Spread** | The range, up to an octave either side (wider for the arpeggios) |
+| **Bias** | The centre, up to an octave down or up |
+| **Steps** | Which degrees: low, all of them; then the chord tones (root, third, fifth, seventh), the triad, and at the top only the root and fifth |
+| **Deja vu** | 0: a new note every time. The middle: a loop of Loop notes that changes now and then. 127: the loop locked |
+| **Loop** | The loop's length, 1–16 notes |
+| **Length** | The notes' length (as the step's Length: AUTO … TIE). Needs Gate on the voice to hold |
+| **Len var** | How often a note gets another length (or a tie) |
+
+Turning Steps up while a loop plays simplifies the phrase as it is. The global LFOs reach **MEL CHANGE** (Deja vu down: more new notes) and **MEL SPREAD**. The settings are saved per track with the pattern. It sounds best on tuned voices: D1–D3 with Plaits' VA, WTABLE, FM, CHORDS or STRING, Rings, or the snare's oscillator.
+
+### Scale (from 0.16)
+
+Each pattern has a **Root** (C … B) and a **Scale**: CHROM (off: every semitone; the default), MAJOR, MINOR, DORIAN, PHRYG (Phrygian), MIXOLYD (Mixolydian), LYDIAN, H MINOR (harmonic minor), MIN PNT, MAJ PNT (the pentatonics), BLUES, MINOR 7 (1 ♭3 5 ♭7), FIFTHS (1 5), PHR DOM (Phrygian dominant, Hijaz), HIRAJO (Hirajoshi), PELOG and WHOLE T (whole tone).
+
+**Follow** (on SCALE and on TRACK) sets which tracks keep to it: D1–D3 by default. On a track that follows, every note it plays goes to the nearest note of the scale (a tie: the lower), counted from what the voice actually sounds (its coarse tune plus the note), so every following voice is in key whatever its tuning; fine tune is kept. That covers the steps' notes, the links' PITCH, ratchets and bounces, random pitch per hit (whole degrees), DENSITY's ghost notes, KEYS (the white keys play the scale) and MIDI notes in. An empty or cleared pattern starts with the scale chosen last. Copying a pattern copies its scale. The global LFOs' **TRANSPOSE** moves the notes by up to 7 degrees.
 
 ### Grids
 
@@ -665,7 +745,7 @@ Press **ARP**. The white keys act **while held**; **SHIFT + key latches** it on 
 | 8 | **FILL** | Every step plays whatever its chance; FILL conditions play |
 | 9 | **RPT** | **Repeat:** the sequencer loops its position at the repeat length (1/4, 1/8, 1/16, 1/32), starting on that grid. When you let go, the pattern carries on where it would have been. |
 | 10 | **FRZ** | **Freeze:** the FX bus's delay loops what it holds (input off, feedback 100%). Needs the FX bus on DELAY; the longest loop is about 0.74 s. |
-| 11 | **T.RV** | **Throw:** the selected track's reverb send goes to full while held; its tail rings out after |
+| 11 | **T.RV** | **Throw:** the selected track's reverb send goes to full while held; its tail rings out after. With the FX bus on DELAY, the echoes are thrown into the reverb too |
 | 12 | **T.FX** | **Throw** to the FX bus (FX send full) |
 | 13 | **FB+** | **Feedback push:** delay feedback to 0.95 (phaser, flanger: their most) |
 | 14 | **STP** | **Tape stop:** tempo and every voice's pitch slow to a stop over the tape time, then silence. Let go: they spin back up in 0.25 s. |
@@ -686,6 +766,8 @@ The performance pages come first (PERFORM 2's among them, last), then the global
 |---|---|---|---|---|
 | PERFORM | Tempo | Roll (rate) | Morph | SRate |
 | PERFORM: MORE | DJ filter | Repeat | Shuffle | Tape time |
+| PERFORM: DENSITY | Density | Ghost vel | Build | – |
+| PERFORM: STUTTER | Chance | Size | Length | Vary |
 | PERFORM: MIX | D1 volume | D2 volume | D3 volume | SN volume |
 | PERFORM: MIX 2 | CY volume | HH volume | FX dry/wet | Reverb level |
 | PERFORM 2 | Tempo | Roll (rate) | Morph | SRate |
@@ -695,6 +777,8 @@ The performance pages come first (PERFORM 2's among them, last), then the global
 | GLOBAL LFO 1: MODE | Mode | Trig | Phase | – |
 | GLOBAL LFO 2 | Dest | Depth | Speed | Wave |
 | GLOBAL LFO 2: MODE | Mode | Trig | Phase | – |
+| GLOBAL LFO 3 | Dest | Depth | Speed | Wave |
+| GLOBAL LFO 3: MODE | Mode | Trig | Phase | – |
 | MACROS | Macro 1 | Macro 2 | Macro 3 | Macro 4 |
 | MACRO SETUP | Macro (1–4) | Target | Min | Max |
 
@@ -709,9 +793,33 @@ The performance pages come first (PERFORM 2's among them, last), then the global
 
 Macros, the repeat length and the tape time are saved with the project. The DJ filter starts in the middle at power-on.
 
+### Density (from 0.16)
+
+**PERFORM: DENSITY** makes the whole pattern more minimal one way and builds it up the other, from one knob.
+
+- **Density:** −100% … +100% (0: as programmed). Down, steps drop out in a fixed order, weakest first: off-beat 16ths before 8ths before beats, quiet before loud, then a set order per pattern. So turning it down thins the groove steadily instead of flickering at random, and at −100% only each bar's first step is left. Up, the steps' chances rise towards 100% first; then, depending on **Build**, ghost notes fill the empty steps (the strongest places first) and ratchets of 2 are added to the strongest hits. Locks, conditions and ratchets of the steps that play are untouched. GRIDS and TURING tracks get their own density pushed instead.
+- **Ghost vel:** the velocity of the added notes (40 by default). They play the track's last note, or the melody's.
+- **Build:** what the positive side adds: **CHANCE** (only the chances), **GHOSTS** (then the ghost notes), **RATCHETS** (then the ratchets too).
+- **Leaving tracks out:** on this page the black track keys don't select tracks; each one leaves its track out (struck through on the screen), so D1 can keep the kick as programmed. None by default.
+
+The settings are saved with the project, so they hold across pattern changes. The global LFOs' **DENSITY** destination breathes the pattern from the knob's position: a 64-bar triangle takes it from sparse to busy and back.
+
+### Stutter (from 0.16)
+
+**PERFORM: STUTTER** cuts the master into short slices and repeats them, in time: beat-repeat glitches, from a knob, a held button or a global LFO. **REPEAT** (key 9) re-plays the sequencer's steps; STUTTER repeats the sound itself, tails, echoes and reverb included.
+
+- **Chance:** at the start of each Length, the chance of a burst. 0% (the default) leaves it to OCT+ and the LFOs; 100% stutters all the time.
+- **Size:** the slice: 1/8, 1/16, 1/16T, 1/32, 1/32T, 1/64, or RANDOM (one of 1/16 … 1/64 each burst).
+- **Length:** how long a burst lasts: 1/16, 1/8, 1/4, 1/2 or 1 bar. A burst plays its first slice as it is, then repeats it until Length is over.
+- **Vary:** **OFF** (the same slice), **SHRINK** (halved each time, down to an eighth: a roll that speeds up), **PITCH DN** / **PITCH UP** (a semitone further each repeat), **REVERSE** (every other repeat backwards), **RANDOM** (one of those each burst).
+- **OCT+ held on this page** stutters now, from the next slice, for as long as it is held.
+- The global LFOs' **STUTTER** destination raises the chance with the wave, so bursts come and go over bars: a square LFO stutters every other bar, a slow triangle makes them thicken and thin out.
+
+It records the last quarter second of the master in mono at half the sample rate, the same recorder REVERSE uses, so it needs no extra memory and little CPU. That also means the repeats are mono and a little dark, and a slice longer than the recorder (a 1/8 below 120 BPM) plays at half its length. The settings are saved with the project.
+
 ### Global LFOs
 
-Two LFOs that move the whole kit's performance controls, not a voice's sound. Slow one down to many bars and it plays the set for you: a kit morphing into the next over 64 bars, a filter opening over 16, comb resonance drifting in and out.
+Three LFOs (the third from 0.16) that move the whole kit's performance controls, not a voice's sound. Slow one down to many bars and it plays the set for you: a kit morphing into the next over 64 bars, a filter opening over 16, comb resonance drifting in and out.
 
 | Knob | Does |
 |---|---|
@@ -729,11 +837,18 @@ Two LFOs that move the whole kit's performance controls, not a voice's sound. Sl
 | **FILTER** | The DJ filter both ways from its knob: low-pass on one side of the wave, high-pass on the other |
 | **LP**, **HP** | The DJ filter towards its low-pass (high-pass) end, as the LP~ and HP~ keys sweep it |
 | **FB PUSH**, **COMB**, **CRUSH**, **JITTER**, **CUTS**, **PUMP** | Those effects fade in with the LFO, from off up to how the key plays them at its setting (PERFORM 2: SETUP). A negative depth turns the wave upside down. A key held or latched still plays its effect in full. |
+| **DENSITY** | The DENSITY knob's value, either way from where it is |
+| **TRANSPOSE** | The tracks that follow the scale, up to 7 degrees either way |
+| **MEL CHANGE**, **MEL SPREAD** | The melodies' Deja vu (down: more new notes) and Spread, either way |
+| **DELAY FB**, **DELAY TIME** | The delay's feedback, and its time by up to a quarter of its range |
+| **REV SEND** | Every voice's reverb send, either way |
+| **MACRO 1–4** | A macro, so an LFO reaches any parameter a step can lock |
+| **STUTTER** | The stutter's chance, from 0 by the depth (see [Stutter](#stutter-from-016)) |
 
 - **The knobs stay put.** The LFO moves the sound, not the setting: the Morph knob, the DJ filter and the effects' settings read as you left them, and that is what the project saves.
 - **Synced to the clock:** the speed follows the tempo, MIDI clock, HALF and TAPE STOP. The LFOs run when stopped too (FREE, or after a trigger).
 - **OCT+** on a global LFO's page triggers it by hand (a FREE LFO has no trigger: set its Mode first).
-- The screen shows both LFOs moving (L1, L2) on their pages. Both LFOs on the same destination add up.
+- The screen shows the LFOs moving (L1, L2, L3) on their pages. LFOs on the same destination add up.
 - They are saved with the project.
 
 **A kit morphing into another over 64 bars:** LOAD → MORPH the second kit; GLOBAL LFO 1: Dest MORPH, Depth +127, Speed 64 BARS, Wave SAW UP; MODE page: Mode ONE, Trig PLAY. Press PLAY: morph goes from the knob's value to full over 64 bars and stays there. With Mode FREE and Wave TRI instead, it morphs there and back for as long as you play.
@@ -825,56 +940,74 @@ The site builder refuses to publish a "+K" build.
 - **Clock in:** turn the tempo all the way down to **MIDI**. Elixir then follows incoming clock, start, continue and stop. The header shows MIDI and the measured tempo.
 - **Filters** (CONFIG: MIDI): what is received and sent: N notes, R clock and start/stop, C CC and NRPN, P program change.
 - **Route:** TRS>USB forwards the jack's input to USB (soft thru).
-- **Remote** (CONFIG: REMOTE, channel 16 by default): a second map, made for an 8-column controller such as Novation's Launch Control XL. See below.
+- **Remote** (CONFIG: REMOTE, channels 15 and 16 by default): a second map on two channels of its own, made for an 8-column controller such as Novation's Launch Control XL. See below.
 
 ### The remote map
 
-Everything on the **remote channel** goes to this map and nowhere else (the LXR's CC map and the notes ignore it, and the MIDI filters don't apply). It reaches what the LXR's map can't: mutes, solo, morph, tempo, the DJ filter, PERF's effects, Elixir's sends. Set the remote channel to one no track and not the global channel uses; the REMOTE page warns if it's shared. The whole map on one page, laid out as the controller is: [the appendix](#appendix-the-remote-map-at-a-glance).
+The remote map has **two channels** of its own, and everything on them goes to it and nowhere else (the LXR's CC map and the notes ignore them, and the MIDI filters don't apply):
 
-Everything comes in **rows of eight**: columns 1–7 are the tracks **D1 D2 D3 SN CY CH OH**, column 8 the **master**. CH and OH both act on the hat voice, except their decays.
+- **TRACKS** (channel 15 by default): what belongs to a track. Columns 1–7 are the tracks **D1 D2 D3 SN CY CH OH**, column 8 the **selected track**. CH and OH both act on the hat voice, except their decays.
+- **GLOBAL** (channel 16 by default): the performance, the effects, the tempo, morph and the rest.
 
-**Knobs and faders: CC = row + column − 1**
+Every number is used once on its channel, so a knob and a button never share one. A button can be a **CC or a note** of its number, whichever the controller sends: a CC above 0 or a note on is a press, CC 0 or a note off (or velocity 0) a release. Set both channels to ones no track and not the global channel use; the REMOTE page warns if one is shared. On a Launch Control XL, give one template the TRACKS channel and another the GLOBAL channel (or one template's knobs one channel and its buttons the other). The whole map, laid out as the controller is: [the appendix](#appendix-the-remote-map-at-a-glance).
 
-| CC | Columns 1–7 (the tracks) | Column 8 (master) |
-|---|---|---|
-| 8–15 | Volume | FX bus dry/wet |
-| 16–23 | Pan | Reverb size |
-| 24–31 | Filter frequency | DJ filter (middle: off) |
-| 32–39 | Resonance | FX bus P1 |
-| 40–47 | Decay (CH closed, OH open) | Tape stop time |
-| 48–55 | Pitch (coarse) | Tempo (60–187 BPM) |
-| 56–63 | Drive | Global sample rate (SRate) |
-| 64–71 | FX send | FX bus P2 |
-| 72–79 | Reverb send | Reverb level |
-| 80–87 | Sample rate | Shuffle |
-| 88–95 | LFO amount | Morph |
-| 96–103 | Random pitch | Roll rate |
-| 104–111 | Macros 1–4, then DRILL, JITTER, CUTS, PUMP (their PERFORM 2 settings) | |
-| 112–119 | Random decay | Repeat length |
+**TRACKS: knobs and faders, CC = row + column − 1** (column 8: the selected track)
 
-**Buttons: note = row + column − 1** (note on: pressed; note off, or velocity 0: released)
+| CC | |
+|---|---|
+| 8–15 | Volume |
+| 16–23 | Pan |
+| 24–31 | Filter frequency |
+| 32–39 | Resonance |
+| 40–47 | Decay (CH closed, OH open) |
+| 48–55 | Pitch (coarse) |
+| 56–63 | Drive |
+| 64–71 | FX send |
+| 72–79 | Reverb send |
+| 80–87 | Sample rate |
+| 88–95 | LFO amount |
+| 96–103 | Random pitch |
 
-| Note | Columns 1–7 | Column 8 |
-|---|---|---|
-| 36–43 | Mute (toggle) | PLAY / STOP |
-| 44–51 | Solo (toggle) | REC |
-| 52–59 | Select the track | FILL (held) |
-| 60–67 | Roll (held) | REPEAT (held) |
-| 68–75 | DRILL (held) | FREEZE (held) |
-| 76–83 | Held: TAPE STOP, HALF, CUTS, PUMP, COMB, SPACE, CRUSH, REVERSE (one per column) | |
-| 84–91 | The same eight, latched: press on, press again off | |
-| 92, 93 | Previous, next pattern | |
+**TRACKS: buttons**
 
-The effects are PERF's (see [Performance mode](#13-performance-mode-perf)); they work from any page, and leaving PERF doesn't turn off what the remote latched.
+| CC or note | |
+|---|---|
+| 104–111 | Mute (toggle) |
+| 112–119 | Solo (toggle) |
+
+**GLOBAL: knobs and faders**
+
+| CC | Columns 1–8 |
+|---|---|
+| 8–15 | Tempo (60–187 BPM), shuffle, morph, global sample rate (SRate), DJ filter (middle: off), roll rate, repeat length, tape stop time |
+| 16–23 | FX bus dry/wet, P1, P2, P3, P4, bus dirt, echo > reverb, saturate |
+| 24–31 | Reverb level, size, damping, master dirt, DENSITY, ghost velocity, build, – |
+| 32–39 | Macros 1–4, then DRILL, JITTER, CUTS, PUMP (their PERFORM 2 settings) |
+| 40–47 | COMB note, COMB feedback, CRUSH, REVERSE length, global LFO 1, 2 and 3 depth, – |
+
+**GLOBAL: buttons**
+
+| CC or note | Columns 1–8 |
+|---|---|
+| 48–55 | PLAY / STOP, REC, then held: FILL, REPEAT, FREEZE, THROW REV, THROW FX, FB PUSH |
+| 56–61 | Held: TAPE STOP, LP sweep, HP sweep, REVERSE; then the previous pattern, the next |
+| 64–70 | Select D1 … OH |
+| 72–79 | Roll (held) D1 … OH; 79 the selected track |
+| 80–87 | DRILL (held) D1 … OH; 87 the selected track |
+| 88–95 | Held: HALF, JITTER, CUTS, SHORT, PUMP, COMB, SPACE, CRUSH |
+| 96–103 | The same eight, latched: press on, press again off |
+| 104–111 | DENSITY: 104–110 leave D1 … OH out of DENSITY (press again: back in), 111 puts them all back in |
+
+The effects are PERF's (see [Performance mode](#13-performance-mode-perf)); they work from any page, and leaving PERF doesn't turn off what the remote latched. DENSITY's knob (CC 28) thins or builds the pattern as on the DENSITY page; its buttons are the page's track toggles, and their lights show the tracks left out.
 
 **Knobs** (REMOTE page, KNOB 2):
 - **PICKUP** (the default): a knob or fader does nothing until it reaches or passes the current value, then follows. If the value changes elsewhere (the panel, a kit), it waits again. Nothing jumps.
 - **ABS:** the value goes straight to the control's position.
 - **REL:** for endless encoders sending relative values: 64 ± n (65 up, 63 down) or two's complement (1 up, 127 down). Don't use it with faders.
 
-**Recording:** under REC with the sequencer playing, a track's knob records locks on its own track, as a panel knob does on the selected track. The master column records nothing.
+**Recording:** under REC with the sequencer playing, a TRACKS knob records locks on its own track (column 8 on the selected track), as a panel knob does. The GLOBAL knobs record nothing.
 
-**Feedback:** when a value on the map changes from anywhere (the panel, a kit or pattern load, MIDI), Elixir sends its CC back on the remote channel, so encoder rings and motorless displays can follow. Button states go back as their notes: velocity 127 on, 0 off. These cover mutes, solo, the selected track, the rolls, the effects, PLAY and REC. A lock playing back isn't sent: the values are the kit's. Out is USB only, so feedback reaches the controller only when both are on a USB host (a computer or a USB MIDI host such as the mioXL), not with the controller's DIN out straight into the FM-1's TRS input.
+**Feedback:** when a value on the map changes from anywhere (the panel, a kit or pattern load, MIDI), Elixir sends its CC back on its channel, so encoder rings and motorless displays can follow. A button's state goes back the way the button last arrived, as a CC (127 on, 0 off) or a note (velocity 127 on, 0 off); until a button has sent anything, both go. These cover mutes, solo, the selected track, the rolls, DRILL, the effects, the DENSITY tracks, PLAY and REC. A lock playing back isn't sent: the values are the kit's. Out is USB only, so feedback reaches the controller only when both are on a USB host (a computer or a USB MIDI host such as the mioXL), not with the controller's DIN out straight into the FM-1's TRS input.
 
 **Connecting:** a controller with a DIN out into the TRS input (with a TRS-to-DIN adapter: check the FM-1's TRS type), or both over a USB host. The FM-1 and the Launch Control XL are both USB devices, so neither plugs straight into the other.
 
@@ -890,8 +1023,8 @@ GLO three times (past Mix and the mixer) opens CONFIG. Turn SELECT for its pages
 | MIDI | Global channel, TX filter, RX filter, Route |
 | MIDI CHANNELS (2 pages) | Each track's channel |
 | MIDI NOTES (2 pages) | Each track's note (ANY or a note) |
-| DEVICE | LEDs (OFF / LOW / HIGH glow), Autosave, Accel (fast knob turns move further), Colours (screen palette) |
-| REMOTE | Channel (OFF, 1–16; 16 by default), Knobs (PICKUP / ABS / REL): see [the remote map](#the-remote-map) |
+| DEVICE | LEDs (OFF / LOW / HIGH glow), Autosave, Accel (fast knob turns move further), Colours (screen palette: GREY, GREEN, AMBER, ICE, VIOLET, ROSE, PAPER, HI-CON, NIGHT, MONO or HYRULE, forest green and Triforce gold) |
+| REMOTE | Tracks (the TRACKS channel: OFF, 1–16; 15 by default), Global (the GLOBAL channel; 16 by default; never the same as Tracks), Knobs (PICKUP / ABS / REL): see [the remote map](#the-remote-map) |
 | CONTROL ALL | Morph: BOTH KITS (the default: with morph on, the morph target moves too) or KIT ONLY; see [Control All](#control-all-every-track-at-once) |
 | BUTTONS | Last page: NO (the default) or YES. With YES, a button opens the page it showed when you left it: on CONFIG's BUTTONS page, press FX, then GLO, and you're back on BUTTONS. It works for SEQ, FX, ARP (PERF or the generator pages, whichever you were on), GLO (Mix, the mixer or CONFIG) and the sound buttons (the section and row). Pressed again, a button moves on as always. HOME still goes to the grid. |
 | LOAD | No knobs: where the processor's time goes, and the cores; see [the LOAD page](#the-load-page) |
@@ -914,6 +1047,8 @@ Below them, the cores. The FM-1's processor has two cores, and from 0.15 Elixir 
 | BAD READ, NO ANSWER, FAULT | The second core misread its job, stopped answering or crashed; the FM-1 carried on with one core (at most one buffer of glitch) and shows SECOND CORE OFF: CONFIG. Until power-off. Some FM-1s do this now and then under load: please report it. |
 | SINCE A CRASH | The last session crashed or hung while two cores ran, or the last start failed early: this session runs on one core, the next tries two again. |
 | NO START | The second core didn't answer at power-on. |
+
+From 0.16 the first core also runs the reverb and reads the delay's echoes while it waits for the second, on the last buffer's sends (one block, 1.45 ms, late: inaudible), so the effects no longer add to the slower core's time. Under the cores, **STACKS** shows the deepest use of the two main stacks since power-on (red past three quarters): worth a look after a busy session, and worth reporting if it is red.
 
 ### The battery
 
@@ -1035,9 +1170,9 @@ Six numbers per voice-based setting, in the order D1 D2 D3 SN CY HH.
 |---|---|
 | 174–179 | FX send |
 | 180–185 | Reverb send |
-| 186, 187, 188, 189 | Reverb size, damping, level, model (0 room, 1 spring, 2 hall) |
+| 186, 187, 188, 189 | Reverb size, damping, level, model (0 room, 1 spring, 2 hall, 3 plate) |
 | 190–195 | Bits (0 off … 15 = 1 bit) |
-| 196–201 | Waveshaper (0 LXR, 1 fold, 2 clip, 3 asym, 4 rectify) |
+| 196–201 | Waveshaper (0 LXR, 1 fold, 2 clip, 3 asym, 4 rectify, 5 fuzz, 6 tape, 7 sine fold, 8 bite) |
 | 202–207 | Tilt (64 flat) |
 | 208–213 | Choke group (0 none, 1–4) |
 | 214–219 | Random pitch |
@@ -1055,6 +1190,10 @@ Six numbers per voice-based setting, in the order D1 D2 D3 SN CY HH.
 | 286–291 | Model exciter |
 | 292–297 | Model tension |
 | 298–303 | LFO mode (0 trig, 1 hold, 2 one, 3 half) |
+| 304–309 | Gate (0 off, 1 on) |
+| 310, 311, 312, 313, 314 | The delay's Sync (0, 1), Saturate, Echo>Rev, Glitch, Pitch (0 off, 1 +12, 2 +7, 3 −12, 4 detune) |
+| 315, 316, 317 | Bus dirt, the master's dirt type (0 tape, 1 tube, 2 fuzz, 3 diode, 4 fold) and amount |
+| 318–324 | The master compressor: Ratio (0 off, 1 1.5:1, 2 2:1, 3 3:1, 4 4:1, 5 6:1, 6 10:1, 7 limit), Thresh, Attack, Release, Sidechain (0 the mix, 1–6 D1 … HH), Makeup, Mix |
 
 The LXR's own parameters keep their CC and NRPN numbers.
 
@@ -1086,10 +1225,10 @@ What changed in the port:
 
 What Elixir adds:
 
-- **Sound:** Control All (OCT+ held, a knob: every track); LFO modes (hold, one-shot, half); FX and reverb sends per voice; three reverbs; waveshaper choice; bits; tilt EQ; random per hit; choke groups; cross modulation; phaser and flanger; a sound browser and a kit library.
+- **Sound:** Control All (OCT+ held, a knob: every track); LFO modes (hold, one-shot, half); FX and reverb sends per voice; four reverbs (Clouds' plate among them); nine waveshapers; bits; tilt EQ; random per hit; choke groups; cross modulation; a gate per voice; phaser and flanger; a tape delay with sync, glitches and pitch-shifted repeats, its echoes into the reverb; dirt on the FX bus and the master; a sound browser and a kit library.
 - **Models (experimental):** Rings' resonators and Plaits' sixteen engines on the drum voices, two at a time. Not in the LXR-02.
-- **Performance:** PERF with fill, repeat, freeze, throws, feedback push, tape stop, filter sweeps, a DJ filter, four macros, the voices' volumes on two pages, PERFORM 2 and two global LFOs (morph, the DJ filter, the effects, down to 256 bars a cycle); KEYS, to play a voice from the keyboard.
-- **Sequencing:** trig conditions, ratchets, per-track clocks, generators (mutate, Turing machine, cellular automata, Grids, Euclid with a second pulse), dice, commit and undo, and copying a bar across all tracks.
+- **Performance:** PERF with fill, repeat, freeze, throws, feedback push, tape stop, filter sweeps, a DJ filter, four macros, the voices' volumes on two pages, PERFORM 2, DENSITY (thinning or building the whole pattern) and three global LFOs (morph, the DJ filter, the effects, density, transpose, the delay, macros, down to 256 bars a cycle); KEYS, to play a voice from the keyboard.
+- **Sequencing:** trig conditions, ratchets, note lengths and ties, per-track clocks, generators (mutate, Turing machine, cellular automata, Grids, Euclid with a second pulse), a melody generator, a scale per pattern, dice, commit and undo, and copying a bar across all tracks.
 - **Safety:** the automatic session save, a CPU meter with the load by part, and backup and restore over USB (the library page).
 - **Both cores:** the FM-1's second core renders the drum voices (from 0.15), guarded: a unit whose second core misbehaves carries on with one.
 
@@ -1123,6 +1262,8 @@ It is built from:
 - **Grids**, © 2011–2012 Emilie Gillet, GPL-3.0-or-later (used under GPL-3.0): the drum map and its reading.
 - **Rings** and **stmlib**, © 2012–2015 Emilie Gillet, MIT licence: the drum voices' Rings models (a fixed-point port).
 - **Plaits**, © 2016–2023 Emilie Gillet, MIT licence: the drum voices' P models (a fixed-point port).
+- **Clouds**, © 2014 Emilie Gillet, MIT licence: the reverb's PLATE (a fixed-point port).
+- **Marbles**, © 2015 Emilie Gillet, MIT licence: the melody generator follows the design of its X section (no code copied).
 - **X0X** (Charles Vestal), **Melodee** (keremimo) and **Jangada** (zednaked), GPL-3.0: starting the FM-1's second core and guarding against units that misread (through Felucca's hardware layer).
 - **Inter Tight** (the screen's font) and **DotGothic16** (the emulator page), SIL Open Font License 1.1.
 
@@ -1130,44 +1271,56 @@ It is built from:
 
 ### Building and testing
 
-See `README.md`: building the firmware (`./build.sh`), the browser emulator (`web/emu/build.sh`), and the host tests (`render_test`, `ui_test`, `compare_test`, `rings_compare`, `plaits_compare`, the library tests).
+See `README.md`: building the firmware (`./build.sh`), the browser emulator (`web/emu/build.sh`), and the host tests (`render_test`, `ui_test`, `compare_test`, `rings_compare`, `plaits_compare`, `reverb_compare`, the library tests).
 
 ---
 
 ## Appendix: the remote map at a glance
 
-The [remote map](#the-remote-map) laid out as the controller is: the tracks across, the rows down. Everything is on the remote channel (CONFIG → REMOTE, 16 by default). CH and OH both act on the hat voice, except their decays.
+The [remote map](#the-remote-map) laid out as the controller is: the columns across, the rows down. Two channels (CONFIG → REMOTE): **TRACKS**, 15 by default, and **GLOBAL**, 16 by default. Knobs are CCs (PICKUP, ABS or REL: [the remote map](#the-remote-map)); buttons are a CC or a note of the number, whichever the controller sends. Mute, solo, the latched effects and the DENSITY tracks toggle; the held ones act while held; select, PLAY / STOP, REC and the patterns act on the press. Their lights follow the state.
 
-**Knobs and faders: the CC numbers** (how they take values, PICKUP, ABS or REL: [the remote map](#the-remote-map))
-
-<!-- grid -->
-| | D1 | D2 | D3 | SN | CY | CH | OH | Master |
-|---|---|---|---|---|---|---|---|---|
-| Volume | **8** | **9** | **10** | **11** | **12** | **13** | **14** | **15** FX dry/wet |
-| Pan | **16** | **17** | **18** | **19** | **20** | **21** | **22** | **23** Reverb size |
-| Filter frequency | **24** | **25** | **26** | **27** | **28** | **29** | **30** | **31** DJ filter |
-| Resonance | **32** | **33** | **34** | **35** | **36** | **37** | **38** | **39** FX P1 |
-| Decay | **40** | **41** | **42** | **43** | **44** | **45** closed | **46** open | **47** Tape time |
-| Pitch (coarse) | **48** | **49** | **50** | **51** | **52** | **53** | **54** | **55** Tempo |
-| Drive | **56** | **57** | **58** | **59** | **60** | **61** | **62** | **63** SRate |
-| FX send | **64** | **65** | **66** | **67** | **68** | **69** | **70** | **71** FX P2 |
-| Reverb send | **72** | **73** | **74** | **75** | **76** | **77** | **78** | **79** Reverb level |
-| Sample rate | **80** | **81** | **82** | **83** | **84** | **85** | **86** | **87** Shuffle |
-| LFO amount | **88** | **89** | **90** | **91** | **92** | **93** | **94** | **95** Morph |
-| Random pitch | **96** | **97** | **98** | **99** | **100** | **101** | **102** | **103** Roll rate |
-| Macros, PERFORM 2 | **104** Macro 1 | **105** Macro 2 | **106** Macro 3 | **107** Macro 4 | **108** DRILL | **109** JITTER | **110** CUTS | **111** PUMP |
-| Random decay | **112** | **113** | **114** | **115** | **116** | **117** | **118** | **119** Repeat length |
-
-**Buttons: the note numbers** (note on: pressed; note off or velocity 0: released). Mute, solo and the latched effects toggle; the others act while held, except select, PLAY / STOP, REC and the patterns, which act on the press. Their lights follow the state: Elixir sends each note back, velocity 127 on and 0 off.
+**TRACKS (channel 15).** CH and OH both act on the hat voice, except their decays.
 
 <!-- grid -->
-| | D1 | D2 | D3 | SN | CY | CH | OH | Master |
+| | D1 | D2 | D3 | SN | CY | CH | OH | Selected |
 |---|---|---|---|---|---|---|---|---|
-| Mute | **36** | **37** | **38** | **39** | **40** | **41** | **42** | **43** PLAY / STOP |
-| Solo | **44** | **45** | **46** | **47** | **48** | **49** | **50** | **51** REC |
-| Select | **52** | **53** | **54** | **55** | **56** | **57** | **58** | **59** FILL (held) |
-| Roll (held) | **60** | **61** | **62** | **63** | **64** | **65** | **66** | **67** REPEAT (held) |
-| DRILL (held) | **68** | **69** | **70** | **71** | **72** | **73** | **74** | **75** FREEZE (held) |
-| Effects, held | **76** TAPE STOP | **77** HALF | **78** CUTS | **79** PUMP | **80** COMB | **81** SPACE | **82** CRUSH | **83** REVERSE |
-| Effects, latched | **84** TAPE STOP | **85** HALF | **86** CUTS | **87** PUMP | **88** COMB | **89** SPACE | **90** CRUSH | **91** REVERSE |
-| Patterns | **92** previous | **93** next | | | | | | |
+| Volume | **8** | **9** | **10** | **11** | **12** | **13** | **14** | **15** |
+| Pan | **16** | **17** | **18** | **19** | **20** | **21** | **22** | **23** |
+| Filter frequency | **24** | **25** | **26** | **27** | **28** | **29** | **30** | **31** |
+| Resonance | **32** | **33** | **34** | **35** | **36** | **37** | **38** | **39** |
+| Decay | **40** | **41** | **42** | **43** | **44** | **45** closed | **46** open | **47** |
+| Pitch (coarse) | **48** | **49** | **50** | **51** | **52** | **53** | **54** | **55** |
+| Drive | **56** | **57** | **58** | **59** | **60** | **61** | **62** | **63** |
+| FX send | **64** | **65** | **66** | **67** | **68** | **69** | **70** | **71** |
+| Reverb send | **72** | **73** | **74** | **75** | **76** | **77** | **78** | **79** |
+| Sample rate | **80** | **81** | **82** | **83** | **84** | **85** | **86** | **87** |
+| LFO amount | **88** | **89** | **90** | **91** | **92** | **93** | **94** | **95** |
+| Random pitch | **96** | **97** | **98** | **99** | **100** | **101** | **102** | **103** |
+| Mute | **104** | **105** | **106** | **107** | **108** | **109** | **110** | **111** |
+| Solo | **112** | **113** | **114** | **115** | **116** | **117** | **118** | **119** |
+
+**GLOBAL (channel 16): knobs and faders**
+
+<!-- grid -->
+| | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|
+| 8–15 | **8** Tempo | **9** Shuffle | **10** Morph | **11** SRate | **12** DJ filter | **13** Roll rate | **14** Repeat | **15** Tape time |
+| 16–23 | **16** FX dry/wet | **17** P1 | **18** P2 | **19** P3 | **20** P4 | **21** Bus dirt | **22** Echo > rev | **23** Saturate |
+| 24–31 | **24** Rev level | **25** Rev size | **26** Rev damp | **27** Master dirt | **28** DENSITY | **29** Ghost vel | **30** Build |  |
+| 32–39 | **32** Macro 1 | **33** Macro 2 | **34** Macro 3 | **35** Macro 4 | **36** DRILL | **37** JITTER | **38** CUTS | **39** PUMP |
+| 40–47 | **40** COMB note | **41** COMB fb | **42** CRUSH | **43** REV length | **44** LFO 1 depth | **45** LFO 2 depth | **46** LFO 3 depth |  |
+
+**GLOBAL (channel 16): buttons**
+
+<!-- grid -->
+| | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|
+| Transport, held | **48** PLAY / STOP | **49** REC | **50** FILL | **51** REPEAT | **52** FREEZE | **53** THROW REV | **54** THROW FX | **55** FB PUSH |
+| Held, patterns | **56** TAPE STOP | **57** LP sweep | **58** HP sweep | **59** REVERSE | **60** previous | **61** next |  |  |
+| Select | **64** D1 | **65** D2 | **66** D3 | **67** SN | **68** CY | **69** CH | **70** OH |  |
+| Roll (held) | **72** D1 | **73** D2 | **74** D3 | **75** SN | **76** CY | **77** CH | **78** OH | **79** selected |
+| DRILL (held) | **80** D1 | **81** D2 | **82** D3 | **83** SN | **84** CY | **85** CH | **86** OH | **87** selected |
+| Effects, held | **88** HALF | **89** JITTER | **90** CUTS | **91** SHORT | **92** PUMP | **93** COMB | **94** SPACE | **95** CRUSH |
+| Effects, latched | **96** HALF | **97** JITTER | **98** CUTS | **99** SHORT | **100** PUMP | **101** COMB | **102** SPACE | **103** CRUSH |
+| DENSITY out | **104** D1 | **105** D2 | **106** D3 | **107** SN | **108** CY | **109** CH | **110** OH | **111** all in |
+

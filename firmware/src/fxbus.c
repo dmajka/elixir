@@ -8,7 +8,7 @@
 
 enum { FX_OFF, FX_DRIVE, FX_RING, FX_COMP, FX_DELAY, FX_PHASER, FX_FLANGER, NFX };
 enum { DIST_TUBE, DIST_FOLD, DIST_RAT };
-enum { DELAY_NORMAL, DELAY_PINGPONG };
+enum { DELAY_NORMAL, DELAY_PINGPONG };            /* (21: TAPE, TAPE PP after them) */
 
 #define FXBUF_SIZE 0x8000u                          /* 32768 samples: 0.74 s mono, 2 x 0.37 s ping pong */
 #define FXBUF_MASK (FXBUF_SIZE - 1u)
@@ -40,7 +40,34 @@ static struct {
     uint32_t fl_w;                                   /* .. its write index */
     uint8_t freeze;                                  /* PERF: FREEZE (the delay loops) */
     int32_t push;                                    /* .. FB PUSH, 0 .. 65536 (0.13: the global LFOs' amount) */
+    int32_t lfo_fb, lfo_time;                        /* 19c: the global LFOs on the delay's feedback and time, -65536 ..
+                                                      * 65536 */
+    uint32_t lfo_n;                                  /* .. blocks since the time was last moved */
+    /* 21: SYNC (TIME as note values), PITCH (DP_*), THROW REV's echoes too; SATURATE 0..127, ECHO > REVERB 0..65536,
+     * GLITCH's chance 0..65535 */
+    uint8_t d_sync, d_pitch, throw_echo;
+    int32_t d_sat, d_echorev, d_glitch;
 } fx;
+/* 21b: SYNC's note values (TIME's 12 steps): 1/32, 1/16T, 1/16, 1/8T, 1/16., 1/8, 1/4T, 1/8., 1/4, 1/2T, 1/4., 1/2,
+ * in ticks (96 a quarter note) */
+#define NSYNCV 12u
+static const uint16_t SYNC_T[NSYNCV] = {12, 16, 24, 32, 36, 48, 64, 72, 96, 128, 144, 192};
+static uint32_t fx_bpm_x10 = 1200u;                  /* (seq.c: the tempo, as it changes) */
+/* note value i's full-rate samples at the tempo, Q16 (32-bit sums: no 64-bit division) */
+static uint64_t sync_len(uint32_t i)
+{
+    uint32_t x = fx_bpm_x10 ? fx_bpm_x10 : 1200u, n = SYNC_T[i < NSYNCV ? i : NSYNCV - 1u] * (60u * 10u * FS / 96u);
+    return (uint64_t)(n / x) << 16 | ((n % x) << 16) / x;
+}
+/* a time t (Q16 0..1) as a note value's full-rate samples, Q16, halved until it fits in max (Q16) */
+static uint32_t sync_samples(uint32_t t, uint64_t max)
+{
+    uint64_t s = sync_len((uint32_t)(((uint64_t)t * NSYNCV) >> 16));
+    while (s > max)
+        s >>= 1;
+    return (uint32_t)s;
+}
+
 
 /* ----------------------------------------------------- fixed log / exp --- */
 static int32_t exp2_q16(int32_t y)                   /* 2^(y / 65536), Q16; y clamped to -16..15 */
@@ -297,18 +324,20 @@ static uint32_t delay_samples(uint32_t t)
 {
     uint64_t cv = ((uint64_t)t * fx.d_range) >> 16;
     uint64_t hi = fx.delay_type == DELAY_NORMAL ? D_HI_MAX : (uint64_t)D_HI_MAX * 48 / 100;
+    if (fx.d_sync)                                   /* (21b: a note value, RANGE aside) */
+        return sync_samples(t, hi);
     uint64_t mn = D_LOW_MIN + (((uint64_t)(D_LOW_MAX - D_LOW_MIN) * fx.d_range) >> 16);
     uint64_t mx = D_LOW_MAX + (((hi - D_LOW_MAX) * fx.d_range) >> 16);
     return (uint32_t)(mn + (((mx - mn) * cv) >> 16));
 }
 static uint32_t delay_mask(void) { return fx.delay_type == DELAY_NORMAL ? FXBUF_MASK : FXBUF_MASK >> 1; }
-static void delay_set_time(uint32_t t)               /* Delay_setDelayTime */
+static void delay_set_at(uint32_t t, uint32_t w)    /* Delay_setDelayTime, the write head at w */
 {
     if (fx.d_interp <= 0) {
         uint32_t off = delay_samples(t);
         fx.d_time = t;
         fx.d_fnew = off & 0xFFFFu;
-        fx.d_new = (fx.d_write - 1u - (off >> 16)) & delay_mask();
+        fx.d_new = (w - 1u - (off >> 16)) & delay_mask();
         fx.d_interp = 1 << 24;
         fx.d_step = (1 << 24) / 441;                 /* a 10 ms crossfade */
     } else {
@@ -316,6 +345,7 @@ static void delay_set_time(uint32_t t)               /* Delay_setDelayTime */
         fx.d_has_pending = 1;
     }
 }
+static void delay_set_time(uint32_t t) { delay_set_at(t, fx.d_write); }
 static inline int32_t delay_read(uint32_t base, uint32_t pos, uint32_t frac, uint32_t mask)
 {
     int32_t a = fxbuf[base + pos], b = fxbuf[base + ((pos + 1u) & mask)];
@@ -326,38 +356,277 @@ static inline int32_t tone(int32_t *lp, int32_t in)  /* the feedback's one-pole 
     *lp += (int32_t)(((int64_t)fx.d_tone * ((in << 8) - *lp)) >> 16);
     return *lp >> 8;
 }
+/* 18b: the delay in two halves. delay_reads reads the block's echoes (the read heads, their crossfade and a time
+ * change waiting for it, as the LXR's loop does sample by sample); fx_delay writes the line (the input, the echoes
+ * through the tone filter and the feedback) and mixes. When every read of the block is of a sample written before
+ * it (the heads a block or more behind the write head: from ~1.5 ms; delay_far), the reads run early, on core 0
+ * while the second core renders D1-D3 (voices.c fx_early), and the echoes are exactly the same as read in the loop:
+ * no latency */
+static int32_t d_ol[BLOCK] POOL, d_or[BLOCK] POOL;   /* the block's echoes, left and right (mono: left) */
+static uint8_t d_read;                               /* .. read already this block */
+static int delay_far(void)
+{
+    uint32_t mask = delay_mask();
+    if (((fx.d_write - fx.d_old) & mask) <= BLOCK + 1u)
+        return 0;
+    if (fx.d_interp > 0 && ((fx.d_write - fx.d_new) & mask) <= BLOCK + 1u)
+        return 0;
+    return !fx.d_has_pending || (delay_samples(fx.d_pending) >> 16) >= BLOCK + 1u;
+}
+static void delay_step(uint32_t w, int32_t *ol, int32_t *orr)   /* one sample's echoes, the write head at w */
+{
+    uint32_t mask = delay_mask(), half = FXBUF_SIZE >> 1;
+    int pp = fx.delay_type != DELAY_NORMAL;
+    if (fx.d_interp <= 0) {
+        *ol = delay_read(0, fx.d_old, fx.d_fold, mask);
+        *orr = pp ? delay_read(half, fx.d_old, fx.d_fold, mask) : *ol;
+        fx.d_old = (fx.d_old + 1u) & mask;
+        if (fx.d_has_pending) {
+            fx.d_has_pending = 0;
+            delay_set_at(fx.d_pending, w);
+        }
+    } else {
+        int32_t al = delay_read(0, fx.d_old, fx.d_fold, mask), bl = delay_read(0, fx.d_new, fx.d_fnew, mask);
+        int32_t g = fx.d_interp >> 9;                /* Q15 */
+        *ol = (al * g + bl * (32768 - g)) >> 15;
+        if (pp) {
+            int32_t ar = delay_read(half, fx.d_old, fx.d_fold, mask), br = delay_read(half, fx.d_new, fx.d_fnew, mask);
+            *orr = (ar * g + br * (32768 - g)) >> 15;
+        } else {
+            *orr = *ol;
+        }
+        fx.d_old = (fx.d_old + 1u) & mask;
+        fx.d_new = (fx.d_new + 1u) & mask;
+        fx.d_interp -= fx.d_step;
+        if (fx.d_interp <= 0) {
+            fx.d_old = fx.d_new;
+            fx.d_fold = fx.d_fnew;
+        }
+    }
+}
+#ifdef FX_NOW
+static uint32_t d_early_blocks;                      /* (host tests: the blocks read early) */
+#endif
+static void delay_reads(void)                        /* the block's echoes, early (delay_far) */
+{
+    uint32_t i;
+#ifdef FX_NOW
+    d_early_blocks++;
+#endif
+    for (i = 0; i < BLOCK; i++)
+        delay_step((fx.d_write + i) & delay_mask(), &d_ol[i], &d_or[i]);
+    d_read = 1;
+}
+
+/* ------------------------------------------------------------ TAPE --- */
+/* 21: TAPE and TAPE PP, two DELAY types of Elixir's beside the LXR's NORMAL and PINGPONG (which are as they were).
+ * The line is stored at half rate (22.05 kHz: 1.49 s mono, 0.74 s a side, in the same fxbuf); the block's input
+ * pairs averaged in, the echoes read between samples and interpolated back up. P1 TIME (10 ms .. the most, or with
+ * SYNC a note value at the tempo), P2 WOW (wow: a slow random drift, flutter: ~6 Hz, on the read head), P3 TONE (the
+ * feedback's low-pass), P4 FEEDBACK (to 115%). In the loop: a low cut (~100 Hz), the tone, PITCH's shifter, then the
+ * tape's soft saturation (SATURATE: from a gentle round-off at full scale down to a 1/4 ceiling), so feedback past
+ * 100% grows into a roar, not a clip. A time change glides the read head (the pitch bends, as a tape's motor).
+ * GLITCH: the chance a repeat is changed: STUTTER (it loops its first 1/32 or 1/64), REVERSE, SKIP (an earlier
+ * slice), HALF (half speed: an octave down), faded in and out over 32 samples */
+enum { DELAY_TAPE = 2, DELAY_TAPEPP, NDELAY };
+enum { DP_OFF, DP_UP12, DP_UP7, DP_DOWN12, DP_DETUNE, NDPITCH };
+enum { GL_NONE, GL_STUTTER, GL_REVERSE, GL_SKIP, GL_HALF };
+#define TP_MIN (220u << 16)                          /* 10 ms at half rate */
+#define TP_FADE 32u
+#define PS_LEN 2048u                                 /* the pitch shifter's window (mono; a side: half) */
+static int16_t ps_buf[PS_LEN] POOL;
+static struct {
+    uint32_t w;                                      /* the write head (half-rate samples) */
+    int32_t cur, tgt;                                /* the delay now and where it glides, Q16 half-rate samples */
+    int32_t prev[2];                                 /* the last half-rate echo (the upsampling) */
+    int32_t hp[2], lp[2];                            /* the low cut's and the tone's states, Q8 */
+    int32_t wow, wowt;                               /* WOW: the drift and its target, Q16 samples */
+    uint32_t wown, flph, rng;
+    uint8_t gmode;                                   /* GLITCH: this repeat's change (GL_*) */
+    uint32_t gleft, glen, gskip, gst;                /* .. half-rate samples left, its length, SKIP's slices, STUTTER's */
+    uint32_t psw, psd;                               /* the shifter's write index, its delay (Q16) */
+} tp;
+static uint32_t tp_rand(void)
+{
+    tp.rng = tp.rng * 1664525u + 1013904223u;
+    return tp.rng >> 8;
+}
+static int is_tape(void) { return fx.delay_type == DELAY_TAPE || fx.delay_type == DELAY_TAPEPP; }
+static uint32_t tape_max(void) { return (fx.delay_type == DELAY_TAPE ? FXBUF_SIZE : FXBUF_SIZE >> 1) - 2u * BLOCK; }
+static int32_t tape_target(void)                     /* P1 (and the global LFOs) as the delay, Q16 half-rate */
+{
+    uint32_t t = (uint32_t)clamp32(fx.p[0] + (fx.lfo_time >> 2), 0, 65536), mx = tape_max() << 16;
+    if (fx.d_sync)
+        return (int32_t)(sync_samples(t, (uint64_t)mx << 1) >> 1);
+    return (int32_t)(TP_MIN + (uint32_t)(((uint64_t)(((uint64_t)t * t) >> 16) * (mx - TP_MIN)) >> 16));
+}
+static inline int32_t tape_read(uint32_t base, uint32_t mask, int32_t d)   /* the line d (Q16) behind the head */
+{
+    uint32_t p = (tp.w << 16) - (uint32_t)d, i = (p >> 16) & mask, f = p & 0xFFFFu;
+    int32_t a = fxbuf[base + i], b = fxbuf[base + ((i + 1u) & mask)];
+    return a + (int32_t)(((int64_t)(b - a) * (int32_t)f) >> 16);
+}
+/* the cubic soft clip (y = u - 4/27 u^3, flat at u = 1.5), its ceiling 32768 / g: x x g in, x 1/g out (gi: 2^32 / g) */
+static inline int32_t tape_sat(int32_t x, int32_t g, uint32_t gi)
+{
+    int32_t u = (int32_t)(((int64_t)x * g) >> 16), u3;
+    u = u > 49152 ? 49152 : u < -49152 ? -49152 : u;
+    u3 = (int32_t)(((int64_t)u * u >> 15) * u >> 15);
+    u -= u3 * 4 / 27;
+    return (int32_t)(((int64_t)u * gi) >> 16);
+}
+static int32_t tape_shift(int32_t x, uint32_t c)     /* PITCH: two crossfaded heads over the window (side c) */
+{
+    static const uint32_t STEP[NDPITCH] = {0, 65536, 32657, 0, 456};   /* (ratio - 1), Q16; down: (1 - ratio) */
+    uint32_t sh = fx.delay_type == DELAY_TAPE ? 11u : 10u, n = 1u << sh, base = c * (PS_LEN >> 1), m = n - 1u;
+    uint32_t wm = (n << 16) - 1u, d0 = tp.psd & wm;
+    int32_t y = 0, k;
+    ps_buf[base + (tp.psw & m)] = (int16_t)sat16(x);
+    for (k = 0; k < 2; k++) {
+        uint32_t d = k ? (d0 + (n << 15)) & wm : d0, p = ((tp.psw & m) << 16) - d - (2u << 16);
+        uint32_t ii = (p >> 16) & m, f = p & 0xFFFFu, tri = d >> sh;   /* (tri: 0 .. 65535 over the window) */
+        int32_t a = ps_buf[base + ii], b = ps_buf[base + ((ii + 1u) & m)];
+        int32_t s = a + (int32_t)(((int64_t)(b - a) * (int32_t)f) >> 16);
+        int32_t wv = (int32_t)(tri < 32768u ? tri * 2u : (65535u - tri) * 2u);
+        y += (int32_t)(((int64_t)s * wv) >> 16);
+    }
+    if (c == 0u || fx.delay_type == DELAY_TAPE)     /* (the heads move once a sample; down: the delay grows) */
+        tp.psd = fx.d_pitch == DP_DOWN12 ? (d0 + 32768u) & wm : (d0 - STEP[fx.d_pitch < NDPITCH ? fx.d_pitch : 0]) & wm;
+    return y;
+}
+static void tape_glitch(void)                        /* a repeat starts: changed, at GLITCH's chance */
+{
+    uint32_t len = (uint32_t)tp.cur >> 16;
+    tp.glen = tp.gleft = len > 64u ? len : 64u;
+    tp.gmode = GL_NONE;
+    if (!fx.d_glitch || (tp_rand() & 0xFFFFu) >= fx.d_glitch)
+        return;
+    tp.gmode = (uint8_t)(GL_STUTTER + (tp_rand() & 3u));
+    if (tp.gmode == GL_STUTTER) {                    /* (1/32 or 1/64 at the tempo, at half rate) */
+        tp.gst = (60u * 10u * FS / 2u) / (fx_bpm_x10 ? fx_bpm_x10 : 1200u) / ((tp_rand() & 1u) ? 8u : 16u);
+        tp.gst = tp.gst < 32u ? 32u : tp.gst;
+    }
+    tp.gskip = 1u + tp_rand() % 3u;
+    if ((tp.gmode == GL_REVERSE && 3u * len + 64u > tape_max()) ||
+        (tp.gmode == GL_SKIP && (tp.gskip + 1u) * len + 64u > tape_max()) || (tp.gmode == GL_HALF && 2u * len > tape_max()))
+        tp.gmode = GL_NONE;                          /* (no room in the line for it) */
+}
+static void fx_tape(void)
+{
+    uint32_t h, c, mask = fx.delay_type == DELAY_TAPE ? FXBUF_MASK : FXBUF_MASK >> 1, half = FXBUF_SIZE >> 1;
+    int pp = fx.delay_type == DELAY_TAPEPP, st = fx_stereo();
+    int32_t *side = fx_side(), e[2], fb, g = 65536 + fx.d_sat * 3 * 516;   /* (SATURATE: 1 .. 4) */
+    uint32_t gi = (uint32_t)(0xFFFFFFFFu / (uint32_t)g) + 1u;
+    int32_t wowd = (int32_t)(((int64_t)fx.p[1] * (40 << 16)) >> 16), fld = (int32_t)(((int64_t)fx.p[1] * (3 << 16)) >> 16);
+    int32_t er = fx.d_echorev, rv_sum = 0;
+    fb = (int32_t)(((int64_t)fx.p[3] * 75366) >> 16);   /* (to 115%) */
+    fb += (int32_t)(((int64_t)(75366 - fb) * fx.push) >> 16);
+    if (fx.lfo_fb)
+        fb = clamp32(fb + fx.lfo_fb, 0, 75366);
+    tp.tgt = tape_target();
+    if (!tp.cur)
+        tp.cur = tp.tgt;
+    for (h = 0; h < BLOCK / 2u; h++) {
+        int32_t d, in[2], env = 65536;
+        uint32_t k;
+        tp.cur += (tp.tgt - tp.cur) >> 11;           /* (the glide: ~90 ms) */
+        if (++tp.wown >= 4096u) {                    /* WOW: a new drift every ~0.19 s */
+            tp.wown = 0;
+            tp.wowt = (int32_t)(((int64_t)((int32_t)(tp_rand() & 0xFFFFu) - 32768) * wowd) >> 15);
+        }
+        tp.wow += (tp.wowt - tp.wow) >> 11;
+        tp.flph += 1168730u;                         /* (~6 Hz at 22.05 kHz) */
+        d = tp.cur + tp.wow + (int32_t)(((int64_t)sine_at(tp.flph) * fld) >> 15);
+        if (!tp.gleft)
+            tape_glitch();
+        k = tp.glen - tp.gleft;
+        tp.gleft--;
+        switch (tp.gmode) {                          /* GLITCH: the repeat read another way */
+        case GL_STUTTER: d += (int32_t)((k - k % tp.gst) << 16); break;
+        case GL_REVERSE: d += (int32_t)((2u * k) << 16); break;
+        case GL_SKIP: d += (int32_t)((tp.gskip * tp.glen) << 16); break;
+        case GL_HALF: d += (int32_t)(k << 15); break;
+        default: break;
+        }
+        if (tp.gmode != GL_NONE) {                   /* (faded in and out: no clicks) */
+            uint32_t m = k < tp.gleft ? k : tp.gleft;
+            env = m < TP_FADE ? (int32_t)(m * 65536u / TP_FADE) : 65536;
+        }
+        d = clamp32(d, (int32_t)(2u << 16), (int32_t)(mask << 16));
+        e[0] = tape_read(pp ? half : 0u, mask, d);
+        e[1] = pp ? tape_read(0, mask, d) : e[0];
+        if (env < 65536) {
+            e[0] = (int32_t)(((int64_t)e[0] * env) >> 16);
+            e[1] = (int32_t)(((int64_t)e[1] * env) >> 16);
+        }
+        in[0] = (fx_l[2u * h] + fx_l[2u * h + 1u]) >> 1;
+        in[1] = (fx_r[2u * h] + fx_r[2u * h + 1u]) >> 1;
+        if (!pp)
+            in[0] = sat16(in[0] + in[1]);
+        for (c = 0; c < (pp ? 2u : 1u); c++) {       /* the feedback: low cut, tone, PITCH, onto the tape */
+            int32_t x = e[pp ? 1u - c : c], y;      /* (PP: each side's echo feeds the other) */
+            int32_t lo;
+            if (fx.freeze) {
+                y = x;
+            } else {
+                tp.hp[c] += (int32_t)(((int64_t)1843 * ((x << 8) - tp.hp[c])) >> 16);   /* (~100 Hz: 1 - 0.9719) */
+                lo = tp.hp[c] >> 8;
+                x -= lo;
+                tp.lp[c] += (int32_t)(((int64_t)fx.d_tone * ((x << 8) - tp.lp[c])) >> 16);
+                x = tp.lp[c] >> 8;
+                if (fx.d_pitch)
+                    x = tape_shift(x, c);
+                y = tape_sat((pp ? in[c] : in[0]) + (int32_t)(((int64_t)x * fb) >> 16), g, gi);
+            }
+            fxbuf[(pp ? (c ? 0u : half) : 0u) + tp.w] = (int16_t)sat16(y);
+        }
+        if (fx.d_pitch)
+            tp.psw++;
+        tp.w = (tp.w + 1u) & mask;
+        for (c = 0; c < 2u; c++) {                   /* back up to the full rate: halfway, then the new */
+            int32_t a = (tp.prev[c] + e[c]) >> 1, b = e[c];
+            uint32_t i = 2u * h;
+            if (st) {
+                int32_t *o = c ? mix_r : mix_l;
+                const int16_t *dry = c ? fx_r : fx_l;
+                o[i] += sat16(drywet(dry[i], a));
+                o[i + 1u] += sat16(drywet(dry[i + 1u], b));
+            } else if (!c) {
+                side[i] += sat16(drywet(fx_l[i], a));
+                side[i + 1u] += sat16(drywet(fx_l[i + 1u], b));
+            }
+            if (er) {                                /* 21c: ECHO > REVERB: the echoes into the reverb's send */
+                rev_in[i] += (int32_t)(((int64_t)a * er) >> 17);
+                rev_in[i + 1u] += (int32_t)(((int64_t)b * er) >> 17);
+                rv_sum |= a | b;
+            }
+            tp.prev[c] = e[c];
+        }
+    }
+    if (rv_sum)
+        rev_fed = 1;
+}
+
 static void fx_delay(void)                           /* Delay_process / Delay_processPingPong */
 {
     uint32_t i, mask = delay_mask(), half = FXBUF_SIZE >> 1;
     int pp = fx.delay_type != DELAY_NORMAL, st = fx_stereo();
+    int32_t er = fx.throw_echo ? 65536 : fx.d_echorev, rv_sum = 0;
+    if (is_tape()) {
+        fx_tape();
+        d_read = 0;
+        return;
+    }
     int32_t *side = fx_side(), fb = fx.d_fb + (int32_t)(((int64_t)(62259 - fx.d_fb) * fx.push) >> 16);   /* (FB PUSH) */
+    if (fx.lfo_fb)                                   /* (19c: the global LFOs, either way) */
+        fb = clamp32(fb + fx.lfo_fb, 0, 65536);
     for (i = 0; i < BLOCK; i++) {
         int32_t ol, orr;
-        if (fx.d_interp <= 0) {
-            ol = delay_read(0, fx.d_old, fx.d_fold, mask);
-            orr = pp ? delay_read(half, fx.d_old, fx.d_fold, mask) : ol;
-            fx.d_old = (fx.d_old + 1u) & mask;
-            if (fx.d_has_pending) {
-                fx.d_has_pending = 0;
-                delay_set_time(fx.d_pending);
-            }
+        if (d_read) {
+            ol = d_ol[i];
+            orr = d_or[i];
         } else {
-            int32_t al = delay_read(0, fx.d_old, fx.d_fold, mask), bl = delay_read(0, fx.d_new, fx.d_fnew, mask);
-            int32_t w = fx.d_interp >> 9;            /* Q15 */
-            ol = (al * w + bl * (32768 - w)) >> 15;
-            if (pp) {
-                int32_t ar = delay_read(half, fx.d_old, fx.d_fold, mask), br = delay_read(half, fx.d_new, fx.d_fnew, mask);
-                orr = (ar * w + br * (32768 - w)) >> 15;
-            } else {
-                orr = ol;
-            }
-            fx.d_old = (fx.d_old + 1u) & mask;
-            fx.d_new = (fx.d_new + 1u) & mask;
-            fx.d_interp -= fx.d_step;
-            if (fx.d_interp <= 0) {
-                fx.d_old = fx.d_new;
-                fx.d_fold = fx.d_fnew;
-            }
+            delay_step(fx.d_write, &ol, &orr);       /* (near: read between the writes) */
         }
         if (fx.freeze) {                             /* FREEZE: what the line holds, round and round */
             if (pp) {
@@ -384,7 +653,42 @@ static void fx_delay(void)                           /* Delay_process / Delay_pr
         } else {
             side[i] += sat16(drywet(fx_l[i], ol));
         }
+        if (er) {                                    /* 21c: ECHO > REVERB */
+            rev_in[i] += (int32_t)(((int64_t)(ol + orr) * er) >> 17);
+            rv_sum |= ol | orr;
+        }
     }
+    if (rv_sum)
+        rev_fed = 1;
+    d_read = 0;
+}
+/* 21b: the tempo (seq.c, as it changes): a synced NORMAL or PINGPONG time again (crossfaded); TAPE glides there */
+static void fx_tempo(uint32_t x10)
+{
+    if (x10 == fx_bpm_x10)
+        return;
+    fx_bpm_x10 = x10;
+    if (fx.d_sync && fx.type == FX_DELAY && !is_tape())
+        delay_set_time(fx.d_time);
+}
+
+/* 18b: what the bus can do before the mixer has its input (voices.c fx_early): the delay's reads, when far */
+static void fxbus_early(void)
+{
+    d_read = 0;
+    if (fx.type == FX_DELAY && !is_tape() && (fx.lfo_time || fx.lfo_n) && ++fx.lfo_n >= 16u && fx.d_interp <= 0) {
+        uint32_t t = (uint32_t)clamp32(fx.p[0] + (fx.lfo_time >> 2), 0, 65536);   /* (19c: the LFOs on the time, +-1/4
+                                                      * of its range, every 16 blocks: crossfaded) */
+        fx.lfo_n = fx.lfo_time ? 1u : 0u;
+        if (t != fx.d_time)
+            delay_set_time(t);
+    }
+#ifdef FX_NOW
+    if (fx_now)
+        return;
+#endif
+    if (fx.type == FX_DELAY && fx.last_type == FX_DELAY && !is_tape() && delay_far())
+        delay_reads();
 }
 
 /* ------------------------------------------------- PHASER, FLANGER --- */
@@ -464,6 +768,165 @@ static void fx_flanger(void)
     fx.fl_w += BLOCK;
 }
 
+/* ------------------------------------------------------------ DIRT --- */
+/* 23b: the bus's DIRT (any type, before it: into the echo, the phaser ..): a gain of 1 .. 8 into soft3 (voices.c),
+ * the level trimmed back as it rises. 23c: the master's DIRT, the mix before the DJ filter (engine.c): a TYPE and an
+ * AMOUNT, each type's gain, tone (a one-pole high cut) and dry / wet set by the amount. TAPE (soft, darker as it
+ * rises), TUBE (soft and biased: even harmonics, the DC taken out), FUZZ (a hard clip, parallel: the kick's punch
+ * kept), DIODE (the LXR's 1N914 curve), FOLD (a sine fold, parallel). At 0, off: nothing touched. The wet part fades
+ * in over the first quarter of the amount (no step at its start) */
+enum { DT_TAPE, DT_TUBE, DT_FUZZ, DT_DIODE, DT_FOLD, NDIRT };
+static struct {
+    int32_t bus, amt;                                /* the amounts, 0 .. 65536 */
+    uint8_t type;
+    int32_t lp[2], dc[2];                            /* the master's tone, TUBE's DC follower (a channel each) */
+} dirt;
+/* each type: its gain at 0 and at the most (Q8), the wet share (Q15), the high cut's coefficient at 0 and at the most
+ * (Q15: 32767 none, 0.5 ~5 kHz), the level trimmed at the most (Q15) */
+static const struct { int32_t g0, g1, wet, c0, c1, trim; } DIRT_T[NDIRT] = {
+    {256, 1536, 32768, 29000, 16384, 13107},         /* TAPE */
+    {256, 2560, 32768, 32767, 24000, 13107},         /* TUBE */
+    {512, 10240, 22938, 26000, 18000, 16384},        /* FUZZ */
+    {256, 3072, 29491, 31000, 22000, 9830},          /* DIODE */
+    {256, 1536, 19661, 32767, 28000, 4096},          /* FOLD */
+};
+static inline int32_t dirt_curve(uint32_t t, int32_t x, uint32_t c)
+{
+    switch (t) {
+    case DT_TUBE: {
+        int32_t y = soft3(x + 8192) - 8117;          /* (soft3 of the bias, 0.25) */
+        dirt.dc[c] += (y - dirt.dc[c]) >> 10;
+        return y - dirt.dc[c];
+    }
+    case DT_FUZZ:
+        return (clamp32(x, -24576, 24576) * 4) / 3;
+    case DT_DIODE:
+        return diode(x * 2) >> 1;
+    case DT_FOLD:
+        return sine_at(((uint32_t)x << 15) + 0x40000000u);   /* (sin: voices.c SH_SFOLD) */
+    default:                                         /* DT_TAPE */
+        return soft3(x);
+    }
+}
+static int32_t dirt_wet(int32_t a, int32_t wet)      /* the wet share: faded in over the amount's first quarter */
+{
+    return a >= 16384 ? wet : (int32_t)(((int64_t)wet * a) >> 14);
+}
+static void dirt_bus(void)
+{
+    uint32_t i, c, nc = fx_stereo() ? 2u : 1u;
+    int32_t g = 256 + (int32_t)(((int64_t)dirt.bus * 1792) >> 16), w = dirt_wet(dirt.bus, 32768);
+    int32_t tr = 32768 - (int32_t)(((int64_t)dirt.bus * 9830) >> 16);
+    if (!dirt.bus)
+        return;
+    for (c = 0; c < nc; c++) {
+        int16_t *x = c ? fx_r : fx_l;
+        for (i = 0; i < BLOCK; i++) {
+            int32_t y = (soft3((x[i] * g) >> 8) * tr) >> 15;
+            x[i] = (int16_t)sat16(x[i] + (int32_t)(((int64_t)(y - x[i]) * w) >> 15));
+        }
+    }
+}
+static void dirt_master(int32_t *l, int32_t *r)      /* the mix (engine.c, before it is saturated to 16 bits) */
+{
+    uint32_t i, c, t = dirt.type < NDIRT ? dirt.type : DT_TAPE;
+    int32_t a = dirt.amt, g, w, k, tr;
+    if (!a)
+        return;
+    g = DIRT_T[t].g0 + (int32_t)(((int64_t)(DIRT_T[t].g1 - DIRT_T[t].g0) * a) >> 16);
+    w = dirt_wet(a, DIRT_T[t].wet);
+    k = DIRT_T[t].c0 + (int32_t)(((int64_t)(DIRT_T[t].c1 - DIRT_T[t].c0) * a) >> 16);
+    tr = 32768 - (int32_t)(((int64_t)DIRT_T[t].trim * a) >> 16);
+    for (c = 0; c < 2u; c++) {
+        int32_t *x = c ? r : l, lp = dirt.lp[c];
+        for (i = 0; i < BLOCK; i++) {
+            int32_t d = clamp32(x[i], -65536, 65536), y = dirt_curve(t, clamp32((d * g) >> 8, -262144, 262144), c);
+            lp += (int32_t)(((int64_t)(y - lp) * k) >> 15);
+            x[i] = d + (int32_t)(((int64_t)((((int64_t)lp * tr) >> 15) - d) * w) >> 15);
+        }
+        dirt.lp[c] = lp;
+    }
+}
+
+/* ------------------------------------------------------------ COMP --- */
+/* 0.16: the master's COMPRESSOR (FX's COMP pages, the kit's), on the mix before the master's DIRT (engine.c).
+ * THRESHOLD 0 .. -48 dB, RATIO (OFF: nothing touched; 1.5:1 .. LIMIT), ATTACK 0.1 .. 100 ms, RELEASE 20 ms .. 2 s,
+ * MAKEUP 0 .. +24 dB, MIX (dry / wet: parallel at less than all), SIDECHAIN: the mix itself (a bus compressor), or a
+ * voice (D1 .. HH): its sound (before its sends and pan) is what the compressor hears, and its own dry part is kept
+ * out of the gain (voices.c mc_key), so a kick ducks everything else and keeps its punch. A peak follower each
+ * sample, the gain (a 6 dB soft knee) every 8 samples, ramped between */
+#define NCRATIO 8u
+#define MC_SUB 8u
+static const int32_t CR_K[NCRATIO] = {0, 21845, 32768, 43691, 49152, 54613, 58982, 65536};   /* 1 - 1/ratio, Q16 */
+static struct {
+    uint8_t ratio, src;                              /* RATIO's index (0: off), SIDECHAIN (0: the mix, 1 .. 6) */
+    int32_t thr, makeup, mix;                        /* log2 of full scale, Q16 (-8 .. 0, 0 .. 4); MIX Q16 */
+    int32_t atk, rel;                                /* the follower's coefficients, Q24 */
+    int32_t env, g;                                  /* the follower (Q15 x 4096), the gain in use (Q16) */
+    volatile int32_t gr;                             /* the last block's most gain reduction, log2 Q16 (the screen) */
+} mc = {.g = 65536, .mix = 65536};
+static int32_t mc_coeff(uint32_t t)                  /* a time in samples as the follower's coefficient */
+{
+    return (int32_t)((1u << 24) / (t + 1u));
+}
+static void mc_set(uint32_t p, uint32_t v)           /* (sound.c: the kit's values, 0 .. 127, the menus' index) */
+{
+    switch (p) {
+    case 0: mc.ratio = (uint8_t)(v < NCRATIO ? v : 0u); break;
+    case 1: mc.thr = -(int32_t)((127u - (v & 127u)) * 8u * 65536u / 127u); break;
+    case 2:                                          /* (4.41 samples x 1000^(v / 127)) */
+        mc.atk = mc_coeff((uint32_t)(((uint64_t)289014u * (uint32_t)exp2_q16((int32_t)(v & 127u) * 5143)) >> 32));
+        break;
+    case 3:                                          /* (882 samples x 100^(v / 127)) */
+        mc.rel = mc_coeff((uint32_t)(((uint64_t)882u * (uint32_t)exp2_q16((int32_t)(v & 127u) * 3428)) >> 16));
+        break;
+    case 4: mc.src = (uint8_t)(v <= NVOICE ? v : 0u); break;
+    case 5: mc.makeup = (int32_t)((v & 127u) * 4u * 65536u / 127u); break;
+    default: mc.mix = (int32_t)((v & 127u) * 65536u / 127u); break;
+    }
+    mc_key = mc.ratio ? mc.src : 0u;                 /* (voices.c: that voice's dry part kept out) */
+}
+static void comp_master(int32_t *l, int32_t *r)      /* the mix (engine.c), then the key voice's dry part back in */
+{
+    uint32_t i, j;
+    int32_t grmax = 0;
+    if (mc.ratio) {
+        const int16_t *key = mc.src ? vbuf[mc.src - 1u] : 0;
+        for (i = 0; i < BLOCK; i += MC_SUB) {
+            int32_t lv, over, eff, gt, dg;
+            for (j = i; j < i + MC_SUB; j++) {       /* the follower */
+                int32_t x = key ? iabs(key[j]) : iabs(l[j]) > iabs(r[j]) ? iabs(l[j]) : iabs(r[j]);
+                int32_t d = (clamp32(x, 0, 262143) << 12) - mc.env;
+                mc.env += (int32_t)(((int64_t)d * (d > 0 ? mc.atk : mc.rel)) >> 24);
+            }
+            lv = mc.env >= 4096 ? log2_q16((uint32_t)mc.env >> 12) - (15 << 16) : -(40 << 16);
+            over = lv - mc.thr;
+            eff = over <= -32768 ? 0 : over < 32768 ? (int32_t)(((int64_t)(over + 32768) * (over + 32768)) >> 17) : over;
+            eff = (int32_t)(((int64_t)eff * CR_K[mc.ratio]) >> 16);
+            grmax = eff > grmax ? eff : grmax;
+            gt = exp2_q16(mc.makeup - eff);
+            dg = (gt - mc.g) / (int32_t)MC_SUB;
+            for (j = i; j < i + MC_SUB; j++) {       /* the gain, ramped; MIX: dry and wet */
+                int32_t w;
+                mc.g += dg;
+                w = 65536 + (int32_t)(((int64_t)(mc.g - 65536) * mc.mix) >> 16);
+                l[j] = (int32_t)(((int64_t)l[j] * w) >> 16);
+                r[j] = (int32_t)(((int64_t)r[j] * w) >> 16);
+            }
+            mc.g = gt;
+        }
+    } else {
+        mc.env = 0;
+        mc.g = 65536;
+    }
+    mc.gr = grmax;
+    if (mc_key)
+        for (i = 0; i < BLOCK; i++) {
+            l[i] += mc_kl[i];
+            r[i] += mc_kr[i];
+        }
+}
+
 /* ---------------------------------------------------------- the bus --- */
 static void fxbus_process(void)                      /* FxBus_process */
 {
@@ -476,6 +939,7 @@ static void fxbus_process(void)                      /* FxBus_process */
         fx.ph_fb[0] = fx.ph_fb[1] = fx.fl_d[0] = fx.fl_d[1] = 0;
         fx.last_type = fx.type;
     }
+    dirt_bus();
     switch (fx.type) {
     case FX_PHASER:
         fx_phaser();

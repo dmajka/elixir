@@ -20,7 +20,8 @@
 #define NVOICE 6
 #define NTRACK 7
 enum { V_DRUM1, V_DRUM2, V_DRUM3, V_SNARE, V_CYM, V_HAT };
-enum { SH_LXR, SH_FOLD, SH_CLIP, SH_ASYM, SH_RECT, NSHAPE };   /* the waveshapers (shape_block) */
+enum { SH_LXR, SH_FOLD, SH_CLIP, SH_ASYM, SH_RECT, SH_FUZZ, SH_TAPE, SH_SFOLD, SH_BITE, NSHAPE };   /* the waveshapers
+                                                                  * (shape_block; 23a: FUZZ .. BITE) */
 enum { XM_DUCK, XM_FILTER, XM_RING, NXMODE };                  /* the cross modulation's modes (xmod_block) */
 
 typedef struct {
@@ -71,12 +72,14 @@ typedef struct {
     uint8_t rnd[4];              /* random per hit: pitch, decay, filter, pan amounts (0..127) */
     uint8_t choking;             /* choked: fading out (1), silent (2) until its next hit */
     uint8_t throw_rev, throw_fx; /* PERF's THROW: the send at 127 while held (perform.c) */
+    uint8_t gate;                /* 19b: GATE: the amp EG holds for the note's length (seq.c gate_start) */
     int32_t drive;               /* DRIVE 0..1, Q16 (the shapers but the LXR's) */
     int32_t xamt;                /* Q15 */
     uint32_t dec_base;           /* the amp EG's decay as set (random per hit scales aeg.dec from it) */
     uint32_t rp;                 /* this hit's random pitch factor, Q16 */
     int32_t rnd_f;               /* .. its random cutoff offset, Q16 */
-    int32_t tilt_lp, sh_dc;      /* the tilt EQ's low-pass, RECTIFY's DC follower */
+    int32_t tilt_lp, sh_dc;      /* the tilt EQ's low-pass, RECTIFY's and BITE's DC follower */
+    int32_t sh_z;                /* 23a: TAPE's high cut, BITE's last sample */
 } voice_t;
 
 static voice_t vc[NVOICE];
@@ -89,6 +92,9 @@ static uint32_t decim_rate[NVOICE + 1];          /* [6]: ALL (the PERF page's gl
 static modnode_t velo_mod[NVOICE], lfo_mod[NVOICE];
 static uint32_t seq_bpm_x10 = 1200;               /* the tempo the LFO sync follows */
 static volatile uint32_t trig_count[NTRACK];         /* triggers of each track (the UI flashes its key) */
+static uint32_t rev_g = 65536u;                      /* 19c: the reverb sends moved by the global LFOs, Q16 (0 .. 2) */
+static uint8_t rp_scaled;                            /* 19a: the next hit's random pitch is in the scale's degrees
+                                                      * (seq.c seq_trigger): no bend */
 static int32_t venv[NVOICE];                         /* each voice's output envelope, Q15 (cross modulation) */
 static uint32_t tape_q16 = 65536u;                   /* PERF's TAPE STOP: every voice's pitch (and the tempo), Q16 */
 static int32_t exp2_q16(int32_t y);                  /* (fxbus.c) */
@@ -264,7 +270,8 @@ static void voice_trigger(uint32_t track, uint32_t vel, uint32_t note)
     }
     /* random per hit: pitch (up to an octave either way, the amount squared: fine at small amounts), decay (x0.5 ..
      * x2 of its time), cutoff (up to half its range either way) */
-    v->rp = v->rnd[0] ? (uint32_t)exp2_q16(hit_rand() * v->rnd[0] * v->rnd[0] * 2 / 16129) : 65536u;   /* (Q16 oct) */
+    v->rp = v->rnd[0] && !rp_scaled ? (uint32_t)exp2_q16(hit_rand() * v->rnd[0] * v->rnd[0] * 2 / 16129) : 65536u;
+    rp_scaled = 0;                                   /* (Q16 octaves) */
     if (vi <= V_DRUM3 && mdl[vi].type >= MD_PL0)         /* (0.15: a Plaits engine's) */
         pl_trigger(vi, vel);
     else if (vi <= V_DRUM3 && mdl[vi].type)              /* (0.6: a model's strike, at the hit's pitch) */
@@ -288,6 +295,32 @@ static void voice_trigger(uint32_t track, uint32_t vel, uint32_t note)
     v->tr.phase = 0;
     v->snap = 65536;
     voice_pan_latch(v);
+}
+
+/* 19b: GATE. A note held (on: the voice's GATE on) or let go: the amp EG's top held until then, then its decay */
+static void voice_hold(uint32_t track, int on)
+{
+    slope_eg_t *e = &vc[track < V_HAT ? track : V_HAT].aeg;
+    if (on) {
+        e->hold = vc[track < V_HAT ? track : V_HAT].gate;
+        return;
+    }
+    e->hold = 0;
+    if (e->state == EG_H)
+        e->state = EG_D;
+}
+/* .. a tied note's next: the voice's pitch there, nothing struck again (legato) */
+static void voice_legato(uint32_t track, uint32_t note)
+{
+    uint32_t vi = track < V_HAT ? track : V_HAT;
+    voice_t *v = &vc[vi];
+    if (track < NTRACK)
+        trig_count[track]++;
+    osc_base_note(&v->osc, note);
+    if (vi != V_SNARE)
+        osc_base_note(&v->mod, note);
+    if (vi >= V_CYM)
+        osc_base_note(&v->mod2, note);
 }
 
 /* ---------------------------------------------------- the block, async --- */
@@ -348,7 +381,18 @@ static int32_t combined_q15(const voice_t *v)
 
 /* the waveshaper of the voice's DRIVE, but the LXR's (its curve: dist_sample): the drive a gain of 1 .. 8, then
  * FOLD (folds back from full scale, a triangle), CLIP (hard), ASYM (the positive half soft, the negative clipped
- * lower: even harmonics), RECTIFY (full wave, the octave up; its DC followed and taken out) */
+ * lower: even harmonics), RECTIFY (full wave, the octave up; its DC followed and taken out). 23a: FUZZ (a gain of 4
+ * .. 56 into a hard clip, the quietest of the tail gated down), TAPE (a cubic soft clip, then a high cut from ~11 kHz
+ * down to ~5 kHz with the drive: 0.8 .. 0.5), SINE FOLD (a sine of the input: West Coast folds, two turns at the
+ * most), BITE (the highs pushed, then a biased soft clip harder with the drive: an overdrive that bites; its DC taken
+ * out) */
+static inline int32_t soft3(int32_t x)               /* x - 4/27 x^3 over -1.5 .. 1.5 (Q15): full scale at 1.5 */
+{
+    int32_t x3;
+    x = clamp32(x, -49152, 49152);
+    x3 = (int32_t)((((int64_t)x * x >> 15) * x) >> 15);
+    return x - ((x3 * 4855) >> 15);
+}
 static void shape_block(voice_t *v, int16_t *buf)
 {
     uint32_t i;
@@ -371,11 +415,32 @@ static void shape_block(voice_t *v, int16_t *buf)
         case SH_ASYM:
             y = a >= 0 ? dist_sample(sat16(a), 1024) : (a < lo ? lo : a);
             break;
-        default:                                     /* SH_RECT */
+        case SH_RECT:
             y = iabs(a) * 2;
             v->sh_dc += (y - v->sh_dc) >> 8;
             y = sat16(y - v->sh_dc);
             break;
+        case SH_FUZZ:
+            y = sat16((int32_t)(((int64_t)a * (4 * 65536 + 3 * v->drive)) >> 16));   /* (a x 4 .. 7) */
+            if (iabs(buf[i]) < 256)                  /* (the gate: below -42 dB, down with the input) */
+                y = (y * iabs(buf[i])) >> 8;
+            break;
+        case SH_TAPE:
+            v->sh_z += (int32_t)(((int64_t)(soft3(a) - v->sh_z) * (26214 - ((v->drive * 9830) >> 16))) >> 15);
+            y = sat16(v->sh_z);
+            break;
+        case SH_SFOLD:
+            y = sine_at(((uint32_t)a << 15) + 0x40000000u);   /* (sin: the LXR's table is -cos; full scale a
+                                                              * quarter turn) */
+            break;
+        default: {                                   /* SH_BITE */
+            int32_t e = a + ((a - v->sh_z) >> 1);
+            v->sh_z = a;
+            y = dist_sample(sat16(e + 4096), 256 + ((v->drive * 1536) >> 16));   /* (the bias: odd and even) */
+            v->sh_dc += (y - v->sh_dc) >> 8;
+            y = sat16(y - v->sh_dc);
+            break;
+        }
         }
         buf[i] = (int16_t)y;
     }
@@ -538,13 +603,18 @@ static int16_t fx_l[BLOCK], fx_r[BLOCK];            /* the FX bus (the LXR's sat
 static int32_t rev_in[BLOCK];                       /* the reverb's send (mono) */
 static uint32_t rev_fed;                            /* a send fed it this block */
 static uint32_t voice_active;                       /* bit v: the voice sounded this block (the UI's meters) */
+/* 0.16: the master compressor's SIDECHAIN voice (1..6, 0 none: fxbus.c mcomp): its dry part goes here, not into the
+ * mix, so the compressor's gain leaves it alone (comp_master adds it back) */
+static uint8_t mc_key;
+static int32_t mc_kl[BLOCK], mc_kr[BLOCK];
 static int32_t voice_peak[NVOICE];
 
-static void mix_voice(const voice_t *v, const int16_t *buf)   /* mixer_addDataToOutput, with the sends */
+static void mix_voice(const voice_t *v, const int16_t *buf, int32_t *dl, int32_t *dr)   /* mixer_addDataToOutput, with
+                                                      * the sends; the dry part into dl, dr */
 {
     uint32_t i;
     int32_t s = v->out_fx || v->throw_fx ? 32768 : v->fx_send >= 32767 ? 32768 : v->fx_send;
-    int32_t rs = v->throw_rev ? 32767 : v->rev_send;
+    int32_t rs = v->throw_rev ? 32767 : rev_g == 65536u ? v->rev_send : clamp32((int32_t)(((int64_t)v->rev_send * rev_g) >> 16), 0, 32767);
     int16_t dry[BLOCK];
     if (rs) {
         int32_t any = 0;
@@ -570,24 +640,26 @@ static void mix_voice(const voice_t *v, const int16_t *buf)   /* mixer_addDataTo
     case R_L1:
     case R_L2:
         for (i = 0; i < BLOCK; i++)
-            mix_l[i] += buf[i];
+            dl[i] += buf[i];
         break;
     case R_R1:
     case R_R2:
         for (i = 0; i < BLOCK; i++)
-            mix_r[i] += buf[i];
+            dr[i] += buf[i];
         break;
     default:
         for (i = 0; i < BLOCK; i++) {
-            mix_l[i] += (buf[i] * v->pan_l) >> 14;
-            mix_r[i] += (buf[i] * v->pan_r) >> 14;
+            dl[i] += (buf[i] * v->pan_l) >> 14;
+            dr[i] += (buf[i] * v->pan_r) >> 14;
         }
         break;
     }
 }
 
 static void fxbus_process(void);                    /* (fxbus.c) */
+static void fxbus_early(void);
 static void reverb_process(void);                   /* (reverb.c) */
+static void reverb_add(void);
 static void modnodes_block(void);                   /* (sound.c) */
 
 /* one block of the six voices into mix_l / mix_r (Q15, unsaturated) */
@@ -657,6 +729,27 @@ static void c1_drums(uint32_t arg)                   /* (runs on the second core
 #ifdef VOICES_SWAP
 static uint8_t voices_swap;                          /* (host tests: SN-HH first, as two cores may finish them) */
 #endif
+#ifdef FX_NOW
+static uint8_t fx_now;                               /* (host tests: the reverb on this block's send, as before 18b) */
+#endif
+
+/* 18b: the effects' work that needs no voice of this block, on core 0 while the second core renders D1-D3: the
+ * reverb on the last block's send (reverb.c), the delay's reads (fxbus.c fxbus_early). Then the sends start again
+ * for the mixer. On one core, the same work in the same order, so the sound doesn't depend on the cores */
+static void fx_early(void)
+{
+    uint32_t i;
+#ifdef FX_NOW
+    if (!fx_now)
+#endif
+        reverb_process();
+    fxbus_early();
+    for (i = 0; i < BLOCK; i++) {
+        fx_l[i] = fx_r[i] = 0;
+        rev_in[i] = 0;
+    }
+    rev_fed = 0;
+}
 
 /* one block of the six voices into mix_l / mix_r (Q15, unsaturated) */
 static void voices_block(void)
@@ -669,18 +762,16 @@ static void voices_block(void)
         voice_async(vi);
     }
     model_limit();                                   /* (model_cap may have changed: main.c) */
-    for (i = 0; i < BLOCK; i++) {
-        mix_l[i] = mix_r[i] = 0;
-        fx_l[i] = fx_r[i] = 0;
-        rev_in[i] = 0;
-    }
-    rev_fed = 0;
+    for (i = 0; i < BLOCK; i++)
+        mix_l[i] = mix_r[i] = mc_kl[i] = mc_kr[i] = 0;
     voice_active = 0;
     LOAD_MARK(LD_SEQ);
 #if FELUCCA_CPU2
-    if (fm1_cpu1_run(c1_drums, 0)) {                 /* D1-D3 on the second core, SN-HH here meanwhile */
+    if (fm1_cpu1_run(c1_drums, 0)) {                 /* D1-D3 on the second core, SN-HH and the early effects here */
         voices_render(V_SNARE, NVOICE);
         LOAD_MARK(LD_SNHH);
+        fx_early();
+        LOAD_MARK(LD_REV);
         if (fm1_cpu1_wait() == 0) {
             LOAD_MARK(LD_WAIT);
             ld_acc[LD_D13] += c1_ticks;
@@ -694,6 +785,7 @@ static void voices_block(void)
 #ifdef VOICES_SWAP
     if (voices_swap) {
         voices_render(V_SNARE, NVOICE);
+        fx_early();
         voices_render(V_DRUM1, V_SNARE);
     } else
 #endif
@@ -702,6 +794,8 @@ static void voices_block(void)
         LOAD_MARK(LD_D13);
         voices_render(V_SNARE, NVOICE);
         LOAD_MARK(LD_SNHH);
+        fx_early();
+        LOAD_MARK(LD_REV);
     }
     for (vi = 0; vi < NVOICE; vi++) {                /* cross modulation, choke, the mixer */
         voice_t *v = &vc[vi];
@@ -728,7 +822,7 @@ static void voices_block(void)
                 buf[i] = (int16_t)((buf[i] * (g >> 6)) >> 15);
             b = buf;
         }
-        mix_voice(v, b);
+        mix_voice(v, b, mc_key == vi + 1u ? mc_kl : mix_l, mc_key == vi + 1u ? mc_kr : mix_r);
         for (i = 0; i < BLOCK; i += 4) {
             int32_t a = iabs(b[i]);
             if (a > pk)
@@ -742,11 +836,17 @@ static void voices_block(void)
         for (i = 0; i < BLOCK; i++) {
             mix_l[i] = (mix_l[i] * 13107) >> 15;
             mix_r[i] = (mix_r[i] * 13107) >> 15;
+            mc_kl[i] = (mc_kl[i] * 13107) >> 15;
+            mc_kr[i] = (mc_kr[i] * 13107) >> 15;
         }
     LOAD_MARK(LD_MIX);
     fxbus_process();
     LOAD_MARK(LD_FX);
-    reverb_process();
+#ifdef FX_NOW
+    if (fx_now)
+        reverb_process();
+#endif
+    reverb_add();
     LOAD_MARK(LD_REV);
 }
 

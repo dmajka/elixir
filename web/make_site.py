@@ -7,6 +7,8 @@
 #   install/                    the install page: web/install.html with fm1pkg.js, fm1ota.js, install.js and the
 #                               package's details inlined (the front page until 0.13)
 #   try/                        the emulator (build/emu: run web/emu/build.sh first)
+#   mobile/                     the emulator laid out for phones (web/emu/mobile.html, on try/'s files; 0.16):
+#                               not linked from anywhere and noindex while it's tried out
 #   library/                    backup, restore and LXR-02 kit import over Web MIDI (web/library.html, library.js)
 #   manual/index.html           MANUAL.md as a page
 #   firmware/                   elixir-VER.fwsc, elixir-VER-src.tar.gz (the source, as the GPL asks), MANUAL.md,
@@ -397,6 +399,11 @@ def main(pkg, out):
     back = '<footer>\n  <a href="../">Elixir</a> · <a href="../install/">Install</a> · <a href="../manual/">Manual</a><br>\n'
     t = t.replace("<footer>\n", back, 1)
     (out / "try/index.html").write_text(t, encoding="utf-8")
+    (out / "try/mobile.html").unlink(missing_ok=True)    # (0.16: the phone page is mobile/, on try/'s files)
+    (out / "mobile").mkdir()
+    m = (ROOT / "web/emu/mobile.html").read_text(encoding="utf-8")
+    m = m.replace("@VERSION@", ver).replace("@BASE@", "../try/").replace("@SITE@", "../")
+    (out / "mobile/index.html").write_text(m, encoding="utf-8")
 
     md = re.sub(r"^## Contents\n.*?^---\n", "", (ROOT / "MANUAL.md").read_text(encoding="utf-8"), flags=re.M | re.S)
     title, body, heads = markdown(md)                # (the side bar replaces the manual's own contents)

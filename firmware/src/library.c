@@ -46,7 +46,7 @@
 
 enum { LS_OK, LS_BAD, LS_ARGS, LS_BUSY, LS_FLASH, LS_CRC, LS_SIZE, LS_EMPTY, LS_ORDER };
 #define LIB_PROTO 1u
-#define LIB_MAX 400u                                 /* a decoded message: a whole kit (KIT_LEN) and its header */
+#define LIB_MAX 432u                                 /* a decoded message: a whole kit (KIT_LEN) and its header (18c: 400 -> 432, room for the kit to grow) */
 _Static_assert(KIT_LEN + 16u <= LIB_MAX, "LIB_MAX: a kit (KL_PUT: 13 header bytes) must fit");
 
 static void lib_send(const uint8_t *wire, uint32_t n);   /* the hook: one F0 .. F7 message to the host */
@@ -378,6 +378,7 @@ static uint32_t lib_pat(uint32_t cmd, const uint8_t *a, uint32_t n)
             return LS_BAD;
         for (i = 0; i < cnt; i++) {
             memcpy(&p->step[t][first + i], a + 4 + i * 7u, 7);
+            p->step[t][first + i].prob &= PROB_MASK;     /* (19b: its top bit is Elixir's length: none) */
             p->timing[t][first + i] = a[4 + cnt * 7u + i];
             p->lhi[t][first + i] = 0;
         }

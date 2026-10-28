@@ -80,6 +80,8 @@ static void engine_block(int32_t *out)
     perf_block();
     seq_block();
     voices_block();
+    comp_master(mix_l, mix_r);                      /* (0.16: the master's COMPRESSOR, off at RATIO OFF) */
+    dirt_master(mix_l, mix_r);                      /* (23c: the master's DIRT, off at 0) */
     for (i = 0; i < BLOCK; i++) {
         ml[i] = (int16_t)sat16(mix_l[i]);
         mr[i] = (int16_t)sat16(mix_r[i]);

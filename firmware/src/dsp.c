@@ -241,12 +241,13 @@ static int32_t snap_calc(int32_t *v, uint32_t pitch_q20)
 
 /* ------------------------------------------------------- envelopes --- */
 #define EG_ONE (1 << 24)
-enum { EG_STOPPED, EG_A, EG_D, EG_REPEAT };
+enum { EG_STOPPED, EG_A, EG_D, EG_REPEAT, EG_H };
 typedef struct {
     int32_t value;               /* Q24 */
     uint32_t atk, dec;           /* steps a block, Q24 */
     int32_t k, ik;               /* slope and the attack's inverse slope, Q16 */
     uint8_t repeat, rcnt, state;
+    uint8_t hold;                /* 19b: GATE: the attack's top held (EG_H) until the note's end lets go */
 } slope_eg_t;
 typedef struct {
     int32_t value;               /* Q24 */
@@ -285,7 +286,7 @@ static int32_t slope_calc(slope_eg_t *e)            /* slopeEg2_calc, once a blo
         } else {
             e->rcnt--;
             if (e->rcnt == 0)
-                e->state = EG_D;
+                e->state = e->hold ? EG_H : EG_D;
             v = EG_ONE;
         }
         e->value = v;
@@ -294,10 +295,12 @@ static int32_t slope_calc(slope_eg_t *e)            /* slopeEg2_calc, once a blo
         v += (int32_t)e->atk;
         if (v >= EG_ONE) {
             v = EG_ONE;
-            e->state = EG_D;
+            e->state = e->hold ? EG_H : EG_D;
         }
         e->value = v;
         return eg_shape(v, e->ik);
+    case EG_H:
+        return eg_shape(e->value, e->k);
     case EG_D:
         if (v > 0) {
             v -= (int32_t)e->dec;

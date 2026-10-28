@@ -175,12 +175,12 @@
 
     <div class="cards">
       <div class="card"><h3>Sends and reverb</h3><p>An FX-bus send and a reverb send on every voice. Room,
-        spring and hall reverb after the FX bus, plus a phaser and flanger on the bus.</p></div>
+        spring, hall and plate reverb after the FX bus, plus a phaser, a flanger and a tape delay on the bus.</p></div>
       <div class="card"><h3>Sound shaping</h3><p>Five waveshapers, a bit reducer and tilt EQ per voice;
         random-per-hit pitch, decay, filter and pan; choke groups; duck, filter or ring modulation from another
         voice.</p></div>
-      <div class="card"><h3>Global LFOs</h3><p>Two tempo-synced LFOs, up to 256 bars long, on morph, the DJ
-        filter or the effects. A one-shot saw over 64 bars turns one kit into another while you play.</p></div>
+      <div class="card"><h3>Global LFOs</h3><p>Three tempo-synced LFOs, up to 256 bars long, on morph, the DJ
+        filter, the effects, density, transpose or the melodies. A one-shot saw over 64 bars turns one kit into another while you play.</p></div>
       <div class="card"><h3>Play it as an instrument</h3><p>KEYS plays any voice chromatically and records into the
         steps. Control All moves a parameter on every track at once, as on Elektron boxes.</p></div>
       <div class="card"><h3>Sound browser</h3><p>Browse presets for a single track: every kick, snare or hat
@@ -232,6 +232,55 @@
   <section class="band" id="updates">
     <div class="intro"><h2>Updates</h2><p>What each release added and fixed.</p></div>
     <div class="updates">
+      <div class="card"><h3>0.16<span>28 October 2026</span></h3>
+        <h4>New</h4>
+        <ul>
+          <li>A scale per pattern (17, from major and minor to pentatonics, Hirajoshi and pelog) that the tracks you
+            choose follow: their notes, random pitch, KEYS and MIDI in stay in key.</li>
+          <li>Note lengths per step (1/32 to 1/2, and TIE) with a GATE per voice; MIDI out sends real note-offs.</li>
+          <li>A melody generator after Marbles: random, walk, arpeggios and motifs over the scale, with spread, bias,
+            steps and déjà vu loops, beside any rhythm generator. COMMIT writes the notes in.</li>
+          <li>DENSITY on PERF: one knob thins the whole pattern, weakest steps first, or builds it up with chances,
+            ghost notes and ratchets. Any tracks can be left out.</li>
+          <li>A third global LFO, and new destinations: density, transpose, the melody, the delay, the reverb sends
+            and the macros.</li>
+          <li>A tape delay: TAPE and TAPE PP with wow, saturation and feedback past 100%, note-value sync, glitches
+            (stutter, reverse, skip, half speed), pitch-shifted repeats, and the echoes into the reverb (THROW REV
+            throws them too).</li>
+          <li>PLATE, Mutable Instruments Clouds' reverb, as a fourth reverb model.</li>
+          <li>Dirt: four more shapes per voice (FUZZ, TAPE, SINE FOLD, BITE), a drive before the FX bus, and a
+            master DIRT (tape, tube, fuzz, diode, fold).</li>
+          <li>HYRULE, a colour theme: deep forest green, parchment text, Triforce gold values and a blue for what's
+            active (CONFIG → DEVICE → Colours).</li>
+          <li>DENSITY on the remote: its amount on a knob, and a row of buttons to leave tracks out of it (or put them
+            all back).</li>
+          <li>A master compressor (FX → MASTER COMP): threshold, ratio, attack, release, makeup and mix, with a
+            sidechain from the mix or any one track. Sidechained to the kick, it ducks everything else and leaves the
+            kick's own punch alone.</li>
+          <li>STUTTER (PERF → PERFORM: STUTTER): the master cut into slices and repeated in time, from 1/8 to 1/64,
+            with shrinking rolls, pitch drops and rises, and reversed repeats. A chance per beat, OCT+ held, or a global
+            LFO sets it off.</li>
+        </ul>
+        <h4>Changed</h4>
+        <ul>
+          <li>The reverb and the delay's echoes now run while the first core waits for the second, so the effects
+            cost less at the busiest moments.</li>
+          <li>ARP's generator pages: MELODY comes after ACTION and SCALE after TRACK. PERF has a DENSITY page after
+            MORE, and two pages for LFO 3. The FX bus has three more pages (DELAY: DUB, DELAY: SEND, DIRT).</li>
+          <li>CONFIG → LOAD shows how deep the stacks have gone.</li>
+          <li>The FX pages come in order: REVERB first, then the FX bus and the selected effect's pages together (the
+            two DELAY pages only when the bus is a DELAY), then DIRT.</li>
+          <li>The remote map is on two channels: TRACKS (15 by default) for each track's knobs, mutes and solos, and
+            GLOBAL (16) for the performance, the effects and the rest. No number is used twice on a channel, so mute
+            and solo no longer share a CC with a knob. Buttons work as CCs or notes, and their lights answer the way
+            they were sent. Settings from 0.15 move to the new defaults. The new map is in the manual (§15).</li>
+          <li>With the delay's SYNC on, each detent of TIME moves to the next note value.</li>
+        </ul>
+        <h4>Fixed</h4>
+        <ul>
+          <li>The site said two global LFOs; there are three.</li>
+        </ul>
+      </div>
       <div class="card"><h3>0.15<span>27 October 2026</span></h3>
         <h4>New</h4>
         <ul>
@@ -275,7 +324,8 @@
   <div class="wrap">
     <p>Elixir ports the LXR-02 firmware (Erica Synths, after Julian Schmidt's Sonic Potions LXR, GPL-3.0) to the FM-1
       on Felucca's hardware layer, USB, updater and emulator (Leo Kuroshita, Hügelton Instruments, GPL-3.0), with
-      Grids' drum map (Emilie Gillet, GPL-3.0-or-later) and ports of Rings and Plaits (Emilie Gillet, MIT).</p>
+      Grids' drum map (Emilie Gillet, GPL-3.0-or-later), ports of Rings, Plaits and Clouds' reverb, and a melody
+      generator after Marbles (Emilie Gillet, MIT).</p>
     <p><a href="firmware/LICENSE">GPL-3.0</a>, no warranty · <a href="firmware/NOTICE.md">Notice</a> ·
       <a href="firmware/">Files and source</a><!--REPO--></p>
     <p>Elixir is unofficial and not affiliated with or endorsed by Erica Synths, M-VAVE or Hügelton Instruments.

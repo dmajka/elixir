@@ -5,7 +5,7 @@
  * and the update entry. OCT- + OCT+ held 5 s: UBOOT (the FM-1's own update mode, as Felucca). */
 extern uint32_t _data_start[], _data_end[], _data_load[], _bss_start[], _bss_end[];
 extern uint32_t _pool_start[], _pool_end[], _rt_start[], _rt_end[], _rt_load[];
-extern uint32_t _c1_start[], _c1_end[], _c1_load[];
+extern uint32_t _c1_start[], _c1_end[], _c1_load[], _rb_start[], _rb_end[];
 
 void fm1_timer5_irq(void)
 {
@@ -218,6 +218,21 @@ static void fm1_main(void)
     }
 }
 
+/* 18a: mark the main stacks below where this runs, so LOAD can show their deepest use (audio.c stack_depth) */
+static void __attribute__((noinline)) stacks_paint(void)
+{
+    volatile uint32_t here = 0;
+    uint32_t lim = ((uint32_t)(uintptr_t)&here - 256u) & ~3u, k, *p;
+    uint32_t *const LO[2] = {(uint32_t *)(uintptr_t)_ustack_lo, (uint32_t *)(uintptr_t)_sstack_lo};
+    uint32_t *const TOP[2] = {(uint32_t *)(uintptr_t)_guard1, (uint32_t *)(uintptr_t)_sstack_top};
+    for (k = 0; k < 2u; k++) {
+        uint32_t *end = lim > (uint32_t)(uintptr_t)LO[k] && lim < (uint32_t)(uintptr_t)TOP[k] ? (uint32_t *)(uintptr_t)lim : TOP[k];
+        for (p = LO[k]; p < end; p++)
+            *p = STACK_MARK;
+    }
+    (void)here;
+}
+
 void fm1_cstart(void)
 {
     uint32_t *s, *d;
@@ -245,6 +260,8 @@ void fm1_cstart(void)
         *d = 0;
     for (d = _pool_start; d < _pool_end; d++)
         *d = 0;
+    for (d = _rb_start; d < _rb_end; d++)
+        *d = 0;
     for (s = _data_load, d = _data_start; d < _data_end; s++, d++)
         *d = *s;
     for (s = _rt_load, d = _rt_start; d < _rt_end; s++, d++)
@@ -252,6 +269,7 @@ void fm1_cstart(void)
     for (s = _c1_load, d = _c1_start; d < _c1_end; s++, d++)
         *d = *s;                                  /* the second core's waiting loop (hal/fm1_cpu1.h) */
     fm1_mailbox_clear();
+    stacks_paint();
     fm1_guard_enable(FM1_GUARD_STACK | FM1_GUARD_WRITE | FM1_GUARD_BUS | FM1_GUARD_PC);
     fm1_main();
     for (;;)

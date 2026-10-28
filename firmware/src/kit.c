@@ -42,6 +42,10 @@ static uint32_t init_kit_k(uint32_t p)
         static const uint8_t D[6] = {64, 64, 32, 40, 0, 0};
         return D[(p - PAR_MDECAY1) / 6u];
     }
+    if (p >= PAR_MC_THR && p <= PAR_MC_MIX) {         /* (0.16: the compressor: -12 dB, ~1 ms, ~0.2 s, all wet) */
+        static const uint8_t C[6] = {96, 40, 64, 0, 0, 127};
+        return C[p - PAR_MC_THR];
+    }
     return p == PAR_REV_SIZE ? 64u : p == PAR_REV_DAMP ? 48u : p == PAR_REV_LEVEL ? 100u : 0u;
 }
 
