@@ -13,6 +13,10 @@ It is derived from:
 
 - **Plaits** and **stmlib**, Copyright 2016–2023 Emilie Gillet, MIT licence (`LICENSES/MIT-Plaits.txt`). The DRUM voices' P models (`firmware/src/plaits.c`, `firmware/src/plaits_va.c`, the tables `firmware/src/plaits_tables.h` from `tools/gen_plaits_tables.py`) are a fixed-point port of Plaits' sixteen original engines and the oscillators, drums, noise, physical models, speech and stmlib DSP they use.
 
+- **Marbles**, Copyright 2015 Emilie Gillet, MIT licence (`LICENSES/MIT-Marbles.txt`). The MELODY generator (0.16, `firmware/src/seq.c` `mel_note`) follows the design of Marbles' X section: SPREAD, BIAS, STEPS (the scale's degrees thinned to its stronger ones) and DÉJÀ VU with its loop. It is written for Elixir; no Marbles code is copied.
+
+- **Clouds**, Copyright 2014 Emilie Gillet, MIT licence (`LICENSES/MIT-Clouds.txt`). The reverb's PLATE model (0.16, `firmware/src/reverb.c` `rev_plate`) is Clouds' reverb (`clouds/dsp/fx/reverb.h`, on its `fx_engine.h`), Jon Dattorro's plate in the Griesinger topology, ported to fixed point at Elixir's half rate with its delay lengths scaled; `tests/reverb_compare.cc` checks it against Clouds' own code.
+
 - **The second core** (0.15): starting the FM-1's second core and guarding against units whose second core misreads (`firmware/hal/fm1_cpu1.h`, `fm1_cpu1.S`, from Felucca's hardware layer) come from **X0X** (Charles Vestal, github.com/charlesvestal/fm1-x0x), **Melodee** (keremimo, github.com/keremimo/melodee) and **Jangada** (zednaked, github.com/zednaked/jangada), all GPL-3.0.
 
 Other parts:
