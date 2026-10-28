@@ -1143,6 +1143,7 @@ static uint32_t sound_sig(void)
     uint32_t k, h, s = sig_add(ui.track, ui.sect | ui.half << 4 | ui.bar << 6 | ui.copy << 8 | ui.ca << 9 |
                                          (uint32_t)mdl[0].type << 10 | (uint32_t)mdl[1].type << 16 |
                                          (uint32_t)mdl[2].type << 22);
+    s = sig_add(s, (uint32_t)mi[track_voice(ui.track)].type);   /* (24: MICRO's knobs) */
     const pattern_t *pt = shown_pat();
     for (h = 0; h < 2u; h++)
         for (k = 0; k < 4u; k++) {

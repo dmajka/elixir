@@ -176,13 +176,16 @@ static const uint16_t K_PAGES[6][8] = {{PAR_SHAPE1, PAR_DRIVE1, PAR_BITS1, PAR_T
                                         PAR_MPOS1, PAR_MEXC1, PAR_MTENS1, 0},
                                        {PAR_LFOMODE1},    /* (0.13) */
                                        {PAR_GATE1}};      /* (19b) */
-/* the parameter on knob k of section s's half h for track t (0: none) */
+/* the parameter on knob k of section s's half h for track t (0: none). 24: MODEL on SN-HH: the model alone but on
+ * MICRO; MICRO's second page REVERSE, TENSION on knobs 1, 2 (it has no POSITION) */
 static uint32_t sect_par(uint32_t t, uint32_t s, uint32_t h, uint32_t k)
 {
     uint32_t q;
     if (s < S_SHAPE)
         return LXR_PAGES[track_page(t)][s][8u + h * 4u + k];
-    if (s == S_MODEL && track_voice(t) > 2u)
+    if (s == S_MODEL && mi[track_voice(t)].type && h == 1u)
+        return k == 0u ? PAR_MEXC1 + track_voice(t) : k == 1u ? PAR_MTENS1 + track_voice(t) : 0u;
+    if (s == S_MODEL && (h || k) && track_voice(t) > 2u && !mi[track_voice(t)].type)
         return 0;
     q = K_PAGES[s - S_SHAPE][h * 4u + k];
     return q ? q + track_voice(t) : 0u;
@@ -1257,6 +1260,13 @@ static uint32_t ca_par(uint32_t u, uint32_t k)
             return b[8u + i] != PAR_NONE ? b[8u + i] : 0u;
     return 0;
 }
+/* 24: a MODEL knob on SN-HH steps from the LXR's engine to MICRO's types and back, past Rings' and Plaits' */
+static uint32_t model_step(uint32_t p, uint32_t from, uint32_t to)
+{
+    if (p < PAR_MODEL1 + 3u || p >= PAR_MODEL1 + 6u || model_ok(p - PAR_MODEL1, to))
+        return to;
+    return to > from ? MD_MC0 : 0u;
+}
 static void control_all(uint32_t k, int32_t step)
 {
     uint16_t done[NTRACK];
@@ -1282,7 +1292,8 @@ static void control_all(uint32_t k, int32_t step)
             uint8_t *m = &morph_par[kit_idx(q)];
             *m = (uint8_t)clamp32((int32_t)*m + step, (int32_t)vp_min(q), (int32_t)vp_max(q));
         }
-        vp_set(q, (uint32_t)clamp32((int32_t)vp_get(q) + step, (int32_t)vp_min(q), (int32_t)vp_max(q)));
+        vp_set(q, model_step(q, vp_get(q), (uint32_t)clamp32((int32_t)vp_get(q) + step, (int32_t)vp_min(q),
+                                                             (int32_t)vp_max(q))));
     }
 }
 static void control_all_undo(void)
@@ -1349,13 +1360,17 @@ static void knob_turn(uint32_t k, int32_t n)
         }
         v = sync_knob(p) ? sync_detent(*dv, n)
                          : clamp32((int32_t)*dv + step, (int32_t)mn, (int32_t)(mx > 127u ? 127u : mx));
-        *dv = (uint8_t)v;
+        *dv = (uint8_t)model_step(p, *dv, (uint32_t)v);
         main_set(pt, ui.track, (uint32_t)ui.held_step, 1);
+        live_step_sync(pt, ui.track, (uint32_t)ui.held_step);
         ui.lock_turned = 1;
         return;
     }
     v = sync_knob(p) ? sync_detent(vp_get(p), n) : clamp32((int32_t)vp_get(p) + step, (int32_t)mn, (int32_t)mx);
+    v = (int32_t)model_step(p, vp_get(p), (uint32_t)v);
     vp_set(p, (uint32_t)v);
+    if (ui.mode == M_STEP)                           /* (a generator's track: what plays takes the step's edit) */
+        live_step_sync(shown_pat(), ui.track, ui.step & 63u);
     if (sq.rec && par_lockable(p))                   /* knob movements record to the playing step (REC) */
         seq_record_automation(ui.track, p, (uint32_t)v);
 }
@@ -2552,5 +2567,6 @@ static int ui_step_note_edit(uint32_t note)
     if (ui.mode != M_STEP)
         return 0;
     sel_step()->note = (uint8_t)note;
+    live_step_sync(shown_pat(), ui.track, ui.step & 63u);
     return 1;
 }

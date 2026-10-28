@@ -1210,6 +1210,18 @@ static void seq_add_note(uint32_t t, uint32_t vel, uint32_t note);
 
 /* ------------------------------------------------------- patterns --- */
 /* track t of s into d: its steps and all of its settings */
+/* a step's settings edited on a generator's track (chance, velocity, note, condition, timing, locks, ratchet,
+ * length): its live copy, which is what plays, takes them too; whether it plays stays the generator's */
+static void live_step_sync(const pattern_t *p, uint32_t t, uint32_t s)
+{
+    if (p != &pat[sq.active] || !gen_live(p, t) || t >= NTRACK || s >= NUM_STEPS)
+        return;
+    gpat.step[t][s] = p->step[t][s];
+    gpat.timing[t][s] = p->timing[t][s];
+    gpat.lhi[t][s] = p->lhi[t][s];
+    gpat.cond[t][s] = p->cond[t][s];
+    gpat.rat[t][s] = p->rat[t][s];
+}
 static void trk_copy(pattern_t *d, const pattern_t *s, uint32_t t)
 {
     memcpy(d->step[t], s->step[t], sizeof d->step[t]);
@@ -1683,6 +1695,7 @@ static void seq_record_automation(uint32_t t, uint32_t param, uint32_t val)
                 p->step[t][k].p1v = (uint8_t)val;
             else
                 p->step[t][k].p2v = (uint8_t)val;
+            live_step_sync(p, t, k);
         }
     }
     if (sq.armed_step >= 0 && sq.armed_track >= 0) {
@@ -1693,6 +1706,7 @@ static void seq_record_automation(uint32_t t, uint32_t param, uint32_t val)
             p->step[at][k].p1v = (uint8_t)val;
         else
             p->step[at][k].p2v = (uint8_t)val;
+        live_step_sync(p, at, k);
     }
 }
 

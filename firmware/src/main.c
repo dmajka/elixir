@@ -66,15 +66,25 @@ static void fm1_fault(const fm1_crash_t *c)
     fm1_reboot();
 }
 
-static void uboot_watch(void)                     /* OCT- + OCT+ held 5 s: the FM-1's UBOOT (updates) */
+/* OCT- + OCT+ held from power-on for 5 s: the FM-1's UBOOT (updates). 0.17: only from power-on (uboot_held, after the
+ * first scans); let go of either and it's gone until the next power-on. Held during play the two are SHIFT + COPY
+ * (clearing a selection held them long enough to send a unit to UBOOT: it looked switched off) */
+static uint8_t uboot_armed;
+static void uboot_held(void)
 {
-    static uint32_t t0;
     uint32_t both = (1u << panel.btn[B_OCTDN]) | (1u << panel.btn[B_OCTUP]);
+    uboot_armed = (fm1_in.buttons & both) == both;
+}
+static void uboot_watch(void)
+{
+    uint32_t both = (1u << panel.btn[B_OCTDN]) | (1u << panel.btn[B_OCTUP]);
+    if (!uboot_armed)
+        return;
     if ((fm1_in.buttons & both) != both) {
-        t0 = fm1_ms;
+        uboot_armed = 0;
         return;
     }
-    if (fm1_ms - t0 > 5000u) {
+    if (fm1_ms > 5000u) {
         fm1_audio_stop();
         lcd_fill(0, 0, 240, 240, T_BG);
         draw_text_box(0, 110, 240, &AF_M, "UBOOT", T_THEME, 1);
@@ -166,8 +176,10 @@ static void fm1_main(void)
     for (ms = 0; ms < 1200u; ms += 10u) {         /* the splash (0.14: 1.2 s, to see the potion) */
         fm1_delay_ms(10);
         master_poll();
-        if (ms == 50u)
+        if (ms == 50u) {
             cores_held();
+            uboot_held();
+        }
     }
     lcd_fill(0, 0, 240, 240, T_BG);
     ui.force = 1;

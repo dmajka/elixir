@@ -72,7 +72,10 @@ static const char *const L_CHOKE[] = {"OFF", "1", "2", "3", "4"};
 static const char *const L_MODEL[] = {"LXR", "MODAL", "STRING", "FM",   /* (0.9: Rings' models, rings.c) */
                                       "P VA", "P WSHAPE", "P FM", "P GRAIN", "P ADDTV", "P WTABLE", "P CHORD",
                                       "P SPEECH", "P SWARM", "P NOISE", "P PARTCL", "P STRING", "P MODAL", "P BD",
-                                      "P SD", "P HH"};   /* (0.15: Plaits' engines, plaits.c) */
+                                      "P SD", "P HH",   /* (0.15: Plaits' engines, plaits.c) */
+                                      "CLICK", "TRAIN", "CRUNCH", "BITS", "BURST", "SNAP", "GRAIN", "DUST", "POP",
+                                      "CHIRP"};   /* (24: MICRO's, micro.c) */
+_Static_assert(sizeof L_MODEL / sizeof L_MODEL[0] == NMODEL, "rings.c: the MODEL list");
 static const char *const L_BITS[] = {"OFF", "15", "14", "13", "12", "11", "10", "9", "8", "7", "6", "5", "4", "3",
                                      "2", "1"};
 static const char *const L_LFOMODE[] = {"TRIG", "HOLD", "ONE", "HALF"};   /* (0.13: voices.c LM_*) */
@@ -154,13 +157,21 @@ static uint32_t par_k_voice(uint32_t p)              /* a per-voice one's voice,
     r = par_k(p);
     return K_PARS[r].n == 6u ? p - K_PARS[r].first : 0xFFu;
 }
-/* 0.15: the MODEL knobs of a voice on a Plaits engine are its (long, category, short, 8 letters) */
+/* 0.15: the MODEL knobs of a voice on a Plaits engine are its (long, category, short, 8 letters); 24: on MICRO, its */
 static const char *pl_knob_name(uint32_t p, uint32_t which)
 {
     static const char *const N[6][4] = {{"Harmonic", "Plaits", "hrm", "Harmonic"}, {"Timbre", "Plaits", "tmb", "Timbre"},
                                         {"Morph", "Plaits", "mrp", "Morph"}, {"Colour", "Plaits", "col", "LPGColor"},
                                         {"Aux", "Plaits", "aux", "AuxMix"}, {"Env", "Plaits", "env", "EnvAmt"}};
-    if (p < PAR_MDECAY1 || p >= PAR_LFOMODE1 || (p - PAR_MDECAY1) % 6u >= 3u || mdl[(p - PAR_MDECAY1) % 6u].want < MD_PL0)
+    static const char *const U[6][4] = {{"Length", "Micro", "len", "Length"}, {"Colour", "Micro", "col", "Colour"},
+                                        {"Jitter", "Micro", "jit", "Jitter"}, {"-", "Micro", "-", "-"},
+                                        {"Reverse", "Micro", "rev", "Reverse"}, {"Tension", "Micro", "mtn", "Tension"}};
+    uint32_t vi = (p - PAR_MDECAY1) % 6u;
+    if (p < PAR_MDECAY1 || p >= PAR_LFOMODE1)
+        return 0;
+    if (mi[vi].type)
+        return U[(p - PAR_MDECAY1) / 6u][which];
+    if (vi >= 3u || mdl[vi].want < MD_PL0)
         return 0;
     return N[(p - PAR_MDECAY1) / 6u][which];
 }

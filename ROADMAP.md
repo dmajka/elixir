@@ -1034,6 +1034,188 @@ Checked in Chrome at 393 × 659 (iPhone 15 Safari's room), 375 × 548 (iPhone SE
 - **Or no unit at all.** The mobile view on a Pi or tablet with a 7″ touch panel is Elixir on a bigger screen today. The FM-1 could then be its controller over the existing remote map (TRACKS ch 15, GLOBAL ch 16), but the sound would come from the host.
 - **Recommendation if wanted:** a phase for the mirror (emulator first, then the unit: measure the USB load with clock and notes running), then the `screen/` page.
 
+### Phase 24 (built 2026-10-28 as 0.17-test1, not yet tried on the unit): MICRO, microsound voices on every track
+
+After GLITCH (ttreu's FM-1 firmware, github.com/ttreu/fm1-glitch, GPL-3.0): a whole track made of a very short sound, a 0.1–1.5 ms click, a rasp of clicks, crunchy sample-and-hold bits, a burst of noise, a resonant noise grain, for glitch and microhouse beats. The user's choice (2026-10-28): a voice the track *is*, easy to use, on all seven tracks; not new transients layered on the LXR's sounds (that was plan A, set aside).
+
+**What it is.** MICRO types at the end of the MODEL list (EDIT → MODEL), on every track: CLICK, TRAIN, CRUNCH, BITS, BURST, SNAP, GRAIN, DUST, POP, CHIRP. Picking one replaces the voice's oscillators, FM and transient with that sound; nothing else needs turning off. D1–D3 keep LXR, Rings' and Plaits' models too; SN, CY and the hats get LXR and the MICRO types (CH and OH share the hat voice, so one setting for both, as every other hat setting).
+
+**The knobs** (the MODEL page's, the same meaning for every type):
+
+| Page | Knob | MICRO |
+|---|---|---|
+| MODEL | 1 | the type |
+| | 2 DECAY → **Length** | how long the sound is (a click's width, a train's count, a grain's window ...) |
+| | 3 BRIGHT → **Colour** | the type's character, as GLITCH's COLOR: single → doublet, dark → bright, wide → resonant, sparse → dense ... |
+| | 4 STRUCT → **Jitter** | each hit's length and colour varied, a train's spacing roughened |
+| MODEL 2 | 1 EXCITER → **Reverse** | the chance a hit plays backwards: a swell into a cut, a train louder and faster |
+| | 2 TENSION → **Tension** | a hit's pitch thrown up and falling back (as Rings' and Plaits' TENSION) |
+
+(POSITION has no use on MICRO, so the second page puts EXCITER and TENSION on knobs 1 and 2: `ui.c` `sect_par`.)
+
+The track's own settings still apply: the pitch (coarse, fine, the pitch EG, the scale, the melody, KEYS, random pitch) is the type's rate or centre; velocity (VOL MOD), filter, shape, bits, tilt, SRate, sends, choke, cross mod, LFO, locks. A lock on MODEL changes the type on that step. Each type's level is matched (GLITCH's loudness table, rebalanced by render_test), so turning the type doesn't jump in volume.
+
+**Changed while building: the amp EG doesn't apply.** Planned as applying, but the init kit's short decays (D3, the cymbal, the hats) cut LENGTH and made REVERSE silent (a swell needs its whole length): the knobs looked broken. MICRO's LENGTH alone shapes the sound now. Cost: CH and OH sound the same length (a lock on the OH track's Length gives it a longer one).
+
+**The types** (fixed point, per voice; the design follows GLITCH's `glitch_dsp.c`, written for Elixir):
+
+| Type | Sound | Pitch | Colour |
+|---|---|---|---|
+| CLICK | a square pulse 0.1–1.5 ms | shorter | single → doublet (the opposite half) |
+| TRAIN | 3–20 clicks, alternating and fading | faster | speeding up ← → slowing down |
+| CRUNCH | sample-and-hold noise, quantized | the hold rate | smooth steps → harsh, jittery |
+| BITS | LFSR noise, clocked | the clock | tonal (short register) → noisy |
+| BURST | a burst of noise, 2–22 ms | brighter | dark → bright |
+| SNAP | a gated band of noise with a click | the band | dark → bright |
+| GRAIN | noise through a resonator, Hann window | the centre | wide → resonant |
+| DUST | a crackle of random clicks | | sparse → dense |
+| POP | a jump that slides back | sharper | soft → sharp edge |
+| CHIRP | a fast sine sweep | the start | down ← → up |
+
+**Cost.** A few integer operations a sample, only while it sounds, and no oscillators, FM or transient: less than the LXR voice it replaces. Not counted in the two-model limit. D1–D3 render on the second core as now. Memory: one small state per voice (~60 B each).
+
+**Format.** None. The MODEL parameter and its six knobs are already stored for all six voices (`PAR_MODEL1` .. `PAR_MTENS1`, 4–6 unused until now). The types are new values after Plaits' (`MD_MC0` ..), so older kits load as they were; an older firmware loads a MICRO voice as LXR. A modulator on MODEL spans the longer list.
+
+**Steps** (1–5 done in 0.17-test1)
+1. `firmware/src/micro.c`: the engine (`mi_trigger`, `mi_setup`, `mi_block`; `mi`, not `mc`, which is the master compressor's), included by voices.c; the hook in the drum block and `micro_block` for SN–HH. No 64-bit divides (the target has no `__divdi3`).
+2. The parameters: MODEL and its knobs reach SN, CY, HH (sound.c); the type lists by voice (D1–D3 all; SN–HH LXR + MICRO); the knob names (Length, Colour, Jitter, Reverse, Tension; POSITION blank); kit_sanitize keeps SN–HH off Rings' and Plaits'.
+3. The UI: the MODEL page on every track; the warning about the model limit only for Rings' and Plaits'.
+4. Tests: render_test (each type on each voice, forwards and backwards: sounds, doesn't clip, ends; on D1 LENGTH and COLOUR at their ends at a low and a high note; SN–HH not on Rings'; MICRO on SN and the hats in the two-core order check), ui_test `phase24` (the MODEL page on SN and OH, K1 from LXR to CLICK and back, D1's whole list, the knob names, a lock on the type played, kit sanitize, a project round trip).
+5. MANUAL.md and README.md; NOTICE.md credits GLITCH.
+6. The unit: CPU on CONFIG → LOAD with all seven tracks on MICRO; listen to each type (the levels were matched by measurement, not by ear).
+
+**Built:** firmware v0.17-test1 (image 468,184 B; RAM .data+.bss 68,428 of 73,728 B), the emulator and the site (`build/site`). A demo beat (`build/micro_beat.wav`): the LXR kick, CLICK, GRAIN, SNAP, TRAIN half reversed, CRUNCH hats.
+
+**0.17-test2 (2026-10-28), from the user's try of test1:**
+- **Chance on a generator's track did nothing.** A generator's track plays its live copy (`gpat`), and COMMIT leaves the generator on, but step edits (chance, velocity, note, condition, timing, ratchet, length, locks: step edit's knobs, a held step's knob, REC, a MIDI note in step edit) were written only into the pattern. Only the step key itself (`step_toggle`) reached the live copy. Now `seq.c` `live_step_sync` copies the edited step's settings into the live copy as well; whether it plays stays the generator's. ui_test `gen_step_edit_test` (MUTATE at 0, committed: a step's chance at 0 stops it; a held step's lock reaches the live copy); it fails without the fix.
+- **The manual and README say which key SHIFT and COPY are** every time: SHIFT (OCT−), COPY (OCT+). Someone who missed the controls table looked for a SHIFT key. (The LINKS effect called SHIFT and the LXR's own SHIFT are left as they are.)
+
+**0.17 (released 2026-10-28):** Phase 24 and test2's fixes, and one more found on the unit: **holding OCT− and OCT+ together sent the FM-1 to UBOOT** (`main.c` `uboot_watch`: both held 5 s, from Felucca's days). Clearing a selection holds SHIFT (OCT−) and COPY (OCT+) together for seconds, and the unit went dark as if switched off. UBOOT by hand now needs both keys held *from power-on* (`uboot_held` at the splash's 50 ms scan, as REC's one-core check); let go of either and it's off until the next power-on. The boot guard and the USB SysEx still reach UBOOT as before.
+
+### Phases 25–28: planned 2026-10-28 (research only; not started)
+
+**What there is to spend** (v0.17-test2): fast RAM 68,428 of 73,728 B (~1.3 KB usable before the 4 KB floor); pool 355,552 of 368,640 B (~5 KB usable before the 8 KB spare); RAMTEXT's `.ram_buf` 8,296 B free; flash ~110 KB; a kit 398 B (LIB_MAX 432: 18 B to go; a library entry in flash holds 480 B); the busy test project 38.1 KB of a 48.9 KB slot. A per-voice kit byte costs 6 B a kit: 384 B of pool (64 kits), 384 B of project, and 6 B of the library's message. 1% CPU is ~80 cycles a sample; a block is 64 samples (~5,100 cycles a percent). **Pool is the limit on all four phases, and LFOs take the most.** The four as recommended below come to ~4 KB of pool together, which is nearly all of it, so **25-0** comes first.
+
+**25-0. Free pool first.** These options are in order of preference, and each must be checked before it is used:
+- (a) Read the stacks' high-water marks on the unit (Phase 18a's `STACKS u + s B` on CONFIG → LOAD, after a busy session). The user stack is 24 KB; if it never passes 12 KB, 8 KB can move to the pool.
+- (b) 64 → 48 kit slots in RAM. The flash library holds 128 more, and morph reads from it. This frees 16 × 398 B = 6.4 KB of pool and ~6 KB of project space. It needs a project format bump: kits 49–64 of an old project go to the library, or are dropped with a warning.
+- (c) Store the kits packed in RAM, with the 4-bit fields doubled up (choke, bits, LFO mode, models' flags). This gives back perhaps 20–30 B a kit (1.5–2 KB), but it touches every read of `kits[][]`.
+
+#### Phase 25: more LFOs on each track
+
+**What there is today.** One LFO per voice (`lfo_t`, voices.c): SINE TRI SAW UP/DN REC NOISE EXP UP/DN, the LXR's sync, retrigger by voice, and Elixir's modes TRIG HOLD ONE HALF. Its destination is one of the LXR's `MOD_TARGETS` (229 entries, the LXR's parameters only). Elixir's own parameters can't be targets of the LFO or of velocity, though p-locks reach them.
+
+**25a. New destinations for LFO 1 and velocity, and then for the new LFOs.** Extend the target list with Elixir's own parameters, as `lock_target_par` already does for locks. The list:
+- the MICRO and model knobs: Length, Colour, Jitter, Reverse, Tension; Rings' and Plaits' DECAY, BRIGHT, STRUCTURE, POSITION;
+- the sends: FX and reverb;
+- BITS, TILT and SHAPE's drive;
+- the random amounts (pitch, decay, filter, pan) and cross-mod's amount;
+- the track's chance/density (19), the melody's range (19), and the arp's/ratchet's rate;
+- the other LFO's rate and amount (LFO → LFO: slow wobble of a wobble);
+- Not allowed as targets: switches (the model, filter type, choke, output); a moving target there would click.
+- The target byte stays one byte: the LXR's 229 + ~26 new entries fit in 255. A stock LXR kit's target numbers keep their meaning. Cost: CPU ~0; flash ~1 KB.
+
+**25b. LFO 2 on every track (recommended).** A second `lfo_t` and `modnode_t` per voice, with the same waves, sync, modes and retrigger as LFO 1, and its own target from 25a's list.
+- **Kit:** 6 B a voice (rate, amount, target; wave + mode packed; sync + retrigger packed; offset): 36 B a kit. KIT_LEN becomes 434, LIB_MAX 432 → 464, and the library entry (480 B) still fits.
+- **Pool:** 2.3 KB (kits) + ~100 B (LIB_MAX). **Project:** up to +2.3 KB. **RAM:** ~250 B (6 × lfo_t + modnode_t).
+- **CPU:** per voice per block, `lfo_calc` (~60 cycles) plus the destination's update. Most targets are a store; the filter cutoff recomputes the SVF's coefficients (two divides, ~400 cycles). Six voices with LFO 2 on the filter is ~0.5%; on cheap targets ~0.1%. It runs where the modnodes run now (`modnodes_block`, core 0 before the render), not on the critical path after the wait.
+- **UI:** a second LFO page beside LFO 1's. On screen it's "TRK LFO 2", because the global LFO 2 already exists (PERF).
+
+**25c. LFOs 3 and 4 per track (only if 25-0 frees the pool).** 72 B a kit more: 4.6 KB of pool, up to 4.6 KB of project. KIT_LEN becomes 506, past the library's 480 B entry, so the library's flash format changes as well (entries 480 → 544 B: 128 kits → ~113 in the same flash, or a bigger area). CPU another ~0.2–1%. **The alternative I'd pick instead:** two *kit-wide* assignable LFOs (Elektron style: each picks a voice and a target), 7 B each, 14 B a kit (0.9 KB of pool). Most kits that want a third modulator want it on one or two tracks, not all six. Together with 25b that's four modulators on the busiest track for 50 B a kit.
+
+**Morph (25b/c).** Today the LFO's voice and target don't morph (`morph_excluded`): they stay the playing kit's, while rate and amount interpolate. For the new LFOs I'd do a **V crossfade, not a freeze**:
+- From morph 0 to 50%, the amount is the playing kit's × (1 − 2m). From 50% to 100% it's the target kit's × (2m − 1).
+- Wave, target, sync and mode switch to the target kit's at 50%, where the amount is 0, so the switch is silent. Rate interpolates.
+- A stock LXR kit, or any kit with LFO 2 off, has amount 0, so its LFO 2 fades out over the first half of the morph and stays off. Morphing the other way, it fades in over the second half. Nothing freezes or jumps, and LFO 1 keeps the LXR's behaviour, so a stock kit morphs exactly as on the LXR.
+- (Freezing, the other option: the LFO holds its last value and the destination stays offset by it until the morph ends. That leaves a stuck filter or pitch offset, which is worse.)
+- **Tests:** render_test, each new target moves its parameter, and LFO 2 off is bit for bit LFO 1 only; ui_test, the pages, the V crossfade's 50% point is silent (no step in the target), a stock .KIT imports with LFO 2 off, and project/library round trips.
+
+#### Phase 26: GROOVE
+
+**What there is today.** SHUFFLE per pattern (`pat.shuffle`, `seq_shuffle_delay`: every other 16th late by up to 16 ticks). Each step's own shift is −7..+7 × 3 ticks in `timing[t][s]`'s high nibble, read in `seq_getShiftFlamPattern` (POS_PREV/POS_NEXT allow it early). The clock is 96 ticks a beat, 24 a 16th.
+
+**26a. Groove templates.**
+- A pattern chooses a GROOVE (off, or one of ~12 templates in flash), an AMOUNT (0–127: 0 none, 100 the template as written, 127 exaggerated), and which tracks follow it (a 7-bit mask, all by default).
+- A template is 16 per-step offsets in ticks (±12) and 16 velocity offsets (±32), looped over the pattern's length.
+- The offset is added to `sh` where the step's shift is read; the velocity goes into `step_hit`. SHUFFLE still works on its own, and a template can be "SWING 50–75%" so SHUFFLE's job is covered too.
+- The templates:
+  - MPC swing 54/58/62/66;
+  - "lazy" (2 and 4's snares late, the hats early);
+  - Dilla (unquantised feel: the kick early, the snare late, the hats uneven);
+  - shuffle in triplets (8th-note triplet feel);
+  - the 2-step garage skip;
+  - dub (the off-beats late and soft);
+  - push (all ahead);
+  - techno 16ths (accents on the 2nd and 4th 16ths, no timing);
+  - and a broken/IDM one (uneven 5+3 lengths).
+- **Cost:** CPU ~0 (an add and a look-up per hit). RAM ~16 B. Pool 3 B a pattern × 35 ≈ 105 B. Flash ~1 KB (12 × 32 B tables plus the code). Project 3 B a pattern (a format bump).
+- Morph doesn't touch it, since it belongs to the pattern, not the kit. It changes with the pattern, on the next pattern's first step.
+- **26b. HUMANIZE (optional):** a random ±0..3 ticks and ±0..16 velocity per hit, drawn from the seeded per-track rng so a pattern humanises the same way each loop when the generators' seed is held. The same cost, one byte.
+- **26c. Groove from a pattern (optional, later):** take one track's per-step shifts and velocities as the pattern's own template ("this hat's feel on all the tracks"). ~0 CPU and a page. It needs 32 B a pattern for a user template, so the pool is the question; one user template per project (32 B) is enough to start.
+- **Tests:** ui_test, each template's ticks on a 16-step pattern, the amount at 0 equals no groove bit for bit, the mask, negative offsets at step 1 (POS_PREV across the loop), SHUFFLE together with a groove, project round trip.
+
+#### Phase 27: INSERT effects on each track
+
+**What there is today.** One FX bus: one type at a time (DRIVE RING COMP DELAY PHASER FLANGER). Each voice has a send to it, plus a reverb send. The PHASER is 6 allpasses a channel (~30 cycles a sample, stereo: ~0.8%). The FLANGER is a 2048-sample line a channel in the bus's 64 KB buffer.
+
+**27a. One insert slot per track, after the shaper and before the pan and sends.** Its own TYPE and three knobs (AMOUNT/DEPTH, RATE, FEEDBACK or TONE): 4 B a voice, 24 B a kit. All mono, since the voice is mono until it's panned. The types:
+- **PHASER:** 4 allpasses with feedback, its own LFO, or synced. ~25 cycles a sample, **~0.3% a voice**.
+- **FLANGER:** a 256-sample (5.8 ms) line, interpolated, with feedback. ~20 cycles, **~0.25%**.
+- **CHORUS:** the same line, two taps. ~30 cycles, **~0.4%**.
+- **COMB:** tuned to the note or a fixed pitch, ± feedback. This is Phase 28's comb; one line serves both.
+- **TREMOLO / AUTOPAN:** ~5 cycles, ~0.05%.
+- **FREQ SHIFT** (a Hilbert pair, 2 × 6 allpasses, ±0..500 Hz: the dub-techno metallic smear). ~60 cycles, **~0.75%**.
+- **RING / AM** against a sine at a pitch. Cross-mod's RING is against another voice. ~10 cycles.
+- **DECIMATE** already exists as BITS and SR.
+
+**Memory.** The delay-based types (FLANGER, CHORUS, COMB) need a line per voice. 512 samples × 2 B × 6 voices = **6 KB, in RAMTEXT's `.ram_buf` (8.3 KB free)**, not in the pool. A voice uses its line for the insert or for Phase 28's comb filter, not both, and the UI says so ("COMB FILTER uses the insert's line"). The rest (allpass and LFO state) is ~40 B a voice: ~250 B of RAM.
+
+**CPU.** The cost falls on the core that renders the voice (D1–D3 on core 1, whose worst case is 71%; SN–HH on core 0 before the wait), not on the effects' critical path. A typical kit (2–3 inserts) costs ~1%. Six FREQ SHIFTs is ~4.5%, which could tip core 1 past 85% with two heavy models, so 17f's governor adds "inserts off" before "models' quality" in its order.
+
+**Cost:** pool 1.5 KB (kits), project up to 1.5 KB, LIB_MAX +24 (with 25b: 488 > 480, so **25b + 27a together need the library's entry to grow** to 512 B: 128 → 120 kits in the same flash), flash ~5 KB. Morph: TYPE switches at 50% (as `PAR_FX_TYPE`), and its knobs interpolate.
+
+- **27b. A second slot per track (later, only if 25-0 freed the pool):** 24 B a kit more and the same CPU again. One slot plus the bus is most of what's wanted.
+- **Tests:** render_test, each type on each voice (bounded, decays to silence, OFF bit for bit as today, the same with one core and two); the comb's period at the note; ui_test, the page, the shared line, morph's switch, project and library round trips.
+
+#### Phase 28: more filter types
+
+**What there is today.** One SVF per voice (`svf_t`, `svf_block`, dsp.c): LP HP BP UNITY BP NOTCH PEAK LP2 OFF. The filter type byte has room, so a new type costs **no kit byte**. Cutoff and resonance (and the LFO, velocity and locks on them) mean whatever the type says.
+
+The types, cheapest first:
+- **ALLPASS (phase):** a 4-stage allpass at the cutoff, with resonance as feedback, mixed with the dry. A static phaser notch that the LFO sweeps: phaser-as-filter with no effect slot. ~25 cycles, **~0.3% a voice**, no RAM.
+- **LP4 (ladder):** four one-poles with tanh feedback (the Moog/TB "squelch", self-oscillating at the top). ~40 cycles, **~0.5%**, no RAM.
+- **FORMANT / VOWEL:** two BPs (F1, F2) at a vowel's formants, with the cutoff sweeping A–E–I–O–U and resonance as their Q. ~2 × today's SVF: **+0.4%**, a 5 × 2 table. Talky toms and snares for IDM.
+- **BP+DRIVE ("dub"):** today's BP into a soft clip at the filter's drive, with the resonance high: the Roland dub chord stab's ring. ~0.05% more than BP.
+- **S&H (stepped):** the cutoff resampled on each hit, or at a rate, with a random step. A glitch filter. ~0, but it's really a modulation, not a filter (the LFO's REC wave with the cutoff as target does nearly the same). **Not recommended.**
+- **COMB:**
+  - Comb+ (peaks at the pitch's harmonics, the ringing chord-like tone) and comb− (hollow, notches).
+  - The cutoff knob is its pitch over 5 octaves, or it follows the note (the track's pitch, the scale from 19a, so it rings in key). Resonance is feedback 0–0.97, with a one-pole in the loop to soften it.
+  - It takes the voice's 512-sample line in `.ram_buf` (lowest pitch 86 Hz; 1024 samples, 43 Hz, would need 12 KB, which doesn't fit). It's shared with Phase 27's insert as above, or comes as 28 alone with the same 6 KB if 27 isn't built.
+  - ~20 cycles (an interpolated read, a one-pole, a write): **~0.25% a voice**.
+  - The master COMB in PERFORM 2 stays: that one rings the whole mix, this one a track.
+- **RESONATOR (a tuned BP bank):** three BPs at the note, a fifth and an octave (or the scale's chord), resonance as Q: a chord out of a hat or noise burst. That's 3 × today's SVF: **~1% a voice**, no RAM. Dub techno's chord without samples. (Rings' MODAL model already does a richer version on the DRUM tracks; this is cheaper and works on SN–HH.)
+
+**Recommended:** COMB (±), LP4, FORMANT and ALLPASS, then RESONATOR if CPU allows. BP+DRIVE is nearly free and could be added with them.
+- **Cost:** pool 0, kit 0, RAM ~30 B a voice for the extra states (~200 B), flash ~4 KB, CPU as above, only on the tracks using them.
+- **Morph:** the filter type already switches at 50% (stock LXR behaviour); a comb's line is cleared on the switch.
+- **LXR kits:** types past LP2/OFF don't exist on the LXR, so a kit exported to an LXR (if ever) maps them to LP.
+- **Tests:** render_test, each type's response (the comb's peaks at the note's harmonics, correlation as the master COMB's test; LP4's slope; the vowels' formant peaks; bounded at full resonance, silence decays to 0); the type switch clears the comb's line; ui_test, the names and the page.
+
+#### Suggested order and totals
+
+| | CPU (typical / worst) | RAM | Pool | `.ram_buf` | Kit | Project | Flash |
+|---|---|---|---|---|---|---|---|
+| 25a new LFO / velocity destinations | ~0 | 0 | 0 | 0 | 0 | 0 | ~1 KB |
+| 25b LFO 2 per track | 0.1% / 0.5% | ~250 B | 2.4 KB | 0 | +36 B | +2.3 KB | ~2 KB |
+| 25c' two kit-wide LFOs (instead of LFOs 3–4) | ~0.1% | ~100 B | 0.9 KB | 0 | +14 B | +0.9 KB | ~1 KB |
+| 26a GROOVE (+ 26b HUMANIZE) | ~0 | ~16 B | ~140 B | 0 | 0 | +140 B | ~1.5 KB |
+| 27a one insert per track | ~1% / 4.5% | ~250 B | 1.5 KB | 6 KB (shared with 28's comb) | +24 B | +1.5 KB | ~5 KB |
+| 28 COMB, LP4, FORMANT, ALLPASS (+RESONATOR) | 0.25–0.5% a voice using one (1% RESONATOR) | ~200 B | 0 | (the same 6 KB) | 0 | 0 | ~4 KB |
+
+- **Totals:** 25a + 25b + 26 + 27a + 28 come to ~4 KB of pool (of ~5 KB usable), ~720 B of RAM (of ~1.3 KB), and 6 of `.ram_buf`'s 8.3 KB. The kit grows to 458 B, and the library entry grows to 512 B. The busy project grows to ~42 KB of 48.9.
+- **Order:** do the cheap, format-free work first. Then **28** (0 pool, 0 kit bytes) and **26** (~140 B), then **25a**, then 25-0 (b) or (a) before **25b** and **27a**. **25c'** comes last, if the pool allows.
+- **25b and 27a together** change the kit layout once, with one LIB_MAX and library-entry bump, one project format bump, and one library_test.
+
 ### Other ideas
 
 - **More projects on the unit** (asked 2026-10-26). Today there are 4 projects and the session, each in a fixed 48 KiB slot, 6 slots in all (288 KiB at 0x97000; the spare slot makes a save safe if the power is cut), whatever their size. Measured with the firmware's own encoder:

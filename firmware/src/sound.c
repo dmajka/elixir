@@ -155,6 +155,10 @@ static uint32_t par_max_k(uint32_t p)
     return 127;
 }
 
+/* 24: the models a voice has: D1-D3 all, SN-HH the LXR's engine and MICRO's (one of Rings' or Plaits': the LXR's) */
+static inline int model_ok(uint32_t vi, uint32_t md) { return vi <= 2u || md == 0u || (md >= MD_MC0 && md < NMODEL); }
+static inline uint32_t model_pick(uint32_t vi, uint32_t md) { return model_ok(vi, md) ? md : 0u; }
+
 /* LXR presetManager.c interpolate: a + (b - a) x / 256, rounded */
 static uint32_t morph_lerp(uint32_t a, uint32_t b, uint32_t x)
 {
@@ -556,10 +560,16 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
     case PAR_XAMT1: case PAR_XAMT1 + 1: case PAR_XAMT1 + 2: case PAR_XAMT1 + 3: case PAR_XAMT1 + 4: case PAR_XAMT1 + 5:
         vc[p - PAR_XAMT1].xamt = f >> 1;
         break;
-    case PAR_MODEL1: case PAR_MODEL1 + 1: case PAR_MODEL1 + 2:   /* (the DRUM voices only) */
-        mdl[p - PAR_MODEL1].want = (uint8_t)pick(itg < NMODEL ? itg : 0u, (uint32_t)f, mod, NMODEL);
-        model_limit();
+    case PAR_MODEL1: case PAR_MODEL1 + 1: case PAR_MODEL1 + 2: case PAR_MODEL1 + 3: case PAR_MODEL1 + 4:
+    case PAR_MODEL1 + 5: {                           /* (Rings' and Plaits': the DRUM voices only; 24: MICRO every voice) */
+        uint32_t vi = p - PAR_MODEL1, md = model_pick(vi, pick(itg < NMODEL ? itg : 0u, (uint32_t)f, mod, NMODEL));
+        mi[vi].type = (uint8_t)(md >= MD_MC0 ? md - MD_MC0 + 1u : 0u);
+        if (vi <= V_DRUM3) {
+            mdl[vi].want = (uint8_t)(md < MD_MC0 ? md : 0u);   /* (MICRO isn't one of the models the limit counts) */
+            model_limit();
+        }
         break;
+    }
     case PAR_LFOMODE1: case PAR_LFOMODE1 + 1: case PAR_LFOMODE1 + 2: case PAR_LFOMODE1 + 3: case PAR_LFOMODE1 + 4:
     case PAR_LFOMODE1 + 5:
         lfo_mode_set(&vc[p - PAR_LFOMODE1].lfo, pick(itg < NLFOMODE ? itg : 0u, (uint32_t)f, mod, NLFOMODE));
@@ -570,16 +580,28 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
             voice_hold(p - PAR_GATE1, 0);
         break;
     default:
-        if (p >= PAR_MDECAY1 && p < PAR_LFOMODE1 && (p - PAR_MDECAY1) % 6u < 3u) {   /* the model's knobs, 0..127 */
-            model_t *m = &mdl[(p - PAR_MDECAY1) % 6u];
+        if (p >= PAR_MDECAY1 && p < PAR_LFOMODE1) { /* the model's knobs, 0..127 (24: MICRO's on every voice) */
+            uint32_t vi = (p - PAR_MDECAY1) % 6u;
+            micro_t *u = &mi[vi];
             uint8_t v = (uint8_t)(mod ? (127u * (uint32_t)f) >> 16 : itg & 127u);
             switch ((p - PAR_MDECAY1) / 6u) {
-            case 0: m->dec = v; break;
-            case 1: m->damp = v; break;
-            case 2: m->mat = v; break;
-            case 3: m->pos = v; break;
-            case 4: m->exc = v; break;
-            default: m->tens = v; break;
+            case 0: u->len = v; break;
+            case 1: u->col = v; break;
+            case 2: u->jit = v; break;
+            case 3: break;                           /* (POSITION: none) */
+            case 4: u->rev = v; break;
+            default: u->tens = v; break;
+            }
+            if (vi <= V_DRUM3) {
+                model_t *m = &mdl[vi];
+                switch ((p - PAR_MDECAY1) / 6u) {
+                case 0: m->dec = v; break;
+                case 1: m->damp = v; break;
+                case 2: m->mat = v; break;
+                case 3: m->pos = v; break;
+                case 4: m->exc = v; break;
+                default: m->tens = v; break;
+                }
             }
         }
         break;

@@ -142,6 +142,9 @@ static void kit_sanitize(uint8_t *p)
             p[PAR_TARGET_LFO1 + i] = 0;
     }
     out_migrate(&p[PAR_AUDIO_OUT1], &p[kit_idx(PAR_FX_SEND1)]);
+    for (i = 3; i < 6u; i++)                         /* (24: SN-HH have the LXR's engine and MICRO's types) */
+        if (!model_ok(i, p[kit_idx(PAR_MODEL1 + i)]))
+            p[kit_idx(PAR_MODEL1 + i)] = 0;
     for (i = END_OF_SOUND_PARAMETERS; i < KIT_LEN; i++)
         if (p[i] > par_max_k(kit_par(i)))
             p[i] = (uint8_t)init_kit_k(kit_par(i));

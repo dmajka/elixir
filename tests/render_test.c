@@ -200,6 +200,96 @@ int main(int argc, char **argv)
         }
         par_set(PAR_MODEL1, 0);
     }
+    {   /* 24: MICRO, each type on each voice, struck (LENGTH, COLOUR at the middle): it sounds, doesn't clip, ends;
+         * backwards it sounds too; its level (over where it sounds) near the others'; SN-HH can't take Rings' */
+        static const char *const MI_NAMES[NMICRO] = {"CLICK", "TRAIN", "CRUNCH", "BITS", "BURST", "SNAP", "GRAIN",
+                                                     "DUST", "POP", "CHIRP"};
+        uint32_t v, e, back, i;
+        for (v = 0; v < NVOICE; v++) {
+            par_set(PAR_MDECAY1 + v, 64);
+            par_set(PAR_MDAMP1 + v, 64);
+            par_set(PAR_MMAT1 + v, 0);
+            par_set(PAR_MTENS1 + v, 0);
+            par_set(PAR_FILTER_TYPE_1 + v, 7);           /* (the filter OFF: the init kit's cymbal is a high pass) */
+        }
+        for (v = 0; v < NVOICE; v++)
+            for (back = 0; back < 2u; back++)
+                for (e = 0; e < NMICRO; e++) {
+                    uint32_t last = 0, loud = 0;
+                    int32_t pk = 0;
+                    double acc = 0;
+                    par_set(PAR_MODEL1 + v, MD_MC0 + e);
+                    par_set(PAR_MEXC1 + v, back ? 127 : 0);
+                    render(FS / 8);
+                    voice_trigger(v, 127, SEQ_DEFAULT_NOTE);
+                    frames = render(FS / 2);
+                    for (i = 0; i < frames * 2u; i++) {
+                        int32_t a = abs(out[i]);
+                        if (a > pk)
+                            pk = a;
+                        if (a > 64) {
+                            last = i / 2u;
+                            loud++;
+                            acc += (double)out[i] * out[i];
+                        }
+                    }
+                    if (v == 0u || v == V_HAT) {
+                        snprintf(path, sizeof path, "%smicro%u%s_%s.wav", dir, v + 1u, back ? "r" : "", MI_NAMES[e]);
+                        wav_write(path, out, frames);
+                    }
+                    if (v == 0u || pk < 500 || pk >= 32767 || last > frames * 3u / 4u)
+                        printf("  %s %-6s %s peak %6d  rms %7.1f  length %6.1f ms\n", VOICE_SHORT[v], MI_NAMES[e],
+                               back ? "rev" : "   ", pk, loud ? sqrt(acc / loud) : 0.0, last * 1000.0 / FS);
+                    if (pk < 500 || pk >= 32767) {
+                        printf("FAIL: MICRO %s on %s%s is silent or clips\n", MI_NAMES[e], VOICE_NAME[v],
+                               back ? " (reverse)" : "");
+                        fails++;
+                    }
+                    if (last > frames * 3u / 4u) {
+                        printf("FAIL: MICRO %s on %s%s doesn't end\n", MI_NAMES[e], VOICE_NAME[v],
+                               back ? " (reverse)" : "");
+                        fails++;
+                    }
+                }
+        for (e = 0; e < NMICRO; e++)                     /* (D1: LENGTH and COLOUR at their ends, high and low; */
+            for (i = 0; i < 16u; i++) {                  /* .. forwards and backwards) */
+                uint32_t j;
+                int32_t pk = 0;
+                par_set(PAR_MODEL1, MD_MC0 + e);
+                par_set(PAR_MDECAY1, i & 1u ? 127 : 0);
+                par_set(PAR_MDAMP1, i & 2u ? 127 : 0);
+                par_set(PAR_MEXC1, i & 8u ? 127 : 0);
+                render(FS / 8);
+                voice_trigger(0, 127, i & 4u ? 96 : 24);
+                frames = render(FS / 2);
+                for (j = 0; j < frames * 2u; j++)
+                    pk = abs(out[j]) > pk ? abs(out[j]) : pk;
+                if (pk < 200 || pk >= 32767) {
+                    printf("FAIL: MICRO %s, length %u colour %u note %u%s: peak %d\n", MI_NAMES[e], i & 1u ? 127 : 0,
+                           i & 2u ? 127 : 0, i & 4u ? 96 : 24, i & 8u ? " reverse" : "", pk);
+                    fails++;
+                }
+            }
+        for (v = 0; v < NVOICE; v++) {
+            par_set(PAR_MODEL1 + v, 0);
+            par_set(PAR_MEXC1 + v, 0);
+            par_set(PAR_FILTER_TYPE_1 + v, INIT_KIT[8u + PAR_FILTER_TYPE_1 + v]);
+        }
+        render(BLOCK);
+        for (v = 0; v < NVOICE; v++) {
+            if (mi[v].type) {
+                printf("FAIL: MICRO stays on %s\n", VOICE_NAME[v]);
+                fails++;
+            }
+        }
+        par_set(PAR_MODEL1 + 3, MD_MODAL);               /* (SN: Rings' isn't its: it plays the LXR's) */
+        render(BLOCK);
+        if (mi[3].type) {
+            printf("FAIL: SN on MODAL\n");
+            fails++;
+        }
+        par_set(PAR_MODEL1 + 3, 0);
+    }
     {   /* 0.15 (17c): D1-D3 render on the second core while core 0 renders SN-HH. A voice must touch only its own
          * state, so the output is the same, bit for bit, whichever group renders first: the beat with MODAL on D1,
          * P NOISE on D2 and D3 on the noise wave (the generators that were shared), in two processes */
@@ -210,6 +300,10 @@ int main(int argc, char **argv)
         par_set(PAR_MODEL1, MD_MODAL);
         par_set(PAR_MODEL1 + 1, MD_PL0 + 9);
         par_set(PAR_OSC_WAVE_DRUM3, W_NOISE);
+        par_set(PAR_MODEL1 + 3, MD_MC0 + 2);             /* (24: MICRO on SN (CRUNCH) and the hats (DUST), with */
+        par_set(PAR_MODEL1 + 5, MD_MC0 + 7);             /* .. JITTER and REVERSE: their noise their own too) */
+        par_set(PAR_MMAT1 + 3, 90);
+        par_set(PAR_MEXC1 + 5, 64);
         for (k = 0; k < 16; k += 3)
             main_set(&pat[0], 1, k, 1);
         for (k = 1; k < 16; k += 4)
@@ -263,6 +357,9 @@ int main(int argc, char **argv)
         model_cap = 2;
         par_set(PAR_MODEL1 + 1, 0);
         par_set(PAR_MODEL1 + 2, 0);
+        par_set(PAR_MODEL1 + 3, 0);
+        par_set(PAR_MODEL1 + 5, 0);
+        par_set(PAR_MEXC1 + 5, 0);
     }
     {   /* 18b: the reverb runs a block behind (on core 0 while the second core renders), the delay reads early when it
          * can. Every voice through the FX bus (DELAY, a time change half way) and into the reverb: the delay's output

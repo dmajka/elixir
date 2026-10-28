@@ -4113,6 +4113,159 @@ static void phase_016t3(void)
     }
 }
 
+/* a generator's track, committed (the generator still on): a step's chance turned to 0 in step edit stops that step
+ * (the edit reaches the live copy, which is what plays), and a held step's lock reaches it too */
+static void gen_step_edit_test(void)
+{
+    pattern_t *pt = &pat[sq.active];
+    uint32_t k, n0, n;
+    printf("generator: step edits reach what plays\n");
+    goto_mode(B_HOME, M_HOME);
+    seq_clear_track(1, pt);
+    for (k = 0; k < 16u; k += 4u)
+        main_set(pt, 1, k, 1);
+    pt->len[1] = 16;
+    pt->gen[1][0] = GEN_MUTATE;
+    pt->gen[1][1] = 0;                               /* (MUTATE at 0: the live track stays as the pattern) */
+    sq.gsync |= 1u << 1;
+    run_ms(20);
+    seq_commit(1);
+    ui.track = 1;
+    run_ms(40);
+    goto_mode(B_SEQ, M_STEP);
+    ui.page = 0;
+    ui.step = 4;
+    run_ms(40);
+    turn(EN_K3, -100);
+    check(step_prob(&pt->step[1][4]) == 0u && step_prob(&gpat.step[1][4]) == 0u,
+          "step edit's chance on a generator's track: the live copy too");
+    n0 = trig_count[1];
+    press(B_PLAY);
+    run_ms(1800);                                    /* (a bar at 120 BPM: the track's 4 steps, one at chance 0) */
+    press(B_PLAY);
+    n = trig_count[1] - n0;
+    printf("  D2: %u hits in a bar (want 3)\n", n);
+    check(n == 3u, "chance 0 stops the step on a generator's track");
+    goto_mode(B_EDIT, M_SOUND);
+    key_hold(8);                                     /* a lock held on step 9: the live copy has it */
+    turn(EN_K1, 3);
+    key_up(8);
+    check(gpat.step[1][8].p1n == pt->step[1][8].p1n && gpat.step[1][8].p1v == pt->step[1][8].p1v &&
+          pt->step[1][8].p1n != NO_AUTOMATION, "a held step's lock on a generator's track: the live copy too");
+    pt->gen[1][0] = GEN_OFF;
+    seq_clear_track(1, pt);
+    sq.gsync |= 1u << 1;
+    ui.track = 0;
+    run_ms(40);
+}
+
+/* ------------------------------------------------------- Phase 24 (0.17) --- */
+/* MICRO: the MODEL page on every track; on SN-HH the model alone until MICRO, K1 from LXR to CLICK past Rings' and
+ * Plaits' (and back); MICRO's knob names, POSITION blank; a lock on the type; the kit keeps SN-HH off Rings' */
+static void phase24(void)
+{
+    uint16_t pp[4];
+    uint32_t k, seen = 0;
+    pattern_t *pt = &pat[sq.active];
+    printf("phase 24: MICRO\n");
+    goto_mode(B_HOME, M_HOME);
+    ui.track = 3;
+    run_ms(60);
+    press(B_EDIT);
+    for (k = 0; k < 12u && ui.sect != S_MODEL; k++)
+        press(B_EDIT);
+    check(ui.mode == M_SOUND && ui.sect == S_MODEL, "SN: EDIT to its MODEL page");
+    page_params(pp);
+    check(pp[0] == PAR_MODEL1 + 3u && pp[1] == VP_NONE && pp[2] == VP_NONE && pp[3] == VP_NONE &&
+          !sect_half_used(3, S_MODEL, 1), "SN on LXR: the model alone, one page");
+    shot("micro-sn-lxr");
+    turn(EN_K1, 1);
+    check(par[PAR_MODEL1 + 3] == MD_MC0 && mi[3].type == 1u, "SN: K1 from LXR to CLICK (past Rings' and Plaits')");
+    page_params(pp);
+    check(pp[1] == PAR_MDECAY1 + 3u && !strcmp(par_name(pp[1]), "Length") && !strcmp(par_name(pp[2]), "Colour") &&
+          !strcmp(par_name(pp[3]), "Jitter"), "MICRO: Length, Colour, Jitter");
+    check(sect_par(3, S_MODEL, 1, 0) == PAR_MEXC1 + 3u && sect_par(3, S_MODEL, 1, 1) == PAR_MTENS1 + 3u &&
+          !sect_par(3, S_MODEL, 1, 2) && !strcmp(par_name(PAR_MEXC1 + 3u), "Reverse") &&
+          !strcmp(par_name(PAR_MTENS1 + 3u), "Tension"), "MICRO's second page: Reverse, Tension (no POSITION)");
+    turn(EN_K1, 6);
+    check(par[PAR_MODEL1 + 3] == MD_MC0 + 6u && mi[3].type == 7u, "SN: K1 to GRAIN");
+    shot("micro-sn-grain");
+    turn(EN_K1, -6);
+    turn(EN_K1, -1);
+    check(par[PAR_MODEL1 + 3] == MD_LXR && mi[3].type == 0u, "SN: K1 down from CLICK to LXR");
+    turn(EN_K1, -1);
+    check(par[PAR_MODEL1 + 3] == MD_LXR, "SN: nothing below LXR");
+    /* D1 keeps the whole list */
+    par_set(PAR_MODEL1, MD_LXR);
+    ui.track = 0;
+    run_ms(60);
+    sound_fix();
+    turn(EN_K1, 1);
+    check(par[PAR_MODEL1] == MD_MODAL, "D1: K1 from LXR to MODAL");
+    turn(EN_K1, (int32_t)(MD_MC0 - MD_MODAL));
+    check(par[PAR_MODEL1] == MD_MC0 && mi[0].type == 1u && mdl[0].want == 0u && mdl[0].type == 0u,
+          "D1 on CLICK: MICRO, not a model the limit counts");
+    page_params(pp);
+    check(!strcmp(par_name(pp[1]), "Length"), "D1 on MICRO: its knob names");
+    par_set(PAR_MODEL1, MD_LXR);
+    /* the hats: one MODEL for CH and OH */
+    ui.track = 6;
+    run_ms(60);
+    sound_fix();
+    page_params(pp);
+    check(ui.sect == S_MODEL && pp[0] == PAR_MODEL1 + 5u, "OH: the hats' MODEL");
+    /* a lock on SN's type: CLICK, step 3 on GRAIN */
+    ui.track = 3;
+    run_ms(60);
+    sound_fix();
+    par_set(PAR_MODEL1 + 3, MD_MC0);
+    run_ms(20);
+    key_hold(2);
+    turn(EN_K1, 6);
+    key_up(2);
+    k = autodest_to_par(lock_get(pt, 3, 2, 0)) == PAR_MODEL1 + 3u ? 0u : 1u;
+    check(autodest_to_par(lock_get(pt, 3, 2, k)) == PAR_MODEL1 + 3u &&
+          (k ? pt->step[3][2].p2v : pt->step[3][2].p1v) == MD_MC0 + 6u, "a step locks SN's MICRO type");
+    press(B_PLAY);
+    for (k = 0; k < 2200u; k += 5u) {
+        run_ms(5);
+        seen |= 1u << mi[3].type;
+    }
+    press(B_PLAY);
+    check(seen & 1u << 7, "the locked step plays GRAIN");
+    lock_set(pt, 3, 2, 0, NO_AUTOMATION);
+    lock_set(pt, 3, 2, 1, NO_AUTOMATION);
+    main_set(pt, 3, 2, 0);
+    /* a kit with SN on MODAL (not its) loads it as LXR; the hats' DUST stays */
+    {
+        static uint8_t kb[KIT_LEN];
+        kit_init_values(kb);
+        kb[kit_idx(PAR_MODEL1 + 3)] = MD_MODAL;
+        kb[kit_idx(PAR_MODEL1 + 5)] = MD_MC0 + 7u;
+        kit_sanitize(kb);
+        check(kb[kit_idx(PAR_MODEL1 + 3)] == MD_LXR && kb[kit_idx(PAR_MODEL1 + 5)] == MD_MC0 + 7u,
+              "kit: SN off Rings', the hats on DUST");
+    }
+    /* a project keeps them */
+    par_set(PAR_MODEL1 + 5, MD_MC0 + 2u);
+    par_set(PAR_MDAMP1 + 5, 99);
+    run_ms(20);
+    {
+        int rc = proj_save(1, "MICRO   ");
+        par[PAR_MODEL1 + 5] = 0;
+        par[PAR_MDAMP1 + 5] = 0;
+        rc |= proj_load(1);
+        run_ms(20);
+        check(rc == 0 && par[PAR_MODEL1 + 5] == MD_MC0 + 2u && par[PAR_MDAMP1 + 5] == 99u && mi[5].type == 3u &&
+              mi[5].col == 99u, "project: the hats' CRUNCH and its colour");
+    }
+    par_set(PAR_MODEL1 + 3, MD_LXR);
+    par_set(PAR_MODEL1 + 5, MD_LXR);
+    run_ms(20);
+    ui.track = 0;
+    goto_mode(B_HOME, M_HOME);
+}
+
 int main(int argc, char **argv)
 {
     uint32_t t;
@@ -4550,6 +4703,8 @@ int main(int argc, char **argv)
     phase23();
     phase_016t2();
     phase_016t3();
+    phase24();
+    gen_step_edit_test();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;
 }

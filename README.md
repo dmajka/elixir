@@ -17,11 +17,11 @@ The FM-1 has no FPU, so the LXR's floating-point DSP is rewritten in fixed point
 | FM-1 control | Elixir |
 |---|---|
 | White keys 1–16 | Steps of the shown bar · patterns (pattern page) · rolls, FILL and effects (PERF) |
-| Black keys 1–7 | Tracks D1 D2 D3 SN CY CH OH (select) · SHIFT + key: mute · SHIFT + GLO: solo the selected track |
-| Black keys 8–11 | Bars 1–4 (shown bar) · banks of 16 (2 on the pattern page, 4 for kits and songs) · SHIFT: track length · COPY: copy the shown bar into it (on the grid: every track) |
+| Black keys 1–7 | Tracks D1 D2 D3 SN CY CH OH (select) · SHIFT (OCT−) + key: mute · SHIFT (OCT−) + GLO: solo the selected track |
+| Black keys 8–11 | Bars 1–4 (shown bar) · banks of 16 (2 on the pattern page, 4 for kits and songs) · SHIFT (OCT−): track length · COPY (OCT+): copy the shown bar into it (on the grid: every track) |
 | OCT− | **SHIFT** (hold it: the screen shows every SHIFT combination) |
-| OCT+ | **COPY** (hold + track/bar/pattern) · held on a sound page + a knob: **CONTROL ALL** · SHIFT + OCT+ = **CLEAR** (on a sound page: CLEAR SOUND, the voice back to init) · OK in dialogs |
-| EDIT | Oscillator → FM → transient (click) → model (drums) · SHIFT + EDIT: **KEYS** (the keys play the track's voice) |
+| OCT+ | **COPY** (hold + track/bar/pattern) · held on a sound page + a knob: **CONTROL ALL** · SHIFT (OCT−) + OCT+ = **CLEAR** (on a sound page: CLEAR SOUND, the voice back to init) · OK in dialogs |
+| EDIT | Oscillator → FM → transient (click) → model (drums) · SHIFT (OCT−) + EDIT: **KEYS** (the keys play the track's voice) |
 | ENV | Amp EG → gate → mod EG / velocity |
 | SCL | Filter → shape (waveshaper, drive, bits, tilt) |
 | LFO | LFO → random per hit → cross mod / choke |
@@ -31,7 +31,7 @@ The FM-1 has no FPU, so the LXR's floating-point DSP is rewritten in fixed point
 | ARP | PERF (rolls, effects, mutes, DJ filter, density, LFOs, macros) → generator / action / melody / track (length, clock, direction) / scale / bounce / links |
 | HOME | Grid → patterns → song |
 | SAVE | Save → load (kit, pattern, song, morph, project) |
-| PLAY / REC | Start/stop (SHIFT + PLAY: the song from the top) · record (SHIFT + REC: options) |
+| PLAY / REC | Start/stop (SHIFT (OCT−) + PLAY: the song from the top) · record (SHIFT (OCT−) + REC: options) |
 | ALGORITHM | Track |
 | SELECT | Page / list position |
 | PRESETS | Kit browser (KNOB 1: from the slots or the kit library; OCT+ loads) · on a sound page or in KEYS: the sound browser (OCT+ keeps, OCT− reverts) |
@@ -39,7 +39,7 @@ The FM-1 has no FPU, so the LXR's floating-point DSP is rewritten in fixed point
 
 Patterns keep their edits when you switch, as on an Elektron box: they are part of the session, which AUTOSAVE keeps. The pattern page's Edits setting can drop them instead, the LXR's way. RELOAD reverts the playing pattern either way.
 
-SHIFT + white keys follow the LXR's SHIFT + step functions: 1–7 audition a voice, 8 KIT, 9 MORPH, 10 SONG, 11 PROJECT, 12 CONFIG, 13 RELOAD, 14 LAST (last-touched parameters), 15 FX, 16 PATTERN.
+SHIFT (OCT−) + white keys follow the LXR's SHIFT + step functions: 1–7 audition a voice, 8 KIT, 9 MORPH, 10 SONG, 11 PROJECT, 12 CONFIG, 13 RELOAD, 14 LAST (last-touched parameters), 15 FX, 16 PATTERN.
 
 ## Sends and reverb
 
@@ -52,7 +52,7 @@ The reverb is a send bus after the FX bus. Its page is the third FX page: model 
 
 ## Copying a bar
 
-On the grid (HOME), hold COPY (OCT+) and press a bar key. The bar you are looking at is copied, every track, into that bar. A track that ended before the new bar grows to include it, unless its length isn't a whole number of bars (a 12-step track keeps its 12). Then move to the new bar and change what you want. On the other pages (a sound page, step edit), COPY + bar key copies only the selected track.
+On the grid (HOME), hold COPY (OCT+) and press a bar key. The bar you are looking at is copied, every track, into that bar. A track that ended before the new bar grows to include it, unless its length isn't a whole number of bars (a 12-step track keeps its 12). Then move to the new bar and change what you want. On the other pages (a sound page, step edit), COPY (OCT+) + bar key copies only the selected track.
 
 ## Steps and tracks
 
@@ -77,7 +77,7 @@ On the grid (HOME), hold COPY (OCT+) and press a bar key. The bar you are lookin
 
 ## Performance (PERF)
 
-Press ARP for PERF. The white keys act while held, and SHIFT + a key latches it on (the key again turns it off). Leaving PERF (HOME, SEQ) turns off whatever is latched.
+Press ARP for PERF. The white keys act while held, and SHIFT (OCT−) + a key latches it on (the key again turns it off). Leaving PERF (HOME, SEQ) turns off whatever is latched.
 
 | Keys | |
 |---|---|
@@ -118,9 +118,11 @@ Drum 1–3 also have **models** (EDIT, after the transient: MODEL), ported from 
 
 From 0.15 the MODEL list also has Plaits' sixteen original engines (**P VA** … **P HH**: virtual analog, waveshaping, FM, grain, additive, wavetable, chords, speech, swarm, filtered and particle noise, inharmonic string, modal, bass drum, snare, hi-hat), ported from Mutable Instruments **Plaits** (MIT licence). Their knobs are Plaits': **Harmonic**, **Timbre**, **Morph**, plus **Colour** (Plaits' low-pass gate on the amp EG; 0 a plain VCA), **Aux** (OUT to AUX) and **Env** (the amp EG's amount on Timbre and Morph). `tests/plaits_compare.sh` checks them against Plaits' own code. The models are **experimental** (not part of the LXR-02) and heavy: at most two play at once, rendered with D1–D3 on the FM-1's second core (one on a unit that falls back to one core; CONFIG → LOAD shows the cores and the load by part).
 
+From 0.17 every track's MODEL also has **MICRO** types, after GLITCH (ttreu's FM-1 firmware): **CLICK** (0.1–1.5 ms), **TRAIN**, **CRUNCH**, **BITS**, **BURST**, **SNAP**, **GRAIN** (resonant noise grains), **DUST**, **POP** and **CHIRP**. The type replaces the voice's oscillators, FM and transient; its knobs are **Length**, **Colour**, **Jitter**, **Reverse** (the chance a hit plays backwards) and **Tension**. The voice's pitch moves the sound, and its filter, shape, sends and locks still apply; the amp EG doesn't (Length does). On the snare, cymbal and hats Model goes from LXR straight to the MICRO types. They cost less than the LXR voice they replace and aren't counted in the two-model limit.
+
 **Control All** (as on Elektron's boxes): hold OCT+ on a sound page and turn a knob, and that parameter moves on every track that has it, each from its own value, so the kit keeps its balance. Keep holding and page (SELECT, the sound buttons) to move more. Letting go of OCT+ asks whether to revert: OCT+ again reverts the kit (the default), OCT− keeps the changes, so a slipped thumb never keeps them by accident. It records no locks.
 
-**KEYS** (SHIFT + EDIT): the white and black keys play the selected track's voice chromatically (KNOB 1: octave). Under REC the notes go into the steps. The keys have no velocity, so KNOB 2 sets it (for rolls too) and KNOB 3 the accent, played with SHIFT.
+**KEYS** (SHIFT (OCT−) + EDIT): the white and black keys play the selected track's voice chromatically (KNOB 1: octave). Under REC the notes go into the steps. The keys have no velocity, so KNOB 2 sets it (for rolls too) and KNOB 3 the accent, played with SHIFT (OCT−).
 
 **Sound browser:** on a track's sound pages, turn PRESETS to step through the sounds that track can take (the library's sounds, then the voices of the library's kits, the kit slots and the factory bank), each auditioned; OCT+ keeps one, OCT− goes back. SAVE → SOUND saves a track's sound to the library.
 

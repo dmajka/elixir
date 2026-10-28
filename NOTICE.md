@@ -17,6 +17,8 @@ It is derived from:
 
 - **Clouds**, Copyright 2014 Emilie Gillet, MIT licence (`LICENSES/MIT-Clouds.txt`). The reverb's PLATE model (0.16, `firmware/src/reverb.c` `rev_plate`) is Clouds' reverb (`clouds/dsp/fx/reverb.h`, on its `fx_engine.h`), Jon Dattorro's plate in the Griesinger topology, ported to fixed point at Elixir's half rate with its delay lengths scaled; `tests/reverb_compare.cc` checks it against Clouds' own code.
 
+- **GLITCH** (ttreu, github.com/ttreu/fm1-glitch), an FM-1 firmware on M-VAVE's FM1 Open sources, GPL-3.0-only (with a linking exception that Elixir doesn't need and doesn't use). The MICRO types (0.17, `firmware/src/micro.c`) follow the design of its microsound sources in `app/glitch_dsp.c`: their shapes, lengths, colours and relative levels. They are written for Elixir in fixed point.
+
 - **The second core** (0.15): starting the FM-1's second core and guarding against units whose second core misreads (`firmware/hal/fm1_cpu1.h`, `fm1_cpu1.S`, from Felucca's hardware layer) come from **X0X** (Charles Vestal, github.com/charlesvestal/fm1-x0x), **Melodee** (keremimo, github.com/keremimo/melodee) and **Jangada** (zednaked, github.com/zednaked/jangada), all GPL-3.0.
 
 Other parts:

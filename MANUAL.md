@@ -71,7 +71,7 @@ How an update works decides what can be recovered. The firmware that is running 
 - **An install was cut off** (cable pulled, page closed, computer asleep): the FM-1 stays in update mode, waiting for the loader's write. Plug it in and press Install again (or run `fm1_install.py` again). It finishes the write. This works for Elixir and for V15.
 - **Elixir runs but something is wrong** (it misbehaves, it's too slow, you don't like it): install V15 from the page. Elixir answers the installer like any other firmware.
 - **Elixir crashes as it starts** (it never reaches the grid): this is the case to worry about, because no firmware is left to answer the installer. Elixir's boot guard notices two crashed starts in a row and sends the FM-1 to the chip's own **UBOOT** mode on the next start. UBOOT is built into the chip and survives any firmware, but neither the install page nor `fm1_install.py` can write from it. Recovery then needs Leo Kuroshita's [FM-1-transporter](https://github.com/kurogedelic/FM-1-transporter): a Seeed XIAO RP2040 board wired to the FM-1's USB lines, which can rewrite its flash.
-- **Hold OCT− and OCT+ together for 5 seconds** to enter UBOOT by hand (the screen shows UBOOT). This is only useful with the Transporter. Turning the FM-1 off and on should leave it, but this hasn't been tried on hardware.
+- **Turn the FM-1 on with OCT− and OCT+ held, and keep them held for 5 seconds,** to enter UBOOT by hand (the screen shows UBOOT). Held together during play they are SHIFT (OCT−) and COPY (OCT+) and do nothing of the kind. This is only useful with the Transporter. Turning the FM-1 off and on should leave it, but this hasn't been tried on hardware.
 
 Elixir has installed and started on one real FM-1, from V15, with the install page. That is still very little testing: install it knowing that a start-up crash would need the Transporter to undo.
 
@@ -100,11 +100,11 @@ The FM-1's keyboard has 16 white keys and 11 black keys, numbered left to right 
 | Control | What it does in Elixir |
 |---|---|
 | **White keys 1–16** | The 16 steps of the bar on screen. On the pattern page: patterns. In PERF: rolls and effects. |
-| **Black keys 1–7** | Select a track: D1 D2 D3 SN CY CH OH. SHIFT + key: mute / unmute it. |
-| **Black keys 8–11** | Show bar 1–4. On pattern, song, save and load pages: the bank of 16. SHIFT + key: track length (16, 32, 48, 64). COPY + key: copy the shown bar into it. In PERF: the repeat length. |
-| **OCT−** | **SHIFT** (hold). While held, the screen shows what SHIFT + each key does. |
-| **OCT+** | **COPY** (hold). SHIFT + OCT+ = **CLEAR**. OK in the save, load and action dialogs. Held on a sound page, a knob turned is **Control All**. |
-| **EDIT** | Sound: oscillator → FM → transient → model (press again to step through). SHIFT + EDIT: **KEYS** (the keys play the track's voice; again: back) |
+| **Black keys 1–7** | Select a track: D1 D2 D3 SN CY CH OH. SHIFT (OCT−) + key: mute / unmute it. |
+| **Black keys 8–11** | Show bar 1–4. On pattern, song, save and load pages: the bank of 16. SHIFT (OCT−) + key: track length (16, 32, 48, 64). COPY (OCT+) + key: copy the shown bar into it. In PERF: the repeat length. |
+| **OCT−** | **SHIFT** (hold). While held, the screen shows what SHIFT (OCT−) + each key does. |
+| **OCT+** | **COPY** (hold). SHIFT (OCT−) + OCT+ = **CLEAR**. OK in the save, load and action dialogs. Held on a sound page, a knob turned is **Control All**. |
+| **EDIT** | Sound: oscillator → FM → transient → model (press again to step through). SHIFT (OCT−) + EDIT: **KEYS** (the keys play the track's voice; again: back) |
 | **ENV** | Sound: amp envelope → mod envelope / velocity |
 | **SCL** | Sound: filter → shape |
 | **LFO** | Sound: LFO → random per hit → cross mod / choke |
@@ -113,9 +113,9 @@ The FM-1's keyboard has 16 white keys and 11 black keys, numbered left to right 
 | **SEQ** | Step edit (press again: its next page) |
 | **ARP** | PERF → generator / action / track / bounce / links |
 | **HOME** | Grid → patterns → song |
-| **SAVE** | Save → load (SHIFT + SAVE: load) |
-| **PLAY** | Start / stop. SHIFT + PLAY: play the song from its start. |
-| **REC** | Record on / off. SHIFT + REC: record options. |
+| **SAVE** | Save → load (SHIFT (OCT−) + SAVE: load) |
+| **PLAY** | Start / stop. SHIFT (OCT−) + PLAY: play the song from its start. |
+| **REC** | Record on / off. SHIFT (OCT−) + REC: record options. |
 | **ALGORITHM** (encoder) | Select the track |
 | **SELECT** (encoder) | The page; in lists, the row |
 | **PRESETS** (encoder) | The kit browser. On a sound page or in KEYS: the [sound browser](#the-sound-browser) |
@@ -174,21 +174,21 @@ On the grid, a step's height shows its velocity, an outline means a chance below
 
 ### Track length
 
-- **SHIFT + bar key:** the selected track becomes 1, 2, 3 or 4 bars long.
+- **SHIFT (OCT−) + bar key:** the selected track becomes 1, 2, 3 or 4 bars long.
 - **Length knob** on the grid (KNOB 3): any length from 1 to 64.
-- **LAST** (SHIFT + white key 14): tap the step that should be the track's last. Press SHIFT + 14 again to set all tracks at once.
+- **LAST** (SHIFT (OCT−) + white key 14): tap the step that should be the track's last. Press SHIFT (OCT−) + 14 again to set all tracks at once.
 
 The pattern lasts as long as its longest track (in time, counting [track clocks](#track-length-clock-direction)). Shorter tracks keep looping on their own across the pattern's end.
 
 ### Copying
 
-- **Copy a bar to another bar:** on the grid, hold **COPY** (OCT+) and press a bar key. The shown bar is copied, *every track*, into that bar, with each step's velocity, locks, timing, conditions and ratchets. A track that ended before the target bar grows to include it, unless its length isn't a whole number of bars (a 12-step track stays at 12). On other pages (sound pages, step edit), COPY + bar key copies the selected track only.
-- **Copy a track:** hold COPY, press the source track's black key, then the target's.
-- **Copy a pattern:** on the pattern page, hold COPY, press the source pattern's white key, then the target's.
+- **Copy a bar to another bar:** on the grid, hold **COPY** (OCT+) and press a bar key. The shown bar is copied, *every track*, into that bar, with each step's velocity, locks, timing, conditions and ratchets. A track that ended before the target bar grows to include it, unless its length isn't a whole number of bars (a 12-step track stays at 12). On other pages (sound pages, step edit), COPY (OCT+) + bar key copies the selected track only.
+- **Copy a track:** hold COPY (OCT+), press the source track's black key, then the target's.
+- **Copy a pattern:** on the pattern page, hold COPY (OCT+), press the source pattern's white key, then the target's.
 
 ### Clearing
 
-Hold SHIFT and press **OCT+** (CLEAR). A list opens; turn SELECT to choose, then press SHIFT + OCT+ again to confirm. Letting go of SHIFT cancels. On a sound page (or in KEYS) the list opens on CLEAR SOUND, so SHIFT + OCT+ twice puts the sound you're shaping back to its init state.
+Hold SHIFT (OCT−) and press **OCT+** (CLEAR). A list opens; turn SELECT to choose, then press SHIFT (OCT−) + OCT+ again to confirm. Letting go of SHIFT (OCT−) cancels. On a sound page (or in KEYS) the list opens on CLEAR SOUND, so SHIFT (OCT−) + OCT+ twice puts the sound you're shaping back to its init state.
 
 | Choice | Clears |
 |---|---|
@@ -201,9 +201,9 @@ Hold SHIFT and press **OCT+** (CLEAR). A list opens; turn SELECT to choose, then
 
 ### Mutes and solo
 
-SHIFT + a track's black key mutes or unmutes it (in PERF, the black keys mute on their own).
+SHIFT (OCT−) + a track's black key mutes or unmutes it (in PERF, the black keys mute on their own).
 
-**SHIFT + GLO** solos the selected track: only soloed tracks play, from any page, so you can shape one sound inside a busy pattern. Select another track and press SHIFT + GLO again to solo it too; SHIFT + GLO on a soloed track takes it out. The mutes are kept underneath and come back as they were when the last solo goes. A soloed track has a bar beside its name on the grid; the others show as muted. Solo isn't saved.
+**SHIFT (OCT−) + GLO** solos the selected track: only soloed tracks play, from any page, so you can shape one sound inside a busy pattern. Select another track and press SHIFT (OCT−) + GLO again to solo it too; SHIFT (OCT−) + GLO on a soloed track takes it out. The mutes are kept underneath and come back as they were when the last solo goes. A soloed track has a bar beside its name on the grid; the others show as muted. Solo isn't saved.
 
 ### Tempo, shuffle, MIDI sync
 
@@ -283,16 +283,16 @@ Press **REC** (it lights), then **PLAY**.
 
 - **Notes** you play (MIDI notes on a track's channel, or rolls in PERF) are written into the nearest step.
 - **Knob moves** on sound pages are written as locks onto the step that is playing, if that step is on.
-- **SHIFT + CLEAR while recording** erases the selected track's steps as they pass.
-- **SHIFT + REC** opens the record options: the lock lane (1 or 2) knob moves record into.
+- **SHIFT (OCT−) + CLEAR while recording** erases the selected track's steps as they pass.
+- **SHIFT (OCT−) + REC** opens the record options: the lock lane (1 or 2) knob moves record into.
 
 ### KEYS: playing a voice
 
-**SHIFT + EDIT** turns the keyboard into an instrument for the selected track (ALGORITHM picks the track): the white and black keys play its voice chromatically, as on a piano, from F at the octave set (KNOB 1, **Octave**: F3 by default). SHIFT + EDIT again goes back to the grid. Under REC each note is written into the nearest step with its note and velocity, as a MIDI note would be, and it goes out on USB MIDI too. The sound pages opened from KEYS keep the keys playing, so you can play and tweak at once; PRESETS opens the [sound browser](#the-sound-browser).
+**SHIFT (OCT−) + EDIT** turns the keyboard into an instrument for the selected track (ALGORITHM picks the track): the white and black keys play its voice chromatically, as on a piano, from F at the octave set (KNOB 1, **Octave**: F3 by default). SHIFT (OCT−) + EDIT again goes back to the grid. Under REC each note is written into the nearest step with its note and velocity, as a MIDI note would be, and it goes out on USB MIDI too. The sound pages opened from KEYS keep the keys playing, so you can play and tweak at once; PRESETS opens the [sound browser](#the-sound-browser).
 
 **In a scale:** when the pattern has a scale (ARP → SCALE, [section 12](#scale)) and the track follows it, the white keys play the scale's degrees upwards from the root at or below F3, so every white key is in key; the black keys stay chromatic.
 
-The FM-1's keys have no velocity, so KEYS sets it: **Velocity** (KNOB 2) is the velocity of a key, and of PERF's rolls and SHIFT + white keys 1–7. **Accent** (KNOB 3) is the velocity of a key played with SHIFT held. Both are kept in the settings.
+The FM-1's keys have no velocity, so KEYS sets it: **Velocity** (KNOB 2) is the velocity of a key, and of PERF's rolls and SHIFT (OCT−) + white keys 1–7. **Accent** (KNOB 3) is the velocity of a key played with SHIFT (OCT−) held. Both are kept in the settings.
 
 ---
 
@@ -306,7 +306,7 @@ Elixir has **32 patterns** in two banks of 16, and **64 songs**.
 - **Bar keys 8–9:** bank 1 (patterns 1–16) or bank 2 (17–32).
 - **Knobs:** kit change (AUTO: switching to a pattern also loads the kit saved with it), shuffle, Edits (KEEP or DROP, below).
 
-**Your edits stay.** With **Edits** on KEEP (the default), a pattern keeps its changes when you switch to another, as on an Elektron box: the patterns are part of the project, and AUTOSAVE keeps the session, every pattern in it, through power-off. To keep a version for good, save the project (SAVE → PROJECT). **RELOAD** (SHIFT + white key 13) brings back the kit, and the playing pattern as it was when it started playing (or was last saved with SAVE → PATTERN).
+**Your edits stay.** With **Edits** on KEEP (the default), a pattern keeps its changes when you switch to another, as on an Elektron box: the patterns are part of the project, and AUTOSAVE keeps the session, every pattern in it, through power-off. To keep a version for good, save the project (SAVE → PROJECT). **RELOAD** (SHIFT (OCT−) + white key 13) brings back the kit, and the playing pattern as it was when it started playing (or was last saved with SAVE → PATTERN).
 
 With **Edits** on DROP, the LXR's way, changes to the playing pattern that haven't been saved (SAVE → PATTERN) are lost when another pattern starts. Edits is a setting: it stays through power-off.
 
@@ -317,8 +317,8 @@ A song is up to 64 rows, each a pattern (or END / LOOP).
 - **SELECT:** the row.
 - **White key:** write that pattern into the row and move to the next (bar keys pick the bank).
 - **KNOB 1:** the row's pattern, END or LOOP; **KNOB 2:** which song.
-- **COPY:** insert a row (a copy of the one above). **CLEAR → DELETE SONG ROW:** remove it.
-- **SHIFT + PLAY:** play the song from the start. PLAY on its own plays the pattern alone.
+- **COPY (OCT+):** insert a row (a copy of the one above). **CLEAR → DELETE SONG ROW:** remove it.
+- **SHIFT (OCT−) + PLAY:** play the song from the start. PLAY on its own plays the pattern alone.
 
 ---
 
@@ -392,7 +392,7 @@ Each hit varies by up to the amount set: pitch up to an octave either way at 127
 
 **Experimental.** The models are not part of the LXR-02: they are Elixir's own addition, ported from two Mutable Instruments Eurorack modules, **Rings** (from 0.9) and **Plaits** (from 0.15). They are still being tested on the FM-1, they use far more of the processor than the LXR's voices, and their sound and settings may change in later versions, so a kit that uses them may sound different after an update. Everything else in Elixir works without them.
 
-The three DRUM voices have more engines than the LXR's own. They are set in the **MODEL** section (EDIT, after the transient; drum tracks only). Model **LXR** is the LXR's engine (the default); **MODAL**, **STRING** and **FM** are Rings' resonators, struck by the voice; the sixteen **P …** models are Plaits' engines (below).
+The three DRUM voices have more engines than the LXR's own. They are set in the **MODEL** section (EDIT, after the transient). Model **LXR** is the LXR's engine (the default); **MODAL**, **STRING** and **FM** are Rings' resonators, struck by the voice; the sixteen **P …** models are Plaits' engines (below). After them come the **MICRO** types, which every track has ([MICRO](#micro-microsound-voices-every-track)).
 
 #### Rings
 
@@ -460,6 +460,50 @@ The model replaces the oscillators, transient and amp EG in the output: the mode
 
 **From 0.8 and earlier:** the old models (SKIN, BAR, BELL, PLATE, TUBE) are gone. A project or kit that used them loads with MODAL in place of SKIN, BAR, BELL and PLATE, and STRING in place of TUBE; the knobs keep their values, so they sound different. Check those sounds after updating.
 
+### MICRO: microsound voices (every track)
+
+From 0.17, any track can play a **microsound** instead of its LXR voice: a click a fraction of a millisecond long, a rasp of clicks, crunchy sample-and-hold bits, a burst of noise, a resonant noise grain. They are for glitch, clicks-and-cuts and microhouse beats, after the sounds of **GLITCH**, ttreu's FM-1 firmware.
+
+Pick one with **Model** on the MODEL page (EDIT, after the transient). On the snare, cymbal and hats the page holds only Model until a MICRO type is picked, and Model steps from **LXR** straight to the MICRO types; on D1–D3 they come after Plaits' engines. The closed and open hats share one voice, so they share one MICRO type, as they share every other sound setting.
+
+The type replaces the voice's oscillators, FM and transient. There is nothing else to turn off.
+
+| Type | The sound | Colour |
+|---|---|---|
+| **CLICK** | one square pulse, 0.1–1.5 ms | a single click → a doublet (a second, opposite half) |
+| **TRAIN** | 3–20 clicks in a row, alternating and fading: a short rasp | speeding up (low) → slowing down (high) |
+| **CRUNCH** | sample-and-hold digital noise | smooth steps → harsh and jittery |
+| **BITS** | 8-bit-style LFSR noise | tonal and buzzy → noisy |
+| **BURST** | a short burst of noise, 2–22 ms | dark → bright |
+| **SNAP** | a gated band of noise with a click | dark → bright |
+| **GRAIN** | noise ringing through a resonator, in a smooth window | wide → resonant |
+| **DUST** | a crackle of random clicks | sparse → dense |
+| **POP** | a speaker pop: a jump that slides back | soft → a sharp edge |
+| **CHIRP** | a fast sine sweep | sweeping down → up |
+
+The knobs:
+
+| | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
+|---|---|---|---|---|
+| Row 1 | Model | Length | Colour | Jitter |
+| Row 2 | Reverse | Tension | | |
+
+- **Length:** how long the sound lasts: a click's width, how many clicks a train has, a grain's window, a crackle's duration.
+- **Colour:** the type's own character (the table above).
+- **Jitter:** each hit a little different: its length and colour vary, and a train's gaps go uneven. At 0 every hit is the same.
+- **Reverse:** the chance that a hit plays backwards: a swell that stops with a cut, a train that grows louder and faster, a sweep the other way. At 127 every hit is backwards.
+- **Tension:** each hit's pitch is thrown up and falls back (an octave at 127 and full velocity), as on Rings' and Plaits' models.
+
+**The pitch** (the voice's coarse and fine tune, its pitch EG, the scale, the melody generator, KEYS, random pitch) moves the sound: a higher note makes a click shorter, a train faster, crunch and bits clocked faster, a grain or a snap's band higher, a pop sharper, a chirp start higher. A grain played by the melody generator is a pitched blip.
+
+**Length shapes the sound, not the amp EG.** A MICRO sound plays its own length, so the amp EG's attack and decay don't apply (on the hats, CH and OH sound the same length; set the open hat's sound with a lock if you want it longer). Velocity still sets the level when VOL MOD is on, and everything after the oscillators still applies: the filter, drive and shape, bits, tilt, sample rate, sends, choke, cross modulation, LFO and random per hit. The filter is worth opening: the init kit's cymbal is a high-pass that hides the lower types.
+
+Each type's level is matched to the others, so changing the type doesn't jump in volume. MICRO costs less processor than the LXR voice it replaces, and it isn't one of the [two models at once](#both): every track can play MICRO together with two Rings or Plaits models.
+
+**Locks:** Model can be locked per step, so one track can play a click on one step, a grain on the next and the LXR's snare after. Length, Colour, Jitter, Reverse and Tension lock and morph like any knob; Model itself doesn't morph.
+
+**Compatibility:** MICRO uses the MODEL parameters a kit already stores for every voice, so kits and projects keep their format. An earlier Elixir plays a MICRO voice as LXR.
+
 ### The sound browser
 
 On a track's sound pages (or in KEYS), turn **PRESETS**: a list of sounds that track can take opens, and each step plays the sound on the track. It lists the library's saved sounds, then the voices of the library's kits, of the 64 kit slots and (on a private build) of the factory bank; a drum track lists all three drums of each kit, the others their own voice. Kits' voices still as the init kit are left out. SELECT moves through it too. **OCT+** keeps the sound; **OCT−** puts back what you had. SAVE → SOUND saves the track's sound into the library, to come up first next time.
@@ -471,8 +515,8 @@ As on Elektron's boxes: hold **OCT+** on a sound page and turn a knob, and that 
 - **Relative.** Each voice moves by the knob's steps from its own value, clamped to its range, so the voices keep their differences. The card shows the selected track's value.
 - **The same parameter** is the one with the same name in the same section: the filter's frequency on each voice, the amp EG's decay (the closed hat's and the open hat's decay both). A voice without it is left alone: FM moves only Drum 1–3, a model only the drums. Elixir's own pages (shape, random, cross mod) move every voice. The hats share a voice, so it moves once.
 - **Page while you hold.** The sound buttons and SELECT still page: hold OCT+, turn the filter, press ENV, turn the decay. Everything you change during the hold is one move.
-- **Keep or revert.** When you let go of OCT+, a dialog asks **REVERT THE KIT?** and the changes keep sounding until you answer. Press **OCT+** again (the default) to put the whole kit back as it was before the first turn (**CONTROL ALL REVERTED**), or **OCT−** to keep the changes (**CONTROL ALL KEPT**). So a thumb slipping off OCT+ doesn't keep anything by accident. While the dialog is open, the knobs, keys and other buttons do nothing, except PLAY and REC. You can also press OCT− while still holding OCT+ to revert at once, then turn again to start a new one. As on Elektron, the kit is the working copy: RELOAD (SHIFT + key 13) or loading the kit goes back further.
-- **COPY still works.** Until a knob turns, OCT+ is COPY as before (track, bar). Once a knob has turned, the voice keys select a track and the bar keys show a bar; nothing is copied on release.
+- **Keep or revert.** When you let go of OCT+, a dialog asks **REVERT THE KIT?** and the changes keep sounding until you answer. Press **OCT+** again (the default) to put the whole kit back as it was before the first turn (**CONTROL ALL REVERTED**), or **OCT−** to keep the changes (**CONTROL ALL KEPT**). So a thumb slipping off OCT+ doesn't keep anything by accident. While the dialog is open, the knobs, keys and other buttons do nothing, except PLAY and REC. You can also press OCT− while still holding OCT+ to revert at once, then turn again to start a new one. As on Elektron, the kit is the working copy: RELOAD (SHIFT (OCT−) + key 13) or loading the kit goes back further.
+- **COPY (OCT+) still works.** Until a knob turns, OCT+ is COPY as before (track, bar). Once a knob has turned, the voice keys select a track and the bar keys show a bar; nothing is copied on release.
 - **With morph.** What you hear is a mix of the kit and the morph target, so a change to the kit alone fades out as morph goes up: at full morph you'd hear nothing. So with morph turned up, Control All moves the morph target's value by the same steps too, and the change is heard at any morph amount and stays as you turn morph. Reverting puts the target back as well. CONFIG → CONTROL ALL → **Morph: KIT ONLY** moves the kit alone instead (the LXR's way); **BOTH KITS** is the default. The kit slot the target was loaded from isn't changed.
 - **Not recorded.** Under REC, Control All writes no locks: it changes the kit. A kit loaded during the hold or the dialog (a pattern change, MIDI) ends it, kept.
 
@@ -573,12 +617,12 @@ A separate send bus after the FX bus, from Felucca: **ROOM** (a Freeverb-style r
 A kit is every sound parameter of all six voices (including the sends, the reverb and Elixir's shaping). Elixir holds **64 kits**.
 
 - **Browse and load:** turn **PRESETS**. The kit list opens on the 64 slots, or on the kit library if you browsed that last. **KNOB 1** switches it: **From: SLOTS** or **From: LIBRARY** (the library's kits, L1 …, empty ones left out; from 0.9.2). Turn PRESETS to choose, press **OCT+** to load. It closes by itself after 6 seconds. (On a sound page, PRESETS browses single sounds instead: the [sound browser](#the-sound-browser).)
-- **Load / save:** SHIFT + white key 8 opens LOAD KIT; SAVE opens SAVE KIT (see [saving](#14-saving)).
+- **Load / save:** SHIFT (OCT−) + white key 8 opens LOAD KIT; SAVE opens SAVE KIT (see [saving](#14-saving)).
 - **LXR-02 kits:** kits from an LXR-02 SD card (.SND files) come in through the [library page](#backing-up-restoring-and-lxr-02-kits). A voice the LXR routed to its FX bus comes in with FX SEND 127, which sounds the same. Elixir's own settings (sends, reverb, shaping, models) start at their defaults. A whole LXR project (kits, patterns, songs) comes in the same way.
 - **The kit library:** besides the 64 slots, the FM-1 keeps **128 kits and 128 single sounds** in its flash, apart from the projects: loading another project leaves them. SAVE → KIT with **To: LIBRARY** (KNOB 3) saves there; LOAD → KIT with **From: LIBRARY** loads one into the sound being edited (SAVE → KIT keeps it in a slot). SAVE / LOAD → SOUND does the same for one track's sound (KNOB 3: the track). The library page backs the library up.
 
   **Slots or library?** The slots are the project's kits, as on the LXR-02: patterns name their kit by slot number (the pattern page's Kit change on AUTO loads it), and loading another project brings its own 64. The library is a collection that stays whatever project is loaded: the place for kits you want everywhere, such as the LXR-02's factory kits or your favourites. Browse it with PRESETS, use a kit from it as the morph target directly, or take single voices from it with the sound browser. To give a pattern a library kit, load it and save it into a slot (SAVE → KIT, To SLOTS).
-- **Morph:** load a second kit as the *morph target* (SHIFT + white key 9: LOAD MORPH; KNOB 3 picks the slots or the library), then turn **Morph** (PERF's first page, KNOB 3) from 0 to 100%. Every sound parameter crossfades towards the target (outputs, modulation targets and the reverb model stay). The header shows M while morph is above 0. SAVE → MORPH saves the mixture you hear as a new kit.
+- **Morph:** load a second kit as the *morph target* (SHIFT (OCT−) + white key 9: LOAD MORPH; KNOB 3 picks the slots or the library), then turn **Morph** (PERF's first page, KNOB 3) from 0 to 100%. Every sound parameter crossfades towards the target (outputs, modulation targets and the reverb model stay). The header shows M while morph is above 0. SAVE → MORPH saves the mixture you hear as a new kit.
 
 ---
 
@@ -623,7 +667,7 @@ KNOB 1 on the GENERATOR page picks how the track is made: **OFF**, **EUCLID**, *
 
 Hits 2 at 0 (OFF) leaves the first pulse alone, whatever the join. 4 hits OR 3 hits over 16 gives a tresillo against four on the floor; SUB carves gaps out of a busy pulse. DICE then keeps the number of hits the two made.
 
-The others play a **live copy** of the track and change it as it plays; the grid shows what is playing. The pattern itself isn't changed until you COMMIT. Turning a generator on, RESET, or changing pattern starts the live copy again from the pattern; stopping and starting doesn't. So EUCLID then MUTATE mutates the Euclid rhythm.
+The others play a **live copy** of the track and change it as it plays; the grid shows what is playing. The pattern itself isn't changed until you COMMIT. Turning a generator on, RESET, or changing pattern starts the live copy again from the pattern; stopping and starting doesn't. So EUCLID then MUTATE mutates the Euclid rhythm. COMMIT leaves the generator on, still playing its live copy; set it to OFF to play the committed steps as they are. Editing a step on a generator's track (its chance, velocity, note, condition, timing, ratchet, length or locks, in step edit or with the step held) changes the step in the pattern and in the live copy, so you hear it at once; whether the step plays is still the generator's choice.
 
 Steps you tap on a generator's track change both the pattern and the live copy.
 
@@ -696,7 +740,7 @@ A time round is still the track's length in steps, whatever the direction, so th
 
 ### Links (track coupling)
 
-Links make tracks react to each other, so a pattern behaves like a small system instead of a loop: the kick ducks the hats, the open hat answers only when the closed hat rests, a snare hit makes the next hat rattle. Each pattern holds up to **8 links**. **SHIFT + SEQ** opens the LINKS page from anywhere (it is also the fifth page after PERF).
+Links make tracks react to each other, so a pattern behaves like a small system instead of a loop: the kick ducks the hats, the open hat answers only when the closed hat rests, a snare hit makes the next hat rattle. Each pattern holds up to **8 links**. **SHIFT (OCT−) + SEQ** opens the LINKS page from anywhere (it is also the fifth page after PERF).
 
 A link reads as a sentence, and the screen shows it that way:
 
@@ -726,7 +770,7 @@ Start shows EDITED once you change the link; turning it back to – clears the l
 
 **A worked example: a hat line that breathes.**
 1. Program four kicks on D1 (steps 1, 5, 9, 13) and closed hats on every step of CH.
-2. SHIFT + SEQ, then turn **Start** to DUCK. The hat after each kick now drops out 60% of the time.
+2. SHIFT (OCT−) + SEQ, then turn **Start** to DUCK. The hat after each kick now drops out 60% of the time.
 3. KNOB 1 to link 2, Start to CALL. Program open hats on every step of OH: they now play only in the two steps after a closed hat rests, so they answer the gaps DUCK made. Every bar comes out a little different.
 4. KNOB 1 to link 3, then on LINK SETUP set When to **SN hit**, Target **CH**, Effect **RATCH**, Window **NEXT**. Add a snare on 5 and 13: the hat after it rattles.
 5. Back on LINKS, turn **Depth** down to 0% and up again while it plays: the system fades out to the plain pattern and back.
@@ -737,7 +781,7 @@ Links, their depth and the bounce settings are saved with the pattern (project f
 
 ## 13. Performance mode (PERF)
 
-Press **ARP**. The white keys act **while held**; **SHIFT + key latches** it on (the key again turns it off). Leaving PERF (HOME or SEQ) turns off whatever is latched.
+Press **ARP**. The white keys act **while held**; **SHIFT (OCT−) + key latches** it on (the key again turns it off). Leaving PERF (HOME or SEQ) turns off whatever is latched.
 
 | Key | Name | Does |
 |---|---|---|
@@ -751,7 +795,7 @@ Press **ARP**. The white keys act **while held**; **SHIFT + key latches** it on 
 | 14 | **STP** | **Tape stop:** tempo and every voice's pitch slow to a stop over the tape time, then silence. Let go: they spin back up in 0.25 s. |
 | 15 | **LP~** | Sweeps the DJ filter to its low-pass end over a bar (back in a quarter bar on release) |
 | 16 | **HP~** | The same to the high-pass end |
-| black 1–7 | | Mutes (SHIFT + key: unmute that track and those before it) |
+| black 1–7 | | Mutes (SHIFT (OCT−) + key: unmute that track and those before it) |
 | bar keys | | The repeat length: 1/4, 1/8, 1/16, 1/32 |
 
 The ALGORITHM encoder selects the track the throws act on (shown as THROW on screen).
@@ -788,7 +832,7 @@ The performance pages come first (PERFORM 2's among them, last), then the global
 - **DJ filter:** off in the middle; left a low-pass on the whole output, right a high-pass.
 - **Macros:** each macro knob moves one parameter between its Min and Max (Max below Min turns it the other way). Set them up on MACRO SETUP: pick the macro, its target (any lockable parameter), Min and Max. Turning a macro while recording writes locks, as any knob does.
 - **Tape time:** 0.2 to 4 seconds.
-- **Roll sweep:** while a roll key is held (or latched) on the PERFORM page, KNOB 2 turns from the roll rate into a smooth sweep from 1/4 to 1/192, off the grid. Turn it up while holding a kick for a drum-and-bass build, or down for a stutter that slows to a stop. SHIFT + KNOB 2 sets the gridded roll rate instead, which puts rolls back on the grid. The swept rate is not saved.
+- **Roll sweep:** while a roll key is held (or latched) on the PERFORM page, KNOB 2 turns from the roll rate into a smooth sweep from 1/4 to 1/192, off the grid. Turn it up while holding a kick for a drum-and-bass build, or down for a stutter that slows to a stop. SHIFT (OCT−) + KNOB 2 sets the gridded roll rate instead, which puts rolls back on the grid. The swept rate is not saved.
 - **Velocity:** rolls play at the KEYS velocity (see [KEYS](#keys-playing-a-voice)).
 
 Macros, the repeat length and the tape time are saved with the project. The DJ filter starts in the middle at power-on.
@@ -855,7 +899,7 @@ Three LFOs (the third from 0.16) that move the whole kit's performance controls,
 
 ### PERFORM 2: the second bank
 
-Turn SELECT on to **PERFORM 2**. While a PERFORM 2 page is on screen, the 16 white keys play a second set of effects, picked with Aphex Twin, Autechre, microhouse and dub techno in mind. The black keys (mutes) and the bar keys (repeat length) work as before. Hold a key, or latch it with SHIFT, just as on the first bank. Effects latched in either bank keep running when you change pages, and a key always lets go in the bank it was pressed in.
+Turn SELECT on to **PERFORM 2**. While a PERFORM 2 page is on screen, the 16 white keys play a second set of effects, picked with Aphex Twin, Autechre, microhouse and dub techno in mind. The black keys (mutes) and the bar keys (repeat length) work as before. Hold a key, or latch it with SHIFT (OCT−), just as on the first bank. Effects latched in either bank keep running when you change pages, and a key always lets go in the bank it was pressed in.
 
 | Key | Name | Does |
 |---|---|---|
@@ -878,7 +922,7 @@ COMB, CUTS and CRUSH act on the whole output after the DJ filter, in that order;
 
 ## 14. Saving
 
-Press **SAVE** for the save page, SAVE again for the load page (SHIFT + SAVE opens load directly). KNOB 1 chooses the type, KNOB 2 (or SELECT, PRESETS, or a white key in the bank on screen) the slot.
+Press **SAVE** for the save page, SAVE again for the load page (SHIFT (OCT−) + SAVE opens load directly). KNOB 1 chooses the type, KNOB 2 (or SELECT, PRESETS, or a white key in the bank on screen) the slot.
 
 | Type | Slots | Save | Load |
 |---|---|---|---|
@@ -1058,7 +1102,7 @@ At the right end of the CPU line: the battery's charge as three bars (as the sto
 
 ## 17. Reference tables
 
-### SHIFT + white keys (outside PERF)
+### SHIFT (OCT−) + white keys (outside PERF)
 
 | Key | Function |
 |---|---|
@@ -1073,26 +1117,26 @@ At the right end of the CPU line: the battery's charge as three bars (as the sto
 | 15 | FX |
 | 16 | PATTERN page |
 
-In PERF, SHIFT + a white key latches it instead.
+In PERF, SHIFT (OCT−) + a white key latches it instead.
 
 ### Other combinations
 
 | Combination | Does |
 |---|---|
-| SHIFT + track key | Mute / unmute |
-| SHIFT + GLO | Solo / unsolo the selected track |
-| SHIFT + bar key | Track length 16 / 32 / 48 / 64 |
-| COPY + bar key | Copy the shown bar (on the grid: every track) |
-| COPY + track, track | Copy a track |
-| COPY + pattern, pattern | Copy a pattern (pattern page) |
-| SHIFT + COPY | CLEAR (again to confirm) |
-| COPY held + knob (sound page) | Control All: the parameter on every track; let go, then OCT+ reverts or OCT− keeps |
-| SHIFT + PLAY | Play the song from the start |
-| SHIFT + REC | Record options |
-| SHIFT + SAVE | Load page |
-| SHIFT + EDIT | KEYS (again: the grid) |
-| SHIFT + a key (KEYS) | The note at the accent velocity |
-| OCT− + OCT+ held 5 s | The chip's UBOOT mode (recovery with the Transporter only) |
+| SHIFT (OCT−) + track key | Mute / unmute |
+| SHIFT (OCT−) + GLO | Solo / unsolo the selected track |
+| SHIFT (OCT−) + bar key | Track length 16 / 32 / 48 / 64 |
+| COPY (OCT+) + bar key | Copy the shown bar (on the grid: every track) |
+| COPY (OCT+) + track, track | Copy a track |
+| COPY (OCT+) + pattern, pattern | Copy a pattern (pattern page) |
+| SHIFT (OCT−) + COPY (OCT+) | CLEAR (again to confirm) |
+| COPY (OCT+) held + knob (sound page) | Control All: the parameter on every track; let go, then OCT+ reverts or OCT− keeps |
+| SHIFT (OCT−) + PLAY | Play the song from the start |
+| SHIFT (OCT−) + REC | Record options |
+| SHIFT (OCT−) + SAVE | Load page |
+| SHIFT (OCT−) + EDIT | KEYS (again: the grid) |
+| SHIFT (OCT−) + a key (KEYS) | The note at the accent velocity |
+| OCT− + OCT+ held from power-on for 5 s | The chip's UBOOT mode (recovery with the Transporter only) |
 | Hold step + turn knob | Lock |
 
 ### The sound by CC
@@ -1227,6 +1271,7 @@ What Elixir adds:
 
 - **Sound:** Control All (OCT+ held, a knob: every track); LFO modes (hold, one-shot, half); FX and reverb sends per voice; four reverbs (Clouds' plate among them); nine waveshapers; bits; tilt EQ; random per hit; choke groups; cross modulation; a gate per voice; phaser and flanger; a tape delay with sync, glitches and pitch-shifted repeats, its echoes into the reverb; dirt on the FX bus and the master; a sound browser and a kit library.
 - **Models (experimental):** Rings' resonators and Plaits' sixteen engines on the drum voices, two at a time. Not in the LXR-02.
+- **MICRO:** ten microsound types (clicks, click trains, crunch, bits, noise bursts, snaps, resonant grains, dust, pops, chirps) on every track, after GLITCH.
 - **Performance:** PERF with fill, repeat, freeze, throws, feedback push, tape stop, filter sweeps, a DJ filter, four macros, the voices' volumes on two pages, PERFORM 2, DENSITY (thinning or building the whole pattern) and three global LFOs (morph, the DJ filter, the effects, density, transpose, the delay, macros, down to 256 bars a cycle); KEYS, to play a voice from the keyboard.
 - **Sequencing:** trig conditions, ratchets, note lengths and ties, per-track clocks, generators (mutate, Turing machine, cellular automata, Grids, Euclid with a second pulse), a melody generator, a scale per pattern, dice, commit and undo, and copying a bar across all tracks.
 - **Safety:** the automatic session save, a CPU meter with the load by part, and backup and restore over USB (the library page).
@@ -1264,6 +1309,7 @@ It is built from:
 - **Plaits**, © 2016–2023 Emilie Gillet, MIT licence: the drum voices' P models (a fixed-point port).
 - **Clouds**, © 2014 Emilie Gillet, MIT licence: the reverb's PLATE (a fixed-point port).
 - **Marbles**, © 2015 Emilie Gillet, MIT licence: the melody generator follows the design of its X section (no code copied).
+- **GLITCH** (ttreu, github.com/ttreu/fm1-glitch), GPL-3.0: the MICRO types follow the design of its microsound sources (written for Elixir in fixed point).
 - **X0X** (Charles Vestal), **Melodee** (keremimo) and **Jangada** (zednaked), GPL-3.0: starting the FM-1's second core and guarding against units that misread (through Felucca's hardware layer).
 - **Inter Tight** (the screen's font) and **DotGothic16** (the emulator page), SIL Open Font License 1.1.
 
