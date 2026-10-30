@@ -232,6 +232,30 @@
   <section class="band" id="updates">
     <div class="intro"><h2>Updates</h2><p>What each release added and fixed.</p></div>
     <div class="updates">
+      <div class="card"><h3>0.18<span>30 October 2026</span></h3>
+        <h4>New</h4>
+        <ul>
+          <li>P CHORD shows its chord by name (OCT, 5, sus4, m, m7, m9, m11, 69, M9, M7, M) on its first MODEL knob,
+            now called Chord; Timbre and Morph are named Invert and Wave.</li>
+          <li>TRK LFO 2 (LFO, after LFO MODE): a second LFO on every track, with LFO 1's waves, sync, retrigger,
+            offset and modes, on any of the track's own parameters. On the same target as LFO 1 it adds to it.</li>
+          <li>INSERT (SCL, after SHAPE): an effect on every track before its pan and sends: PHASER, FLANGER,
+            CHORUS, TREMOLO, AUTOPAN, SHIFTER (a frequency shifter with feedback) or RING, with an AMOUNT and two
+            knobs named for the type.</li>
+          <li>The LFO's and velocity's targets go on past the LXR's to Elixir's own: the sends, tilt, bits, the
+            random amounts, cross mod, the MODEL knobs, and the reverb, delay and dirt settings.</li>
+          <li>GROOVE (ARP, after SCALE): twelve timing and velocity templates per pattern (MPC-style swings, LAZY,
+            DILLA, 2-STEP, DUB, PUSH, TECHNO, BROKEN) with an amount, HUMANIZE, and which tracks follow.</li>
+          <li>Seven more filter types on every track: LP4 (a ladder low-pass), COMB+ and COMB− (tuned combs that
+            follow the note), ALLPASS (a phaser's notches), VOWEL (formants from A to U), DUB BP (a driven band-pass)
+            and CHORD (a root, fifth and octave rung out of any sound).</li>
+        </ul>
+        <h4>Changed</h4>
+        <ul>
+          <li>The 64 kit slots are stored more compactly in memory, which frees about 6 KB for the next features
+            (more LFOs, track inserts). Kits, projects and the library are unchanged, and kits sound the same.</li>
+        </ul>
+      </div>
       <div class="card"><h3>0.17<span>28 October 2026</span></h3>
         <h4>New</h4>
         <ul>

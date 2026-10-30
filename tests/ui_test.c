@@ -53,6 +53,9 @@ static uint32_t pj_len(uint32_t l)                   /* a project's payload in f
     return proj_exists(l) && !hdr_read((uint32_t)pj.phys[l], &h) ? h.len : 0u;
 }
 static void check(int ok, const char *what);
+/* 25-0: the kit slots are packed (kit.c kit_get / kit_put): one value of slot n */
+static uint32_t kit_at(uint32_t n, uint32_t i) { uint8_t k[KIT_LEN]; kit_get(n, k); return k[i]; }
+static void kit_set1(uint32_t n, uint32_t i, uint32_t v) { uint8_t k[KIT_LEN]; kit_get(n, k); k[i] = (uint8_t)v; kit_put(n, k); }
 static void fx_goto(uint32_t g)                      /* 0.16: FX's page g (FXPG_*), as shown */
 {
     uint32_t i;
@@ -291,8 +294,12 @@ static void phase2(void)
     /* the panel: SCL > SHAPE, LFO > RANDOM > CROSS MOD; a lock on a shaping parameter, saved and loaded */
     for (i = 0; i < NUM_PATTERN; i++)                 /* (the dense project's patterns and kits out) */
         seq_clear_pattern(&pat[i]);
-    for (i = 0; i < NUM_KITS; i++)
-        kit_init_values(kits[i]);
+    {
+        uint8_t k[KIT_LEN];
+        kit_init_values(k);
+        for (i = 0; i < NUM_KITS; i++)
+            kit_put(i, k);
+    }
     pat_backup = pat[sq.active];
     eng_reset(0);
     goto_mode(B_HOME, M_HOME);
@@ -318,7 +325,13 @@ static void phase2(void)
     press(B_LFO);
     check(ui.sect == S_LFOM, "LFO three times: LFO MODE");
     press(B_LFO);
-    check(ui.sect == S_RANDOM, "LFO four times: RANDOM");
+    check(ui.sect == S_LFO2 && ui.half == 0, "LFO four times: TRK LFO 2 (25b)");
+    shot("lfo2");
+    press(B_LFO);
+    check(ui.sect == S_LFO2 && ui.half == 1, "LFO again: TRK LFO 2's second page");
+    shot("lfo2-b");
+    press(B_LFO);
+    check(ui.sect == S_RANDOM, "LFO again: RANDOM");
     turn(EN_K1, 30);
     shot("random");
     press(B_LFO);
@@ -1812,7 +1825,9 @@ static void phase14(void)
     turn(EN_SELECT, -1);                             /* 0.14: SELECT's order too: the LFO's pages, LFO MODE, MIX */
     check(ui.sect == S_LFO && ui.half == 1, "SELECT: before LFO MODE, the LFO's second page");
     turn(EN_SELECT, 2);
-    check(ui.sect == S_MIX && ui.half == 0, "SELECT: after LFO MODE, MIX");
+    check(ui.sect == S_LFO2 && ui.half == 0, "SELECT: after LFO MODE, TRK LFO 2 (25b)");
+    turn(EN_SELECT, 2);
+    check(ui.sect == S_MIX && ui.half == 0, "SELECT: after TRK LFO 2, MIX");
 
     /* 14b: the global LFOs. MORPH by a one-shot saw over a bar from PLAY: the knob stays, the sound moves */
     p4_reset();
@@ -1992,7 +2007,7 @@ static void phase14(void)
     press(B_LFO);
     check(ui.mode == M_SOUND && ui.sect == S_LFOM, "LFO: back to LFO MODE");
     press(B_LFO);
-    check(ui.sect == S_RANDOM, "LFO again: on as before");
+    check(ui.sect == S_LFO2, "LFO again: on as before");
     goto_mode(B_ARP, M_EUCLID);
     turn(EN_SELECT, (int32_t)PG_TRACK - (int32_t)ui.page);
     press(B_HOME);
@@ -2296,7 +2311,7 @@ static void phase9_library(void)
     goto_mode(B_HOME, M_HOME);
     /* the browser: PRESETS on a sound page lists the track's sounds, auditions each; OCT- puts it back */
     kit_init_par();
-    kits[2][kit_idx(PAR_OSC_WAVE_DRUM3)] = 4;      /* (slot 3's D3: something to find) */
+    kit_set1(2, kit_idx(PAR_OSC_WAVE_DRUM3), 4);   /* (slot 3's D3: something to find) */
     snd_post_all();
     black(1);
     press(B_ENV);
@@ -2320,7 +2335,7 @@ static void phase9_library(void)
     turn(EN_PRESET, 1);
     press(B_OCTUP);
     check(!ui.sb_open && !strcmp(ui.msg, "SOUND LOADED"), "SOUND BROWSER: OCT+ keeps it");
-    kits[2][kit_idx(PAR_OSC_WAVE_DRUM3)] = INIT_KIT[8u + PAR_OSC_WAVE_DRUM3];
+    kit_set1(2, kit_idx(PAR_OSC_WAVE_DRUM3), INIT_KIT[8u + PAR_OSC_WAVE_DRUM3]);
     kl_write(KLK_SOUND, 3, 0, 0, 0);
     goto_mode(B_HOME, M_HOME);
     p4_reset();
@@ -3144,7 +3159,7 @@ static void phase19(void)
     scl_last.root = scl_last.scale = 0;
 
     /* 19b: a step's length; GATE holds the voice for it, MIDI's note-off at its end */
-    check(PROJ_VERSION == 10, "project version 10");
+    check(PROJ_VERSION >= 10, "project version 10 or later");
     main_set(p, 0, 0, 1);
     p->cond[0][0] = COND_FILL;
     p->step[0][0].prob = 77;
@@ -4266,6 +4281,575 @@ static void phase24(void)
     goto_mode(B_HOME, M_HOME);
 }
 
+/* 25a: LFO and velocity targets past the LXR's: Elixir's parameters, of the LFO's voice (VEL DEST: its own). The
+ * knob's order, the voice change, the names, the LFO and velocity moving them, BITS over its own range, the kit */
+static void phase25a(void)
+{
+    uint32_t h, k, kk = 4, hh = 0, lo, hi, i;
+    int32_t mn = 1 << 30, mx = -1;
+    char b[24];
+    uint16_t pp[4];
+    printf("phase 25a: LFO and velocity targets\n");
+    check(NUM_TARGETS_X == NUM_MOD_TARGETS + 27u && NUM_TARGETS_X <= 256u, "27 targets after the LXR's 229 (25b, 27a: 5)");
+    goto_mode(B_HOME, M_HOME);
+    ui.track = 0;
+    run_ms(60);
+    par_set(PAR_VOICE_LFO1, 1);                      /* (D1's LFO on D1) */
+    sound_open(S_LFO, 0);
+    run_ms(60);
+    for (h = 0; h < 2u && kk == 4u; h++)
+        for (k = 0; k < 4u; k++)
+            if (sect_par(0, S_LFO, h, k) == PAR_TARGET_LFO1) {
+                kk = k;
+                hh = h;
+                break;
+            }
+    check(kk < 4u, "D1's LFO page has the target");
+    if (hh) {
+        ui.half = 1;
+        ui.force = 1;
+        run_ms(60);
+    }
+    page_params(pp);
+    target_range(PAR_TARGET_LFO1, &lo, &hi);
+    par_set(PAR_TARGET_LFO1, hi);
+    run_ms(20);
+    turn(EN_K1 + kk, 1);
+    check(par[PAR_TARGET_LFO1] == NUM_MOD_TARGETS && lfo_mod[0].dest == PAR_FX_SEND1, "K past D1's last: D1's FX send");
+    par_format(b, PAR_TARGET_LFO1, par[PAR_TARGET_LFO1], sizeof b);
+    check(!strcmp(b, "FX"), "its name: FX");
+    turn(EN_K1 + kk, 30);
+    check(par[PAR_TARGET_LFO1] == NUM_TARGETS_X - 1u, "K to the last, no further");
+    turn(EN_K1 + kk, -(int32_t)NXT);
+    check(par[PAR_TARGET_LFO1] == hi, "K back: D1's last LXR target");
+    par_set(PAR_TARGET_LFO1, lo);
+    run_ms(20);
+    turn(EN_K1 + kk, -1);
+    check(par[PAR_TARGET_LFO1] == 0u, "K below D1's first: OFF");
+    turn(EN_K1 + kk, 1);
+    check(par[PAR_TARGET_LFO1] == lo, "up from OFF: D1's first");
+    par_set(PAR_TARGET_LFO1, NUM_MOD_TARGETS + 1u);  /* REV send */
+    run_ms(20);
+    shot("lfo-target-rev");
+    vp_set(PAR_VOICE_LFO1, 4);                       /* (to SN: the target goes with it) */
+    run_ms(20);
+    check(par[PAR_TARGET_LFO1] == NUM_MOD_TARGETS + 1u && lfo_mod[0].dest == PAR_REV_SEND1 + 3u,
+          "the LFO's voice to SN: SN's reverb send");
+    /* the LFO moves SN's reverb send */
+    par_set(PAR_REV_SEND1 + 3, 64);
+    par_set(PAR_FREQ_LFO1, 100);
+    par_set(PAR_AMOUNT_LFO1, 100);
+    par_set(PAR_WAVE_LFO1, 0);
+    for (i = 0; i < 100u; i++) {
+        run_ms(5);
+        mn = vc[3].rev_send < mn ? vc[3].rev_send : mn;
+        mx = vc[3].rev_send > mx ? vc[3].rev_send : mx;
+    }
+    check(mx - mn > 8000, "LFO 1 sweeps SN's reverb send");
+    par_set(PAR_AMOUNT_LFO1, 0);
+    par_set(PAR_TARGET_LFO1, 0);
+    vp_set(PAR_VOICE_LFO1, 1);
+    run_ms(20);
+    /* velocity: D2's own MICRO length; BITS over 0..15 */
+    par_set(PAR_VEL_DEST_1 + 1, NUM_MOD_TARGETS + 9u);
+    par_set(PAR_VELO_MOD_AMT_1 + 1, 127);
+    par_set(PAR_MDECAY1 + 1, 64);
+    run_ms(20);
+    check(velo_mod[1].dest == PAR_MDECAY1 + 1u, "VEL DEST: D2's own model knob 1");
+    voice_trigger(1, 127, SEQ_DEFAULT_NOTE);
+    run_ms(10);
+    k = mi[1].len;
+    voice_trigger(1, 1, SEQ_DEFAULT_NOTE);
+    run_ms(10);
+    check(k > 120u && mi[1].len < 10u, "velocity moves D2's LENGTH");
+    par_set(PAR_BITS1 + 1, 8);
+    par_set(PAR_VEL_DEST_1 + 1, NUM_MOD_TARGETS + 3u);
+    par_set(PAR_VELO_MOD_AMT_1 + 1, 30);
+    voice_trigger(1, 64, SEQ_DEFAULT_NOTE);
+    run_ms(10);
+    check(vc[1].bits >= 7u && vc[1].bits <= 8u, "BITS: a middle velocity leaves it near 8 (its own range)");
+    voice_trigger(1, 127, SEQ_DEFAULT_NOTE);
+    run_ms(10);
+    check(vc[1].bits > 8u, "BITS: a hard hit more");
+    par_format(b, PAR_VEL_DEST_1 + 1, NUM_MOD_TARGETS + 3u, sizeof b);
+    check(!strcmp(b, "Bits"), "its name: Bits");
+    par_set(PAR_VEL_DEST_1 + 1, 0);
+    par_set(PAR_VELO_MOD_AMT_1 + 1, 0);
+    par_set(PAR_BITS1 + 1, 0);
+    /* a kit keeps Elixir's targets, a byte past them is OFF */
+    {
+        static uint8_t kb[KIT_LEN];
+        kit_init_values(kb);
+        kb[PAR_TARGET_LFO1 + 2] = (uint8_t)(NUM_MOD_TARGETS + 5u);
+        kb[PAR_VEL_DEST_1 + 2] = (uint8_t)NUM_TARGETS_X;
+        kit_sanitize(kb);
+        check(kb[PAR_TARGET_LFO1 + 2] == NUM_MOD_TARGETS + 5u && kb[PAR_VEL_DEST_1 + 2] == 0u,
+              "kit: Elixir's target kept, one past them OFF");
+    }
+    run_ms(20);
+    goto_mode(B_HOME, M_HOME);
+}
+
+/* 25b: LFO 2 on every track: the page, the target, a sweep, adding to LFO 1, morph, a sound moved, the round trips */
+static void phase25b(void)
+{
+    uint32_t i, lo, hi, n;
+    int32_t mn = 1 << 30, mx = -1;
+    char b[24];
+    uint16_t pp[4];
+    uint32_t pg, np;
+    uint8_t sv[SOUND_MAX], kb[KIT_LEN], k2[KIT_LEN];
+    printf("phase 25b: LFO 2 on every track\n");
+    goto_mode(B_HOME, M_HOME);
+    ui.track = 1;
+    run_ms(40);
+    sound_open(S_LFO2, 0);
+    run_ms(40);
+    page_params(pp);
+    title_text(b, sizeof b, &pg, &np);
+    check(ui.sect == S_LFO2 && pp[0] == PAR_L2RATE1 + 1u && pp[1] == PAR_L2SYNC1 + 1u && pp[2] == PAR_L2AMT1 + 1u &&
+          pp[3] == PAR_L2WAVE1 + 1u && !strcmp(b, "TRK LFO 2"), "TRK LFO 2: D2's rate, sync, amount, wave");
+    ui.half = 1;
+    ui.force = 1;
+    run_ms(40);
+    page_params(pp);
+    check(pp[0] == PAR_L2RTRG1 + 1u && pp[1] == PAR_L2OFS1 + 1u && pp[2] == PAR_L2MODE1 + 1u && pp[3] == PAR_L2TGT1 + 1u,
+          "its second page: retrigger, offset, mode, target");
+    target_range(PAR_L2TGT1 + 1, &lo, &hi);
+    check(lo == MOD_TARGET_VOICE[1][0] && hi == MOD_TARGET_VOICE[1][1], "its targets: D2's own");
+    par_set(PAR_L2TGT1 + 1, 0);
+    run_ms(20);
+    turn(EN_K4, 1);
+    check(par[PAR_L2TGT1 + 1] == lo, "K4 up from OFF: D2's first target");
+    par_set(PAR_L2TGT1 + 1, hi);
+    run_ms(20);
+    turn(EN_K4, 1);
+    run_ms(20);
+    check(par[PAR_L2TGT1 + 1] == NUM_MOD_TARGETS && lfo2_mod[1].dest == PAR_FX_SEND1 + 1u, "past D2's last: D2's FX send");
+    par_format(b, PAR_L2TGT1 + 1, NUM_MOD_TARGETS + 2u, sizeof b);
+    check(!strcmp(b, "Tilt"), "its name: Tilt");
+    /* LFO 2 sweeps D2's tilt */
+    par_set(PAR_TILT1 + 1, 64);
+    par_set(PAR_L2TGT1 + 1, NUM_MOD_TARGETS + 2u);
+    par_set(PAR_L2RATE1 + 1, 100);
+    par_set(PAR_L2AMT1 + 1, 100);
+    run_ms(20);
+    shot("lfo2-tilt");
+    for (i = 0; i < 100u; i++) {
+        run_ms(5);
+        mn = vc[1].tilt < mn ? vc[1].tilt : mn;
+        mx = vc[1].tilt > mx ? vc[1].tilt : mx;
+    }
+    check(mx - mn > 40, "LFO 2 sweeps D2's tilt");
+    /* with LFO 1 on the same target: LFO 2 adds to it (both held at their top: square waves part way round) */
+    par_set(PAR_TILT1 + 1, 20);
+    par_set(PAR_VOICE_LFO1 + 1, 2);
+    par_set(PAR_TARGET_LFO1 + 1, NUM_MOD_TARGETS + 2u);
+    par_set(PAR_AMOUNT_LFO1 + 1, 40);
+    par_set(PAR_L2AMT1 + 1, 50);
+    par_set(PAR_WAVE_LFO1 + 1, LFO_REC);
+    par_set(PAR_L2WAVE1 + 1, LFO_REC);
+    par_set(PAR_FREQ_LFO1 + 1, 0);
+    par_set(PAR_L2RATE1 + 1, 0);
+    run_ms(20);
+    vc[1].lfo.phase = vc[1].lfo2.phase = 0x90000000u;
+    run_ms(5);
+    n = vc[1].tilt;
+    par_set(PAR_L2AMT1 + 1, 0);
+    run_ms(5);
+    check(n >= 108u && n <= 112u && vc[1].tilt >= 58u && vc[1].tilt <= 62u, "LFO 1 and LFO 2 on D2's tilt: they add");
+    par_set(PAR_AMOUNT_LFO1 + 1, 0);
+    par_set(PAR_TARGET_LFO1 + 1, 0);
+    par_set(PAR_WAVE_LFO1 + 1, 0);
+    par_set(PAR_TILT1 + 1, 64);
+    /* morph: LFO 2's switches at 50%; with them different, its amount down to 0 there and up to the other's */
+    for (i = 0; i < KIT_LEN; i++)
+        morph_par[i] = par[kit_par(i)];
+    par[PAR_L2TGT1 + 1] = (uint8_t)(NUM_MOD_TARGETS + 2u);
+    morph_par[kit_idx(PAR_L2TGT1 + 1)] = (uint8_t)(NUM_MOD_TARGETS + 1u);
+    check(morph_mix(PAR_L2AMT1 + 1, 100, 80, 64) == 50 && morph_mix(PAR_L2AMT1 + 1, 100, 80, 128) == 0 &&
+          morph_mix(PAR_L2AMT1 + 1, 100, 80, 255) == 80 &&
+          morph_mix(PAR_L2TGT1 + 1, NUM_MOD_TARGETS + 2u, NUM_MOD_TARGETS + 1u, 127) == NUM_MOD_TARGETS + 2u &&
+          morph_mix(PAR_L2TGT1 + 1, NUM_MOD_TARGETS + 2u, NUM_MOD_TARGETS + 1u, 128) == NUM_MOD_TARGETS + 1u,
+          "morph: the target switches at 50%, the amount through 0");
+    morph_par[kit_idx(PAR_L2TGT1 + 1)] = (uint8_t)(NUM_MOD_TARGETS + 2u);
+    check(morph_mix(PAR_L2AMT1 + 1, 100, 80, 128) == morph_lerp(100, 80, 128), "morph: the same switches: as any knob");
+    /* a sound from D2 on D3: LFO 2's target (one of D2's) and its retrigger (D2) become D3's */
+    par_set(PAR_L2TGT1 + 1, MOD_TARGET_VOICE[1][0] + 3u);
+    par_set(PAR_L2RTRG1 + 1, 2);
+    run_ms(10);
+    n = voice_get_par(1, sv);
+    voice_put_par(2, sv, n, 1);
+    run_ms(10);
+    printf("  a drum's sound: %u values (SOUND_MAX %u)\n", n, SOUND_MAX);
+    check(n < SOUND_MAX && par[PAR_L2TGT1 + 2] == MOD_TARGET_VOICE[2][0] + 3u && par[PAR_L2RTRG1 + 2] == 3u &&
+          lfo2_mod[2].dest == MOD_TARGETS[MOD_TARGET_VOICE[2][0] + 3u][1], "a sound from D2 on D3: LFO 2's D3's");
+    /* the project and the library keep LFO 2 and the insert */
+    par_set(PAR_L2RATE1 + 3, 77);
+    par_set(PAR_L2SYNC1 + 3, 5);
+    par_set(PAR_L2OFS1 + 3, 33);
+    par_set(PAR_INS1 + 3, INS_CHORUS);
+    par_set(PAR_INSC1 + 3, 99);
+    run_ms(10);
+    {
+        int rc = proj_save(1, "L2INS   ");
+        par_set(PAR_L2RATE1 + 3, 1);
+        par_set(PAR_INS1 + 3, 0);
+        par_set(PAR_INSC1 + 3, 1);
+        rc |= proj_load(1);
+        run_ms(10);
+        check(rc == 0 && par[PAR_L2RATE1 + 3] == 77 && par[PAR_L2SYNC1 + 3] == 5 && par[PAR_L2OFS1 + 3] == 33 &&
+              par[PAR_INS1 + 3] == INS_CHORUS && par[PAR_INSC1 + 3] == 99 && ins[3].type == INS_CHORUS,
+              "a project keeps LFO 2 and the insert");
+        rc = libkit_save(5, "L2KIT   ", 0);
+        par_set(PAR_L2RATE1 + 3, 1);
+        par_set(PAR_INS1 + 3, 0);
+        rc |= libkit_load(5, 0);
+        run_ms(10);
+        check(rc == 0 && par[PAR_L2RATE1 + 3] == 77 && par[PAR_INS1 + 3] == INS_CHORUS, "a library kit keeps them");
+        for (i = 0; i < KIT_LEN; i++)                /* a library kit from before them: their init values */
+            kb[i] = par[kit_par(i)];
+        rc = kl_write(KLK_KIT, 6, "OLD     ", kb, 398);
+        rc |= libkit_get(6, k2);
+        check(rc == 0 && k2[kit_idx(PAR_L2RATE1 + 3)] == 64 && k2[kit_idx(PAR_L2AMT1 + 1)] == 0 &&
+              k2[kit_idx(PAR_INS1 + 3)] == INS_OFF && k2[kit_idx(PAR_INSA1 + 3)] == 64 &&
+              k2[kit_idx(PAR_MC_MIX)] == kb[kit_idx(PAR_MC_MIX)], "a kit from 0.18-test4: LFO 2 and the insert at init");
+        kl_write(KLK_KIT, 5, "", 0, 0);
+        kl_write(KLK_KIT, 6, "", 0, 0);
+    }
+    for (i = PAR_L2RATE1; i < NPAR; i++)
+        par_set(i, init_kit_k(i));
+    run_ms(20);
+    goto_mode(B_HOME, M_HOME);
+}
+
+/* 27a: the INSERT: its page on the filter button, the type's knob names and values, morph, sound */
+static void phase27a(void)
+{
+    uint16_t pp[4];
+    char b[24];
+    uint32_t pg, np, i;
+    int32_t pk = 0;
+    printf("phase 27a: the insert\n");
+    goto_mode(B_HOME, M_HOME);
+    ui.track = 3;
+    run_ms(40);
+    press(B_SCL);
+    for (i = 0; i < 6u && ui.sect != S_INSERT; i++)
+        press(B_SCL);
+    page_params(pp);
+    title_text(b, sizeof b, &pg, &np);
+    check(ui.sect == S_INSERT && pp[0] == PAR_INS1 + 3u && pp[1] == PAR_INSA1 + 3u && pp[2] == PAR_INSB1 + 3u &&
+          pp[3] == PAR_INSC1 + 3u && !strcmp(b, "INSERT"), "the filter button: FILTER, SHAPE, then INSERT");
+    press(B_SCL);
+    check(ui.sect == S_FILTER, "again: back to FILTER");
+    sound_open(S_INSERT, 0);
+    run_ms(20);
+    turn(EN_K1, 2);
+    run_ms(20);
+    check(par[PAR_INS1 + 3] == INS_FLANGER && ins[3].type == INS_FLANGER, "K1: FLANGER");
+    par_format(b, PAR_INSC1 + 3, 64, sizeof b);
+    check(!strcmp(par_name(PAR_INSB1 + 3), "Rate") && !strcmp(par_name(PAR_INSC1 + 3), "Feedback") && !strcmp(b, "0"),
+          "FLANGER: Rate, Feedback (64: none)");
+    shot("insert-flanger");
+    turn(EN_K1, 4);
+    run_ms(20);
+    par_format(b, PAR_INSB1 + 3, 127, sizeof b);
+    check(par[PAR_INS1 + 3] == INS_SHIFT && !strcmp(par_name(PAR_INSB1 + 3), "Shift") && !strcmp(b, "+500Hz"),
+          "SHIFTER: Shift, +500Hz at 127");
+    par_format(b, PAR_INSB1 + 3, 1, sizeof b);
+    check(!strcmp(b, "-500Hz"), "..-500Hz at 1");
+    turn(EN_K1, 1);
+    run_ms(20);
+    par_format(b, PAR_INSB1 + 3, 64, sizeof b);
+    printf("  RING at 64: %s\n", b);
+    check(par[PAR_INS1 + 3] == INS_RING && !strcmp(par_name(PAR_INSC1 + 3), "AM") && !strcmp(b, "230Hz"),
+          "RING: Pitch in Hz, AM");
+    shot("insert-ring");
+    turn(EN_K1, -4);
+    run_ms(20);
+    check(par[PAR_INS1 + 3] == INS_CHORUS && !strcmp(par_name(PAR_INSC1 + 3), "Depth"), "CHORUS: Depth");
+    /* the snare through the chorus at full amount: it sounds, and the lock list has the knobs */
+    par_set(PAR_INSA1 + 3, 127);
+    voice_trigger(3, 127, SEQ_DEFAULT_NOTE);
+    for (i = 0; i < 40u; i++) {
+        run_ms(1);
+        pk = venv[3] > pk ? venv[3] : pk;
+    }
+    check(pk > 1000, "SN through the CHORUS");
+    check(par_lockable(PAR_INSB1 + 3) && par_lockable(PAR_INS1 + 3), "the insert's knobs lock");
+    /* morph: the type switches at 50%, AMOUNT through 0 when the types differ */
+    for (i = 0; i < KIT_LEN; i++)
+        morph_par[i] = par[kit_par(i)];
+    morph_par[kit_idx(PAR_INS1 + 3)] = INS_PHASER;
+    check(morph_mix(PAR_INS1 + 3, INS_CHORUS, INS_PHASER, 127) == INS_CHORUS &&
+          morph_mix(PAR_INS1 + 3, INS_CHORUS, INS_PHASER, 128) == INS_PHASER &&
+          morph_mix(PAR_INSA1 + 3, 127, 100, 128) == 0 && morph_mix(PAR_INSA1 + 3, 127, 100, 255) == 100 &&
+          morph_mix(PAR_INSB1 + 3, 0, 100, 128) == morph_lerp(0, 100, 128), "morph: the type at 50%, AMOUNT through 0");
+    /* the kit check: a type past the list is OFF */
+    {
+        uint8_t kb[KIT_LEN];
+        kit_init_values(kb);
+        kb[kit_idx(PAR_INS1 + 2)] = NINS;
+        kit_sanitize(kb);
+        check(kb[kit_idx(PAR_INS1 + 2)] == INS_OFF, "kit: an insert type past the list: OFF");
+    }
+    for (i = PAR_INS1; i < NPAR; i++)
+        par_set(i, init_kit_k(i));
+    run_ms(20);
+    /* P CHORD: its first knob is named Chord and shows the chord the engine plays */
+    par_set(PAR_MODEL1, MD_PL0 + PE_CHORD);
+    par_set(PAR_MDECAY1, 0);
+    run_ms(20);
+    {
+        char c0[12], c1[12], c2[12];
+        par_format(c0, PAR_MDECAY1, 0, sizeof c0);
+        par_set(PAR_MDECAY1, 127);
+        run_ms(20);
+        par_format(c1, PAR_MDECAY1, 127, sizeof c1);
+        par_set(PAR_MDECAY1, 50);
+        run_ms(20);
+        par_format(c2, PAR_MDECAY1, 50, sizeof c2);
+        printf("  P CHORD: 0 %s, 50 %s (plays %s), 127 %s\n", c0, c2, PL_CHORD_NAME[pl[0].u.ch.chord], c1);
+        check(!strcmp(par_name(PAR_MDECAY1), "Chord") && !strcmp(c0, "OCT") && !strcmp(c1, "M") &&
+              !strcmp(c2, PL_CHORD_NAME[pl[0].u.ch.chord]), "P CHORD: the knob names the chord it plays");
+    }
+    par_set(PAR_MODEL1, 0);
+    par_set(PAR_MDECAY1, init_kit_k(PAR_MDECAY1));
+    run_ms(20);
+    goto_mode(B_HOME, M_HOME);
+}
+
+/* 26: GROOVE. The hats' 16 steps over two bars: the block each hit lands in and its velocity */
+static uint32_t gr_rec(uint32_t *at, int32_t *vel, uint32_t max)
+{
+    uint32_t n = 0, b, c = trig_count[5];
+    seq_start(1);                                    /* (two bars at 120, 4 s, less half a step) */
+    for (b = 0; b < 4u * FS / BLOCK - 43u; b++) {
+        web_render(BLOCK);
+        if (trig_count[5] != c) {
+            c = trig_count[5];
+            if (n < max) {
+                at[n] = b;
+                vel[n] = vc[V_HAT].velo;
+            }
+            n++;
+        }
+    }
+    seq_stop_now();
+    run_ms(200);
+    return n;
+}
+static int gr_near(const uint32_t *at, uint32_t n, double want)   /* the hit nearest a block, its index */
+{
+    uint32_t j;
+    int best = 0;
+    for (j = 1; j < n && j < 40u; j++)
+        if (fabs(at[j] - want) < fabs(at[best] - want))
+            best = (int)j;
+    return best;
+}
+static int gr_same(const uint32_t *a, const int32_t *v, const uint32_t *b, const int32_t *w, uint32_t n)
+{                                                    /* (a run starts anywhere in a block: within one) */
+    uint32_t k;
+    for (k = 0; k < n; k++)
+        if ((a[k] > b[k] ? a[k] - b[k] : b[k] - a[k]) > 1u || v[k] != w[k])
+            return 0;
+    return 1;
+}
+static void phase26(void)
+{
+    static uint32_t a0[40], a1[40];
+    static int32_t v0[40], v1[40];
+    const double tick_blk = FS * 60.0 / 120.0 / 96.0 / BLOCK;   /* (a tick in blocks at 120) */
+    pattern_t *p = &pat[sq.active];
+    uint32_t k, n0, n1, i, ok, same, diff;
+    uint16_t pp[4];
+    char b[24];
+    uint32_t pg, np;
+    printf("phase 26: GROOVE\n");
+    seq_clear_pattern(p);
+    check(p->groove == 0 && p->gamt == GAMT_DEFAULT && !p->ghum && !p->gskip, "a cleared pattern: no groove");
+    par_set(PAR_BPM, 120);
+    p->shuffle = 0;
+    par[PAR_SHUFFLE] = 0;
+    for (k = 0; k < 16u; k++) {
+        main_set(p, 5, k, 1);
+        p->step[5][k].volume = 0x80u | 100u;
+    }
+    p->len[5] = 16;
+    /* the page */
+    goto_mode(B_ARP, M_EUCLID);
+    while (ui.page)
+        turn(EN_SELECT, -1);
+    turn(EN_SELECT, (int32_t)PG_GROOVE);
+    page_params(pp);
+    title_text(b, sizeof b, &pg, &np);
+    check(pp[0] == VP_GROOVE && pp[1] == VP_GAMT && pp[2] == VP_GHUM && pp[3] == VP_GFOLLOW && !strcmp(b, "GROOVE"),
+          "ARP: the GROOVE page after SCALE");
+    p->gamt = 0;
+    turn(EN_K1, 4);
+    check(p->groove == 4 && p->gamt == GAMT_DEFAULT, "K1: SW 66%, the amount from 0 to 100");
+    shot("groove-page");
+    p->groove = 0;
+    n0 = gr_rec(a0, v0, 40);
+    check(n0 == 32, "no groove: 32 hits in two bars");
+    /* each template at 100: its offsets in ticks and its velocities, step by step (the first bar) */
+    for (i = 1; i <= NGROOVE; i++) {
+        p->groove = (uint8_t)i;
+        p->gamt = 100;
+        n1 = gr_rec(a1, v1, 40);
+        ok = n1 >= 31u;                              /* (a first step early can't play before the start) */
+        for (k = 1; ok && k < 16u; k++) {
+            double w = GROOVE_T[i - 1][k];
+            int j = gr_near(a1, n1, a0[k] + w * tick_blk);
+            double d = ((double)a1[j] - a0[k]) / tick_blk;
+            int32_t wv = clamp32(100 + GROOVE_V[i - 1][k], 1, 127);
+            ok = fabs(d - w) <= 1.0 && v1[j] == (int32_t)(wv * 32768u / 127u);
+            if (!ok)
+                printf("  groove %u step %u: %.1f ticks (want %.0f), velocity %d (want %d)\n", i, k, d, w,
+                       v1[j] * 127 / 32768, wv);
+        }
+        check(ok, "a groove at 100: its ticks and velocities");
+    }
+    /* PUSH: the bar's first step early, before the loop ends (the next round's) */
+    p->groove = 10;
+    n1 = gr_rec(a1, v1, 40);
+    {
+        int j = gr_near(a1, n1, a0[16] - 3 * tick_blk);
+        check(fabs(((double)a1[j] - a0[16]) / tick_blk + 3.0) <= 1.0 && a1[j] < a0[16],
+              "PUSH: step 1 of the next round early");
+    }
+    /* amount 0 is no groove, bit for bit; a track that doesn't follow too */
+    p->groove = 7;
+    p->gamt = 0;
+    n1 = gr_rec(a1, v1, 40);
+    check(n1 == n0 && gr_same(a1, v1, a0, v0, n0), "amount 0: as no groove");
+    p->gamt = 100;
+    ui.track = 5;
+    turn(EN_K4, -1);
+    check(p->gskip == 1u << 5, "FOLLOW OFF: CH left out");
+    n1 = gr_rec(a1, v1, 40);
+    check(n1 == n0 && gr_same(a1, v1, a0, v0, n0), "CH not following: as no groove");
+    turn(EN_K4, 1);
+    /* half the amount: half the ticks */
+    p->groove = 4;
+    p->gamt = 50;
+    n1 = gr_rec(a1, v1, 40);
+    check(n1 == 32 && fabs(((double)(a1[1] - a1[0]) - (a0[1] - a0[0])) / tick_blk - 4.0) <= 1.0 &&
+          (a1[0] > a0[0] ? a1[0] - a0[0] : a0[0] - a1[0]) <= 1u, "SW 66% at 50: 4 ticks");   /* (a run starts
+                                                      * anywhere in a block) */
+    /* with SHUFFLE too: every hit still plays */
+    p->shuffle = 60;
+    par[PAR_SHUFFLE] = 60;
+    n1 = gr_rec(a1, v1, 40);
+    check(n1 == 32, "SHUFFLE and a groove: 32 hits");
+    p->shuffle = 0;
+    par[PAR_SHUFFLE] = 0;
+    /* HUMANIZE: within 3 ticks and 16 of velocity, the bars different, the same step's checks agreeing (32 hits) */
+    p->groove = 0;
+    p->ghum = 127;
+    n1 = gr_rec(a1, v1, 40);
+    ok = n1 == 32;
+    same = diff = 0;
+    for (k = 0; ok && k < 32u; k++) {
+        double d = ((double)a1[k] - a0[k]) / tick_blk;
+        ok = fabs(d) <= 4.0 && iabs(v1[k] - v0[k]) <= 17 * 32768 / 127;
+        if (k < 16u)
+            (a1[k] - a0[k] == a1[k + 16] - a0[k + 16] && v1[k] == v1[k + 16]) ? same++ : diff++;
+    }
+    check(ok && diff > 4u, "HUMANIZE 127: hits within 3 ticks, velocity within 16, each bar its own");
+    /* a project keeps it */
+    p->groove = 8;
+    p->gamt = 90;
+    p->ghum = 20;
+    p->gskip = 1u << 2;
+    {
+        int rc = proj_save(1, "GROOVE  ");
+        p->groove = p->gamt = p->ghum = p->gskip = 0;
+        rc |= proj_load(1);
+        p = &pat[sq.active];
+        check(rc == 0 && p->groove == 8 && p->gamt == 90 && p->ghum == 20 && p->gskip == 1u << 2,
+              "project: the groove, amount, HUMANIZE, follow");
+    }
+    seq_clear_pattern(p);
+    goto_mode(B_HOME, M_HOME);
+}
+
+/* 28: Elixir's filter types after the LXR's OFF: the names, K-turns from OFF up to CHORD on the FILTER page, the
+ * voice's type, a project round trip; an LXR kit's 0..7 keep their meaning */
+static void phase28(void)
+{
+    static const char *const NM[] = {"LP4", "COMB+", "COMB-", "ALLPASS", "VOWEL", "DUB BP", "CHORD"};
+    uint16_t pp[4];
+    uint32_t k, h, kk = 4;
+    char b[16];
+    printf("phase 28: filter types\n");
+    check(par_max(PAR_FILTER_TYPE_1) == F_LAST - 1u, "the filter type runs to CHORD");
+    for (k = 0; k < 7u; k++) {
+        par_format(b, PAR_FILTER_TYPE_1, F_OFF + k, sizeof b);
+        check(!strcmp(b, NM[k]), NM[k]);
+    }
+    par_format(b, PAR_FILTER_TYPE_1, F_OFF - 1u, sizeof b);
+    check(!strcmp(b, "OFF"), "OFF where it was");
+    goto_mode(B_HOME, M_HOME);
+    ui.track = 0;
+    run_ms(60);
+    sound_open(S_FILTER, 0);
+    run_ms(60);
+    for (h = 0; h < 2u && kk == 4u; h++)
+        for (k = 0; k < 4u; k++)
+            if (sect_par(0, S_FILTER, h, k) == PAR_FILTER_TYPE_1) {
+                kk = k;
+                break;
+            }
+    check(kk < 4u, "D1's FILTER page has the type");
+    if (h == 2u) {
+        ui.half = 1;
+        ui.force = 1;
+        run_ms(60);
+    }
+    page_params(pp);
+    par_set(PAR_FILTER_TYPE_1, F_OFF - 1u);
+    run_ms(20);
+    turn(EN_K1 + kk, 1);
+    check(par[PAR_FILTER_TYPE_1] == F_LP4 - 1u && vc[0].ftype == F_LP4, "K from OFF to LP4");
+    turn(EN_K1 + kk, 1);
+    check(par[PAR_FILTER_TYPE_1] == F_COMBP - 1u && vc[0].ftype == F_COMBP, "K to COMB+");
+    shot("filter-comb");
+    turn(EN_K1 + kk, 2);
+    check(par[PAR_FILTER_TYPE_1] == F_APF - 1u, "K to ALLPASS");
+    shot("filter-allpass");
+    turn(EN_K1 + kk, 10);
+    check(par[PAR_FILTER_TYPE_1] == F_LAST - 1u && vc[0].ftype == F_RESO, "K up to CHORD, no further");
+    shot("filter-chord");
+    /* playing D1 on each: the comb's line is D1's own, the note moves its pitch */
+    for (k = F_LP4; k <= F_LAST; k++) {
+        par_set(PAR_FILTER_TYPE_1, k - 1u);
+        voice_trigger(0, 100, 72);
+        run_ms(30);
+        check(vc[0].ftype == k && vc[0].flt.was == (k == F_DUB ? 0u : k), "D1 renders the type");
+    }
+    check(vc[0].flt.line == flt_line[0] && vc[0].flt.key == 12, "D1: its own line, the note's +12");
+    /* a project keeps them */
+    par_set(PAR_FILTER_TYPE_1 + 3, F_DUB - 1u);
+    par_set(PAR_FILTER_TYPE_1, F_COMBN - 1u);
+    run_ms(20);
+    {
+        int rc = proj_save(1, "FILTERS ");
+        par[PAR_FILTER_TYPE_1] = 0;
+        par[PAR_FILTER_TYPE_1 + 3] = 0;
+        rc |= proj_load(1);
+        run_ms(20);
+        check(rc == 0 && par[PAR_FILTER_TYPE_1] == F_COMBN - 1u && par[PAR_FILTER_TYPE_1 + 3] == F_DUB - 1u &&
+              vc[0].ftype == F_COMBN && vc[3].ftype == F_DUB, "project: COMB- on D1, DUB BP on SN");
+    }
+    par_set(PAR_FILTER_TYPE_1, INIT_KIT[8u + PAR_FILTER_TYPE_1]);
+    par_set(PAR_FILTER_TYPE_1 + 3, INIT_KIT[8u + PAR_FILTER_TYPE_1 + 3]);
+    run_ms(20);
+    goto_mode(B_HOME, M_HOME);
+}
+
 int main(int argc, char **argv)
 {
     uint32_t t;
@@ -4584,14 +5168,14 @@ int main(int argc, char **argv)
     {
         int rc;
         uint32_t send = par[PAR_REV_SEND1], ln = lock_get(&pat[sq.active], 0, 2, 0), ln2 = lock_get(&pat[sq.active], 0, 2, 1);
-        kits[7][kit_idx(PAR_REV_SIZE)] = 111;
+        kit_set1(7, kit_idx(PAR_REV_SIZE), 111);
         rc = proj_save(1, "V2      ");
         check(rc == 0, "project save (version 2)");
         par[PAR_REV_SEND1] = 0;
-        kits[7][kit_idx(PAR_REV_SIZE)] = 0;
+        kit_set1(7, kit_idx(PAR_REV_SIZE), 0);
         seq_clear_pattern(&pat[sq.active]);
         rc = proj_load(1);
-        check(rc == 0 && par[PAR_REV_SEND1] == send && kits[7][kit_idx(PAR_REV_SIZE)] == 111 &&
+        check(rc == 0 && par[PAR_REV_SEND1] == send && kit_at(7, kit_idx(PAR_REV_SIZE)) == 111 &&
               lock_get(&pat[sq.active], 0, 2, 0) == ln && lock_get(&pat[sq.active], 0, 2, 1) == ln2,
               "project load: sends, reverb, locks");
     }
@@ -4621,8 +5205,8 @@ int main(int argc, char **argv)
               pat[0].step[0][8].volume == (0x80 | 64), "version 1: settings and patterns");
         check(songs[0][0] == 5 && songs[0][1] == NUM_PATTERN - 1u && songs[0][2] == 0 && songs[0][3] == SONG_LOOP,
               "version 1: a song's pattern 41 becomes 32");
-        check(par[PAR_AUDIO_OUT2] == 0 && par[PAR_FX_SEND1 + 1] == 127 && kits[3][PAR_AUDIO_OUT4] == 0 &&
-              kits[3][kit_idx(PAR_FX_SEND1 + 3)] == 127 && par[PAR_REV_LEVEL] == 100,
+        check(par[PAR_AUDIO_OUT2] == 0 && par[PAR_FX_SEND1 + 1] == 127 && kit_at(3, PAR_AUDIO_OUT4) == 0 &&
+              kit_at(3, kit_idx(PAR_FX_SEND1 + 3)) == 127 && par[PAR_REV_LEVEL] == 100,
               "version 1: Out = FX BUS becomes FX send 127");
         proj_scan();
     }
@@ -4652,10 +5236,14 @@ int main(int argc, char **argv)
                         }
                     }
                 }
-            for (i = 0; i < NUM_KITS; i++)
+            for (i = 0; i < NUM_KITS; i++) {
+                uint8_t kb[KIT_LEN];
+                kit_get(i, kb);
                 for (k = 1; k < KIT_LEN; k++)
                     if (pass || k % 6u == 0u)
-                        kits[i][k] = (uint8_t)((k * 13u + i + 1u) & 127u);
+                        kb[k] = (uint8_t)((k * 13u + i + 1u) & 127u);
+                kit_put(i, kb);
+            }
             rc = proj_save(2, "DENSE   ");
             printf("  %s project: %s, %u bytes (a slot holds %u)\n", pass ? "dense" : "busy",
                    rc == 0 ? "saved" : rc == -20 ? "PROJECT TOO BIG" : "failed", rc == 0 ? pj_len(2) : pw.off,
@@ -4704,6 +5292,39 @@ int main(int argc, char **argv)
     phase_016t2();
     phase_016t3();
     phase24();
+    phase25a();
+    phase25b();
+    phase27a();
+    {   /* 25-0: the packed kit slots: the widths fit; a kit of each value's largest, and the init kit, back as put */
+        uint8_t a[KIT_LEN], b[KIT_LEN];
+        uint32_t i, ok = 1;
+        check(kit_pk_init() == 0, "the packed kit fits its slot");
+        printf("  kit slots: %u bits a kit, %u bytes (KIT_PK %u, KIT_LEN %u)\n", kit_pk_bits, (kit_pk_bits + 7u) / 8u,
+               KIT_PK, KIT_LEN);
+        kit_get(9, b);
+        for (i = 0; i < KIT_LEN; i++) {
+            uint32_t p = kit_par(i);
+            a[i] = (uint8_t)(p < NUM_PARAMS ? par_max(p) : par_max_k(p));
+        }
+        kit_put(9, a);
+        kit_get(9, a + 0);
+        for (i = 0; i < KIT_LEN; i++) {
+            uint32_t p = kit_par(i);
+            ok &= a[i] == (uint8_t)(p < NUM_PARAMS ? par_max(p) : par_max_k(p));
+        }
+        kit_init_values(a);
+        kit_put(9, a);
+        kit_get(9, a);
+        {
+            uint8_t c[KIT_LEN];
+            kit_init_values(c);
+            ok &= memcmp(a, c, KIT_LEN) == 0;
+        }
+        kit_put(9, b);
+        check(ok, "kit slots: each value's largest and the init kit back as put");
+    }
+    phase26();
+    phase28();
     gen_step_edit_test();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;

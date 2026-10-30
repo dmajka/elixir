@@ -884,6 +884,14 @@ static const int32_t PL_CH_REG[8][6] = {           /* the divide-down's registra
     {5536481, 0, 5536481, 0, 5536481, 0}, {5536481, 0, 0, 5536481, 0, 5536481}, {PL1 / 2, 0, 0, 0, 0, PL1 / 2},
     {0, PL1 / 2, 0, 0, 0, PL1 / 2}, {0, 1677722, 1677722, 0, 3355443, 10066330}};
 static const int32_t PL_CH_FADE[5] = {9227469, 7885291, 8220836, 8556380, 8891924};   /* .55 .47 .49 .51 .53 */
+static const char *const PL_CHORD_NAME[PL_CHN] = {"OCT", "5", "sus4", "m", "m7", "m9", "m11", "69", "M9", "M7", "M"};
+/* HysteresisQuantizer2(11, 0.075): the chord HARMONICS picks, from the last one (the UI names it the same way) */
+static int32_t ch_quant(int32_t harm, int32_t last)
+{
+    int32_t x = pm(pm(harm, 17112760), PL_CHN * PL1) - (PL1 >> 1);   /* x 1.02 x 11 - 0.5 */
+    int32_t q = (x + (x > last * PL1 ? -1258291 : 1258291) + (PL1 >> 1)) >> 24;
+    return pclamp(q, 0, PL_CHN - 1);
+}
 typedef struct { pl_ss_t dd[5]; pl_wto_t wt[5]; int32_t mlp, tlp, chord; } pl_ch_t;
 static void ch_init(pl_ch_t *d) { memset(d, 0, sizeof *d); { int i; for (i = 0; i < 5; i++) d->dd[i].f = 16777; } }
 static void ch_render(pl_ch_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
@@ -892,11 +900,7 @@ static void ch_render(pl_ch_t *d, const pl_par_t *p, int32_t *out, int32_t *aux,
     uint32_t i;
     PL_ONE_POLE(d->mlp, p->morph, 1677722);          /* 0.1 */
     PL_ONE_POLE(d->tlp, p->timbre, 1677722);
-    {   /* HysteresisQuantizer2(11, 0.075): the chord */
-        int32_t x = pm(pm(p->harm, 17112760), PL_CHN * PL1) - (PL1 >> 1);   /* x 1.02 x 11 - 0.5 */
-        int32_t q = (x + (x > d->chord * PL1 ? -1258291 : 1258291) + (PL1 >> 1)) >> 24;
-        d->chord = pclamp(q, 0, PL_CHN - 1);
-    }
+    d->chord = ch_quant(p->harm, d->chord);
     rg = pm(pmax(PL1 - pm(d->mlp, 36071014), 0), 117423063);   /* (1 - 2.15 m) x 6.999 */
     ri = rg >> 24;
     rf = rg & 0xFFFFFF;

@@ -49,9 +49,14 @@ static void engine_init(void)
     reverb_init();
     perf_init();
     seq_init();
-    for (i = 0; i < NUM_KITS; i++) {
-        kit_init_values(kits[i]);
-        memcpy(kit_names[i], "Init    ", KIT_NAME_LEN);
+    kit_pk_init();                                  /* (25-0: the slots' packing; ui_test checks it fits) */
+    {
+        uint8_t k[KIT_LEN];
+        kit_init_values(k);
+        for (i = 0; i < NUM_KITS; i++) {
+            kit_put(i, k);
+            memcpy(kit_names[i], "Init    ", KIT_NAME_LEN);
+        }
     }
 #if ELIXIR_FACTORY_KITS
     kit_factory_fill();

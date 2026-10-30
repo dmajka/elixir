@@ -30,6 +30,7 @@ typedef struct {
     uint32_t hcrc;                                   /* the header's above */
 } kl_hdr_t;
 _Static_assert(sizeof(kl_hdr_t) == 28u, "the library's commit record");
+_Static_assert(KL_HDR + KIT_LEN <= 512u, "a library kit: 2 pages");
 
 static struct {
     int16_t at[2][128];                              /* [kind - 1][slot]: the first page of its newest entry, -1 none */
@@ -305,7 +306,7 @@ static uint32_t kl_count(uint32_t kind)
  * values. Moved to another drum, what pointed at its own voice (a velocity or LFO target, the LFO's retrigger, the
  * cross modulation's source) points at the new one. */
 enum { SK_DRUM, SK_SNARE, SK_CYM, SK_HAT };
-#define SOUND_MAX 64u
+#define SOUND_MAX 96u                               /* (25b, 27a: 64 -> 96) */
 static uint32_t voice_kind(uint32_t v) { return v < 3u ? SK_DRUM : v == 3u ? SK_SNARE : v == 4u ? SK_CYM : SK_HAT; }
 /* a kit's (kit layout) voice v as a sound's values: their count */
 static uint32_t voice_get(const uint8_t *kit, uint32_t v, uint8_t *out)
@@ -331,10 +332,10 @@ static uint32_t voice_move(uint32_t p, uint32_t x, uint32_t from, uint32_t to)
     uint32_t lo = MOD_TARGET_VOICE[from][0], hi = MOD_TARGET_VOICE[from][1];
     if (from == to)
         return x;
-    if (p >= PAR_VEL_DEST_1 && p <= PAR_VEL_DEST_6)
+    if ((p >= PAR_VEL_DEST_1 && p <= PAR_VEL_DEST_6) || (p >= PAR_L2TGT1 && p < PAR_L2TGT1 + 6u))
         return x >= lo && x <= hi ? x - lo + MOD_TARGET_VOICE[to][0] : x;
     if ((p >= PAR_VOICE_LFO1 && p <= PAR_VOICE_LFO6) || (p >= PAR_RETRIGGER_LFO1 && p <= PAR_RETRIGGER_LFO6) ||
-        (p >= PAR_XSRC1 && p < PAR_XSRC1 + 6u))
+        (p >= PAR_XSRC1 && p < PAR_XSRC1 + 6u) || (p >= PAR_L2RTRG1 && p < PAR_L2RTRG1 + 6u))
         return x == from + 1u ? to + 1u : x;
     return x;
 }
@@ -383,7 +384,7 @@ static int libkit_save(uint32_t n, const char *name, int morph)
     uint32_t i;
     for (i = 0; i < KIT_LEN; i++) {
         uint32_t p = kit_par(i);
-        k[i] = morph && morph_amt && !morph_excluded(p) ? (uint8_t)morph_lerp(par[p], morph_par[i], morph_amt) : par[p];
+        k[i] = morph && morph_amt && !morph_excluded(p) ? (uint8_t)morph_mix(p, par[p], morph_par[i], morph_amt) : par[p];
     }
     return kl_write(KLK_KIT, n, name, k, KIT_LEN);
 }
@@ -479,14 +480,16 @@ static void sb_build(uint32_t v)                     /* the list for voice v */
             sb_add_kit(SB_LIB, i, k, v);
     for (i = 0; i < NUM_KITS; i++) {
         uint32_t n0 = sb_n, j, w;
-        sb_add_kit(SB_SLOT, i, kits[i], v);
+        uint8_t ks[KIT_LEN];
+        kit_get(i, ks);                              /* (25-0: the slot unpacked) */
+        sb_add_kit(SB_SLOT, i, ks, v);
 #if ELIXIR_FACTORY_KITS
         if (i < FACTORY_NKITS) {                     /* (a slot still as the factory kit it started with: once) */
             uint8_t a[SOUND_MAX], c[SOUND_MAX];
             kit_factory_values(i, k);
             for (j = n0; j < sb_n;) {
                 w = (sb_list[j] >> 11) & 7u;
-                if (voice_get(kits[i], w, a) == voice_get(k, w, c) && !memcmp(a, c, voice_get(k, w, c)))
+                if (voice_get(ks, w, a) == voice_get(k, w, c) && !memcmp(a, c, voice_get(k, w, c)))
                     sb_list[j] = sb_list[--sb_n];
                 else
                     j++;
@@ -528,7 +531,8 @@ static uint32_t sb_values(uint32_t e, uint32_t v, uint8_t *out, uint32_t *from)
             return 0;
         return voice_get(k, w, out);
     case SB_SLOT:
-        return voice_get(kits[i], w, out);
+        kit_get(i, k);
+        return voice_get(k, w, out);
     default:
 #if ELIXIR_FACTORY_KITS
         kit_factory_values(i, k);

@@ -322,7 +322,10 @@ static int32_t decay_calc(decay_eg_t *e)            /* DecayEg_calc */
 }
 
 /* ---------------------------------------------------------- filter --- */
-enum { F_LP = 1, F_HP, F_BP, F_UBP, F_NOTCH, F_PEAK, F_LP2, F_OFF };
+/* 28: Elixir's types after the LXR's OFF (a kit's value: the type - 1; the LXR's 0..7 keep their meaning) */
+enum { F_LP = 1, F_HP, F_BP, F_UBP, F_NOTCH, F_PEAK, F_LP2, F_OFF, F_LP4, F_COMBP, F_COMBN, F_APF, F_VOWEL, F_DUB,
+       F_RESO, F_LAST = F_RESO };
+#define FLT_LINE 512u            /* 28: COMB's line per voice (voices.c flt_line, .ram_buf): down to FS / 512, 86 Hz */
 typedef struct {
     int32_t s1, s2, a, b;        /* states, Q16 */
     uint32_t fval;               /* the cutoff setting 0..1, Q16 */
@@ -330,6 +333,13 @@ typedef struct {
     int32_t R;                   /* the damping in use (1 at the top of the range) */
     /* the block's coefficients (svf_coef) */
     int32_t cx, cs1, cs2, g0, gg0, g2, r2, lp2f, lp2q;
+    /* 28: Elixir's types. e: LP4's and ALLPASS's four stages, VOWEL's two and RESONATOR's three band-passes (lp, bp
+     * each), COMB's loop filter; fb: the last output fed back. k1..k4: their coefficients (svf_coef) */
+    int32_t e[6], fb, k1, k2, k3, k4;
+    int16_t *line;               /* COMB's line (none: the DJ filter's, which never runs one) */
+    uint16_t wp;
+    int8_t key;                  /* the played note - 60: COMB and RESONATOR follow it */
+    uint8_t was, clr;            /* the type the states are for; clear them at the next block (a hit, a switch) */
     uint8_t dirty;
 } svf_t;
 
@@ -365,6 +375,205 @@ static inline int32_t q16_to_s16(int32_t v)          /* x 0x7FFF, saturated (FIL
     return sat16((v * 32767) >> 16);
 }
 
+#define S_LIM (128 << 16)                        /* the states' rail (+-64 would read 0xFFC00000: build.py's ROM guard) */
+
+/* ------------------------------------------- 28: Elixir's filter types --- */
+/* After the LXR's eight, on the same knobs: CUTOFF, RESONANCE and DRIVE (the input's soft clip, as theirs).
+ *   LP4       four one-poles (zero-delay, g / (1 + g)) with tanh on the input and the 4th fed back (the loop solved
+ *             without a sample's delay: stable at any cutoff): the ladder's squelch, ringing on the edge of
+ *             oscillation at the top of RESONANCE. The pass band made up by 1 + k / 2, into a tanh
+ *   COMB+     a comb at the cutoff's pitch: 86 Hz (CUTOFF 0) up 5 octaves, and the played note moves it (it rings in
+ *   COMB-     the scale). RESONANCE is the feedback (0..0.93), through a one-pole that softens the ringing. COMB+
+ *             rings at the pitch's harmonics, COMB- (negative feedback) at the odd ones of the octave below: hollow
+ *   ALLPASS   four first-order allpasses at the cutoff with RESONANCE as feedback, mixed with the dry: a phaser's
+ *             two notches, standing still until an LFO moves the cutoff
+ *   VOWEL     two band-passes at a vowel's first two formants; CUTOFF sweeps A E I O U, RESONANCE is their Q
+ *   DUB BP    the LXR's BP into a tanh driven by DRIVE: the ring of a dub chord stab
+ *   RESONATOR three band-passes at the note, a fifth and an octave (the pitch as COMB's), RESONANCE their Q
+ * VOWEL's and RESONATOR's band-passes are Chamberlin's (2 sin(w / 2), stable below ~7 kHz, where they're clamped) */
+static int32_t exp2_q16(int32_t y);                  /* (fxbus.c) */
+static inline int32_t mulr16(int32_t a, int32_t b) { return (int32_t)(((int64_t)a * b + 32768) >> 16); }   /* (the
+                                                       * loops round: truncating left a DC and a limit cycle) */
+static inline int32_t tanh20(int32_t x)              /* fast_tanh in Q20, in and out */
+{
+    int32_t a = x < 0 ? -x : x, r;
+    if (a >= (2 << 20)) {
+        r = 1 << 20;
+    } else {
+        uint32_t i = (uint32_t)a >> 12, f = (uint32_t)a & 4095u;
+        r = (FASTTANH[i] << 4) + (((FASTTANH[i + 1u] - FASTTANH[i]) * (int32_t)f) >> 8);
+    }
+    return x < 0 ? -r : r;
+}
+static const int16_t VOWEL_F[5][2] = {{800, 1150}, {400, 1700}, {300, 2250}, {450, 800}, {330, 650}};   /* A E I O U */
+static int32_t cham_coef(int32_t w)                  /* 2 sin(w / 2) ~ w - w^3 / 24, w Q16 rad/sample */
+{
+    if (w > 62000)                                   /* (~6.7 kHz) */
+        w = 62000;
+    return w - mulq16(mulq16(w, w), w) / 24;
+}
+static int32_t flt_octaves(const svf_t *s)           /* COMB's and RESONATOR's pitch over 86 Hz, Q16 octaves */
+{
+    return (int32_t)(((int64_t)s->fval * 5) + ((int32_t)s->key * 65536 / 12));
+}
+static void svf_coef(svf_t *s);
+static void svf_coef28(svf_t *s)
+{
+    int32_t r = 65536 - s->q;                        /* RESONANCE 0 .. 0.98 */
+    switch (s->was) {
+    case F_LP4:
+    case F_APF: {
+        int32_t g4;
+        s->k1 = (int32_t)(((uint64_t)(uint32_t)s->g << 16) / (uint32_t)(65536 + s->g));   /* G = g / (1 + g) */
+        s->k2 = s->was == F_LP4 ? r * 4 - (r >> 4) : mulq16(r, 58982);   /* LP4: k ~3.9; ALLPASS: 0.9 */
+        g4 = mulq16(mulq16(s->k1, s->k1), mulq16(s->k1, s->k1));
+        s->k3 = g4;                                  /* LP4: G^4 and 1 / (1 + k G^4), the loop solved at once */
+        s->k4 = (int32_t)(((uint64_t)1 << 32) / (uint32_t)(65536 + mulq16(s->k2, g4)));
+        break;
+    }
+    case F_COMBP:
+    case F_COMBN: {
+        int32_t pd = exp2_q16(-flt_octaves(s)) << 9;     /* the period, Q16 samples: 512 at 86 Hz */
+        int32_t fb = mulq16(r, 62259);               /* 0 .. 0.93 */
+        s->k1 = clamp32(pd, 2 << 16, (int32_t)(FLT_LINE - 2u) << 16);
+        s->k2 = s->was == F_COMBN ? -fb : fb;
+        s->k3 = 65536 - mulq16(fb, 52429);           /* the output: 1 - 0.8 |fb| */
+        break;
+    }
+    case F_VOWEL: {
+        uint32_t x = s->fval * 4u, i = x >> 16, fr = x & 0xFFFFu;
+        int32_t f1, f2;
+        if (i >= 4u) {
+            i = 3u;
+            fr = 65536u;
+        }
+        f1 = VOWEL_F[i][0] + (int32_t)(((VOWEL_F[i + 1u][0] - VOWEL_F[i][0]) * (int32_t)fr) >> 16);
+        f2 = VOWEL_F[i][1] + (int32_t)(((VOWEL_F[i + 1u][1] - VOWEL_F[i][1]) * (int32_t)fr) >> 16);
+        s->k1 = cham_coef((int32_t)((uint32_t)f1 * 411775u / FS));   /* 2 pi f / FS, Q16 (2 pi = 411775) */
+        s->k2 = cham_coef((int32_t)((uint32_t)f2 * 411775u / FS));
+        s->k3 = 65536 - mulq16(r, 60293);            /* the damping: 1 .. 0.1 (Q 1 .. 10) */
+        break;
+    }
+    case F_RESO: {
+        int32_t w = (int32_t)(((int64_t)exp2_q16(flt_octaves(s)) * 804) >> 16);   /* 2 pi 86.13 / FS = 804 Q16 */
+        s->k1 = cham_coef(w);
+        s->k2 = cham_coef(w + (w >> 1));
+        s->k3 = cham_coef(w * 2);
+        s->k4 = 65536 - mulq16(r, 63570);            /* the damping: 1 .. 0.05 */
+        break;
+    }
+    default:
+        break;
+    }
+}
+static inline int32_t cham_bp(int32_t *st, int32_t x, int32_t c, int32_t d)   /* st: lp, bp; returns the bp */
+{
+    int32_t lp = st[0] + mulr16(c, st[1]);
+    int32_t hp = x - lp - mulr16(d, st[1]);
+    int32_t bp = st[1] + mulr16(c, hp);
+    st[0] = clamp32(lp, -S_LIM, S_LIM);
+    st[1] = clamp32(bp, -S_LIM, S_LIM);
+    return st[1];
+}
+static void svf_block28(svf_t *s, uint32_t type, int16_t *buf)
+{
+    uint32_t i;
+    if (type != s->was || s->clr) {                  /* (a switch or a hit: from rest, the line silent) */
+        memset(s->e, 0, sizeof s->e);
+        s->fb = 0;
+        if (s->line && (type == F_COMBP || type == F_COMBN))
+            memset(s->line, 0, FLT_LINE * sizeof s->line[0]);
+        s->clr = 0;
+        if (type != s->was) {
+            s->was = (uint8_t)type;
+            s->dirty = 1;
+        }
+    }
+    if (s->dirty)
+        svf_coef(s);
+    switch (type) {
+    case F_LP4: {
+        /* (Zavalishin's: each stage y = G u + (1 - G) s, so the 4th is G^4 u + S, S from the states alone; u = x - k y4
+         * solved for this sample, then the tanh on u. The stages are bounded by the tanh's 1, and k < 4 rings out) */
+        const int32_t G = s->k1, B = 65536 - s->k1, k = s->k2, g4 = s->k3, inv = s->k4, mk = 65536 + (k >> 1);
+        int32_t *e = s->e;                           /* (Q20 inside: in Q16 the rounding rang on as a limit cycle) */
+        for (i = 0; i < BLOCK; i++) {
+            int32_t x = softclip((buf[i] * 2 * s->drive) >> 12) << 4, u, j;
+            int32_t S = mulr16(B, mulr16(G, mulr16(G, mulr16(G, e[0]) + e[1]) + e[2]) + e[3]);
+            int32_t y4 = mulr16(mulr16(g4, x) + S, inv);
+            u = tanh20(x - mulr16(k, y4));
+            for (j = 0; j < 4; j++) {                /* (TPT one-poles) */
+                int32_t v = mulr16(u - e[j], G);
+                u = v + e[j];
+                e[j] = u + v;
+            }
+            buf[i] = (int16_t)q16_to_s16(fast_tanh(mulr16((u + 8) >> 4, mk)));
+        }
+        break;
+    }
+    case F_APF: {
+        const int32_t G = s->k1, fbk = s->k2;
+        int32_t *e = s->e, y = s->fb;
+        for (i = 0; i < BLOCK; i++) {
+            int32_t x = softclip((buf[i] * 2 * s->drive) >> 12), u = clamp32(x + mulr16(fbk, y), -S_LIM, S_LIM), j;
+            for (j = 0; j < 4; j++) {
+                int32_t v = mulr16(u - e[j], G), lp = v + e[j];
+                e[j] = clamp32(lp + v, -S_LIM, S_LIM);
+                u = 2 * lp - u;
+            }
+            y = u;
+            buf[i] = (int16_t)q16_to_s16((x + y) >> 1);
+        }
+        s->fb = y;
+        break;
+    }
+    case F_COMBP:
+    case F_COMBN: {
+        const int32_t pd = s->k1, fbk = s->k2, og = s->k3;
+        const uint32_t pi = (uint32_t)pd >> 16, pf = (uint32_t)pd & 0xFFFFu;
+        int16_t *ln = s->line;
+        uint32_t wp = s->wp;
+        int32_t lp = s->e[0];
+        if (!ln)
+            return;
+        for (i = 0; i < BLOCK; i++) {
+            int32_t x = softclip((buf[i] * 2 * s->drive) >> 12), w;
+            uint32_t r0 = (wp - pi) & (FLT_LINE - 1u), r1 = (r0 - 1u) & (FLT_LINE - 1u);
+            int32_t d = (ln[r0] + (((ln[r1] - ln[r0]) * (int32_t)(pf >> 2)) >> 14)) << 3;   /* (Q13 -> Q16) */
+            lp += mulr16(d - lp, 45875);             /* (the loop's one-pole, 0.7) */
+            w = clamp32(x + mulr16(fbk, lp), -(4 << 16) + 8, (4 << 16) - 8);
+            ln[wp] = (int16_t)(w >> 3);
+            wp = (wp + 1u) & (FLT_LINE - 1u);
+            buf[i] = (int16_t)q16_to_s16(fast_tanh(mulr16(w, og)));
+        }
+        s->wp = (uint16_t)wp;
+        s->e[0] = lp;
+        break;
+    }
+    case F_VOWEL: {
+        const int32_t c1 = s->k1, c2 = s->k2, d = s->k3, og = (65536 + d) >> 1;
+        for (i = 0; i < BLOCK; i++) {
+            int32_t x = softclip((buf[i] * 2 * s->drive) >> 12);
+            int32_t y = cham_bp(&s->e[0], x, c1, d) + mulr16(cham_bp(&s->e[2], x, c2, d), 39322);   /* (F2 x 0.6) */
+            buf[i] = (int16_t)q16_to_s16(fast_tanh(mulr16(y, og)));
+        }
+        break;
+    }
+    case F_RESO: {
+        const int32_t c1 = s->k1, c2 = s->k2, c3 = s->k3, d = s->k4, og = d + 8192;
+        for (i = 0; i < BLOCK; i++) {
+            int32_t x = softclip((buf[i] * 2 * s->drive) >> 12);
+            int32_t y = cham_bp(&s->e[0], x, c1, d) + mulr16(cham_bp(&s->e[2], x, c2, d), 45875) +
+                        mulr16(cham_bp(&s->e[4], x, c3, d), 39322);   /* (the root, the fifth x 0.7, the octave x 0.6) */
+            buf[i] = (int16_t)q16_to_s16(fast_tanh(mulr16(y, og)));
+        }
+        break;
+    }
+    default:
+        break;
+    }
+}
+
 static void svf_init(svf_t *s)                       /* SVF_init */
 {
     s->s1 = s->s2 = s->a = s->b = 0;
@@ -373,7 +582,8 @@ static void svf_init(svf_t *s)                       /* SVF_init */
     s->fval = 0x4000;                                /* SVF_directSetFilterValue(0.25) */
     s->dirty = 1;
 }
-static void svf_reset(svf_t *s) { s->s1 = s->s2 = s->a = s->b = 0; }
+/* (28: Elixir's states and COMB's line at the voice's next block, on the core that renders it) */
+static void svf_reset(svf_t *s) { s->s1 = s->s2 = s->a = s->b = 0; s->clr = 1; }
 
 static void svf_coef(svf_t *s)                       /* SVF_recalcFreq + the per-block terms of SVF_calcBlockZDF */
 {
@@ -400,15 +610,24 @@ static void svf_coef(svf_t *s)                       /* SVF_recalcFreq + the per
         s->lp2f = (int32_t)fl;
         s->lp2q = (int32_t)(((oq * 91750) >> 16) + (oq << 16) / (int32_t)(65536 - fl));
     }
+    if (s->was >= F_LP4)
+        svf_coef28(s);
     s->dirty = 0;
 }
 
-#define S_LIM (128 << 16)                        /* the states' rail (+-64 would read 0xFFC00000: build.py's ROM guard) */
 static void svf_block(svf_t *s, uint32_t type, int16_t *buf)   /* SVF_calcBlockZDF */
 {
     uint32_t i;
-    if (type == F_OFF || type < F_LP || type > F_OFF)
+    if (type > F_OFF && type <= F_LAST && type != F_DUB) {
+        svf_block28(s, type, buf);
         return;
+    }
+    if (type == F_OFF || type < F_LP || type > F_LAST)
+        return;
+    if (s->was || s->clr) {                          /* (28: back from one of Elixir's types: those states go) */
+        s->was = 0;
+        s->clr = 0;
+    }
     if (s->dirty)
         svf_coef(s);
     if (type == F_LP2) {
@@ -434,7 +653,7 @@ static void svf_block(svf_t *s, uint32_t type, int16_t *buf)   /* SVF_calcBlockZ
             int32_t y1 = (int32_t)(((int64_t)cx * x + (int64_t)cs2 * s2 + (int64_t)cs1 * s1) >> 16);
             int32_t xx = x - y1, sc = softclip(s1);
             int32_t y0 = (int32_t)(((int64_t)g0 * sc + (int64_t)gg0 * xx) >> 16);
-            int32_t ugb = mulq16(r2, y0), o;
+            int32_t ugb = mulr16(r2, y0), o;
             s1 = sc + (int32_t)(((int64_t)g2 * (xx - ugb)) >> 16);
             s2 = s2 + (int32_t)(((int64_t)g2 * y0) >> 16);
             s1 = clamp32(s1, -S_LIM, S_LIM);
@@ -448,6 +667,10 @@ static void svf_block(svf_t *s, uint32_t type, int16_t *buf)   /* SVF_calcBlockZ
                 break;
             case F_BP:
                 o = y0;
+                break;
+            case F_DUB:                              /* (28: the BP into a tanh, 2 .. 14.8 x by DRIVE; below 24 (-69 */
+                o = y0 - clamp32(y0, -24, 24);       /* .. dB) left out: the BP's own rounding hum, made loud) */
+                o = fast_tanh((int32_t)(((int64_t)o * (8192 + 2 * s->drive)) >> 12));
                 break;
             case F_UBP:
                 o = ugb;

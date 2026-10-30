@@ -46,8 +46,40 @@ typedef struct {
     uint8_t sroot, scale, sfollow;               /* 19a: the scale (root C..B, SCALE_*) and the tracks that follow
                                                   * it (bit t) */
     uint8_t mel[NTRACK][8];                      /* 20: the track's melody (ML_*: MEL_* and its settings) */
+    uint8_t groove, gamt, ghum, gskip;           /* 26: the GROOVE (0 off, 1.. GROOVE_T's + 1), its amount (100: as
+                                                  * written), HUMANIZE 0..127, the tracks that don't follow (bit t) */
 } pattern_t;
 #define NLINK 8u
+/* 26: the grooves. A step's offset in 24ths of a step (its ticks at 1x; + late) and its velocity's, by its place in
+ * the bar (s & 15), both scaled by the pattern's amount / 100. SWING nn: the second 16th of each 8th at nn% of it */
+#define NGROOVE 12u
+#define GAMT_DEFAULT 100u
+static const int8_t GROOVE_T[NGROOVE][16] = {
+    {0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2},                       /* SWING 54 */
+    {0, 4, 0, 4, 0, 4, 0, 4, 0, 4, 0, 4, 0, 4, 0, 4},                       /* SWING 58 */
+    {0, 6, 0, 6, 0, 6, 0, 6, 0, 6, 0, 6, 0, 6, 0, 6},                       /* SWING 62 */
+    {0, 8, 0, 8, 0, 8, 0, 8, 0, 8, 0, 8, 0, 8, 0, 8},                       /* SWING 66 */
+    {0, 10, 0, 10, 0, 10, 0, 10, 0, 10, 0, 10, 0, 10, 0, 10},               /* SWING 71 */
+    {0, 1, 2, 1, 3, 1, 2, 1, 0, 1, 2, 1, 3, 1, 2, 1},                       /* LAZY: 2 and 4 late, the 8ths behind */
+    {0, 5, -2, 7, 4, 6, -3, 8, 0, 5, -1, 7, 3, 6, -2, 9},                   /* DILLA: loose, uneven */
+    {0, 6, 0, 5, 0, 7, 0, 6, 0, 6, 0, 5, 0, 7, 0, 6},                       /* 2-STEP */
+    {0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 4, 0},                       /* DUB: the off-beats late */
+    {-3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3},       /* PUSH: ahead */
+    {0},                                                                    /* TECHNO: accents only */
+    {0, 2, 4, 2, 0, -2, 0, 2, 0, 2, 4, 2, 0, -2, 0, 2}};                    /* BROKEN: 5 + 3 */
+static const int8_t GROOVE_V[NGROOVE][16] = {
+    {0, -4, 0, -4, 0, -4, 0, -4, 0, -4, 0, -4, 0, -4, 0, -4},
+    {0, -6, 0, -6, 0, -6, 0, -6, 0, -6, 0, -6, 0, -6, 0, -6},
+    {0, -8, 0, -8, 0, -8, 0, -8, 0, -8, 0, -8, 0, -8, 0, -8},
+    {0, -10, 0, -10, 0, -10, 0, -10, 0, -10, 0, -10, 0, -10, 0, -10},
+    {0, -12, 0, -12, 0, -12, 0, -12, 0, -12, 0, -12, 0, -12, 0, -12},
+    {0, -10, -4, -10, 4, -10, -4, -10, 0, -10, -4, -10, 4, -10, -4, -10},
+    {0, -14, -6, -20, 4, -12, -8, -18, 0, -16, -4, -22, 6, -10, -8, -16},
+    {0, -12, -4, 8, 0, -12, -4, 8, 0, -12, -4, 8, 0, -12, -4, 8},
+    {0, 0, -16, 0, 0, 0, -16, 0, 0, 0, -16, 0, 0, 0, -16, 0},
+    {0},
+    {0, 12, -12, 12, 0, 12, -12, 12, 0, 12, -12, 12, 0, 12, -12, 12},
+    {16, -8, -8, -8, -8, 16, -8, -8, 16, -8, -8, -8, -8, 16, -8, -8}};
 
 /* the tracks' clocks (0.5): ticks a step, slowest to fastest; 1x the LXR's 24 */
 #define NCLK 11u
@@ -326,6 +358,8 @@ static void seq_clear_pattern(pattern_t *p)
     p->sroot = scl_last.root;                        /* (19a: a blank pattern, the scale last chosen) */
     p->scale = scl_last.scale;
     p->sfollow = SFOLLOW_DEFAULT;
+    p->groove = p->ghum = p->gskip = 0;
+    p->gamt = GAMT_DEFAULT;
 }
 static int pat_blank(const pattern_t *p)             /* nothing on and no generator: a blank pattern */
 {
@@ -741,6 +775,43 @@ static void mel_reset(uint32_t t)                    /* the melody from its star
     sq.mlast[t] = 0;
 }
 
+/* 26: GROOVE and HUMANIZE for track t's step s in its time round loop (the playing pattern's: a generator's live
+ * copy plays with it too). HUMANIZE draws from the step and the round, so the step's checks before, at and after it
+ * agree: up to +-3 24ths and +-16 velocity at 127. *dv: the velocity's change (may be 0) */
+static uint32_t groove_hash(uint32_t t, uint32_t s, uint32_t loop)
+{
+    uint32_t h = (t + 1u) * 0x9E3779B1u ^ (s + 1u) * 0x85EBCA77u ^ (loop + 1u) * 0xC2B2AE3Du;
+    h ^= h >> 15;
+    h *= 0x2C1B3C6Du;
+    h ^= h >> 12;
+    h *= 0x297A2D39u;
+    return h ^ (h >> 15);
+}
+static int32_t groove_at(uint32_t t, uint32_t s, uint32_t loop, int32_t *dv)
+{
+    const pattern_t *p = &pat[sq.active];
+    int32_t d = 0, v = 0;
+    if ((p->gskip >> t) & 1u) {
+        if (dv)
+            *dv = 0;
+        return 0;
+    }
+    if (p->groove && p->groove <= NGROOVE) {
+        d = GROOVE_T[p->groove - 1u][s & 15u] * (int32_t)p->gamt;
+        d = (d + (d < 0 ? -50 : 50)) / 100;
+        v = GROOVE_V[p->groove - 1u][s & 15u] * (int32_t)p->gamt / 100;
+    }
+    if (p->ghum) {
+        uint32_t h = groove_hash(t, s, loop);
+        int32_t a = (int32_t)(h & 0xFFu) - 128, b = (int32_t)((h >> 8) & 0xFFu) - 128;   /* (-128..127) */
+        d += (a * (int32_t)p->ghum * 3 + (a < 0 ? -127 * 64 : 127 * 64)) / (127 * 128);
+        v += b * (int32_t)p->ghum * 16 / (127 * 128);
+    }
+    if (dv)
+        *dv = v;
+    return d;
+}
+
 static uint32_t shift_flam(const pattern_t *p, uint32_t t, uint32_t s, uint32_t pos, uint32_t loop)
 {                                                    /* seq_getShiftFlamPattern */
     uint32_t tm, pt;
@@ -756,6 +827,7 @@ static uint32_t shift_flam(const pattern_t *p, uint32_t t, uint32_t s, uint32_t 
     tm = p->timing[t][s];
     pt = FLAM_PAT[(tm & 15u) < 6u ? tm & 15u : 0u];
     sh = ((int32_t)(tm >> 4) - 7) * 3;              /* 8 shifts a step, 24 ticks: x3 */
+    sh = clamp32(sh + groove_at(t, s, loop, 0), -23, 23);   /* (26: the groove's, within the steps either side) */
     if (sh == 0)
         return pos == POS_CUR ? pt : 0u;
     if (sh > 0)
@@ -782,6 +854,12 @@ static void step_hit(uint32_t t, const pattern_t *p, uint32_t s, uint32_t loop, 
     }
     if (mel_on(&pat[sq.active], t))                  /* (20: the melody's note and length) */
         note = mel_note(t, s, occ, &ln);
+    {                                                /* (26: the groove's and HUMANIZE's velocity) */
+        int32_t gv;
+        groove_at(t, s, loop, &gv);
+        if (gv && vel)
+            vel = (uint32_t)clamp32((int32_t)vel + gv, 1, 127);
+    }
     if (!(r & 7u) && !(r & RAT_BOUNCE) && dens_rat(p, t, s))
         r = 1u;                                      /* (19d: BUILD's ratchets: 2 hits, 1/32) */
     if (m && m->on) {

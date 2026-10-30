@@ -64,7 +64,20 @@ enum {
     PAR_MC_SRC,
     PAR_MC_GAIN,
     PAR_MC_MIX,
-    NPAR
+    PAR_L2RATE1,                                 /* 25b: each track's LFO 2 (voices.c vc[].lfo2): RATE, AMOUNT, TARGET
+                                                  * (25a's list, its own voice's), WAVE, MODE, SYNC, RETRIGGER, OFFSET */
+    PAR_L2AMT1 = PAR_L2RATE1 + 6,
+    PAR_L2TGT1 = PAR_L2AMT1 + 6,
+    PAR_L2WAVE1 = PAR_L2TGT1 + 6,
+    PAR_L2MODE1 = PAR_L2WAVE1 + 6,
+    PAR_L2SYNC1 = PAR_L2MODE1 + 6,
+    PAR_L2RTRG1 = PAR_L2SYNC1 + 6,
+    PAR_L2OFS1 = PAR_L2RTRG1 + 6,
+    PAR_INS1 = PAR_L2OFS1 + 6,                   /* 27a: each track's INSERT (voices.c ins_block): its type (INS_*), */
+    PAR_INSA1 = PAR_INS1 + 6,                    /* .. AMOUNT (0: dry, whatever the type), and two knobs the type */
+    PAR_INSB1 = PAR_INSA1 + 6,                   /* .. names (RATE / SHIFT / PITCH, FEEDBACK / DEPTH / SHAPE) */
+    PAR_INSC1 = PAR_INSB1 + 6,
+    NPAR = PAR_INSC1 + 6
 };
 #define KIT_LEN (END_OF_SOUND_PARAMETERS + NPAR - NUM_PARAMS)
 #define KIT_GAP (NUM_PARAMS - END_OF_SOUND_PARAMETERS)
@@ -121,6 +134,39 @@ static uint32_t lock_target_idx(uint32_t p)          /* (Elixir's parameter p: i
 {
     return NUM_MOD_TARGETS + p - NUM_PARAMS - (p > PAR_REV_TYPE ? 1u : 0u);
 }
+/* 25a: LFO and velocity targets past the LXR's 229 (a kit's target byte): Elixir's parameters. The first XT_NV are
+ * per voice and mean the LFO's destination voice's (VEL DEST: its own voice's), so a voice's list is the LXR's for
+ * it and then these; the rest are the kit's own. No switches (model, filter type, choke, output): a moving one
+ * would click. The LXR's numbers keep their meaning; an older Elixir loads these as OFF */
+static const uint16_t XT_PAR[] = {PAR_FX_SEND1, PAR_REV_SEND1, PAR_TILT1, PAR_BITS1, PAR_RND_PITCH1, PAR_RND_DECAY1,
+                                  PAR_RND_FILTER1, PAR_RND_PAN1, PAR_XAMT1, PAR_MDECAY1, PAR_MDAMP1, PAR_MMAT1,
+                                  PAR_MPOS1, PAR_MEXC1, PAR_MTENS1,
+                                  PAR_REV_SIZE, PAR_REV_DAMP, PAR_REV_LEVEL, PAR_ECHOREV, PAR_GLITCH, PAR_FXDIRT,
+                                  PAR_MDIRT_AMT,
+                                  PAR_L2RATE1, PAR_L2AMT1, PAR_INSA1, PAR_INSB1, PAR_INSC1};   /* (25b, 27a: per voice) */
+#define XT_NV 15u
+#define XT_NV2 22u                                   /* (the per-voice ones added after the kit's) */
+#define NXT (sizeof XT_PAR / sizeof XT_PAR[0])
+#define NUM_TARGETS_X (NUM_MOD_TARGETS + NXT)
+_Static_assert(NUM_MOD_TARGETS + sizeof XT_PAR / sizeof XT_PAR[0] <= 256u, "a kit's target byte");
+static uint32_t target_ok(uint32_t t) { return t < NUM_TARGETS_X; }   /* (27a: all 256 of a byte, now) */
+static uint32_t xt_par(uint32_t idx, uint32_t vi)   /* a target past the LXR's, for voice vi: the parameter (0 none) */
+{
+    uint32_t k = idx - NUM_MOD_TARGETS;
+    if (idx < NUM_MOD_TARGETS || k >= NXT)
+        return 0;
+    return XT_PAR[k] + (k < XT_NV || k >= XT_NV2 ? (vi < NVOICE ? vi : 0u) : 0u);
+}
+static uint32_t lfo_voice(uint32_t l)                /* LFO l's destination voice (PAR_VOICE_LFO: 1..6; OFF: D1's */
+{                                                    /* .. list, as the UI's target_range) */
+    uint32_t v = par[PAR_VOICE_LFO1 + l];
+    return v >= 1u && v <= 6u ? v - 1u : 0u;
+}
+static uint32_t mod_dest(uint32_t idx, uint32_t vi)  /* a target byte -> the parameter (0: none) */
+{
+    return idx < NUM_MOD_TARGETS ? MOD_TARGETS[idx][1] : xt_par(idx, vi);
+}
+
 /* the largest value of Elixir's parameters */
 static uint32_t par_max_k(uint32_t p)
 {
@@ -138,8 +184,18 @@ static uint32_t par_max_k(uint32_t p)
         return NXMODE - 1u;
     if (p >= PAR_MODEL1 && p < PAR_MODEL1 + 6u)
         return NMODEL - 1u;
-    if (p >= PAR_LFOMODE1 && p < PAR_LFOMODE1 + 6u)
+    if ((p >= PAR_LFOMODE1 && p < PAR_LFOMODE1 + 6u) || (p >= PAR_L2MODE1 && p < PAR_L2MODE1 + 6u))
         return NLFOMODE - 1u;
+    if (p >= PAR_L2TGT1 && p < PAR_L2TGT1 + 6u)
+        return NUM_TARGETS_X - 1u;
+    if (p >= PAR_L2WAVE1 && p < PAR_L2WAVE1 + 6u)
+        return NLFO - 1u;
+    if (p >= PAR_L2SYNC1 && p < PAR_L2SYNC1 + 6u)
+        return 11;
+    if (p >= PAR_L2RTRG1 && p < PAR_L2RTRG1 + 6u)
+        return 6;
+    if (p >= PAR_INS1 && p < PAR_INS1 + 6u)
+        return NINS - 1u;
     if (p >= PAR_GATE1 && p < PAR_GATE1 + 6u)
         return 1;
     if (p == PAR_DSYNC)
@@ -165,6 +221,33 @@ static uint32_t morph_lerp(uint32_t a, uint32_t b, uint32_t x)
     uint32_t f = (uint32_t)((int32_t)(a * 256u) + ((int32_t)b - (int32_t)a) * (int32_t)x) & 0xFFFFu;
     return (f & 0xFFu) < 0x7Fu ? f >> 8 : (f >> 8) + 1u;
 }
+/* .. 28: the filter type moves through its values as the LXR's, but one of Elixir's types at either end switches at
+ * 50% (no sweep through the types between) */
+/* .. 25b, 27a: LFO 2's switches (target, wave, mode, sync, retrigger) and the insert's type switch at 50%; when they
+ * differ between the kits, LFO 2's amount and the insert's AMOUNT go down to 0 there and up again (a x (1 - 2m), then
+ * b x (2m - 1)), so nothing jumps. (a, b: par[] and morph_par[], as every caller has them) */
+static int morph_l2_differs(uint32_t vi)
+{
+    static const uint16_t SW[5] = {PAR_L2TGT1, PAR_L2WAVE1, PAR_L2MODE1, PAR_L2SYNC1, PAR_L2RTRG1};
+    uint32_t i;
+    for (i = 0; i < 5u; i++)
+        if (par[SW[i] + vi] != morph_par[kit_idx(SW[i] + vi)])
+            return 1;
+    return 0;
+}
+static uint32_t morph_mix(uint32_t p, uint32_t a, uint32_t b, uint32_t x)
+{
+    if (p >= PAR_FILTER_TYPE_1 && p <= PAR_FILTER_TYPE_6 && (a >= F_OFF || b >= F_OFF) && a != b)
+        return x < 128u ? a : b;
+    if (p >= PAR_L2TGT1 && p < PAR_L2OFS1)          /* (target, wave, mode, sync, retrigger: in a row) */
+        return x < 128u ? a : b;
+    if (p >= PAR_INS1 && p < PAR_INS1 + 6u)
+        return x < 128u ? a : b;
+    if ((p >= PAR_L2AMT1 && p < PAR_L2AMT1 + 6u && morph_l2_differs(p - PAR_L2AMT1)) ||
+        (p >= PAR_INSA1 && p < PAR_INSA1 + 6u && par[PAR_INS1 + p - PAR_INSA1] != morph_par[kit_idx(PAR_INS1 + p - PAR_INSA1)]))
+        return x < 128u ? (a * (128u - x) + 64u) / 128u : (b * (x - 128u) + 63u) / 127u;
+    return morph_lerp(a, b, x);
+}
 static int morph_excluded(uint32_t p)            /* the outputs and the modulation targets stay the kit's */
 {
     return (p >= PAR_AUDIO_OUT1 && p <= PAR_AUDIO_OUT6) || (p >= PAR_VEL_DEST_1 && p <= PAR_VEL_DEST_6) ||
@@ -183,7 +266,7 @@ static uint32_t par_base(uint32_t p)
                 if (auto_par[t][k] == p)
                     return auto_val[t][k];
     if (par_sound(p) && morph_amt && !morph_excluded(p))
-        return morph_lerp(par[p], morph_par[kit_idx(p)], morph_amt);
+        return morph_mix(p, par[p], morph_par[kit_idx(p)], morph_amt);
     return par[p];
 }
 
@@ -316,7 +399,7 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
         return;
     }
     if (p >= PAR_VEL_DEST_1 && p <= PAR_VEL_DEST_6) {                /* a modTargets index -> the parameter */
-        velo_mod[p - PAR_VEL_DEST_1].dest = itg < NUM_MOD_TARGETS ? MOD_TARGETS[itg][1] : 0u;
+        velo_mod[p - PAR_VEL_DEST_1].dest = (uint16_t)mod_dest(itg, p - PAR_VEL_DEST_1);
         return;
     }
     if (p >= PAR_WAVE_LFO1 && p <= PAR_WAVE_LFO6) {
@@ -324,7 +407,13 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
         return;
     }
     if (p >= PAR_TARGET_LFO1 && p <= PAR_TARGET_LFO6) {
-        lfo_mod[p - PAR_TARGET_LFO1].dest = itg < NUM_MOD_TARGETS ? MOD_TARGETS[itg][1] : 0u;
+        lfo_mod[p - PAR_TARGET_LFO1].dest = (uint16_t)mod_dest(itg, lfo_voice(p - PAR_TARGET_LFO1));
+        return;
+    }
+    if (p >= PAR_VOICE_LFO1 && p <= PAR_VOICE_LFO6) {                /* (25a: a voice's own target moves with it) */
+        uint32_t l = p - PAR_VOICE_LFO1, t = par[PAR_TARGET_LFO1 + l];
+        if (t >= NUM_MOD_TARGETS)
+            lfo_mod[l].dest = (uint16_t)mod_dest(t, lfo_voice(l));
         return;
     }
     if (p >= PAR_RETRIGGER_LFO1 && p <= PAR_RETRIGGER_LFO6) {
@@ -580,6 +669,32 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
             voice_hold(p - PAR_GATE1, 0);
         break;
     default:
+        if (p >= PAR_L2RATE1 && p < PAR_INS1) {     /* 25b: LFO 2, as LFO 1's (its target: its own voice's) */
+            uint32_t vi = (p - PAR_L2RATE1) % 6u;
+            lfo_t *l = &vc[vi].lfo2;
+            switch ((p - PAR_L2RATE1) / 6u) {
+            case 0: l->rate = (uint32_t)f; lfo_update_inc(l); break;
+            case 1: lfo2_mod[vi].amount = f; break;
+            case 2: lfo2_mod[vi].dest = (uint16_t)mod_dest(itg < NUM_TARGETS_X ? itg : 0u, vi); break;
+            case 3: l->wave = (uint8_t)pick(itg < NLFO ? itg : 0u, (uint32_t)f, mod, NLFO); break;
+            case 4: lfo_mode_set(l, pick(itg < NLFOMODE ? itg : 0u, (uint32_t)f, mod, NLFOMODE)); break;
+            case 5: l->sync = (uint8_t)(itg > 11u ? 0u : itg); lfo_update_inc(l); break;
+            case 6: l->retrig = (uint8_t)(mod ? (7u * (uint32_t)f) >> 16 : itg > 6u ? 0u : itg); break;
+            default: l->offset = f >= 65536 ? 0xFFFFFFFFu : (uint32_t)f << 16; break;
+            }
+            break;
+        }
+        if (p >= PAR_INS1 && p < NPAR) {             /* 27a: the insert (voices.c ins_block) */
+            ins_t *n = &ins[(p - PAR_INS1) % 6u];
+            uint8_t v = (uint8_t)(mod ? (127u * (uint32_t)f) >> 16 : itg & 127u);
+            switch ((p - PAR_INS1) / 6u) {
+            case 0: n->type = (uint8_t)pick(itg < NINS ? itg : 0u, (uint32_t)f, mod, NINS); break;
+            case 1: n->a = v; break;
+            case 2: n->b = v; break;
+            default: n->c = v; break;
+            }
+            break;
+        }
         if (p >= PAR_MDECAY1 && p < PAR_LFOMODE1) { /* the model's knobs, 0..127 (24: MICRO's on every voice) */
             uint32_t vi = (p - PAR_MDECAY1) % 6u;
             micro_t *u = &mi[vi];
@@ -618,17 +733,28 @@ static void snd_refresh(uint32_t p)                 /* apply a parameter's value
 /* ------------------------------------------------- modulation nodes --- */
 /* modulationNode.c modNode_updateValue: the target at its value / 127 + amount x (source x 2 - 1), 0..1 */
 static uint32_t mod_touched[(NPAR + 31) / 32];
-static void modnode_update(modnode_t *m, int32_t val)
+static void modnode_move(modnode_t *m, int32_t val, int32_t from)   /* from: where it moves from (-1: its value) */
 {
     int32_t nv;
     m->last = val;
+    m->nv = -1;
     if (!m->dest || !m->amount)
         return;
-    nv = (int32_t)q16_of(par_base(m->dest)) + (int32_t)(((int64_t)m->amount * (2 * val - 65536)) >> 16);
+    if (from >= 0) {
+        nv = from;
+    } else if (m->dest >= NUM_PARAMS) {              /* (25a: Elixir's, over their own range: BITS 0..15) */
+        uint32_t mx = par_max_k(m->dest), b = par_base(m->dest);
+        nv = (int32_t)(b >= mx ? 65536u : b * 65536u / mx);
+    } else {
+        nv = (int32_t)q16_of(par_base(m->dest));
+    }
+    nv += (int32_t)(((int64_t)m->amount * (2 * val - 65536)) >> 16);
     nv = clamp32(nv, 0, 65536);
     snd_apply(m->dest, (uint32_t)(nv * 127) >> 16, (uint32_t)nv, 1);
     mod_touched[m->dest >> 5] |= 1u << (m->dest & 31u);
+    m->nv = nv;
 }
+static void modnode_update(modnode_t *m, int32_t val) { modnode_move(m, val, -1); }
 /* once a block, before the voices: what was modulated goes back to its value, then the velocity and the LFOs move
  * their targets again (modNode_resetTargets, modNode_reassignVeloMod, lfo_dispatchNextValue) */
 static void modnodes_block(void)
@@ -647,6 +773,18 @@ static void modnodes_block(void)
         modnode_update(&velo_mod[i], velo_mod[i].last);
     for (i = 0; i < NVOICE; i++)
         modnode_update(&lfo_mod[i], lfo_calc(&vc[i].lfo));
+    for (i = 0; i < NVOICE; i++) {                   /* 25b: LFO 2 adds to what moved its target before it this block
+                                                      * (the LXR's velocity and LFO 1 each start from the value) */
+        modnode_t *m = &lfo2_mod[i];
+        int32_t from = -1, j;
+        for (j = (int32_t)(3u * NVOICE) - 1; m->dest && from < 0 && j >= 0; j--) {
+            const modnode_t *o = j >= 2 * NVOICE ? &lfo2_mod[j - 2 * NVOICE] : j >= NVOICE ? &lfo_mod[j - NVOICE]
+                                                                                           : &velo_mod[j];
+            if (o != m && (j < 2 * NVOICE || j - 2 * NVOICE < (int32_t)i) && o->dest == m->dest && o->nv >= 0)
+                from = o->nv;
+        }
+        modnode_move(m, lfo_calc(&vc[i].lfo2), from);
+    }
 }
 /* after modnodes_block: each voice's cutoff moved by its hit's random offset and by its cross-mod source's envelope
  * (XM_FILTER: last block's, voices.c venv), from where the kit, the locks and the LFO put it; back next block */

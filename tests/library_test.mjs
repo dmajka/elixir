@@ -37,7 +37,7 @@ const expectStatus = async (p, st, what) => {
 // 1. info
 let info = await lib.info();
 console.log(`  info: proto ${info.proto}, ${info.version}, ${info.nlog} projects, ${info.nkits} kits of ${info.kitLen}`);
-check(info.proto === 1 && info.nlog === 5 && info.nkits === 64 && info.kitLen === 398, "info");   // (0.16: 377 + 21 bytes)
+check(info.proto === 1 && info.nlog === 5 && info.nkits === 64 && info.kitLen === 470, "info");   // (0.16: 377 + 21 bytes; 25b, 27a: + 72)
 
 // 2. LXR kits in
 let kits = [];
@@ -60,8 +60,9 @@ if (existsSync(kitDir)) {
     const back = sndBytes(k.name, k.data).subarray(8), orig = kits[i].data;
     for (let j = 0; j < orig.length; j++, total++) {
       const out = j >= 215 && j <= 220 && orig[j] >= 6;
+      const tw = j >= 203 && j <= 208 && orig[j] >= 14;   // (25-0: a transient wave past the table: 0, as it plays)
       fxbus += out;
-      same += back[j] === (out ? 0 : orig[j]);
+      same += back[j] === (out || tw ? 0 : orig[j]);
     }
   }
   console.log(`  kits read back: ${same} of ${total} bytes as in the files (${fxbus} Out = FX BUS as sends)`);

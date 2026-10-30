@@ -23,11 +23,12 @@
 enum { M_HOME, M_PATTERN, M_SONG, M_SOUND, M_STEP, M_PERF, M_EUCLID, M_FX, M_MIXER, M_CONFIG, M_SAVE, M_LOAD,
        M_LAST, M_RECOPT, M_KEYS, NMODE };
 enum { S_OSC, S_AEG, S_MOD, S_FM, S_CLICK, S_FILTER, S_LFO, S_MIX, S_SHAPE, S_RANDOM, S_XMOD, S_MODEL, S_LFOM,
-       S_GATE, NSECT };
-#define NSPG 28                                      /* the sound pages a track can have (sections x halves) */
+       S_GATE, S_LFO2, S_INSERT, NSECT };
+#define NSPG 32                                      /* the sound pages a track can have (sections x halves) */
 static const char *const SECT_NAME[NSECT] = {"OSCILLATOR", "AMP EG", "MOD EG / VELO", "FM", "TRANSIENT", "FILTER",
                                              "LFO", "MIX", "SHAPE", "RANDOM PER HIT", "CROSS MOD / CHOKE", "MODEL",
-                                             "LFO MODE", "GATE"};
+                                             "LFO MODE", "GATE", "TRK LFO 2", "INSERT"};   /* (25b: "TRK": PERF
+                                                  * has the global LFO 2) */
 enum { IO_KIT, IO_PATTERN, IO_SONG, IO_MORPH, IO_SOUND, IO_PROJECT, IO_FACTORY, NIO };   /* (FACTORY: LOAD, a kit bank) */
 static const char *const IO_NAME[NIO] = {"KIT", "PATTERN", "SONG", "MORPH", "SOUND", "PROJECT", "FACTORY"};
 #if ELIXIR_FACTORY_KITS
@@ -42,7 +43,7 @@ static const uint8_t WHITE_KEY[16] = {0, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 
 static const uint8_t BLACK_KEY[11] = {1, 3, 5, 8, 10, 13, 15, 17, 20, 22, 25};
 
 /* virtual parameters: what the cards edit that is not in par[] */
-enum { VP_BASE = 0x200, VP_NONE = VP_BASE, VP_IO_TYPE, VP_IO_SLOT, VP_NAME_POS, VP_NAME_CHAR, VP_NAME_CASE,
+enum { VP_BASE = 0x400, VP_NONE = VP_BASE, VP_IO_TYPE, VP_IO_SLOT, VP_NAME_POS, VP_NAME_CHAR, VP_NAME_CASE,
        VP_SONG_PAT, VP_SONG_NUM, VP_LEDS, VP_AUTOSAVE, VP_ACCEL, VP_PALETTE, VP_TRACK_VOL, VP_FX_SUB, VP_MASTER,
        VP_DJ, VP_REPEAT, VP_TAPE, VP_M1, VP_M4 = VP_M1 + NMACRO - 1, VP_MSEL, VP_MTARGET, VP_MMIN, VP_MMAX,
        VP_COND, VP_RAT_N, VP_RAT_RATE, VP_RAT_FADE, VP_ACTION, VP_GMODE, VP_GA, VP_GB, VP_GC, VP_CLOCK,
@@ -50,10 +51,12 @@ enum { VP_BASE = 0x200, VP_NONE = VP_BASE, VP_IO_TYPE, VP_IO_SLOT, VP_NAME_POS, 
        VP_LINK, VP_LSTART, VP_LAMT, VP_DEPTH, VP_LWHEN, VP_LTGT, VP_LEFF, VP_LWIN, VP_KOCT, VP_KVEL, VP_KACC, VP_PKEEP, VP_KB_SRC,
        VP_IO_SRC, VP_IO_TRACK, VP_DIR, VP_RCH, VP_RCH2, VP_RKNOBS, VP_CAKIT, VP_EH2, VP_ER2, VP_EOP, VP_PMEM,
        VP_DENS, VP_GHOST, VP_BUILD, VP_SROOT, VP_SCALE, VP_SFOLLOW, VP_LEN,   /* (19) */
+       VP_GROOVE, VP_GAMT, VP_GHUM, VP_GFOLLOW,      /* (26: GROOVE) */
        VP_STCH, VP_STSIZE, VP_STLEN, VP_STVARY,      /* (0.16: STUTTER) */
        VP_MEL, VP_MEL_LAST = VP_MEL + NML - 1,       /* 20: the track's melody (pattern_t mel: ML_*) */
        VP_GL, VP_GL_LAST = VP_GL + NGLFO * NGLSET - 1,   /* 0.13: the global LFOs' settings (gls: NGLSET each) */
        VP_P2, VP_P2_LAST = VP_P2 + 7 };
+_Static_assert(NPAR <= VP_BASE, "the virtual parameters after the parameters (25b + 27a: NPAR 525, past 0x200)");
 /* the ACTION page's action (OCT+ does it); 0.10: those of the track's generator (gen_acts) */
 enum { ACT_NONE, ACT_DICE, ACT_COMMIT, ACT_UNDO, ACT_RESET, NACT };
 
@@ -169,13 +172,16 @@ static uint32_t track_voice(uint32_t t) { return t < 6u ? t : 5u; }
 static uint32_t track_page(uint32_t t) { return t; }
 /* Elixir's sections (S_SHAPE ..): the first of each six per-voice parameters, by half (0: none). MODEL: the DRUM
  * voices' only */
-static const uint16_t K_PAGES[6][8] = {{PAR_SHAPE1, PAR_DRIVE1, PAR_BITS1, PAR_TILT1},
+static const uint16_t K_PAGES[8][8] = {{PAR_SHAPE1, PAR_DRIVE1, PAR_BITS1, PAR_TILT1},
                                        {PAR_RND_PITCH1, PAR_RND_DECAY1, PAR_RND_FILTER1, PAR_RND_PAN1},
                                        {PAR_XSRC1, PAR_XMODE1, PAR_XAMT1, PAR_CHOKE1},
                                        {PAR_MODEL1, PAR_MDECAY1, PAR_MDAMP1, PAR_MMAT1,
                                         PAR_MPOS1, PAR_MEXC1, PAR_MTENS1, 0},
                                        {PAR_LFOMODE1},    /* (0.13) */
-                                       {PAR_GATE1}};      /* (19b) */
+                                       {PAR_GATE1},       /* (19b) */
+                                       {PAR_L2RATE1, PAR_L2SYNC1, PAR_L2AMT1, PAR_L2WAVE1,   /* (25b: LFO 1's order, */
+                                        PAR_L2RTRG1, PAR_L2OFS1, PAR_L2MODE1, PAR_L2TGT1},   /* .. MODE for VOICE) */
+                                       {PAR_INS1, PAR_INSA1, PAR_INSB1, PAR_INSC1}};         /* (27a) */
 /* the parameter on knob k of section s's half h for track t (0: none). 24: MODEL on SN-HH: the model alone but on
  * MICRO; MICRO's second page REVERSE, TENSION on knobs 1, 2 (it has no POSITION) */
 static uint32_t sect_par(uint32_t t, uint32_t s, uint32_t h, uint32_t k)
@@ -194,7 +200,7 @@ static uint32_t sect_par(uint32_t t, uint32_t s, uint32_t h, uint32_t k)
 static uint32_t sect_group(uint32_t s)
 {
     static const uint8_t G[NSECT] = {S_OSC, S_AEG, S_AEG, S_OSC, S_OSC, S_FILTER, S_LFO, S_MIX, S_FILTER, S_LFO, S_LFO,
-                                     S_OSC, S_LFO, S_AEG};
+                                     S_OSC, S_LFO, S_AEG, S_LFO, S_FILTER};
     return G[s];
 }
 
@@ -216,7 +222,7 @@ static int sect_half_used(uint32_t t, uint32_t s, uint32_t h)
 }
 /* the sections in page order (0.14: LFO MODE right after the LFO's pages; the numbers stay, they are saved) */
 static const uint8_t SECT_ORDER[NSECT] = {S_OSC, S_AEG, S_GATE, S_MOD, S_FM, S_CLICK, S_FILTER, S_LFO, S_LFOM,
-                                          S_MIX, S_SHAPE, S_RANDOM, S_XMOD, S_MODEL};
+                                          S_LFO2, S_MIX, S_SHAPE, S_INSERT, S_RANDOM, S_XMOD, S_MODEL};
 static uint32_t sect_rank(uint32_t s)
 {
     uint32_t i;
@@ -307,26 +313,29 @@ static int perf_mix(void) { return ui.mode == M_PERF && (ui.page % NPERF == PG_M
 static int perf_bank2(void) { return ui.mode == M_PERF && ui.page % NPERF >= PG_PERF2 && ui.page % NPERF < PG_GLFO; }
 /* 0.10: ARP's second set of pages: GENERATOR (the type, then its settings: page_params), ACTION (GRIDS: and the
  * map), TRACK, BOUNCE, LINKS, LINK SETUP. 19a: SCALE after TRACK (the pattern's root and scale, the track's
- * follow; TRACK has the follow too). 20: MELODY and MELODY: LOOP after ACTION */
-#define NEUCLID 9u
+ * follow; TRACK has the follow too). 20: MELODY and MELODY: LOOP after ACTION. 26: GROOVE after SCALE (the
+ * pattern's groove, amount, HUMANIZE; the track's follow) */
+#define NEUCLID 10u
 #define PG_GEN 0u
 #define PG_ACTION 1u
 #define PG_MELODY 2u
 #define PG_TRACK 4u
 #define PG_SCALE 5u
-#define PG_BOUNCE 6u
-#define PG_LINKS 7u
+#define PG_GROOVE 6u
+#define PG_BOUNCE 7u
+#define PG_LINKS 8u
 static const uint16_t P_EUCLID[NEUCLID][4] = {{VP_GMODE, VP_GA, VP_GB, VP_GC},
                                               {VP_ACTION, VP_NONE, VP_NONE, VP_NONE},
                                               {VP_MEL + ML_SHAPE, VP_MEL + ML_SPREAD, VP_MEL + ML_BIAS, VP_MEL + ML_STEPS},
                                               {VP_MEL + ML_DEJA, VP_MEL + ML_LOOP, VP_MEL + ML_LEN, VP_MEL + ML_LVAR},
                                               {PAR_TRACK_LENGTH, VP_CLOCK, VP_DIR, VP_SFOLLOW},
                                               {VP_SROOT, VP_SCALE, VP_SFOLLOW, VP_NONE},
+                                              {VP_GROOVE, VP_GAMT, VP_GHUM, VP_GFOLLOW},
                                               {VP_BSTART, VP_BPITCH, VP_NONE, VP_NONE},
                                               {VP_LINK, VP_LSTART, VP_LAMT, VP_DEPTH},
                                               {VP_LWHEN, VP_LTGT, VP_LEFF, VP_LWIN}};
 static const char *const EUCLID_TITLE[NEUCLID] = {"GENERATOR", "ACTION", "MELODY", "MELODY: LOOP", "TRACK", "SCALE",
-                                                  "BOUNCE", "LINKS", "LINK SETUP"};
+                                                  "GROOVE", "BOUNCE", "LINKS", "LINK SETUP"};
 /* the GENERATOR knob's order (KNOB 1: the value's index here) */
 static const uint8_t GEN_ORDER[NGEN] = {GEN_OFF, GEN_EUCLID, GEN_MUTATE, GEN_TURING, GEN_CA, GEN_GRIDS};
 /* the actions a track's generator has (the ACTION knob's 1..; 0: none): EUCLID's steps diced, a live generator's
@@ -591,9 +600,30 @@ static void target_range(uint32_t p, uint32_t *lo, uint32_t *hi)
     else if (p >= PAR_TARGET_LFO1 && p <= PAR_TARGET_LFO6) {
         v = par[PAR_VOICE_LFO1 + (p - PAR_TARGET_LFO1)];
         v = v >= 1u && v <= 6u ? v - 1u : 0u;
-    }
+    } else if (p >= PAR_L2TGT1 && p < PAR_L2TGT1 + 6u)   /* (25b: LFO 2's: its own) */
+        v = p - PAR_L2TGT1;
     *lo = MOD_TARGET_VOICE[v][0];
     *hi = MOD_TARGET_VOICE[v][1];
+}
+
+/* 25a: the target knob's order: OFF, the voice's LXR targets, then Elixir's (NUM_MOD_TARGETS ..) */
+static int is_target(uint32_t p)
+{
+    return (p >= PAR_VEL_DEST_1 && p <= PAR_VEL_DEST_6) || (p >= PAR_TARGET_LFO1 && p <= PAR_TARGET_LFO6) ||
+           (p >= PAR_L2TGT1 && p < PAR_L2TGT1 + 6u);
+}
+static uint32_t target_turn(uint32_t p, uint32_t raw, int32_t n)
+{
+    uint32_t lo, hi;
+    int32_t u;
+    target_range(p, &lo, &hi);
+    u = raw >= NUM_MOD_TARGETS ? (int32_t)(hi + 1u + raw - NUM_MOD_TARGETS) : (int32_t)raw;
+    if (u && u < (int32_t)lo)
+        u = (int32_t)lo;
+    u = clamp32(u + n, 0, (int32_t)(hi + NXT));
+    if (u && u < (int32_t)lo)                        /* (below the voice's first: OFF; up from OFF: the first) */
+        u = n < 0 ? 0 : (int32_t)lo;
+    return u > (int32_t)hi ? NUM_MOD_TARGETS + (uint32_t)u - hi - 1u : (uint32_t)u;
 }
 
 /* a parameter's index in the lock targets (lock_target_par; 0: none) */
@@ -729,6 +759,10 @@ static uint32_t vp_get(uint32_t p)
     case VP_SROOT: return pt->sroot % 12u;
     case VP_SCALE: return pt->scale < NSCALE ? pt->scale : SC_CHROM;
     case VP_SFOLLOW: return (pt->sfollow >> ui.track) & 1u;
+    case VP_GROOVE: return pt->groove <= NGROOVE ? pt->groove : 0u;
+    case VP_GAMT: return pt->gamt > 127u ? 127u : pt->gamt;
+    case VP_GHUM: return pt->ghum > 127u ? 127u : pt->ghum;
+    case VP_GFOLLOW: return !((pt->gskip >> ui.track) & 1u);
     case VP_MEL ... VP_MEL_LAST: {
         uint32_t k = p - VP_MEL, v = pt->mel[ui.track][k];
         return k == ML_SHAPE ? (v < NMEL ? v : MEL_OFF) : k == ML_LOOP ? (v < 1u ? 1u : v > 16u ? 16u : v)
@@ -789,7 +823,7 @@ static uint32_t vp_get(uint32_t p)
 static uint32_t vp_min(uint32_t p)
 {
     uint32_t lo, hi;
-    if ((p >= PAR_VEL_DEST_1 && p <= PAR_VEL_DEST_6) || (p >= PAR_TARGET_LFO1 && p <= PAR_TARGET_LFO6))
+    if (is_target(p))
         return 0;
     (void)lo;
     (void)hi;
@@ -808,7 +842,7 @@ static uint32_t vp_min(uint32_t p)
 static uint32_t vp_max(uint32_t p)
 {
     uint32_t lo, hi;
-    if ((p >= PAR_VEL_DEST_1 && p <= PAR_VEL_DEST_6) || (p >= PAR_TARGET_LFO1 && p <= PAR_TARGET_LFO6)) {
+    if (is_target(p)) {
         target_range(p, &lo, &hi);
         return hi;
     }
@@ -872,6 +906,9 @@ static uint32_t vp_max(uint32_t p)
     case VP_SROOT: return 11;
     case VP_SCALE: return NSCALE - 1u;
     case VP_SFOLLOW: return 1;
+    case VP_GROOVE: return NGROOVE;
+    case VP_GAMT: case VP_GHUM: return 127;
+    case VP_GFOLLOW: return 1;
     case VP_MEL ... VP_MEL_LAST: {
         static const uint8_t MX[NML] = {NMEL - 1, 127, 127, 127, 127, 16, NLEN - 1, 127};
         return MX[p - VP_MEL];
@@ -1094,6 +1131,14 @@ static void vp_set(uint32_t p, uint32_t v)
         scl_last.scale = pt->scale;
         return;
     case VP_SFOLLOW: pt->sfollow = (uint8_t)(v ? pt->sfollow | 1u << ui.track : pt->sfollow & ~(1u << ui.track)); return;
+    case VP_GROOVE:                                  /* (26: from OFF with the amount at 0: as written) */
+        if (v && !pt->groove && !pt->gamt)
+            pt->gamt = GAMT_DEFAULT;
+        pt->groove = (uint8_t)v;
+        return;
+    case VP_GAMT: pt->gamt = (uint8_t)v; return;
+    case VP_GHUM: pt->ghum = (uint8_t)v; return;
+    case VP_GFOLLOW: pt->gskip = (uint8_t)(v ? pt->gskip & ~(1u << ui.track) : pt->gskip | 1u << ui.track); return;
     case VP_MEL ... VP_MEL_LAST: {                  /* (a melody turned on: its settings from their defaults) */
         uint8_t *m = pt->mel[ui.track];
         if (p == VP_MEL + ML_SHAPE && v && !m[ML_SHAPE] && !m[ML_SPREAD] && !m[ML_LOOP])
@@ -1212,7 +1257,9 @@ static void vp_set(uint32_t p, uint32_t v)
             uint32_t l = p - PAR_VOICE_LFO1, old = par[p], tp = PAR_TARGET_LFO1 + l, idx = par[tp];
             uint32_t ov = old >= 1u && old <= 6u ? old - 1u : 0u, nv = v >= 1u && v <= 6u ? v - 1u : 0u;
             par[p] = (uint8_t)v;
-            if (idx >= MOD_TARGET_VOICE[ov][0] && idx <= MOD_TARGET_VOICE[ov][1]) {
+            if (idx >= NUM_MOD_TARGETS)              /* (25a: Elixir's go with the voice as they are) */
+                par_set(tp, idx);
+            else if (idx >= MOD_TARGET_VOICE[ov][0] && idx <= MOD_TARGET_VOICE[ov][1]) {
                 idx = idx - MOD_TARGET_VOICE[ov][0] + MOD_TARGET_VOICE[nv][0];
                 if (idx > MOD_TARGET_VOICE[nv][1])
                     idx = MOD_TARGET_VOICE[nv][1];
@@ -1220,7 +1267,7 @@ static void vp_set(uint32_t p, uint32_t v)
             }
             return;
         }
-        if ((p >= PAR_VEL_DEST_1 && p <= PAR_VEL_DEST_6) || (p >= PAR_TARGET_LFO1 && p <= PAR_TARGET_LFO6)) {
+        if (is_target(p)) {
             uint32_t lo, hi;
             target_range(p, &lo, &hi);
             if (v && v < lo)                         /* 0 (off), or inside the voice's targets */
@@ -1367,6 +1414,8 @@ static void knob_turn(uint32_t k, int32_t n)
         return;
     }
     v = sync_knob(p) ? sync_detent(vp_get(p), n) : clamp32((int32_t)vp_get(p) + step, (int32_t)mn, (int32_t)mx);
+    if (is_target(p))                                /* (25a: past the voice's LXR targets, Elixir's) */
+        v = (int32_t)target_turn(p, vp_get(p), step);
     v = (int32_t)model_step(p, vp_get(p), (uint32_t)v);
     vp_set(p, (uint32_t)v);
     if (ui.mode == M_STEP)                           /* (a generator's track: what plays takes the step's edit) */
@@ -1440,7 +1489,7 @@ static void mode_set(uint32_t m)
 static void sound_open(uint32_t s, int again)        /* a section button; again: its next section */
 {
     static const uint8_t NEXT[NSECT] = {S_FM, S_GATE, S_AEG, S_CLICK, S_MODEL, S_SHAPE, S_LFOM, S_MIX,
-                                        S_FILTER, S_XMOD, S_LFO, S_OSC, S_RANDOM, S_MOD};
+                                        S_INSERT, S_XMOD, S_LFO, S_OSC, S_LFO2, S_MOD, S_RANDOM, S_FILTER};
     if (ui.mode == M_SOUND && again) {
         if (sect_group(ui.sect) == s) {
             uint8_t l[NSPG][2];

@@ -39,6 +39,7 @@ typedef struct {
     uint16_t dest;               /* the parameter, 0 = none */
     int32_t amount;              /* Q16 */
     int32_t last;                /* the last source value, Q16 (0..65536) */
+    int32_t nv;                  /* 25b: the value it set this block (0..65536), -1 none (sound.c modnodes_block) */
 } modnode_t;
 
 typedef struct {
@@ -67,6 +68,7 @@ typedef struct {
     uint32_t dec_cnt;            /* the sample rate reducer, Q16 */
     int16_t dec_hold;
     lfo_t lfo;
+    lfo_t lfo2;                  /* 25b: the track's LFO 2 (sound.c PAR_L2RATE1 ..: its target is its own voice's) */
     /* Elixir's shaping (sound.c sets them) */
     uint8_t bits, shape, tilt, choke_grp, xsrc, xmode;
     uint8_t rnd[4];              /* random per hit: pitch, decay, filter, pan amounts (0..127) */
@@ -83,6 +85,7 @@ typedef struct {
 } voice_t;
 
 static voice_t vc[NVOICE];
+static int16_t flt_line[NVOICE][FLT_LINE] RAMBUF;   /* 28: the COMB filter's line per voice (6 KB) */
 /* 0.9: the DRUM voices' MODEL section: Rings' resonators (rings.c; 0.6's physical models: physmodels.c, not built);
  * 0.15: Plaits' engines (plaits.c) */
 #include "rings.c"
@@ -90,7 +93,7 @@ static voice_t vc[NVOICE];
 #include "micro.c"                                  /* (Phase 24: MICRO, on every voice) */
 
 static uint32_t decim_rate[NVOICE + 1];          /* [6]: ALL (the PERF page's global reducer). Q16 */
-static modnode_t velo_mod[NVOICE], lfo_mod[NVOICE];
+static modnode_t velo_mod[NVOICE], lfo_mod[NVOICE], lfo2_mod[NVOICE];
 static uint32_t seq_bpm_x10 = 1200;               /* the tempo the LFO sync follows */
 static volatile uint32_t trig_count[NTRACK];         /* triggers of each track (the UI flashes its key) */
 static uint32_t rev_g = 65536u;                      /* 19c: the reverb sends moved by the global LFOs, Q16 (0 .. 2) */
@@ -133,8 +136,10 @@ static void lfo_update_inc(lfo_t *l)                 /* lfo_setFreq / lfo_setSyn
 static void lfo_recalc_sync(void)
 {
     uint32_t i;
-    for (i = 0; i < NVOICE; i++)
+    for (i = 0; i < NVOICE; i++) {
         lfo_update_inc(&vc[i].lfo);
+        lfo_update_inc(&vc[i].lfo2);
+    }
 }
 static int32_t lfo_wave(lfo_t *l, uint32_t old)      /* the wave at the phase (from old: RANDOM's draw), 0..1, Q16 */
 {
@@ -213,9 +218,9 @@ static void lfo_hit(lfo_t *l)                        /* a trigger, as its mode t
 static void lfo_retrigger(uint32_t voice)            /* a voice was triggered: the LFOs that follow it restart */
 {
     uint32_t i;
-    for (i = 0; i < NVOICE; i++) {
-        lfo_t *l = &vc[i].lfo;
-        uint32_t src = l->retrig ? l->retrig : l->mode != LM_TRIG ? i + 1u : 0u;
+    for (i = 0; i < 2u * NVOICE; i++) {              /* (25b: LFO 2 as LFO 1) */
+        lfo_t *l = i < NVOICE ? &vc[i].lfo : &vc[i - NVOICE].lfo2;
+        uint32_t src = l->retrig ? l->retrig : l->mode != LM_TRIG ? i % NVOICE + 1u : 0u;
         if (src == voice + 1u)
             lfo_hit(l);
     }
@@ -236,6 +241,16 @@ static void voice_pan_latch(voice_t *v)
 static uint32_t trans_offset(const voice_t *v)       /* OFFSET mode: 1 - the transient's volume, Q16 */
 {
     return v->tr.wave == TR_OFFSET ? (uint32_t)(65536 - (v->tr.vol << 1)) : 65536u;
+}
+
+/* 28: COMB and RESONATOR follow the played note (60: as set) */
+static void flt_key(svf_t *f, uint32_t note)
+{
+    int8_t k = (int8_t)((int32_t)note - SEQ_DEFAULT_NOTE);
+    if (f->key != k) {
+        f->key = k;
+        f->dirty = 1;
+    }
 }
 
 static void voice_trigger(uint32_t track, uint32_t vel, uint32_t note)
@@ -287,6 +302,7 @@ static void voice_trigger(uint32_t track, uint32_t vel, uint32_t note)
         v->aeg.dec = v->dec_base;
     }
     v->rnd_f = v->rnd[2] ? hit_rand() * v->rnd[2] / 127 : 0;
+    flt_key(&v->flt, v->osc.base_note);
     if (v->choke_grp) {                              /* the choke group: the others fade out */
         uint32_t w;
         for (w = 0; w < NVOICE; w++)
@@ -324,6 +340,7 @@ static void voice_legato(uint32_t track, uint32_t note)
         osc_base_note(&v->mod, note);
     if (vi >= V_CYM)
         osc_base_note(&v->mod2, note);
+    flt_key(&v->flt, v->osc.base_note);
 }
 
 /* ---------------------------------------------------- the block, async --- */
@@ -617,6 +634,178 @@ static void post_block(voice_t *v, int16_t *buf)
     }
 }
 
+/* ----------------------------------------------------------- insert --- */
+/* 27a: one INSERT per track, after the shaper, the bits and the tilt, before the pan and the sends (mono). AMOUNT (a)
+ * is how much of it is heard, 0 none, whatever the type; b and c are the type's (params.c names them). Its LFO steps
+ * a block at a time, and the delays and gains are ramped across the block. The delay types have the voice's own line
+ * (ins_line: Phase 28's COMB keeps its own). A new type starts from rest */
+enum { INS_OFF, INS_PHASER, INS_FLANGER, INS_CHORUS, INS_TREMOLO, INS_AUTOPAN, INS_SHIFT, INS_RING, NINS };
+#define INS_LINE 512u
+typedef struct {
+    uint8_t type, a, b, c;       /* (sound.c: PAR_INS1 ..) */
+    uint8_t was;                 /* the type its state is for */
+    uint16_t wp;                 /* the line's write position */
+    uint32_t ph, osc;            /* the LFO's phase (a block); RING's and SHIFTER's oscillator (a sample) */
+    int32_t st[33];              /* PHASER: 4 allpasses' x1, y1; SHIFTER: 8 sections' x1 x2 y1 y2, then the delay */
+    int32_t fb;                  /* the last output, fed back */
+    int32_t d[2];                /* FLANGER, CHORUS: the taps' delays at the block's end, Q16 samples */
+    int32_t g;                   /* TREMOLO: the gain at the block's end, Q15 */
+    int32_t pg[2][2];            /* AUTOPAN: the left and right gains at the block's start [0] and end [1], Q15 */
+} ins_t;
+static ins_t ins[NVOICE] RAMBUF;                    /* (RAMTEXT's: the pool is short) */
+static int16_t ins_line[NVOICE][INS_LINE] POOL;     /* (6 KB) */
+/* SHIFTER: two chains of four allpasses 90 degrees apart (Olli Niemitalo's, a^2 in Q30); the first's output a sample
+ * late */
+static const int32_t HILB[8] = {514752760, 940832443, 1048613677, 1071056671,
+                                173686865, 787083823, 1015061512, 1063647745};
+
+static uint32_t ins_inc(uint32_t b)                  /* the LFO's step a block: 0.05 Hz .. 12.8 Hz (b 0..127) */
+{
+    return (uint32_t)(((uint64_t)311665u * (uint32_t)exp2_q16((int32_t)(b * 8u * 65536u / 127u))) >> 16);
+}
+static int32_t ins_shape(uint32_t ph, uint32_t c)    /* TREMOLO, AUTOPAN: a sine (c 0) to a square (127), Q15 */
+{
+    int32_t v = sine_at(ph), q = v >= 0 ? 32767 : -32767;
+    return v + (((q - v) * (int32_t)c) / 127);
+}
+static inline int32_t ins_read(const int16_t *l, uint32_t wp, int32_t d)   /* the line d (Q16) samples back */
+{
+    uint32_t pos = (wp << 16) - (uint32_t)d, i = (pos >> 16) & (INS_LINE - 1u), f = pos & 0xFFFFu;
+    int32_t x0 = l[i], x1 = l[(i + 1u) & (INS_LINE - 1u)];
+    return x0 + (int32_t)(((int64_t)(x1 - x0) * (int32_t)f) >> 16);
+}
+static void ins_block(uint32_t vi, int16_t *buf)
+{
+    ins_t *s = &ins[vi];
+    int16_t *line = ins_line[vi];
+    uint32_t i, t = s->type < NINS ? s->type : INS_OFF;
+    int32_t amt = s->a * 258;                        /* Q15 */
+    if (t != s->was) {                               /* (a new type: from rest) */
+        memset(s->st, 0, sizeof s->st);
+        s->fb = 0;
+        s->d[0] = s->d[1] = 0;
+        s->g = 32768;
+        s->pg[0][0] = s->pg[0][1] = s->pg[1][0] = s->pg[1][1] = 32768;
+        if (t == INS_FLANGER || t == INS_CHORUS)
+            memset(line, 0, sizeof ins_line[0]);
+        s->was = (uint8_t)t;
+    }
+    if (t == INS_OFF)
+        return;
+    switch (t) {
+    case INS_PHASER: {                               /* 4 first-order allpasses swept 150 Hz .. 4.8 kHz, fed back + or - */
+        int32_t l, w, c, fbk = ((int32_t)s->c - 64) * 400, m = amt >> 1;   /* (c 64: no feedback) */
+        s->ph += ins_inc(s->b);
+        l = 65536 - iabs((int32_t)(s->ph >> 15) - 65536);                     /* (a triangle, Q16) */
+        w = (int32_t)(((int64_t)150 * exp2_q16(l * 5) * 76490) >> 30);       /* (pi f / FS, Q16) */
+        c = (int32_t)(((int64_t)(65536 - w) << 15) / (65536 + w));
+        for (i = 0; i < BLOCK; i++) {                /* (8 bits below the sample's, rounded: no limit cycle) */
+            int32_t x = buf[i], in = clamp32((x << 8) + (int32_t)(((int64_t)s->fb * fbk) >> 15), -(1 << 23), 1 << 23), k, o;
+            for (k = 0; k < 8; k += 2) {
+                int32_t y = (int32_t)(((int64_t)c * (s->st[k + 1] - in) + 16384) >> 15) + s->st[k];
+                s->st[k] = in;
+                s->st[k + 1] = y = clamp32(y, -(1 << 24), 1 << 24);
+                in = y;
+            }
+            s->fb = in;
+            o = (in + 128) >> 8;
+            buf[i] = (int16_t)sat16(x + (((o - x) * m) >> 15));
+        }
+        break;
+    }
+    case INS_FLANGER:                                /* 0.23 .. 4.7 ms, fed back + or - (c 64: none) */
+    case INS_CHORUS: {                               /* two taps either side of 6 ms, c the depth */
+        int32_t d0[2] = {0, 0}, dd[2] = {0, 0}, fbk = t == INS_FLANGER ? clamp32(((int32_t)s->c - 64) * 480, -30000, 30000) : 0;
+        int32_t m = amt >> 1;
+        uint32_t k, n = t == INS_CHORUS ? 2u : 1u;
+        s->ph += ins_inc(s->b);
+        for (k = 0; k < n; k++) {
+            int32_t e;
+            if (t == INS_FLANGER) {
+                int32_t l = 65536 - iabs((int32_t)(s->ph >> 15) - 65536);
+                e = (10 << 16) + l * 200;
+            } else {
+                e = (265 << 16) + (int32_t)(((int64_t)sine_at(s->ph + k * 0x80000000u) * s->c * 3467) >> 10);   /* (+-215) */
+            }
+            d0[k] = s->d[k] ? s->d[k] : e;
+            dd[k] = (e - d0[k]) / (int32_t)BLOCK;
+            s->d[k] = e;
+        }
+        for (i = 0; i < BLOCK; i++) {
+            int32_t x = buf[i], r = ins_read(line, s->wp, d0[0]);
+            if (n == 2u)
+                r = (r + ins_read(line, s->wp, d0[1])) >> 1;
+            line[s->wp] = (int16_t)sat16(x + ((r * fbk) >> 15));
+            s->wp = (uint16_t)((s->wp + 1u) & (INS_LINE - 1u));
+            d0[0] += dd[0];
+            d0[1] += dd[1];
+            buf[i] = (int16_t)sat16(x + (((r - x) * m) >> 15));
+        }
+        break;
+    }
+    case INS_TREMOLO: {
+        int32_t g0 = s->g, g1, dg;
+        s->ph += ins_inc(s->b);
+        g1 = 32768 - (int32_t)((((int64_t)ins_shape(s->ph, s->c) + 32767) * amt) >> 16);
+        dg = (g1 - g0) / (int32_t)BLOCK;
+        for (i = 0; i < BLOCK; i++, g0 += dg)
+            buf[i] = (int16_t)((buf[i] * g0) >> 15);
+        s->g = g1;
+        break;
+    }
+    case INS_AUTOPAN: {                              /* (mix_voice pans with pg: one side turned down at a time) */
+        int32_t p;
+        s->ph += ins_inc(s->b);
+        p = (int32_t)(((int64_t)ins_shape(s->ph, s->c) * amt) >> 15);
+        s->pg[0][0] = s->pg[1][0];
+        s->pg[0][1] = s->pg[1][1];
+        s->pg[1][0] = 32768 - (p > 0 ? p : 0);
+        s->pg[1][1] = 32768 + (p < 0 ? p : 0);
+        break;
+    }
+    case INS_SHIFT: {                                /* +-500 Hz (b 64: none), fed back + or - (c 64: none; at most
+                                                      * 0.64: near DC the pair is less than 90 degrees apart) */
+        int32_t d = (int32_t)s->b - 64, hz = d * d * 500 / (63 * 63), fbk = clamp32(((int32_t)s->c - 64) * 335, -21000, 21000);
+        int32_t inc = (int32_t)(((int64_t)(d < 0 ? -hz : hz) << 32) / FS);
+        for (i = 0; i < BLOCK; i++) {                /* (8 bits below the sample's, rounded: no limit cycle) */
+            int32_t x = buf[i], a = (x << 8) + (int32_t)(((int64_t)s->fb * fbk) >> 15), b, k, y;
+            a = b = clamp32(a, -(1 << 23), 1 << 23);
+            for (k = 0; k < 4; k++) {                /* (y = a^2 (x + y2) - x2) */
+                int32_t *z = &s->st[k * 4];
+                y = (int32_t)(((int64_t)HILB[k] * (a + z[3]) + (1 << 29)) >> 30) - z[1];
+                z[1] = z[0]; z[0] = a; z[3] = z[2]; z[2] = y;
+                a = y;
+            }
+            for (k = 4; k < 8; k++) {
+                int32_t *z = &s->st[k * 4];
+                y = (int32_t)(((int64_t)HILB[k] * (b + z[3]) + (1 << 29)) >> 30) - z[1];
+                z[1] = z[0]; z[0] = b; z[3] = z[2]; z[2] = y;
+                b = y;
+            }
+            y = (int32_t)(((int64_t)s->st[32] * sine_at(s->osc + 0x40000000u) + (int64_t)b * sine_at(s->osc) +
+                           16384) >> 15);
+            s->st[32] = a;
+            s->osc += (uint32_t)inc;
+            s->fb = y = clamp32(y, -(1 << 23), 1 << 23);
+            y = (y + 128) >> 8;
+            buf[i] = (int16_t)sat16(x + (((y - x) * amt) >> 15));
+        }
+        break;
+    }
+    default: {                                       /* RING: against a sine of 20 Hz .. 2.6 kHz; c 127: AM */
+        uint32_t inc = (uint32_t)(((uint64_t)20u * (uint32_t)exp2_q16((int32_t)(s->b * 7u * 65536u / 127u)) << 16) / FS);
+        int32_t c = s->c * 258;
+        for (i = 0; i < BLOCK; i++) {
+            int32_t x = buf[i], w = sine_at(s->osc), mm = w + ((((32767 + w) >> 1) - w) * c >> 15);
+            int32_t y = (x * mm) >> 15;
+            s->osc += inc;
+            buf[i] = (int16_t)sat16(x + (((y - x) * amt) >> 15));
+        }
+        break;
+    }
+    }
+}
+
 /* ------------------------------------------------------------ mixer --- */
 enum { R_ST1, R_ST2, R_L1, R_R1, R_L2, R_R2, R_FX };
 static int32_t mix_l[BLOCK], mix_r[BLOCK];          /* the outputs (both stereo pairs and the mono outs) */
@@ -639,8 +828,23 @@ static void mix_voice(const voice_t *v, const int16_t *buf, int32_t *dl, int32_t
 {
     uint32_t i;
     int32_t s = v->out_fx || v->throw_fx ? 32768 : v->fx_send >= 32767 ? 32768 : v->fx_send;
+    const ins_t *in = &ins[v - vc];
+    int16_t pl[BLOCK], pr[BLOCK];                    /* the pan's gains a sample (27a: AUTOPAN moves them), Q14 */
     int32_t rs = v->throw_rev ? 32767 : rev_g == 65536u ? v->rev_send : clamp32((int32_t)(((int64_t)v->rev_send * rev_g) >> 16), 0, 32767);
     int16_t dry[BLOCK];
+    if (in->type == INS_AUTOPAN && in->was == INS_AUTOPAN) {
+        int32_t gl = in->pg[0][0], gr = in->pg[0][1], dgl = (in->pg[1][0] - gl) / (int32_t)BLOCK,
+                dgr = (in->pg[1][1] - gr) / (int32_t)BLOCK;
+        for (i = 0; i < BLOCK; i++, gl += dgl, gr += dgr) {
+            pl[i] = (int16_t)((v->pan_l * gl) >> 15);
+            pr[i] = (int16_t)((v->pan_r * gr) >> 15);
+        }
+    } else {
+        for (i = 0; i < BLOCK; i++) {
+            pl[i] = v->pan_l;
+            pr[i] = v->pan_r;
+        }
+    }
     if (rs) {
         int32_t any = 0;
         for (i = 0; i < BLOCK; i++) {
@@ -652,8 +856,8 @@ static void mix_voice(const voice_t *v, const int16_t *buf, int32_t *dl, int32_t
     if (s) {                                         /* the FX send: its share through the bus (panned, as the LXR's) */
         for (i = 0; i < BLOCK; i++) {
             int32_t x = s == 32768 ? buf[i] : (buf[i] * s) >> 15;
-            fx_l[i] = (int16_t)sat16(fx_l[i] + ((x * v->pan_l) >> 14));
-            fx_r[i] = (int16_t)sat16(fx_r[i] + ((x * v->pan_r) >> 14));
+            fx_l[i] = (int16_t)sat16(fx_l[i] + ((x * pl[i]) >> 14));
+            fx_r[i] = (int16_t)sat16(fx_r[i] + ((x * pr[i]) >> 14));
         }
         if (s == 32768)
             return;
@@ -674,8 +878,8 @@ static void mix_voice(const voice_t *v, const int16_t *buf, int32_t *dl, int32_t
         break;
     default:
         for (i = 0; i < BLOCK; i++) {
-            dl[i] += (buf[i] * v->pan_l) >> 14;
-            dr[i] += (buf[i] * v->pan_r) >> 14;
+            dl[i] += (buf[i] * pl[i]) >> 14;
+            dr[i] += (buf[i] * pr[i]) >> 14;
         }
         break;
     }
@@ -732,6 +936,7 @@ static void voices_render(uint32_t lo, uint32_t hi)
 #endif
         decimate(v, b, (uint32_t)(((uint64_t)decim_rate[vi] * decim_rate[NVOICE]) >> 16));
         post_block(v, b);
+        ins_block(vi, b);                            /* (27a) */
         for (i = 0; i < BLOCK; i += 2) {
             int32_t a = iabs(b[i]);
             if (a > pk)
@@ -914,8 +1119,13 @@ static void voices_init(void)                       /* initDrumVoice, Snare_init
         v->rp = 65536u;
         v->dec_base = v->aeg.dec;
         svf_init(&v->flt);
+        v->flt.line = flt_line[i];
         v->lfo.rate = 65536u;
         lfo_update_inc(&v->lfo);
+        v->lfo2.rate = 65536u;
+        lfo_update_inc(&v->lfo2);
+        memset(&ins[i], 0, sizeof ins[i]);
+        memset(ins_line[i], 0, sizeof ins_line[i]);
         osc_recalc(&v->osc);
         osc_recalc(&v->mod);
         osc_recalc(&v->mod2);

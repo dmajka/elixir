@@ -23,12 +23,12 @@ The FM-1 has no FPU, so the LXR's floating-point DSP is rewritten in fixed point
 | OCT+ | **COPY** (hold + track/bar/pattern) · held on a sound page + a knob: **CONTROL ALL** · SHIFT (OCT−) + OCT+ = **CLEAR** (on a sound page: CLEAR SOUND, the voice back to init) · OK in dialogs |
 | EDIT | Oscillator → FM → transient (click) → model (drums) · SHIFT (OCT−) + EDIT: **KEYS** (the keys play the track's voice) |
 | ENV | Amp EG → gate → mod EG / velocity |
-| SCL | Filter → shape (waveshaper, drive, bits, tilt) |
-| LFO | LFO → random per hit → cross mod / choke |
+| SCL | Filter → shape (waveshaper, drive, bits, tilt) → insert (phaser, flanger, chorus, tremolo, autopan, shifter, ring) |
+| LFO | LFO → LFO mode → track LFO 2 → random per hit → cross mod / choke |
 | GLO | Mix → mixer (volume, pan, FX send, reverb send) → config (MIDI, sync; CPU load at the bottom; LOAD: the load by part and the cores) |
 | FX | FX bus: drive (tube/fold/rat), ring mod, compressor, delay (mono, ping pong, tape), phaser, flanger → reverb → delay dub / send → dirt (SELECT: the pages) |
 | SEQ | Step edit: velocity, note, probability, condition → flam, shift, length → locks → ratchet (SEQ again: the next page) |
-| ARP | PERF (rolls, effects, mutes, DJ filter, density, LFOs, macros) → generator / action / melody / track (length, clock, direction) / scale / bounce / links |
+| ARP | PERF (rolls, effects, mutes, DJ filter, density, LFOs, macros) → generator / action / melody / track (length, clock, direction) / scale / groove / bounce / links |
 | HOME | Grid → patterns → song |
 | SAVE | Save → load (kit, pattern, song, morph, project) |
 | PLAY / REC | Start/stop (SHIFT (OCT−) + PLAY: the song from the top) · record (SHIFT (OCT−) + REC: options) |
@@ -73,7 +73,8 @@ On the grid (HOME), hold COPY (OCT+) and press a bar key. The bar you are lookin
 - **Melody** (3rd and 4th pages): which note each hit plays, beside any generator: SHAPE (RANDOM, WALK, ARP UP/DN/U-D, MOTIF), SPREAD, BIAS, STEPS (all the scale's degrees down to root and fifth), and DÉJÀ VU, LOOP (1–16), LENGTH, LEN VAR. After Marbles' X section. COMMIT writes the notes into the steps.
 - **Track** (5th page): length; clock, the track's step rate against the pattern (/4, /3, /2, 2/3, 3/4, 1x, 4/3, 3/2, x2, x3, x4) for polyrhythms, or with lengths for polymeters (the pattern lasts as long as its longest track); **direction**: FWD, REV, PING (ping-pong), PING2 (the ends played twice), RAND (any step), WALK (a step either way). A time round stays the track's length in steps, so conditions and generators keep their timing.
 - **Scale** (6th page): the pattern's root and scale (17, from chromatic to pelog) and which tracks follow it (D1–D3 by default): their notes, random pitch, KEYS and MIDI in go to the nearest degree.
-- **Bounce** (7th page): the bouncing ratchets' first gap and pitch drift.
+- **Groove** (7th page, from 0.18): the pattern's groove (OFF, SWING 54–71%, LAZY, DILLA, 2-STEP, DUB, PUSH, TECHNO, BROKEN: timing and velocity per 16th), its amount (0–127%, 100% as written), HUMANIZE (random timing and velocity per hit), and whether the track follows (all by default).
+- **Bounce** (8th page): the bouncing ratchets' first gap and pitch drift.
 
 ## Performance (PERF)
 
@@ -106,11 +107,17 @@ Macros, the repeat length, the tape time and the global LFOs are saved with the 
 
 ## Sound shaping
 
-Each voice (the open and closed hats share one) has four extra pages. All of their settings are part of the kit, morph with it, and can be locked per step.
+Each voice (the open and closed hats share one) has extra pages of Elixir's. All of their settings are part of the kit, morph with it, and can be locked per step.
+
+From 0.18 the LFO's and the velocity's targets go on past the LXR's parameters to Elixir's: the sends, tilt, bits, the random amounts, cross mod's amount, the MODEL knobs, and the reverb, delay and dirt settings.
+
+From 0.18 the filter's **Type** goes on past the LXR's OFF to seven of Elixir's: **LP4** (a four-pole ladder), **COMB+** and **COMB−** (combs tuned by Frequency from 86 Hz up five octaves, following the played note), **ALLPASS** (a phaser's notches, still until an LFO moves them), **VOWEL** (formants, A to U), **DUB BP** (the BP into a saturator) and **CHORD** (band-passes at a root, its fifth and octave). Same knobs, no kit bytes; a .SND sent to an LXR-02 gets LP instead.
 
 - **Shape** (SCL, press again after the filter): the **waveshaper** used by the voice's drive: LXR (the original curve), FOLD, CLIP, ASYM (soft on top, clipped below), RECTIFY (full-wave, an octave up), FUZZ, TAPE, SINE FOLD, BITE. Also the **drive** itself, **bits** (OFF, then 15 down to 1; applied after the sample-rate reducer) and **tilt** (0 is flat; + brighter, − darker).
 - **Gate** (ENV, after the amp EG): ON holds the voice for the step's length (step edit's TIMING page: AUTO, 1/32 … 1/2, TIE), and MIDI out sends the note-off then.
 - **LFO mode** (LFO, after the LFO's two pages): TRIG (the LXR's: a hit restarts it), HOLD (runs free, its value held at each hit), ONE (one cycle from a hit, then still: an envelope) or HALF, as on Elektron's machines.
+- **Track LFO 2** (LFO, after LFO mode; from 0.18): a second LFO on every track with LFO 1's waves, sync, retrigger, offset and modes. Its target is one of the track's own parameters (the LXR's or Elixir's); on the same target as LFO 1 it adds to it. In morph its switches change at the halfway point, its amount dipping to 0 there.
+- **Insert** (SCL, after shape; from 0.18): one effect per track between the shaping and the pan and sends: **PHASER**, **FLANGER**, **CHORUS**, **TREMOLO**, **AUTOPAN**, **SHIFTER** (a frequency shifter, ±500 Hz, with feedback) or **RING** (against a sine, or AM). **Amount** (0: none), and two knobs named for the type.
 - **Random per hit** (LFO, next): how much each hit varies in **pitch** (up to an octave either way at 127; small amounts are subtle), **decay** (half to double), **filter** cutoff and **pan**.
 - **Cross mod / choke** (LFO, next): another voice as the **source** and a **mode**. DUCK turns this voice down while the source sounds, FILTER opens this voice's filter with the source's level, and RING multiplies the two. **Amount** sets how much. **Choke** puts the voice in a group from 1 to 4. A hit on any voice in the group fades the others out within 1.5 ms.
 

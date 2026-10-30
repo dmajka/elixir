@@ -46,7 +46,7 @@
 
 enum { LS_OK, LS_BAD, LS_ARGS, LS_BUSY, LS_FLASH, LS_CRC, LS_SIZE, LS_EMPTY, LS_ORDER };
 #define LIB_PROTO 1u
-#define LIB_MAX 432u                                 /* a decoded message: a whole kit (KIT_LEN) and its header (18c: 400 -> 432, room for the kit to grow) */
+#define LIB_MAX 512u                                 /* a decoded message: a whole kit (KIT_LEN) and its header (18c: 400 -> 432, room for the kit to grow; 25b + 27a: 512) */
 _Static_assert(KIT_LEN + 16u <= LIB_MAX, "LIB_MAX: a kit (KL_PUT: 13 header bytes) must fit");
 
 static void lib_send(const uint8_t *wire, uint32_t n);   /* the hook: one F0 .. F7 message to the host */
@@ -333,12 +333,16 @@ static uint32_t lib_kit_put(const uint8_t *a, uint32_t n)
         return LS_ARGS;
     if (n < 12u + cnt)
         return LS_BAD;
-    kit_init_values(kits[idx]);                      /* Elixir's part: the init kit's */
-    for (i = 0; i < END_OF_SOUND_PARAMETERS; i++)   /* the LXR's part: as read, 0 past it */
-        kits[idx][i] = i < cnt ? a[12 + i] : 0u;
-    for (; i < cnt; i++)
-        kits[idx][i] = a[12 + i];
-    kit_sanitize(kits[idx]);
+    {
+        uint8_t k[KIT_LEN];
+        kit_init_values(k);                          /* Elixir's part: the init kit's */
+        for (i = 0; i < END_OF_SOUND_PARAMETERS; i++)   /* the LXR's part: as read, 0 past it */
+            k[i] = i < cnt ? a[12 + i] : 0u;
+        for (; i < cnt; i++)
+            k[i] = a[12 + i];
+        kit_sanitize(k);
+        kit_put(idx, k);
+    }
     for (i = 0; i < KIT_NAME_LEN; i++) {             /* (a name's zeros and controls as spaces) */
         uint8_t c = a[2 + i];
         kit_names[idx][i] = (char)(c >= 32u && c < 127u ? c : ' ');
@@ -488,7 +492,11 @@ static uint32_t lib_kit_get(uint32_t idx)
     lib_puts(kit_names[idx], KIT_NAME_LEN);
     lib_put(KIT_LEN & 0xFFu);
     lib_put(KIT_LEN >> 8);
-    lib_puts(kits[idx], KIT_LEN);
+    {
+        uint8_t k[KIT_LEN];
+        kit_get(idx, k);
+        lib_puts(k, KIT_LEN);
+    }
     return LS_OK;
 }
 

@@ -19,7 +19,7 @@
 #define PROJ_AUTO 4u                                /* the session */
 #define PROJ_NLOG 5u
 #define PROJ_MAGIC 0x4A52504Bu                      /* "KPRJ" (Kettle's, kept: its projects load) */
-#define PROJ_VERSION 10u                            /* (1 .. 9 still load: proj_read_payload) */
+#define PROJ_VERSION 11u                            /* (1 .. 10 still load: proj_read_payload) */
 #define PROJ_PAYLOAD (PROJ_SLOT - 256u)
 
 typedef struct {
@@ -124,7 +124,8 @@ static void pr_bytes(void *p, uint32_t n)
  * the tracks that follow it) after its links (CHROMATIC, D1-D3 before); a track's melody (8 B) after its second Euclid
  * pulse (off before); a step's length in its condition's and
  * chance's top bits; three global LFOs (two before: the third off); the scale last chosen, DENSITY and STUTTER after
- * the LFOs (KSC1; STUTTER off before). */
+ * the LFOs (KSC1; STUTTER off before). Version 11 (0.18): a pattern's GROOVE (groove, amount, HUMANIZE, the tracks
+ * that don't follow) after its scale (off before). */
 #define SF_VOL 0x01u
 #define SF_PROB 0x02u
 #define SF_NOTE 0x04u
@@ -193,15 +194,16 @@ static void proj_write_payload(void)
         pw_byte(0);
     pw_byte(NUM_KITS);
     for (k = 0; k < NUM_KITS; k++) {                /* kits: the name, which parameters differ from INIT, those */
-        uint8_t bits[(KIT_LEN + 7) / 8] = {0};
+        uint8_t bits[(KIT_LEN + 7) / 8] = {0}, kb[KIT_LEN];
+        kit_get(k, kb);                             /* (25-0: a byte a value here, as before) */
         pw_bytes(kit_names[k], KIT_NAME_LEN);
         for (i = 0; i < KIT_LEN; i++)
-            if (kits[k][i] != init[i])
+            if (kb[i] != init[i])
                 bits[i >> 3] |= (uint8_t)(1u << (i & 7u));
         pw_bytes(bits, sizeof bits);
         for (i = 0; i < KIT_LEN; i++)
             if (bits[i >> 3] & (1u << (i & 7u)))
-                pw_byte(kits[k][i]);
+                pw_byte(kb[i]);
     }
     pw_byte(NUM_PATTERN);
     for (i = 0; i < NUM_PATTERN; i++) {             /* patterns: the tracks not empty, their steps that differ */
@@ -215,7 +217,7 @@ static void proj_write_payload(void)
             if (p->link[k][1] & 15u)
                 lm |= 1u << k;
         if (p->shuffle || p->kit || p->gx || p->gy || p->gchaos || lm || p->cdepth != 127u || p->sroot || p->scale ||
-            p->sfollow != SFOLLOW_DEFAULT)
+            p->sfollow != SFOLLOW_DEFAULT || p->groove || p->gamt != GAMT_DEFAULT || p->ghum || p->gskip)
             tm |= 0x80u;
         pw_byte(tm);
         if (tm & 0x80u) {
@@ -232,6 +234,10 @@ static void proj_write_payload(void)
             pw_byte(p->sroot);                      /* (version 10: the scale) */
             pw_byte(p->scale);
             pw_byte(p->sfollow);
+            pw_byte(p->groove);                     /* (version 11: the groove) */
+            pw_byte(p->gamt);
+            pw_byte(p->ghum);
+            pw_byte(p->gskip);
         }
         for (t = 0; t < NTRACK; t++) {
             uint8_t bits[8] = {0};
@@ -420,7 +426,7 @@ static int proj_read_payload(uint32_t ver)
         (void)pr_byte();
     n = ver < 2u ? NUM_KITS : pr_byte();
     for (k = 0; k < n; k++) {                       /* (kits past NUM_KITS: read, dropped) */
-        uint8_t bits[64], v, *kp = k < NUM_KITS ? kits[k] : 0;
+        uint8_t bits[64], v, kb[KIT_LEN], *kp = k < NUM_KITS ? kb : 0;
         char nm[KIT_NAME_LEN];
         pr_bytes(nm, KIT_NAME_LEN);
         pr_bytes(bits, (nk + 7u) / 8u);
@@ -438,6 +444,7 @@ static int proj_read_payload(uint32_t ver)
             if (ver < 7u)
                 proj_models_08(kp);
             kit_sanitize(kp);
+            kit_put(k, kp);
         }
     }
     if (ver < 7u) {
@@ -479,6 +486,14 @@ static int proj_read_payload(uint32_t ver)
                 p->sfollow = (uint8_t)(pr_byte() & ((1u << NTRACK) - 1u));
                 if (p->scale >= NSCALE)
                     p->scale = SC_CHROM;
+            }
+            if (ver >= 11u) {
+                p->groove = (uint8_t)pr_byte();
+                p->gamt = (uint8_t)(pr_byte() & 127u);
+                p->ghum = (uint8_t)(pr_byte() & 127u);
+                p->gskip = (uint8_t)(pr_byte() & ((1u << NTRACK) - 1u));
+                if (p->groove > NGROOVE)
+                    p->groove = 0;
             }
         }
         for (t = 0; t < NTRACK; t++) {

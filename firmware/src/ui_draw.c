@@ -1333,6 +1333,10 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_SROOT: put_str(b, "Root", n); return;
     case VP_SCALE: put_str(b, "Scale", n); return;
     case VP_SFOLLOW: put_str(b, "Follow", n); return;
+    case VP_GROOVE: put_str(b, "Groove", n); return;
+    case VP_GAMT: put_str(b, "Amount", n); return;
+    case VP_GHUM: put_str(b, "Humanize", n); return;
+    case VP_GFOLLOW: put_str(b, "Follow", n); return;
     case VP_LEN: put_str(b, "Length", n); return;
     case VP_MEL ... VP_MEL_LAST: {
         static const char *const M[NML] = {"Shape", "Spread", "Bias", "Steps", "Deja vu", "Loop", "Length", "Len var"};
@@ -1640,7 +1644,14 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
         return;
     }
     case VP_SCALE: put_str(b, SCALE_NAME[v < NSCALE ? v : 0], n); return;
-    case VP_SFOLLOW: put_str(b, v ? "ON" : "OFF", n); return;
+    case VP_SFOLLOW: case VP_GFOLLOW: put_str(b, v ? "ON" : "OFF", n); return;
+    case VP_GROOVE: {                                /* (26: seq.c GROOVE_T's order) */
+        static const char *const G[NGROOVE + 1u] = {"OFF", "SW 54%", "SW 58%", "SW 62%", "SW 66%", "SW 71%", "LAZY",
+                                                    "DILLA", "2-STEP", "DUB", "PUSH", "TECHNO", "BROKEN"};
+        put_str(b, G[v <= NGROOVE ? v : 0], n);
+        return;
+    }
+    case VP_GAMT: put_str(put_int(b, (int32_t)v), "%", 2); return;
     case VP_LEN: case VP_MEL + ML_LEN: {
         static const char *const L[NLEN] = {"AUTO", "1/32", "1/16", "1/8", "1/8.", "1/4", "1/2", "TIE"};
         put_str(b, L[v < NLEN ? v : 0], n);
@@ -1866,6 +1877,7 @@ static void draw_card(uint32_t k, uint32_t p)
     s = sig_add(s, ui.msel | (uint32_t)pfs.m[p >= VP_M1 && p <= VP_M4 ? p - VP_M1 : ui.msel & 3u].par << 4 |
                        (uint32_t)shown_pat()->gen[ui.track][0] << 20 |
                        (uint32_t)(shown_pat()->rat[ui.track][ui.step & 63u] & RAT_BOUNCE) << 21);
+    s = sig_add(s, ins[track_voice(ui.track)].type);   /* (27a: the insert's knobs are named by its type) */
     if (!region(R_CARD0 + k, s))
         return;
     card_name(nm, sizeof nm, p);

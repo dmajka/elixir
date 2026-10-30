@@ -38,7 +38,9 @@ static void params_init(void)
 
 /* -------------------------------------------------------- the lists --- */
 static const char *const L_WAVE[] = {"SINE", "TRI", "SAW", "SQUARE", "NOISE", "PWM"};
-static const char *const L_FILTER[] = {"LP", "HP", "BP", "UNITY BP", "NOTCH", "PEAK", "LP2", "OFF"};
+static const char *const L_FILTER[] = {"LP", "HP", "BP", "UNITY BP", "NOTCH", "PEAK", "LP2", "OFF",
+                                       "LP4", "COMB+", "COMB-", "ALLPASS", "VOWEL", "DUB BP", "CHORD"};   /* (28) */
+_Static_assert(sizeof L_FILTER / sizeof L_FILTER[0] == F_LAST, "dsp.c: the filter types");
 static const char *const L_OUT[] = {"STEREO", "STEREO 2", "LEFT", "RIGHT", "LEFT 2", "RIGHT 2"};   /* (the LXR's 7th,
                                                   * FX BUS, is FX SEND 127: kit.c out_migrate) */
 static const char *const L_ROLL[] = {"ONE", "1/1", "1/2", "1/4", "1/8", "1/16", "1/24", "1/32", "1/48", "1/64",
@@ -79,8 +81,10 @@ _Static_assert(sizeof L_MODEL / sizeof L_MODEL[0] == NMODEL, "rings.c: the MODEL
 static const char *const L_BITS[] = {"OFF", "15", "14", "13", "12", "11", "10", "9", "8", "7", "6", "5", "4", "3",
                                      "2", "1"};
 static const char *const L_LFOMODE[] = {"TRIG", "HOLD", "ONE", "HALF"};   /* (0.13: voices.c LM_*) */
+static const char *const L_INS[] = {"OFF", "PHASER", "FLANGER", "CHORUS", "TREMOLO", "AUTOPAN", "SHIFTER", "RING"};
+_Static_assert(sizeof L_INS / sizeof L_INS[0] == NINS, "voices.c: the insert's types");
 enum { MENU_REV_MODEL = 27, MENU_SHAPE, MENU_XMODE, MENU_CHOKE, MENU_BITS, MENU_MODEL, MENU_LFOMODE, MENU_GATE,
-       MENU_DPITCH, MENU_DIRT, MENU_CRATIO, MENU_CSRC };   /* (Elixir's) */
+       MENU_DPITCH, MENU_DIRT, MENU_CRATIO, MENU_CSRC, MENU_INS };   /* (Elixir's) */
 #define LIST(a) {a, sizeof a / sizeof a[0]}
 static const struct { const char *const *s; uint8_t n; } MENUS[] = {
     [MENU_FILTER] = LIST(L_FILTER), [MENU_WAVEFORM] = LIST(L_WAVE), [MENU_AUDIO_OUT] = LIST(L_OUT),
@@ -92,7 +96,7 @@ static const struct { const char *const *s; uint8_t n; } MENUS[] = {
     [MENU_REV_MODEL] = LIST(L_REVMODEL), [MENU_SHAPE] = LIST(L_SHAPE), [MENU_XMODE] = LIST(L_XMODE),
     [MENU_CHOKE] = LIST(L_CHOKE), [MENU_BITS] = LIST(L_BITS), [MENU_MODEL] = LIST(L_MODEL),
     [MENU_LFOMODE] = LIST(L_LFOMODE), [MENU_GATE] = LIST(L_OFFON), [MENU_DPITCH] = LIST(L_DPITCH),
-    [MENU_DIRT] = LIST(L_DIRT), [MENU_CRATIO] = LIST(L_CRATIO), [MENU_CSRC] = LIST(L_CSRC),
+    [MENU_DIRT] = LIST(L_DIRT), [MENU_CRATIO] = LIST(L_CRATIO), [MENU_CSRC] = LIST(L_CSRC), [MENU_INS] = LIST(L_INS),
 };
 static const char *const VOICE_NAME[NTRACK] = {"DRUM 1", "DRUM 2", "DRUM 3", "SNARE", "CYMBAL", "CL HAT", "OP HAT"};
 static const char *const VOICE_SHORT[NTRACK] = {"D1", "D2", "D3", "SN", "CY", "CH", "OH"};
@@ -141,6 +145,18 @@ static const struct { uint16_t first; uint8_t n; uint16_t dtype; const char *nm[
     {PAR_MC_SRC, 1, DTYPE_MENU | MENU_CSRC << 8, {"Sidechain", "Comp", "csc", "C sidech"}},
     {PAR_MC_GAIN, 1, DTYPE_0B127, {"Makeup", "Comp", "cmk", "C makeup"}},
     {PAR_MC_MIX, 1, DTYPE_0B127, {"Mix", "Comp", "cmx", "C mix"}},
+    {PAR_L2RATE1, 6, DTYPE_0B127, {"Rate", "LFO 2", "l2r", "L2 rate"}},           /* (25b) */
+    {PAR_L2AMT1, 6, DTYPE_0B127, {"Amount", "LFO 2", "l2a", "L2 amt"}},
+    {PAR_L2TGT1, 6, DTYPE_TARGET_SELECTION_LFO, {"Target", "LFO 2", "l2t", "L2 targt"}},
+    {PAR_L2WAVE1, 6, DTYPE_MENU | MENU_LFO_WAVES << 8, {"Wave", "LFO 2", "l2w", "L2 wave"}},
+    {PAR_L2MODE1, 6, DTYPE_MENU | MENU_LFOMODE << 8, {"Mode", "LFO 2", "l2m", "L2 mode"}},
+    {PAR_L2SYNC1, 6, DTYPE_MENU | MENU_SYNC_RATES << 8, {"Sync", "LFO 2", "l2s", "L2 sync"}},
+    {PAR_L2RTRG1, 6, DTYPE_MENU | MENU_RETRIGGER << 8, {"Retrig", "LFO 2", "l2g", "L2 retrg"}},
+    {PAR_L2OFS1, 6, DTYPE_0B127, {"Offset", "LFO 2", "l2o", "L2 offst"}},
+    {PAR_INS1, 6, DTYPE_MENU | MENU_INS << 8, {"Type", "Insert", "ins", "Ins type"}},   /* (27a) */
+    {PAR_INSA1, 6, DTYPE_0B127, {"Amount", "Insert", "ina", "Ins amt"}},
+    {PAR_INSB1, 6, DTYPE_0B127, {"Rate", "Insert", "inb", "Ins rate"}},
+    {PAR_INSC1, 6, DTYPE_0B127, {"Feedback", "Insert", "inc", "Ins fdbk"}},
 };
 static uint32_t par_k(uint32_t p)                    /* its row in K_PARS (p >= NUM_PARAMS) */
 {
@@ -173,11 +189,33 @@ static const char *pl_knob_name(uint32_t p, uint32_t which)
         return U[(p - PAR_MDECAY1) / 6u][which];
     if (vi >= 3u || mdl[vi].want < MD_PL0)
         return 0;
+    if (mdl[vi].want == MD_PL0 + PE_CHORD && p < PAR_MPOS1) {   /* (P CHORD's: the chord, its inversion, the wave) */
+        static const char *const C[3][4] = {{"Chord", "Plaits", "chd", "Chord"}, {"Invert", "Plaits", "inv", "Invert"},
+                                            {"Wave", "Plaits", "wav", "Wave"}};
+        return C[(p - PAR_MDECAY1) / 6u][which];
+    }
     return N[(p - PAR_MDECAY1) / 6u][which];
+}
+/* 27a: the insert's B and C are its type's (long, category, short, 8 letters) */
+static const char *ins_knob_name(uint32_t p, uint32_t which)
+{
+    static const char *const B[3][4] = {{"Rate", "Insert", "inb", "Ins rate"}, {"Shift", "Insert", "inb", "InsShift"},
+                                        {"Pitch", "Insert", "inb", "InsPitch"}};
+    static const char *const C[4][4] = {{"Feedback", "Insert", "inc", "Ins fdbk"}, {"Depth", "Insert", "inc", "InsDepth"},
+                                        {"Shape", "Insert", "inc", "InsShape"}, {"AM", "Insert", "inc", "Ins AM"}};
+    uint32_t t;
+    if (p < PAR_INSB1 || p >= NPAR)
+        return 0;
+    t = ins[(p - PAR_INS1) % 6u].type;
+    if (p < PAR_INSC1)
+        return B[t == INS_SHIFT ? 1 : t == INS_RING ? 2 : 0][which];
+    return C[t == INS_CHORUS ? 1 : t == INS_TREMOLO || t == INS_AUTOPAN ? 2 : t == INS_RING ? 3 : 0][which];
 }
 static const char *par_name_k(uint32_t p, uint32_t which)
 {
     const char *n = pl_knob_name(p, which);
+    if (!n)
+        n = ins_knob_name(p, which);
     return n ? n : K_PARS[par_k(p)].nm[which];
 }
 
@@ -222,6 +260,7 @@ static uint32_t par_max(uint32_t p)
         return 100;
     case DTYPE_TARGET_SELECTION_LFO:
     case DTYPE_TARGET_SELECTION_VELO:
+        return NUM_TARGETS_X - 1u;                   /* (25a) */
     case DTYPE_AUTOM_TARGET:
         return NUM_MOD_TARGETS - 1u;
     case DTYPE_VOICE_LFO:
@@ -337,9 +376,45 @@ static void mod_target_name(char *b, uint32_t idx, int with_voice, uint32_t max)
 }
 
 /* the value as the screen shows it */
+static void par_hz(char *b, uint32_t max)           /* (27a: "Hz" after the number) */
+{
+    uint32_t n = 0;
+    while (b[n])
+        n++;
+    put_str(b + n, "Hz", max - n);
+}
 static void par_format(char *b, uint32_t p, uint32_t v, uint32_t max)
 {
     uint32_t m;
+    if (p >= PAR_INSB1 && p < NPAR) {               /* 27a: the shift and the pitch in Hz; the feedbacks from 64 */
+        uint32_t t = ins[(p - PAR_INS1) % 6u].type;
+        int32_t d = (int32_t)v - 64;
+        if (p < PAR_INSC1 && t == INS_SHIFT) {
+            int32_t hz = d * d * 500 / (63 * 63);
+            put_int(b + (d > 0), d < 0 ? -hz : hz);
+            if (d > 0)
+                b[0] = '+';
+            par_hz(b, max);
+            return;
+        }
+        if (p < PAR_INSC1 && t == INS_RING) {
+            put_int(b, (int32_t)(((uint64_t)20u * (uint32_t)exp2_q16((int32_t)(v * 7u * 65536u / 127u))) >> 16));
+            par_hz(b, max);
+            return;
+        }
+        if (p >= PAR_INSC1 && (t == INS_PHASER || t == INS_FLANGER || t == INS_SHIFT)) {
+            put_int(b + (d > 0), d);
+            if (d > 0)
+                b[0] = '+';
+            return;
+        }
+    }
+    if (p >= PAR_MDECAY1 && p < PAR_MDECAY1 + 3u && mdl[p - PAR_MDECAY1].want == MD_PL0 + PE_CHORD &&
+        !mi[p - PAR_MDECAY1].type) {                 /* P CHORD's HARMONIC: the chord it plays (from the one playing) */
+        const pl_t *d = &pl[p - PAR_MDECAY1];
+        put_str(b, PL_CHORD_NAME[ch_quant(pl_knob((uint8_t)v), d->eng == PE_CHORD ? d->u.ch.chord : 0)], max);
+        return;
+    }
     if (p >= PAR_TILT1 && p < PAR_TILT1 + 6u) {    /* tilt: from flat (64), + brighter */
         if (v > 64u) {
             b[0] = '+';
@@ -407,6 +482,13 @@ static void par_format(char *b, uint32_t p, uint32_t v, uint32_t max)
         return;
     case DTYPE_TARGET_SELECTION_LFO:
     case DTYPE_TARGET_SELECTION_VELO:
+        if (v >= NUM_MOD_TARGETS) {                  /* (25a: Elixir's, for the LFO's voice or the velocity's own) */
+            uint32_t vi = p >= PAR_TARGET_LFO1 && p <= PAR_TARGET_LFO6 ? lfo_voice(p - PAR_TARGET_LFO1)
+                        : p >= PAR_VEL_DEST_1 && p <= PAR_VEL_DEST_6 ? p - PAR_VEL_DEST_1
+                        : p >= PAR_L2TGT1 && p < PAR_L2TGT1 + 6u ? p - PAR_L2TGT1 : 0u, q = xt_par(v, vi);
+            put_str(b, q ? par_name_k(q, 3) : "OFF", max);
+            return;
+        }
         mod_target_name(b, v, 0, max);
         return;
     case DTYPE_AUTOM_TARGET:
