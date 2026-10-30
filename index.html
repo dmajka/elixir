@@ -102,7 +102,7 @@
         <a class="btn alt" href="install/">Install on your FM-1</a>
         <a class="btn alt" href="manual/">Read the manual</a>
       </div>
-      <p class="meta"><span class="pill">Test release</span>Version v0.17 · GPL-3.0 · unofficial, not
+      <p class="meta"><span class="pill">Test release</span>Version v0.18 · GPL-3.0 · unofficial, not
         affiliated with Erica Synths or M-VAVE</p>
     </div>
     <div class="art" aria-hidden="true"><svg class="pixel" viewBox="0 0 22 18" aria-hidden="true"><path class="px-s" d="M5 0h1v1h-1zM19 1h1v1h-1zM18 2h3v1h-3zM19 3h1v1h-1zM1 5h1v1h-1zM0 6h3v1h-3zM1 7h1v1h-1zM21 11h1v1h-1z"/><path class="px-c" d="M9 0h4v1h-4zM9 1h4v1h-4z"/><path class="px-o" d="M8 2h6v1h-6zM9 3h1v1h-1zM12 3h1v1h-1zM9 4h1v1h-1zM12 4h1v1h-1zM9 5h1v1h-1zM12 5h1v1h-1zM8 6h1v1h-1zM13 6h1v1h-1zM7 7h1v1h-1zM14 7h1v1h-1zM6 8h1v1h-1zM15 8h1v1h-1zM5 9h1v1h-1zM16 9h1v1h-1zM4 10h1v1h-1zM17 10h1v1h-1zM4 11h1v1h-1zM17 11h1v1h-1zM4 12h1v1h-1zM17 12h1v1h-1zM4 13h1v1h-1zM17 13h1v1h-1zM4 14h1v1h-1zM17 14h1v1h-1zM5 15h1v1h-1zM16 15h1v1h-1zM6 16h1v1h-1zM15 16h1v1h-1zM7 17h8v1h-8z"/><path class="px-h" d="M10 3h1v1h-1zM10 4h1v1h-1zM7 10h1v1h-1zM6 11h1v1h-1zM6 12h1v1h-1zM6 13h1v1h-1z"/><path class="px-g" d="M11 3h1v1h-1zM11 4h1v1h-1zM10 5h2v1h-2zM9 6h4v1h-4zM8 7h6v1h-6zM7 8h8v1h-8z"/><path class="px-L" d="M6 9h10v1h-10zM14 11h1v1h-1zM11 13h1v1h-1zM15 14h1v1h-1z"/><path class="px-l" d="M5 10h2v1h-2zM8 10h9v1h-9zM5 11h1v1h-1zM7 11h7v1h-7zM15 11h2v1h-2zM5 12h1v1h-1zM7 12h10v1h-10zM5 13h1v1h-1zM7 13h4v1h-4zM12 13h5v1h-5zM5 14h10v1h-10zM16 14h1v1h-1zM6 15h1v1h-1z"/><path class="px-d" d="M7 15h9v1h-9zM7 16h8v1h-8z"/></svg></div>
@@ -232,6 +232,30 @@
   <section class="band" id="updates">
     <div class="intro"><h2>Updates</h2><p>What each release added and fixed.</p></div>
     <div class="updates">
+      <div class="card"><h3>0.18<span>30 October 2026</span></h3>
+        <h4>New</h4>
+        <ul>
+          <li>P CHORD shows its chord by name (OCT, 5, sus4, m, m7, m9, m11, 69, M9, M7, M) on its first MODEL knob,
+            now called Chord; Timbre and Morph are named Invert and Wave.</li>
+          <li>TRK LFO 2 (LFO, after LFO MODE): a second LFO on every track, with LFO 1's waves, sync, retrigger,
+            offset and modes, on any of the track's own parameters. On the same target as LFO 1 it adds to it.</li>
+          <li>INSERT (SCL, after SHAPE): an effect on every track before its pan and sends: PHASER, FLANGER,
+            CHORUS, TREMOLO, AUTOPAN, SHIFTER (a frequency shifter with feedback) or RING, with an AMOUNT and two
+            knobs named for the type.</li>
+          <li>The LFO's and velocity's targets go on past the LXR's to Elixir's own: the sends, tilt, bits, the
+            random amounts, cross mod, the MODEL knobs, and the reverb, delay and dirt settings.</li>
+          <li>GROOVE (ARP, after SCALE): twelve timing and velocity templates per pattern (MPC-style swings, LAZY,
+            DILLA, 2-STEP, DUB, PUSH, TECHNO, BROKEN) with an amount, HUMANIZE, and which tracks follow.</li>
+          <li>Seven more filter types on every track: LP4 (a ladder low-pass), COMB+ and COMB− (tuned combs that
+            follow the note), ALLPASS (a phaser's notches), VOWEL (formants from A to U), DUB BP (a driven band-pass)
+            and CHORD (a root, fifth and octave rung out of any sound).</li>
+        </ul>
+        <h4>Changed</h4>
+        <ul>
+          <li>The 64 kit slots are stored more compactly in memory, which frees about 6 KB for the next features
+            (more LFOs, track inserts). Kits, projects and the library are unchanged, and kits sound the same.</li>
+        </ul>
+      </div>
       <div class="card"><h3>0.17<span>28 October 2026</span></h3>
         <h4>New</h4>
         <ul>

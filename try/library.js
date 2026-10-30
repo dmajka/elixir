@@ -297,6 +297,11 @@ export function sndBytes(name, data) {
   const out = new Uint8Array(8 + LXR_PARAMS);
   out.set(nameBytes(name).map((c) => c), 0);
   out.set(data.subarray(0, LXR_PARAMS), 8);
+  for (let v = 0; v < 6; v++) {                        // (28: Elixir's filter types, past the LXR's OFF: LP there;
+    if (out[8 + 191 + v] > 7) out[8 + 191 + v] = 0;     // 25a: its LFO and velocity targets: OFF)
+    if (out[8 + 149 + v] >= 229) out[8 + 149 + v] = 0;
+    if (out[8 + 167 + v] >= 229) out[8 + 167 + v] = 0;
+  }
   return out;
 }
 

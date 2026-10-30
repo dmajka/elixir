@@ -208,7 +208,7 @@ SHIFT (OCT−) + a track's black key mutes or unmutes it (in PERF, the black key
 ### Tempo, shuffle, MIDI sync
 
 - **Tempo:** KNOB 1 on the grid, the PERF page or CONFIG. Turn it all the way down to **MIDI** to follow incoming MIDI clock.
-- **Shuffle:** delays every other 16th; saved with the pattern.
+- **Shuffle:** delays every other 16th; saved with the pattern. For other feels see [Groove](#groove-from-018).
 
 ---
 
@@ -336,12 +336,34 @@ Select a track, then press a sound button. Pressing the same button again moves 
 | **Model** (EDIT, Elixir's) | Model, Decay, Bright, Struct / Position, Exciter, Tension (see *Models* below) | – | – |
 | **Amp EG** (ENV; then Elixir's GATE page) | Attack, Decay, Slope | Attack, Decay, Repeat count (claps), Slope | Attack, Decay (CH: closed; OH: open), Repeat (cymbal), Slope |
 | **Mod EG / velocity** (ENV) | Pitch EG: Decay, Slope, Amount / Velocity: destination, amount, volume mod | same | Velocity: destination, amount, volume mod |
-| **Filter** (SCL) | Frequency, Resonance, Type (LP HP BP UNITY BP NOTCH PEAK LP2 OFF), Overdrive | same | same |
+| **Filter** (SCL) | Frequency, Resonance, Type (LP HP BP UNITY BP NOTCH PEAK LP2 OFF; then Elixir's, below), Overdrive | same | same |
 | **LFO** (LFO) | Frequency, Clock sync, Amount, Waveform / Retrigger, Offset, Destination voice, Destination parameter | same | same |
 | **LFO mode** (LFO, Elixir's) | Mode (TRIG, HOLD, ONE, HALF: see below) | same | same |
+| **Trk LFO 2** (LFO, Elixir's) | Rate, Sync, Amount, Wave / Retrigger, Offset, Mode, Target (see below) | same | same |
 | **Mix** (GLO) | Volume, Pan, Sample rate, Drive / Output, Length, MIDI channel, MIDI note | same | same |
 
 The LXR's waveforms are SINE, TRI, SAW, SQUARE, NOISE and PWM; its transients SNAP, OFFSET, CLICK, CLICK 2, TICK, KICK, RIM, DRIP, HAT, CLAP, KICK 2, SNARE, TOM and SNAP 2. Each voice has one LFO, which can modulate any parameter of any voice; the velocity destination can be any of the voice's own parameters.
+
+**Elixir's LFO and velocity targets** (from 0.18). After the LXR's parameters, the LFO's **DstParam** and the velocity's destination go on to Elixir's own: the voice's **FX** and **Rev** sends, **Tilt**, **Bits**, the random-per-hit amounts (**RndPitch**, **RndDecay**, **RndFiltr**, **RndPan**), the cross mod's **XAmount**, and the six MODEL knobs (named for the voice's model: Rings', Plaits' or MICRO's, e.g. Length, Colour, Jitter), then the kit's **Rev size**, **Rev damp**, **Rev level**, **Echo>Rev**, **Glitch**, **Bus dirt** and **Dirt amt**, then the voice's LFO 2 **Rate** and **Amount** and its insert's **Amount** and two knobs. The per-voice ones belong to the LFO's **DstVoice** (and move with it if you change the voice), or for velocity to the voice itself. Switches (the model, the filter type, choke, the output) aren't targets: a moving one would click. Each voice's LFO can already move another voice's LFO rate or amount (the LXR's targets), for a wobble of a wobble. A kit sent to an LXR-02 as a .SND file has OFF in place of these targets.
+
+### Elixir's filter types
+
+After the LXR's eight (OFF stays where it was), the filter's **Type** goes on to seven of Elixir's (from 0.18). They use the same knobs: **Frequency**, **Resonance** and **Overdrive** (the drive into the filter, as on the LXR's types). The LFO, velocity, locks and the random cutoff move them as they move the others.
+
+| Type | Sound | Frequency | Resonance |
+|---|---|---|---|
+| **LP4** | A four-pole ladder low-pass: steeper than LP, with the squelch of a Moog or a TB-303 | the cutoff | up to the edge of oscillation: it rings, then dies away |
+| **COMB+** | A comb filter: the sound rings at a pitch and its harmonics, like a plucked string or a metal tube | the pitch: 86 Hz at 0, up five octaves; the played note moves it, so it rings in the track's scale | the feedback: how long it rings |
+| **COMB−** | The same with the feedback turned over: hollow, an octave lower, odd harmonics only | the same | the same |
+| **ALLPASS** | A phaser's two notches, standing still. Put the LFO on the filter's frequency and it sweeps like a phaser, with no effect used | where the notches are | feedback: deeper, sharper notches |
+| **VOWEL** | Two band-passes at a voice's formants: talking toms and snares | the vowel, from A through E, I, O to U | how sharp the formants are |
+| **DUB BP** | The LXR's BP into a saturator: the ringing band of a dub chord stab | the band | as the BP's; Overdrive drives the saturator as well (2× to 15×) |
+| **CHORD** | Three band-passes at a root, its fifth and its octave: a chord out of a hat, a noise burst or a click | the root, as the combs' pitch (and the note moves it) | how long they ring (high values ring like a bell) |
+
+- The combs and CHORD follow the note a step, KEYS or the melody generator plays (a scale, ARP → SCALE, keeps them in key); at the track's default note they stay where Frequency puts them. The voice's own tuning and random pitch don't move them.
+- A drum voice (D1–D3) starts its filter from rest at each hit, as on the LXR: a comb's ringing doesn't carry over to the next hit. On the snare, cymbal and hats it carries on.
+- **Morph:** between two of the LXR's types the type moves through the values between, as the LXR does. If either kit uses one of Elixir's, the type switches at the halfway point.
+- A kit sent to an LXR-02 as a .SND file (the library page) has LP in place of Elixir's types, which the LXR doesn't have.
 
 ### The LFO's mode
 
@@ -356,6 +378,21 @@ The LXR's waveforms are SINE, TRI, SAW, SQUARE, NOISE and PWM; its transients SN
 
 In HOLD, ONE and HALF, Retrigger OFF means the LFO's own voice's hits. A RANDOM wave draws a new value at each one-shot. The mode is part of the kit and can be locked per step; it doesn't morph.
 
+### Track LFO 2 (from 0.18)
+
+Every track has a second LFO: **TRK LFO 2** (LFO, after LFO MODE; "TRK" because PERF already has the global LFO 2). It has LFO 1's waves, clock sync, retrigger, offset and modes, laid out as LFO 1's pages:
+
+| | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
+|---|---|---|---|---|
+| first page | Rate | Sync | Amount | Wave |
+| second page | Retrig | Offset | Mode | Target |
+
+- **Target:** OFF, then the track's own parameters: the LXR's for that voice, then Elixir's (the list above). Unlike LFO 1 it has no destination voice: it always moves its own track. Kits start with its Amount at 0.
+- **On the same target as LFO 1** (or as the velocity), LFO 2 adds to it: LFO 1 sweeping the cutoff slowly and LFO 2 wobbling it fast give both movements. (LFO 1 and velocity on one target don't add: the LFO wins, as on the LXR.)
+- Every setting is part of the kit, can be locked per step, and LFO 1 (or another track's LFO 1) can move LFO 2's Rate or Amount.
+- **Morph:** Rate, Amount and Offset glide. Target, Wave, Mode, Sync and Retrigger switch at the halfway point; when they differ between the two kits, the Amount goes down to 0 at the halfway point and up to the other kit's after it, so nothing jumps.
+- A sound moved to another drum takes LFO 2 with it, its target and retrigger following the new voice. A kit sent to an LXR-02 leaves it out.
+
 ### Elixir's sound pages
 
 **Shape** (SCL, after the filter):
@@ -368,9 +405,33 @@ In HOLD, ONE and HALF, Retrigger OFF means the LFO's own voice's hits. A RANDOM 
 - **Bits:** OFF, then 15 down to 1. Works after the sample-rate reducer (Mix page) for a full bitcrusher.
 - **Tilt:** a one-knob EQ around 700 Hz. 0 is flat, + brighter, − darker.
 
+**Insert** (SCL, after Shape; from 0.18): one effect on each track, after the shape, bits and tilt and before the pan and the sends, so the FX bus and the reverb get it too.
+
+| KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
+|---|---|---|---|
+| Type | Amount | (the type's) | (the type's) |
+
+**Amount** is how much of the effect you hear: 0 is none, whatever the type. Knobs 3 and 4 are named for the type:
+
+| Type | Sound | Knob 3 | Knob 4 |
+|---|---|---|---|
+| **PHASER** | Four allpasses swept from 150 Hz to 4.8 kHz: the classic swirl, per drum | Rate | Feedback (0 none, + or −) |
+| **FLANGER** | A short delay (0.2–4.7 ms) swept: jet, metallic | Rate | Feedback (0 none, + or −) |
+| **CHORUS** | Two voices of the sound around 6 ms, swept opposite ways: width and shimmer (mono until the pan) | Rate | Depth |
+| **TREMOLO** | The level moved | Rate | Shape (sine to square) |
+| **AUTOPAN** | The pan moved: one side turned down at a time | Rate | Shape (sine to square) |
+| **SHIFTER** | A frequency shifter: every partial moved by the same Hz, so the sound goes inharmonic and metallic (dub techno's smear). Feedback makes the barber-pole rising or falling sweep | Shift (−500 to +500 Hz; middle none) | Feedback (0 none, + or −) |
+| **RING** | Ring modulation against a sine | Pitch (20 Hz to 2.6 kHz) | AM (0: ring, the sound's own pitch gone; up: amplitude modulation, which keeps it) |
+
+- The rates go from one cycle in 20 s to about 13 Hz. The insert's LFO runs free (it doesn't restart at hits); for a synced sweep, put LFO 2 on the insert's knobs.
+- **Morph:** the knobs glide; the type switches at the halfway point, and when the two kits' types differ the Amount goes down to 0 there and up again, so the switch is silent.
+- All the knobs can be locked per step and moved by the LFOs and velocity (the type can't: a moving one would click).
+- **CPU** (estimated, not yet measured on the FM-1): a phaser, flanger, chorus or ring should cost well under 1% a track, the shifter about 1%. Six shifters on a busy kit can push the CPU meter up: see CONFIG's CPU meter.
+- A comb is in the filter (COMB+ and COMB−), not here.
+
 **Gate** (ENV, after the amp EG; from 0.16): **OFF** (the LXR's: a hit runs the attack and the decay, whatever the step) or **ON**: the voice holds the top of its attack for the step's **Length** (step edit's TIMING page), then decays. With Length AUTO a gated voice plays as before. Part of the kit; it doesn't morph. A Plaits model's low-pass gate stays open while it holds, so P VA or P WTABLE can play a held bass note or a pad.
 
-**Random per hit** (LFO, after the LFO's two pages):
+**Random per hit** (LFO, after LFO MODE and TRK LFO 2):
 
 | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|
@@ -439,7 +500,7 @@ A port of the sixteen original engines of Mutable Instruments' **Plaits** (its f
 | P GRAIN | Formant / grains | formant ratio | formant frequency | formant width | windowed sines |
 | P ADDTV | Additive (harmonics) | bumps in the spectrum | most prominent harmonic | bump shape | organ harmonics only |
 | P WTABLE | Wavetables | bank | row | column | lo-fi (5-bit) |
-| P CHORD | Chords | chord type | inversion | waveform | the chord's root |
+| P CHORD | Chords | chord type (the knob is named **Chord** and shows it: OCT, 5, sus4, m, m7, m9, m11, 69, M9, M7, M; from 0.18) | inversion (**Invert**) | waveform (**Wave**) | the chord's root |
 | P SPEECH | Speech | vowels, then word banks | species (formant shift) | phoneme or word | raw vocal cords |
 | P SWARM | Eight sawtooth swarm | pitch spread | grain density | grain length | sine swarm |
 | P NOISE | Clocked filtered noise | filter LP → BP → HP | clock rate | resonance | two band-passes |
@@ -622,13 +683,13 @@ A kit is every sound parameter of all six voices (including the sends, the rever
 - **The kit library:** besides the 64 slots, the FM-1 keeps **128 kits and 128 single sounds** in its flash, apart from the projects: loading another project leaves them. SAVE → KIT with **To: LIBRARY** (KNOB 3) saves there; LOAD → KIT with **From: LIBRARY** loads one into the sound being edited (SAVE → KIT keeps it in a slot). SAVE / LOAD → SOUND does the same for one track's sound (KNOB 3: the track). The library page backs the library up.
 
   **Slots or library?** The slots are the project's kits, as on the LXR-02: patterns name their kit by slot number (the pattern page's Kit change on AUTO loads it), and loading another project brings its own 64. The library is a collection that stays whatever project is loaded: the place for kits you want everywhere, such as the LXR-02's factory kits or your favourites. Browse it with PRESETS, use a kit from it as the morph target directly, or take single voices from it with the sound browser. To give a pattern a library kit, load it and save it into a slot (SAVE → KIT, To SLOTS).
-- **Morph:** load a second kit as the *morph target* (SHIFT (OCT−) + white key 9: LOAD MORPH; KNOB 3 picks the slots or the library), then turn **Morph** (PERF's first page, KNOB 3) from 0 to 100%. Every sound parameter crossfades towards the target (outputs, modulation targets and the reverb model stay). The header shows M while morph is above 0. SAVE → MORPH saves the mixture you hear as a new kit.
+- **Morph:** load a second kit as the *morph target* (SHIFT (OCT−) + white key 9: LOAD MORPH; KNOB 3 picks the slots or the library), then turn **Morph** (PERF's first page, KNOB 3) from 0 to 100%. Every sound parameter crossfades towards the target (outputs, LFO 1's and the velocity's targets and the reverb model stay; switches such as Elixir's filter types, LFO 2's target and wave and the insert's type change at the halfway point). The header shows M while morph is above 0. SAVE → MORPH saves the mixture you hear as a new kit.
 
 ---
 
 ## 12. Generating tracks
 
-Press **ARP** twice (past PERF). Turn SELECT for nine pages. Most are for the selected track; SCALE's root and scale and the links are for the pattern:
+Press **ARP** twice (past PERF). Turn SELECT for ten pages. Most are for the selected track; SCALE's root and scale, GROOVE's groove, amount and humanize, and the links are for the pattern:
 
 | Page | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
@@ -638,6 +699,7 @@ Press **ARP** twice (past PERF). Turn SELECT for nine pages. Most are for the se
 | MELODY: LOOP | Deja vu | Loop | Length | Len var |
 | TRACK | Length | Clock | Direction | Follow |
 | SCALE | Root | Scale | Follow | – |
+| GROOVE | Groove | Amount | Humanize | Follow |
 | BOUNCE | Bounce | Bnc pitch | – | – |
 | LINKS | Link (1–8) | Start | Amount | Depth |
 | LINK SETUP | When | Target | Effect | Window |
@@ -708,6 +770,27 @@ Turning Steps up while a loop plays simplifies the phrase as it is. The global L
 Each pattern has a **Root** (C … B) and a **Scale**: CHROM (off: every semitone; the default), MAJOR, MINOR, DORIAN, PHRYG (Phrygian), MIXOLYD (Mixolydian), LYDIAN, H MINOR (harmonic minor), MIN PNT, MAJ PNT (the pentatonics), BLUES, MINOR 7 (1 ♭3 5 ♭7), FIFTHS (1 5), PHR DOM (Phrygian dominant, Hijaz), HIRAJO (Hirajoshi), PELOG and WHOLE T (whole tone).
 
 **Follow** (on SCALE and on TRACK) sets which tracks keep to it: D1–D3 by default. On a track that follows, every note it plays goes to the nearest note of the scale (a tie: the lower), counted from what the voice actually sounds (its coarse tune plus the note), so every following voice is in key whatever its tuning; fine tune is kept. That covers the steps' notes, the links' PITCH, ratchets and bounces, random pitch per hit (whole degrees), DENSITY's ghost notes, KEYS (the white keys play the scale) and MIDI notes in. An empty or cleared pattern starts with the scale chosen last. Copying a pattern copies its scale. The global LFOs' **TRANSPOSE** moves the notes by up to 7 degrees.
+
+### Groove (from 0.18)
+
+A pattern can play with a **Groove**: a template of timing and velocity for the 16 steps of a bar, repeated over the pattern. It moves each step's hits by up to half a step either way (on top of the step's own SHIFT) and makes them louder or softer. **SHUFFLE** still works on its own; the SWING grooves do its job with more choice.
+
+| Groove | Feel |
+|---|---|
+| OFF | none (the default) |
+| SW 54% … SW 71% | MPC-style swing: the second 16th of each 8th late (54% subtle, 66% a triplet feel, 71% heavy), and a touch softer |
+| LAZY | beats 2 and 4 a little late, the 8ths behind: laid back |
+| DILLA | loose and uneven, the 16ths dragging by different amounts, the velocities uneven |
+| 2-STEP | the garage skip: swung, with the 4th 16th of each beat pushed |
+| DUB | the off-beat 8ths late and soft |
+| PUSH | every step a little early: ahead of the beat (against the tracks that don't follow) |
+| TECHNO | no timing; the 2nd and 4th 16ths accented, the 3rd softer |
+| BROKEN | 5 + 3 sixteenths: accents on 1, 6, 9 and 14, the steps between pulled |
+
+- **Amount:** 0 is no groove, 100% the template as written, up to 127% exaggerated. Choosing a groove with the amount at 0 sets it to 100%.
+- **Humanize:** each hit late or early by up to 3/24 of a step and up to 16 louder or softer, at random, at 127. The same step in the same pass draws the same; each pass round the pattern is new.
+- **Follow** (the selected track): whether the track plays with the groove and humanize. All tracks do by default; turn it OFF for, say, a kick that should stay on the grid.
+- The groove belongs to the pattern: it changes when the pattern does, and isn't part of the kit or morph. A cleared pattern has none. Saved in the project (from 0.18; older projects load with none).
 
 ### Grids
 
@@ -1189,7 +1272,7 @@ NRPN *n* sets parameter *n* + 128: send CC 99 = *n* ÷ 128, CC 98 = *n* mod 128,
 | 27–32 | LFO waveform (0–7) |
 | 51–56 | LFO clock sync (0–11) |
 | 57–62 | LFO offset |
-| 63–68 | Filter type (0–7: LP HP BP UNITY BP NOTCH PEAK LP2 OFF) |
+| 63–68 | Filter type (0–7: LP HP BP UNITY BP NOTCH PEAK LP2 OFF; 8–14: LP4 COMB+ COMB− ALLPASS VOWEL DUB BP CHORD) |
 | 69–74 | Transient volume |
 | 75–80 | Transient waveform (0–13) |
 | 81–86 | Transient frequency |
@@ -1238,6 +1321,18 @@ Six numbers per voice-based setting, in the order D1 D2 D3 SN CY HH.
 | 310, 311, 312, 313, 314 | The delay's Sync (0, 1), Saturate, Echo>Rev, Glitch, Pitch (0 off, 1 +12, 2 +7, 3 −12, 4 detune) |
 | 315, 316, 317 | Bus dirt, the master's dirt type (0 tape, 1 tube, 2 fuzz, 3 diode, 4 fold) and amount |
 | 318–324 | The master compressor: Ratio (0 off, 1 1.5:1, 2 2:1, 3 3:1, 4 4:1, 5 6:1, 6 10:1, 7 limit), Thresh, Attack, Release, Sidechain (0 the mix, 1–6 D1 … HH), Makeup, Mix |
+| 325–330 | LFO 2 rate (from 0.18) |
+| 331–336 | LFO 2 amount |
+| 337–342 | LFO 2 target (as LFO 1's: 0 off) |
+| 343–348 | LFO 2 wave (0 sine, 1 tri, 2 saw up, 3 saw down, 4 square, 5 random, 6 exp up, 7 exp down) |
+| 349–354 | LFO 2 mode (0 trig, 1 hold, 2 one, 3 half) |
+| 355–360 | LFO 2 sync (0 off, 1 4/1 … 11 1/32) |
+| 361–366 | LFO 2 retrigger (0 off, 1–6 D1 … HH) |
+| 367–372 | LFO 2 offset |
+| 373–378 | Insert type (0 off, 1 phaser, 2 flanger, 3 chorus, 4 tremolo, 5 autopan, 6 shifter, 7 ring) |
+| 379–384 | Insert amount |
+| 385–390 | Insert knob 3 (rate, shift or pitch) |
+| 391–396 | Insert knob 4 (feedback, depth, shape or AM) |
 
 The LXR's own parameters keep their CC and NRPN numbers.
 
@@ -1269,7 +1364,7 @@ What changed in the port:
 
 What Elixir adds:
 
-- **Sound:** Control All (OCT+ held, a knob: every track); LFO modes (hold, one-shot, half); FX and reverb sends per voice; four reverbs (Clouds' plate among them); nine waveshapers; bits; tilt EQ; random per hit; choke groups; cross modulation; a gate per voice; phaser and flanger; a tape delay with sync, glitches and pitch-shifted repeats, its echoes into the reverb; dirt on the FX bus and the master; a sound browser and a kit library.
+- **Sound:** Control All (OCT+ held, a knob: every track); LFO modes (hold, one-shot, half); a second LFO and an insert effect (phaser, flanger, chorus, tremolo, autopan, frequency shifter, ring) on every track; seven more filter types; FX and reverb sends per voice; four reverbs (Clouds' plate among them); nine waveshapers; bits; tilt EQ; random per hit; choke groups; cross modulation; a gate per voice; phaser and flanger; a tape delay with sync, glitches and pitch-shifted repeats, its echoes into the reverb; dirt on the FX bus and the master; a sound browser and a kit library.
 - **Models (experimental):** Rings' resonators and Plaits' sixteen engines on the drum voices, two at a time. Not in the LXR-02.
 - **MICRO:** ten microsound types (clicks, click trains, crunch, bits, noise bursts, snaps, resonant grains, dust, pops, chirps) on every track, after GLITCH.
 - **Performance:** PERF with fill, repeat, freeze, throws, feedback push, tape stop, filter sweeps, a DJ filter, four macros, the voices' volumes on two pages, PERFORM 2, DENSITY (thinning or building the whole pattern) and three global LFOs (morph, the DJ filter, the effects, density, transpose, the delay, macros, down to 256 bars a cycle); KEYS, to play a voice from the keyboard.
