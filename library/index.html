@@ -111,6 +111,11 @@
   <ul class="kits" id="libkits"></ul>
   <p><button id="libbackup">Back up the kit library</button></p>
   <p><label>Restore <input type="file" id="librestore" accept=".ktlb"></label></p>
+  <h3>Empty the kit library</h3>
+  <p>Deletes every kit and sound in the library, for a clean start: installing V15 or updating Elixir doesn't clear
+    it. The factory kits are built into Elixir and stay; the kit slots and projects aren't touched.</p>
+  <p><label><input type="checkbox" id="libbackfirst" checked> back it up first (downloads a .ktlb)</label></p>
+  <p><button class="alt" id="libempty">Empty the kit library</button></p>
 
   <h2>Kit slots</h2>
   <h3>Import LXR-02 kits into the slots</h3>
@@ -317,6 +322,24 @@ $("libbackup").addEventListener("click", () => job(async () => {
   if (!entries.length) throw new Error("The kit library is empty.");
   download(packKitLib(entries), `elixir-kits-${stamp()}.ktlb`);
   say(`Backed up ${entries.length} kits and sounds.`);
+}));
+$("libempty").addEventListener("click", () => job(async () => {   // (every kit and sound deleted, a backup first)
+  const lk = await lib.libList(KL_KIT), ls = await lib.libList(KL_SOUND), back = $("libbackfirst").checked;
+  if (!lk.length && !ls.length) throw new Error("The kit library is already empty.");
+  if (!confirm(`Delete all ${lk.length} kits and ${ls.length} sounds from the kit library? This can't be undone` +
+               (back ? " (a backup downloads first)." : ", and nothing is backed up."))) { say("Nothing deleted."); return; }
+  if (back) {
+    say("Backing up the kit library …");
+    download(packKitLib(await lib.libBackup(bar)), `elixir-kits-${stamp()}.ktlb`);
+  }
+  const all = [...lk.map((e) => [KL_KIT, e.slot]), ...ls.map((e) => [KL_SOUND, e.slot])];
+  for (let i = 0; i < all.length; i++) {
+    say(`Deleting ${i + 1} of ${all.length} …`);
+    await lib.libDelete(all[i][0], all[i][1]);
+    bar(i + 1, all.length);
+  }
+  await refresh();
+  say(`The kit library is empty (${lk.length} kits and ${ls.length} sounds deleted).`);
 }));
 $("librestore").addEventListener("change", (e) => {
   const f = e.target.files[0];
