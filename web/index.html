@@ -242,181 +242,63 @@
   <section class="band" id="updates">
     <div class="intro"><h2>Updates</h2><p>What each release added and fixed.</p></div>
     <div class="updates">
-      <div class="card"><h3>0.19-test12<span>31 October 2026</span></h3>
-        <h4>Fixed</h4>
+      <div class="card"><h3>0.19<span>31 October 2026</span></h3>
+        <h4>New</h4>
         <ul>
-          <li>SPELLS MOTION now works with every spell (it did nothing on Haunted Dub and most others), and SAME
-            brings back tracks an earlier FREE cast sent off, the kick and snare included. FREE is a free-for-all
-            with any spell, wilder with Chaos up.</li>
-        </ul>
-      </div>
-      <div class="card"><h3>0.19-test11<span>30 October 2026</span></h3>
-        <h4>Added</h4>
-        <ul>
-          <li>Songs: KNOB 3 (Repeats) sets how many times a row's pattern plays before the song moves on: x1, x2,
-            x3, x4, x6, x8 or x16. The row playing shows which time it is.</li>
-          <li>SPELLS: a fifth page, MOTION. Motion sets how far a cast parts the tracks' speed and direction: SAME
-            (every track forward at the pattern's speed), ONE (one track at x2, 1/2 or 3/2, or backwards or
-            ping-pong), FEW, MANY, or FREE (as before). Lengths sets the track lengths a cast may give: BARS, EVEN
-            or ODD.</li>
-          <li>A new spell, Whispering Motes: MICRO's dust, grains, pops and chirps on the voices, a hushed kick and
-            soft, scattered hits.</li>
-        </ul>
-      </div>
-      <div class="card"><h3>0.19-test10<span>30 October 2026</span></h3>
-        <h4>Added</h4>
-        <ul>
-          <li>The LXR-02's 85 factory kits are built into Elixir, with Erica Synths' permission. They take no kit
-            library space.</li>
-          <li>The kit browser (PRESETS) lists the factory kits first (F1 …), then the library (L1 …), then the
-            slots; KNOB 1 jumps between them. CONFIG → BUTTONS &amp; KITS, Kits first, can put the slots first. The
-            sound browser offers the factory kits' voices too.</li>
+          <li>SPELLS (ARP, after PERFORM): NONE and eleven guided randomizers for the sound and the pattern, from
+            Poltergeist to Whispering Motes. The black keys pick the tracks, the white keys what may change (1–8 the
+            sound, 9–16 the pattern). COPY (OCT+) rolls a twelve-sided die and casts, again rerolls from before the
+            cast, and SHIFT (OCT−) takes it back exactly. Five pages: GRIMOIRE (spell, variation, scope, roll), CAST
+            (sound, pattern, density, chaos), CHARACTER (each spell's own four), LIMITS (the most a spell sets for
+            the sends, the reverb and the FX mix) and MOTION (how far the tracks' speed and direction part, from
+            SAME to FREE, and the lengths a cast may give). Bar key 3 saves a recipe (U1–U8) into the project.
+            D1 always stays a kick and D2 and D3 toms, and spells often give the toms a melody in the pattern's
+            scale.</li>
+          <li>The LXR-02's 85 factory kits are built in, with Erica Synths' permission. The kit browser (PRESETS)
+            lists them first (F1 …), then the library, then the slots; CONFIG → BUTTONS &amp; KITS can put the
+            slots first. The sound browser offers the factory kits' voices too.</li>
           <li>Hrtl's DLC and UNTZ kit packs (16 kits each): tick them on the install page or add them on the library
             page. They go only into empty library slots (97–128). The emulators include them.</li>
-          <li>Phone emulator: the screen near the top with PRESET, ALGO and SELECT evenly down its side (ALGO level
-            with the screen's four parameters, SELECT with KNOB 1–4, under the parameters they turn), larger knobs,
-            the controls in evenly spaced groups with square pads, and the volume as a slider in the top bar. Drag a
-            parameter on the screen to turn its knob.</li>
+          <li>Songs: KNOB 3 (Repeats) plays a row's pattern x1, x2, x3, x4, x6, x8 or x16 times before moving on;
+            the row playing shows which time it is.</li>
+          <li>Pictures: each EDIT page's top shows its sound (the wave, FM, transient, envelopes, the filter's
+            response, the shaper, inserts, LFOs, random lanes); the MODEL page a picture of the model beside a plain
+            description; SEQ's groove, bounce, melody and scale; FX's reverb room, delay echoes, FX bus, DIRT and
+            the master compressor.</li>
+          <li>PERF RESET: SHIFT (OCT−) + HOME turns every performance effect off at once.</li>
+          <li>KEYS stays on as you change pages, so you can play while turning knobs; the header shows KEYS.</li>
+          <li>The FX pages end with the voices' FX and reverb sends.</li>
+          <li>Editing with morph on moves the morph target too, so an edit is heard at any morph amount (CONFIG →
+            MORPH → Edits; KIT ONLY for the LXR's way).</li>
+          <li>DENSITY's VARY redraws the order steps drop and ghosts land each time round; OCT+ on DENSITY commits
+            it into the pattern (again: undo).</li>
         </ul>
         <h4>Changed</h4>
         <ul>
-          <li>Both emulators draw the screen smoothed at your display's resolution, so it no longer looks
-            blocky.</li>
+          <li>The sound pages run in a synth's order: MODEL, oscillator, FM, transient, filter, shape, insert FX,
+            the envelopes, then the modulation. SELECT steps through them all; EDIT, ENV, SCL and LFO jump to their
+            sections. A section of several pages shows its page in the title.</li>
+          <li>SEQ opens the track's pages (TRACK, generator, action, groove, bounce, melody, scale), SEQ again step
+            edit. ARP cycles PERFORM → SPELLS → GLOBAL MOD (the global LFOs, macros and links).</li>
+          <li>LFO 1 and LFO 2 share a layout. The track's MIX pages are gone (the mixer, CONFIG and TRACK have
+            them); the sample rate is on SHAPE. CONFIG has a new last page, ELIXIR: the version and each core's
+            load.</li>
+          <li>Knob cards in real units: filter Hz and Q, envelope times in ms, LFO rates in Hz, delay time in ms and
+            so on.</li>
+          <li>On a model's own sound, the FM, TRANSIENT and AMP EG pages it doesn't use are hidden, and OSC keeps
+            only COARSE and FINE live.</li>
+          <li>The FX bus is always stereo (no Output knob).</li>
+          <li>Phone emulator: a smaller screen with PRESET, ALGO and SELECT beside it, larger knobs under the
+            parameters they turn (or drag a parameter on the screen), square pads and a volume slider. Both
+            emulators draw the screen smooth at your display's resolution.</li>
           <li>A new unit no longer fills its kit slots with factory kits (LOAD → FACTORY, ALL &gt; SLOTS still
             does).</li>
         </ul>
         <h4>Fixed</h4>
         <ul>
+          <li>After a model change the knob cards kept the last model's names and values.</li>
+          <li>MODEL on LXR showed Rings' knobs, which do nothing there; the MODEL page lit GLO instead of EDIT.</li>
           <li>Phone emulator: tapping buttons no longer zooms the page.</li>
-        </ul>
-      </div>
-      <div class="card"><h3>0.19-test9<span>30 October 2026</span></h3>
-        <h4>Changed</h4>
-        <ul>
-          <li>SPELLS: D2 stays a floor tom and D3 a rack tom above it; their pitch moves within those registers,
-            and a deep pitch drop stays short, so no more high, moaning toms.</li>
-          <li>Spells now often play melodies on D2 and D3 with the melody generator, in the pattern's scale:
-            walks, arpeggios or motifs, each spell its kind.</li>
-          <li>Each cast lands somewhere new instead of near the same sound; Poltergeist and Rust Circuit use less
-            FM; band, peak and comb filters don't whistle.</li>
-        </ul>
-        <h4>Fixed</h4>
-        <ul>
-          <li>Forbidden Ritual had stopped changing the pattern in 0.19-test7.</li>
-        </ul>
-      </div>
-      <div class="card"><h3>0.19-test8<span>30 October 2026</span></h3>
-        <h4>Added</h4>
-        <ul>
-          <li>SPELLS: LIMITS, a fourth page: the most any spell sets for each track's reverb and FX sends (30 at
-            first), the reverb's level (80) and the FX bus's mix (64), so the effects don't drown what a spell
-            makes.</li>
-          <li>Bar key 4 on SPELLS puts the spell's knobs back as at first; NONE starts at moderate settings.</li>
-        </ul>
-      </div>
-      <div class="card"><h3>0.19-test7<span>30 October 2026</span></h3>
-        <h4>Changed</h4>
-        <ul>
-          <li>SPELLS: the white keys pick what a spell may change (1–8 the sound: pitch, oscillator, transient,
-            envelopes, filter, drive, FX, modulation; 9–16 the pattern: hits, accents, chance, timing, ratchets,
-            notes, length, links). SHIFT (OCT−) + a key: only that one. The Scope knob holds presets for them.</li>
-          <li>NONE is the first spell: just a little variation of the sound and the steps.</li>
-          <li>D1 always stays a kick: the LXR's, Plaits' BASS DRUM or Rings' MODAL, of the spell's kind (soft and
-            dark for Haunted Dub, loud and driven for Forbidden Ritual).</li>
-          <li>A cast never changes the spell's knobs (Mode is now Roll: NEW or SAME). The screen drops the key hints
-            and the wizard is smaller.</li>
-        </ul>
-        <h4>Fixed</h4>
-        <ul>
-          <li>Spells asking for a low-pass filter got a high-pass (and the other filter types one off).</li>
-        </ul>
-      </div>
-      <div class="card"><h3>0.19-test6<span>30 October 2026</span></h3>
-        <h4>Added</h4>
-        <ul>
-          <li>SPELLS (ARP, after PERFORM): ten guided randomizers for the sound and the pattern, from Poltergeist to
-            Biofeedback. The black keys pick the tracks, COPY (OCT+) rolls a twelve-sided die and casts, COPY (OCT+)
-            again rerolls from before the cast, SHIFT (OCT−) takes it back exactly. Three pages: GRIMOIRE (spell,
-            variation, scope, recall mode), CAST (sound, pattern, density, chaos) and CHARACTER (each spell's own
-            four). Bar key 3 saves a recipe (U1–U8) into the project.</li>
-        </ul>
-      </div>
-      <div class="card"><h3>0.19-test5<span>30 October 2026</span></h3>
-        <h4>Changed</h4>
-        <ul>
-          <li>On a model's own sound, EDIT hides the FM, TRANSIENT and AMP EG pages it doesn't use. OSC keeps COARSE
-            and FINE, with its other knobs faint and locked. With morph, pages the morph target needs show faint
-            until morphed.</li>
-          <li>The reverb picture is a 3-D room (ROOM, HALL, PLATE, SPRING) that SIZE grows, with LEVEL and DAMPING
-            as its echoes. The delay picture names its mode in full.</li>
-          <li>The FX bus has no Output knob: it is always stereo (older kits' side routes play stereo).</li>
-          <li>The MODEL page drops the list of EDIT pages a model uses.</li>
-        </ul>
-      </div>
-      <div class="card"><h3>0.19-test4<span>30 October 2026</span></h3>
-        <h4>Changed</h4>
-        <ul>
-          <li>The MODEL page shows the model's name and a plain description beside a picture of it (a kick's head,
-            a snare, a cymbal, a string, a chord on a staff …) that moves with its knobs.</li>
-          <li>On a model, OSC, FM, TRANSIENT and AMP EG say NOT USED.</li>
-          <li>Knob cards in real units: filter Hz and Q, envelope times in ms, LFO rates in Hz, sample rate in kHz,
-            delay time in ms, and so on.</li>
-          <li>The small corner sigils are gone.</li>
-        </ul>
-      </div>
-      <div class="card"><h3>0.19-test3<span>30 October 2026</span></h3>
-        <h4>Added</h4>
-        <ul>
-          <li>Each EDIT page's top is a picture of its sound: the wave, FM, transient, envelopes, the filter's
-            response, the shaper, insert effects, LFOs and the random lanes, each changing as you turn.</li>
-          <li>SEQ: Groove, Bounce, Melody, Melody loop and Scale as pictures (Track, Generator and Action keep the
-            grid).</li>
-          <li>FX: the reverb's tail, the delay's echoes, the FX bus, DIRT, and the master compressor's curve and
-            ducking. Nothing animates; a picture redraws only when its settings change.</li>
-        </ul>
-      </div>
-      <div class="card"><h3>0.19-test2<span>30 October 2026</span></h3>
-        <h4>Added</h4>
-        <ul>
-          <li>PERF RESET: SHIFT (OCT−) + HOME turns every performance effect off at once (latched keys, rolls,
-            STUTTER's chance, DENSITY, the DJ filter).</li>
-          <li>KEYS stays on as you change pages, so you can play while turning knobs; the header shows KEYS.
-            SHIFT (OCT−) + EDIT turns it off.</li>
-          <li>The FX pages end with the voices' FX and reverb sends.</li>
-          <li>Editing with morph on: a knob's edit moves the morph target too, so it is heard at any morph amount
-            (CONFIG → MORPH → Edits; KIT ONLY for the LXR's way).</li>
-          <li>DENSITY's VARY: the order steps drop and ghosts land is drawn again each time round. OCT+ on the
-            DENSITY page commits what it does into the pattern (OCT+ again: undo).</li>
-        </ul>
-        <h4>Fixed</h4>
-        <ul>
-          <li>After a model change the knob cards kept the last model's names and values (P CHORD showed a number,
-            or a chord that didn't follow the knob).</li>
-        </ul>
-      </div>
-      <div class="card"><h3>0.19-test1<span>30 October 2026</span></h3>
-        <h4>Changed</h4>
-        <ul>
-          <li>The sound pages run in a synth's order: MODEL first, then oscillator, FM, transient, filter, shape,
-            insert FX, the envelopes, and the modulation last (LFO 1, LFO 2, random per hit, cross mod / choke).
-            SELECT steps through them all; EDIT, ENV, SCL and LFO jump to their sections.</li>
-          <li>A section of several pages shows its page in the title: MOD EG / VELO (1/2), LFO 1 (2/3).</li>
-          <li>LFO 1 and LFO 2 share a layout: rate, amount, wave and target first, then sync, retrigger, offset and
-            mode.</li>
-          <li>The track's MIX pages are gone (volume and pan are on the mixer, MIDI on CONFIG, length on the TRACK
-            page); the sample rate moved to SHAPE, next to bits. GLO opens the mixer, then CONFIG.</li>
-          <li>SEQ opens the track's pages (TRACK first, then generator, action, groove, bounce, melody, scale);
-            SEQ again opens step edit. SELECT pages within each.</li>
-          <li>ARP opens PERF in two sets: PERFORM, then GLOBAL MOD (the global LFOs, macros and links). PERF's two
-            MIX pages are gone (the mixer has them).</li>
-          <li>RATCHET's Shape is on KNOB 2, before the rate it renames.</li>
-          <li>CONFIG shows the CPU line only on its LOAD page and a new last page, ELIXIR: the version and each
-            core's load.</li>
-        </ul>
-        <h4>Fixed</h4>
-        <ul>
-          <li>MODEL on LXR showed Rings' knobs, which do nothing there; it now holds the model alone.</li>
-          <li>The MODEL page lit the GLO button instead of EDIT.</li>
         </ul>
       </div>
       <div class="card"><h3>0.18<span>30 October 2026</span></h3>
