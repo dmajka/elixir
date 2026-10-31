@@ -1062,15 +1062,17 @@ A spell changes the sound and the pattern of the tracks you pick, at random but 
    | 8 MOD | random per hit, LFO 2, cross-mod | 16 LNK | links and generators |
 
    SHIFT (OCT−) + a white key leaves only that one in. The **Scope** knob sets them all at once (ALL, SOUND, PATTERN, VOICE, SHAPE, SPACE, RHYTHM, NOTES; CUSTOM when they match none). A part the spell never touches is grey; one left out is an outline.
-3. **Pick a spell** with KNOB 1 on GRIMOIRE. The first, **NONE**, is no spell: just a little variation of the sound and the steps, nudged from where they are. It starts at moderate settings (bar key 4 brings them back). Nothing else needs setting: every spell starts with settings that work.
+3. **Pick a spell** with KNOB 1 on GRIMOIRE. The first, **NONE**, is no spell: plain chance on whatever the white keys let in. Its **Sound** knob sets how far: low, a nudge of a step or two; around 70%, up to half of each knob's range; at 100%, anywhere at all (and waveforms, filter types, shapers and inserts switch more often as you turn it up). **Spread** (CHARACTER, KNOB 1) sets how many of the knobs move, **Motion** how far the random-per-hit amounts go, **Protect** how much the pitch, the decay and the beat are kept. It starts at moderate settings (bar key 4 brings them back). Nothing else needs setting: every spell starts with settings that work.
 4. **Cast** with **COPY (OCT+)**. It breathes when a cast is possible. A twelve-sided die rolls for a moment, and when it stops the spell is cast. Beside the die: how many sounds and steps it changed.
 5. **Listen.** Don't like it? **COPY (OCT+)** again rolls again, from where you were before the first roll (not on top of it). **SHIFT (OCT−)** alone takes the spell back: the pattern and the kit exactly as before. Bar key 2 **keeps** it, and so does leaving SPELLS or loading a pattern or a kit. Bar key 4 puts the spell's knobs back as they were at first.
 
 Only the targets' steps change. A spell changes the shared FX (the delay, the reverb, the FX bus) only when every track is a target.
 
-**D1 stays a kick.** Whatever the spell, D1 remains a kick: the LXR's (a sine or a triangle, low), Plaits' BASS DRUM or Rings' MODAL, with a low-pass filter. The spell picks the kind: Haunted Dub a soft, dark, quieter kick; Forbidden Ritual and Rust Circuit a loud, driven, clicky one; Raster Séance a short tight one; Glass Cathedral a soft tuned one; Whispering Motes a short, quiet one; NONE, Concrete Drift and Biofeedback nudge the kick you have. Protection keeps its pitch and decay.
+**D1 stays a kick.** Whatever the spell, D1 remains a kick: the LXR's (a sine or a triangle, low), Plaits' BASS DRUM or Rings' MODAL (MICRO's POP or a CHIRP down when VOICES lets in only MICRO), with a low-pass filter. The spell picks the kind: Haunted Dub a soft, dark, quieter kick; Forbidden Ritual and Rust Circuit a loud, driven, clicky one; Raster Séance a short tight one; Glass Cathedral a soft tuned one; Whispering Motes a short, quiet one; Concrete Drift and Biofeedback nudge the kick you have; NONE moves it as far as Sound says, within a kick's bounds. Protection keeps its pitch and decay.
 
 **D2 and D3 stay toms.** D2 is held in a floor tom's register and D3 in a rack tom's a little above it; a spell moves their pitch within those, never into high, thin tones, and keeps a deep pitch drop short (no long slow moans).
+
+**Sound at 100% sets them free** (from 0.21, any spell; the card shows FREE): D1 is no longer kept a kick and D2 and D3 no longer toms, so every voice is fair game. At 99% they are kept as above. The LIMITS still hold, and so do the guards against a whistling filter.
 
 **Melodies.** Most spells sometimes turn on the melody generator ([Melody](#melody-from-016)) on D2 and D3, in the pattern's scale (a spell picks one when the pattern has none) and around the voice's own pitch: slow walks for NONE, Haunted Dub and Concrete Drift, arpeggios for Rust Circuit and Glass Cathedral, motifs for Forbidden Ritual, random notes for Glitch Storm. More often with Pattern up; leave NOT (white key 14) out to keep the notes as they are.
 
@@ -1078,7 +1080,7 @@ Only the targets' steps change. A spell changes the shared FX (the delay, the re
 
 | Spell | Does | Character knobs |
 |---|---|---|
-| **None** | A little variation: the sound and the steps nudged | Range, Detail, Motion, Protect |
+| **None** | Plain chance: Sound from a nudge to anything | Spread, Detail, Motion, Protect |
 | **Poltergeist** | Metallic, unstable hits and rattles; the rhythm kept | Metal, Rattle, Haunting, Preserve |
 | **Skeleton** | Strips the groove to its bones: accents and gaps (the pattern only) | Emphasis, Syncope, Variety, Anchors |
 | **Glitch Storm** | Digital errors, bursts, cuts and chaotic fills | Corrupt, Fragment, Unstable, Groove |
@@ -1092,7 +1094,7 @@ Only the targets' steps change. A spell changes the shared FX (the delay, the re
 | **Whispering Motes** (0.19) | Microsound, softly: MICRO's dust, grains, pops and chirps on D2 to the hats (the snare sometimes its own hushed noise), a quiet short kick, soft hits in scattered clusters | Grain, Scatter, Whisper, Anchors |
 
 **CAST** (how much):
-- **Sound:** how far the voices move. OFF leaves the kit alone.
+- **Sound:** how far the voices move. OFF leaves the kit alone; 100% (FREE) lets the kick and the toms go too.
 - **Pattern:** how much the steps change: hits, velocity, probability, timing, ratchets. OFF leaves them alone.
 - **Density:** fewer hits (left) or more (right); AS IS in the middle.
 - **Chaos:** low follows the bar (beats, backbeats, off-beats), high lets anything happen.
@@ -1105,7 +1107,19 @@ Only the targets' steps change. A spell changes the shared FX (the delay, the re
 - **Motion:** **SAME** every target forward at the pattern's speed (it also brings back tracks an earlier cast sent off); **ONE** (the default) one target at x2, 1/2 or 3/2, or backwards or ping-pong, the rest forward at the pattern's speed; **FEW** two of them (3/4 and 4/3 too); **MANY** about half (any speed from 2/3 to x3, random and the other ping-pong too); **FREE** a free-for-all, wilder with Chaos up. A slower clock is kept within four bars. With Protection over half, the kick and snare are never sent their own way (but SAME and the others still bring them back).
 - **Lengths:** the track lengths a cast may give: **BARS** 16, 32 or 64 steps (other lengths are set to the nearest of them); **EVEN** (the default) 12 and 24 too; **ODD** 7, 14, 15 and 20 too.
 
-Like LIMITS, MOTION is shared by every spell and saved with the project.
+**VOICES** (from 0.21; on MOTION's page the top row of white keys picks the engines instead of the sound parts; the bottom row is still the pattern's):
+
+| Key | Lets in |
+|---|---|
+| 1 LXR | the LXR's own voices |
+| 2 RNG | Rings' models (D1–D3) |
+| 3 PLT | Plaits' engines (D1–D3) |
+| 4 MIC | MICRO's types (any voice) |
+| 5 KCK | (on: D1 always the LXR's kick) |
+
+All four lit (the default): each spell picks engines its own way. Some lit: a cast gives the targets only those, moving a voice on an engine left out to one let in, and now and then switching between them (NONE: more often with Sound and Spread up). None lit: every voice keeps its engine. SHIFT (OCT−) + a key leaves only that engine. Rings and Plaits play on D1–D3 only, two models at most, so a voice they can't go on keeps what it has. Some examples: **LXR + MIC** a mix of the two, the kick the LXR's; **MIC + KCK** the LXR's kick and MICRO on everything else; **MIC** alone MICRO everywhere, the kick a POP or a CHIRP; **PLT + KCK** the LXR's kick, Plaits on the toms. The OSC white key must be in (on the other pages) for engines to change at all.
+
+Like LIMITS, MOTION and VOICES are shared by every spell and saved with the project; a recipe keeps its VOICES too.
 
 **GRIMOIRE**:
 - **Spell:** NONE and the eleven spells, then your recipes (U1–U8).
