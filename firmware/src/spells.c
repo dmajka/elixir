@@ -1,14 +1,16 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Elixir: SPELLS (32), PERF's second set (ARP: PERFORM > SPELLS > GLOBAL MOD). Guided randomization: NONE (a little
- * variation) and ten spells, each its own way of changing the voices and the steps of the tracks the black keys pick
- * (docs/SPELLS.md), in the parts of them the white keys pick (sound 1-8, pattern 9-16). D1 stays a kick. The pages:
+ * Elixir: SPELLS (32), PERF's second set (ARP: PERFORM > SPELLS > GLOBAL MOD). Guided randomization: NONE (plain
+ * chance: SOUND from a nudge to anything, 0.21) and eleven spells, each its own way of changing the voices and the steps of the tracks the black keys pick
+ * (docs/SPELLS.md), in the parts of them the white keys pick (sound 1-8, pattern 9-16). D1 stays a kick, D2 and D3
+ * toms (SOUND at 100%: not, any spell). The pages:
  *   GRIMOIRE   SPELL (a spell, or a recipe saved from one: U1 ..), VARIATION, SCOPE (the white keys' presets), ROLL
  *   CAST       SOUND (how much the voices change; 0 none), PATTERN (how much of the steps), DENSITY (how many
  *              hits: 64 as many as now), CHAOS (the spell's musical rules .. anything)
  *   CHARACTER  the spell's own four: a sound one, a rhythm one, EVOLUTION, PROTECTION
  *   LIMITS     the most any spell sets: a voice's reverb send, its FX send, the reverb's level, the FX bus's mix
  *   MOTION     (0.19) how far the tracks' speed and direction part (SAME: every target forward at the pattern's
- *              speed .. FREE: any), the lengths a cast may give (bars, even, odd)
+ *              speed .. FREE: any), the lengths a cast may give (bars, even, odd); (0.21) its white keys 1-5 the
+ *              VOICES: the engines a cast may give (LXR, RINGS, PLAITS, MICRO) and KICK (D1 the LXR's, always)
  * OCT+ casts (a d12 rolls, then the spell plays while the pattern runs); cast again (OCT+) and it is cast afresh on
  * what was there before it; OCT- REVERSE puts that back; bar key 2 KEEPs it (and leaving SPELLS does). Bar key 1:
  * every track or none, bar key 3: SAVE the spell's settings, targets and roll as a recipe, bar key 4: the spell's
@@ -55,6 +57,15 @@ static const char *const SC_LONG[16] = {"PITCH", "OSCILLATOR, MODELS", "TRANSIEN
 static const char *const SCOPE_NAME[NSCOPE] = {"ALL", "SOUND", "PATTERN", "VOICE", "SHAPE", "SPACE", "RHYTHM", "NOTES"};
 static const uint16_t SCOPE_CATS[NSCOPE] = {SC_ALL, SC_SOUND, SC_PATTERN, SC_VOICE | SC_ENV, SC_SHAPE, SC_FX | SC_MOD,
                                             SC_RHYTHM, SC_NOTES};
+/* VOICES (MOTION's page, white keys 1-5): the engines a cast may give the targets (all four: the spell's own picks;
+ * some: only those, a voice on another moved to one; none: each voice's engine as it is), and KICK: D1 the LXR's */
+enum { SE_LXR = 1, SE_RINGS = 2, SE_PLAITS = 4, SE_MICRO = 8, SE_ALL = 15, SE_KICK = 16 };
+#define NSE 5u
+static const char *const SE_SHORT[NSE] = {"LXR", "RNG", "PLT", "MIC", "KCK"};
+static const char *const SE_LONG[NSE] = {"LXR VOICES", "RINGS MODELS", "PLAITS MODELS", "MICRO TYPES",
+                                         "KICK ALWAYS LXR"};
+#define MC_POP 8u                                    /* (MICRO's POP and CHIRP, micro.c: a kick of sorts) */
+#define MC_CHIRP 9u
 
 /* the roles a spell moves, each voice's parameter for it (sp_role_par) */
 enum { R_COARSE, R_FINE, R_WAVE, R_FMAMT, R_FMFREQ, R_FMWAVE, R_FM2AMT, R_FM2FREQ, R_NOISE, R_SNMIX, R_TWAVE, R_TVOL,
@@ -147,15 +158,6 @@ static const uint8_t SP_LIST[NSL][5] = {{FK(F_BP), FK(F_HP), FK(F_PEAK), FK(F_CO
                                         {SH_CLIP, SH_BITE, SH_FUZZ, SH_RECT, SH_CLIP}, {SH_TAPE, SH_LXR, SH_ASYM, SH_TAPE, SH_LXR},
                                         {INS_PHASER, INS_FLANGER, INS_CHORUS, INS_SHIFT, INS_RING}};
 
-static const smove_t MV_NONE[] = {                  /* (a little of everything, near where it is) */
-    {R_COARSE, 0, 3, MF_W2 | MF_NEAR | MF_PROT}, {R_FINE, 0, 10, MF_W2 | MF_NEAR}, {R_FMAMT, 0, 16, MF_W2 | MF_NEAR},
-    {R_FMFREQ, 0, 12, MF_W1 | MF_NEAR}, {R_NOISE, 0, 16, MF_W2 | MF_NEAR}, {R_SNMIX, 0, 16, MF_W2 | MF_NEAR},
-    {R_TVOL, 0, 20, MF_W2 | MF_NEAR}, {R_TFREQ, 0, 16, MF_W1 | MF_NEAR}, {R_DEC, 0, 14, MF_W3 | MF_NEAR | MF_PROT},
-    {R_SLOPE, 0, 16, MF_W1 | MF_NEAR}, {R_MODAMT, 0, 12, MF_W1 | MF_NEAR}, {R_MODDEC, 0, 12, MF_W1 | MF_NEAR},
-    {R_FFREQ, 0, 18, MF_W3 | MF_NEAR}, {R_RESO, 0, 12, MF_W1 | MF_NEAR}, {R_DRIVE, 0, 12, MF_W1 | MF_NEAR},
-    {R_TILT, 0, 10, MF_W2 | MF_NEAR}, {R_PAN, 0, 14, MF_W1 | MF_NEAR}, {R_M1, 0, 14, MF_W2 | MF_NEAR},
-    {R_M2, 0, 14, MF_W2 | MF_NEAR}, {R_M3, 0, 14, MF_W2 | MF_NEAR}, {R_RVS, 0, 10, MF_W1 | MF_NEAR},
-    {R_RNDP, 0, 12, MF_W2 | MF_EVO}, {R_RNDF, 0, 20, MF_W2 | MF_EVO}};
 static const smove_t MV_POLTER[] = {
     {R_FMAMT, 20, 100, MF_W3 | MF_C1}, {R_FMFREQ, 10, 127, MF_W3}, {R_FMWAVE, 0, 7, MF_W2 | MF_SET},
     {R_FM2AMT, 40, 127, MF_W3 | MF_C1}, {R_FM2FREQ, 10, 127, MF_W3}, {R_WAVE, 0, 5, MF_W1 | MF_SET},
@@ -252,11 +254,11 @@ typedef struct {
 } spell_t;
 #define MV(a) a, sizeof a / sizeof a[0]
 static const spell_t SPELL[NSPELL] = {
-    {"NO SPELL", "NONE", {"A little variation: the", "sound and the steps nudged"},
-     {"Range", "Detail", "Motion", "Protect"},
-     {"Small to wider nudges", "Plain to busy details", "Still to moving", "Keeps kick and snare"},
-     {24, 24, 64, 16, 32, 24, 0, 96}, SC_SOUND | SC_RHYTHM | SC_NOTES,
-     50, 20, 10, 40, 20, 10, 20, 10, 20, 0, 0, 0, MV(MV_NONE)},
+    {"NO SPELL", "NONE", {"Plain chance: SOUND from", "a nudge to anything at all"},
+     {"Spread", "Detail", "Motion", "Protect"},
+     {"Few knobs to every one", "Plain to busy details", "Random per hit, still to wild", "Keeps pitch, decay, beat"},
+     {24, 24, 64, 16, 64, 24, 0, 72}, SC_SOUND | SC_RHYTHM | SC_NOTES,
+     50, 20, 10, 40, 20, 10, 20, 10, 20, 0, 0, 0, 0, 0},   /* (its sound: sp_none_voice's) */
     {"POLTERGEIST", "POLTER", {"Metallic, unstable hits,", "rattles, the rhythm kept"},
      {"Metal", "Rattle", "Haunting", "Preserve"},
      {"Harmonic to inharmonic", "Clean strikes to rattles", "Still to drifting tones", "Keeps pitch and decay"},
@@ -315,7 +317,8 @@ static const spell_t SPELL[NSPELL] = {
      60, 50, 90, 70, 60, 30, 60, 30, 70, 20, 30, SF_MICRO | SF_LFO | SF_PLATE | SF_SOFT, MV(MV_MOTES)}};
 
 /* a recipe: a spell and its settings, saved (bar key 3) into the project's GRIMOIRE */
-typedef struct { uint8_t spell, tracks, k[NSPK]; uint16_t mask; uint32_t seed; } recipe_t;   /* (spell: + 1, 0 empty) */
+typedef struct { uint8_t spell, tracks, k[NSPK]; uint16_t mask; uint32_t seed; uint8_t eng; } recipe_t;   /* (spell:
+                                                     * + 1, 0 empty) */
 static recipe_t rcp[NRECIPE] POOL;
 static struct {
     uint8_t sel;                                     /* SPELL: 0.. the spells, NSPELL + r recipe r */
@@ -326,6 +329,7 @@ static struct {
     uint16_t wdown;                                  /* (the white keys pressed on SPELLS) */
     uint8_t lim[NSPL];                               /* LIMITS: the most a spell sets (SPL_*) */
     uint8_t mot, mlen;                               /* MOTION (SPMO_*, SPML_*) */
+    uint8_t eng;                                     /* VOICES (SE_*) */
     uint8_t pend, pend_p, pend_loads;                /* a cast to audition: its pattern, kit_loads then */
     uint8_t rolling, face;                           /* the die rolling; its face (1..12) */
     uint32_t roll_ms, seed, last;                    /* .. since; the seed it rolled, the last cast's */
@@ -357,6 +361,7 @@ static void sp_defaults(void)
     memcpy(sp.lim, SP_LIM0, NSPL);
     sp.mot = SPMO_ONE;
     sp.mlen = SPML_EVEN;
+    sp.eng = SE_ALL;
     sp.last = 0x2545F491u;
 }
 static int sp_is_rcp(void) { return sp.sel >= NSPELL; }
@@ -365,8 +370,8 @@ static uint8_t *sp_knobs(void) { return sp_is_rcp() ? rcp[sp.sel - NSPELL].k : s
 static int sp_castable(void) { return sp.tracks && !sp.rolling; }
 
 /* ------------------------------------------------------------- sound --- */
-typedef struct { uint16_t cats; uint8_t sm, pm, dens, chaos, c[4]; uint8_t all, mot; } spc_t;   /* a cast's settings
-                                                                     * (mot: MOTION applies) */
+typedef struct { uint16_t cats; uint8_t sm, pm, dens, chaos, c[4]; uint8_t all, mot, free; } spc_t;   /* a cast's
+                                * settings (mot: MOTION applies; free: SOUND at 100%, D1 no kick, D2 D3 no toms) */
 
 static void sp_par(uint32_t p, int32_t v)            /* a sound parameter, in its range (CONFIG MORPH: the target too) */
 {
@@ -384,9 +389,9 @@ static void sp_move(const smove_t *m, uint32_t t, uint32_t v, const spc_t *c)
 {
     uint32_t p = sp_role_par(m->r, v), amt = c->sm, w = (m->f & 3u) + 1u, str;
     int32_t cur, lo = m->lo, hi = m->hi, tg, mn, mx;
-    if (!p || !(c->cats & sp_role_cat(m->r)) || par_unheard(t, p) || (v == 0u && sp_kick_role(m->r)))
+    if (!p || !(c->cats & sp_role_cat(m->r)) || par_unheard(t, p) || (v == 0u && !c->free && sp_kick_role(m->r)))
         return;
-    if (m->r == R_COARSE && (v == 1u || v == 2u) && !(m->f & MF_NEAR)) {   /* (D2, D3: the toms' registers) */
+    if (m->r == R_COARSE && (v == 1u || v == 2u) && !(m->f & MF_NEAR) && !c->free) {   /* (D2, D3: the toms' registers) */
         lo = TOM[v - 1u][0] + lo * (TOM[v - 1u][1] - TOM[v - 1u][0]) / 127;
         hi = TOM[v - 1u][0] + hi * (TOM[v - 1u][1] - TOM[v - 1u][0]) / 127;
     }
@@ -425,6 +430,50 @@ static void sp_move(const smove_t *m, uint32_t t, uint32_t v, const spc_t *c)
     str = 40u + (amt * 3u >> 2) + sp_rnd(24);
     sp_par(p, cur + (tg - cur) * (int32_t)(str > 127u ? 127u : str) / 127);
 }
+/* NONE's sound (0.21): plain chance on every knob the white keys let in. SOUND how far (its square: a step or two
+ * low, half the range at 70%, anywhere at 100%), Spread how many of them move; Motion how far the random-per-hit
+ * ones, Protection keeps pitch and decay, Chaos over half lets the bits and the rate in too. D1's kick knobs are
+ * sp_kick's and the toms' pitch sp_tom's (SOUND at 100%: these too) */
+static uint32_t sp_q(const spc_t *c) { return c->sm * c->sm / 127u; }
+static uint32_t sp_spread(const spc_t *c) { return 16u + c->c[0] * 112u / 127u; }
+static int32_t sp_near(int32_t cur, int32_t lo, int32_t hi, int32_t d)   /* anywhere within d of cur, in lo .. hi */
+{
+    int32_t a, b;
+    cur = clamp32(cur, lo, hi);
+    a = cur - d > lo ? cur - d : lo;
+    b = cur + d < hi ? cur + d : hi;
+    return a + (int32_t)sp_rnd((uint32_t)(b - a) + 1u);
+}
+static void sp_none_voice(uint32_t t, uint32_t v, const spc_t *c)
+{
+    uint32_t r, p, q;
+    int32_t lo, hi;
+    for (r = 0; r < NROLE; r++) {
+        if (!(p = sp_role_par(r, v)) || !(c->cats & sp_role_cat(r)) || par_unheard(t, p))
+            continue;
+        if (!c->free && ((v == 0u && sp_kick_role(r)) || ((v == 1u || v == 2u) && r == R_COARSE)))
+            continue;
+        if ((r == R_DECIM || r == R_BITS) && c->chaos <= 64u)
+            continue;
+        if (sp_rnd(128) >= sp_spread(c))
+            continue;
+        q = sp_q(c);
+        if (r >= R_RNDP && r <= R_XAMT)              /* (random per hit, cross-mod: Motion's) */
+            q = q * c->c[2] / 127u;
+        else if ((r == R_COARSE || r == R_DEC) && !c->free)
+            q = q * (127u - c->c[3]) / 127u;
+        lo = (int32_t)vp_min(p);
+        hi = (int32_t)vp_max(p);
+        if (r == R_RVS || r == R_FXS)                /* (within LIMITS) */
+            hi = clamp32((int32_t)sp.lim[r == R_RVS ? SPL_RVS : SPL_FXS], lo, hi);
+        if (r == R_WAVE || r == R_FMWAVE || r == R_TWAVE || r == R_FTYPE || r == R_SHAPE || r == R_INS) {
+            if (sp_rnd(128) < q)                     /* (a switch: any of its values) */
+                sp_par(p, lo + (int32_t)sp_rnd((uint32_t)(hi - lo) + 1u));
+        } else if (q) {
+            sp_par(p, sp_near((int32_t)par[p], lo, hi, (hi - lo) * (int32_t)q / 127 + 1));
+        }
+    }
+}
 /* the safeguards: resonance and drive bounded together, a short decay for a hard FM, the bits and the levels */
 static void sp_safe(uint32_t v, const spc_t *c)
 {
@@ -447,12 +496,15 @@ static void sp_safe(uint32_t v, const spc_t *c)
         if (c->chaos < 112u && par[r] > 88u && f != F_LP && f != F_LP2 && f != F_LP4 && f != F_OFF && f != F_DUB)
             par[r] = 88;
     }
-    if (v == 0u && par[r] > 72u)                     /* (the kick: no ringing filter, little random pitch) */
+    if (v == 0u && !c->free && par[r] > 72u)         /* (the kick: no ringing filter, little random pitch) */
         par[r] = 72;
-    if (v == 0u && par[PAR_RND_PITCH1] > 16u)
+    if (v == 0u && !c->free && par[PAR_RND_PITCH1] > 16u)
         par[PAR_RND_PITCH1] = 16;
 }
-/* the models: Rings' and Plaits' (D1-D3, as many as play: model_cap) or MICRO's, each with its knobs set */
+/* the models: Rings' and Plaits' (D1-D3, as many as play: model_cap) or MICRO's, each with its knobs set; only
+ * the engines VOICES lets in (sp_eng_ok) */
+static uint32_t sp_eng_of(uint32_t md) { return !md ? SE_LXR : md < MD_PL0 ? SE_RINGS : md < MD_MC0 ? SE_PLAITS : SE_MICRO; }
+static uint32_t sp_eng_ok(uint32_t v) { return v == 0u && (sp.eng & SE_KICK) ? SE_LXR : sp.eng & SE_ALL; }
 static uint32_t sp_models(uint32_t skip)             /* the Rings or Plaits models on D1-D3 (but voice skip's) */
 {
     uint32_t v, n = 0;
@@ -464,7 +516,8 @@ static void sp_model(uint32_t v, uint32_t md)
 {
     static const uint8_t D[6] = {64, 64, 32, 40, 0, 0};
     uint32_t i;
-    if (!model_ok(v, md) || (md && md < MD_MC0 && (v > 2u || sp_models(v) >= model_cap)) || par[PAR_MODEL1 + v] == md)
+    if (!model_ok(v, md) || (md && md < MD_MC0 && (v > 2u || sp_models(v) >= model_cap)) || par[PAR_MODEL1 + v] == md ||
+        !(sp_eng_ok(v) & sp_eng_of(md)))
         return;
     sp_par(PAR_MODEL1 + v, (int32_t)md);
     if (md >= MD_MC0 || md <= MD_FM)                 /* (a fresh model's knobs: as the init kit has them) */
@@ -474,7 +527,7 @@ static void sp_model(uint32_t v, uint32_t md)
 static void sp_models_cast(const spell_t *S, uint32_t v, const spc_t *c)
 {
     uint32_t want = S == &SPELL[SP_MOTES] ? 128u : c->sm * (64u + c->c[0]) >> 7, md = par[PAR_MODEL1 + v];
-    if (!(c->cats & SC_OSC) || sp_rnd(128) >= want || v == 0u)   /* (D1: sp_kick's) */
+    if (!(c->cats & SC_OSC) || sp_rnd(128) >= want || (v == 0u && !c->free))   /* (D1: sp_kick's) */
         return;
     if (S == &SPELL[SP_MOTES]) {                     /* (MOTES: MICRO's quiet ones on every voice; the snare at
                                                       * times its own noise, hushed) */
@@ -505,6 +558,30 @@ static void sp_models_cast(const spell_t *S, uint32_t v, const spc_t *c)
         sp_model(v, MD_PL0 + sp_rnd(16));
     }
 }
+/* VOICES: a voice on an engine left out moved to one let in (D1, a kick: sp_kick's); NONE now and then another,
+ * with SOUND and Spread; another spell with only some let in, now and then too (all of them: its own picks) */
+static void sp_engines(const spell_t *S, uint32_t v, const spc_t *c)
+{
+    uint32_t ok = sp_eng_ok(v), md = par[PAR_MODEL1 + v], n = 0;
+    uint8_t m[4];
+    if (!(c->cats & SC_OSC) || !ok || (v == 0u && !c->free))
+        return;
+    if (ok & sp_eng_of(md)) {
+        uint32_t a = S == &SPELL[SP_NONE] ? sp_q(c) * sp_spread(c) >> 7 : ok == SE_ALL ? 0u : c->sm * (64u + c->c[0]) >> 8;
+        if (!a || sp_rnd(128) >= a)
+            return;
+    }
+    if (ok & SE_LXR)
+        m[n++] = MD_LXR;
+    if ((ok & SE_RINGS) && v <= 2u && sp_models(v) < model_cap)
+        m[n++] = (uint8_t)(MD_MODAL + sp_rnd(3));    /* (MODAL, STRING, FM) */
+    if ((ok & SE_PLAITS) && v <= 2u && sp_models(v) < model_cap)
+        m[n++] = (uint8_t)(MD_PL0 + sp_rnd(16));
+    if (ok & SE_MICRO)
+        m[n++] = (uint8_t)(MD_MC0 + sp_rnd(NMICRO));
+    if (n)                                           /* (none for this voice, Rings or Plaits only on the hats: kept) */
+        sp_model(v, m[sp_rnd(n)]);
+}
 /* D1 stays a kick: the LXR's (a sine or triangle), Plaits' BASS DRUM or Rings' MODAL, low. Each spell has its kind
  * of kick: ranges (kit values) for the pitch, the decay, the pitch EG's amount and decay, the click (the transient's
  * level), drive, FM, the low-pass and the level. The click, drive, FM and filter follow the first CHARACTER knob
@@ -533,7 +610,10 @@ static const uint8_t KK_LIM[NKK][2] = {{18, 44}, {4, 90}, {0, 127}, {8, 110}, {0
 static const uint8_t KK_PAR[NKK] = {PAR_COARSE1, PAR_VELOD1, PAR_MODAMNT1, PAR_MOD_EG1, PAR_TRANS1_VOL, PAR_DRIVE1,
                                     PAR_FMAMNT1, PAR_FILTER_FREQ_1, PAR_VOL1};
 static const uint16_t KK_CAT[NKK] = {SC_PITCH, SC_ENV, SC_ENV, SC_ENV, SC_TRANS, SC_DRIVE, SC_OSC, SC_FILTER, SC_ENV};
-static int sp_kick_ok(uint32_t md) { return !md || md == MD_MODAL || md == MD_PL0 + PE_BD; }
+static int sp_kick_ok(uint32_t md)
+{
+    return !md || md == MD_MODAL || md == MD_PL0 + PE_BD || md == MD_MC0 + MC_POP || md == MD_MC0 + MC_CHIRP;
+}
 static void sp_kick(const spell_t *S, const spc_t *c)
 {
     const kick_t *K = &KICK[S - SPELL];
@@ -543,6 +623,13 @@ static void sp_kick(const spell_t *S, const spc_t *c)
         uint32_t a = k <= KK_DEC ? amt * (127u - c->c[3]) >> 7 : amt;   /* (PROTECTION keeps pitch and decay) */
         if (!(c->cats & KK_CAT[k]))
             continue;
+        if (S == &SPELL[SP_NONE]) {                  /* (NONE: plain chance, within a kick's bounds) */
+            uint32_t q = k <= KK_DEC ? sp_q(c) * (127u - c->c[3]) / 127u : sp_q(c);
+            if (q && sp_rnd(128) < sp_spread(c))
+                sp_par(KK_PAR[k], sp_near(cur, KK_LIM[k][0], KK_LIM[k][1],
+                                          (KK_LIM[k][1] - KK_LIM[k][0]) * (int32_t)q / 127 + 1));
+            continue;
+        }
         if (a && sp_rnd(128) < 16u + (a * 3u >> 2) && (lo || hi)) {
             if (K->eng & KE_NEAR) {
                 int32_t d = (hi * (int32_t)(32u + c->c[0]) >> 7) * (int32_t)(32u + a) / 128;
@@ -569,19 +656,26 @@ static void sp_kick(const spell_t *S, const spc_t *c)
     }
     if (!(c->cats & SC_OSC))
         return;
-    if (!sp_kick_ok(md) || (!(K->eng & KE_NEAR) && sp_rnd(256) < (amt * (32u + c->c[0]) >> 7))) {   /* (the engine) */
-        uint32_t n = 0;
+    if (!sp_kick_ok(md) || !(sp_eng_ok(0) & sp_eng_of(md)) ||   /* (the engine: one VOICES lets in) */
+        (!(K->eng & KE_NEAR) && sp_rnd(256) < (amt * (32u + c->c[0]) >> 7)) ||
+        (S == &SPELL[SP_NONE] && sp_rnd(128) < (sp_q(c) * sp_spread(c) >> 7))) {
+        uint32_t n = 0, ok = sp_eng_ok(0), none = S == &SPELL[SP_NONE];
         uint8_t e[3];
-        e[n++] = MD_LXR;
-        if ((K->eng & KE_PLAITS) || (!sp_kick_ok(md) && md >= MD_PL0 && md < MD_MC0))
+        if (ok & SE_LXR)
+            e[n++] = MD_LXR;
+        if ((ok & SE_PLAITS) && ((K->eng & KE_PLAITS) || none || (!sp_kick_ok(md) && md >= MD_PL0 && md < MD_MC0)))
             e[n++] = MD_PL0 + PE_BD;
-        if ((K->eng & KE_RINGS) || (!sp_kick_ok(md) && md && md < MD_PL0))
+        if ((ok & SE_RINGS) && ((K->eng & KE_RINGS) || none || (!sp_kick_ok(md) && md && md < MD_PL0)))
             e[n++] = MD_MODAL;
-        md = e[sp_rnd(n)];
-        if (md && (sp_models(0) >= model_cap || !model_ok(0, md)))
-            md = MD_LXR;
-        if (md != par[PAR_MODEL1])
-            sp_par(PAR_MODEL1, (int32_t)md);
+        if (ok == SE_MICRO)                          /* (MICRO alone: its POP or a CHIRP down) */
+            e[n++] = (uint8_t)(MD_MC0 + (sp_rnd(2) ? MC_POP : MC_CHIRP));
+        if (n) {
+            md = e[sp_rnd(n)];
+            if (md && md < MD_MC0 && (sp_models(0) >= model_cap || !model_ok(0, md)))
+                md = ok & SE_LXR ? MD_LXR : par[PAR_MODEL1];
+            if (md != par[PAR_MODEL1])
+                sp_par(PAR_MODEL1, (int32_t)md);
+        }
     }
     md = par[PAR_MODEL1];
     if (md == MD_LXR) {                              /* (the LXR's: a sine or a triangle) */
@@ -599,6 +693,10 @@ static void sp_kick(const spell_t *S, const spc_t *c)
         sp_par(PAR_MPOS1, 30 + (int32_t)sp_rnd(30));
         sp_par(PAR_MEXC1, 0);
         sp_par(PAR_MTENS1, (int32_t)par[PAR_MODAMNT1] / 3);
+    } else if (md >= MD_MC0) {                       /* (MICRO: dark (a CHIRP down), its length the decay's) */
+        sp_par(PAR_MDECAY1, 24 + (int32_t)par[PAR_VELOD1] / 2);
+        sp_par(PAR_MDAMP1, (int32_t)sp_rnd(24));
+        sp_par(PAR_MEXC1, 0);
     }
 }
 /* the toms' pitch: somewhere in their register when it was outside, else (SOUND, less with PROTECTION) a few
@@ -611,7 +709,11 @@ static void sp_tom(const spell_t *S, uint32_t v, const spc_t *c)
         return;
     if (cur < lo || cur > hi)
         sp_par(p, lo + (int32_t)sp_rnd((uint32_t)(hi - lo) + 1u));
-    else if (sp_rnd(128) < a)
+    else if (S == &SPELL[SP_NONE]) {                 /* (NONE: SOUND how far in the register) */
+        uint32_t q = sp_q(c) * (127u - c->c[3]) / 127u;
+        if (q && sp_rnd(128) < sp_spread(c))
+            sp_par(p, sp_near(cur, lo, hi, (hi - lo) * (int32_t)q / 127 + 1));
+    } else if (sp_rnd(128) < a)
         sp_par(p, clamp32(KICK[S - SPELL].eng & KE_NEAR ? cur + sp_pm(2)
                         : sp_rnd(3) ? cur + sp_pm(2 + (int32_t)(c->chaos >> 4)) : lo + (int32_t)sp_rnd((uint32_t)(hi - lo) + 1u),
                           lo, hi));
@@ -1046,7 +1148,8 @@ static void sp_cast(uint32_t seed)                   /* the spell on the targets
     for (i = 0; i < NSPK; i++)                       /* (VARIATION: the knobs moved, this cast only) */
         kk[i] = (uint8_t)clamp32((int32_t)k[i] + sp_pm((int32_t)sp.var / 2), 0, 127);
     c.cats = (uint16_t)(S->cats & sp.mask);
-    c.sm = kk[SPK_SOUND];
+    c.free = k[SPK_SOUND] >= 127u;                   /* (SOUND at 100%: no kick, no toms kept; VARIATION aside) */
+    c.sm = c.free ? 127u : kk[SPK_SOUND];
     c.pm = kk[SPK_PAT];
     c.dens = kk[SPK_DENS];
     c.chaos = kk[SPK_CHAOS];
@@ -1067,10 +1170,13 @@ static void sp_cast(uint32_t seed)                   /* the spell on the targets
             continue;
         vdone |= 1u << v;
         if (c.cats & SC_SOUND) {
-            if (v == 0u)                             /* (D1: a kick, the spell's kind) */
+            sp_engines(S, v, &c);
+            if (v == 0u && !c.free)                  /* (D1: a kick, the spell's kind) */
                 sp_kick(S, &c);
             if (S->fl & (SF_RINGS | SF_PLAITS | SF_MICRO))
                 sp_models_cast(S, v, &c);
+            if (S == &SPELL[SP_NONE])
+                sp_none_voice(t, v, &c);
             for (i = 0; i < S->nmv; i++)
                 sp_move(&S->mv[i], t, v, &c);
             if (S->fl & SF_LFO)
@@ -1084,12 +1190,12 @@ static void sp_cast(uint32_t seed)                   /* the spell on the targets
                 par[PAR_REV_SEND1] = (uint8_t)(par[PAR_REV_SEND1] * (127u - c.c[3]) >> 7);
                 par[PAR_FX_SEND1] = (uint8_t)(par[PAR_FX_SEND1] * (127u - c.c[3]) >> 7);
             }
-            if (v == 1u || v == 2u)
+            if ((v == 1u || v == 2u) && !c.free)
                 sp_tom(S, v, &c);
             sp_safe(v, &c);
         }
     }
-    if ((c.cats & SC_PITCH) && (sp.tracks & 6u) && par[PAR_COARSE3] < par[PAR_COARSE2] + 3u)   /* (D3 above D2) */
+    if ((c.cats & SC_PITCH) && !c.free && (sp.tracks & 6u) && par[PAR_COARSE3] < par[PAR_COARSE2] + 3u)   /* (D3 above D2) */
         sp_par(PAR_COARSE3, clamp32((int32_t)par[PAR_COARSE2] + 3 + (int32_t)sp_rnd(5), TOM[1][0], TOM[1][1]));
     sp_fx(S, &c);
     if (c.cats & SC_FX) {                            /* (LIMITS: the targets' sends; with every track, the shared) */
@@ -1184,6 +1290,17 @@ static void sp_cast_key(void)                        /* OCT+: the die rolls (sp_
     sp.roll_ms = fm1_ms;
     ui.force = 1;
 }
+static const char *sp_why(void)                      /* why a cast changed nothing */
+{
+    const spell_t *S = &SPELL[sp_spell() % NSPELL];
+    const uint8_t *k = sp_knobs();
+    uint32_t in = (S->cats | SC_LEN) & sp.mask, snd = (in & SC_SOUND) != 0u, pt = (in & SC_PATTERN) != 0u;
+    if (!in)
+        return ": NOTHING IN SCOPE";                 /* (the white keys leave none of the spell's parts) */
+    if ((!snd || !k[SPK_SOUND]) && (!pt || !k[SPK_PAT]))
+        return snd && pt ? ": SOUND, PATTERN OFF" : snd ? ": SOUND IS OFF" : ": PATTERN IS OFF";
+    return ": NOTHING CHANGED";
+}
 static void sp_service(void)                         /* each ms: the roll's end; a cast kept when SPELLS is left */
 {
     if (sp.pend && (!perf_spells() || !sp_pending()))
@@ -1200,7 +1317,7 @@ static void sp_service(void)                         /* each ms: the roll's end;
         sp_cast(sp.seed);
         sp.last = sp.seed;
         put_str(b, SPELL[sp_spell() % NSPELL].card, sizeof b);
-        put_str(b + str_len(b), sp.nsnd || sp.nstep ? " CAST (OCT-: UNDO)" : ": NOTHING CHANGED", sizeof b - str_len(b));
+        put_str(b + str_len(b), sp.nsnd || sp.nstep ? " CAST (OCT-: UNDO)" : sp_why(), sizeof b - str_len(b));
         ui_message(b);
     }
 }
@@ -1233,10 +1350,25 @@ static uint32_t sp_scope_of(uint16_t m)              /* the preset the white key
         ;
     return i;
 }
+static int sp_voices_page(void) { return ui.page % NPERF == PG_SPELL + 4u; }   /* (MOTION's: VOICES on top) */
 static void sp_white(uint32_t w, int only)           /* a white key: that part in (again: out); SHIFT: only it */
 {
     char b[32];
     sp.wdown |= (uint16_t)(1u << w);
+    if (w < 8u && sp_voices_page()) {                /* (VOICES: an engine in or out; KICK on or off) */
+        if (w >= NSE)
+            return;
+        if (only && w < 4u)
+            sp.eng = (uint8_t)((sp.eng & SE_KICK) | 1u << w);
+        else
+            sp.eng ^= (uint8_t)(1u << w);
+        put_str(b, SE_LONG[w], sizeof b);
+        put_str(b + str_len(b), w == 4u ? (sp.eng & SE_KICK ? ": ON" : ": OFF") : only ? " ONLY"
+                                : (sp.eng >> w) & 1u ? ": IN" : ": OUT", sizeof b - str_len(b));
+        ui_message(sp.eng & SE_ALL ? b : "NO ENGINES: EACH KEPT AS IT IS");
+        ui.force = 1;
+        return;
+    }
     if (only)
         sp.mask = (uint16_t)(1u << w);
     else
@@ -1284,6 +1416,7 @@ static void sp_bar(uint32_t k)                       /* bar keys: 1 ALL / NONE, 
         rcp[r].mask = sp.mask;
         rcp[r].tracks = sp.tracks;
         rcp[r].seed = sp.last;
+        rcp[r].eng = sp.eng;
         sp.sel = (uint8_t)(NSPELL + r);
         {
             char b[24];
@@ -1337,6 +1470,7 @@ static void sp_vset(uint32_t i, uint32_t v)
         if (sp_is_rcp()) {
             sp.tracks = rcp[n - (int32_t)NSPELL].tracks;
             sp.mask = rcp[n - (int32_t)NSPELL].mask;
+            sp.eng = rcp[n - (int32_t)NSPELL].eng;
         }
         return;
     }
@@ -1361,8 +1495,8 @@ static void sp_vset(uint32_t i, uint32_t v)
 static void sp_write(void)                           /* KSP2 (project.c; 0.19-test6's KSP1 is skipped) */
 {
     uint32_t i;
-    pw_byte(7u + NSPELL0 * NSPK + NSPL + 2u + (NSPELL - NSPELL0) * NSPK);   /* (0.19-test11: MOTION and the spells
-                                                                         * after NSPELL0 after LIMITS) */
+    pw_byte(7u + NSPELL0 * NSPK + NSPL + 2u + (NSPELL - NSPELL0) * NSPK + 1u);   /* (0.19-test11: MOTION and the
+                                                                         * spells after NSPELL0 after LIMITS; 0.21 VOICES) */
     pw_byte(sp.sel);
     pw_byte(sp.var);
     pw_byte(sp.scope);
@@ -1377,9 +1511,10 @@ static void sp_write(void)                           /* KSP2 (project.c; 0.19-te
     pw_byte(sp.mlen);
     for (i = NSPELL0; i < NSPELL; i++)
         pw_bytes(sp.k[i], NSPK);
+    pw_byte(sp.eng);
     pw_byte(NRECIPE);
     for (i = 0; i < NRECIPE; i++) {
-        pw_byte(4u + NSPK + 4u);
+        pw_byte(4u + NSPK + 4u + 1u);
         pw_byte(rcp[i].spell);
         pw_byte(rcp[i].tracks);
         pw_byte(rcp[i].mask & 0xFFu);
@@ -1389,12 +1524,13 @@ static void sp_write(void)                           /* KSP2 (project.c; 0.19-te
         pw_byte(rcp[i].seed >> 8 & 0xFFu);
         pw_byte(rcp[i].seed >> 16 & 0xFFu);
         pw_byte(rcp[i].seed >> 24);
+        pw_byte(rcp[i].eng | 0x80u);                 /* (0.21: VOICES; none saved: all) */
     }
 }
 static void sp_read(void)
 {
-    enum { B_LIM = 7u + NSPELL0 * NSPK, B_MOT = B_LIM + NSPL, B_K2 = B_MOT + 2u };
-    uint8_t b[B_K2 + (NSPELL - NSPELL0) * NSPK];
+    enum { B_LIM = 7u + NSPELL0 * NSPK, B_MOT = B_LIM + NSPL, B_K2 = B_MOT + 2u, B_ENG = B_K2 + (NSPELL - NSPELL0) * NSPK };
+    uint8_t b[B_ENG + 1u];
     uint32_t n = pr_byte(), i, k;
     sp_defaults();
     memcpy(b + 7, sp.k, NSPELL0 * NSPK);
@@ -1402,6 +1538,7 @@ static void sp_read(void)
     b[B_MOT] = sp.mot;
     b[B_MOT + 1u] = sp.mlen;
     memcpy(b + B_K2, sp.k[NSPELL0], (NSPELL - NSPELL0) * NSPK);
+    b[B_ENG] = sp.eng;
     memset(b, 0, 7);
     b[4] = sp.tracks;
     b[5] = b[6] = 0xFF;
@@ -1420,9 +1557,10 @@ static void sp_read(void)
         sp.lim[k] = (uint8_t)(b[B_LIM + k] & 127u);
     sp.mot = (uint8_t)(b[B_MOT] < NSPMO ? b[B_MOT] : SPMO_ONE);
     sp.mlen = (uint8_t)(b[B_MOT + 1u] < NSPML ? b[B_MOT + 1u] : SPML_EVEN);
+    sp.eng = (uint8_t)(b[B_ENG] & (SE_ALL | SE_KICK));
     n = pr_byte();
     for (i = 0; i < n; i++) {
-        uint8_t r[4u + NSPK + 4u] = {0};
+        uint8_t r[4u + NSPK + 4u + 1u] = {0};
         uint32_t c = pr_byte();
         pr_bytes(r, c < sizeof r ? c : sizeof r);
         pr_skip(c > sizeof r ? c - sizeof r : 0u);
@@ -1435,6 +1573,7 @@ static void sp_read(void)
             rcp[i].k[k] = (uint8_t)(r[4u + k] & 127u);
         rcp[i].seed = (uint32_t)r[4u + NSPK] | (uint32_t)r[5u + NSPK] << 8 | (uint32_t)r[6u + NSPK] << 16 |
                       (uint32_t)r[7u + NSPK] << 24;
+        rcp[i].eng = (uint8_t)(r[8u + NSPK] & 0x80u ? r[8u + NSPK] & (SE_ALL | SE_KICK) : SE_ALL);
     }
     if (sp.sel >= NSPELL && !rcp[sp.sel - NSPELL].spell)
         sp.sel = 0;

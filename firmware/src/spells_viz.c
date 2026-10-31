@@ -51,6 +51,11 @@ static void sp_card_value(char *b, uint32_t n, uint32_t i, uint32_t v)
         return;
     }
     case SPV_MODE + 1u + SPK_SOUND:
+        if (v >= 127u) {                             /* (0.21: no kick, no toms kept) */
+            put_str(b, "FREE", n);
+            return;
+        }
+        /* fall through */
     case SPV_MODE + 1u + SPK_PAT:
         if (!v) {
             put_str(b, "OFF", n);
@@ -84,6 +89,8 @@ static const char *sp_knob_line(uint32_t i)
         return MO[sp.mot % NSPMO];
     if (i == SPV_MLEN)
         return ML[sp.mlen % NSPML];
+    if (i == SPV_MODE + 1u + SPK_SOUND && sp_knobs()[SPK_SOUND] >= 127u)
+        return "Free: no kick, no toms kept";
     return i == SPV_MODE ? M[sp.mode % NSPM] : i < 8u ? L[i] : i >= SPV_LIM ? T[(i - SPV_LIM) % NSPL]
                                                                             : SPELL[sp_spell() % NSPELL].cl[(i - 8u) & 3u];
 }
@@ -258,6 +265,17 @@ static void draw_spells(int32_t y0)
     for (k = 0; k < 16u; k++) {                      /* (the white keys, sound over pattern: lit in, grey in but not this spell's, outlined out) */
         int32_t x = (int32_t)(k & 7u) * 30, y = k < 8u ? 92 : 110;
         int on = (sp.mask >> k) & 1u, used = ((S->cats | SC_LEN) >> k) & 1u;   /* (LEN: MOTION's, any spell) */
+        if (k < 8u && pg == 4u) {                    /* (MOTION's page: VOICES on the sound row) */
+            if (k < NSE) {
+                on = (sp.eng >> k) & 1u;
+                cv_rrect(x + 1, y, 28, 15, 3, on ? T_THEME : T_SURF, T_BG);
+                if (!on)
+                    cv_rrect(x + 2, y + 1, 26, 13, 2, T_BG, T_SURF);
+                text_c(x + 1, y + CAP_IN(S, 15), 28, &AF_S, SE_SHORT[k], on ? RGB(12, 12, 12) : T_DIM,
+                       on ? T_THEME : T_BG);
+            }
+            continue;
+        }
         uint16_t c = !on ? T_BG : used ? T_THEME : T_SURF;   /* (out: an outline) */
         cv_rrect(x + 1, y, 28, 15, 3, on ? c : T_SURF, T_BG);
         if (!on)
@@ -268,7 +286,7 @@ static void draw_spells(int32_t y0)
 static uint32_t spells_sig(void)
 {
     uint32_t s = sig_add(16, sp.sel | (uint32_t)sp.tracks << 8 | (uint32_t)sp.mask << 16);
-    s = sig_add(s, (uint32_t)sp.scope | (uint32_t)sp.mode << 8);
+    s = sig_add(s, (uint32_t)sp.scope | (uint32_t)sp.mode << 8 | (uint32_t)sp.eng << 16);
     s = sig_add(s, (uint32_t)sp_pending() | (uint32_t)sp.rolling << 1 | sp_frame() << 2 | (uint32_t)sp.face << 12 |
                        ui.page << 16 | (uint32_t)ui.hot << 24);
     s = sig_add(s, sp.nsnd | (uint32_t)sp.nstep << 16);

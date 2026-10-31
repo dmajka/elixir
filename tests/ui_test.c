@@ -5327,7 +5327,7 @@ static void phase32(void)
         for (n = 0; n < NSPELL; n++) {
             uint32_t r, snd = sp.k[n][SPK_SOUND], ch = sp.k[n][SPK_CHAOS];
             sp.sel = (uint8_t)n;
-            sp.k[n][SPK_SOUND] = 127;
+            sp.k[n][SPK_SOUND] = 126;                /* (127: FREE, no kick kept: below) */
             sp.k[n][SPK_CHAOS] = 100;
             for (r = 0; r < 6u; r++) {
                 uint32_t md = par[PAR_MODEL1], f = par[PAR_FILTER_TYPE_1] + 1u;
@@ -5395,6 +5395,119 @@ static void phase32(void)
         }
         check(kick, "LIMITS: the sends, the reverb level and the FX mix kept under them");
         par[PAR_REV_LEVEL] = 100;
+        sp.tracks = (uint8_t)sv;
+        sp.sel = SP_POLTER;
+    }
+    /* 0.21: NONE plain chance (SOUND how far), SOUND 100% FREE, VOICES on MOTION's page */
+    {
+        uint8_t kb[NSPK], ka[KIT_LEN];
+        uint32_t w, r, n, sv = sp.tracks, free = 0;
+        int kick = 1, eng = 1;
+        char b[24];
+        for (w = 0, ok = 1; w < NSE; w++)
+            if (text_w(&AF_S, SE_SHORT[w]) > 26u)
+                printf("  VOICES key too wide: %s\n", SE_SHORT[w]), ok = 0;
+        check(ok, "VOICES: the names fit the keys");
+        sp_vset(SPV_SPELL, SP_NONE);
+        memcpy(kb, sp.k[SP_NONE], NSPK);
+        sp.tracks = 0x7Fu;
+        sp_kit(ka);
+        sp_roll();
+        n = sp.nsnd;
+        sp_kit(k1);
+        for (i = 0, w = 0; i < KIT_LEN; i++)
+            w += ka[i] != k1[i] && (ka[i] > k1[i] ? ka[i] - k1[i] : k1[i] - ka[i]) > 8u;
+        hold(B_OCTDN);
+        release(B_OCTDN);
+        sp.k[SP_NONE][SPK_SOUND] = 110;
+        sp_roll();
+        sp_kit(k1);
+        for (i = 0, r = 0; i < KIT_LEN; i++)
+            r += ka[i] != k1[i] && (ka[i] > k1[i] ? ka[i] - k1[i] : k1[i] - ka[i]) > 8u;
+        printf("  NONE: %u knobs moved at SOUND 24 (%u by over 8), %u at 87%% (%u by over 8)\n", n, w, sp.nsnd, r);
+        check(n >= 5u && w <= n / 8u && r >= 6u * (w + 1u), "NONE: SOUND 24 nudges, SOUND up moves far further");
+        for (r = 0; r < 6u; r++) {                   /* (still a kick and toms below 100%) */
+            uint32_t f = par[PAR_FILTER_TYPE_1] + 1u;
+            kick &= sp_kick_ok(par[PAR_MODEL1]) && par[PAR_COARSE1] >= 18u && par[PAR_COARSE1] <= 44u &&
+                    (f == F_LP || f == F_LP2 || f == F_LP4 || f == F_OFF || f == F_DUB) && par[PAR_RESO_1] <= 72u;
+            kick &= par[PAR_COARSE2] >= 34u && par[PAR_COARSE2] <= 48u && par[PAR_COARSE3] > par[PAR_COARSE2] &&
+                    par[PAR_COARSE3] <= 56u;
+            sp_roll();
+        }
+        check(kick, "NONE at 87%: D1 still a kick, D2 D3 toms");
+        hold(B_OCTDN);
+        release(B_OCTDN);
+        sp.k[SP_NONE][SPK_SOUND] = 127;
+        sp_card_value(b, sizeof b, SPV_MODE + 1u + SPK_SOUND, 127);
+        check(!strcmp(b, "FREE"), "SOUND 100%: FREE");
+        for (r = 0; r < 6u; r++) {
+            sp_roll();
+            free += par[PAR_COARSE1] < 18u || par[PAR_COARSE1] > 44u || par[PAR_COARSE2] < 34u ||
+                    par[PAR_COARSE2] > 48u || par[PAR_COARSE3] > 56u;
+        }
+        check(free > 0u, "SOUND 100%: the kick and the toms let go");
+        hold(B_OCTDN);
+        release(B_OCTDN);
+        sp.k[SP_NONE][SPK_SOUND] = 64;
+        /* VOICES: MOTION's page, the sound row's keys 1-5; the pattern row still the scope */
+        perf_goto(PG_SPELL + 4u);
+        hold(B_OCTDN);
+        white(3);
+        release(B_OCTDN);
+        check(sp.eng == SE_MICRO && sp.mask == SC_ALL, "VOICES: SHIFT (OCT-) + MICRO: MICRO only, the scope as it was");
+        white(8);
+        check(!(sp.mask & SC_HITS) && sp.eng == SE_MICRO, "MOTION's page: the pattern row still the scope");
+        white(8);
+        sp_roll();
+        for (w = 1; w < NVOICE; w++)
+            eng &= par[PAR_MODEL1 + w] >= MD_MC0;
+        eng &= par[PAR_MODEL1] == MD_MC0 + MC_POP || par[PAR_MODEL1] == MD_MC0 + MC_CHIRP;
+        check(eng, "MICRO only: every voice MICRO, D1 a POP or a CHIRP");
+        hold(B_OCTDN);
+        release(B_OCTDN);
+        white(4);
+        check(sp.eng == (SE_MICRO | SE_KICK), "KICK: D1 always the LXR's");
+        sp_roll();
+        run_ms(60);
+        shot("spells-voices");
+        check(par[PAR_MODEL1] == MD_LXR && par[PAR_MODEL1 + 2u] >= MD_MC0, "KICK and MICRO: the LXR's kick, MICRO above");
+        hold(B_OCTDN);
+        release(B_OCTDN);
+        sp.eng = 0;                                  /* (none: the engines as they are, any spell) */
+        sp_vset(SPV_SPELL, SP_RITUAL);
+        eng = 1;
+        {
+            uint8_t md[NVOICE];
+            for (w = 0; w < NVOICE; w++)
+                md[w] = par[PAR_MODEL1 + w];
+            sp.k[SP_RITUAL][SPK_SOUND] = 126;
+            for (r = 0; r < 4u; r++) {
+                sp_roll();
+                for (w = 0; w < NVOICE; w++)
+                    eng &= par[PAR_MODEL1 + w] == md[w];
+                hold(B_OCTDN);
+                release(B_OCTDN);
+            }
+            sp.k[SP_RITUAL][SPK_SOUND] = SPELL[SP_RITUAL].def[SPK_SOUND];
+        }
+        check(eng, "VOICES none: the engines kept, whatever the spell");
+        sp.eng = SE_LXR | SE_PLAITS | SE_KICK;
+        {
+            int rc = proj_save(1, "VOICES  ");
+            sp_defaults();
+            rc |= proj_load(1);
+            check(rc == 0 && sp.eng == (SE_LXR | SE_PLAITS | SE_KICK), "the project: VOICES back");
+        }
+        sp.eng = SE_ALL;
+        sp.sel = SP_SKELETON;                        /* (a cast that can change nothing says why) */
+        sp.mask = SC_SOUND;
+        check(!strcmp(sp_why(), ": NOTHING IN SCOPE"), "SKELETON, scope SOUND: NOTHING IN SCOPE");
+        sp.sel = SP_NONE;
+        sp.k[SP_NONE][SPK_SOUND] = 0;
+        check(!strcmp(sp_why(), ": SOUND IS OFF"), "NONE, scope SOUND, SOUND OFF: SOUND IS OFF");
+        sp.mask = SC_ALL;
+        memcpy(sp.k[SP_NONE], kb, NSPK);
+        perf_goto(PG_SPELL);
         sp.tracks = (uint8_t)sv;
         sp.sel = SP_POLTER;
     }
