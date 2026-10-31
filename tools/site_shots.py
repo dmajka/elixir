@@ -14,7 +14,9 @@ ROOT = Path(__file__).resolve().parents[1]
 # shown on the front page, in this order: ui_test's name (without its number, which moves as tests are added; the
 # first shot of that name) -> the site's
 SHOTS = {"playing": "pattern", "grids-map": "grids", "perform2": "perform",
-         "global-lfo": "global-lfo", "links-duck-hats": "links", "spells-cast": "spells", "mixer": "mixer", "keys": "keys"}
+         "global-lfo": "global-lfo", "links-duck-hats": "links", "spells-motes": "spells", "mixer": "mixer", "keys": "keys",
+         "viz-model-modal": "rings", "viz-model-pspeech": "plaits-speech", "viz-reverb-plate": "reverb-plate",
+         "viz-reverb-hall": "reverb-hall"}
 
 
 def read_ppm(path):
