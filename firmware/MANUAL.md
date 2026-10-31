@@ -1098,7 +1098,7 @@ Like LIMITS, MOTION is shared by every spell and saved with the project.
 - **Scope:** presets for the white keys (above).
 - **Roll:** **NEW** a new roll each time; **SAME** the last roll again (a recipe's own roll), so the same cast on other tracks or another pattern.
 
-**Recipes:** bar key 3 saves the spell, its knobs, the white keys, the targets and its last roll as a recipe (U1–U8; on a recipe it saves over it). Picking a recipe brings back its targets and white keys. Recipes and every spell's knobs are saved with the project (0.19-test6's spell settings are not read: they start fresh).
+**Recipes:** bar key 3 saves the spell, its knobs, the white keys, the targets and its last roll as a recipe (U1–U8; on a recipe it saves over it). Picking a recipe brings back its targets and white keys. Recipes and every spell's knobs are saved with the project.
 
 The reverse is one level, shared with a track action's undo and DENSITY's OCT+: using either after a cast keeps the cast.
 
