@@ -192,25 +192,33 @@ export class Library {
 }
 export const KL_KIT = 1, KL_SOUND = 2;
 
-// 0.19: the Hrtl kit packs (tools/gen_kit_packs.py: .ktlb files in the emulator's kits/), each in its own library
-// slots. addPacks puts them into the slots that are empty: a slot holding a kit keeps it.
+// 0.19: the Hrtl kit packs (tools/gen_kit_packs.py: .ktlb files in the emulator's kits/). addPacks puts each kit into
+// the library's first empty slot (from L1, so they're near the top of the kit browser's LIBRARY): a slot holding a
+// kit keeps it, and a kit whose name is in the library already isn't added again.
 export const KIT_PACKS = [
-  { id: "hrtl-dlc", name: "Hrtl DLC kits", file: "hrtl-dlc.ktlb", slots: "97–112" },
-  { id: "hrtl-untz", name: "Hrtl UNTZ kits", file: "hrtl-untz.ktlb", slots: "113–128" },
+  { id: "hrtl-dlc", name: "Hrtl DLC kits", file: "hrtl-dlc.ktlb" },
+  { id: "hrtl-untz", name: "Hrtl UNTZ kits", file: "hrtl-untz.ktlb" },
 ];
 export async function fetchPack(base, pack) {          // base: where kits/ is ("../try/", "")
   const r = await fetch(base + "kits/" + pack.file);
   if (!r.ok) throw new Error(`${pack.file}: HTTP ${r.status}`);
   return unpackKitLib(await r.arrayBuffer());
 }
-export async function addPacks(lib, entries, onProgress = () => {}) {   // -> { added, kept }
-  const used = new Set((await lib.libList(KL_KIT)).map((e) => e.slot));
-  const todo = entries.filter((e) => e.kind === KL_KIT && !used.has(e.slot));
+export async function addPacks(lib, entries, onProgress = () => {}) {   // -> { added, kept (there already), full }
+  const have = await lib.libList(KL_KIT);
+  const used = new Set(have.map((e) => e.slot)), names = new Set(have.map((e) => e.name));
+  const kits = entries.filter((e) => e.kind === KL_KIT);
+  const todo = kits.filter((e) => !names.has(e.name));
+  let slot = 0, added = 0;
   for (let i = 0; i < todo.length; i++) {
-    await lib.libPut(KL_KIT, todo[i].slot, todo[i].name, todo[i].data);
+    while (slot < 128 && used.has(slot)) slot++;
+    if (slot >= 128) break;
+    await lib.libPut(KL_KIT, slot, todo[i].name, todo[i].data);
+    used.add(slot);
+    added++;
     onProgress(i + 1, todo.length);
   }
-  return { added: todo.length, kept: entries.length - todo.length };
+  return { added, kept: kits.length - todo.length, full: todo.length - added };
 }
 
 // a kit library backup file: "KTLB", a count, then (kind, slot, name[8], length (2), data) for each entry

@@ -96,10 +96,10 @@
   <p><label>Kit files <input type="file" id="libsndfiles" accept=".snd,.SND" multiple></label></p>
   <p><label>A folder <input type="file" id="libsnddir" webkitdirectory></label></p>
   <h3>Hrtl kit packs</h3>
-  <p>Two sets of 16 kits by Hrtl for the LXR-02, distributed with Erica Synths' permission. Each goes into its own
-    library slots, and only where a slot is empty: a kit you keep there stays.</p>
-  <p><label><input type="checkbox" id="pack-hrtl-dlc" checked> Hrtl DLC kits (library 97–112)</label>
-    <label><input type="checkbox" id="pack-hrtl-untz" checked> Hrtl UNTZ kits (113–128)</label></p>
+  <p>Two sets of 16 kits by Hrtl for the LXR-02, distributed with Erica Synths' permission. They go into the
+    library's first empty slots (L1 on, near the top of the kit browser's LIBRARY): a kit you keep there stays.</p>
+  <p><label><input type="checkbox" id="pack-hrtl-dlc" checked> Hrtl DLC kits</label>
+    <label><input type="checkbox" id="pack-hrtl-untz" checked> Hrtl UNTZ kits</label></p>
   <p class="small">Both packs take about a quarter of the kit library's flash (each about 12%), leaving the rest for
     your own kits and sounds. You can save your own kits over them at any time.</p>
   <p><button id="packs">Add to the kit library</button></p>
@@ -300,15 +300,17 @@ $("lxrdir").addEventListener("change", (e) => {
 $("packs").addEventListener("click", () => job(async () => {     // (0.19: the Hrtl kit packs, from the emulator's kits/)
   const packs = KIT_PACKS.filter((p) => $("pack-" + p.id).checked);
   if (!packs.length) throw new Error("Tick a pack first.");
-  let added = 0, kept = 0;
+  let added = 0, kept = 0, full = 0;
   for (const p of packs) {
     say(`Adding ${p.name} …`);
     const r = await addPacks(lib, await fetchPack("../try/", p), bar);
     added += r.added;
     kept += r.kept;
+    full += r.full;
   }
   await refresh();
-  say(`Added ${added} kits to the kit library` + (kept ? `; ${kept} slots already held a kit and were left as they were.` : "."));
+  say(`Added ${added} kits to the kit library` + (kept ? `; ${kept} were there already` : "") +
+      (full ? `; ${full} didn't fit: the library is full` : "") + ".");
 }));
 $("libbackup").addEventListener("click", () => job(async () => {
   const entries = await lib.libBackup(bar);
