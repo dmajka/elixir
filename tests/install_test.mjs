@@ -164,22 +164,22 @@ async function scenario(title, app, opts, expect) {
 console.log(`package ${PRODUCT}, image ${IMAGE.length} B`);
 check(/^FM-1_9\d\d$/.test(PRODUCT), "an alternative firmware's identity (FM-1_9xx), as Kettle's");
 check(IMAGE.length < 0x97000, "the image ends below the projects (0x97000)");
-check(firmwareOf("Kettle") === "kettle" && firmwareOf("2- Kettle") === "kettle" && firmwareOf("Elixir") === "elixir" &&
+check(firmwareOf("Kettle") === "elixir" && firmwareOf("2- Kettle") === "elixir" && firmwareOf("Elixir") === "elixir" &&
       firmwareOf("Felucca Update") === "felucca" && firmwareOf("Digitakt") === null, "port names");
 // what Kettle's own page (0.13) matched: it wouldn't find the unit once it is called Elixir; this page finds both
 const OLD = /fm-1|felucca|kettle|ota|composite|sinco|usb-midi/i;
 check(!OLD.test("Elixir"), "(Kettle 0.13's page doesn't see a unit named Elixir: use this page)");
 
 await scenario("Kettle 0.13 -> Elixir", { name: "Kettle", id: "FM-1_900" }, {},
-  { before: /Kettle, Elixir's former name/, after: /Elixir is installed/ });
+  { before: /Elixir is installed/, after: /Elixir is installed/ });
 await scenario("Kettle -> Elixir, the computer keeps the name Kettle", { name: "Kettle", id: "FM-1_900" },
-  { after: "Kettle" }, { before: /Kettle/, after: /Kettle, Elixir's former name/ });
+  { after: "Kettle" }, { before: /Elixir is installed/, after: /Elixir is installed/ });
 await scenario("Kettle (a release build, FM-1_913) -> Elixir", { name: "Kettle", id: "FM-1_913" }, {},
-  { before: /Kettle/, after: /Elixir is installed/ });
+  { before: /Elixir is installed/, after: /Elixir is installed/ });
 await scenario("Windows' port name (\"2- Kettle\") -> Elixir", { name: "2- Kettle", id: "FM-1_900" },
-  { after: "2- Elixir" }, { before: /Kettle/, after: /Elixir is installed/ });
+  { after: "2- Elixir" }, { before: /Elixir is installed/, after: /Elixir is installed/ });
 await scenario("Kettle -> Elixir, the cable pulled during the write, then resumed", { name: "Kettle", id: "FM-1_900" },
-  { cut: 5 }, { before: /Kettle/, after: /Elixir is installed/, cutOff: true });
+  { cut: 5 }, { before: /Elixir is installed/, after: /Elixir is installed/, cutOff: true });
 await scenario("Elixir -> Elixir (an update)", { name: "Elixir", id: "FM-1_900" }, {},
   { before: /Elixir is installed/, after: /Elixir is installed/ });
 await scenario("official V15 -> Elixir", { name: "FM-1", id: "FM-1_015" }, {},

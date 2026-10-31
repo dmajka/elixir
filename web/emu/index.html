@@ -24,7 +24,7 @@ a { color: inherit; }
 .device { position: relative; width: 100%; aspect-ratio: 1000 / 624; user-select: none; -webkit-user-select: none;
           -webkit-touch-callout: none; touch-action: manipulation; }
 .device svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.device canvas { position: absolute; image-rendering: crisp-edges; image-rendering: pixelated; background: #000; }
+.device canvas { position: absolute; background: #000; }
 .hit { position: absolute; touch-action: none; cursor: pointer; -webkit-tap-highlight-color: transparent; border-radius: 10px; }
 .hit.knob { cursor: ns-resize; border-radius: 50%; }
 .hit:focus-visible { outline: 2px solid var(--lit); outline-offset: 2px; }
@@ -90,9 +90,11 @@ footer small { font-size: 11px; opacity: .8; }
 </div>
 
 <details class="keys lib"><summary><b>Library</b>: try LXR-02 kits, backup and restore</summary>
-  <p>Try kits here before putting them on your FM-1. The emulator holds what the FM-1 does: <b>64 kit slots</b> (the
-    project's: patterns load them by number) and the <b>kit library</b> of 128 more (kept apart from the projects). Turn
-    PRESETS for the kit browser and KNOB 1 to switch it between the slots and the library (L1 …); OCT+ loads one; a library kit can also be the morph target
+  <p>Try kits here before putting them on your FM-1. The emulator holds what the FM-1 does: the LXR-02's <b>85 factory
+    kits</b> built in, <b>64 kit slots</b> (the project's: patterns load them by number) and the <b>kit library</b> of
+    128 more (kept apart from the projects; Hrtl's DLC and UNTZ kit packs are put in its slots 97–128 the first time
+    the emulator starts). Turn PRESETS for the kit browser: the factory kits (F1 …), then the library (L1 …), then the
+    slots; KNOB 1 jumps between them, OCT+ loads one. A library kit can also be the morph target
     (LOAD → MORPH, From LIBRARY). Then download the kit library below, and restore it onto the FM-1 from the library
     page.</p>
   <p>Pick .SND files, or a folder: it takes the .SND files in it and in all its subfolders (one project's folder,
@@ -141,7 +143,7 @@ footer small { font-size: 11px; opacity: .8; }
 <script type="module">
 import { midiKnob, KNOB_MODES } from "./worklet.js";
 import { Library, sndFiles, packBackup, unpackBackup, checkImage, SLOT_NAMES, KL_KIT, packKitLib, unpackKitLib, lxrProject,
-         importLxrProject } from "./library.js";
+         importLxrProject, KIT_PACKS, fetchPack, addPacks } from "./library.js";
 const NS = "http://www.w3.org/2000/svg";
 // panel.c's labels (bit = label) and encoder roles
 const B = { FX: 0, SCL: 1, ENV: 2, LFO: 3, EDIT: 4, GLO: 5, HOME: 6, SAVE: 7, ARP: 8, SEQ: 9, PLAY: 10, REC: 11, "OCT-": 12, "OCT+": 13 };
@@ -417,9 +419,19 @@ addEventListener("blur", () => {
 });
 
 // ------------------------------------------------------------------ screen and lights
-const ctx = document.getElementById("screen").getContext("2d");
-const img = ctx.createImageData(240, 240);
+// 33: the firmware's 240 x 240 doubled (whole pixels), then smoothed to the display's pixels: no uneven blocks, still crisp
+const ctx = canvas.getContext("2d"), src = document.createElement("canvas"), dbl = document.createElement("canvas");
+src.width = src.height = 240;
+dbl.width = dbl.height = 480;
+const sctx = src.getContext("2d"), dctx = dbl.getContext("2d"), img = sctx.createImageData(240, 240);
+dctx.imageSmoothingEnabled = false;
+let lastFb = null;
+new ResizeObserver(() => {                                       // the canvas: as many pixels as it shows
+  const px = Math.max(240, Math.round(canvas.clientWidth * (devicePixelRatio || 1)));
+  if (canvas.width !== px) { canvas.width = canvas.height = px; if (lastFb) drawScreen(lastFb); }
+}).observe(canvas);
 function drawScreen(fb) {
+  lastFb = fb;
   const d = img.data;
   for (let i = 0; i < 240 * 240; i++) {
     const v = fb[i], p = ((v >> 8) | (v << 8)) & 0xFFFF;          // the panel's byte order -> RGB565
@@ -428,7 +440,11 @@ function drawScreen(fb) {
     d[i * 4 + 2] = (p & 31) * 255 / 31;
     d[i * 4 + 3] = 255;
   }
-  ctx.putImageData(img, 0, 0);
+  sctx.putImageData(img, 0, 0);
+  dctx.drawImage(src, 0, 0, 480, 480);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(dbl, 0, 0, canvas.width, canvas.height);
 }
 // the power-on sweep (hal/fm1_led_anim.h): a level per LED, lit frames /64 (| 128: the glow under them), drawn as the
 // LED's share of lit between its dark (or glowing) colour and the lit one, mixed in linear light
@@ -580,6 +596,7 @@ async function switchOn() {
     syncKeys();
     send({ type: "visible", on: !document.hidden });
     midiOn();
+    packsOnce();
   } catch (err) {
     node = null;
     go.disabled = false;
@@ -604,6 +621,18 @@ const lib = new Library({
   },
 });
 const libSay = (s) => { document.getElementById("libstatus").textContent = s; };
+// 0.19: Hrtl's kit packs into the library's empty slots, the first time the emulator runs in this browser (the phone
+// page shares the flag and the saves)
+async function packsOnce() {
+  const KEY = "elixir-emu-packs";
+  try { if (localStorage.getItem(KEY)) return; } catch { return; }
+  try {
+    let added = 0;
+    for (const p of KIT_PACKS) added += (await addPacks(lib, await fetchPack("", p))).added;
+    try { localStorage.setItem(KEY, "1"); } catch {}
+    if (added) console.log(`Elixir: ${added} Hrtl kits put into the kit library (97–128)`);
+  } catch (e) { console.warn("Elixir: the kit packs:", e.message); }
+}
 const libEl = (id) => document.getElementById(id);
 function libDownload(bytes, name) {
   const a = document.createElement("a");

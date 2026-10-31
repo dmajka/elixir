@@ -10,7 +10,7 @@ import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Library, checkImage, packBackup, unpackBackup, sndFiles, sndBytes, message, KL_KIT, KL_SOUND, packKitLib,
-         unpackKitLib, parsePat, parseSng, songWindow, lxrProject, importLxrProject } from "../web/library.js";
+         unpackKitLib, parsePat, parseSng, songWindow, lxrProject, importLxrProject, KIT_PACKS, addPacks } from "../web/library.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const kitDir = process.argv[2] || join(root, "..", "lxr-02_kits", "LXR factory SD image 06.07", "PROJ00");
@@ -222,6 +222,21 @@ check((await transport.request(message(0x01, 1, [5]).map((b, i, a) => (i === a.l
     check(r.pats === pats.length && same === pats.length && (await lib.kitNames())[proj.kits[1].number] === proj.kits[1].name.slice(0, 8).trimEnd(),
           "an LXR project in: kits by number, patterns as in the files");
   }
+}
+
+// 9. 0.19: the Hrtl kit packs (build/emu/kits, web/emu/build.sh) into the library's empty slots only
+{
+  const packs = KIT_PACKS.map((p) => unpackKitLib(readFileSync(join(root, "build", "emu", "kits", p.file))));
+  check(packs.every((e) => e.length === 16) && packs[0][0].slot === 96 && packs[1][15].slot === 127, "the packs' slots");
+  const before = (await lib.libList(KL_KIT)).length;
+  await lib.libPut(KL_KIT, 99, "MINE", new Uint8Array(247));
+  const r1 = await addPacks(lib, packs[0]), r2 = await addPacks(lib, packs[1]);
+  const lk = await lib.libList(KL_KIT);
+  check(r1.added === 15 && r1.kept === 1 && r2.kept === (before > 1 ? 1 : 0), "packs: the empty slots filled, the others kept");
+  check(lk.find((e) => e.slot === 99).name === "MINE" && lk.find((e) => e.slot === 96).name === packs[0][0].name,
+        "packs: a kit already there stays");
+  check((await addPacks(lib, packs[0])).added === 0, "packs: a second time adds nothing");
+  console.log(`  kit packs: ${r1.added} + ${r2.added} kits added, ${lk.length} in the library`);
 }
 
 dev.stdin.end();

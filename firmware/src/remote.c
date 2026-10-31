@@ -43,7 +43,7 @@ enum { RG_PERF, RG_PERF2, RG_SELECT, RG_ROLL, RG_DRILL, RG_HOLD, RG_LATCH, RG_DE
 static const uint16_t RM_GK[RM_NGK] = {
     PAR_BPM, PAR_SHUFFLE, PAR_MORPH, PAR_VOICE_DECIMATION_ALL, VP_DJ, PAR_ROLL, VP_REPEAT, VP_TAPE,
     PAR_FX_DRY_WET, PAR_FX_P1, PAR_FX_P2, PAR_FX_P3, PAR_FX_P4, PAR_FXDIRT, PAR_ECHOREV, PAR_DSAT,
-    PAR_REV_LEVEL, PAR_REV_SIZE, PAR_REV_DAMP, PAR_MDIRT_AMT, VP_DENS, VP_GHOST, VP_BUILD, VP_NONE,
+    PAR_REV_LEVEL, PAR_REV_SIZE, PAR_REV_DAMP, PAR_MDIRT_AMT, VP_DENS, VP_GHOST, VP_BUILD, VP_DVARY,
     VP_M1, VP_M1 + 1, VP_M1 + 2, VP_M1 + 3, VP_P2, VP_P2 + 1, VP_P2 + 2, VP_P2 + 3,
     VP_P2 + 4, VP_P2 + 5, VP_P2 + 6, VP_P2 + 7, GLV(0, 1), GLV(1, 1), GLV(2, 1), VP_NONE};
 #define RM_PLAY 0xFEu
@@ -149,6 +149,7 @@ static void rm_knob(uint32_t i, uint32_t v)
         }
         now = lo + (v * (hi - lo) + 63u) / 127u;
     }
+    morph_follow(p, (int32_t)now - (int32_t)vp_get(p));   /* (31: as the panel's knobs) */
     vp_set(p, now);
     rm.sent[i] = (uint8_t)rm_to_cc(p);               /* (no echo of what came in) */
     if (i < RM_NTK && sq.rec && par_lockable(p))

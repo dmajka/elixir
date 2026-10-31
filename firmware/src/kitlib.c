@@ -448,14 +448,31 @@ static int libsound_load(uint32_t n, uint32_t v)
 /* ------------------------------------------------------------ the sound browser --- */
 /* 0.8: PRESETS on a track's sound pages lists the sounds it can take: the library's sounds, then the voices of the
  * library's kits, the slots' kits, the factory kits (a drum track: all three drums of each); a kit's voice still as
- * the init kit's is left out. An entry: its source (SB_*) << 14 | the voice << 11 | the number. */
+ * the init kit's is left out. An entry: its source (SB_*) << 14 | the voice << 11 | the number. 0.19: the factory's
+ * entries aren't kept in sb_list (no RAM for them): they follow its sb_nl, found from fac_live (sb_code). */
 enum { SB_SOUND, SB_LIB, SB_SLOT, SB_FACTORY };
-#ifndef FACTORY_NKITS
-#define FACTORY_NKITS 0u
-#endif
-#define SB_MAX (KL_SOUNDS + (KL_KITS + NUM_KITS + FACTORY_NKITS) * 3u)
+#define SB_MAX (KL_SOUNDS + (KL_KITS + NUM_KITS) * 3u)
 static uint16_t sb_list[SB_MAX];
-static uint32_t sb_n;
+static uint32_t sb_n, sb_nl;                         /* the entries in all; in sb_list */
+static uint8_t fac_live[6][(FACTORY_NKITS + 7u) / 8u];   /* bit: factory kit f's voice w isn't the init kit's */
+static uint8_t fac_live_ok;
+
+static int fac_takes(uint32_t f, uint32_t w, uint32_t v)   /* voice v's list has factory kit f's voice w */
+{
+    return voice_kind(w) == voice_kind(v) && (w == v || voice_kind(v) == SK_DRUM) && (fac_live[w][f >> 3] >> (f & 7u) & 1u);
+}
+static uint32_t sb_code(uint32_t e, uint32_t v)      /* entry e of voice v's list */
+{
+    uint32_t f, w;
+    if (e < sb_nl)
+        return sb_list[e];
+    e -= sb_nl;
+    for (f = 0; f < FACTORY_NKITS; f++)
+        for (w = 0; w < 6u; w++)
+            if (fac_takes(f, w, v) && !e--)
+                return SB_FACTORY << 14 | w << 11 | f;
+    return 0;
+}
 
 static void sb_add(uint32_t src, uint32_t v, uint32_t i) { sb_list[sb_n++] = (uint16_t)(src << 14 | v << 11 | i); }
 static void sb_add_kit(uint32_t src, uint32_t i, const uint8_t *k, uint32_t v)
@@ -479,39 +496,27 @@ static void sb_build(uint32_t v)                     /* the list for voice v */
         if (kl_exists(KLK_KIT, i) && !libkit_get(i, k))
             sb_add_kit(SB_LIB, i, k, v);
     for (i = 0; i < NUM_KITS; i++) {
-        uint32_t n0 = sb_n, j, w;
-        uint8_t ks[KIT_LEN];
-        kit_get(i, ks);                              /* (25-0: the slot unpacked) */
-        sb_add_kit(SB_SLOT, i, ks, v);
-#if ELIXIR_FACTORY_KITS
-        if (i < FACTORY_NKITS) {                     /* (a slot still as the factory kit it started with: once) */
-            uint8_t a[SOUND_MAX], c[SOUND_MAX];
-            kit_factory_values(i, k);
-            for (j = n0; j < sb_n;) {
-                w = (sb_list[j] >> 11) & 7u;
-                if (voice_get(ks, w, a) == voice_get(k, w, c) && !memcmp(a, c, voice_get(k, w, c)))
-                    sb_list[j] = sb_list[--sb_n];
-                else
-                    j++;
-            }
-        }
-#else
-        (void)n0;
-        (void)j;
-        (void)w;
-#endif
+        kit_get(i, k);                               /* (25-0: the slot unpacked) */
+        sb_add_kit(SB_SLOT, i, k, v);
     }
-#if ELIXIR_FACTORY_KITS
+    sb_nl = sb_n;
     for (i = 0; i < FACTORY_NKITS; i++) {
-        kit_factory_values(i, k);
-        sb_add_kit(SB_FACTORY, i, k, v);
+        uint32_t w;
+        if (!fac_live_ok) {                          /* (once: the bank never changes) */
+            kit_factory_values(i, k);
+            for (w = 0; w < 6u; w++)
+                if (!voice_is_init(k, w))
+                    fac_live[w][i >> 3] |= (uint8_t)(1u << (i & 7u));
+        }
+        for (w = 0; w < 6u; w++)
+            sb_n += (uint32_t)fac_takes(i, w, v);
     }
-#endif
+    fac_live_ok = 1;
 }
 /* entry e's values (out) and the voice they were taken from: their count, or 0 */
 static uint32_t sb_values(uint32_t e, uint32_t v, uint8_t *out, uint32_t *from)
 {
-    uint32_t src = sb_list[e] >> 14, w = (sb_list[e] >> 11) & 7u, i = sb_list[e] & 0x7FFu;
+    uint32_t code = sb_code(e, v), src = code >> 14, w = (code >> 11) & 7u, i = code & 0x7FFu;
     uint8_t k[KIT_LEN];
     if (e >= sb_n)
         return 0;
@@ -534,12 +539,8 @@ static uint32_t sb_values(uint32_t e, uint32_t v, uint8_t *out, uint32_t *from)
         kit_get(i, k);
         return voice_get(k, w, out);
     default:
-#if ELIXIR_FACTORY_KITS
         kit_factory_values(i, k);
         return voice_get(k, w, out);
-#else
-        return 0;
-#endif
     }
 }
 /* entry e's name (8) and source label ("SND 12", "LIB 3 D2", ..) */
@@ -547,7 +548,7 @@ static void sb_label(uint32_t e, uint32_t v, char *name, char *tag, uint32_t n)
 {
     static const char *const SRC[4] = {"SND ", "LIB ", "KIT ", "FAC "};
     static const char *const VS[6] = {" D1", " D2", " D3", "", "", ""};
-    uint32_t src = sb_list[e] >> 14, w = (sb_list[e] >> 11) & 7u, i = sb_list[e] & 0x7FFu;
+    uint32_t c = sb_code(e, v), src = c >> 14, w = (c >> 11) & 7u, i = c & 0x7FFu;
     memset(name, ' ', 8);
     if (src == SB_SOUND)
         (void)kl_name(KLK_SOUND, i, name);
@@ -555,10 +556,8 @@ static void sb_label(uint32_t e, uint32_t v, char *name, char *tag, uint32_t n)
         (void)kl_name(KLK_KIT, i, name);
     else if (src == SB_SLOT)
         memcpy(name, kit_names[i], 8);
-#if ELIXIR_FACTORY_KITS
     else
         kit_factory_name(i, name);
-#endif
     put_str(tag, SRC[src], n);
     put_int(tag + 4, (int32_t)i + 1);
     if (src != SB_SOUND && voice_kind(v) == SK_DRUM)

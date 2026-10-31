@@ -181,6 +181,7 @@ static uint8_t songs[NUM_SONGS][MAX_SONG_LENGTH] POOL;
 static struct {
     uint8_t running, active, pending, load_pending;
     uint8_t song_mode, song, song_pos;
+    uint8_t song_n;                              /* (0.19: the times the row has played, less 1) */
     int8_t idx[NTRACK];                          /* the playing step (-1: before the first) */
     uint8_t prescale, master_cnt;
     uint8_t muted, roll, roll_rate, last_on;
@@ -274,6 +275,7 @@ static struct {
      * BUILD (DB_*), the tracks it leaves alone (bit t) */
     int8_t dens;
     uint8_t dghost, dbuild, dex;
+    uint8_t dvary;                               /* 31: VARY, 0..127: the order shuffled each time round */
     /* 20: the melody: DEJA VU's loop (semitones above the root, lengths), where it is, the notes played (MOTIF's
      * phrase), the last note (WALK), MOTIF's four, the occurrence a note was chosen for; CHANGE and SPREAD from
      * the global LFOs (perf_block), -64..64 */
@@ -588,21 +590,31 @@ static int cond_ok(const pattern_t *p, uint32_t t, uint32_t s, uint32_t loop)
 /* 19d: DENSITY. A step's strength, 1..255: its place in the bar (the bar's first step, the beats, the 8ths, the
  * 16ths), then its velocity (on: an empty step has none), then a per-pattern random order among equals. Thinning
  * drops the weakest first (the bar's first steps last), building fills the strongest empty places first; turned
- * slowly, the groove thins or fills steadily, it doesn't flicker */
-static uint32_t dens_rank(const pattern_t *p, uint32_t t, uint32_t s, int on)
+ * slowly, the groove thins or fills steadily, it doesn't flicker.
+ * 31: VARY moves each strength by a random amount drawn afresh each time round (loop), up to +-128 at 127: a little
+ * swaps neighbours (which 16th goes, which ghost comes), more lets an offbeat outlast a beat; the bar's first step
+ * isn't moved (at -100% it alone stays). The same draw for the step's checks before, at and after it (as HUMANIZE's) */
+static uint32_t groove_hash(uint32_t t, uint32_t s, uint32_t loop);
+static uint32_t dens_rank(const pattern_t *p, uint32_t t, uint32_t s, int on, uint32_t loop)
 {
     uint32_t i = s & 15u, c = i == 0u ? 3u : (i & 3u) == 0u ? 2u : (i & 1u) == 0u ? 1u : 0u;
     uint32_t h = ((s * 40503u + t * 9973u + sq.active * 21011u) >> 5) & 15u;
-    return c * 64u + (on ? (p->step[t][s].volume & STEP_VOLUME_MASK) * 47u / 127u : 0u) + h + 1u;
+    uint32_t r = c * 64u + (on ? (p->step[t][s].volume & STEP_VOLUME_MASK) * 47u / 127u : 0u) + h + 1u;
+    if (sq.dvary && c < 3u) {                        /* (the bar's first step as it is: the last to go) */
+        int32_t n = (int32_t)(groove_hash(t + 8u, s, loop) & 255u) - 128;
+        r = (uint32_t)clamp32((int32_t)r + n * (int32_t)sq.dvary / 127, 1, 254);
+    }
+    return r;
 }
 static int dens_on(uint32_t t)                       /* DENSITY moves track t's steps (GRIDS, TURING: their density) */
 {
     uint32_t g = pat[sq.active].gen[t][0];
     return sq.dens && !((sq.dex >> t) & 1u) && g != GEN_GRIDS && g != GEN_TURING;
 }
-static int dens_drop(const pattern_t *p, uint32_t t, uint32_t s)
+static int dens_drop(const pattern_t *p, uint32_t t, uint32_t s, uint32_t loop)
 {
-    return sq.dens < 0 && dens_on(t) && dens_rank(p, t, s, 1) <= (uint32_t)(-sq.dens) * 3u;   /* (at -64: up to the beats) */
+    return sq.dens < 0 && dens_on(t) && dens_rank(p, t, s, 1, loop) <= (uint32_t)(-sq.dens) * 3u;   /* (at -64: up to the
+                                                                                                      * beats) */
 }
 /* the positive side in parts: the chances up to 100% (all of it with BUILD CHANCE), then the ghosts, then (RATCHETS)
  * ratchets of 2 on the strongest hits; a part's amount 0..256 (dens_part) */
@@ -622,15 +634,20 @@ static uint32_t dens_prob(const pattern_t *p, uint32_t t, uint32_t s)   /* a ste
         return pr;
     return pr + (100u - (pr > 100u ? 100u : pr)) * dens_part(0) / 256u;
 }
-static int dens_ghost(const pattern_t *p, uint32_t t, uint32_t s)   /* an empty step plays a ghost */
+static int dens_ghost(const pattern_t *p, uint32_t t, uint32_t s, uint32_t loop)   /* an empty step plays a ghost */
 {
     uint32_t a = dens_on(t) ? dens_part(1) : 0u;
-    return a && dens_rank(p, t, s, 0) > 256u - a;
+    return a && dens_rank(p, t, s, 0, loop) > 256u - a;
 }
-static int dens_rat(const pattern_t *p, uint32_t t, uint32_t s)     /* a hit gets a ratchet of 2 */
+static int dens_rat(const pattern_t *p, uint32_t t, uint32_t s, uint32_t loop)     /* a hit gets a ratchet of 2 */
 {
     uint32_t a = dens_on(t) ? dens_part(2) : 0u;
-    return a && dens_rank(p, t, s, 1) > 256u - a;
+    return a && dens_rank(p, t, s, 1, loop) > 256u - a;
+}
+static uint32_t dens_ghost_vel(uint32_t t, uint32_t s, uint32_t loop)   /* 31: a ghost's velocity (VARY: +-a third) */
+{
+    int32_t v = sq.dghost ? sq.dghost : 1, n = (int32_t)((groove_hash(t + 16u, s, loop) >> 8) & 255u) - 128;
+    return (uint32_t)clamp32(v + v * n * (int32_t)sq.dvary / (3 * 128 * 127), 1, 127);
 }
 static uint32_t gen_dens(uint32_t t, uint32_t d)    /* a GRIDS or TURING track's density, DENSITY's push in it */
 {
@@ -817,8 +834,8 @@ static uint32_t shift_flam(const pattern_t *p, uint32_t t, uint32_t s, uint32_t 
     uint32_t tm, pt;
     int32_t sh;
     if (!main_on(p, t, s))                           /* (19d: a ghost, on the step) */
-        return dens_ghost(p, t, s) && pos == POS_CUR ? FLAM_PAT[0] : 0u;
-    if (dens_drop(p, t, s))
+        return dens_ghost(p, t, s, loop) && pos == POS_CUR ? FLAM_PAT[0] : 0u;
+    if (dens_drop(p, t, s, loop))
         return 0;
     if (sq.rnd[t][pos == POS_PREV ? 0 : pos == POS_CUR ? 1 : 2] > dens_prob(p, t, s) && !sq.fill)
         return 0;
@@ -848,7 +865,7 @@ static void step_hit(uint32_t t, const pattern_t *p, uint32_t s, uint32_t loop, 
     uint32_t occ = (loop << 6 | s) + 1u, ln = step_len(p, t, s);
     if (!main_on(p, t, s)) {                         /* 19d: DENSITY's ghost: the track's last note, no locks */
         sq.last_on |= 1u << t;
-        seq_trigger(t, 0, 0, sq.dghost ? sq.dghost : 1u, sq.lnote[t]);
+        seq_trigger(t, 0, 0, dens_ghost_vel(t, s, loop), sq.lnote[t]);
         gate_start(t, LEN_AUTO);
         return;
     }
@@ -860,7 +877,7 @@ static void step_hit(uint32_t t, const pattern_t *p, uint32_t s, uint32_t loop, 
         if (gv && vel)
             vel = (uint32_t)clamp32((int32_t)vel + gv, 1, 127);
     }
-    if (!(r & 7u) && !(r & RAT_BOUNCE) && dens_rat(p, t, s))
+    if (!(r & 7u) && !(r & RAT_BOUNCE) && dens_rat(p, t, s, loop))
         r = 1u;                                      /* (19d: BUILD's ratchets: 2 hits, 1/32) */
     if (m && m->on) {
         if (m->rat && !(r & 7u))                     /* (RATCHET: the step's own ratchet first) */
@@ -1024,8 +1041,8 @@ static void seq_roll_sweep(void)                     /* the block's swept rolls 
 static int step_live(const pattern_t *p, uint32_t t, uint32_t s, uint32_t loop)
 {
     if (!main_on(p, t, s))
-        return dens_ghost(p, t, s);
-    return !dens_drop(p, t, s) && (sq.rnd[t][1] <= dens_prob(p, t, s) || sq.fill) && cond_ok(p, t, s, loop);
+        return dens_ghost(p, t, s, loop);
+    return !dens_drop(p, t, s, loop) && (sq.rnd[t][1] <= dens_prob(p, t, s) || sq.fill) && cond_ok(p, t, s, loop);
 }
 static uint32_t links_set(const pattern_t *p)        /* bit l: link l is set */
 {
@@ -1380,17 +1397,44 @@ static void seq_set_next_pattern(uint32_t n)         /* seq_setNextPattern */
     if (!sq.running)
         seq_pattern_activate();
 }
-static uint32_t seq_next_in_song(int advance)        /* seq_determineNextPattern */
+/* 0.19: a song row also says how many times its pattern plays: the pattern in bits 0-4, the times in bits 5-7 (k:
+ * SONG_REPS[k < 2 ? k : k - 1]; k = 2 never, so END and LOOP stay 64 and 65, the LXR's) */
+#define NSONGREP 7u
+static const uint8_t SONG_REPS[NSONGREP] = {1, 2, 3, 4, 6, 8, 16};
+static uint32_t song_row(uint32_t v)                 /* a row's pattern, or SONG_END / SONG_LOOP */
+{
+    return v == SONG_END || v == SONG_LOOP ? v : (v >> 5) == 2u ? SONG_END : v & 31u;
+}
+static uint32_t song_rep_i(uint32_t s, uint32_t r)   /* its times: SONG_REPS's index */
+{
+    uint32_t k = songs[s % NUM_SONGS][r & 63u] >> 5;
+    return song_row(songs[s % NUM_SONGS][r & 63u]) >= NUM_PATTERN ? 0u : k < 2u ? k : k - 1u;
+}
+static uint32_t song_reps(uint32_t s, uint32_t r) { return SONG_REPS[song_rep_i(s, r) % NSONGREP]; }
+static void song_put(uint32_t s, uint32_t r, uint32_t v, uint32_t i)   /* row r: pattern (or END, LOOP) v, times i */
+{
+    i %= NSONGREP;
+    songs[s % NUM_SONGS][r & 63u] = (uint8_t)(v >= NUM_PATTERN ? v : v | (i < 2u ? i : i + 1u) << 5);
+}
+static uint32_t seq_next_in_song(int advance)        /* seq_determineNextPattern (0.19: a row its times first) */
 {
     uint32_t pos;
     if (!sq.song_mode)
         return sq.active;
+    if (sq.song_pos < MAX_SONG_LENGTH && song_row(songs[sq.song][sq.song_pos]) < NUM_PATTERN &&
+        sq.song_n + 1u < song_reps(sq.song, sq.song_pos)) {
+        if (advance)
+            sq.song_n++;
+        return song_row(songs[sq.song][sq.song_pos]);
+    }
     pos = (uint32_t)(uint8_t)(sq.song_pos + 1u);
     if (pos >= MAX_SONG_LENGTH)
         pos = 0;
-    if (advance)
+    if (advance) {
         sq.song_pos = (uint8_t)pos;
-    return songs[sq.song][pos];
+        sq.song_n = 0;
+    }
+    return song_row(songs[sq.song][pos]);
 }
 
 static void seq_stop_now(void);
@@ -1402,12 +1446,12 @@ static int seq_pattern_end(void)                     /* (seq_nextStep's master s
         uint32_t n = seq_next_in_song(1);
         if (n == SONG_END) {
             seq_stop_now();
-            sq.pending = songs[sq.song][0] < NUM_PATTERN ? songs[sq.song][0] : 0u;
+            sq.pending = (uint8_t)(song_row(songs[sq.song][0]) < NUM_PATTERN ? song_row(songs[sq.song][0]) : 0u);
             sq.song_pos = 0;
             return 0;
         }
         if (n == SONG_LOOP || n >= NUM_PATTERN) {
-            n = songs[sq.song][0] < NUM_PATTERN ? songs[sq.song][0] : 0u;
+            n = song_row(songs[sq.song][0]) < NUM_PATTERN ? song_row(songs[sq.song][0]) : 0u;
             sq.song_pos = 0;
         }
         sq.pending = (uint8_t)n;
@@ -1807,7 +1851,7 @@ static void seq_set_roll(uint32_t t, int on)         /* seq_setRoll */
 }
 
 /* --------------------------------------------------- song editing --- */
-static void song_insert_row(uint32_t song, uint32_t pos)   /* seq_insertRow: the row repeated below */
+static void song_insert_row(uint32_t song, uint32_t pos)   /* seq_insertRow: the row repeated below (its times too) */
 {
     uint32_t i;
     for (i = MAX_SONG_LENGTH - 1u; i > pos; i--)
@@ -2019,8 +2063,10 @@ static void seq_gen_loop(uint32_t t)                 /* track t round again: MUT
 /* the panel's actions on track t of the shown pattern (the main loop): UNDO keeps the track as it was */
 static int8_t undo_t = -1;
 static uint8_t undo_p;
+static uint8_t dundo;
 static void seq_undo_save(uint32_t t)
 {
+    dundo = 0;                                       /* (31: upat a track's now, not DENSITY's pattern) */
     trk_copy(&upat, &pat[sq.active], t);
     undo_t = (int8_t)t;
     undo_p = sq.active;
@@ -2063,6 +2109,71 @@ static void seq_commit(uint32_t t)                   /* COMMIT: the live track i
         }
     memcpy(p->gen[t], g, 4);
     memcpy(p->mel[t], m, NML);
+}
+/* 31: DENSITY's COMMIT (OCT+ on its page): what it does now written into the playing pattern, as this time round
+ * plays it (VARY's draw): its dropped steps off, its chances up, its ghosts as steps (the track's last note, its
+ * velocity), its ratchets; DENSITY then goes back to 0, as it sounded. The whole pattern is kept for its UNDO (OCT+
+ * again, DENSITY still at 0: the pattern and DENSITY as they were; again: redo). Returns the steps it changed */
+static uint8_t dundo_p;                              /* (dundo: 1 a COMMIT to undo, 2 to redo; its pattern) */
+static uint32_t seq_dens_commit(void)
+{
+    pattern_t *p = &pat[sq.active];
+    uint32_t t, s, n = 0;
+    upat = *p;
+    undo_t = -1;                                     /* (upat holds the pattern now: no track's UNDO) */
+    for (t = 0; t < NTRACK; t++) {
+        uint32_t len = track_len(p, t), lp = sq.loops[t];
+        if (!dens_on(t))
+            continue;
+        for (s = 0; s < len; s++) {
+            step_t *x = &p->step[t][s];
+            if (!main_on(p, t, s)) {
+                if (!dens_ghost(p, t, s, lp))
+                    continue;
+                main_set(p, t, s, 1);                /* (a ghost: a plain step, as a recorded one) */
+                x->note = sq.lnote[t];
+                x->volume = (uint8_t)(dens_ghost_vel(t, s, lp) | STEP_ACTIVE_MASK);
+                x->prob = 100u;                      /* (its length AUTO, no condition) */
+                lock_set(p, t, s, 0, NO_AUTOMATION);
+                lock_set(p, t, s, 1, NO_AUTOMATION);
+                p->cond[t][s] = 0;
+                p->rat[t][s] = 0;
+                p->timing[t][s] = 7u << 4;
+                n++;
+            } else if (dens_drop(p, t, s, lp)) {
+                main_set(p, t, s, 0);
+                n++;
+            } else {
+                uint32_t pr = dens_prob(p, t, s);
+                if (pr > 100u)
+                    pr = 100u;
+                if (pr != step_prob(x)) {
+                    x->prob = (uint8_t)((x->prob & ~PROB_MASK) | pr);
+                    n++;
+                }
+                if (!(p->rat[t][s] & 7u) && !(p->rat[t][s] & RAT_BOUNCE) && dens_rat(p, t, s, lp)) {
+                    p->rat[t][s] = (uint8_t)((p->rat[t][s] & ~7u) | 1u);   /* (2 hits, 1/32: as it played) */
+                    n++;
+                }
+            }
+        }
+        if (gen_live(p, t))                          /* (a live generator: from the pattern again) */
+            sq.gsync |= (uint8_t)(1u << t);
+    }
+    dundo = 1;
+    dundo_p = sq.active;
+    return n;
+}
+static int seq_dens_undo(void)                       /* the pattern and the kept copy swapped */
+{
+    if (!dundo || dundo_p != sq.active)
+        return 0;
+    gpat = pat[sq.active];                           /* (gpat: scratch for the swap, then synced) */
+    pat[sq.active] = upat;
+    upat = gpat;
+    dundo = (uint8_t)(3u - dundo);
+    sq.gsync = (uint8_t)((1u << NTRACK) - 1u);
+    return 1;
 }
 /* DICE: the track again, at random: Euclid's length, its number of hits anywhere */
 static void seq_dice(uint32_t t)

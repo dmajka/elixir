@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-3.0-only
-# Elixir: the generated headers (build/gen): the engine's fixed-point tables, the UI fonts, palettes and keycaps.
+# Elixir: the generated headers (build/gen): the engine's fixed-point tables, the UI fonts, palettes and keycaps, the factory kits.
 # PYTHON: a Python 3 with Pillow (and libraqm) and fontTools.
 set -e
 cd "$(dirname "$0")/.."
@@ -11,3 +11,4 @@ mkdir -p build/gen
 "$PY" tools/gen_aa_font.py build/gen/ui_fonts.h --preset inter-tight 2>&1 | grep -v "Raqm\|warnings.warn" | tail -1
 "$PY" tools/gen_ui_palettes.py build/gen/ui_palettes.h
 "$PY" tools/gen_aa_keycaps.py build/gen/ui_keycaps.h 2>&1 | grep -v "Raqm\|warnings.warn" | tail -1
+"$PY" tools/gen_factory_kits.py build/gen/factory_kits.h assets/kits/factory

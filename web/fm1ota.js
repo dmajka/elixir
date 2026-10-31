@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
-// Elixir: copied from Felucca's web/; the port filter also matches Elixir's USB name (and Kettle's, its former
-// name), and the steps get the address read (the page's progress bar).
+// Elixir: copied from Felucca's web/; the port filter also matches Elixir's USB names, and the steps get the address read (the page's progress bar).
 //
 // The FM-1 USB-MIDI update protocol over WebMIDI (after tools/fm1_install.py).
 // Step 1: the running firmware (official
@@ -121,7 +120,7 @@ export class Updater {
     const outs = [...this.access.outputs.values()];
     for (const input of this.access.inputs.values()) {
       if (input.state === "disconnected") continue;
-      if (!/fm-1|felucca|elixir|kettle|ota|composite|sinco|usb-midi/i.test(input.name || "")) continue;   // (Elixir, and Kettle: its former name)
+      if (!/fm-1|felucca|elixir|kettle|ota|composite|sinco|usb-midi/i.test(input.name || "")) continue;   // (Elixir, under its names)
       const output = outs.find((o) => o.name === input.name && o.state !== "disconnected");
       if (!output) continue;
       try { await input.open(); await output.open(); } catch (_) { continue; }

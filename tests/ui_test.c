@@ -59,7 +59,7 @@ static void kit_set1(uint32_t n, uint32_t i, uint32_t v) { uint8_t k[KIT_LEN]; k
 static void fx_goto(uint32_t g)                      /* 0.16: FX's page g (FXPG_*), as shown */
 {
     uint32_t i;
-    for (i = 0; i < 8u && fx_page() != g; i++)
+    for (i = 0; i < NFXPG && fx_page() != g; i++)
         turn(EN_SELECT, fx_page() < g ? 1 : -1);
 }
 static void goto_mode(uint32_t b, uint32_t m)        /* press b until the mode is m */
@@ -68,6 +68,20 @@ static void goto_mode(uint32_t b, uint32_t m)        /* press b until the mode i
     for (i = 0; i < 6u && ui.mode != m; i++)
         press(b);
     check(ui.mode == m, "the mode a button cycles to");
+}
+static void perf_goto(uint32_t g)                    /* 29: PERF's page g (ARP: its set) */
+{
+    uint32_t i;
+    goto_mode(B_ARP, M_PERF);
+    for (i = 0; i < 3u && (g >= PG_GMOD ? 2u : g >= PG_SPELL) != perf_set(); i++)   /* (32: three sets) */
+        press(B_ARP);
+    for (i = 0; i < NPERF && ui.page != g; i++)
+        turn(EN_SELECT, ui.page < g ? 1 : -1);
+}
+static void seq_goto(uint32_t g)                     /* 29: SEQ's track page g (TRACK, GENERATOR ..) */
+{
+    goto_mode(B_SEQ, M_EUCLID);
+    turn(EN_SELECT, (int32_t)g - (int32_t)ui.page);
 }
 static void check(int ok, const char *what)
 {
@@ -308,13 +322,19 @@ static void phase2(void)
     press(B_SCL);
     check(ui.mode == M_SOUND && ui.sect == S_SHAPE, "SCL twice: SHAPE");
     turn(EN_K1, 1);
-    turn(EN_K3, 4);
-    check(par[PAR_SHAPE1] == SH_FOLD && par[PAR_BITS1] == 4, "SHAPE: K1 the shaper, K3 the bits");
+    turn(EN_K4, 4);
+    {
+        uint16_t kp[4];
+        page_params(kp);
+        check(kp[2] == PAR_VOICE_DECIMATION1, "SHAPE: K3 the sample rate, before the bits (29)");
+    }
+    check(par[PAR_SHAPE1] == SH_FOLD && par[PAR_BITS1] == 4, "SHAPE: K1 the shaper, K4 the bits");
     shot("shape");
+    turn(EN_SELECT, 1);                               /* (29: SHAPE (2/2): the tilt) */
     keys |= 1u << WHITE_KEY[6];                       /* a lock on step 7: D1's tilt */
     web_keys(keys);
     run_ms(40);
-    turn(EN_K4, 20);
+    turn(EN_K1, 20);
     keys &= ~(1u << WHITE_KEY[6]);
     web_keys(keys);
     run_ms(40);
@@ -532,7 +552,7 @@ static void phase3(void)
         turn(EN_ALGO, -3);
     }
     /* MACROS: M1 on D1's decay between 10 and 100; turned under REC it records a lock */
-    turn(EN_SELECT, (int32_t)PG_MACRO + 1);
+    perf_goto(PG_MACRO + 1u);
     check(ui.page == PG_MACRO + 1u, "PERF: MACRO SETUP");
     kset.accel = 0;                                   /* (exact detents) */
     turn(EN_K2, (int32_t)lock_idx_of(PAR_VELOD1));
@@ -722,9 +742,8 @@ static void phase4(void)
     for (i = 0; i < 16u; i += 4)
         main_set(p, 0, i, 1);
     black(0);
-    press(B_ARP);
-    press(B_ARP);
-    check(ui.mode == M_EUCLID && ui.page == PG_GEN, "ARP twice: GENERATOR");
+    seq_goto(PG_GEN);
+    check(ui.mode == M_EUCLID && ui.page == PG_GEN, "SEQ, SELECT: GENERATOR");
     turn(EN_K1, 2);
     check(p->gen[0][0] == GEN_MUTATE, "GENERATOR: MUTATE");
     turn(EN_K2, 75);
@@ -793,13 +812,15 @@ static void phase4(void)
     shot("step-cond");
     turn(EN_SELECT, 3);
     turn(EN_K1, 2);
-    turn(EN_K2, 1);
-    turn(EN_K3, 2);
+    turn(EN_K3, 1);
+    turn(EN_K4, 2);
     check((p->rat[0][0] & 7u) == 2 && ((p->rat[0][0] >> 3) & 3u) == 1 && (p->rat[0][0] >> 5) == RF_UP,
-          "RATCHET: 3 hits, 1/48, up");
+          "RATCHET: 3 hits, 1/48, up (29: K2 the shape)");
     shot("step-ratchet");
+    turn(EN_SELECT, 1);
+    check(ui.mode == M_STEP && ui.page == 3, "SELECT past RATCHET: still RATCHET");
     press(B_SEQ);
-    check(ui.mode == M_STEP && ui.page == 0, "SEQ again from RATCHET: STEP");
+    check(ui.mode == M_EUCLID, "SEQ again from the steps: the track's pages (29)");
     /* project version 4: conditions, ratchets, clocks, generators */
     {
         int rc;
@@ -962,16 +983,14 @@ static void phase5a(void)
     p->rat[0][4] = 0;
     p->rat[0][0] = 0;
     pat_backup = *p;
-    press(B_SEQ);
+    goto_mode(B_SEQ, M_STEP);
     white(0);
-    turn(EN_SELECT, 3);
-    turn(EN_K4, 1);
+    turn(EN_SELECT, 3 - (int32_t)ui.page);
+    turn(EN_K2, 1);
     turn(EN_K1, 5);
     check((p->rat[0][0] & RAT_BOUNCE) && (p->rat[0][0] & 7u) == 5u, "RATCHET page: BOUNCE, 8 hits");
     shot("step-bounce");
-    press(B_SEQ);
-    goto_mode(B_ARP, M_EUCLID);
-    turn(EN_SELECT, (int32_t)PG_BOUNCE);
+    seq_goto(PG_BOUNCE);
     turn(EN_K1, 1);
     turn(EN_K2, -5);
     check((p->bnc[0] & 3u) == 2u && (p->bnc[0] >> 2) == 7u, "BOUNCE: from 1/16, -5 semitones");
@@ -980,9 +999,7 @@ static void phase5a(void)
     p->bnc[0] = BNC_DEFAULT;
     p->rat[0][0] = 0;
     pat_backup = *p;
-    goto_mode(B_ARP, M_PERF);
-    while (ui.page)
-        turn(EN_SELECT, -1);
+    perf_goto(0);
     play_from_start();
     keys |= 1u;
     web_keys(keys);
@@ -1153,7 +1170,7 @@ static void phase5b(void)
     hold(B_OCTDN);                                   /* (SHIFT) */
     press(B_SEQ);
     release(B_OCTDN);
-    check(ui.mode == M_EUCLID && ui.page == PG_LINKS, "SHIFT + SEQ: LINKS");
+    check(ui.mode == M_PERF && ui.page == PG_LINKS, "SHIFT + SEQ: LINKS (29: PERF's GLOBAL MOD)");
     shot("links-empty");
     turn(EN_K2, 1);
     check(!memcmp(p->link[0], LK_START[0], 4), "LINKS: Start: DUCK HATS");
@@ -1173,8 +1190,9 @@ static void phase5b(void)
     shot("link-setup");
     turn(EN_SELECT, -1);
     shot("links-custom");
-    while (ui.page)
-        turn(EN_SELECT, -1);
+    turn(EN_SELECT, -1);
+    check(ui.page == PG_MACRO + 1u, "SELECT: GLOBAL MOD's pages before LINKS");
+    goto_mode(B_HOME, M_HOME);
     shot("links-grid-mark");
     {
         int rc;
@@ -1204,8 +1222,7 @@ static void phase5c(void)
     for (k = 0; k < 16u; k += 4u)
         main_set(p, 0, k, 1);
     pat_backup = *p;
-    goto_mode(B_ARP, M_PERF);
-    turn(EN_SELECT, (int32_t)PG_PERF2);
+    perf_goto(PG_PERF2);
     check(ui.page == PG_PERF2 && perf_bank2(), "PERFORM 2: the fifth PERF page");
     /* HALF: the ticks at half the rate */
     start_now();
@@ -1710,8 +1727,7 @@ static void grids_test(void)
     press(B_PLAY);
     goto_mode(B_HOME, M_HOME);
     black(5);
-    goto_mode(B_ARP, M_PERF);
-    press(B_ARP);
+    seq_goto(PG_GEN);
     shot("grids-generator");
     turn(EN_SELECT, 1);
     {
@@ -1750,7 +1766,7 @@ static void phase14(void)
     kset.accel = 0;                                  /* (exact detents) */
     black(0);
     /* 14d: Euclid's second pulse, on the ACTION page; joined OR, XOR, AND, SUB */
-    goto_mode(B_ARP, M_EUCLID);
+    seq_goto(PG_GEN);
     turn(EN_K1, 1);
     turn(EN_K3, 4);
     check(p->gen[0][0] == GEN_EUCLID && p->main[0][0] == 0x1111u, "EUCLID: 4 hits");
@@ -1822,12 +1838,12 @@ static void phase14(void)
     turn(EN_K1, -3);
     check(par[PAR_LFOMODE1] == LM_TRIG, "LFO MODE: back to TRIG by its knob");
     shot("lfo-mode");
-    turn(EN_SELECT, -1);                             /* 0.14: SELECT's order too: the LFO's pages, LFO MODE, MIX */
+    turn(EN_SELECT, -1);                             /* 0.14: SELECT's order too: the LFO's pages, LFO MODE */
     check(ui.sect == S_LFO && ui.half == 1, "SELECT: before LFO MODE, the LFO's second page");
     turn(EN_SELECT, 2);
     check(ui.sect == S_LFO2 && ui.half == 0, "SELECT: after LFO MODE, TRK LFO 2 (25b)");
     turn(EN_SELECT, 2);
-    check(ui.sect == S_MIX && ui.half == 0, "SELECT: after TRK LFO 2, MIX");
+    check(ui.sect == S_RANDOM && ui.half == 0, "SELECT: after LFO 2, RANDOM PER HIT (29)");
 
     /* 14b: the global LFOs. MORPH by a one-shot saw over a bar from PLAY: the knob stays, the sound moves */
     p4_reset();
@@ -1910,11 +1926,10 @@ static void phase14(void)
     check(lo == hi && gl.out[0] != lo, "GLOBAL LFO HOLD: its value held through a bar, a new one at the next");
     seq_stop_now();
     /* the pages, OCT+ to trigger, saved with the project */
-    goto_mode(B_ARP, M_PERF);
-    turn(EN_SELECT, (int32_t)PG_GLFO);
+    perf_goto(PG_GLFO);
     page_params(pp);
     title_text(b, sizeof b, &pg, &np);
-    check(pp[0] == GLV(0, 0) && pp[3] == GLV(0, 3) && !strcmp(b, "GLOBAL LFO 1") && !perf_bank2(),
+    check(pp[0] == GLV(0, 0) && pp[3] == GLV(0, 3) && !strcmp(b, "GLOBAL LFO 1 (1/2)") && !perf_bank2(),
           "PERF: GLOBAL LFO 1's page (DEST DEPTH SPEED WAVE), the first bank's keys");
     turn(EN_K1, -20);
     turn(EN_K1, 1);
@@ -1969,7 +1984,7 @@ static void phase14(void)
     press(B_GLO);
     check(ui.mode == M_CONFIG && ui.page == CF_LOAD - 1u, "GLO: back to CONFIG's last page");
     press(B_GLO);
-    check(ui.mode == M_SOUND && ui.sect == S_MIX, "GLO again: round to MIX as before");
+    check(ui.mode == M_MIXER, "GLO again: round to the mixer (29)");
     {   /* 0.15 (17a, 17b): CONFIG > LOAD, the last page: each part's load, the cores. The emulator measures none
          * and has one core; the figures here are set as the FM-1 would have them */
         static const uint16_t AVG[NLD] = {10, 105, 77, 8, 13, 15, 20}, PK[NLD] = {20, 133, 90, 10, 18, 28, 40};
@@ -1977,8 +1992,8 @@ static void phase14(void)
         goto_mode(B_GLO, M_CONFIG);
         turn(EN_SELECT, (int32_t)CF_LOAD - (int32_t)ui.page);
         page_params(pp);
-        check(ui.page == NCONFIG - 1u && ui.page == CF_LOAD && pp[0] == VP_NONE && pp[3] == VP_NONE,
-              "CONFIG: LOAD, the last page, no knobs");
+        check(ui.page == NCONFIG - 2u && ui.page == CF_LOAD && pp[0] == VP_NONE && pp[3] == VP_NONE,
+              "CONFIG: LOAD, before the last page, no knobs");
         check(cores_why == CW_BUILD && c1_stack() == 0, "the emulator: one core (no second core built in)");
         run_ms(100);
         shot("config-load-emu");
@@ -1989,6 +2004,12 @@ static void phase14(void)
         cores_why = CW_TWO;
         run_ms(100);
         shot("config-load");
+        turn(EN_SELECT, 1);                          /* 29: the last page, ELIXIR: the version, each core's load */
+        page_params(pp);
+        check(ui.page == CF_ABOUT && ui.page == NCONFIG - 1u && pp[0] == VP_NONE, "CONFIG: ELIXIR, the last page");
+        run_ms(100);
+        shot("config-about");
+        turn(EN_SELECT, -1);
         cores_why = CW_BAD;
         run_ms(100);
         shot("config-load-bad");
@@ -2008,13 +2029,22 @@ static void phase14(void)
     check(ui.mode == M_SOUND && ui.sect == S_LFOM, "LFO: back to LFO MODE");
     press(B_LFO);
     check(ui.sect == S_LFO2, "LFO again: on as before");
-    goto_mode(B_ARP, M_EUCLID);
-    turn(EN_SELECT, (int32_t)PG_TRACK - (int32_t)ui.page);
+    seq_goto(PG_SCALE);
     press(B_HOME);
+    press(B_SEQ);
+    check(ui.mode == M_EUCLID && ui.page == PG_SCALE, "SEQ: back to the SCALE page");
+    press(B_SEQ);
+    check(ui.mode == M_STEP, "SEQ again: the steps");
+    press(B_HOME);
+    press(B_SEQ);
+    check(ui.mode == M_STEP, "SEQ: back to the steps, as SEQ showed last");
+    perf_goto(PG_MACRO);
     press(B_ARP);
-    check(ui.mode == M_EUCLID && ui.page == PG_TRACK, "ARP: back to the generator's TRACK page");
+    check(ui.mode == M_PERF && ui.page < PG_SPELL, "ARP in GLOBAL MOD: PERFORM");
     press(B_ARP);
-    check(ui.mode == M_PERF, "ARP again: PERF");
+    check(ui.mode == M_PERF && perf_spells(), "ARP again: SPELLS (32)");
+    press(B_ARP);
+    check(ui.mode == M_PERF && ui.page == PG_MACRO, "ARP again: GLOBAL MOD, on MACROS as it was left");
     kset.pmem = 0;
     press(B_HOME);
     press(B_FX);
@@ -2026,10 +2056,13 @@ static void phase14(void)
 /* 9b, 9g: PERF's pages (the performance ones, then the macros, then PERFORM 2), MIX, the global sample rate */
 static void phase9_perf(void)
 {
-    static const char *const T[NPERF] = {"PERFORM", "PERFORM: MORE", "PERFORM: DENSITY", "PERFORM: STUTTER", "PERFORM: MIX",
-                                         "PERFORM: MIX 2", "PERFORM 2", "PERFORM 2: SETUP", "PERFORM 2: SETUP 2",
-                                         "GLOBAL LFO 1", "GLOBAL LFO 1: MODE", "GLOBAL LFO 2", "GLOBAL LFO 2: MODE",
-                                         "GLOBAL LFO 3", "GLOBAL LFO 3: MODE", "MACROS", "MACRO SETUP"};
+    static const char *const T[NPERF] = {"PERFORM", "PERFORM: MORE", "PERFORM: DENSITY", "PERFORM: STUTTER",
+                                         "PERFORM 2", "PERFORM 2: SETUP (1/2)", "PERFORM 2: SETUP (2/2)",
+                                         "SPELLS: GRIMOIRE", "SPELLS: CAST", "SPELLS: CHARACTER", "SPELLS: LIMITS",
+                                         "SPELLS: MOTION",
+                                         "GLOBAL LFO 1 (1/2)", "GLOBAL LFO 1 (2/2)", "GLOBAL LFO 2 (1/2)",
+                                         "GLOBAL LFO 2 (2/2)", "GLOBAL LFO 3 (1/2)", "GLOBAL LFO 3 (2/2)", "MACROS",
+                                         "MACRO SETUP", "LINKS", "LINK SETUP"};
     pattern_t *p = &pat[0];
     uint16_t kp[4];
     uint32_t i, ok = 1, d0, d1;
@@ -2039,10 +2072,20 @@ static void phase9_perf(void)
         uint32_t pg, np;
         char b[40];
         title_text(b, sizeof b, &pg, &np);
-        ok &= !strcmp(b, T[i]) && pg == i && (i >= PG_PERF2 && i < PG_GLFO) == (uint32_t)perf_bank2();
-        turn(EN_SELECT, 1);
+        uint32_t f = i >= PG_GMOD ? PG_GMOD : i >= PG_SPELL ? PG_SPELL : 0u;
+        ok &= !strcmp(b, T[i]) && pg == i - f &&
+              np == (i >= PG_GMOD ? NPERF - PG_GMOD : i >= PG_SPELL ? PG_GMOD - PG_SPELL : PG_SPELL) &&
+              (i >= PG_PERF2 && i < PG_SPELL) == (uint32_t)perf_bank2();
+        if (i + 1u == PG_GMOD || i + 1u == PG_SPELL) {   /* (29: SELECT stays in the set; ARP: the next) */
+            turn(EN_SELECT, 1);
+            ok &= ui.page == i;
+            press(B_ARP);
+        } else {
+            turn(EN_SELECT, 1);
+        }
     }
-    check(ok, "PERF: its pages in order, PERFORM 2's bank after the performance pages");
+    check(ok, "PERF: its pages in order, in three sets (PERFORM, SPELLS, GLOBAL MOD), PERFORM 2's bank in the first");
+    press(B_ARP);
     turn(EN_SELECT, -(int32_t)NPERF);
     page_params(kp);
     check(kp[0] == PAR_BPM && kp[1] == PAR_ROLL && kp[2] == PAR_MORPH && kp[3] == PAR_VOICE_DECIMATION_ALL,
@@ -2078,20 +2121,6 @@ static void phase9_perf(void)
         check(n >= 1u, "SRATE: turned under REC, a lock on the playing step");
     }
     par_set(PAR_VOICE_DECIMATION_ALL, 127);
-    /* MIX: the volumes on the knobs, the faders on the screen */
-    turn(EN_SELECT, (int32_t)PG_MIX);
-    page_params(kp);
-    check(kp[0] == PAR_VOL1 && kp[3] == PAR_VOL4, "MIX: D1 D2 D3 SN");
-    par_set(PAR_VOL1, 100);
-    turn(EN_K1, -40);
-    check(par[PAR_VOL1] == 60, "MIX: KNOB 1 rides D1's volume");
-    shot("perf-mix");
-    turn(EN_SELECT, 1);
-    page_params(kp);
-    check(kp[0] == PAR_VOL5 && kp[1] == PAR_VOL6 && kp[2] == PAR_FX_DRY_WET && kp[3] == PAR_REV_LEVEL,
-          "MIX 2: CY HH, the FX bus, the reverb");
-    white(0);                                        /* (the keys still roll there) */
-    check(ui.mode == M_PERF, "MIX: the keys still PERF's");
     par_set(PAR_VOL1, 100);
     kset.accel = 1;
     p4_reset();
@@ -2159,8 +2188,24 @@ static void phase9_keys(void)
     white(2);
     run_ms(10);
     check(trig_count[1] == c + 1u && !main_on(p, 1, 2), "KEYS on a sound page: a note, not a step");
+    /* 31: KEYS stays on as the pages change (the header says so), but where the keys are the page's own; SHIFT +
+     * EDIT off */
+    press(B_FX);
+    c = trig_count[1];
+    white(2);
+    run_ms(10);
+    check(ui.mode == M_FX && keys_live() && trig_count[1] == c + 1u, "KEYS (31): on FX's pages, the keys still play");
+    shot("keys-on-fx");
     press(B_HOME);
-    check(!ui.kplay, "HOME: KEYS let go");
+    check(ui.kplay && keys_live(), "KEYS (31): HOME keeps them");
+    press(B_HOME);
+    check(ui.mode == M_PATTERN && !keys_live(), "KEYS (31): the patterns page has its own keys");
+    press(B_HOME);
+    press(B_HOME);
+    hold(B_OCTDN);
+    press(B_EDIT);
+    release(B_OCTDN);
+    check(!ui.kplay && ui.mode == M_HOME, "KEYS (31): SHIFT + EDIT on another page turns them off, the page stays");
     /* the rolls at the keys' velocity */
     goto_mode(B_ARP, M_PERF);
     white(0);
@@ -2216,29 +2261,53 @@ static void phase9_library(void)
     check(morph_par[kit_idx(PAR_VOL2)] == 77, "LOAD MORPH < LIBRARY: the morph target");
     vp_set(VP_IO_SRC, 0);
     goto_mode(B_HOME, M_HOME);
-    /* 0.9.2: the kit browser (PRESETS): KNOB 1 lists the slots or the library's kits (the empty ones left out) */
+    /* the kit browser (PRESETS; 0.19: one list, FACTORY, LIBRARY, SLOTS; KNOB 1 jumps between them; the library's
+     * empty slots left out) */
     par[PAR_VOL2] = 10;
+    ui.kb_at = 0;
     turn(EN_PRESET, 1);
-    check(ui.kb_open && !ui.kb_lib && ui.kb_sel == kit_loaded, "PRESETS: the kit browser, the slots, on the loaded kit");
-    turn(EN_PRESET, 100);
-    check(ui.kb_sel == NUM_KITS - 1u, "kit browser: the slots end at 64");
+    check(ui.kb_open && ui.kb_sel == KB_FAC, "PRESETS: the kit browser opens on factory kit 1");
     {
         uint16_t kp[4];
         page_params(kp);
-        check(kp[0] == VP_KB_SRC, "kit browser: KNOB 1 is From");
+        check(kp[0] == VP_KB_SRC && vp_get(VP_KB_SRC) == 0u, "kit browser: KNOB 1 is From, at FACTORY");
     }
-    turn(EN_K1, 1);
-    check(ui.kb_lib && ui.kb_sel == NUM_KITS + 99u, "kit browser: From LIBRARY, on library kit 100 (the only one)");
+    shot("kits-factory");
+    turn(EN_PRESET, 100);
+    check(ui.kb_sel == 14u, "kit browser: on from the factory's 85 through the library's one kit into the slots");
+    turn(EN_PRESET, -15);
+    check(ui.kb_sel == NUM_KITS + 99u && vp_get(VP_KB_SRC) == 1u, "kit browser: back to library kit 100 (the only one)");
     shot("kits-library");
-    turn(EN_PRESET, -5);
-    check(ui.kb_sel == NUM_KITS + 99u, "kit browser: the library only, its empty slots left out");
+    turn(EN_K1, 1);
+    check(ui.kb_sel == kit_loaded && vp_get(VP_KB_SRC) == 2u, "kit browser: KNOB 1 to SLOTS, on the loaded kit");
+    turn(EN_K1, -2);
+    check(ui.kb_sel == KB_FAC, "kit browser: KNOB 1 back to FACTORY");
+    turn(EN_PRESET, 2);
+    press(B_OCTUP);
+    {
+        uint8_t f[KIT_LEN];
+        kit_factory_values(2, f);
+        for (i = 0, ok = 1; i < KIT_LEN; i++)
+            ok &= par[kit_par(i)] == f[i];
+        check(!ui.kb_open && ok, "kit browser: OCT+ loads factory kit 3 into the edit buffer");
+    }
+    turn(EN_PRESET, 1);
+    check(ui.kb_open && ui.kb_sel == KB_FAC + 2u, "kit browser: it opens where it was");
+    turn(EN_K1, 1);
+    check(ui.kb_sel == NUM_KITS + 99u, "kit browser: KNOB 1 to LIBRARY, on the kit last loaded");
     press(B_OCTUP);
     check(!ui.kb_open && par[PAR_VOL2] == 77 && ui.lib_kit == 99u, "kit browser: OCT+ loads the library kit");
+    vp_set(VP_KBSLOTS, 1);
     turn(EN_PRESET, 1);
-    check(ui.kb_open && ui.kb_lib && ui.kb_sel == NUM_KITS + 99u, "kit browser: it opens on the library again");
-    turn(EN_K1, -1);
-    check(!ui.kb_lib && ui.kb_sel == kit_loaded, "kit browser: From SLOTS, on the loaded kit");
+    check(ui.kb_open && ui.kb_sel == kit_loaded && vp_get(VP_KB_SRC) == 0u, "CONFIG Kits first SLOTS: it opens on the slots");
+    turn(EN_PRESET, -1);
+    check(ui.kb_sel == (kit_loaded ? kit_loaded - 1u : 0u), "kit browser: the slots first");
+    turn(EN_K1, 2);
+    check(ui.kb_sel == KB_FAC, "kit browser: KNOB 1 to FACTORY, last of the three");
+    vp_set(VP_KBSLOTS, 0);
     press(B_OCTDN);
+    check(!ui.kb_open, "kit browser: OCT- closes it");
+    turn(EN_PRESET, 1);
     run_ms(6100);
     check(!ui.kb_open, "kit browser: closes by itself");
     /* a write torn before its record: the slot as it was */
@@ -2273,13 +2342,13 @@ static void phase9_library(void)
         kl_write(KLK_SOUND, i, 0, 0, 0);
     }
     check(kl_count(KLK_KIT) == 0u && kl_count(KLK_SOUND) == 0u, "LIBRARY: emptied");
+    ui.kb_at = 0;
     turn(EN_PRESET, 1);
     turn(EN_K1, 1);
-    check(ui.kb_open && ui.kb_lib && ui.kb_sel == NUM_KITS, "kit browser: From LIBRARY, the library empty");
-    shot("kits-library-empty");
-    press(B_OCTUP);
-    check(!ui.kb_open, "kit browser: OCT+ on an empty library loads nothing");
-    ui.kb_lib = 0;
+    check(ui.kb_open && ui.kb_sel == kit_loaded, "kit browser: the library empty, KNOB 1 passes it over to SLOTS");
+    turn(EN_K1, -1);
+    check(ui.kb_sel == KB_FAC, "kit browser: .. and back to FACTORY");
+    press(B_OCTDN);
     /* SOUND: D1's into D2 (its velocity target, its LFO on itself, moved along); not into the snare */
     kit_init_par();
     par[PAR_OSC_WAVE_DRUM1] = 2;
@@ -2322,9 +2391,15 @@ static void phase9_library(void)
     check(ui.sb_open && sb_n >= 2u && trig_count[1] > c && (sb_list[0] >> 14) == SB_SOUND,
           "SOUND BROWSER: open, the library's sound first, auditioned");
     check(par[PAR_OSC_WAVE_DRUM2] == 2, "SOUND BROWSER: the sound in D2 as it plays");
-    for (i = 0; i < sb_n && sb_list[i] != (SB_SLOT << 14 | 2u << 11 | 2u); i++)
+    for (i = 0; i < sb_n && sb_code(i, 1) != (SB_SLOT << 14 | 2u << 11 | 2u); i++)
         ;
     check(i < sb_n, "SOUND BROWSER: a slot kit's D3 for D2");
+    {
+        char nm[8], tag[16];
+        sb_label(sb_nl, 1, nm, tag, sizeof tag);
+        check(sb_n > sb_nl + 200u && !memcmp(nm, "Badonka", 7) && !strcmp(tag, "FAC 1 D1"),
+              "SOUND BROWSER: the factory kits' drums after the rest (0.19)");
+    }
     turn(EN_PRESET, (int32_t)i);
     shot("sound-browser");
     check(par[PAR_OSC_WAVE_DRUM2] == 4, "SOUND BROWSER: moving on loads the next");
@@ -2485,20 +2560,25 @@ static void phase11(void)
     sq.muted = 0;
     kset.accel = 0;                                  /* (exact detents) */
     black(0);
-    /* 11a: SEQ again steps through the step pages, as every button does, and stays in step edit */
+    /* 29: SEQ the track's pages, then step edit, and round; SELECT pages in each */
     press(B_LFO);
     press(B_SEQ);
-    check(ui.mode == M_STEP && ui.page == 0, "SEQ: step edit, STEP");
+    check(ui.mode == M_EUCLID && ui.page == PG_TRACK, "SEQ: the track's pages, TRACK");
+    press(B_SEQ);
+    check(ui.mode == M_STEP && ui.page == 0, "SEQ again: step edit, STEP");
     for (i = 1; i < 5u; i++) {
-        press(B_SEQ);
-        check(ui.mode == M_STEP && ui.page == i % 4u, "SEQ again: the next step page (round to STEP)");
+        turn(EN_SELECT, 1);
+        check(ui.mode == M_STEP && ui.page == (i < 4u ? i : 3u), "SELECT: the next step page (RATCHET the last)");
     }
+    press(B_SEQ);
+    check(ui.mode == M_EUCLID, "SEQ again: the track's pages");
     /* 11b, 11c: one GENERATOR page; EUCLID from 0 hits over the track's length, nothing written until the hits */
     for (i = 0; i < 16u; i += 2)
         main_set(p, 0, i, 1);
     p->len[0] = 12;
-    goto_mode(B_ARP, M_EUCLID);
-    check(ui.page == PG_GEN, "ARP twice: the GENERATOR page first");
+    goto_mode(B_SEQ, M_EUCLID);
+    check(ui.page == PG_TRACK, "SEQ: the TRACK page first");
+    turn(EN_SELECT, (int32_t)PG_GEN - (int32_t)ui.page);
     page_params(pp);
     check(pp[0] == VP_GMODE && pp[1] == VP_NONE, "GENERATOR OFF: only the type");
     turn(EN_K1, 1);
@@ -2611,8 +2691,7 @@ static void phase11(void)
     }
     seq_clear_track(0, p);
     /* the TRACK page's direction; project version 8 */
-    goto_mode(B_ARP, M_EUCLID);
-    turn(EN_SELECT, (int32_t)PG_TRACK);
+    seq_goto(PG_TRACK);
     page_params(pp);
     check(pp[0] == PAR_TRACK_LENGTH && pp[1] == VP_CLOCK && pp[2] == VP_DIR, "TRACK: length, clock, direction");
     turn(EN_K3, -10);
@@ -2712,9 +2791,9 @@ static void phase13_control_all(void)
         ok &= par[kit_par(i)] == k0[i];
     check(ok && !ui.ca_ask && !ui.copy && ui.msg[12] == 'R', "OCT+ in the dialog: the kit reverted, no COPY held");
     /* a parameter only some voices have: FM's on D1..D3, the others left alone */
-    press(B_EDIT);
-    press(B_EDIT);
-    check(ui.sect == S_FM, "EDIT twice: FM");
+    for (i = 0; i < 4u && !(ui.mode == M_SOUND && ui.sect == S_FM); i++)
+        press(B_EDIT);
+    check(ui.sect == S_FM, "EDIT: MODEL, OSCILLATOR, then FM");
     for (i = 0; i < KIT_LEN; i++)
         k0[i] = par[kit_par(i)];
     hold(B_OCTUP);
@@ -2732,7 +2811,7 @@ static void phase13_control_all(void)
     press(B_SCL);
     check(ui.sect == S_SHAPE, "SCL again: SHAPE");
     hold(B_OCTUP);
-    turn(EN_K3, 2);
+    turn(EN_K4, 2);
     release(B_OCTUP);
     press(B_OCTDN);
     for (v = 0, ok = 1; v < NVOICE; v++)
@@ -3094,10 +3173,7 @@ static void phase19(void)
     check(scale_q(SC_CHROM, 0, 61, 0) == 61 && scale_q(SC_WHOLE, 0, 61, 0) == 60 && scale_q(SC_FIFTHS, 2, 62, 1) == 69,
           "scale_q: CHROMATIC as it is, WHOLE TONE, FIFTHS");
     check(p->scale == SC_CHROM && p->sfollow == SFOLLOW_DEFAULT, "a new pattern: CHROMATIC, D1-D3 follow");
-    goto_mode(B_ARP, M_EUCLID);
-    while (ui.page)
-        turn(EN_SELECT, -1);
-    turn(EN_SELECT, (int32_t)PG_SCALE);
+    seq_goto(PG_SCALE);
     page_params(pp);
     title_text(b, sizeof b, &pg, &np);
     check(pp[0] == VP_SROOT && pp[1] == VP_SCALE && pp[2] == VP_SFOLLOW, "EUCLID: the SCALE page, ROOT SCALE FOLLOW");
@@ -3139,6 +3215,9 @@ static void phase19(void)
         check(ui.knote == (uint8_t)key_scale_note(1), "KEYS: white key 2 plays the second degree");
     }
     shot("keys-scale");
+    hold(B_OCTDN);                                   /* (31: KEYS stays on till SHIFT + EDIT) */
+    press(B_EDIT);
+    release(B_OCTDN);
     /* a blank pattern takes the scale last chosen */
     seq_clear_pattern(&pat[3]);
     check(pat[3].sroot == 2 && pat[3].scale == SC_DORIAN, "a cleared pattern: the scale last chosen");
@@ -3215,16 +3294,16 @@ static void phase19(void)
     {
         uint32_t kept = 0, d1 = 0;
         for (i = 0; i < 16u; i++)
-            kept += !dens_drop(p, 0, i);
-        check(!dens_drop(p, 0, 0) && !dens_drop(p, 0, 4) && dens_drop(p, 0, 1) && kept == 4u,
+            kept += !dens_drop(p, 0, i, 0);
+        check(!dens_drop(p, 0, 0, 0) && !dens_drop(p, 0, 4, 0) && dens_drop(p, 0, 1, 0) && kept == 4u,
               "DENSITY -40: the beats kept, the 16ths gone");
         sq.dex = 1;
         for (i = 0; i < 16u; i++)
-            d1 += dens_drop(p, 0, i);
+            d1 += dens_drop(p, 0, i, 0);
         check(d1 == 0u, "DENSITY: a track left out keeps its steps");
         sq.dex = 0;
         sq.dens = -64;
-        check(!dens_drop(p, 0, 0) && dens_drop(p, 0, 4), "DENSITY at its least: the bar's first step alone");
+        check(!dens_drop(p, 0, 0, 0) && dens_drop(p, 0, 4, 0), "DENSITY at its least: the bar's first step alone");
     }
     seq_clear_track(0, p);
     main_set(p, 0, 0, 1);
@@ -3233,13 +3312,13 @@ static void phase19(void)
     {
         uint32_t g = 0;
         for (i = 1; i < 16u; i++)
-            g += dens_ghost(p, 0, i);
-        check(g >= 12u && dens_rat(p, 0, 0), "DENSITY up, RATCHETS: ghosts in the empty steps, a ratchet on the hit");
+            g += dens_ghost(p, 0, i, 0);
+        check(g >= 12u && dens_rat(p, 0, 0, 0), "DENSITY up, RATCHETS: ghosts in the empty steps, a ratchet on the hit");
         sq.dens = 20;
         g = 0;
         for (i = 1; i < 16u; i++)
-            g += dens_ghost(p, 0, i);
-        check(dens_part(0) == 256u && g < 12u && !dens_rat(p, 0, 0), "a third of the way: the chances, a few ghosts");
+            g += dens_ghost(p, 0, i, 0);
+        check(dens_part(0) == 256u && g < 12u && !dens_rat(p, 0, 0, 0), "a third of the way: the chances, a few ghosts");
     }
     sq.dens = 0;
     check(gen_dens(0, 60) == 60, "DENSITY 0: a GRIDS density as it is");
@@ -3247,10 +3326,7 @@ static void phase19(void)
     check(gen_dens(0, 60) == 100 && gen_dens(0, 120) == 127, "DENSITY: GRIDS' density pushed");
     sq.dens = 0;
     /* the DENSITY page: KNOB 1 DENSITY, the black keys leave tracks out */
-    goto_mode(B_ARP, M_PERF);
-    while (ui.page)
-        turn(EN_SELECT, -1);
-    turn(EN_SELECT, (int32_t)PG_DENS);
+    perf_goto(PG_DENS);
     check(perf_dens(), "PERF: the DENSITY page");
     page_params(pp);
     check(pp[0] == VP_DENS && pp[1] == VP_GHOST && pp[2] == VP_BUILD, "DENSITY: DENSITY GHOSTS BUILD");
@@ -3338,14 +3414,11 @@ static void phase20(void)
     p->scale = SC_MINPENT;
     p->sroot = 9;                                    /* A minor pentatonic: A C D E G */
     black(0);
-    goto_mode(B_ARP, M_EUCLID);
-    while (ui.page)
-        turn(EN_SELECT, -1);
-    turn(EN_SELECT, (int32_t)PG_MELODY);
+    seq_goto(PG_MELODY);
     page_params(pp);
     title_text(b, sizeof b, &pg, &np);
-    check(pp[0] == VP_MEL + ML_SHAPE && pp[3] == VP_MEL + ML_STEPS && !strcmp(b, "MELODY"),
-          "EUCLID: MELODY after ACTION: SHAPE SPREAD BIAS STEPS");
+    check(pp[0] == VP_MEL + ML_SHAPE && pp[3] == VP_MEL + ML_STEPS && !strcmp(b, "MELODY (1/2)"),
+          "EUCLID: MELODY: SHAPE SPREAD BIAS STEPS");
     turn(EN_K1, 1);
     check(p->mel[0][ML_SHAPE] == MEL_RANDOM && p->mel[0][ML_LOOP] == 8 && p->mel[0][ML_SPREAD] == MEL_DEFAULT[ML_SPREAD],
           "MELODY: RANDOM, its settings from their defaults");
@@ -3353,7 +3426,7 @@ static void phase20(void)
     turn(EN_SELECT, 1);
     title_text(b, sizeof b, &pg, &np);
     page_params(pp);
-    check(pp[0] == VP_MEL + ML_DEJA && pp[1] == VP_MEL + ML_LOOP && !strcmp(b, "MELODY: LOOP"), "MELODY: LOOP page");
+    check(pp[0] == VP_MEL + ML_DEJA && pp[1] == VP_MEL + ML_LOOP && !strcmp(b, "MELODY (2/2)"), "MELODY (2/2): the loop");
     shot("melody-loop");
     /* RANDOM, DEJA VU 0: notes in the scale, changing */
     k = mel_hits(16, nt);
@@ -3760,11 +3833,13 @@ static double p23_h3(const int32_t *x, uint32_t n)   /* the 3rd harmonic's share
 }
 static void phase_016t2(void)                        /* 0.16-test2: FX's page order; the HYRULE palette */
 {
-    static const uint8_t OFF[] = {FXPG_REV, FXPG_BUS, FXPG_DIRT, FXPG_COMP, FXPG_COMP2};
-    static const uint8_t PH[] = {FXPG_REV, FXPG_BUS, FXPG_PARS, FXPG_DIRT, FXPG_COMP, FXPG_COMP2};
-    static const uint8_t DL[] = {FXPG_REV, FXPG_BUS, FXPG_PARS, FXPG_DUB, FXPG_SEND, FXPG_DIRT, FXPG_COMP, FXPG_COMP2};
+#define FXSENDS FXPG_FSEND, FXPG_FSEND2, FXPG_RSEND, FXPG_RSEND2   /* (31: the sends last) */
+    static const uint8_t OFF[] = {FXPG_REV, FXPG_BUS, FXPG_DIRT, FXPG_COMP, FXPG_COMP2, FXSENDS};
+    static const uint8_t PH[] = {FXPG_REV, FXPG_BUS, FXPG_PARS, FXPG_DIRT, FXPG_COMP, FXPG_COMP2, FXSENDS};
+    static const uint8_t DL[] = {FXPG_REV, FXPG_BUS, FXPG_PARS, FXPG_DUB, FXPG_SEND, FXPG_DIRT, FXPG_COMP, FXPG_COMP2,
+                                 FXSENDS};
     static const struct { uint32_t type; const uint8_t *pg; uint32_t n; } C[3] = {
-        {FX_OFF, OFF, 5}, {FX_PHASER, PH, 6}, {FX_DELAY, DL, 8}};
+        {FX_OFF, OFF, 9}, {FX_PHASER, PH, 10}, {FX_DELAY, DL, 12}};
     uint32_t k, i, ok;
     uint8_t l[NFXPG];
     press(B_HOME);
@@ -4128,6 +4203,151 @@ static void phase_016t3(void)
     }
 }
 
+/* Phase 31: PERF RESET, the knob cards on a model change (P CHORD), sticky KEYS (phase9_keys), FX's sends, edits
+ * under morph, DENSITY's VARY and COMMIT */
+static void phase31(void)
+{
+    pattern_t *p = &pat[sq.active];
+    uint32_t i, n, m0, c;
+    uint16_t pp[4];
+    char v[24];
+    printf("phase 31: fixes and small things\n");
+    goto_mode(B_HOME, M_HOME);
+    /* the cards: a model change redraws them (P CHORD's knobs named and shown, not the last model's) */
+    black(0);
+    sound_open(S_MODEL, 0);
+    par_set(PAR_MODEL1, MD_PL0 + PE_WTBL);
+    par_set(PAR_MDECAY1, 69);
+    run_ms(100);
+    c = rsig[R_CARD0 + 1];
+    turn(EN_K1, 1);
+    run_ms(100);
+    page_params(pp);
+    card_value(v, sizeof v, pp[1], vp_get(pp[1]));
+    check(par[PAR_MODEL1] == MD_PL0 + PE_CHORD && rsig[R_CARD0 + 1] != c && !strcmp(par_name(pp[1]), "Chord") &&
+          strcmp(v, "69") != 0, "a model change redraws its knobs' cards (P CHORD: Chord, a chord's name)");
+    shot("p-chord");
+    par_set(PAR_MODEL1, 0);
+    par_set(PAR_MDECAY1, init_kit_k(PAR_MDECAY1));
+    run_ms(20);
+    /* FX: the sends last, as the mixer's */
+    press(B_FX);
+    fx_goto(FXPG_FSEND);
+    page_params(pp);
+    m0 = par[PAR_FX_SEND1];
+    turn(EN_K1, 3);
+    check(fx_page() == FXPG_FSEND && pp[0] == PAR_FX_SEND1 && par[PAR_FX_SEND1] == m0 + 3u, "FX: the FX sends");
+    shot("fx-sends");
+    fx_goto(FXPG_RSEND2);
+    page_params(pp);
+    check(pp[0] == PAR_REV_SEND1 + 4u && pp[2] == PAR_REV_LEVEL && ui.page == mode_pages() - 1u,
+          "FX: the reverb sends, the last page");
+    par_set(PAR_FX_SEND1, m0);
+    /* edits under morph: the morph target moves too (BOTH KITS), or not (KIT ONLY) */
+    goto_mode(B_HOME, M_HOME);
+    black(0);
+    sound_open(S_FILTER, 0);
+    page_params(pp);
+    vp_set(PAR_MORPH, 255);
+    run_ms(20);
+    morph_par[kit_idx(pp[0])] = 40;
+    par_set(pp[0], 60);
+    kset.medit = 0;
+    turn(EN_K1, 5);
+    check(par[pp[0]] == 65u && morph_par[kit_idx(pp[0])] == 45u && par_base(pp[0]) == 45u,
+          "morph at 100%: an edit moves the target too, heard (BOTH KITS)");
+    kset.medit = 1;
+    turn(EN_K1, 5);
+    check(par[pp[0]] == 70u && morph_par[kit_idx(pp[0])] == 45u, "KIT ONLY: the kit alone, the LXR's way");
+    kset.medit = 0;
+    vp_set(PAR_MORPH, 0);
+    par_set(pp[0], init_kit_k(pp[0]) ? init_kit_k(pp[0]) : par[pp[0]]);
+    run_ms(20);
+    /* PERF RESET: SHIFT + HOME, from any page */
+    perf_goto(0);
+    hold(B_OCTDN);
+    white(9);                                        /* (RPT .. FRZ latched) */
+    white(13);
+    white(1);                                        /* (a roll latched) */
+    release(B_OCTDN);
+    pfs.st_chance = 90;
+    pfs.dens = -30;
+    pf.dj = 20;
+    press(B_FX);
+    check(ui.pf_latch && ui.roll_latch, "PERF: effects latched");
+    hold(B_OCTDN);
+    press(B_HOME);
+    release(B_OCTDN);
+    run_ms(20);
+    check(!pf.on && !ui.pf_latch && !ui.roll_latch && !sq.roll && !pfs.st_chance && !pfs.dens && pf.dj == 64 &&
+          ui.mode == M_FX, "SHIFT + HOME: PERF RESET, every effect off, the page stays");
+    goto_mode(B_HOME, M_HOME);
+    hold(B_OCTDN);
+    run_ms(20);
+    shot("shift-legend");
+    release(B_OCTDN);
+    /* DENSITY's VARY: the order drawn again each time round; 0 as it was */
+    goto_mode(B_HOME, M_HOME);
+    seq_clear_track(0, p);
+    for (i = 0; i < 16u; i++) {
+        main_set(p, 0, i, 1);
+        p->step[0][i].volume = 100;
+    }
+    sq.dex = 0;
+    sq.dens = -40;
+    sq.dvary = 0;
+    {
+        uint32_t a = 0, b = 0, d = 0, k;
+        for (i = 0; i < 16u; i++) {
+            a |= (uint32_t)dens_drop(p, 0, i, 0) << i;
+            b |= (uint32_t)dens_drop(p, 0, i, 1) << i;
+        }
+        check(a == b, "VARY 0: the same steps go each time round");
+        sq.dvary = 127;
+        for (k = 0; k < 8u; k++) {
+            uint32_t x = 0;
+            for (i = 0; i < 16u; i++)
+                x |= (uint32_t)dens_drop(p, 0, i, k) << i;
+            d += x != a;
+        }
+        check(d >= 4u, "VARY 127: other steps go, time round after time round");
+        sq.dens = -64;
+        for (k = 0, d = 0; k < 8u; k++)
+            d += !dens_drop(p, 0, 0, k);
+        check(d == 8u, "VARY: the bar's first step stays at the least");
+        sq.dvary = 0;
+        sq.dens = 0;
+    }
+    /* DENSITY's COMMIT: OCT+ on its page; again at 0: UNDO */
+    perf_goto(PG_DENS);
+    turn(EN_K4, 10);
+    check(pfs.dvary == 10u, "DENSITY: KNOB 4 VARY");
+    turn(EN_K4, -10);
+    pfs.dens = -40;
+    run_ms(20);
+    shot("density-commit");
+    press(B_OCTUP);
+    for (i = n = 0; i < 16u; i++)
+        n += main_on(p, 0, i);
+    check(n == 4u && pfs.dens == 0 && main_on(p, 0, 0) && main_on(p, 0, 4), "DENSITY COMMIT: the beats kept, at 0");
+    press(B_OCTUP);
+    for (i = n = 0; i < 16u; i++)
+        n += main_on(p, 0, i);
+    check(n == 16u && pfs.dens == -40, "OCT+ again: UNDO, the pattern and DENSITY as they were");
+    pfs.dens = 50;
+    pfs.build = DB_GHOSTS;
+    pfs.ghost = 30;
+    seq_clear_track(0, p);
+    main_set(p, 0, 0, 1);
+    run_ms(20);
+    press(B_OCTUP);
+    for (i = n = 0; i < 16u; i++)
+        n += main_on(p, 0, i) && (p->step[0][i].volume & 127u) <= 31u;
+    check(n == 3u && pfs.dens == 0, "DENSITY COMMIT up: its ghosts written as steps at GHOST's velocity");
+    pfs.ghost = 40;
+    seq_clear_track(0, p);
+    goto_mode(B_HOME, M_HOME);
+}
 /* a generator's track, committed (the generator still on): a step's chance turned to 0 in step edit stops that step
  * (the edit reaches the live copy, which is what plays), and a held step's lock reaches it too */
 static void gen_step_edit_test(void)
@@ -4407,14 +4627,17 @@ static void phase25b(void)
     run_ms(40);
     page_params(pp);
     title_text(b, sizeof b, &pg, &np);
-    check(ui.sect == S_LFO2 && pp[0] == PAR_L2RATE1 + 1u && pp[1] == PAR_L2SYNC1 + 1u && pp[2] == PAR_L2AMT1 + 1u &&
-          pp[3] == PAR_L2WAVE1 + 1u && !strcmp(b, "TRK LFO 2"), "TRK LFO 2: D2's rate, sync, amount, wave");
+    check(ui.sect == S_LFO2 && pp[0] == PAR_L2RATE1 + 1u && pp[1] == PAR_L2AMT1 + 1u && pp[2] == PAR_L2WAVE1 + 1u &&
+          pp[3] == PAR_L2TGT1 + 1u && !strcmp(b, "LFO 2 (1/2)"), "LFO 2: D2's rate, amount, wave, target (29)");
     ui.half = 1;
     ui.force = 1;
     run_ms(40);
     page_params(pp);
-    check(pp[0] == PAR_L2RTRG1 + 1u && pp[1] == PAR_L2OFS1 + 1u && pp[2] == PAR_L2MODE1 + 1u && pp[3] == PAR_L2TGT1 + 1u,
-          "its second page: retrigger, offset, mode, target");
+    check(pp[0] == PAR_L2MODE1 + 1u && pp[1] == PAR_L2SYNC1 + 1u && pp[2] == PAR_L2RTRG1 + 1u && pp[3] == PAR_L2OFS1 + 1u,
+          "its second page: mode, sync, retrigger, offset");
+    ui.half = 0;
+    ui.force = 1;
+    run_ms(40);
     target_range(PAR_L2TGT1 + 1, &lo, &hi);
     check(lo == MOD_TARGET_VOICE[1][0] && hi == MOD_TARGET_VOICE[1][1], "its targets: D2's own");
     par_set(PAR_L2TGT1 + 1, 0);
@@ -4540,7 +4763,7 @@ static void phase27a(void)
     page_params(pp);
     title_text(b, sizeof b, &pg, &np);
     check(ui.sect == S_INSERT && pp[0] == PAR_INS1 + 3u && pp[1] == PAR_INSA1 + 3u && pp[2] == PAR_INSB1 + 3u &&
-          pp[3] == PAR_INSC1 + 3u && !strcmp(b, "INSERT"), "the filter button: FILTER, SHAPE, then INSERT");
+          pp[3] == PAR_INSC1 + 3u && !strcmp(b, "INSERT FX"), "the filter button: FILTER, SHAPE, then INSERT");
     press(B_SCL);
     check(ui.sect == S_FILTER, "again: back to FILTER");
     sound_open(S_INSERT, 0);
@@ -4679,10 +4902,7 @@ static void phase26(void)
     }
     p->len[5] = 16;
     /* the page */
-    goto_mode(B_ARP, M_EUCLID);
-    while (ui.page)
-        turn(EN_SELECT, -1);
-    turn(EN_SELECT, (int32_t)PG_GROOVE);
+    seq_goto(PG_GROOVE);
     page_params(pp);
     title_text(b, sizeof b, &pg, &np);
     check(pp[0] == VP_GROOVE && pp[1] == VP_GAMT && pp[2] == VP_GHUM && pp[3] == VP_GFOLLOW && !strcmp(b, "GROOVE"),
@@ -4776,6 +4996,65 @@ static void phase26(void)
     goto_mode(B_HOME, M_HOME);
 }
 
+/* 29: the pages tidied: the sound pages in a synth's order, MODEL on LXR alone, LFO 1 as LFO 2, titles with their
+ * page of the section's pages */
+static void phase29(void)
+{
+    static const uint8_t ORD[] = {S_MODEL, S_OSC, S_FM, S_CLICK, S_FILTER, S_SHAPE, S_INSERT, S_AEG, S_GATE, S_MOD,
+                                  S_LFO, S_LFOM, S_LFO2, S_RANDOM, S_XMOD};
+    uint8_t l[NSPG][2];
+    uint16_t pp[4];
+    char b[40];
+    uint32_t i, j, n, pg, np, ok = 1;
+    printf("phase 29: the pages\n");
+    goto_mode(B_HOME, M_HOME);
+    black(0);
+    par_set(PAR_MODEL1, 0);
+    run_ms(20);
+    n = sound_pages(l);
+    for (i = j = 0; i < n; i++) {                    /* (the sections in this order, each once in a row) */
+        while (j < sizeof ORD && ORD[j] != l[i][0])
+            j++;
+        ok &= j < sizeof ORD && l[i][0] != S_MIX;
+    }
+    check(ok && l[0][0] == S_MODEL && l[n - 1u][0] == S_XMOD, "the sound pages: MODEL first, CROSS MOD last, no MIX");
+    sound_open(S_MODEL, 0);
+    run_ms(20);
+    page_params(pp);
+    check(pp[0] == PAR_MODEL1 && pp[1] == VP_NONE && !sect_half_used(0, S_MODEL, 1), "MODEL on LXR: the model alone");
+    turn(EN_K1, 1);
+    run_ms(20);
+    page_params(pp);
+    check(par[PAR_MODEL1] == 1u && pp[1] != VP_NONE && sect_half_used(0, S_MODEL, 1), "MODEL on MODAL: Rings' knobs");
+    turn(EN_K1, -1);
+    run_ms(20);
+    check(!sect_half_used(0, S_MODEL, 1), "back on LXR: the model alone again");
+    sound_open(S_LFO, 0);
+    run_ms(20);
+    page_params(pp);
+    title_text(b, sizeof b, &pg, &np);
+    check(pp[0] == PAR_FREQ_LFO1 && pp[1] == PAR_AMOUNT_LFO1 && pp[2] == PAR_WAVE_LFO1 && pp[3] == PAR_TARGET_LFO1 &&
+          !strcmp(b, "LFO 1 (1/3)"), "LFO 1 (1/3): rate, amount, wave, target");
+    turn(EN_SELECT, 1);
+    page_params(pp);
+    title_text(b, sizeof b, &pg, &np);
+    check(pp[0] == PAR_VOICE_LFO1 && pp[1] == PAR_SYNC_LFO1 && pp[2] == PAR_RETRIGGER_LFO1 &&
+          pp[3] == PAR_OFFSET_LFO1 && !strcmp(b, "LFO 1 (2/3)"), "LFO 1 (2/3): voice, sync, retrigger, offset");
+    turn(EN_SELECT, 1);
+    page_params(pp);
+    title_text(b, sizeof b, &pg, &np);
+    check(ui.sect == S_LFOM && pp[0] == PAR_LFOMODE1 && !strcmp(b, "LFO 1 (3/3)"), "LFO 1 (3/3): the mode");
+    sound_open(S_MOD, 0);
+    run_ms(20);
+    title_text(b, sizeof b, &pg, &np);
+    check(!strcmp(b, "MOD EG / VELO (1/2)"), "a section of two pages: (1/2) in its title");
+    sound_open(S_GATE, 0);
+    run_ms(20);
+    title_text(b, sizeof b, &pg, &np);
+    check(!strcmp(b, "GATE"), "a section of one page: no count");
+    goto_mode(B_HOME, M_HOME);
+}
+
 /* 28: Elixir's filter types after the LXR's OFF: the names, K-turns from OFF up to CHORD on the FILTER page, the
  * voice's type, a project round trip; an LXR kit's 0..7 keep their meaning */
 static void phase28(void)
@@ -4850,9 +5129,801 @@ static void phase28(void)
     goto_mode(B_HOME, M_HOME);
 }
 
+/* 30: the pages' pictures (ui_viz.c): each page draws (a shot of each), and while the pattern plays the sound page
+ * redraws only its strip of steps, not the picture */
+static void viz_page(uint32_t t, uint32_t sect, uint32_t half)
+{
+    goto_mode(B_HOME, M_HOME);
+    black(t < 6u ? t : 5u);
+    if (t == 6u)
+        black(6);
+    press(B_EDIT);
+    ui.sect = (uint8_t)sect;
+    ui.half = (uint8_t)half;
+    ui.force = 1;
+    run_ms(60);
+}
+static void viz_set(uint32_t sect, uint32_t half, uint32_t k, uint32_t v)
+{
+    vp_set(sect_par(ui.track, sect, half, k), v);
+    run_ms(40);
+}
+static void sp_kit(uint8_t *k) { uint32_t i; for (i = 0; i < KIT_LEN; i++) k[i] = par[kit_par(i)]; }
+static void sp_roll(void) { press(B_OCTUP); run_ms(SP_ROLL_MS + 60); }   /* OCT+: the die rolls, stops, casts */
+static void phase32(void)
+{
+    pattern_t p0, p1;
+    uint8_t k0[KIT_LEN], k1[KIT_LEN];
+    uint32_t i, t, ok;
+    printf("phase 32: spells\n");
+    for (i = 0, ok = 1; i < NSPELL; i++) {           /* (the words fit: the lines beside the wizard, the cards) */
+        uint32_t j, w;
+        for (j = 0; j < 6u; j++) {
+            const char *l = j < 2u ? SPELL[i].line[j] : SPELL[i].cl[j - 2u];
+            if ((w = text_w(&AF_S, l)) > 164u)
+                printf("  too wide (%u): %s\n", w, l), ok = 0;
+        }
+        for (j = 0; j < 4u; j++)
+            if ((w = text_w(&AF_S, SPELL[i].cn[j])) > 52u)
+                printf("  card name too wide (%u): %s\n", w, SPELL[i].cn[j]), ok = 0;
+    }
+    for (i = SPV_LIM; i < NSPV; i++) {              /* (LIMITS' cards) */
+        char b[24];
+        sp_card_name(b, sizeof b, i);
+        ok &= text_w(&AF_S, b) <= 52u;
+    }
+    for (i = 0; i < NSPV; i++)
+        if (text_w(&AF_S, sp_knob_line(i)) > 164u)
+            printf("  too wide: %s\n", sp_knob_line(i)), ok = 0;
+    for (i = 0; i < NSPMO + NSPML; i++) {            /* (0.19: MOTION's lines, each value its own) */
+        if (i < NSPMO)
+            sp.mot = (uint8_t)i;
+        else
+            sp.mlen = (uint8_t)(i - NSPMO);
+        if (text_w(&AF_S, sp_knob_line(i < NSPMO ? SPV_MOT : SPV_MLEN)) > 164u)
+            printf("  too wide: %s\n", sp_knob_line(i < NSPMO ? SPV_MOT : SPV_MLEN)), ok = 0;
+    }
+    sp.mot = SPMO_ONE;
+    sp.mlen = SPML_EVEN;
+    for (i = 0; i < 16u; i++)                        /* (the white keys' chips) */
+        if (text_w(&AF_S, SC_SHORT[i]) > 28u)
+            printf("  chip too wide (%u): %s\n", text_w(&AF_S, SC_SHORT[i]), SC_SHORT[i]), ok = 0;
+    check(ok, "SPELLS: the words fit");
+    goto_mode(B_HOME, M_HOME);
+    perf_goto(PG_SPELL);
+    {
+        char b[40];
+        uint32_t pg, np;
+        title_text(b, sizeof b, &pg, &np);
+        check(perf_spells() && !strcmp(b, "SPELLS: GRIMOIRE"), "ARP: SPELLS' first page, GRIMOIRE");
+    }
+    check(sp.sel == SP_NONE && sp.mask == SC_ALL, "SPELLS: NONE first, everything in scope");
+    sp.tracks = 0;
+    run_ms(60);
+    shot("spells-grimoire-none");
+    sp.sel = SP_POLTER;
+    p0 = pat[sq.active];
+    sp_kit(k0);
+    press(B_OCTUP);
+    run_ms(SP_ROLL_MS + 60);
+    check(!sp.rolling && !memcmp(&p0, &pat[sq.active], sizeof p0), "no target: OCT+ casts nothing");
+    black(NTRACK);                                   /* bar 1: ALL */
+    check(sp.tracks == (1u << NTRACK) - 1u, "bar 1: all tracks targets");
+    black(NTRACK);
+    check(sp.tracks == 0u, "bar 1 again: none");
+    black(0);
+    black(3);
+    black(5);
+    check(sp.tracks == 0x29u, "black keys: the targets");
+    run_ms(60);
+    shot("spells-grimoire");
+    press(B_OCTUP);
+    run_ms(300);
+    check(sp.rolling, "OCT+: the die rolls");
+    shot("spells-roll");
+    run_ms(SP_ROLL_MS);
+    check(!sp.rolling && sp_pending(), "the die stops: the spell cast, pending");
+    pattern_t pc = pat[sq.active];
+    sp_kit(k1);
+    ok = memcmp(&p0, &pc, sizeof p0) != 0 || memcmp(k0, k1, KIT_LEN) != 0;
+    check(ok, "POLTERGEIST: the pattern or the kit changed");
+    for (t = 0, ok = 1; t < NTRACK; t++)             /* (the tracks not targets: as they were) */
+        if (!(sp.tracks >> t & 1u))
+            ok &= !memcmp(p0.main[t], pc.main[t], sizeof p0.main[t]);
+    check(ok, "the tracks not targets keep their steps");
+    shot("spells-cast");
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    sp_kit(k1);
+    check(!memcmp(&p0, &pat[sq.active], sizeof p0) && !memcmp(k0, k1, KIT_LEN) && !sp.pend,
+          "OCT-: REVERSE, the pattern and the kit exactly as before");
+    /* reroll: from before the cast, not on top of it */
+    sp_roll();
+    p1 = pat[sq.active];
+    sp_roll();
+    check(sp_pending(), "OCT+ again: a reroll, still pending");
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    check(!memcmp(&p0, &pat[sq.active], sizeof p0), "a reroll reverses to before the first cast");
+    (void)p1;
+    /* KEEP */
+    sp_roll();
+    pc = pat[sq.active];
+    black(NTRACK + 1);
+    check(!sp.pend, "bar 2: KEEP");
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    check(!memcmp(&pc, &pat[sq.active], sizeof pc), "a kept spell: OCT- leaves it");
+    /* SKELETON: the pattern only, fewer hits, the kit as it was */
+    pat[sq.active] = p0;
+    for (i = 0; i < KIT_LEN; i++)
+        par[kit_par(i)] = k0[i];
+    snd_post_all();
+    sp_vset(SPV_SPELL, SP_SKELETON);
+    sp.tracks = (1u << NTRACK) - 1u;
+    sp_roll();
+    sp_kit(k1);
+    check(!memcmp(k0, k1, KIT_LEN), "SKELETON: the kit untouched");
+    {
+        uint32_t a = 0, b = 0, s;
+        for (t = 0; t < NTRACK; t++)
+            for (s = 0; s < 4u; s++) {
+                a += (uint32_t)__builtin_popcount(p0.main[t][s]);
+                b += (uint32_t)__builtin_popcount(pat[sq.active].main[t][s]);
+            }
+        check(b <= a, "SKELETON: no more hits than before");
+    }
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    /* scope PATTERN on POLTERGEIST: the kit untouched; sound mutation 0 too */
+    sp_vset(SPV_SPELL, SP_POLTER);
+    sp_vset(SPV_SCOPE, 2);
+    sp_roll();
+    sp_kit(k1);
+    check(!memcmp(k0, k1, KIT_LEN), "scope PATTERN: the kit untouched");
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    sp_vset(SPV_SCOPE, 0);
+    i = sp.k[SP_POLTER][SPK_SOUND];
+    sp.k[SP_POLTER][SPK_SOUND] = 0;
+    sp_roll();
+    sp_kit(k1);
+    check(!memcmp(k0, k1, KIT_LEN), "SOUND MUTATION 0: the kit untouched");
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    sp.k[SP_POLTER][SPK_SOUND] = (uint8_t)i;
+    sp.k[SP_POLTER][SPK_C1] = 5;                     /* (bar 4: the knobs as at first) */
+    black(NTRACK + 3);
+    check(!memcmp(sp.k[SP_POLTER], SPELL[SP_POLTER].def, NSPK), "bar 4: the spell's knobs as at first");
+    /* the white keys: a part out, SHIFT (OCT-) + a key: only it; TIMING alone leaves the hits and the kit */
+    white(0);
+    check(!(sp.mask & SC_PITCH) && (sp.mask & SC_OSC), "a white key: that part out");
+    run_ms(60);
+    shot("spells-scope");
+    white(0);
+    hold(B_OCTDN);
+    white(11);
+    release(B_OCTDN);
+    check(sp.mask == SC_TIME && !sp.pend, "SHIFT (OCT-) + a white key: only it");
+    sp.k[SP_POLTER][SPK_PAT] = 127;
+    sp_roll();
+    sp_kit(k1);
+    {
+        int same = !memcmp(k0, k1, KIT_LEN);
+        for (t = 0; t < NTRACK; t++)
+            same &= !memcmp(p0.main[t], pat[sq.active].main[t], sizeof p0.main[t]);
+        check(same, "TIMING alone: the hits and the kit as they were");
+    }
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    sp.k[SP_POLTER][SPK_PAT] = SPELL[SP_POLTER].def[SPK_PAT];
+    sp_vset(SPV_SCOPE, 0);
+    check(sp.mask == SC_ALL, "SCOPE ALL: every white key");
+    /* D1 stays a kick, whatever the spell */
+    {
+        uint32_t sv = sp.tracks, n;
+        int kick = 1;
+        sp.tracks = 1;
+        for (n = 0; n < NSPELL; n++) {
+            uint32_t r, snd = sp.k[n][SPK_SOUND], ch = sp.k[n][SPK_CHAOS];
+            sp.sel = (uint8_t)n;
+            sp.k[n][SPK_SOUND] = 127;
+            sp.k[n][SPK_CHAOS] = 100;
+            for (r = 0; r < 6u; r++) {
+                uint32_t md = par[PAR_MODEL1], f = par[PAR_FILTER_TYPE_1] + 1u;
+                sp_roll();
+                md = par[PAR_MODEL1];
+                f = par[PAR_FILTER_TYPE_1] + 1u;
+                if (!sp_kick_ok(md) || par[PAR_COARSE1] > 44u || (!md && par[PAR_OSC_WAVE_DRUM1] > 1u) ||
+                    (f != F_LP && f != F_LP2 && f != F_LP4 && f != F_OFF && f != F_DUB) || par[PAR_RESO_1] > 72u) {
+                    printf("  %s: D1 model %u coarse %u wave %u filter %u reso %u\n", SPELL[n].name, md,
+                           par[PAR_COARSE1], par[PAR_OSC_WAVE_DRUM1], f, par[PAR_RESO_1]);
+                    kick = 0;
+                }
+            }
+            hold(B_OCTDN);
+            release(B_OCTDN);
+            sp.k[n][SPK_SOUND] = (uint8_t)snd;
+            sp.k[n][SPK_CHAOS] = (uint8_t)ch;
+        }
+        check(kick, "D1 stays a kick (LXR, BASS DRUM or MODAL; low, a low-pass)");
+        /* D2 and D3: toms, D3 above D2; the melody generator on them now and then */
+        sp.tracks = 0x7Fu;
+        {
+            int toms = 1;
+            uint32_t mel = 0;
+            for (n = 0; n < NSPELL; n++) {
+                uint32_t r;
+                if (!(SPELL[n].cats & SC_PITCH))
+                    continue;
+                sp.sel = (uint8_t)n;
+                for (r = 0; r < 6u; r++) {
+                    sp_roll();
+                    toms &= par[PAR_COARSE2] >= 34u && par[PAR_COARSE2] <= 48u && par[PAR_COARSE3] <= 56u &&
+                            par[PAR_COARSE3] > par[PAR_COARSE2];
+                    toms &= par[PAR_MODAMNT2] <= 30u || par[PAR_MOD_EG2] <= 72u;
+                    mel += mel_on(&pat[sq.active], 1) + mel_on(&pat[sq.active], 2);
+                }
+                hold(B_OCTDN);
+                release(B_OCTDN);
+            }
+            check(toms, "D2 a floor tom, D3 a rack tom above it; no long deep pitch drop");
+            check(mel >= 10u, "the melody generator on the toms now and then");
+            printf("  toms: %u melodies in 60 casts\n", mel);
+        }
+        /* LIMITS: the sends, the reverb's level and the FX mix stay under them, whatever the spell */
+        sp.tracks = 0x7Fu;
+        par[PAR_REV_LEVEL] = 127;
+        for (n = 0; n < NSPELL; n++) {               /* (a spell that never touches FX leaves them as they are) */
+            uint32_t r, v, snd = sp.k[n][SPK_SOUND];
+            int under = 1;
+            if (!(SPELL[n].cats & SC_FX))
+                continue;
+            sp.sel = (uint8_t)n;
+            sp.k[n][SPK_SOUND] = 127;
+            for (r = 0; r < 4u; r++) {
+                sp_roll();
+                for (v = 0; v < NVOICE; v++)
+                    under &= par[PAR_REV_SEND1 + v] <= SP_LIM0[SPL_RVS] && par[PAR_FX_SEND1 + v] <= SP_LIM0[SPL_FXS];
+                under &= par[PAR_REV_LEVEL] <= SP_LIM0[SPL_RLEV] && par[PAR_FX_DRY_WET] <= SP_LIM0[SPL_FXMIX];
+            }
+            if (!under)
+                printf("  %s: over LIMITS\n", SPELL[n].name), kick = 0;
+            hold(B_OCTDN);
+            release(B_OCTDN);
+            sp.k[n][SPK_SOUND] = (uint8_t)snd;
+        }
+        check(kick, "LIMITS: the sends, the reverb level and the FX mix kept under them");
+        par[PAR_REV_LEVEL] = 100;
+        sp.tracks = (uint8_t)sv;
+        sp.sel = SP_POLTER;
+    }
+    /* recipes: SAVE, RECALL the same roll */
+    memset(rcp, 0, sizeof rcp);
+    sp.tracks = 0x05u;
+    sp_roll();
+    pc = pat[sq.active];
+    sp_kit(k1);
+    black(NTRACK + 2);
+    check(sp.sel == NSPELL && rcp[0].spell == SP_POLTER + 1u && rcp[0].tracks == 0x05u && rcp[0].seed == sp.last,
+          "bar 3: SAVE, the recipe U1");
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    sp.tracks = 0x7Fu;
+    sp_vset(SPV_SPELL, 0);
+    sp_vset(SPV_SPELL, NSPELL);
+    check(sp.sel == NSPELL && sp.tracks == 0x05u, "a recipe picked: its targets");
+    sp_vset(SPV_MODE, SPM_RECALL);
+    sp_roll();
+    {
+        uint8_t k2[KIT_LEN];
+        sp_kit(k2);
+        check(!memcmp(&pc, &pat[sq.active], sizeof pc) && !memcmp(k1, k2, KIT_LEN), "ROLL SAME: the same cast again");
+    }
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    sp_vset(SPV_MODE, SPM_RECAST);
+    turn(EN_SELECT, 1);
+    run_ms(60);
+    shot("spells-cast-page");
+    turn(EN_SELECT, 1);
+    run_ms(60);
+    shot("spells-character");
+    turn(EN_SELECT, 1);
+    turn(EN_K1, -3);
+    run_ms(60);
+    check(sp.lim[SPL_RVS] == SP_LIM0[SPL_RVS] - 3u, "LIMITS: KNOB 1 the most reverb send");
+    shot("spells-limits");
+    sp.lim[SPL_RVS] = SP_LIM0[SPL_RVS];
+    turn(EN_SELECT, -1);
+    {                                                /* (the knobs: a cast leaves them as set, playing too) */
+        uint8_t kb[NSPK];
+        sp_vset(SPV_SPELL, SP_GLITCH);
+        sp_vset(SPV_VAR, 100);
+        turn(EN_K2, -40);
+        turn(EN_K2, 13);
+        memcpy(kb, sp_knobs(), NSPK);
+        press(B_PLAY);
+        sp_roll();
+        sp_roll();
+        run_ms(500);
+        press(B_PLAY);
+        check(!memcmp(kb, sp_knobs(), NSPK), "a cast leaves the spell's knobs as set (VARIATION too)");
+        hold(B_OCTDN);
+        release(B_OCTDN);
+        sp_vset(SPV_VAR, 0);
+    }
+    turn(EN_SELECT, -2);
+    /* the project: KSP2 */
+    sp.lim[SPL_FXMIX] = 17;
+    {
+        uint8_t k[NSPK];
+        uint32_t sel = sp.sel, sd = rcp[0].seed;
+        int rc;
+        memcpy(k, sp.k[3], NSPK);
+        sp.k[3][SPK_C2] = 99;
+        rc = proj_save(1, "SPELLS  ");
+        sp_defaults();
+        memset(rcp, 0, sizeof rcp);
+        rc |= proj_load(1);
+        check(rc == 0 && sp.sel == sel && rcp[0].spell == SP_POLTER + 1u && rcp[0].seed == sd && sp.k[3][SPK_C2] == 99u &&
+              rcp[0].mask == SC_ALL && sp.lim[SPL_FXMIX] == 17u,
+              "the project: the spells and the recipes back");
+        memcpy(sp.k[3], k, NSPK);
+    }
+    /* leaving SPELLS keeps the cast */
+    sp_vset(SPV_SPELL, SP_POLTER);
+    sp.tracks = 0x7Fu;
+    sp_roll();
+    press(B_ARP);
+    run_ms(20);
+    check(!perf_spells() && !sp.pend, "SPELLS left: the cast kept");
+    pat[sq.active] = p0;
+    for (i = 0; i < KIT_LEN; i++)
+        par[kit_par(i)] = k0[i];
+    snd_post_all();
+    memset(rcp, 0, sizeof rcp);
+    sp_defaults();
+    goto_mode(B_HOME, M_HOME);
+}
+/* 0.19-test11: a song row's repeats (KNOB 3), SPELLS' MOTION page, WHISPERING MOTES */
+static uint32_t t11_moved(const pattern_t *p, uint32_t *bad, int one_way)   /* (the tracks off the pulse) */
+{
+    uint32_t t, n = 0;
+    for (t = 0; t < NTRACK; t++) {
+        if (p->clk[t] == CLK_1X && p->dir[t] == DIR_FWD)
+            continue;
+        n++;
+        if (one_way && p->clk[t] != CLK_1X && p->dir[t] != DIR_FWD)
+            (*bad)++;
+        if (one_way && p->clk[t] != CLK_1X && p->clk[t] != 8u && p->clk[t] != 2u && p->clk[t] != 7u)
+            (*bad)++;
+    }
+    return n;
+}
+static void phase_t11(void)
+{
+    pattern_t p0[2], base;
+    uint8_t k0[KIT_LEN], s0[MAX_SONG_LENGTH];
+    uint32_t i, t, n, bad, seen[8][3], ok;
+    printf("0.19-test11: song repeats, MOTION, MOTES\n");
+    /* the song: P1 twice, P2 three times, END */
+    p0[0] = pat[0];
+    p0[1] = pat[1];
+    memcpy(s0, songs[0], sizeof s0);
+    for (i = 0; i < 2u; i++)
+        for (t = 0; t < NTRACK; t++) {
+            pat[i].len[t] = 16;
+            pat[i].clk[t] = CLK_1X;
+        }
+    memset(songs[0], SONG_END, MAX_SONG_LENGTH);
+    songs[0][0] = 0;
+    songs[0][1] = 1;
+    sq.song = 0;
+    goto_mode(B_HOME, M_SONG);
+    ui.song_row = 0;
+    turn(EN_K3, 1);
+    check(song_reps(0, 0) == 2u && vp_get(VP_SONG_REP) == 1u, "SONG: KNOB 3, the row's repeats (x2)");
+    ui.song_row = 1;
+    song_put(0, 1, 1, 2);                            /* (x3) */
+    run_ms(60);
+    shot("song-repeats");
+    check(song_reps(0, 2) == 1u && song_row(songs[0][1]) == 1u && song_row(songs[0][2]) == SONG_END,
+          "a row unset: once; the row's pattern kept beside its times");
+    ui.song_row = 0;
+    turn(EN_K1, 1);
+    check(song_row(songs[0][0]) == 1u && song_reps(0, 0) == 2u, "KNOB 1: the row's pattern, its times kept");
+    turn(EN_K1, -1);
+    for (i = 0, ok = 1; i < NUM_PATTERN; i++)        /* (every pattern, every count: no END or LOOP among them) */
+        for (t = 0; t < NSONGREP; t++) {
+            song_put(0, 5, i, t);
+            ok &= song_row(songs[0][5]) == i && song_rep_i(0, 5) == t;
+        }
+    check(ok, "a row holds any pattern with any of its times");
+    songs[0][5] = SONG_END;
+    ui.song_row = 1;
+    hold(B_OCTDN);
+    press(B_PLAY);
+    release(B_OCTDN);
+    n = 0;
+    for (i = 0; i < 1500u && sq.running; i++) {      /* (each pattern start: the row, the time) */
+        if (!n || seen[n - 1u][1] != sq.song_pos || seen[n - 1u][2] != sq.song_n) {
+            if (n < 8u) {
+                seen[n][0] = sq.active;
+                seen[n][1] = sq.song_pos;
+                seen[n][2] = sq.song_n;
+            }
+            n++;
+        }
+        run_ms(20);
+    }
+    ok = n == 5u && !sq.running;
+    for (i = 0; ok && i < 5u; i++)
+        ok = seen[i][0] == (i < 2u ? 0u : 1u) && seen[i][2] == (i < 2u ? i : i - 2u);
+    check(ok, "the song: P1 twice, P2 three times, then END stops it");
+    if (sq.running)
+        press(B_PLAY);
+    ui.song_row = 0;
+    song_insert_row(0, 0);
+    check(song_row(songs[0][1]) == 0u && song_reps(0, 1) == 2u && song_reps(0, 2) == 3u, "COPY: a row inserted, its repeats too");
+    song_delete_row(0, 0);
+    check(song_reps(0, 0) == 2u && song_reps(0, 1) == 3u && song_reps(0, 63) == 1u, "a row deleted: the repeats move up");
+    {
+        int rc = proj_save(1, "SONGREP ");
+        memset(songs[0], SONG_END, MAX_SONG_LENGTH);
+        rc |= proj_load(1);
+        check(rc == 0 && song_reps(0, 0) == 2u && song_reps(0, 1) == 3u && song_reps(0, 2) == 1u &&
+              song_row(songs[0][1]) == 1u, "the project: the song's repeats back");
+    }
+    memcpy(songs[0], s0, sizeof s0);
+    pat[0] = p0[0];
+    pat[1] = p0[1];
+    /* MOTION: RITUAL on every track; SAME: all forward at the pattern's speed, ONE: one at most, in time */
+    perf_goto(PG_SPELL + 4u);
+    check(ui.page == PG_SPELL + 4u && sp.mot == SPMO_ONE && sp.mlen == SPML_EVEN, "SPELLS: MOTION, ONE and EVEN at first");
+    shot("spells-motion");
+    base = pat[sq.active];
+    sp_kit(k0);
+    for (t = 0; t < NTRACK; t++) {
+        pat[sq.active].gen[t][0] = GEN_OFF;
+        pat[sq.active].clk[t] = CLK_1X;
+        pat[sq.active].dir[t] = DIR_FWD;
+    }
+    pat[sq.active].clk[2] = 8;
+    pat[sq.active].dir[4] = DIR_REV;
+    pat[sq.active].len[5] = 15;
+    sp_vset(SPV_SPELL, SP_RITUAL);
+    sp.tracks = (1u << NTRACK) - 1u;
+    sp.mot = SPMO_SAME;
+    sp.mlen = SPML_BARS;
+    sp_roll();
+    bad = 0;
+    ok = t11_moved(&pat[sq.active], &bad, 0) == 0u;
+    for (t = 0; t < NTRACK; t++)
+        ok &= (track_len(&pat[sq.active], t) & 15u) == 0u;
+    check(ok, "MOTION SAME, Lengths BARS: every track forward, at 1x, 16 / 32 / 64 steps");
+    sp.mot = SPMO_ONE;
+    for (i = 0, n = 0, ok = 1, bad = 0; i < 12u; i++) {
+        uint32_t m;
+        sp_roll();
+        m = t11_moved(&pat[sq.active], &bad, 1);
+        ok &= m <= 1u;
+        n += m;
+    }
+    check(ok && n >= 6u && !bad, "MOTION ONE: one track its own speed (x2, 1/2, 3/2) or way, no more");
+    sp.mot = SPMO_FEW;
+    for (i = 0, ok = 1; i < 8u; i++) {
+        sp_roll();
+        ok &= t11_moved(&pat[sq.active], &bad, 0) <= 2u;
+    }
+    check(ok, "MOTION FEW: two tracks at most");
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    sp_vset(SPV_SPELL, SP_DUB);                      /* (test12: every spell, not only those with lengths) */
+    sp.mot = SPMO_ONE;
+    for (i = 0, n = 0, ok = 1; i < 10u; i++) {
+        uint32_t m;
+        sp_roll();
+        m = t11_moved(&pat[sq.active], &bad, 0);
+        ok &= m <= 1u;
+        n += m;
+    }
+    check(ok && n >= 5u, "MOTION ONE on HAUNTED DUB: one track its own way");
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    sp_vset(SPV_SPELL, SP_RITUAL);                   /* (FREE kept, then SAME on another spell tames it all) */
+    sp.mot = SPMO_FREE;
+    sp.k[SP_RITUAL][SPK_CHAOS] = 127;
+    for (i = 0, n = 0; i < 6u && n < 3u; i++) {
+        sp_roll();
+        n = t11_moved(&pat[sq.active], &bad, 0);
+    }
+    check(n >= 3u, "MOTION FREE: a free-for-all");
+    black(NTRACK + 1);                               /* (KEEP) */
+    for (t = 0; t < NTRACK; t++)
+        pat[sq.active].gen[t][0] = t == 6u ? GEN_EUCLID : GEN_OFF;
+    pat[sq.active].clk[0] = 8;
+    pat[sq.active].dir[3] = DIR_REV;
+    pat[sq.active].dir[6] = DIR_PING;
+    sp_vset(SPV_SPELL, SP_DUB);                      /* (PROTECTION 100: the kick and snare protected) */
+    sp.mot = SPMO_SAME;
+    sp_roll();
+    check(t11_moved(&pat[sq.active], &bad, 0) == 0u, "MOTION SAME after a kept FREE (DUB, kick and snare protected, a EUCLID track): all forward at 1x");
+    black(NTRACK + 1);
+    memcpy(sp.k[SP_RITUAL], SPELL[SP_RITUAL].def, NSPK);
+    sp.mot = SPMO_ONE;
+    sp.mot = SPMO_ONE;
+    sp.mlen = SPML_EVEN;
+    /* WHISPERING MOTES: MICRO on the voices (the snare: MICRO or its noise), a quiet kick */
+    sp_vset(SPV_SPELL, SP_MOTES);
+    for (i = 0, ok = 1; i < 6u; i++) {
+        uint32_t v;
+        sp_roll();
+        for (v = 1; v < NVOICE; v++)
+            ok &= v == 3u ? par[PAR_MODEL1 + v] == 0u || par[PAR_MODEL1 + v] >= MD_MC0 : par[PAR_MODEL1 + v] >= MD_MC0;
+        ok &= par[PAR_VOL1] <= 98u && (par[PAR_MODEL1] == 0u || par[PAR_MODEL1] == MD_MODAL ||
+                                       par[PAR_MODEL1] == MD_PL0 + PE_BD);
+    }
+    check(ok, "MOTES: MICRO on D2-HH (the snare MICRO or noise), D1 a hushed kick");
+    run_ms(60);
+    perf_goto(PG_SPELL);
+    shot("spells-motes");
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    {
+        int rc;
+        sp.mot = SPMO_MANY;
+        sp.mlen = SPML_ODD;
+        sp.k[SP_MOTES][SPK_C1] = 33;
+        sp.lim[SPL_RVS] = 21;
+        rc = proj_save(1, "MOTION  ");
+        sp_defaults();
+        rc |= proj_load(1);
+        check(rc == 0 && sp.mot == SPMO_MANY && sp.mlen == SPML_ODD && sp.k[SP_MOTES][SPK_C1] == 33u &&
+              sp.lim[SPL_RVS] == 21u && sp.k[SP_BIO][SPK_SOUND] == SPELL[SP_BIO].def[SPK_SOUND],
+              "the project: MOTION, MOTES' knobs and LIMITS back (KSP2)");
+    }
+    pat[sq.active] = base;
+    sp_defaults();
+    memset(rcp, 0, sizeof rcp);
+    goto_mode(B_HOME, M_HOME);
+}
+static void phase30(void)
+{
+    uint32_t a, b;
+    printf("phase 30: the pages' pictures\n");
+    viz_page(0, S_FM, 0);
+    viz_set(S_FM, 0, 0, 70);
+    viz_set(S_FM, 0, 1, 88);
+    shot("viz-fm");
+    viz_page(4, S_FM, 0);
+    viz_set(S_FM, 0, 2, 60);
+    viz_set(S_FM, 0, 3, 40);
+    shot("viz-fm-cy");
+    viz_page(0, S_CLICK, 0);
+    viz_set(S_CLICK, 0, 0, 7);
+    viz_set(S_CLICK, 0, 1, 110);
+    shot("viz-transient");
+    viz_set(S_CLICK, 0, 0, 0);
+    shot("viz-transient-snap");
+    viz_page(0, S_MOD, 0);
+    viz_set(S_MOD, 0, 0, 60);
+    viz_set(S_MOD, 0, 2, 90);
+    shot("viz-pitch-eg");
+    viz_page(0, S_MOD, 1);
+    viz_set(S_MOD, 1, 1, 100);
+    shot("viz-velocity");
+    viz_page(3, S_AEG, 0);
+    viz_set(S_AEG, 0, 0, 30);
+    viz_set(S_AEG, 0, 2, 3);
+    viz_set(S_AEG, 0, 1, 60);
+    shot("viz-aeg-clap");
+    viz_page(0, S_GATE, 0);
+    viz_set(S_GATE, 0, 0, 1);
+    shot("viz-gate-on");
+    viz_set(S_GATE, 0, 0, 0);
+    viz_page(0, S_FILTER, 0);
+    viz_set(S_FILTER, 0, 0, 70);
+    viz_set(S_FILTER, 0, 1, 110);
+    shot("viz-filter-res");
+    viz_set(S_FILTER, 0, 2, 1);
+    shot("viz-filter-hp");
+    viz_set(S_FILTER, 0, 2, 12);
+    shot("viz-filter-vowel");
+    viz_set(S_FILTER, 0, 2, 0);
+    viz_set(S_FILTER, 0, 0, 127);
+    viz_set(S_FILTER, 0, 1, 0);
+    viz_page(0, S_LFO, 0);
+    viz_set(S_LFO, 0, 0, 20);
+    viz_set(S_LFO, 0, 1, 100);
+    viz_set(S_LFO, 0, 2, 1);
+    viz_set(S_LFO, 1, 2, 1);                          /* (RETRIGGER: D1's hits) */
+    shot("viz-lfo-trig");
+    viz_page(0, S_LFOM, 0);
+    viz_set(S_LFOM, 0, 0, LM_HOLD);
+    shot("viz-lfo-hold");
+    viz_set(S_LFOM, 0, 0, LM_ONE);
+    shot("viz-lfo-one");
+    viz_set(S_LFOM, 0, 0, LM_TRIG);
+    viz_page(0, S_SHAPE, 0);
+    viz_set(S_SHAPE, 0, 2, 40);
+    shot("viz-shape-srate");
+    viz_set(S_SHAPE, 0, 2, 127);
+    viz_page(0, S_INSERT, 0);
+    viz_set(S_INSERT, 0, 0, INS_PHASER);
+    shot("viz-insert-phaser");
+    viz_set(S_INSERT, 0, 0, INS_TREMOLO);
+    viz_set(S_INSERT, 0, 3, 100);
+    shot("viz-insert-tremolo");
+    viz_set(S_INSERT, 0, 0, INS_AUTOPAN);
+    shot("viz-insert-autopan");
+    viz_set(S_INSERT, 0, 0, INS_CHORUS);
+    shot("viz-insert-chorus");
+    viz_set(S_INSERT, 0, 0, INS_SHIFT);
+    viz_set(S_INSERT, 0, 2, 90);
+    shot("viz-insert-shifter");
+    viz_set(S_INSERT, 0, 0, INS_OFF);
+    viz_page(3, S_MODEL, 0);
+    shot("viz-model-sn");
+    viz_page(0, S_MODEL, 0);                          /* (30 rev: each model a picture, its pages marked) */
+    shot("viz-model-lxr");
+    {
+        static const uint8_t M[] = {15, 11, 10, 4, 17, 1, 9, 8, 14, 5, 6, 12};
+        static const char *const N[] = {"viz-model-pstring", "viz-model-pspeech", "viz-model-pchord", "viz-model-pva",
+                                        "viz-model-pkick", "viz-model-modal", "viz-model-pwtable", "viz-model-paddtv",
+                                        "viz-model-pparticle", "viz-model-pwshape", "viz-model-pfm", "viz-model-pswarm"};
+        uint32_t i;
+        for (i = 0; i < sizeof M; i++) {
+            viz_set(S_MODEL, 0, 0, M[i]);
+            viz_set(S_MODEL, 0, 1, 90);
+            viz_set(S_MODEL, 0, 2, 70);
+            viz_set(S_MODEL, 0, 3, 40);
+            shot(N[i]);
+        }
+    }
+    viz_set(S_MODEL, 0, 0, 15);
+    viz_page(0, S_OSC, 0);
+    shot("viz-model-pitch-osc");                     /* (0.19: COARSE, FINE; WAVE, PWM faint, locked) */
+    check(par_unheard(0, sect_par(0, S_OSC, 0, 2)) == 2u && !par_unheard(0, sect_par(0, S_OSC, 0, 0)),
+          "a model's OSC: only its pitch heard");
+    a = vp_get(sect_par(0, S_OSC, 0, 2));
+    knob_turn(2, 5);
+    check(vp_get(sect_par(0, S_OSC, 0, 2)) == a, "a model's unheard knob locked");
+    viz_page(0, S_AEG, 0);
+    check(ui.sect != S_AEG && ui.sect != S_FM && ui.sect != S_CLICK, "a model's AMP EG page hidden");
+    viz_page(0, S_MODEL, 0);
+    viz_set(S_MODEL, 0, 0, 1);                       /* (Rings, not struck; the morph kit's EXCITER up: faint) */
+    vp_set(PAR_MEXC1, 0);
+    morph_par[kit_idx(PAR_MEXC1)] = 90;
+    viz_page(0, S_FM, 0);
+    check(ui.sect == S_FM && par_unheard(0, sect_par(0, S_FM, 0, 0)) == 1u, "Rings: FM faint when morphing strikes it");
+    shot("viz-model-morph-fm");
+    morph_par[kit_idx(PAR_MEXC1)] = 0;
+    viz_page(0, S_MODEL, 0);
+    viz_set(S_MODEL, 0, 0, 0);
+    viz_page(3, S_MODEL, 0);
+    viz_set(S_MODEL, 0, 0, 26);
+    shot("viz-model-micro-grain");
+    viz_set(S_MODEL, 0, 0, 21);
+    shot("viz-model-micro-train");
+    viz_set(S_MODEL, 0, 0, 0);
+    viz_page(4, S_MODEL, 0);
+    shot("viz-model-cy");
+    viz_page(5, S_MODEL, 0);
+    shot("viz-model-hh");
+    viz_page(0, S_AEG, 0);
+    shot("viz-units-aeg");
+    viz_page(0, S_LFO, 0);
+    shot("viz-units-lfo");
+    viz_page(4, S_RANDOM, 0);
+    viz_set(S_RANDOM, 0, 0, 127);
+    viz_set(S_RANDOM, 0, 3, 64);
+    shot("viz-random");
+    viz_page(0, S_OSC, 0);                            /* (the playhead: the strip, not the picture) */
+    if (!sq.running)
+        press(B_PLAY);
+    run_ms(100);
+    a = rsig[R_BODY];
+    b = rsig[R_STRIP];
+    run_ms(500);
+    check(a == rsig[R_BODY] && b != rsig[R_STRIP], "30: playing redraws the step strip, not the picture");
+    seq_goto(PG_BOUNCE);
+    shot("viz-bounce");
+    seq_goto(PG_MELODY);
+    vp_set(VP_MEL + ML_SHAPE, MEL_WALK);
+    run_ms(1200);
+    shot("viz-melody-playing");
+    seq_goto(PG_MELODY + 1u);
+    vp_set(VP_MEL + ML_DEJA, 100);
+    run_ms(600);
+    shot("viz-melody-loop");
+    vp_set(VP_MEL + ML_SHAPE, MEL_OFF);
+    seq_goto(PG_SCALE);
+    shot("viz-scale");
+    seq_goto(PG_GROOVE);
+    vp_set(VP_GROOVE, 7);
+    vp_set(VP_GHUM, 60);
+    run_ms(40);
+    shot("viz-groove-dilla");
+    vp_set(VP_GROOVE, 0);
+    vp_set(VP_GHUM, 0);
+    press(B_FX);
+    fx_goto(FXPG_REV);
+    vp_set(PAR_REV_TYPE, 1);
+    run_ms(40);
+    shot("viz-reverb-spring");
+    vp_set(PAR_REV_TYPE, 0);
+    vp_set(PAR_REV_SIZE, 30);
+    run_ms(40);
+    shot("viz-reverb-room");
+    vp_set(PAR_REV_TYPE, 2);
+    vp_set(PAR_REV_SIZE, 120);
+    run_ms(40);
+    shot("viz-reverb-hall");
+    vp_set(PAR_REV_TYPE, 3);
+    vp_set(PAR_REV_SIZE, 70);
+    run_ms(40);
+    shot("viz-reverb-plate");
+    fx_goto(FXPG_BUS);
+    vp_set(PAR_FX_TYPE, FX_DELAY);
+    vp_set(VP_FX_SUB, 1);
+    vp_set(PAR_FX_P1, 40);
+    vp_set(PAR_FX_P4, 90);
+    run_ms(40);
+    shot("viz-fx-delay-pp");
+    vp_set(VP_FX_SUB, 3);
+    run_ms(40);
+    shot("viz-fx-delay-tapepp");
+    vp_set(VP_FX_SUB, 1);
+    fx_goto(FXPG_DUB);
+    vp_set(PAR_DPITCH, 1);
+    vp_set(PAR_GLITCH, 80);
+    run_ms(40);
+    shot("viz-fx-dub");
+    fx_goto(FXPG_SEND);
+    vp_set(PAR_ECHOREV, 90);
+    run_ms(40);
+    shot("viz-fx-send");
+    fx_goto(FXPG_BUS);
+    vp_set(PAR_FX_TYPE, FX_DRIVE);
+    vp_set(PAR_FX_P1, 90);
+    run_ms(40);
+    shot("viz-fx-drive");
+    vp_set(PAR_FX_TYPE, FX_COMP);
+    vp_set(PAR_FX_P3, 60);
+    vp_set(VP_FX_SUB, 3);
+    run_ms(40);
+    shot("viz-fx-comp");
+    vp_set(PAR_FX_TYPE, FX_OFF);
+    run_ms(40);
+    shot("viz-fx-off");
+    fx_goto(FXPG_DIRT);
+    vp_set(PAR_MDIRT, 2);
+    vp_set(PAR_MDIRT_AMT, 90);
+    vp_set(PAR_FXDIRT, 50);
+    run_ms(40);
+    shot("viz-dirt");
+    fx_goto(FXPG_COMP);
+    vp_set(PAR_MC_RATIO, 4);
+    vp_set(PAR_MC_THR, 60);
+    run_ms(300);
+    shot("viz-master-comp");
+    fx_goto(FXPG_COMP2);
+    vp_set(PAR_MC_SRC, 1);
+    run_ms(40);
+    shot("viz-sidechain");
+    vp_set(PAR_MC_RATIO, 0);
+    vp_set(PAR_MC_SRC, 0);
+    vp_set(PAR_MDIRT_AMT, 0);
+    vp_set(PAR_FXDIRT, 0);
+    press(B_PLAY);
+    goto_mode(B_HOME, M_HOME);
+}
+
 int main(int argc, char **argv)
 {
     uint32_t t;
+    setvbuf(stdout, NULL, _IOLBF, 0);                /* (a line at a time: a hang shows where) */
     if (argc > 1)
         shots = argv[1];
     web_nor_erase();
@@ -4880,7 +5951,10 @@ int main(int argc, char **argv)
     /* the sound pages */
     black(0);
     press(B_EDIT);
-    check(ui.mode == M_SOUND && ui.sect == S_OSC, "EDIT: the oscillator page");
+    check(ui.mode == M_SOUND && ui.sect == S_MODEL, "EDIT: the MODEL page first (29)");
+    shot("model");
+    press(B_EDIT);
+    check(ui.mode == M_SOUND && ui.sect == S_OSC, "EDIT again: the oscillator page");
     shot("osc");
     turn(EN_K1, -5);                                  /* coarse down */
     check(par[PAR_COARSE1] != INIT_KIT[8 + PAR_COARSE1], "K1 moves the coarse tune");
@@ -4896,9 +5970,7 @@ int main(int argc, char **argv)
     turn(EN_SELECT, 1);
     shot("lfo-2");
     press(B_GLO);
-    shot("mix");
-    press(B_GLO);
-    press(B_GLO);
+    check(ui.mode == M_MIXER, "GLO: the mixer (29: no MIX pages)");
     shot("mixer");
     press(B_GLO);
     shot("config");
@@ -4912,6 +5984,10 @@ int main(int argc, char **argv)
     /* step edit */
     press(B_HOME);
     press(B_SEQ);
+    check(ui.mode == M_EUCLID && ui.page == PG_TRACK, "SEQ: the TRACK page");
+    shot("track");
+    press(B_SEQ);
+    check(ui.mode == M_STEP, "SEQ again: the steps");
     white(4);
     turn(EN_K1, -30);
     check((pat[0].step[0][4].volume & 127u) < 127u, "STEP: K1 sets the velocity");
@@ -4949,6 +6025,8 @@ int main(int argc, char **argv)
     press(B_ARP);
     shot("perf");
     press(B_ARP);
+    shot("global-mod");
+    seq_goto(PG_GEN);
     turn(EN_K2, 3);
     shot("euclid");
     /* save the kit, load page, kit browser */
@@ -5325,6 +6403,11 @@ int main(int argc, char **argv)
     }
     phase26();
     phase28();
+    phase29();
+    phase31();
+    phase32();
+    phase_t11();
+    phase30();
     gen_step_edit_test();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;

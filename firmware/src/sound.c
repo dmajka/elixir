@@ -558,7 +558,8 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
         fxbus_update();
         break;
     case PAR_FX_ROUTING:
-        fx.route = (uint8_t)(itg <= R_R2 ? itg : R_ST1);
+        fx.route = R_ST1;                            /* (0.19: always stereo, the FM-1's one output; a kit's */
+        (void)itg;                                   /* .. side-only bus from the LXR plays in stereo) */
         break;
     case PAR_FX_DRY_WET:
         i = itg > 100u ? 100u : itg;

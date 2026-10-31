@@ -110,6 +110,10 @@ static void pr_bytes(void *p, uint32_t n)
         *b++ = (uint8_t)pr_byte();
 }
 
+static void sp_defaults(void);                      /* (32: SPELLS, spells.c: KSP2) */
+static void sp_write(void);
+static void sp_read(void);
+
 /* ------------------------------------------------------------ format --- */
 /* Version 2 (Elixir 0.2): 32 patterns; Elixir's parameters (the sends, the reverb) in the edit buffer and the
  * kits; every count written, so a later version can add to the end of a part; a step as a mask of the fields that
@@ -320,8 +324,8 @@ static void proj_write_payload(void)
         pw_byte(gls[i].trig);
         pw_byte(gls[i].phase);
     }
-    pw_bytes("KSC1", 4);                            /* 19: the scale last chosen, DENSITY, STUTTER (0.16) */
-    pw_byte(10);
+    pw_bytes("KSC1", 4);                            /* 19: the scale last chosen, DENSITY, STUTTER (0.16), VARY (31) */
+    pw_byte(11);
     pw_byte(scl_last.root);
     pw_byte(scl_last.scale);
     pw_byte((uint8_t)pfs.dens);
@@ -332,6 +336,9 @@ static void proj_write_payload(void)
     pw_byte(pfs.st_size);
     pw_byte(pfs.st_len);
     pw_byte(pfs.st_vary);
+    pw_byte(pfs.dvary);
+    pw_bytes("KSP2", 4);                            /* 32: SPELLS: the knobs, the targets, the GRIMOIRE's recipes */
+    sp_write();
 }
 
 /* a version-2 lock code: Elixir's parameters were at the numbers the LXR leaves free (247..254: PAR_FX_SEND1 ..,
@@ -550,12 +557,15 @@ static int proj_read_payload(uint32_t ver)
         for (k = 0; k < len; k++) {
             uint32_t v = pr_byte();
             if (i < NUM_SONGS && k < MAX_SONG_LENGTH)
-                songs[i][k] = (uint8_t)(v >= NUM_PATTERN && v < SONG_END ? NUM_PATTERN - 1u : v);
+                songs[i][k] = (uint8_t)(ver < 2u && v >= NUM_PATTERN && v < SONG_END ? NUM_PATTERN - 1u
+                                        : song_row(v) == SONG_END && v != SONG_END ? SONG_END : v);   /* (0.19: the
+                                                                            * times in bits 5-7, song_row) */
         }
         for (k = len; i < NUM_SONGS && k < MAX_SONG_LENGTH; k++)
             songs[i][k] = SONG_END;
     }
     perf_defaults();                                /* PERF's settings, when the project has them */
+    sp_defaults();                                  /* (32: SPELLS', KSP2) */
     if (!pr.err && pr.pos + 4u <= pr.end) {
         pr_bytes(tag, 4);
         if (!memcmp(tag, "KPF1", 4)) {
@@ -608,10 +618,10 @@ static int proj_read_payload(uint32_t ver)
     if (!pr.err && pr.pos + 4u <= pr.end) {
         pr_bytes(tag, 4);
         if (!memcmp(tag, "KSC1", 4)) {               /* 19: the scale last chosen, DENSITY; STUTTER */
-            uint8_t b[10] = {0, 0, 0, 40, DB_GHOSTS, 0, 0, 1, 2, SV_OFF};
+            uint8_t b[11] = {0, 0, 0, 40, DB_GHOSTS, 0, 0, 1, 2, SV_OFF, 0};   /* (31: VARY 0 before) */
             n = pr_byte();
-            pr_bytes(b, n < 10u ? n : 10u);
-            pr_skip(n > 10u ? n - 10u : 0u);
+            pr_bytes(b, n < 11u ? n : 11u);
+            pr_skip(n > 11u ? n - 11u : 0u);
             scl_last.root = (uint8_t)(b[0] % 12u);
             scl_last.scale = (uint8_t)(b[1] < NSCALE ? b[1] : SC_CHROM);
             pfs.dens = (int8_t)clamp32((int8_t)b[2], -64, 63);
@@ -622,7 +632,13 @@ static int proj_read_payload(uint32_t ver)
             pfs.st_size = (uint8_t)(b[7] < NSTSIZE ? b[7] : 1u);
             pfs.st_len = (uint8_t)(b[8] < NSTLEN ? b[8] : 2u);
             pfs.st_vary = (uint8_t)(b[9] < NSV ? b[9] : SV_OFF);
+            pfs.dvary = (uint8_t)(b[10] & 127u);
         }
+    }
+    if (!pr.err && pr.pos + 4u <= pr.end) {
+        pr_bytes(tag, 4);
+        if (!memcmp(tag, "KSP2", 4))                 /* 32: SPELLS (0.19-test6's KSP1: left, the defaults) */
+            sp_read();
     }
     return pr.err;
 }
@@ -819,13 +835,16 @@ static void autosave_poll(void)
  * cakit: Control All moves the kit only, not the morph target too (0, the default: both).
  * 0.13: pmem: a button opens the page it showed last (ui.c pmem_*; 0, the default: its first).
  * 0.16: remote is the TRACKS channel (0: 15), rglobal the GLOBAL one (1..16, 17 off, 0: 16); settings from before
- * (16 bytes) start both at their defaults, or both off if the remote was */
+ * (16 bytes) start both at their defaults, or both off if the remote was.
+ * 31: medit: a knob's edit with morph on moves the morph target too (0, the default: both kits; 1 the kit only). In
+ * the struct's padding before: settings from 0.16 .. 0.19 hold 0 there.
+ * 0.19 (33): kbslots: the kit browser lists the slots first (0, the default: the factory kits first); in the padding too */
 #define SET_LEN_015 16u
 typedef struct {
     uint32_t magic;
-    uint8_t palette, leds, autosave, accel, project, kvel, kacc, pdrop, remote, rknobs, cakit, pmem, rglobal;
+    uint8_t palette, leds, autosave, accel, project, kvel, kacc, pdrop, remote, rknobs, cakit, pmem, rglobal, medit, kbslots;
 } elixir_settings_t;
-static elixir_settings_t kset = {SET_MAGIC, 2, 1, 1, 1, 0xFF, 100, 127, 0, 0, 0, 0, 0, 0};   /* (palette 2: AMBER) */
+static elixir_settings_t kset = {SET_MAGIC, 2, 1, 1, 1, 0xFF, 100, 127, 0, 0, 0, 0, 0, 0, 0, 0};   /* (palette 2: AMBER) */
 static uint8_t remote_of(uint32_t v, uint32_t dflt) { return (uint8_t)(v > 16u ? 0xFFu : v ? v - 1u : dflt - 1u); }
 static uint8_t settings_dirty;
 static uint32_t settings_ms;

@@ -51,3 +51,4 @@ static int ui_step_note_edit(uint32_t note) { (void)note; return 0; }
 #include "../firmware/src/params.c"
 #include "../firmware/src/midi.c"
 #include "../firmware/src/engine.c"
+static void sp_defaults(void) {}                     /* (32: SPELLS' recipes live in spells.c, with the UI) */

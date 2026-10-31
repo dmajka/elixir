@@ -8,7 +8,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="robots" content="noindex">   <!-- (unlisted while it is tried out) -->
 <meta name="theme-color" content="#121214">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -23,11 +23,12 @@
   --bg: #0b0b0c; --part: #232326; --edge: #343438; --ink: #e9e9ec; --mid: #8d8d93; --dim: #5b5b61;
   --lit: #fff4d6; --green: #5fe08a; --rec: #ff453a; --accent: #f4d04a;
   --t0: #ff7038; --t1: #ffa62c; --t2: #f4d04a; --t3: #7cd25c; --t4: #3ec6c8; --t5: #509cf0; --t6: #a87cf2; --bar: #7fb0d8;
-  --gap: 6px; --knob: clamp(30px, 9vw, 42px); --btn: clamp(30px, 4.6vh, 40px); --blk: clamp(30px, 4.8vh, 42px);
+  --gap: 6px; --knob: clamp(40px, 13vw, 58px); --btn: clamp(30px, 4.6vh, 40px); --blk: clamp(30px, 4.8vh, 42px);
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overscroll-behavior: none; overflow: hidden; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overscroll-behavior: none; overflow: hidden;
+             touch-action: none; }   /* (33: no double-tap or pinch zoom anywhere on the panel) */
 body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; letter-spacing: .03em;
        -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 /* one screen high: 100dvh is what Safari's bars leave; the screen takes the room the controls don't */
@@ -38,19 +39,33 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
 .bar b { font-size: 14px; letter-spacing: .06em; }
 .bar small { color: var(--mid); font-weight: 500; }
 .bar .sp { flex: 1; }
+/* 33: the volume, a slider in the bar (the master level, 0..1023) */
+.bar .vol { display: flex; align-items: center; gap: 6px; color: var(--mid); font-size: 10px; letter-spacing: .04em; }
+.bar .vol input { width: clamp(72px, 26vw, 150px); accent-color: var(--accent); touch-action: none; margin: 0; }
 .bar button, .sheet button, .sheet .file { font: inherit; color: var(--ink); background: var(--part); border: 1px solid var(--edge);
        border-radius: 8px; padding: 6px 11px; }
-.L, .R { display: flex; flex-direction: column; gap: var(--gap); min-height: 0; }
-.L { flex: 1; }
-.R { flex: none; }
-.hold { flex: 1; min-height: 0; display: grid; place-items: center; }
+/* the controls below the stage, in groups. Portrait: the groups are the page's own rows (.R lets them through), 12 px
+   apart at least and the height left over shared out evenly between them; 18 px between the bar and the screen */
+.R { display: flex; flex-direction: column; gap: var(--gap); min-height: 0; }
+@media (orientation: portrait) {
+  .app { gap: 12px; }
+  .R { display: contents; }
+  .stage { margin-top: 6px; }
+  .btns, .blacks, .steps { margin-top: auto; }
+}
+/* 33: the stage at the top: PRESET, ALGO, SELECT down the left of the screen (SELECT lowest, by the thumb), KNOB 1-4
+   under it, each below the parameter it turns (the screen's four cells); drag a knob, or the parameter on the
+   screen, up or down */
+.stage { flex: none; display: flex; gap: var(--gap); align-items: flex-start; justify-content: center; }
+.lk { flex: none; position: relative; width: calc(var(--knob) + 12px); }   /* (as tall as the screen and its knobs: fit) */
+.lk .kn { position: absolute; left: 50%; transform: translateX(-50%); }   /* (ALGO level with the screen's cells, SELECT
+                                                                            with KNOB 1-4, PRESET as far above ALGO: fit) */
+.mid { flex: none; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .scr { width: 240px; height: 240px; padding: 6px; border-radius: 12px; background: #050506;
        box-shadow: 0 0 0 1px #000, 0 0 24px rgba(244, 208, 74, .06), inset 0 0 0 1px #1f1f22; }
-.scr canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; image-rendering: crisp-edges;
-              border-radius: 3px; background: #000; }
+.scr canvas { width: 100%; height: 100%; display: block; border-radius: 3px; background: #000; touch-action: none; }
 .row { display: grid; gap: var(--gap); flex: none; }
-/* the knobs, as on the FM-1: SELECT, ALGORITHM, PRESETS (and VOL) on the left, KNOB 1-4 on the right; drag up or down */
-.knobs { grid-template-columns: repeat(4, minmax(0, 1fr)) 6px repeat(4, minmax(0, 1fr)); gap: 2px; align-items: end; }
+.knobs4 { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 0 6px; width: 240px; }
 .kn { display: flex; flex-direction: column; align-items: center; gap: 3px; touch-action: none; cursor: ns-resize; min-width: 0; }
 .kn .face { position: relative; width: var(--knob); height: var(--knob); border-radius: 50%;
             background: radial-gradient(circle at 50% 30%, #47474b 0%, #232326 48%, #101011 100%);
@@ -60,10 +75,6 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
 .kn .ind { position: absolute; inset: 0; z-index: 1; }
 .kn .ind::before { content: ""; position: absolute; left: calc(50% - 1.5px); top: 7%; width: 3px; height: 30%; border-radius: 2px;
                    background: var(--accent); box-shadow: 0 0 5px #f4d04a88; }
-.kn.vol .face::before { content: ""; position: absolute; inset: -4px; border-radius: 50%;
-  background: conic-gradient(from -135deg, var(--accent) 0 calc(var(--level, .68) * 270deg), #3d3d41 0 270deg, transparent 0);
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
-  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px)); }
 .kn .nm { font-size: 9.5px; color: var(--mid); white-space: nowrap; overflow: hidden; max-width: 100%; letter-spacing: .02em; }
 .kn.on .nm { color: var(--accent); }
 /* the buttons, two rows of seven as on the FM-1, lit as its are */
@@ -87,7 +98,7 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
 .steps { grid-template-columns: repeat(8, minmax(0, 1fr)); }
 .p { background: #1a1a1d; border-radius: 8px; }
 .blacks .p { height: var(--blk); background: #141416; }
-.steps .p { aspect-ratio: 1; max-height: 52px; }
+
 .p .nm { font-size: 10.5px; color: var(--mid); margin-bottom: 4px; }
 .blacks .p .nm { font-size: 10px; color: var(--col); }
 .p::after { content: ""; position: absolute; left: 22%; right: 22%; bottom: 5px; height: 3px; border-radius: 2px;
@@ -99,6 +110,7 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
 .p.lit::after { background: var(--col, var(--lit)); box-shadow: 0 0 10px var(--col, var(--lit)); }
 .p.lit .nm { color: var(--ink); }
 .blacks .p.lit .nm { color: var(--col); }
+.steps .p { aspect-ratio: 1; }   /* (square, as a Digitakt's) */
 .steps .p:nth-child(4n+1) { background: #202024; }
 @keyframes slit { 0%, 100% { background: #2c2c30; } 50% { background: #b9b9be; } }
 .p.held { background: #303036; }
@@ -108,10 +120,10 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
   .app { max-width: none; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr);
          column-gap: 14px; }
   .bar { grid-column: 1 / -1; }
-  .L { height: 100%; }
+  .stage { height: 100%; align-items: center; }
   .R { justify-content: center; max-width: 640px; }
-  :root { --knob: clamp(28px, 8.5vh, 44px); --btn: clamp(26px, 7.6vh, 40px); --blk: clamp(26px, 7.8vh, 42px); }
-  .steps .p { aspect-ratio: auto; height: clamp(28px, 9vh, 52px); }
+  .R .blacks, .R .steps { margin-top: 8px; }
+  :root { --knob: clamp(34px, 10vh, 54px); --btn: clamp(26px, 7.6vh, 40px); --blk: clamp(26px, 7.8vh, 42px); }
 }
 /* switching on; the kits sheet */
 .start { position: fixed; inset: 0; display: grid; place-content: center; justify-items: center; gap: 14px; padding: 24px;
@@ -119,7 +131,7 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
 .start[hidden] { display: none; }
 .start button { font: inherit; font-size: 18px; padding: 14px 34px; border-radius: 12px; border: 0; background: var(--accent); color: #1b1a12; }
 .start p { margin: 0; max-width: 30em; color: var(--mid); font-weight: 500; line-height: 1.5; }
-.sheet { position: fixed; left: 0; right: 0; bottom: 0; max-height: 82vh; overflow: auto; z-index: 6; background: #18181b;
+.sheet { position: fixed; left: 0; right: 0; bottom: 0; max-height: 82vh; overflow: auto; z-index: 6; background: #18181b; touch-action: pan-y;
          border-top: 1px solid var(--edge); border-radius: 16px 16px 0 0; padding: 16px max(16px, env(safe-area-inset-right))
          max(18px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); font-weight: 500; line-height: 1.5;
          transform: translateY(105%); transition: transform .2s; -webkit-user-select: text; user-select: text; }
@@ -131,7 +143,7 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
 .sheet .file { display: inline-block; position: relative; overflow: hidden; }
 .sheet .file input { position: absolute; inset: 0; opacity: 0; }
 .sheet label.o { display: block; margin: 6px 0; color: var(--mid); }
-.sheet select, .sheet input[type=number] { font: inherit; background: var(--part); color: var(--ink); border: 1px solid var(--edge); border-radius: 6px; }
+.sheet select, .sheet input[type=number] { font: inherit; font-size: 16px; background: var(--part); color: var(--ink); border: 1px solid var(--edge); border-radius: 6px; }   /* (16 px: iOS zooms into smaller fields) */
 .sheet .fine { color: var(--dim); font-size: 11px; }
 #kstatus { color: var(--accent); min-height: 1.5em; }
 @media (prefers-reduced-motion: reduce) { .b.breath, .p.breath::after { animation: none; } .sheet { transition: none; } }
@@ -140,12 +152,16 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
 <body>
 <div class="app" id="app">
   <div class="bar"><b>ELIXIR</b><small>@VERSION@</small><span class="sp"></span>
+    <label class="vol">VOL<input id="vol" type="range" min="0" max="1023" step="1" aria-label="Volume"></label>
     <button id="kitsbtn" type="button">Kits</button></div>
-  <div class="L">
-    <div class="hold" id="hold"><div class="scr" id="scr"><canvas id="screen" width="240" height="240" role="img" aria-label="The screen"></canvas></div></div>
+  <div class="stage">
+    <div class="lk" id="lknobs"></div>
+    <div class="mid">
+      <div class="scr" id="scr"><canvas id="screen" width="240" height="240" role="img" aria-label="The screen"></canvas></div>
+      <div class="row knobs4" id="knobs4"></div>
+    </div>
   </div>
   <div class="R">
-    <div class="row knobs" id="knobs"></div>
     <div class="row btns" id="btns"></div>
     <div class="row blacks" id="blacks"></div>
     <div class="row steps" id="steps"></div>
@@ -163,13 +179,14 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
     from number <input id="kfirst" type="number" min="1" max="128" value="1" style="width:4.2em"></label>
   <label class="o"><input id="kskip" type="checkbox" checked> leave out Init and empty kits</label>
   <p><span class="file">Pick .SND or .zip<input id="kfiles" type="file" accept=".snd,.SND,.zip,application/zip" multiple></span></p>
-  <p>Then turn <b>PRESETS</b> for the kit browser, <b>KNOB 1</b> to switch between the slots and the library, and
-    <b>OCT+</b> to load one. SAVE → PROJECT keeps kits loaded into slots with a project.</p>
+  <p>Turn <b>PRESETS</b> for the kit browser: the LXR-02's 85 factory kits (F1 …), then the library (L1 …, with
+    Hrtl's DLC and UNTZ kits in 97–128), then the slots. <b>KNOB 1</b> jumps between them, <b>OCT+</b> loads one.
+    SAVE → PROJECT keeps kits loaded into slots with a project.</p>
   <p><button id="kbackup" type="button">Download the kit library</button> (.ktlb: the library page puts it on an FM-1)</p>
   <p><span class="file">Restore a kit library<input id="krestore" type="file" accept=".ktlb"></span></p>
   <p id="kstatus"></p>
   <h3>Playing it</h3>
-  <p>Drag a knob up or down. The black keys are the FM-1's: D1 … OH select a track, 1–4 show a bar. OCT− is SHIFT,
+  <p>Drag a knob up or down, or drag a parameter at the bottom of the screen to turn the knob below it. The black keys are the FM-1's: D1 … OH select a track, 1–4 show a bar. OCT− is SHIFT,
     OCT+ is COPY / OK; hold one with a finger and press with another for combinations.</p>
   <p class="fine"><a href="@SITE@">Elixir</a> · <a href="@BASE@index.html">Full emulator</a> · <a href="@SITE@manual/">Manual</a> · GPL-3.0 ·
     an unofficial port of the Erica Synths LXR-02 firmware, not affiliated with Erica Synths or M-VAVE</p>
@@ -177,7 +194,7 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
 </div>
 
 <script type="module">
-import { Library, sndFiles, KL_KIT, packKitLib, unpackKitLib } from "@BASE@library.js";
+import { Library, sndFiles, KL_KIT, packKitLib, unpackKitLib, KIT_PACKS, fetchPack, addPacks } from "@BASE@library.js";
 const BASE = "@BASE@";
 // panel.c's labels (bit = label) and encoder roles, as the emulator page
 const B = { FX: 0, SCL: 1, ENV: 2, LFO: 3, EDIT: 4, GLO: 5, HOME: 6, SAVE: 7, ARP: 8, SEQ: 9, PLAY: 10, REC: 11, "OCT-": 12, "OCT+": 13 };
@@ -239,18 +256,16 @@ WHITE.forEach((k, i) => {
   keys[k] = { el, k };
   press(el, { key: k });
 });
-// a knob: drag up (or right) for clockwise, ~10 px a detent; the indicator turns 15 degrees a detent
-function knob(parent, name, onTurn, cls = "") {
-  const el = div("kn" + cls, parent, `<span class="face"><span class="ind"></span></span><span class="nm">${name}</span>`);
-  el.setAttribute("role", "slider");
-  el.setAttribute("aria-label", name);
-  const ind = el.querySelector(".ind");
-  let drag = null, angle = 0;
+// a drag turns: up (or right) for clockwise, ~10 px a detent. start(e): the knob it turns (null: not this touch)
+function dragTurns(el, start) {
+  let drag = null;
   el.addEventListener("pointerdown", (e) => {
+    const k = start(e);
+    if (!k) return;
     e.preventDefault();
     el.setPointerCapture(e.pointerId);
-    drag = { x: e.clientX, y: e.clientY, acc: 0 };
-    el.classList.add("on");
+    drag = { k, x: e.clientX, y: e.clientY, acc: 0 };
+    k.el.classList.add("on");
   });
   el.addEventListener("pointermove", (e) => {
     if (!drag) return;
@@ -259,46 +274,87 @@ function knob(parent, name, onTurn, cls = "") {
     drag.x = e.clientX;
     drag.y = e.clientY;
     const n = Math.trunc(drag.acc / 10);
-    if (n) { drag.acc -= n * 10; const a = onTurn(n); angle = a ?? angle + 15 * n; ind.style.transform = `rotate(${angle}deg)`; }
+    if (n) { drag.acc -= n * 10; drag.k.turn(n); }
   });
-  const end = () => { drag = null; el.classList.remove("on"); };
+  const end = () => { if (drag) drag.k.el.classList.remove("on"); drag = null; };
   for (const t of ["pointerup", "pointercancel"]) el.addEventListener(t, end);
   el.addEventListener("contextmenu", (e) => e.preventDefault());
-  return { el, ind };
 }
-const knobs = document.getElementById("knobs");
-for (const n of ["SELECT", "ALGORITHM", "PRESETS"]) knob(knobs, n === "ALGORITHM" ? "ALGO" : n === "PRESETS" ? "PRESET" : n, (d) => send({ type: "enc", role: EN[n], n: d }));
-// VOL: the one absolute knob (the master level, 0..1023), shown as an arc
+// a knob; the indicator turns 15 degrees a detent
+function knob(parent, name, onTurn, cls = "") {
+  const el = div("kn" + cls, parent, `<span class="face"><span class="ind"></span></span><span class="nm">${name}</span>`);
+  el.setAttribute("role", "slider");
+  el.setAttribute("aria-label", name);
+  const ind = el.querySelector(".ind");
+  let angle = 0;
+  const k = { el, ind, turn(n) { const a = onTurn(n); angle = a ?? angle + 15 * n; ind.style.transform = `rotate(${angle}deg)`; } };
+  dragTurns(el, () => k);
+  return k;
+}
+const knobs = document.getElementById("lknobs");
+// VOL: the master level (0..1023), a slider in the bar (33: was a knob)
 let volume = 700;
 try { volume = Math.max(0, Math.min(1023, +(localStorage.getItem("elixir-mobile-vol") ?? 700))); } catch {}
-const volAngle = () => -135 + 270 * volume / 1023;
-const vk = knob(knobs, "VOL", (d) => {
-  volume = Math.max(0, Math.min(1023, volume + d * 16));
-  vk.el.style.setProperty("--level", volume / 1023);
+const volEl = document.getElementById("vol");
+volEl.value = volume;
+volEl.addEventListener("input", () => {
+  volume = +volEl.value;
   send({ type: "master", value: volume });
   try { localStorage.setItem("elixir-mobile-vol", volume); } catch {}
-  return volAngle();
-}, " vol");
-vk.el.style.setProperty("--level", volume / 1023);
-vk.ind.style.transform = `rotate(${volAngle()}deg)`;
-div("gap", knobs);
-["KNOB 1", "KNOB 2", "KNOB 3", "KNOB 4"].forEach((n) => knob(knobs, n, (d) => send({ type: "enc", role: EN[n], n: d })));
-// the screen as large as the room the controls leave, in whole firmware pixels where that costs little
-const hold = document.getElementById("hold"), scr = document.getElementById("scr");
+});
+const lks = ["PRESETS", "ALGORITHM", "SELECT"].map((n) => knob(knobs, n === "ALGORITHM" ? "ALGO" : n === "PRESETS" ? "PRESET" : n, (d) => send({ type: "enc", role: EN[n], n: d })));
+const k4 = ["KNOB 1", "KNOB 2", "KNOB 3", "KNOB 4"].map((n) => knob(document.getElementById("knobs4"), n, (d) => send({ type: "enc", role: EN[n], n: d })));
+// the screen's four parameter cells (its bottom 70 rows of 240): a drag there turns the knob below
+const screenEl = document.getElementById("screen");
+dragTurns(screenEl, (e) => {
+  const r = screenEl.getBoundingClientRect();
+  if ((e.clientY - r.top) / r.height * 240 < 170) return null;
+  return k4[Math.max(0, Math.min(3, Math.floor((e.clientX - r.left) / r.width * 4)))];
+});
+// the screen as large as the room the controls leave (33: drawn smoothed at the display's resolution, drawScreen), the
+// knobs below as wide
+const stage = document.querySelector(".stage"), lk = document.getElementById("lknobs"), scr = document.getElementById("scr");
+const k4row = document.getElementById("knobs4");
+let lastFb = null;                                         // (the frame last drawn: redrawn at a new size)
+// (portrait: the room the bar, the gaps and the controls below leave; the square pads' height comes from the width)
+const app = document.getElementById("app"), barEl = document.querySelector(".bar");
+const rows = ["btns", "blacks", "steps"].map((id) => document.getElementById(id));
 function fit() {
-  const land = matchMedia("(orientation: landscape)").matches;
-  const room = land ? Math.min(hold.clientHeight, innerWidth * 0.5) : Math.min(hold.clientWidth, hold.clientHeight);
-  const dpr = devicePixelRatio || 1, inner = room - 12, whole = Math.floor(inner * dpr / 240) * 240 / dpr;
-  const side = Math.max(120, (whole >= inner * 0.9 ? whole : inner) + 12);
-  scr.style.width = scr.style.height = `${Math.floor(side)}px`;
+  const land = matchMedia("(orientation: landscape)").matches, gap = 6, k4h = k4row.offsetHeight;
+  let w, h;
+  if (land) {
+    w = innerWidth * 0.48 - lk.offsetWidth - gap;
+    h = stage.clientHeight - k4h - 10;
+  } else {
+    const cs = getComputedStyle(app), inner = app.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    w = stage.clientWidth - lk.offsetWidth - gap;
+    h = inner - barEl.offsetHeight - 6 - 4 * 12 - rows.reduce((a, r) => a + r.offsetHeight, 0) - k4h - 10;
+  }
+  const side = Math.floor(Math.max(120, Math.min(w, h)));
+  scr.style.width = scr.style.height = k4row.style.width = `${side}px`;
+  lk.style.height = `${side + 10 + k4h}px`;
+  // the left knobs by their faces' centres: SELECT with KNOB 1-4, ALGO with the screen's cells (rows 172-236 of 240,
+  // inside the bezel's 6 px), PRESET as far above ALGO
+  const face = lks[0].el.querySelector(".face").offsetHeight, sel = side + 10 + face / 2;
+  const algo = 6 + (side - 12) * 204 / 240, centres = [Math.max(face / 2, 2 * algo - sel), algo, sel];
+  lks.forEach((k, i) => { k.el.style.top = `${Math.round(centres[i] - face / 2)}px`; });
+  const px = Math.round((side - 12) * (devicePixelRatio || 1));
+  if (screenEl.width !== px) { screenEl.width = screenEl.height = px; if (lastFb) drawScreen(lastFb); }
 }
-new ResizeObserver(fit).observe(hold);
+new ResizeObserver(fit).observe(app);
 addEventListener("resize", fit);
 fit();
 
 // ------------------------------------------------------------------ the screen and the lights
-const ctx = document.getElementById("screen").getContext("2d"), img = ctx.createImageData(240, 240);
+// 33: the firmware's 240 x 240 doubled (whole pixels), then smoothed to the display's pixels: no uneven blocks on a
+// phone's screen, still crisp
+const ctx = screenEl.getContext("2d"), src = document.createElement("canvas"), dbl = document.createElement("canvas");
+src.width = src.height = 240;
+dbl.width = dbl.height = 480;
+const sctx = src.getContext("2d"), dctx = dbl.getContext("2d"), img = sctx.createImageData(240, 240);
+dctx.imageSmoothingEnabled = false;
 function drawScreen(fb) {
+  lastFb = fb;
   const d = img.data;
   for (let i = 0; i < 240 * 240; i++) {
     const v = fb[i], p = ((v >> 8) | (v << 8)) & 0xFFFF;
@@ -307,7 +363,11 @@ function drawScreen(fb) {
     d[i * 4 + 2] = (p & 31) * 255 / 31;
     d[i * 4 + 3] = 255;
   }
-  ctx.putImageData(img, 0, 0);
+  sctx.putImageData(img, 0, 0);
+  dctx.drawImage(src, 0, 0, 480, 480);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(dbl, 0, 0, screenEl.width, screenEl.height);
 }
 function drawLights([litB, litK, dimB, dimK, , brB = 0, brK = 0, midK = 0]) {
   for (const x of buttons) {
@@ -381,6 +441,7 @@ async function switchOn() {
     document.getElementById("start").hidden = true;
     send({ type: "visible", on: !document.hidden });
     keepAwake();
+    packsOnce();
     document.addEventListener("visibilitychange", () => {
       send({ type: "visible", on: !document.hidden });
       if (!document.hidden) { ac.resume(); keepAwake(); }
@@ -409,6 +470,15 @@ const lib = new Library({
   },
 });
 const $ = (id) => document.getElementById(id), say = (s) => { $("kstatus").textContent = s; };
+// 0.19: Hrtl's kit packs into the library's empty slots, once in this browser (as the emulator page; the same flag)
+async function packsOnce() {
+  const KEY = "elixir-emu-packs";
+  try { if (localStorage.getItem(KEY)) return; } catch { return; }
+  try {
+    for (const p of KIT_PACKS) await addPacks(lib, await fetchPack(BASE, p));
+    try { localStorage.setItem(KEY, "1"); } catch {}
+  } catch (e) { console.warn("Elixir: the kit packs:", e.message); }
+}
 const sheet = $("sheet");
 $("kitsbtn").addEventListener("click", () => sheet.classList.add("open"));
 $("kclose").addEventListener("click", () => sheet.classList.remove("open"));
@@ -479,7 +549,14 @@ $("krestore").addEventListener("change", async (ev) => {
     say(`Restored ${entries.length} kits and sounds into the kit library.`);
   } catch (err) { say("Restore failed: " + err.message); }
 });
-document.addEventListener("gesturestart", (e) => e.preventDefault());   // (Safari: no pinch zoom on the panel)
+// (Safari: no pinch zoom, and no double-tap zoom off the controls; 33)
+for (const t of ["gesturestart", "gesturechange", "gestureend", "dblclick"]) document.addEventListener(t, (e) => e.preventDefault());
+let lastTap = 0;
+document.addEventListener("touchend", (e) => {
+  const now = e.timeStamp;
+  if (now - lastTap < 350 && !e.target.closest(".sheet")) e.preventDefault();
+  lastTap = now;
+}, { passive: false });
 </script>
 </body>
 </html>

@@ -211,10 +211,10 @@ static void kit_sanitize(uint8_t *p)
             p[i] = (uint8_t)init_kit_k(kit_par(i));
 }
 
-#if ELIXIR_FACTORY_KITS
-/* 0.7: a bank of LXR-02 kits built in from a local folder (tools/gen_factory_kits.py; never in a public build: the
- * kits aren't Elixir's to give away). FACTORY_KITS[f]: the .SND file (8 name bytes, the LXR's 247). A fresh unit
- * starts with the first 64 in its slots; LOAD > FACTORY loads one into the edit buffer, or all into the slots. */
+/* 0.7: a bank of LXR-02 kits built in (tools/gen_factory_kits.py); from 0.19 the LXR-02's factory kits, always (Erica
+ * Synths' permission). FACTORY_KITS[f]: the .SND file (8 name bytes, the LXR's 247). The kit browser and LOAD >
+ * FACTORY load one into the edit buffer; LOAD > FACTORY's ALL > SLOTS puts the first 64 into the slots (a fresh unit
+ * no longer starts with them there: 0.19). */
 #include "factory_kits.h"
 static void kit_factory_values(uint32_t f, uint8_t *p)
 {
@@ -254,4 +254,3 @@ static void kit_factory_load(uint32_t f)             /* one into the edit buffer
     kit_loads++;
     snd_post_all();
 }
-#endif

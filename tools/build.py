@@ -99,7 +99,8 @@ def generate():
     cmds = [[tools / "gen_aa_font.py", GEN / "ui_fonts.h", "--preset", "inter-tight"],
             [tools / "gen_aa_keycaps.py", GEN / "ui_keycaps.h"],
             [tools / "gen_ui_palettes.py", GEN / "ui_palettes.h"],
-            [tools / "gen_tables.py", GEN / "elixir_tables.h"]]
+            [tools / "gen_tables.py", GEN / "elixir_tables.h"],
+            [tools / "gen_factory_kits.py", GEN / "factory_kits.h", SRC / "assets" / "kits" / "factory"]]
     procs = [subprocess.Popen([sys.executable, *map(str, c)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               text=True) for c in cmds]
     failed = []
@@ -183,24 +184,10 @@ def ld_regions():
     return regs
 
 
-def factory_kits():
-    """ELIXIR_KITS_DIR (folders, ':' between): a private build with those LXR-02 kits built in (0.7). The version
-    gets "+K", and web/make_site.py refuses to publish it: the kits aren't Elixir's to redistribute."""
-    dirs = os.environ.get("ELIXIR_KITS_DIR", "")
-    if not dirs.strip(":"):
-        return False
-    subprocess.run([sys.executable, "tools/gen_factory_kits.py", "build/gen/factory_kits.h", dirs], check=True)
-    return True
-
-
 def build_app():
     flags = [*CFLAGS, "-Ifirmware/hal", "-Ifirmware/src", "-Ibuild/gen"]
     flags.append(f'-DFELUCCA_ID="{PRODUCT}"')
     version = VERSION
-    if factory_kits():
-        flags.append("-DELIXIR_FACTORY_KITS=1")
-        version = (version or re.search(r'#define ELIXIR_VERSION "([^"]+)"',
-                                        (FW / "src" / "elixir.c").read_text()).group(1)) + "+K"
     if version:
         flags.append(f'-DELIXIR_VERSION="{version}"')
     cmain = ("cc", *flags, "-c", FW / "src" / "elixir.c", "-o", OUT / "elixir.o")

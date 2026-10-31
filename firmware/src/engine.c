@@ -37,6 +37,7 @@ static void engine_globals_default(void)            /* the LXR's settings as a n
     par[PAR_STEP_PROB] = 100;
 }
 
+static void sp_defaults(void);                      /* (32: SPELLS, spells.c) */
 static void engine_init(void)
 {
     uint32_t i;
@@ -48,6 +49,7 @@ static void engine_init(void)
     fxbus_init();
     reverb_init();
     perf_init();
+    sp_defaults();
     seq_init();
     kit_pk_init();                                  /* (25-0: the slots' packing; ui_test checks it fits) */
     {
@@ -58,9 +60,6 @@ static void engine_init(void)
             memcpy(kit_names[i], "Init    ", KIT_NAME_LEN);
         }
     }
-#if ELIXIR_FACTORY_KITS
-    kit_factory_fill();
-#endif
     kit_init_values(morph_par);
     engine_globals_default();
     kit_load_ram(0);

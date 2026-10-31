@@ -113,6 +113,7 @@ static struct {
     uint8_t ghost, build, dex;
     /* 0.16: STUTTER: CHANCE 0..127, SIZE, LENGTH, VARY (ST_SIZE, ST_LEN, SV_*) (KSC1) */
     uint8_t st_chance, st_size, st_len, st_vary;
+    uint8_t dvary;                                   /* 31: DENSITY's VARY, 0..127 (KSC1) */
 } pfs;
 #define NPF2SET 8u                                   /* (KPF2: the bytes from drill) */
 static const uint8_t REPEAT_TICKS[4] = {96, 48, 24, 12};
@@ -256,6 +257,7 @@ static void perf_block(void)
         sq.dghost = pfs.ghost;
         sq.dbuild = (uint8_t)(pfs.build < NDB ? pfs.build : DB_GHOSTS);
         sq.dex = pfs.dex;
+        sq.dvary = pfs.dvary;
         sq.transp = (int8_t)((t + (t < 0 ? -32768 : 32768)) / 65536);
         sq.mchg = (int8_t)(gl.bi[GD_MCHANGE - GD_DENSITY] / 1024);   /* (20: the melodies' DEJA VU, SPREAD) */
         sq.mspr = (int8_t)(gl.bi[GD_MSPREAD - GD_DENSITY] / 1024);

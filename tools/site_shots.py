@@ -11,9 +11,10 @@ import zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-# shown on the front page, in this order: ui_test's name -> the site's
-SHOTS = {"03-playing": "pattern", "58-grids-map": "grids", "67-perform2": "perform",
-         "90-global-lfo": "global-lfo", "63-links-duck-hats": "links", "12-mixer": "mixer", "73-keys": "keys"}
+# shown on the front page, in this order: ui_test's name (without its number, which moves as tests are added; the
+# first shot of that name) -> the site's
+SHOTS = {"playing": "pattern", "grids-map": "grids", "perform2": "perform",
+         "global-lfo": "global-lfo", "links-duck-hats": "links", "spells-cast": "spells", "mixer": "mixer", "keys": "keys"}
 
 
 def read_ppm(path):
@@ -37,7 +38,7 @@ def main(src=ROOT / "build/shots", out=ROOT / "web/shots"):
     src, out = Path(src), Path(out)
     out.mkdir(parents=True, exist_ok=True)
     for name, to in SHOTS.items():
-        w, h, rgb = read_ppm(src / f"{name}.ppm")
+        w, h, rgb = read_ppm(sorted(src.glob(f"[0-9]*-{name}.ppm"))[0])
         (out / f"{to}.png").write_bytes(png(w, h, rgb))
     print(f"site_shots: {len(SHOTS)} screens -> {out}")
 

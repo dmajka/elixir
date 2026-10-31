@@ -20,7 +20,6 @@
   .ver { color: var(--dim); font-size: 16px; margin-left: 8px; font-weight: 400; }
   .callout { padding: 14px 18px; border-radius: var(--radius); background: var(--well); margin: 0 0 14px; font-size: 15px; }
   .callout.warn { border-left: 3px solid var(--warn); border-radius: 0 var(--radius) var(--radius) 0; color: var(--fg); }
-  .callout.kettle { border-left: 3px solid var(--accent-fill); border-radius: 0 var(--radius) var(--radius) 0; }
   .callout p:last-child { margin: 0; }
   #found { min-height: 1.6em; font-weight: 600; }
   #progress { margin-top: 24px; }
@@ -46,9 +45,6 @@
     <a href="https://github.com/kurogedelic/FM-1-transporter" target="_blank" rel="noopener">FM-1-transporter</a>
     (see the <a href="../manual/#if-something-goes-wrong">manual</a>). You install it at your own risk; there is no
     warranty, and the authors accept no responsibility for damage to your FM-1.</p></div>
-  <div class="callout kettle"><p><strong>Running Kettle?</strong> Elixir is Kettle's new name: same firmware, same
-    projects. Skip step 2 and install Elixir over it (step 3); your projects, kit library and settings are kept.
-    Kettle's own install page won't find the FM-1 once it runs Elixir: use this one from now on.</p></div>
   <p class="small">Connect the FM-1 directly to the computer with a USB data cable, close other apps that use MIDI,
     and allow MIDI (SysEx) when the browser asks. Don't unplug the cable or close this page while it writes.</p>
 
@@ -58,8 +54,8 @@
 
   <h2><span class="n">2</span>Official V15 first</h2>
   <p>Install M-VAVE's official firmware V15 before installing Elixir for the first time. Elixir's package is built for
-    V15's flash layout and update loader, and V15 is what you return to. If step 1 says your FM-1 already runs V15,
-    Kettle or Elixir, skip to step 3.</p>
+    V15's flash layout and update loader, and V15 is what you return to. If step 1 says your FM-1 already runs V15 or
+    Elixir, skip to step 3.</p>
   <p class="small">Download the FM-1 firmware V15 from
     <a href="https://www.m-vave.com/download" target="_blank" rel="noopener">M-VAVE's download page</a>, unpack it and
     select the unmodified <code>FM-1.fwsc</code>. This page checks the file in the browser (it is not uploaded
@@ -68,14 +64,21 @@
     <input id="stock-file" type="file" accept=".fwsc"></label></p>
   <p><button class="alt" id="stock-go" disabled>Install official V15</button></p>
   <p class="small">The same button takes you back from Elixir to the official firmware. Elixir's projects are not
-    kept: back them up first with the <a href="../library/">library page</a> (Elixir, or Kettle 0.7 or later), and
+    kept: back them up first with the <a href="../library/">library page</a>, and
     restore them there after installing Elixir again. Coming from Felucca, back up first with
     <a href="https://hugelton.github.io/Felucca/webapp/installer/" target="_blank" rel="noopener">Felucca's page</a>:
     V15 and Elixir both replace Felucca's saved data.</p>
 
   <h2><span class="n">3</span>Install Elixir</h2>
-  <p>Installs Elixir on an FM-1 running V15, Kettle or Elixir. Updating Kettle or Elixir keeps your projects, kit
-    library and settings.</p>
+  <p>Installs Elixir on an FM-1 running V15 or Elixir. Updating Elixir keeps your projects, kit library and
+    settings.</p>
+  <p>Elixir comes with the LXR-02's 85 factory kits built in (with Erica Synths' permission): turn PRESETS on the
+    FM-1 to browse them. It can also put Hrtl's kit packs for the LXR-02 into your kit library once it is installed:</p>
+  <p><label><input type="checkbox" id="pack-hrtl-dlc"> Hrtl DLC kits (16, library 97–112)</label><br>
+    <label><input type="checkbox" id="pack-hrtl-untz"> Hrtl UNTZ kits (16, library 113–128)</label></p>
+  <p class="small">The two packs together fill about a quarter of the kit library's flash, each pack about 12%. A
+    library slot that already holds a kit is left alone, and you can save your own kits over these at any time. You
+    can also add them later on the <a href="../library/">library page</a>.</p>
   <p><button id="go" disabled>Install Elixir</button></p>
   <p class="small">If an install is cut off (cable pulled, page closed), the FM-1 stays in update mode. Plug it in
     and press the same button again to finish it.</p>
@@ -125,11 +128,14 @@ const MSG = {
     "update mode until the write is finished).",
   noreturn: "The FM-1 did not come back. Turn it off and on.",
   mismatch: "Written, but the FM-1 reports another version: ",
+  packs: "Elixir is installed. Adding the kit packs to the kit library: ",
+  packsDone: "Done. Kit packs added to the kit library: ",
+  packsFail: "Elixir is installed, but the kit packs could not be added (add them on the library page): ",
   badpkg: "The Elixir package is damaged. Reload the page.",
   leave: "Writing. Do not close the page.",
   stockValid: "Official V15 file verified.", stockError: "Not the official V15 file: ",
   stockConfirm: "Install the official V15 firmware? Elixir's projects on the FM-1 will be lost.",
-  elixirConfirm: "Install Elixir? Projects saved by Kettle or Elixir are kept; anything Felucca saved on the " +
+  elixirConfirm: "Install Elixir? Projects saved by Elixir are kept; anything Felucca saved on the " +
     "FM-1 will be replaced.",
 };
 const say = (k, arg = "") => { $("status").textContent = (MSG[k] ?? k) + arg; };
@@ -154,7 +160,7 @@ function notFound(access) {
     "another alternative firmware, use that firmware's own page to return it to V15 first." :
     " The browser sees no MIDI ports at all.");
 }
-// the bar: checking 0..10% (V15 asks ~22 parts, Felucca, Kettle and Elixir ~74), writing 10..95% by the furthest
+// the bar: checking 0..10% (V15 asks ~22 parts, Felucca and Elixir ~74), writing 10..95% by the furthest
 // address the loader has read, restarting 97%. The log (Details) keeps every step.
 const steps = (len) => {
   let top = 0;
@@ -183,18 +189,48 @@ async function run(img, product) {
     const up = new Updater(access, log);
     const step = steps(img.length);
     const ota = await up.find((id) => /^ota-/i.test(id.model));
+    let ok = true;
     if (ota) {
       ota.link.close();
-      say((await up.resume(img, step, product)) ? "done" : "stopped");
+      ok = await up.resume(img, step, product);
+      say(ok ? "done" : "stopped");
     } else {
       await up.install(img, product, step);
     }
+    if (ok && product === meta.product) await addKitPacks(access);
   } catch (e) {
     if (e && e.code === "notfound") $("status").textContent = notFound(access);
     else if (e && e.code && MSG[e.code]) say(e.code, e.detail || "");
     else say("error", e && e.message);
     log(String(e && e.stack || e));
     $("logbox").open = true;                         // (a failure: the log shown, to copy into a report)
+  }
+}
+
+// 0.19: after Elixir's install, the Hrtl kit packs ticked above into the kit library's empty slots (web/library.js, the
+// packs from the emulator's kits/). Elixir takes a few seconds to come back on USB after the restart.
+async function addKitPacks(access) {
+  const packs = [...document.querySelectorAll("input[id^=pack-]")].filter((c) => c.checked).map((c) => c.id.slice(5));
+  if (!packs.length) return;
+  try {
+    const L = await import("../library/library.js");
+    let t = null;
+    for (let k = 0; k < 15 && !t; k++) {
+      t = await L.midiTransport(access, log);
+      if (!t) await new Promise((r) => setTimeout(r, 1000));
+    }
+    if (!t) throw new Error("Elixir wasn't found on USB");
+    const lib = new L.Library(t), done = [];
+    for (const p of L.KIT_PACKS.filter((p) => packs.includes(p.id))) {
+      say("packs", p.name);
+      const r = await L.addPacks(lib, await L.fetchPack("../try/", p));
+      done.push(`${p.name} (${r.added} added` + (r.kept ? `, ${r.kept} slots kept as they were)` : ")"));
+    }
+    t.close();
+    say("packsDone", done.join(", ") + ".");
+  } catch (e) {
+    say("packsFail", e.message);
+    log(String(e && e.stack || e));
   }
 }
 

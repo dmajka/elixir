@@ -26,5 +26,6 @@ Other parts:
 - Inter Tight (UI font), SIL Open Font License 1.1 (`LICENSES/OFL-InterTight.txt`).
 - DotGothic16 (emulator page), SIL Open Font License 1.1 (`LICENSES/OFL-DotGothic16.txt`).
 - The firmware package embeds JieLi AC79 SDK boot files under Apache-2.0 (`LICENSES/Apache-2.0.txt`).
+- **LXR-02 kits** (0.19, `assets/kits`): the LXR-02's factory kits (built into the firmware) and Hrtl's DLC and UNTZ kit packs (offered by the install and library pages and the emulators) are the work of Erica Synths and Hrtl, distributed with Erica Synths' permission. See `assets/kits/README.md` for where they come from.
 
 "Erica Synths" and "LXR-02" are trademarks of Erica Synths. "M-VAVE" and "FM-1" are trademarks of their owner. Elixir is an unofficial port, not affiliated with or endorsed by Erica Synths, M-VAVE or Hügelton Instruments.

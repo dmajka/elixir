@@ -350,12 +350,6 @@ def main(pkg, out):
     emu = ROOT / "build/emu"
     if not (emu / "elixir.wasm").exists():
         raise SystemExit("no build/emu: run web/emu/build.sh first")
-    # 0.7: never publish a build with LXR-02 kits built in (ELIXIR_KITS_DIR: they aren't Elixir's to give away). Its
-    # version ends in "+K", and the splash's string carries it into the app image and the emulator.
-    private = re.compile(rb"unofficial port, [^\0]*\+K\0")
-    for f in (pkg.with_name("elixir.bin"), emu / "elixir.wasm"):
-        if f.exists() and private.search(f.read_bytes()):
-            raise SystemExit(f"{f}: built with ELIXIR_KITS_DIR (LXR-02 kits): rebuild without it before publishing")
     if out.exists():
         shutil.rmtree(out)
     fw, man = out / "firmware", out / "manual"

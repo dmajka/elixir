@@ -20,7 +20,7 @@
 #define BARS_Y (BODY_Y + NTRACK * ROW_H)
 #define BARS_H (BODY_H - NTRACK * ROW_H)
 
-enum { R_HDR, R_TITLE, R_LABELS, R_BARS, R_BODY, R_CARD0, R_COL0 = R_CARD0 + 4, NREG = R_COL0 + 16 };
+enum { R_HDR, R_TITLE, R_LABELS, R_BARS, R_BODY, R_STRIP, R_CARD0, R_COL0 = R_CARD0 + 4, NREG = R_COL0 + 16 };
 static uint32_t rsig[NREG];
 static uint8_t body_is_grid;                        /* what the body showed last (a change redraws it all) */
 
@@ -61,7 +61,7 @@ static void draw_header(void)
     s = sig_add(s, kit_loaded);
     s = sig_add(s, sq.song_pos | sq.song << 8);
     s = sig_add(s, (uint32_t)kit_names[kit_loaded][0] | (uint32_t)kit_names[kit_loaded][3] << 8);
-    s = sig_add(s, morph_amt);
+    s = sig_add(s, morph_amt | (uint32_t)keys_live() << 8 | (uint32_t)(ui.mode == M_KEYS) << 9);
     if (!region(R_HDR, s))
         return;
     cv_begin(240, HDR_H, T_BG);
@@ -86,12 +86,16 @@ static void draw_header(void)
                 t[--n] = 0;
         }
         put_str(b, t, sizeof b);
-        cv_text_fit(64, 5, &AF_S, b, T_TEXT, T_BG, 84);
+        cv_text_fit(64, 5, &AF_S, b, T_TEXT, T_BG, keys_live() ? 54 : 84);
         if (morph_amt)
-            cv_text(150, 5, &AF_S, "M", T_ACCENT);
+            cv_text(keys_live() ? 120 : 150, 5, &AF_S, "M", T_ACCENT);
+    }
+    if (keys_live() && ui.mode != M_KEYS) {          /* 31: KEYS on (SHIFT + EDIT): the keys play notes here */
+        cv_rrect(130, 3, 32, 15, 4, T_ACCENT, T_BG);
+        text_c(130, 3 + CAP_IN(S, 15), 32, &AF_S, "KEYS", T_INK, T_ACCENT);
     }
     if (sq.sync_ext)
-        cv_text(160, 5, &AF_S, "MIDI", T_MID);
+        cv_text(keys_live() && ui.mode != M_KEYS ? 166 : 160, 5, &AF_S, "MIDI", T_MID);
     put_int(b, (int32_t)bpm);
     cv_text_r(214, 4, &AF_M, b, T_TEXT, T_BG);
     if (sq.running) {                                /* play: a triangle (bright on the beat) */
@@ -120,14 +124,28 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
     case M_SOUND: {
         uint8_t l[NSPG][2];
         uint32_t i, k = sound_pages(l);
+        uint32_t a = ui.half, z = sect_half_used(ui.track, ui.sect, 0) + sect_half_used(ui.track, ui.sect, 1);
+        if (ui.sect == S_LFO || ui.sect == S_LFOM) { /* (29: LFO 1's three pages: its two, then its mode) */
+            uint32_t h1 = sect_half_used(ui.track, S_LFO, 0) + sect_half_used(ui.track, S_LFO, 1);
+            if (ui.sect == S_LFOM)
+                a += h1;
+            z = h1 + sect_half_used(ui.track, S_LFOM, 0);
+        }
         if (ui.copy) {                               /* 0.11: OCT+ held: the knobs move every voice */
             put_str(b, "CONTROL ALL: ", n);
             put_str(b + str_len(b), SECT_NAME[ui.sect], n - str_len(b));
         } else {
             put_str(b, SECT_NAME[ui.sect], n);
         }
-        if (ui.kplay)                                /* (0.8: the keys still play notes) */
-            put_str(b + str_len(b), "  KEYS", n - str_len(b));
+        if (z > 1u) {                                /* 29: the section's page of its pages */
+            char d[8];
+            put_str(d, " (", sizeof d);
+            put_int(d + 2, (int32_t)a + 1);
+            put_str(d + str_len(d), "/", sizeof d - str_len(d));
+            put_int(d + str_len(d), (int32_t)z);
+            put_str(d + str_len(d), ")", sizeof d - str_len(d));
+            put_str(b + str_len(b), d, n - str_len(b));
+        }
         for (i = 0; i < k && !(l[i][0] == ui.sect && l[i][1] == ui.half); i++)
             ;
         *pg = i;
@@ -142,7 +160,11 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
         put_int(b + str_len(b), ui.step + 1);
         break;
     }
-    case M_PERF: put_str(b, PERF_TITLE[ui.page % NPERF], n); break;
+    case M_PERF:                                     /* (29: the pages of the set shown) */
+        put_str(b, PERF_TITLE[ui.page % NPERF], n);
+        *pg = ui.page % NPERF - perf_first();
+        *np = perf_count();
+        break;
     case M_EUCLID:
         if (ui.page % NEUCLID == PG_ACTION && ui.action) {   /* 0.10: what OCT+ does, in place of the title */
             static const char *const A[NACT] = {"", "DICE", "COMMIT", "UNDO", "RESET"};
@@ -158,7 +180,8 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
         break;
     case M_FX: {
         static const char *const T[NFXPG] = {"REVERB", "FX BUS", "", "DELAY: DUB", "DELAY: SEND", "DIRT",
-                                             "MASTER COMP", "COMP: SIDECHAIN"};
+                                             "MASTER COMP", "COMP: SIDECHAIN", "FX SEND (1/2)", "FX SEND (2/2)",
+                                             "REVERB SEND (1/2)", "REVERB SEND (2/2)"};
         uint32_t g = fx_page();
         if (g == FXPG_PARS) {                        /* (the type's knobs: named after it) */
             put_str(b, "FX BUS: ", n);
@@ -168,7 +191,10 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
         }
         break;
     }
-    case M_MIXER: put_str(b, MIXER_TITLE[(ui.page % NMIXER) / 2u], n); break;
+    case M_MIXER:
+        put_str(b, MIXER_TITLE[(ui.page % NMIXER) / 2u], n);
+        put_str(b + str_len(b), ui.page % 2u ? " (2/2)" : " (1/2)", n - str_len(b));
+        break;
     case M_CONFIG: put_str(b, CONFIG_TITLE[ui.page % NCONFIG], n); break;
     case M_SAVE: put_str(b, "SAVE ", n); put_str(b + 5, IO_NAME[ui.io_type], n - 5); break;
     case M_LOAD: put_str(b, "LOAD ", n); put_str(b + 5, IO_NAME[ui.io_type], n - 5); break;
@@ -364,19 +390,27 @@ static void draw_grid(void)
     draw_bars();
 }
 
+/* 19a: the scales' names (seq.c SC_*) */
+static const char *const SCALE_NAME[NSCALE] = {"CHROM", "MAJOR", "MINOR", "DORIAN", "PHRYG", "MIXOLYD",
+                                               "LYDIAN", "H MINOR", "MIN PNT", "MAJ PNT", "BLUES", "MINOR 7",
+                                               "FIFTHS", "PHR DOM", "HIRAJO", "PELOG", "WHOLE T"};   /* (52 px at most) */
+#include "ui_viz.c"                                  /* (30: the pages' pictures) */
+#include "spells_viz.c"                              /* (32: SPELLS' wizard and die) */
+
 /* ---------------------------------------------------- the other bodies --- */
-/* the body in two strips (the canvas holds half of it): draw(y0) draws with the strip's origin at -y0 */
-static void body_strips(void (*draw)(int32_t))
+/* the body's top h rows in two strips (the canvas holds half of it): draw(y0) draws with the strip's origin at -y0 */
+static void body_strips_h(void (*draw)(int32_t), int32_t h)
 {
     int32_t y;
-    for (y = 0; y < BODY_H; y += BODY_H / 2) {
-        cv_begin(240, BODY_H / 2, T_BG);
+    for (y = 0; y < h; y += h / 2) {
+        cv_begin(240, (uint32_t)h / 2u, T_BG);
         cv_oy = -y;
         draw(y);
         cv_oy = 0;
         cv_blit(0, BODY_Y + (uint32_t)y);
     }
 }
+static void body_strips(void (*draw)(int32_t)) { body_strips_h(draw, BODY_H); }
 
 static void list_row(int32_t y, const char *left, const char *right, int sel, int dim)
 {
@@ -387,36 +421,30 @@ static void list_row(int32_t y, const char *left, const char *right, int sel, in
     cv_text_fit(64, y + CAP_IN(S, 16), &AF_S, right, sel ? T_INK : dim ? T_DIM : T_TEXT, bg, 168);
 }
 
-static void draw_kit_browser(int32_t y0)             /* 0.9: the slots or (0.9.2) the library's kits (L1 ..) */
+static void draw_kit_browser(int32_t y0)             /* 0.9: the slots, the library's kits (L1 ..), 0.19 the factory's (F1 ..) */
 {
+    static const char *const TITLE[3] = {"KIT SLOTS", "LIBRARY KITS", "FACTORY KITS"};
     uint32_t i, k = ui.kb_sel, first = kb_step(ui.kb_sel, -3);
     (void)y0;
     for (i = 0; i < 3u && kb_step(first, 5) == kb_step(first, 6) && kb_step(first, -1) != first; i++)
         first = kb_step(first, -1);                   /* (the list's end: the last 7 shown) */
-    cv_text(10, 2, &AF_S, ui.kb_lib ? "LIBRARY KITS" : "KIT SLOTS", T_THEME);
+    cv_text(10, 2, &AF_S, TITLE[kb_part(ui.kb_sel)], T_THEME);
     cv_text_r(232, 2, &AF_S, "OCT+ LOAD", T_MID, T_BG);
-    if (!kb_has((int32_t)ui.kb_sel)) {                /* (the library empty) */
-        cv_text(10, 34, &AF_S, "THE LIBRARY IS EMPTY", T_MID);
-        return;
-    }
     for (i = 0, k = first; i < 7u; i++) {
         char l[8], r[12];
+        uint32_t q = kb_part(k);
         put_str(l, "", sizeof l);
-        if (k < NUM_KITS) {
+        if (q == KB_SLOTS) {
             two_digits(l, k + 1u);
             memcpy(r, kit_names[k], 8);
             if (k == kit_loaded)
                 put_str(l + 2, " *", sizeof l - 2);
         } else {
-            uint32_t n = k - NUM_KITS + 1u, p = 1;
-            l[0] = 'L';
-            if (n >= 100u)
-                l[p++] = (char)('0' + n / 100u);
-            if (n >= 10u)
-                l[p++] = (char)('0' + n / 10u % 10u);
-            l[p++] = (char)('0' + n % 10u);
-            l[p] = 0;
-            if (kl_name(KLK_KIT, k - NUM_KITS, r))
+            l[0] = q == KB_LIB ? 'L' : 'F';
+            put_int(l + 1, (int32_t)(k - KB_FIRST[q] + 1u));
+            if (q == KB_FACTORY)
+                kit_factory_name(k - KB_FAC, r);
+            else if (kl_name(KLK_KIT, k - NUM_KITS, r))
                 memset(r, ' ', 8);
         }
         r[8] = 0;
@@ -500,7 +528,10 @@ static void draw_perf(int32_t y0)
     put_str(b + str_len(b), REP[pfs.repeat & 3u], sizeof b - str_len(b));
     put_str(b + str_len(b), "   THROW ", sizeof b - str_len(b));
     put_str(b + str_len(b), VOICE_SHORT[track_voice(ui.track)], sizeof b - str_len(b));
-    cv_text(6, 60, &AF_S, b, T_TEXT);
+    if (perf_dens() && (pfs.dens || dundo == 1u))    /* 31: DENSITY's COMMIT, its UNDO */
+        cv_text(6, 60, &AF_S, pfs.dens ? "OCT+: COMMIT INTO THE PATTERN" : "OCT+: UNDO THE COMMIT", T_ACCENT);
+    else
+        cv_text(6, 60, &AF_S, b, T_TEXT);
     cv_text(6, 78, &AF_S, "LP", d < 0 ? T_THEME : T_DIM);
     cv_text_r(234, 78, &AF_S, "HP", d > 0 ? T_THEME : T_DIM, T_BG);
     cv_rect(26, 84, 186, 4, T_SURF);                  /* the DJ filter: where it is */
@@ -576,8 +607,9 @@ static void draw_shift_legend(int32_t y0)
         cv_text(x + 4, y + CAP_IN(S, 17), &AF_S, b, T_INK);
         cv_text_fit(x + 22, y + CAP_IN(S, 17), &AF_S, F[i], T_INK, T_SEL, 52);
     }
-    cv_text(8, 94, &AF_S, "VOICE: mute  GLO: solo  BAR: length", T_TEXT);
-    cv_text(8, 108, &AF_S, "SEQ: links EDIT: keys PLAY: song REC: opts", T_TEXT);
+    cv_text(8, 92, &AF_S, "VOICE: mute  GLO: solo  BAR: length", T_TEXT);
+    cv_text(8, 104, &AF_S, "SEQ: links EDIT: keys PLAY: song REC: opts", T_TEXT);
+    cv_text(8, 116, &AF_S, "HOME: PERF RESET, ALL EFFECTS OFF", T_ACCENT);
 }
 
 /* 0.8: KEYS: the FM-1's keyboard (from F; held keys in the track's colour), the last note, how to play */
@@ -658,7 +690,7 @@ static void draw_song(int32_t y0)
     if (first > MAX_SONG_LENGTH - 8)
         first = MAX_SONG_LENGTH - 8;
     for (i = 0; i < 8; i++) {
-        uint32_t r = (uint32_t)(first + i), v = songs[sq.song][r];
+        uint32_t r = (uint32_t)(first + i), v = song_row(songs[sq.song][r]);
         char l[8], b[16];
         two_digits(l, r + 1u);
         if (sq.song_mode && sq.running && sq.song_pos == r)
@@ -668,8 +700,17 @@ static void draw_song(int32_t y0)
         else if (v == SONG_LOOP)
             put_str(b, "LOOP", sizeof b);
         else {
+            uint32_t n = song_reps(sq.song, r);
             put_str(b, "PATTERN ", sizeof b);
             two_digits(b + 8, v + 1u);
+            if (sq.song_mode && sq.running && sq.song_pos == r && n > 1u) {   /* (0.19: playing: the time it is) */
+                put_str(b + 10, "  ", sizeof b - 10u);
+                put_str(put_int(b + 12, (int32_t)sq.song_n + 1), "/", 2);
+                put_int(b + str_len(b), (int32_t)n);
+            } else if (n > 1u) {
+                put_str(b + 10, "  x", sizeof b - 10u);
+                put_int(b + 13, (int32_t)n);
+            }
         }
         list_row(i * 16, l, b, r == ui.song_row, v == SONG_END);
     }
@@ -677,7 +718,6 @@ static void draw_song(int32_t y0)
 
 static void io_slot_name(char *b, uint32_t n, uint32_t type, uint32_t s)
 {
-#if ELIXIR_FACTORY_KITS
     if (type == IO_FACTORY) {
         if (s >= FACTORY_NKITS) {
             put_str(b, "ALL > SLOTS", n);
@@ -687,7 +727,6 @@ static void io_slot_name(char *b, uint32_t n, uint32_t type, uint32_t s)
         }
         return;
     }
-#endif
     if (io_lib()) {                                  /* 0.8: the library's */
         static const char *const KIND[4] = {"  DRUM", "  SNARE", "  CYMBAL", "  HIHAT"};
         uint8_t h[3];
@@ -720,7 +759,7 @@ static void io_slot_name(char *b, uint32_t n, uint32_t type, uint32_t s)
             put_str(b + str_len(b), "  (playing)", n - str_len(b));
     } else {
         uint32_t k = 0;
-        while (k < MAX_SONG_LENGTH && songs[s][k] != SONG_END)
+        while (k < MAX_SONG_LENGTH && song_row(songs[s][k]) != SONG_END)
             k++;
         put_int(b, (int32_t)k);
         put_str(b + str_len(b), " rows", n - str_len(b));
@@ -769,6 +808,8 @@ static uint32_t mixer_bar_par(uint32_t v)
     uint32_t g = (ui.page % NMIXER) / 2u;
     if (ui.mode == M_PERF)                           /* (PERF's MIX pages: the volumes) */
         return PAR_VOL1 + v;
+    if (ui.mode == M_FX)                             /* (31: FX's send pages) */
+        return fx_page() >= FXPG_RSEND ? PAR_REV_SEND1 + v : PAR_FX_SEND1 + v;
     return g == 2u ? PAR_FX_SEND1 + v : g == 3u ? PAR_REV_SEND1 + v : PAR_VOL1 + v;
 }
 static void draw_mixer(int32_t y0)
@@ -790,68 +831,20 @@ static void draw_mixer(int32_t y0)
     }
 }
 
-static void draw_comp(void)                          /* 0.16: the master compressor: its settings, the gain it takes */
-{
-    static const char *const SRC[NVOICE + 1u] = {"THE MIX", "D1", "D2", "D3", "SN", "CY", "HH"};
-    char b[32];
-    int32_t gr = mc.gr, db10 = (int32_t)(((int64_t)gr * 602) >> 16), w;   /* (log2 to tenths of a dB) */
-    cv_text(10, 6, &AF_S, "RATIO", T_MID);
-    cv_text(10, 20, &AF_M, L_CRATIO[mc.ratio < NCRATIO ? mc.ratio : 0], mc.ratio ? T_THEME : T_DIM);
-    cv_text(120, 6, &AF_S, "SIDECHAIN", T_MID);
-    cv_text(120, 22, &AF_S, SRC[mc.src <= NVOICE ? mc.src : 0], mc.src ? TRACK_COL[mc.src - 1u] : T_TEXT);
-    cv_text(10, 50, &AF_S, "GAIN REDUCTION", T_MID);
-    cv_rect(10, 68, 220, 10, T_SURF);                /* (0 .. -24 dB, from the right) */
-    w = db10 * 220 / 240;
-    w = w > 220 ? 220 : w;
-    if (w > 0)
-        cv_rect(230 - w, 68, w, 10, T_ACCENT);
-    b[0] = '-';
-    put_int(b + 1, db10 / 10);
-    put_str(b + str_len(b), ".", sizeof b - str_len(b));
-    put_int(b + str_len(b), db10 % 10);
-    put_str(b + str_len(b), " dB", sizeof b - str_len(b));
-    cv_text(10, 86, &AF_S, mc.ratio ? b : "OFF: RATIO TURNS IT ON", mc.ratio ? T_TEXT : T_DIM);
-    cv_text(10, 104, &AF_S, mc.src ? "THE KEY'S OWN SOUND IS NOT DUCKED" : "", T_MID);
-}
 static void draw_fx(int32_t y0)
 {
-    char b[24];
-    uint32_t i;
-    int rev = fx_page() == FXPG_REV;
     (void)y0;
-    if (fx_page() >= FXPG_COMP) {
-        draw_comp();
-        return;
+    vz_h = 122;
+    switch (fx_page()) {                             /* 30: each page's picture (ui_viz.c) */
+    case FXPG_REV: viz_reverb(); break;
+    case FXPG_BUS: case FXPG_PARS: viz_fxbus(); break;
+    case FXPG_DUB: viz_echoes(1, 0); break;
+    case FXPG_SEND: viz_echoes(0, 1); break;
+    case FXPG_DIRT: viz_dirt(); break;
+    case FXPG_COMP: viz_mcomp(0); break;
+    case FXPG_COMP2: viz_mcomp(1); break;
+    default: draw_mixer(y0); break;                  /* (31: the sends, as the mixer shows them) */
     }
-    cv_text(10, 6, &AF_S, rev ? "MODEL" : "TYPE", T_MID);
-    cv_text(10, 20, &AF_M, rev ? L_REVMODEL[rv.type % NREV] : L_FX[fx.type < NFX ? fx.type : 0], T_THEME);
-    if (!rev && fx.type == FX_DRIVE)
-        cv_text(120, 22, &AF_S, L_DIST[fx.dist_type % 3u], T_TEXT);
-    else if (!rev && fx.type == FX_DELAY)
-        cv_text(120, 22, &AF_S, L_DELAY[fx.delay_type < NDELAY ? fx.delay_type : 0], T_TEXT);
-    else if (!rev && fx.type == FX_COMP)
-        cv_text(120, 22, &AF_S, L_RATIO[fx.ratio % 6u], T_TEXT);
-    cv_text(10, 50, &AF_S, rev ? "REVERB SENDS" : "FX SENDS", T_MID);
-    for (i = 0; i < NVOICE; i++) {                  /* each voice's send: lit when it sends, the amount */
-        uint32_t a = par[(rev ? PAR_REV_SEND1 : PAR_FX_SEND1) + i];
-        int on = a != 0u;
-        int32_t x = 10 + (int32_t)i * 36;
-        cv_rrect(x, 66, 32, 18, 3, on ? TRACK_COL[i] : T_SURF, T_BG);
-        text_c(x, 66 + CAP_IN(S, 18), 32, &AF_S, i == 5u ? "HH" : VOICE_SHORT[i], on ? RGB(12, 12, 12) : T_DIM,
-               on ? TRACK_COL[i] : T_SURF);
-        put_int(b, (int32_t)a);
-        text_c(x, 86, 32, &AF_S, b, on ? T_TEXT : T_DIM, T_BG);
-    }
-    if (rev) {
-        put_str(b, "LEVEL ", sizeof b);
-        put_int(b + 6, (int32_t)par[PAR_REV_LEVEL]);
-    } else {
-        put_str(b, "DRY/WET ", sizeof b);
-        put_int(b + 8, (int32_t)par[PAR_FX_DRY_WET]);
-        put_str(b + str_len(b), "%", sizeof b - str_len(b));
-    }
-    cv_text(10, 104, &AF_S, b, T_TEXT);
-    cv_text_r(234, 104, &AF_S, "SENDS: GLO > MIXER", T_MID, T_BG);
 }
 
 /* the audio ISR's load (audio.c): the average, the peak since CONFIG opened, the halves it was late for. A bar
@@ -945,7 +938,7 @@ static void draw_links(int32_t y0)
         cv_text(8, 30, &AF_M, b, T_TEXT);
         cv_text(8, 56, &AF_S, "KNOB 2 (Start): a starting point,", T_TEXT);
         cv_text(8, 71, &AF_S, "or set one up on LINK SETUP.", T_TEXT);
-        cv_text(8, 94, &AF_S, "SHIFT + SEQ opens this page.", T_MID);
+        cv_text(8, 94, &AF_S, "SHIFT (OCT-) + SEQ opens this page.", T_MID);
         return;
     }
     if (e > LE_DUCK && e != LE_TRIG)
@@ -1026,12 +1019,17 @@ static void draw_load(void)
     }
 }
 
+static void draw_about(void);
 static void draw_config_help(int32_t y0)
 {
     (void)y0;
     if (ui.page % NCONFIG == CF_LOAD) {
         draw_load();
         draw_cpu(104);
+        return;
+    }
+    if (ui.page % NCONFIG == CF_ABOUT) {
+        draw_about();
         return;
     }
     switch (ui.page % NCONFIG) {
@@ -1076,20 +1074,21 @@ static void draw_config_help(int32_t y0)
             cv_text(10, 76, &AF_S, "Values go back to it over USB.", T_MID);
         break;
     }
-    case 8:                                          /* 0.12: Control All with morph */
-        cv_text(10, 8, &AF_S, "OCT+ held on a sound page, a knob:", T_TEXT);
-        cv_text(10, 22, &AF_S, "the parameter on every track.", T_TEXT);
-        cv_text(10, 40, &AF_S, "BOTH KITS: with morph on, the morph", T_TEXT);
-        cv_text(10, 54, &AF_S, "target moves too: heard at any morph", T_TEXT);
+    case 8:                                          /* 0.12: Control All with morph; 31: and the edits */
+        cv_text(10, 8, &AF_S, "With morph on, a knob's edit (EDITS)", T_TEXT);
+        cv_text(10, 22, &AF_S, "or Control All's (CTRL ALL, OCT+ held)", T_TEXT);
+        cv_text(10, 40, &AF_S, "BOTH KITS: the morph target moves", T_TEXT);
+        cv_text(10, 54, &AF_S, "too: heard at any morph amount", T_TEXT);
         cv_text(10, 72, &AF_S, "KIT ONLY: the kit alone (full morph:", T_TEXT);
         cv_text(10, 86, &AF_S, "nothing heard, as the LXR's knobs)", T_TEXT);
         break;
-    case 9:                                          /* 0.13: page memory */
+    case 9:                                          /* 0.13: page memory; 0.19: the kit list's order */
         cv_text(10, 8, &AF_S, "LAST PAGE: a button opens the page", T_TEXT);
-        cv_text(10, 22, &AF_S, "it showed when you left it (SEQ, FX,", T_TEXT);
-        cv_text(10, 36, &AF_S, "ARP, GLO, the sound buttons).", T_TEXT);
-        cv_text(10, 54, &AF_S, "Pressed again, it moves on as always.", T_TEXT);
-        cv_text(10, 72, &AF_S, "NO: the first page, every time.", T_MID);
+        cv_text(10, 22, &AF_S, "it showed when you left it (NO: its", T_TEXT);
+        cv_text(10, 36, &AF_S, "first). Pressed again, it moves on.", T_TEXT);
+        cv_text(10, 54, &AF_S, "KITS FIRST: PRESETS' kit list starts", T_TEXT);
+        cv_text(10, 68, &AF_S, "with the FACTORY kits, then LIBRARY,", T_TEXT);
+        cv_text(10, 82, &AF_S, "SLOTS; or with the SLOTS, FACTORY last.", T_TEXT);
         break;
     default:
         cv_text(10, 8, &AF_S, "LEDS: OFF / LOW / HIGH glow", T_TEXT);
@@ -1097,63 +1096,71 @@ static void draw_config_help(int32_t y0)
         cv_text(10, 36, &AF_S, "ACCEL: fast turns move faster", T_TEXT);
         break;
     }
-    draw_cpu(104);
 }
 
-/* the sound page's body: the section's parameters (the knobs' half lit), then the track's steps */
+/* the sound page's body: 30: the section's picture (ui_viz.c); below it, in its own region (SOUND_STRIP), the track's
+ * steps in the shown bar, so the playhead redraws only them */
+#define SOUND_VIZ_H 108
 static void draw_sound(int32_t y0)
 {
-    uint32_t k, h;
-    const pattern_t *pt = shown_pat();
     (void)y0;
-    for (h = 0; h < 2u; h++)
-        for (k = 0; k < 4u; k++) {
-            uint32_t p = sect_par(ui.track, ui.sect, h, k);
-            int32_t x = 6 + (int32_t)(k % 2u) * 117, y = 6 + (int32_t)h * 46 + (int32_t)(k / 2u) * 20;
-            char v[24];
-            int act = h == ui.half;
-            if (!p)
-                continue;
-            if (act)
-                cv_rrect(x - 2, y - 1, 114, 19, 3, T_SURF, T_BG);
-            cv_text_fit(x + 2, y + CAP_IN(S, 17), &AF_S, par_name(p), act ? T_MID : T_DIM, act ? T_SURF : T_BG, 60);
-            par_format(v, p, vp_get(p), sizeof v);
-            cv_text_fit(x + 64, y + CAP_IN(S, 17), &AF_S, v, act ? T_TEXT : T_DIM, act ? T_SURF : T_BG, 46);
-        }
-    if (ui.sect == S_MODEL && track_voice(ui.track) <= 2u && mdl[track_voice(ui.track)].want &&
-        !mdl[track_voice(ui.track)].type)           /* 0.15: over the models' limit (rings.c model_limit) */
-        cv_text(6, 88, &AF_S, model_cap == 1u ? "1 MODEL ON ONE CORE: PLAYS AS LXR" : "OVER 2 MODELS: PLAYS AS LXR",
-                T_REC);
-    if (ui.copy) {                                   /* 0.11: Control All: what OCT- and letting go do */
-        cv_text(6, 106, &AF_S, ui.ca ? "LET GO: KEEP OR REVERT" : "KNOB: ALL TRACKS   TRACK KEY: COPY", T_ACCENT);
+    draw_sound_viz();
+}
+static void draw_sound_strip(void)
+{
+    uint32_t k, s = sig_add(ui.track, ui.bar | ui.copy << 2 | ui.ca << 3 | ui.mode << 4);
+    const pattern_t *pt = shown_pat();
+    for (k = 0; k < 4u; k++)
+        s = sig_add(s, pt->main[ui.track][k]);
+    s = sig_add(s, sq.running ? (uint32_t)(uint8_t)sq.idx[ui.track] : 0xFFFFu);
+    if (!region(R_STRIP, s))
         return;
+    cv_begin(240, BODY_H - SOUND_VIZ_H, T_BG);
+    if (ui.copy) {                                   /* 0.11: Control All: what OCT- and letting go do */
+        cv_text(6, 4, &AF_S, ui.ca ? "LET GO: KEEP OR REVERT" : "KNOB: ALL TRACKS   TRACK KEY: COPY", T_ACCENT);
+    } else {
+        for (k = 0; k < 16u; k++) {                  /* the track's steps in the shown bar */
+            uint32_t st = ui.bar * 16u + k;
+            int32_t x = 6 + (int32_t)k * 14;
+            int on = main_on(pt, ui.track, st), play = sq.running && sq.idx[ui.track] == (int8_t)st;
+            uint16_t c = on ? TRACK_COL[ui.track] : (k & 3u) == 0u ? T_RAISE : T_SURF;
+            cv_rrect(x, 2, 12, 12, 2, c, T_BG);
+            if (play)
+                cv_rect(x, 16, 12, 2, T_ACCENT);
+        }
     }
-    for (k = 0; k < 16u; k++) {                      /* the track's steps in the shown bar */
-        uint32_t s = ui.bar * 16u + k;
-        int32_t x = 6 + (int32_t)k * 14;
-        int on = main_on(pt, ui.track, s), play = sq.running && sq.idx[ui.track] == (int8_t)s;
-        uint16_t c = on ? TRACK_COL[ui.track] : (k & 3u) == 0u ? T_RAISE : T_SURF;
-        cv_rrect(x, 104, 12, 16, 2, c, T_BG);
-        if (play)
-            cv_rect(x, 122, 12, 3, T_ACCENT);
-    }
+    cv_blit(0, BODY_Y + SOUND_VIZ_H);
 }
 static uint32_t sound_sig(void)
 {
-    uint32_t k, h, s = sig_add(ui.track, ui.sect | ui.half << 4 | ui.bar << 6 | ui.copy << 8 | ui.ca << 9 |
+    uint32_t k, h, s = sig_add(ui.track, ui.sect | ui.half << 4 | ui.bar << 6 |
                                          (uint32_t)mdl[0].type << 10 | (uint32_t)mdl[1].type << 16 |
                                          (uint32_t)mdl[2].type << 22);
-    s = sig_add(s, (uint32_t)mi[track_voice(ui.track)].type);   /* (24: MICRO's knobs) */
-    const pattern_t *pt = shown_pat();
+    uint32_t v = track_voice(ui.track);
+    s = sig_add(s, (uint32_t)mi[v].type);            /* (24: MICRO's knobs) */
     for (h = 0; h < 2u; h++)
         for (k = 0; k < 4u; k++) {
             uint32_t p = sect_par(ui.track, ui.sect, h, k);
             if (p)
                 s = sig_add(s, vp_get(p));
         }
-    for (k = 0; k < 4u; k++)
-        s = sig_add(s, pt->main[ui.track][k]);
-    return sig_add(s, sq.running ? (uint32_t)(uint8_t)sq.idx[ui.track] : 0xFFFFu);
+    if (ui.sect == S_LFO || ui.sect == S_LFOM || ui.sect == S_LFO2) {   /* (30: the LFO's other pages, its hits) */
+        const pattern_t *pt = shown_pat();
+        for (k = 0; k < NTRACK; k++)
+            s = sig_add(s, pt->main[k][ui.bar]);
+        s = sig_add(s, sv(S_LFOM, 0, 0) | sv(S_LFO, 1, 1) << 4 | sv(S_LFO, 1, 2) << 8 | sv(S_LFO, 1, 3) << 12);
+        s = sig_add(s, seq_bpm());
+    }
+    if (ui.sect == S_SHAPE || ui.sect == S_AEG || ui.sect == S_GATE || ui.sect == S_MOD || ui.sect == S_FM)
+        for (h = 0; h < 2u; h++)                     /* (30: the pages drawn from another section's knobs) */
+            for (k = 0; k < 4u; k++)
+                s = sig_add(s, sv(S_SHAPE, h, k) | sv(S_AEG, h, k) << 8 | sv(S_MOD, h, k) << 16 | sv(S_OSC, h, k) << 24);
+    if (ui.sect == S_XMOD)
+        for (k = 0; k < NVOICE; k++)
+            s = sig_add(s, par[PAR_CHOKE1 + k]);
+    s = sig_add(s, par[PAR_GATE1 + v] | (uint32_t)mdl[v < 3u ? v : 0u].want << 8 | model_cap << 9);
+    s = sig_add(s, sv(S_MODEL, 0, 0) | (v < 3u ? vp_get(PAR_MEXC1 + v) : 0u) << 8);   /* (30: a model's pages) */
+    return s;
 }
 
 static void draw_body(void)
@@ -1163,13 +1170,16 @@ static void draw_body(void)
     if (ui.ca_ask) {                                 /* 0.11: Control All's dialog */
         fn = draw_ca_ask;
         s = 41;
-    } else if (perf_mix() && !ui.shift && !ui.clear_open && !ui.kb_open) {   /* 0.8: PERF's MIX: the faders */
-        uint32_t v;
-        fn = draw_mixer;
-        s = 13;
-        for (v = 0; v < NVOICE; v++)
-            s = sig_add(s, par[PAR_VOL1 + v] | (uint32_t)(voice_peak[v] >> 10) << 8 |
-                               (uint32_t)par[v < 3u ? PAR_PAN1 + v : PAR_PAN4 + v - 3u] << 16);
+    } else if (perf_spells() && !ui.clear_open && !ui.kb_open && !(ui.shift && ui.shift_used)) {   /* (32) */
+        fn = draw_spells;
+        s = spells_sig();
+    } else if (perf_links() && !ui.shift && !ui.clear_open && !ui.kb_open) {   /* (29: PERF's GLOBAL MOD) */
+        uint32_t l;
+        const pattern_t *pt = shown_pat();
+        fn = draw_links;
+        s = sig_add(12, ui.link | (uint32_t)pt->cdepth << 8);
+        for (l = 0; l < NLINK; l++)
+            s = sig_add(s, (uint32_t)pt->link[l][0] | (uint32_t)pt->link[l][1] << 8 | (uint32_t)pt->link[l][2] << 16);
     } else if ((ui.mode == M_PERF || (ui.perf && ui.shift)) && !ui.clear_open && !ui.kb_open) {   /* (SHIFT: latches) */
         fn = draw_perf;
         s = sig_add(sig_add(11, pf.on), ui.pf_latch | (uint32_t)perf_bank2() << 31);
@@ -1180,8 +1190,9 @@ static void draw_body(void)
             s = sig_add(sig_add(s, (uint32_t)gl.out[0] >> 11 | (uint32_t)gl.out[1] >> 11 << 8 |
                                        (uint32_t)gl.out[2] >> 11 << 16 | ui.page << 24),
                         (uint32_t)gls[0].dest | (uint32_t)gls[1].dest << 8 | (uint32_t)gls[2].dest << 16);
-        if (perf_dens())                             /* (19d: the tracks left out, DENSITY in use) */
-            s = sig_add(s, pfs.dex | (uint32_t)(uint8_t)sq.dens << 8 | 1u << 16);
+        if (perf_dens())                             /* (19d: the tracks left out, DENSITY in use; 31: COMMIT) */
+            s = sig_add(s, pfs.dex | (uint32_t)(uint8_t)sq.dens << 8 | 1u << 16 | (uint32_t)(pfs.dens != 0) << 17 |
+                               (uint32_t)dundo << 18);
         if (perf_stut())                             /* (0.16: STUTTER: a burst, its repeat, held) */
             s = sig_add(s, pf.st_on | pf.st_rep << 2 | (uint32_t)pf.st_hold << 12 | 2u << 16);
     } else if (ui.shift && !ui.clear_open) {
@@ -1195,7 +1206,7 @@ static void draw_body(void)
         s = sig_add(40, ui.sb_sel | ui.track << 16);
     } else if (ui.kb_open) {
         fn = draw_kit_browser;
-        s = sig_add(3, ui.kb_sel | kit_loaded << 8 | (uint32_t)ui.kb_lib << 16);
+        s = sig_add(3, ui.kb_sel | kit_loaded << 9 | kset.kbslots << 15);
     } else {
         switch (ui.mode) {
         case M_PATTERN:
@@ -1204,7 +1215,8 @@ static void draw_body(void)
             break;
         case M_SONG:
             fn = draw_song;
-            s = sig_add(5, ui.song_row | sq.song << 8 | (sq.song_mode && sq.running ? sq.song_pos : 0xFFu) << 16);
+            s = sig_add(5, ui.song_row | sq.song << 8 | (sq.song_mode && sq.running ? sq.song_pos : 0xFFu) << 16 |
+                                 (uint32_t)sq.song_n << 24);
             {
                 uint32_t i;
                 for (i = 0; i < MAX_SONG_LENGTH; i++)
@@ -1236,8 +1248,18 @@ static void draw_body(void)
             uint32_t v;
             fn = draw_fx;
             s = sig_add(8, fx.type | fx.dist_type << 4 | fx.delay_type << 8 | fx.ratio << 12 | par[PAR_FX_DRY_WET] << 16);
-            s = sig_add(s, fx_page() | rv.type << 4 | (uint32_t)par[PAR_REV_LEVEL] << 8);
-            if (fx_page() >= FXPG_COMP)              /* (0.16: the compressor's gain reduction, a quarter dB) */
+            s = sig_add(s, fx_page() | rv.type << 4 | (uint32_t)par[PAR_REV_LEVEL] << 8 | fx.d_sync << 16);
+            s = sig_add(s, (uint32_t)par[PAR_FX_P1] | (uint32_t)par[PAR_FX_P2] << 8 | (uint32_t)par[PAR_FX_P3] << 16 |
+                               (uint32_t)par[PAR_FX_P4] << 24);   /* (30: the pictures' settings) */
+            s = sig_add(s, (uint32_t)par[PAR_REV_SIZE] | (uint32_t)par[PAR_REV_DAMP] << 8 | (uint32_t)par[PAR_REV_TYPE] << 16 |
+                               (uint32_t)par[PAR_ECHOREV] << 24);
+            s = sig_add(s, (uint32_t)par[PAR_GLITCH] | (uint32_t)par[PAR_DPITCH] << 8 | (uint32_t)par[PAR_FXDIRT] << 16 |
+                               (uint32_t)par[PAR_MDIRT_AMT] << 24);
+            s = sig_add(s, (uint32_t)par[PAR_MDIRT] | (uint32_t)par[PAR_MC_THR] << 8 | (uint32_t)par[PAR_MC_GAIN] << 16 |
+                               (uint32_t)par[PAR_FX_TYPE] << 24);
+            if (fx_page() == FXPG_COMP2 && mc.src && mc.src <= NVOICE)
+                s = sig_add(s, shown_pat()->main[mc.src - 1u][ui.bar & 3u] | ui.bar << 16);
+            if (fx_page() == FXPG_COMP || fx_page() == FXPG_COMP2)   /* (0.16: the compressor's gain reduction) */
                 s = sig_add(s, (uint32_t)(mc.gr >> 12) | mc.ratio << 16 | mc.src << 20);
             for (v = 0; v < NVOICE; v++)
                 s = sig_add(s, par[PAR_FX_SEND1 + v] | (uint32_t)par[PAR_REV_SEND1 + v] << 8);
@@ -1252,7 +1274,7 @@ static void draw_body(void)
             fn = draw_config_help;
             s = sig_add(9, ui.page | (uint32_t)remote_ch << 8 | (uint32_t)remote_gch << 16);
             s = sig_add(s, cpu_pct() | cpu_peak_pct() << 8 | audio_late << 16 | (uint32_t)batt_level() << 28);
-            if (ui.page % NCONFIG == CF_LOAD) {
+            if (ui.page % NCONFIG == CF_LOAD || ui.page % NCONFIG == CF_ABOUT) {
                 uint32_t i;
                 for (i = 0; i < NLD; i++)
                     s = sig_add(s, ld_q8[i] | (uint32_t)ld_pk[i] << 16);
@@ -1265,14 +1287,9 @@ static void draw_body(void)
             s = sig_add(10, sound_sig());
             break;
         case M_EUCLID:
-            if (ui.page % NEUCLID >= PG_LINKS) {
-                uint32_t l;
-                const pattern_t *pt = shown_pat();
-                fn = draw_links;
-                s = sig_add(12, ui.link | (uint32_t)pt->cdepth << 8);
-                for (l = 0; l < NLINK; l++)
-                    s = sig_add(s, (uint32_t)pt->link[l][0] | (uint32_t)pt->link[l][1] << 8 |
-                                       (uint32_t)pt->link[l][2] << 16);
+            if (track_viz_page()) {                  /* (30: GROOVE, BOUNCE, MELODY, SCALE: their pictures) */
+                fn = draw_track_viz;
+                s = sig_add(15, track_viz_sig());
                 break;
             }
             draw_grid();
@@ -1285,6 +1302,14 @@ static void draw_body(void)
     if (body_is_grid) {                              /* (the grid was there: this body all over) */
         body_is_grid = 0;
         rsig[R_BODY] = 0;
+    }
+    if (fn == draw_sound) {                          /* (30: the picture, then the steps' strip under it) */
+        if (region(R_BODY, s)) {
+            body_strips_h(fn, SOUND_VIZ_H);
+            rsig[R_STRIP] = 0;
+        }
+        draw_sound_strip();
+        return;
     }
     if (!region(R_BODY, s))
         return;
@@ -1310,6 +1335,7 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_NAME_CASE: put_str(b, "Case", n); return;
     case VP_SONG_PAT: put_str(b, "Pattern", n); return;
     case VP_SONG_NUM: put_str(b, "Song", n); return;
+    case VP_SONG_REP: put_str(b, "Repeats", n); return;
     case VP_LEDS: put_str(b, "Leds", n); return;
     case VP_AUTOSAVE: put_str(b, "Autosave", n); return;
     case VP_PKEEP: put_str(b, "Edits", n); return;
@@ -1318,14 +1344,18 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_RCH: put_str(b, "Tracks", n); return;
     case VP_RCH2: put_str(b, "Global", n); return;
     case VP_RKNOBS: put_str(b, "Knobs", n); return;
-    case VP_CAKIT: put_str(b, "Morph", n); return;
+    case VP_CAKIT: put_str(b, "Ctrl all", n); return;
+    case VP_MEDIT: put_str(b, "Edits", n); return;
     case VP_PMEM: put_str(b, "Last page", n); return;
+    case VP_KBSLOTS: put_str(b, "Kits first", n); return;
     case VP_EH2: put_str(b, "Hits 2", n); return;
     case VP_ER2: put_str(b, "Rotate 2", n); return;
     case VP_EOP: put_str(b, "Join", n); return;
     case VP_DENS: put_str(b, "Density", n); return;
+    case VP_SP ... VP_SP_LAST: sp_card_name(b, n, p - VP_SP); return;
     case VP_GHOST: put_str(b, "Ghost vel", n); return;
     case VP_BUILD: put_str(b, "Build", n); return;
+    case VP_DVARY: put_str(b, "Vary", n); return;
     case VP_STCH: put_str(b, "Chance", n); return;
     case VP_STSIZE: put_str(b, "Size", n); return;
     case VP_STLEN: put_str(b, "Length", n); return;
@@ -1454,7 +1484,7 @@ static void card_name(char *b, uint32_t n, uint32_t p)
                 n - 4);
         return;
     }
-    if ((ui.mode == M_MIXER || perf_mix()) && ((p >= PAR_VOL1 && p <= PAR_VOL6) || (p >= PAR_PAN1 && p <= PAR_PAN3) ||
+    if (ui.mode == M_MIXER && ((p >= PAR_VOL1 && p <= PAR_VOL6) || (p >= PAR_PAN1 && p <= PAR_PAN3) ||
                                (p >= PAR_PAN4 && p <= PAR_PAN6))) {
         uint32_t v = p >= PAR_VOL1 && p <= PAR_VOL6 ? p - PAR_VOL1 : p <= PAR_PAN3 ? p - PAR_PAN1 : p - PAR_PAN4 + 3u;
         put_str(b, v == 5u ? "HH" : VOICE_SHORT[v], n);
@@ -1471,10 +1501,6 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     }
     put_str(b, par_name(p), n);
 }
-/* 19a: the scales' names (seq.c SC_*) */
-static const char *const SCALE_NAME[NSCALE] = {"CHROM", "MAJOR", "MINOR", "DORIAN", "PHRYG", "MIXOLYD",
-                                               "LYDIAN", "H MINOR", "MIN PNT", "MAJ PNT", "BLUES", "MINOR 7",
-                                               "FIFTHS", "PHR DOM", "HIRAJO", "PELOG", "WHOLE T"};   /* (52 px at most) */
 /* a trig condition's name */
 static void cond_name(char *b, uint32_t c, uint32_t n)
 {
@@ -1509,6 +1535,147 @@ static void put_ms(char *b, uint32_t ms10)           /* a time: 0.9 ms, 12 ms, 1
         put_str(e + 2, " s", 3);
     }
 }
+/* 30: a frequency, hundredths of a Hz: 0.25 Hz, 12.5 Hz, 850 Hz, 1.2 kHz, 12 kHz */
+static void put_hz(char *b, uint32_t n, uint32_t hz100)
+{
+    char *e;
+    if (hz100 < 1000u) {
+        e = put_int(b, (int32_t)(hz100 / 100u));
+        *e++ = '.';
+        two_digits(e, hz100 % 100u);
+        e += 2;
+    } else if (hz100 < 10000u) {
+        e = put_int(b, (int32_t)(hz100 / 100u));
+        *e++ = '.';
+        e = put_int(e, (int32_t)(hz100 / 10u % 10u));
+    } else if (hz100 < 100000u) {
+        e = put_int(b, (int32_t)(hz100 / 100u));
+    } else {
+        e = put_int(b, (int32_t)(hz100 / 100000u));
+        if (hz100 < 1000000u) {
+            *e++ = '.';
+            e = put_int(e, (int32_t)(hz100 / 10000u % 10u));
+        }
+        put_str(e, " kHz", n - (uint32_t)(e - b));
+        return;
+    }
+    put_str(e, " Hz", n - (uint32_t)(e - b));
+}
+/* an envelope's time (the blocks from 0 to 1 at its step, Q24) as ms */
+static void put_eg_time(char *b, uint32_t n, uint32_t step)
+{
+    uint32_t blocks = step ? (1u << 24) / step : 0u;
+    if (!step || blocks > 600000u)
+        put_str(b, "HOLD", n);
+    else
+        put_ms(b, blocks * (BLOCK * 100u) / 441u);   /* (ms x 10: blocks x BLOCK x 10000 / FS) */
+}
+/* a ratio, hundredths: x0.25 */
+static void put_x(char *b, uint32_t r100)
+{
+    char *e;
+    b[0] = 'x';
+    e = put_int(b + 1, (int32_t)(r100 / 100u));
+    *e++ = '.';
+    two_digits(e, r100 % 100u);
+}
+/* 30: a knob in its own units where they say more than 0..127 (the filter in Hz, times in ms ..); 0: not one */
+static int card_unit(char *b, uint32_t n, uint32_t p, uint32_t v)
+{
+    uint32_t f = (v & 127u) * 65536u / 127u;
+    if (p >= PAR_FILTER_FREQ_1 && p <= PAR_FILTER_FREQ_6) {
+        put_hz(b, n, (uint32_t)(((uint64_t)(uint32_t)lut1024(FILT_F, f) * (FS * 100u)) >> 16));
+        return 1;
+    }
+    if (p >= PAR_RESO_1 && p <= PAR_RESO_6) {        /* (the SVF's damping R, sound.c: Q = 1 / 2R) */
+        uint32_t r = 65536u - f, q10;
+        char *e;
+        r = r < 6554u ? 1311u : r;
+        q10 = 327680u / r;
+        b[0] = 'Q';
+        b[1] = ' ';
+        e = put_int(b + 2, (int32_t)(q10 / 10u));
+        if (q10 < 100u) {
+            *e++ = '.';
+            put_int(e, (int32_t)(q10 % 10u));
+        }
+        return 1;
+    }
+    if (p >= PAR_VELOA1 && p <= PAR_VELOD6_OPEN) {   /* (the attacks EG_ATK, the decays EG_DEC) */
+        uint32_t k = p - PAR_VELOA1;
+        put_eg_time(b, n, (k & 1u) || k >= 11u ? EG_DEC[v & 127u] : EG_ATK[v & 127u]);
+        return 1;
+    }
+    if (p >= PAR_MOD_EG1 && p <= PAR_MOD_EG4) {
+        put_eg_time(b, n, EG_ATK[v & 127u]);
+        return 1;
+    }
+    if ((p >= PAR_FREQ_LFO1 && p <= PAR_FREQ_LFO6) || (p >= PAR_L2RATE1 && p < PAR_L2RATE1 + 6u)) {
+        uint32_t sy = p >= PAR_L2RATE1 ? par[PAR_L2SYNC1 + p - PAR_L2RATE1] : par[PAR_SYNC_LFO1 + p - PAR_FREQ_LFO1];
+        uint64_t x = 512u + (((uint64_t)f * 65024u) >> 16);   /* (lfo.c: (1/128 + v (1 - 1/128))^3 x 200 Hz) */
+        if (sy && sy <= 11u)
+            put_str(b, "SYNC", n);
+        else
+            put_hz(b, n, (uint32_t)((((x * x) >> 16) * x * 20000u) >> 32));
+        return 1;
+    }
+    if (p >= PAR_VOICE_DECIMATION1 && p <= PAR_VOICE_DECIMATION_ALL) {
+        put_hz(b, n, (uint32_t)(((uint64_t)lut1024u(DECIM, f) * (FS * 100u)) >> 16));
+        return 1;
+    }
+    if (p == PAR_NOISE_FREQ1) {                      /* (the snare's noise: v x 22 kHz) */
+        put_hz(b, n, (v & 127u) * 2200000u / 127u);
+        return 1;
+    }
+    if (p >= PAR_TRANS1_FREQ && p <= PAR_TRANS6_FREQ) {   /* (the sample's speed: x0.25 .. x4) */
+        put_x(b, ((262144u + (((v & 127u) << 20) * 10u) / 339u) * 25u) >> 18);
+        return 1;
+    }
+    if (p >= PAR_INSB1 && p < PAR_INSB1 + 6u && ins[p - PAR_INSB1].type >= INS_PHASER &&
+        ins[p - PAR_INSB1].type <= INS_AUTOPAN) {    /* (the insert's LFO, voices.c ins_inc: 0.05 Hz x 2^(8 v)) */
+        put_hz(b, n, (uint32_t)((5u * (uint32_t)exp2_q16((int32_t)((v & 127u) * 8u * 65536u / 127u))) >> 16));
+        return 1;
+    }
+    if (p >= PAR_FX_P1 && p <= PAR_FX_P4) {          /* (fxbus_update: by the bus's type) */
+        uint32_t k = p - PAR_FX_P1;
+        switch (fx.type) {
+        case FX_RING:
+            if (k)
+                return 0;
+            put_hz(b, n, f * 88000u >> 16);
+            return 1;
+        case FX_COMP:
+            if (k == 0u)
+                put_ms(b, 3u + f * 1000u / 65536u);
+            else if (k == 1u)
+                put_ms(b, 250u + f * 1750u / 65536u);
+            else if (k == 2u)
+                put_str(put_int(b, -96 + (int32_t)(f * 96u / 65536u)), " dB", 4);
+            else
+                put_x(b, 100u + f * 200u / 65536u);
+            return 1;
+        case FX_DELAY:
+            if (k || fx.d_sync)
+                return 0;
+            if (is_tape()) {                         /* (tape_target, at half rate) */
+                uint32_t mx = tape_max() << 16;
+                uint32_t d = TP_MIN + (uint32_t)(((((uint64_t)f * f) >> 16) * (mx - TP_MIN)) >> 16);
+                put_ms(b, (d >> 15) * 100u / 441u);
+            } else {
+                put_ms(b, (delay_samples(f) >> 16) * 100u / 441u);
+            }
+            return 1;
+        case FX_PHASER: case FX_FLANGER:
+            if (k)
+                return 0;
+            put_hz(b, n, (uint32_t)(((uint64_t)3277u * (uint32_t)exp2_q16((int32_t)((f * 7643u) >> 10)) * 100u) >> 32));
+            return 1;
+        default: return 0;
+        }
+    }
+    return 0;
+}
+
 static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
 {
     switch (p) {                                     /* (0.16: the master compressor) */
@@ -1541,6 +1708,8 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
         }
         return;
     }
+    if (card_unit(b, n, p, v))
+        return;
     switch (p) {
     case VP_NONE: b[0] = 0; return;
     case VP_IO_TYPE: put_str(b, IO_NAME[v % NIO], n); return;
@@ -1561,13 +1730,21 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
         else { b[0] = 'P'; two_digits(b + 1, v + 1u); }
         return;
     case VP_SONG_NUM: two_digits(b, v + 1u); return;
+    case VP_SONG_REP:                                /* (0.19: END and LOOP play no times) */
+        if (song_row(songs[sq.song][ui.song_row & 63u]) >= NUM_PATTERN) {
+            put_str(b, "-", n);
+        } else {
+            b[0] = 'x';
+            put_int(b + 1, SONG_REPS[v % NSONGREP]);
+        }
+        return;
     case VP_LEDS: put_str(b, v == 0u ? "OFF" : v == 1u ? "LOW" : "HIGH", n); return;
     case VP_AUTOSAVE: case VP_ACCEL: put_str(b, v ? "ON" : "OFF", n); return;
     case VP_PKEEP: put_str(b, v ? "KEEP" : "DROP", n); return;
     case VP_PALETTE: put_str(b, UI_PALETTES[v % NPALETTES].name, n); return;
     case VP_RCH: case VP_RCH2: if (v) put_int(b, (int32_t)v); else put_str(b, "OFF", n); return;
     case VP_RKNOBS: put_str(b, v == RK_ABS ? "ABS" : v == RK_REL ? "REL" : "PICKUP", n); return;
-    case VP_CAKIT: put_str(b, v ? "KIT ONLY" : "BOTH KITS", n); return;
+    case VP_CAKIT: case VP_MEDIT: put_str(b, v ? "KIT ONLY" : "BOTH KITS", n); return;
     case VP_PMEM: put_str(b, v ? "YES" : "NO", n); return;
     case VP_GL ... VP_GL_LAST:
         switch ((p - VP_GL) % NGLSET) {
@@ -1617,6 +1794,8 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
         return;
     }
     case VP_GHOST: put_int(b, (int32_t)v); return;
+    case VP_SP ... VP_SP_LAST: sp_card_value(b, n, p - VP_SP, v); return;
+    case VP_DVARY: if (v) put_int(b, (int32_t)v); else put_str(b, "OFF", n); return;
     case VP_STCH: put_str(put_int(b, (int32_t)(v * 100u / 127u)), "%", 2); return;
     case VP_STSIZE: {
         static const char *const Z[NSTSIZE] = {"1/8", "1/16", "1/16T", "1/32", "1/32T", "1/64", "RANDOM"};
@@ -1719,7 +1898,12 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
         put_int(b + (v > 3u), (int32_t)v - 3);
         return;
     case VP_KVEL: case VP_KACC: put_int(b, (int32_t)v); return;
-    case VP_KB_SRC: put_str(b, v ? "LIBRARY" : "SLOTS", n); return;
+    case VP_KB_SRC: {
+        static const char *const P[3] = {"SLOTS", "LIBRARY", "FACTORY"};
+        put_str(b, P[kb_part_at(v < 3u ? v : 0u)], n);
+        return;
+    }
+    case VP_KBSLOTS: put_str(b, v ? "SLOTS" : "FACTORY", n); return;
     case VP_P2 + 4: note_name(b, v); return;
     case VP_P2_LAST: {
         static const char *const L[3] = {"1/16", "1/8", "1/4"};
@@ -1858,7 +2042,7 @@ static void draw_card(uint32_t k, uint32_t p)
 {
     char nm[24], v[24];
     uint32_t val, mn, mx, s;
-    int lock = 0, hot = ui.hot == k + 1u;
+    int lock = 0, hot = ui.hot == k + 1u, idle = ui.mode == M_SOUND && p != VP_NONE && par_unheard(ui.track, p);
     uint16_t bg = T_SURF, fg = T_TEXT;
     int32_t x0 = (int32_t)k * 60;
     if (p != VP_NONE && ui.held_step >= 0 && par_lockable(p) && ui.mode != M_STEP) {
@@ -1877,13 +2061,26 @@ static void draw_card(uint32_t k, uint32_t p)
     s = sig_add(s, ui.msel | (uint32_t)pfs.m[p >= VP_M1 && p <= VP_M4 ? p - VP_M1 : ui.msel & 3u].par << 4 |
                        (uint32_t)shown_pat()->gen[ui.track][0] << 20 |
                        (uint32_t)(shown_pat()->rat[ui.track][ui.step & 63u] & RAT_BOUNCE) << 21);
-    s = sig_add(s, ins[track_voice(ui.track)].type);   /* (27a: the insert's knobs are named by its type) */
-    if (!region(R_CARD0 + k, s))
-        return;
+    s = sig_add(s, ins[track_voice(ui.track)].type | (uint32_t)idle << 8);   /* (27a: the insert's knobs are named
+                                                                              * by its type) */
     card_name(nm, sizeof nm, p);
     card_value(v, sizeof v, p, val);
+    {                                                /* (31: and the text itself: a model's knobs have its names, */
+        uint32_t i;                                  /* .. P CHORD's the chord: the old model's stayed on a change) */
+        for (i = 0; nm[i]; i++)
+            s = sig_add(s, (uint8_t)nm[i]);
+        for (i = 0; v[i]; i++)
+            s = sig_add(s, (uint8_t)v[i]);
+    }
+    if (!region(R_CARD0 + k, s))
+        return;
     cv_begin(60, CARD_H, T_BG);
-    if (p != VP_NONE) {
+    if (idle) {                                      /* (0.19: a model's own sound: this knob unheard, locked) */
+        uint16_t f = ux_mix(T_BG, T_SURF, 50);
+        cv_rrect(2, 2, 56, CARD_H - 6, 5, f, T_BG);
+        cv_text_in(2, 8, 56, &AF_S, nm, ux_mix(f, T_MID, 55), f);
+        cv_text_in(2, 26, 56, &AF_M, "--", ux_mix(f, T_MID, 55), f);
+    } else if (p != VP_NONE) {
         if (hot) {
             bg = T_SEL;
             fg = T_INK;
@@ -1920,6 +2117,8 @@ static void draw_cards(void)
 /* -------------------------------------------------------------- frame --- */
 static void ui_draw(void)
 {
+    if (ui.mode == M_SOUND)                          /* (0.19: a page a model's sound hides (a kit loaded): the next) */
+        sound_fix();
     draw_header();
     draw_title();
     draw_body();
@@ -1969,30 +2168,72 @@ static void draw_word(uint32_t x, uint32_t y, uint32_t px, uint16_t c)
     }
 }
 
-static void draw_splash(void)
+/* a potion map character's colour (0: none) */
+static uint16_t potion_col(char m)
 {
     const uint16_t white = RGB(255, 255, 255), black = RGB(0, 0, 0);
+    switch (m) {
+    case 'c': return RGB(150, 96, 52);
+    case 'o': return T_TEXT;
+    case 'g': return ux_mix(T_BG, T_TEXT, 14);
+    case 'h': return white;
+    case 'l': return T_THEME;
+    case 'L': return ux_mix(T_THEME, white, 45);
+    case 'd': return ux_mix(T_THEME, black, 35);
+    case 's': return ux_mix(T_THEME, white, 60);
+    default: return 0;
+    }
+}
+static void draw_splash(void)
+{
     uint32_t r, k;
     lcd_fill(0, 0, 240, 240, T_BG);
     for (r = 0; r < 18u; r++)
         for (k = 0; k < 22u; k++) {
-            uint16_t c;
-            switch (POTION[r][k]) {
-            case 'c': c = RGB(150, 96, 52); break;
-            case 'o': c = T_TEXT; break;
-            case 'g': c = ux_mix(T_BG, T_TEXT, 14); break;
-            case 'h': c = white; break;
-            case 'l': c = T_THEME; break;
-            case 'L': c = ux_mix(T_THEME, white, 45); break;
-            case 'd': c = ux_mix(T_THEME, black, 35); break;
-            case 's': c = ux_mix(T_THEME, white, 60); break;
-            default: continue;
-            }
-            lcd_fill(65u + k * 5u, 10u + r * 5u, 5, 5, c);
+            uint16_t c = potion_col(POTION[r][k]);
+            if (c)
+                lcd_fill(65u + k * 5u, 10u + r * 5u, 5, 5, c);
         }
     draw_word(33, 117, 5, ux_mix(T_THEME, T_BG, 45));           /* (36 columns: 180 px; a shadow, then the word) */
     draw_word(30, 114, 5, T_TEXT);
     draw_text_box(0, 160, 240, &AF_M, "drum machine", T_TEXT, 1);
     draw_text_box(0, 192, 240, &AF_S, "the LXR-02's engine on the FM-1", T_MID, 1);
     draw_text_box(0, 209, 240, &AF_S, "unofficial port, " ELIXIR_VERSION, T_MID, 1);
+}
+/* 29: CONFIG's last page: the potion and the word small, the version, the load of each core (core 0: the audio
+ * ISR less its wait for the second; core 1: D1-D3, which it renders), the CPU line with the battery */
+static void draw_about(void)
+{
+    uint32_t r, k, i;
+    int32_t x = 128;
+    char b[40];
+    for (r = 0; r < 18u; r++)
+        for (k = 0; k < 22u; k++) {
+            uint16_t c = potion_col(POTION[r][k]);
+            if (c)
+                cv_rect(14 + (int32_t)k * 3, 4 + (int32_t)r * 3, 3, 3, c);
+        }
+    for (i = 0; i < 6u; i++) {
+        for (r = 0; r < 7u; r++)
+            for (k = 0; k < WORD_W[i]; k++)
+                if (WORD[i][r] >> (WORD_W[i] - 1u - k) & 1u)
+                    cv_rect(x + (int32_t)k * 3 - 46, 12 + (int32_t)r * 3, 3, 3, T_TEXT);
+        x += (int32_t)(WORD_W[i] + 2u) * 3;
+    }
+    cv_text(82, 40, &AF_S, ELIXIR_VERSION, T_THEME);
+    cv_text(82, 54, &AF_S, "the LXR-02 on the FM-1", T_MID);
+    put_str(b, "CORE 0 ", sizeof b);
+    {
+        uint32_t c = cpu_pct(), w = (ld_q8[LD_WAIT] * 100u + 128u) >> 8;
+        put_int(b + str_len(b), (int32_t)(cores_why == CW_TWO && c > w ? c - w : c));
+    }
+    cat(b, "%   CORE 1 ", sizeof b);
+    if (cores_why == CW_TWO) {
+        put_int(b + str_len(b), (int32_t)((ld_q8[LD_D13] * 100u + 128u) >> 8));
+        cat(b, "%", sizeof b);
+    } else {
+        cat(b, "OFF", sizeof b);
+    }
+    cv_text(10, 82, &AF_S, b, T_TEXT);
+    draw_cpu(104);
 }
