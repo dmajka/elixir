@@ -227,15 +227,24 @@ check((await transport.request(message(0x01, 1, [5]).map((b, i, a) => (i === a.l
 // 9. 0.19: the Hrtl kit packs (build/emu/kits, web/emu/build.sh) into the library's empty slots only
 {
   const packs = KIT_PACKS.map((p) => unpackKitLib(readFileSync(join(root, "build", "emu", "kits", p.file))));
-  check(packs.every((e) => e.length === 16) && packs[0][0].slot === 96 && packs[1][15].slot === 127, "the packs' slots");
-  const before = (await lib.libList(KL_KIT)).length;
-  await lib.libPut(KL_KIT, 99, "MINE", new Uint8Array(247));
+  check(packs.every((e) => e.length === 16), "the packs: 16 kits each");
+  const before = await lib.libList(KL_KIT), used = new Set(before.map((e) => e.slot));
+  let mine = 0;
+  while (used.has(mine)) mine++;
+  mine++;                                          // (a kit of the user's after the first empty slot)
+  while (used.has(mine)) mine++;
+  await lib.libPut(KL_KIT, mine, "MINE", new Uint8Array(247));
+  used.add(mine);
   const r1 = await addPacks(lib, packs[0]), r2 = await addPacks(lib, packs[1]);
-  const lk = await lib.libList(KL_KIT);
-  check(r1.added === 15 && r1.kept === 1 && r2.kept === (before > 1 ? 1 : 0), "packs: the empty slots filled, the others kept");
-  check(lk.find((e) => e.slot === 99).name === "MINE" && lk.find((e) => e.slot === 96).name === packs[0][0].name,
-        "packs: a kit already there stays");
-  check((await addPacks(lib, packs[0])).added === 0, "packs: a second time adds nothing");
+  const lk = await lib.libList(KL_KIT), at = new Map(lk.map((e) => [e.slot, e.name]));
+  const free = [];                                 // (the slots that were empty, from L1)
+  for (let s = 0; s < 128 && free.length < 32; s++) if (!used.has(s)) free.push(s);
+  check(r1.added === 16 && r2.added === 16 && !r1.kept && !r1.full, "packs: all 32 added");
+  check(free.every((s, i) => at.get(s) === (i < 16 ? packs[0][i] : packs[1][i - 16]).name),
+        "packs: into the first empty slots from L1, in order");
+  check(at.get(mine) === "MINE" && before.every((e) => at.get(e.slot) === e.name), "packs: the kits already there stay");
+  const r3 = await addPacks(lib, packs[0]);
+  check(r3.added === 0 && r3.kept === 16, "packs: a second time adds nothing");
   console.log(`  kit packs: ${r1.added} + ${r2.added} kits added, ${lk.length} in the library`);
 }
 

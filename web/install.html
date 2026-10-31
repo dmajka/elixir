@@ -74,10 +74,10 @@
     settings.</p>
   <p>Elixir comes with the LXR-02's 85 factory kits built in (with Erica Synths' permission): turn PRESETS on the
     FM-1 to browse them. It can also put Hrtl's kit packs for the LXR-02 into your kit library once it is installed:</p>
-  <p><label><input type="checkbox" id="pack-hrtl-dlc"> Hrtl DLC kits (16, library 97–112)</label><br>
-    <label><input type="checkbox" id="pack-hrtl-untz"> Hrtl UNTZ kits (16, library 113–128)</label></p>
-  <p class="small">The two packs together fill about a quarter of the kit library's flash, each pack about 12%. A
-    library slot that already holds a kit is left alone, and you can save your own kits over these at any time. You
+  <p><label><input type="checkbox" id="pack-hrtl-dlc"> Hrtl DLC kits (16)</label><br>
+    <label><input type="checkbox" id="pack-hrtl-untz"> Hrtl UNTZ kits (16)</label></p>
+  <p class="small">The two packs together fill about a quarter of the kit library's flash, each pack about 12%. They
+    go into the library's first empty slots (L1 on); a kit already there is left alone, and you can save your own kits over these at any time. You
     can also add them later on the <a href="../library/">library page</a>.</p>
   <p><button id="go" disabled>Install Elixir</button></p>
   <p class="small">If an install is cut off (cable pulled, page closed), the FM-1 stays in update mode. Plug it in
@@ -224,7 +224,8 @@ async function addKitPacks(access) {
     for (const p of L.KIT_PACKS.filter((p) => packs.includes(p.id))) {
       say("packs", p.name);
       const r = await L.addPacks(lib, await L.fetchPack("../try/", p));
-      done.push(`${p.name} (${r.added} added` + (r.kept ? `, ${r.kept} slots kept as they were)` : ")"));
+      done.push(`${p.name} (${r.added} added` + (r.kept ? `, ${r.kept} there already` : "") +
+        (r.full ? `, ${r.full} not added: the library is full` : "") + ")");
     }
     t.close();
     say("packsDone", done.join(", ") + ".");

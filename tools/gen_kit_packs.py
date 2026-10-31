@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Elixir 0.19: the Hrtl kit packs (assets/kits/hrtl-*, distributed with Erica Synths' permission: assets/kits/README.md)
 # as kit library files (.ktlb, web/library.js packKitLib's format), for the install page, the library page and the
-# emulators to put into the kit library's empty slots. Each pack has its own slots at the library's end, out of the way
-# of imports (which start at 1): DLC 97-112, UNTZ 113-128.
+# emulators to put into the kit library's empty slots. web/library.js addPacks puts each kit into the first empty slot
+# from L1; the slots written here only keep the kits' order.
 #
 #   tools/gen_kit_packs.py OUT_DIR      (web/emu/build.sh: build/emu/kits)
 import struct
