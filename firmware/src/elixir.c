@@ -5,7 +5,7 @@
  * or supported by Erica Synths or M-VAVE.
  * One compilation unit (the HAL is header-only); each file uses what the files above it define. */
 #ifndef ELIXIR_VERSION
-#define ELIXIR_VERSION "v0.19"
+#define ELIXIR_VERSION "v0.20"
 #endif
 #define FELUCCA_FLASH 1
 #define FELUCCA_OTA 1

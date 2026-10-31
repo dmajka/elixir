@@ -5521,9 +5521,10 @@ static void phase_t11(void)
     songs[0][1] = 1;
     sq.song = 0;
     goto_mode(B_HOME, M_SONG);
+    ui.page = 0;                                     /* (37: KNOB 4 the repeats, KNOB 3 the pattern) */
     ui.song_row = 0;
-    turn(EN_K3, 1);
-    check(song_reps(0, 0) == 2u && vp_get(VP_SONG_REP) == 1u, "SONG: KNOB 3, the row's repeats (x2)");
+    turn(EN_K4, 1);
+    check(song_reps(0, 0) == 2u && vp_get(VP_SONG_REP) == 1u, "SONG: KNOB 4, the row's repeats (x2)");
     ui.song_row = 1;
     song_put(0, 1, 1, 2);                            /* (x3) */
     run_ms(60);
@@ -5531,9 +5532,9 @@ static void phase_t11(void)
     check(song_reps(0, 2) == 1u && song_row(songs[0][1]) == 1u && song_row(songs[0][2]) == SONG_END,
           "a row unset: once; the row's pattern kept beside its times");
     ui.song_row = 0;
-    turn(EN_K1, 1);
-    check(song_row(songs[0][0]) == 1u && song_reps(0, 0) == 2u, "KNOB 1: the row's pattern, its times kept");
-    turn(EN_K1, -1);
+    turn(EN_K3, 1);
+    check(song_row(songs[0][0]) == 1u && song_reps(0, 0) == 2u, "KNOB 3: the row's pattern, its times kept");
+    turn(EN_K3, -1);
     for (i = 0, ok = 1; i < NUM_PATTERN; i++)        /* (every pattern, every count: no END or LOOP among them) */
         for (t = 0; t < NSONGREP; t++) {
             song_put(0, 5, i, t);
@@ -5563,6 +5564,8 @@ static void phase_t11(void)
     check(ok, "the song: P1 twice, P2 three times, then END stops it");
     if (sq.running)
         press(B_PLAY);
+    check(sq.song_mode == 1u, "37: SHIFT + PLAY leaves Play on SONG");
+    sq.song_mode = 0;
     ui.song_row = 0;
     song_insert_row(0, 0);
     check(song_row(songs[0][1]) == 0u && song_reps(0, 1) == 2u && song_reps(0, 2) == 3u, "COPY: a row inserted, its repeats too");
@@ -5917,6 +5920,162 @@ static void phase30(void)
     vp_set(PAR_MDIRT_AMT, 0);
     vp_set(PAR_FXDIRT, 0);
     press(B_PLAY);
+    goto_mode(B_HOME, M_HOME);
+}
+
+/* 37: refinements: the config pages' instructions, LOAD with the cores, the song's rows page, the play mode, the
+ * patterns' voices (FREE / LOCKED / KIT), the reverb's and P SPEECH's pictures */
+static void phase37(void)
+{
+    uint32_t i;
+    printf("phase 37: refinements\n");
+    goto_mode(B_GLO, M_CONFIG);
+    turn(EN_SELECT, -(int32_t)ui.page);
+    for (i = 0; i < NCONFIG; i++) {
+        char nm[32];
+        snprintf(nm, sizeof nm, "p37-config-%u", (unsigned)(i + 1u));
+        run_ms(60);
+        shot(nm);
+        turn(EN_SELECT, 1);
+    }
+    {   /* the song: KNOB 2 the row, ROWS: INSERT / DELETE with OCT+, Play */
+        uint8_t s0[MAX_SONG_LENGTH];
+        memcpy(s0, songs[0], sizeof s0);
+        memset(songs[0], SONG_END, MAX_SONG_LENGTH);
+        songs[0][0] = 0;
+        songs[0][1] = 1;
+        songs[0][2] = 2;
+        sq.song = 0;
+        goto_mode(B_HOME, M_SONG);
+        turn(EN_SELECT, -3);
+        ui.song_row = 0;
+        turn(EN_K2, 1);
+        check(ui.page == 0 && ui.song_row == 1u, "SONG: KNOB 2 moves the row");
+        turn(EN_SELECT, 1);
+        check(ui.page == 1u, "SONG: SELECT opens ROWS");
+        run_ms(60);
+        shot("p37-song-rows-insert");
+        press(B_OCTUP);
+        check(song_row(songs[0][1]) == 1u && song_row(songs[0][2]) == 1u && song_row(songs[0][3]) == 2u,
+              "ROWS: OCT+ inserts a row (the rows below move down)");
+        turn(EN_K3, 2);
+        check(song_row(songs[0][1]) == 3u, "ROWS: KNOB 3 picks the new row's pattern");
+        turn(EN_K2, 1);
+        check(ui.song_edit == SE_DELETE, "ROWS: KNOB 2 to DELETE");
+        run_ms(60);
+        shot("p37-song-rows-delete");
+        press(B_OCTUP);
+        check(song_row(songs[0][1]) == 1u && song_row(songs[0][2]) == 2u && song_row(songs[0][3]) == SONG_END,
+              "ROWS: OCT+ deletes the row (the rows below move up)");
+        turn(EN_K2, -1);
+        turn(EN_K4, 1);
+        check(sq.song_mode == 1u, "ROWS: Play SONG");
+        press(B_PLAY);
+        run_ms(100);
+        check(sq.running && sq.song_mode && sq.active == 0u, "Play SONG: PLAY plays the song");
+        press(B_PLAY);
+        turn(EN_K4, -1);
+        press(B_PLAY);
+        run_ms(100);
+        check(sq.running && !sq.song_mode, "Play PATTERN: PLAY plays the pattern");
+        press(B_PLAY);
+        turn(EN_SELECT, -1);
+        memcpy(songs[0], s0, sizeof s0);
+    }
+    {   /* the patterns' voices: FREE shared, LOCKED its own (slot 32 + n), KIT the saved kit */
+        pattern_t p0[3];
+        uint8_t k5[KIT_LEN], k33[KIT_LEN], k34[KIT_LEN];
+        char n33[KIT_NAME_LEN], n34[KIT_NAME_LEN];
+        uint32_t P = kit_par(5), kl = kit_loaded;
+        for (i = 0; i < 3u; i++)
+            p0[i] = pat[i];
+        kit_get(5, k5);
+        kit_get(33, k33);
+        kit_get(34, k34);
+        memcpy(n33, kit_names[33], KIT_NAME_LEN);
+        memcpy(n34, kit_names[34], KIT_NAME_LEN);
+        if (sq.running)
+            press(B_PLAY);
+        seq_set_next_pattern(0);
+        for (i = 0; i < 3u; i++)
+            pat_set_voices(&pat[i], PV_FREE, 0);
+        par[P] = 10;
+        goto_mode(B_HOME, M_PATTERN);
+        run_ms(60);
+        shot("p37-pattern-free");
+        white(1);
+        check(sq.active == 1u && par[P] == 10u, "FREE: the next pattern keeps the voices");
+        turn(EN_K1, 1);
+        check(pat_voices(&pat[1]) == PV_LOCKED && par[P] == 10u && kit_at(33, 5) == 10u &&
+              !memcmp(kit_names[33], "P02 LOCK", 8), "LOCKED: the voices heard kept in kit slot 33 (P02 LOCK)");
+        run_ms(60);
+        shot("p37-pattern-locked");
+        par[P] = 20;
+        white(0);
+        check(sq.active == 0u && par[P] == 10u, "from a LOCKED pattern to a FREE one: the shared voices back");
+        par[P] = 30;
+        white(1);
+        check(par[P] == 20u, "back to the LOCKED pattern: its own voices, edits kept");
+        white(0);
+        check(par[P] == 30u, "an edit on a FREE pattern stays shared");
+        kit_set1(5, 5, 40);
+        kit_loaded = 5;
+        turn(EN_K1, 2);
+        check(pat_voices(&pat[0]) == PV_KIT && pat_kit(&pat[0]) == 5u && par[P] == 40u,
+              "KIT: the pattern plays its saved kit (slot 6)");
+        run_ms(60);
+        shot("p37-pattern-kit");
+        par[P] = 41;
+        white(1);
+        check(par[P] == 20u, "KIT to LOCKED: the locked voices");
+        white(0);
+        check(par[P] == 40u, "back to KIT: the saved kit again (edits not kept)");
+        white(1);
+        {
+            int rc = proj_save(1, "VOICES  ");
+            par[P] = 99;
+            pat_set_voices(&pat[0], PV_FREE, 0);
+            rc |= proj_load(1);
+            check(rc == 0 && sq.active == 1u && par[P] == 20u && pat_voices(&pat[0]) == PV_KIT,
+                  "a project saved on a LOCKED pattern: its voices, the others' modes back");
+            seq_set_next_pattern(0);
+            check(par[P] == 40u, ".. and KIT's kit");
+        }
+        pv_set(PV_FREE);
+        check(par[P] == 30u, "KIT to FREE: the shared voices, as saved with the project");
+        pv_copy(1, 2);
+        check(pat_voices(&pat[2]) == PV_LOCKED && kit_at(34, 5) == 20u, "COPY: a LOCKED pattern's voices go with it");
+        pat_set_voices(&pat[2], PV_FREE, 0);
+        pat_set_voices(&pat[1], PV_FREE, 3);
+        par[PAR_PATTERN_MODE] = 1;
+        proj_after_load();
+        check(pat_voices(&pat[1]) == PV_KIT && pat_kit(&pat[1]) == 3u && par[PAR_PATTERN_MODE] == 0u,
+              "an old project with Kit chg AUTO: its patterns on KIT");
+        seq_set_next_pattern(0);
+        for (i = 0; i < 3u; i++)
+            pat[i] = p0[i];
+        kit_put(5, k5);
+        kit_put(33, k33);
+        kit_put(34, k34);
+        memcpy(kit_names[33], n33, KIT_NAME_LEN);
+        memcpy(kit_names[34], n34, KIT_NAME_LEN);
+        kit_load_ram(kl);
+        goto_mode(B_HOME, M_HOME);
+    }
+    goto_mode(B_GLO, M_CONFIG);
+    turn(EN_SELECT, (int32_t)CF_LOAD - (int32_t)ui.page);
+    {
+        static const uint16_t AVG[NLD] = {10, 105, 77, 8, 13, 15, 20}, PK[NLD] = {20, 133, 90, 10, 18, 28, 40};
+        for (i = 0; i < NLD; i++) {
+            ld_q8[i] = AVG[i];
+            ld_pk[i] = PK[i];
+        }
+        cores_why = CW_TWO;
+        run_ms(100);
+        shot("p37-load");
+        cores_why = CW_BUILD;
+        memset(ld_q8, 0, sizeof ld_q8);
+    }
     goto_mode(B_HOME, M_HOME);
 }
 
@@ -6409,6 +6568,7 @@ int main(int argc, char **argv)
     phase_t11();
     phase30();
     gen_step_edit_test();
+    phase37();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;
 }

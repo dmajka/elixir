@@ -184,11 +184,22 @@ static void proj_write_payload(void)
     kit_init_values(init);
     pw_bytes("KPR5", 4);
     pw_u16(NPAR);
-    pw_bytes(par, NPAR);                           /* the edit buffer and the settings */
+    if (pat_voices(&pat[sq.active]) == PV_FREE) {
+        pw_bytes(par, NPAR);                       /* the edit buffer and the settings */
+    } else {                                       /* (37: the shared voices, a LOCKED pattern's own in its slot) */
+        uint8_t e[NPAR], k[KIT_LEN];
+        if (pat_voices(&pat[sq.active]) == PV_LOCKED)
+            kit_stash(PV_SLOT(sq.active));
+        memcpy(e, par, NPAR);
+        kit_get_row(KIT_SHARED, k);
+        for (i = 0; i < KIT_LEN; i++)
+            e[kit_par(i)] = k[i];
+        pw_bytes(e, NPAR);
+    }
     pw_u16(KIT_LEN);
     pw_bytes(morph_par, KIT_LEN);
     pw_byte(par[PAR_MORPH]);                       /* (0.13: the knob; the global LFOs move it from there) */
-    pw_byte(kit_loaded);
+    pw_byte(pat_voices(&pat[sq.active]) == PV_FREE ? kit_loaded : pv_from);
     pw_byte(kit_morph_loaded);
     pw_byte(sq.active);
     pw_byte(sq.song);
@@ -473,7 +484,10 @@ static int proj_read_payload(uint32_t ver)
         p->gx = p->gy = p->gchaos = 0;
         if (tm & 0x80u) {
             p->shuffle = (uint8_t)pr_byte();
-            p->kit = (uint8_t)(pr_byte() % NUM_KITS);
+            {   /* (37: bits 6-7 the pattern's voices, PV_*) */
+                uint32_t kb = pr_byte();
+                p->kit = (uint8_t)((kb & 63u) | ((kb >> 6) < NPV ? kb & 0xC0u : 0u));
+            }
             if (ver >= 5u) {
                 p->gx = (uint8_t)(pr_byte() & 127u);
                 p->gy = (uint8_t)(pr_byte() & 127u);
@@ -733,6 +747,14 @@ static int proj_save(uint32_t l, const char *name)  /* 0.5.1: hushed (storage_hw
 static void proj_after_load(void)                   /* the session as the project left it */
 {
     uint32_t t;
+    if (par[PAR_PATTERN_MODE] == 1u) {              /* (37: KIT CHANGE AUTO, from before 0.20: every pattern KIT) */
+        for (t = 0; t < NUM_PATTERN; t++)
+            if (pat_voices(&pat[t]) == PV_FREE)
+                pat_set_voices(&pat[t], PV_KIT, pat_kit(&pat[t]));
+    }
+    par[PAR_PATTERN_MODE] = 0;
+    pv_skip = 0;                                    /* (the edit buffer: the shared voices) */
+    pv_switch(PV_FREE, sq.active, sq.active);
     pat_backup = pat[sq.active];
     sq.gsync = (1u << NTRACK) - 1u;                 /* (the generators' live tracks from the loaded pattern) */
     for (t = 0; t < NTRACK; t++)

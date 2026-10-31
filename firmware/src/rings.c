@@ -25,7 +25,7 @@
 
 #include "rings_tables.h"
 
-#define NMICRO 10                                    /* (Phase 24: MICRO's types, micro.c, on every voice) */
+#define NMICRO 13                                    /* (Phase 24: MICRO's types, micro.c, on every voice) */
 enum { MD_LXR, MD_MODAL, MD_STRING, MD_FM, MD_PL0, MD_MC0 = MD_PL0 + 16, NMODEL = MD_MC0 + NMICRO };   /* (0.15:
                                                      * Plaits' 16, plaits.c) */
 #define RG_MODES 32u

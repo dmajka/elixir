@@ -120,7 +120,10 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
     switch (ui.mode) {
     case M_HOME: put_str(b, "PATTERN", n); break;
     case M_PATTERN: put_str(b, "PATTERNS", n); break;
-    case M_SONG: put_str(b, "SONG", n); break;
+    case M_SONG:                                     /* (37: ROWS: what OCT+ does, as ACTION's) */
+        put_str(b, !(ui.page % 2u) ? "SONG" : ui.song_edit == SE_DELETE ? "PRESS OCT+ TO DELETE THE ROW"
+                                                                       : "PRESS OCT+ TO INSERT A ROW", n);
+        break;
     case M_SOUND: {
         uint8_t l[NSPG][2];
         uint32_t i, k = sound_pages(l);
@@ -587,6 +590,64 @@ static void draw_perf(int32_t y0)
         cv_text(6, 112, &AF_S, "BLACK: MUTE  BAR KEYS: REPEAT", T_MID);
 }
 
+/* 37: instructions. A term in the theme's colour, a gap, then its text, wrapped to the left margin; every page spaces
+ * them alike (HELP_LH a line, HELP_GAP between items). Returns the next item's y */
+#define HELP_X 10
+#define HELP_LH 14
+#define HELP_GAP 8
+#define HELP_R 232
+static int32_t help_text(int32_t x, int32_t y, const char *s, uint16_t c)
+{
+    char line[48];
+    while (*s == ' ')
+        s++;
+    while (*s) {
+        uint32_t cut = 0, e = 0;
+        while (s[e]) {                                /* the most words that fit */
+            while (s[e] == ' ')
+                e++;
+            while (s[e] && s[e] != ' ')
+                e++;
+            if (e >= sizeof line)
+                break;
+            memcpy(line, s, e);
+            line[e] = 0;
+            if (cut && x + text_w(&AF_S, line) > HELP_R)
+                break;
+            cut = e;
+        }
+        if (!cut)
+            break;
+        memcpy(line, s, cut);
+        line[cut] = 0;
+        cv_text(x, y, &AF_S, line, c);
+        x = HELP_X;
+        s += cut;
+        while (*s == ' ')
+            s++;
+        if (*s)
+            y += HELP_LH;
+    }
+    return y + HELP_LH;
+}
+static int32_t help_item(int32_t y, const char *term, const char *text)
+{
+    int32_t x = HELP_X;
+    if (term && term[0])
+        x = cv_text(HELP_X, y, &AF_S, term, T_THEME) + 6;
+    return help_text(x, y, text, T_TEXT) + HELP_GAP;
+}
+
+/* .. a line of key hints: each key (or term) in the theme's colour, then what it does; n pairs */
+static void help_pairs(int32_t x, int32_t y, const char *const *kv, uint32_t n)
+{
+    uint32_t i;
+    for (i = 0; i < n; i++) {
+        x = cv_text(x, y, &AF_S, kv[2u * i], T_THEME) + 4;
+        x = cv_text(x, y, &AF_S, kv[2u * i + 1u], T_TEXT) + 9;
+    }
+}
+
 static void draw_shift_legend(int32_t y0)
 {
     static const char *const F[9] = {"KIT", "MORPH", "SONG", "PROJECT", "CONFIG", "RELOAD", "LAST", "FX",
@@ -607,9 +668,14 @@ static void draw_shift_legend(int32_t y0)
         cv_text(x + 4, y + CAP_IN(S, 17), &AF_S, b, T_INK);
         cv_text_fit(x + 22, y + CAP_IN(S, 17), &AF_S, F[i], T_INK, T_SEL, 52);
     }
-    cv_text(8, 92, &AF_S, "VOICE: mute  GLO: solo  BAR: length", T_TEXT);
-    cv_text(8, 104, &AF_S, "SEQ: links EDIT: keys PLAY: song REC: opts", T_TEXT);
-    cv_text(8, 116, &AF_S, "HOME: PERF RESET, ALL EFFECTS OFF", T_ACCENT);
+    {
+        static const char *const L1[6] = {"VOICE", "mute", "GLO", "solo", "BAR", "length"};
+        static const char *const L2[6] = {"SEQ", "links", "EDIT", "keys", "PLAY", "song"};
+        static const char *const L3[4] = {"REC", "options", "HOME", "PERF reset"};
+        help_pairs(8, 90, L1, 3);
+        help_pairs(8, 103, L2, 3);
+        help_pairs(8, 116, L3, 2);
+    }
 }
 
 /* 0.8: KEYS: the FM-1's keyboard (from F; held keys in the track's colour), the last note, how to play */
@@ -650,8 +716,12 @@ static void draw_keys(int32_t y0)
         note_name(b, ui.knote);
         cv_text_r(232, 74, &AF_M, b, T_THEME, T_BG);
     }
-    cv_text(8, 96, &AF_S, sq.rec && sq.running ? "REC: the notes go into the steps" : "SHIFT + key: accent", T_TEXT);
-    cv_text(8, 112, &AF_S, "ALGORITHM: track   SHIFT + EDIT: grid", T_MID);
+    {
+        static const char *const L1[2] = {"SHIFT + KEY", "accent"}, *const LR[2] = {"REC", "the notes go into the steps"};
+        static const char *const L2[4] = {"ALGORITHM", "track", "SHIFT + EDIT", "grid"};
+        help_pairs(8, 96, sq.rec && sq.running ? LR : L1, 1);
+        help_pairs(8, 112, L2, 2);
+    }
 }
 
 static void draw_patterns(int32_t y0)
@@ -670,14 +740,50 @@ static void draw_patterns(int32_t y0)
         if (used && i != sq.active && i != sq.pending)
             cv_rect(x + 5, y + 10, 3, 3, T_TEXT);
     }
-    {
-        char b[24];
+    {   /* 37: the playing pattern's voices: a lock, open (FREE) or shut (LOCKED, KIT), what they are */
+        const pattern_t *p = &pat[sq.active];
+        uint32_t v = pat_voices(p);
+        uint16_t c = v == PV_LOCKED ? T_THEME : v == PV_KIT ? T_TEXT : T_MID;
+        int32_t x = 12, y = 55 - (v == PV_FREE ? 5 : 0);
+        char b[40];
+        cv_rrect(x + 4, y, 18, 22, 8, c, T_BG);       /* the shackle */
+        cv_rrect(x + 8, y + 4, 10, 20, 5, T_BG, c);
+        if (v == PV_FREE)
+            cv_rect(x + 18, y + 10, 4, 10, T_BG);     /* (open: its right leg out) */
+        cv_rrect(x, 69, 26, 21, 3, c, T_BG);          /* the body, its keyhole */
+        cv_rrect(x + 11, 74, 4, 6, 2, T_BG, c);
+        cv_rect(x + 12, 79, 2, 5, T_BG);
+        if (v == PV_KIT) {
+            put_str(b, "KIT ", sizeof b);
+            two_digits(b + 4, pat_kit(p) + 1u);
+        } else {
+            put_str(b, v == PV_LOCKED ? "LOCKED" : "FREE", sizeof b);
+        }
+        cv_text(48, 53, &AF_M, b, T_TEXT);
         put_str(b, "BANK ", sizeof b);
         b[5] = (char)('1' + ui.bank);
         b[6] = 0;
-        cv_text(6, 110, &AF_S, b, T_MID);
-        cv_text(60, 110, &AF_S, "BAR KEYS: bank", T_DIM);
-        cv_text_r(234, 110, &AF_S, sq.pending != sq.active ? "QUEUED" : "", T_ACCENT, T_BG);
+        cv_text_r(232, 57, &AF_S, sq.pending != sq.active ? "QUEUED" : b, sq.pending != sq.active ? T_ACCENT : T_MID,
+                  T_BG);
+        if (v == PV_KIT) {
+            put_str(b, "plays kit slot ", sizeof b);
+            two_digits(b + 15, pat_kit(p) + 1u);
+            b[17] = ' ';
+            memcpy(b + 18, kit_names[pat_kit(p)], 8);
+            b[26] = 0;
+        } else if (v == PV_LOCKED) {
+            put_str(b, "its own voices, in kit slot ", sizeof b);
+            two_digits(b + str_len(b), PV_SLOT(sq.active) + 1u);
+        } else {
+            put_str(b, "voices shared by every FREE pattern", sizeof b);
+        }
+        cv_text(48, 77, &AF_S, b, T_MID);
+    }
+    {
+        static const char *const CP[2] = {"COPY", "hold OCT+, tap the pattern"};
+        static const char *const PA[2] = {"PASTE", "hold OCT+, tap the target"};
+        help_pairs(10, 98, CP, 1);
+        help_pairs(10, 112, PA, 1);
     }
 }
 
@@ -777,8 +883,12 @@ static void draw_io(int32_t y0)
             cv_rrect(x, 26, 24, 34, 4, i == ui.io_pos ? T_SEL : T_SURF, T_BG);
             text_c(x, 26 + CAP_IN(M, 34), 24, &AF_M, c, i == ui.io_pos ? T_INK : T_TEXT, i == ui.io_pos ? T_SEL : T_SURF);
         }
-        cv_text(10, 76, &AF_S, "K1: position  K2: letter  K3: case", T_TEXT);
-        cv_text(10, 92, &AF_S, "OCT+: save    OCT-: back", T_MID);
+        {
+            static const char *const L1[6] = {"K1", "position", "K2", "letter", "K3", "case"};
+            static const char *const L2[4] = {"OCT+", "save", "OCT-", "back"};
+            help_pairs(10, 76, L1, 3);
+            help_pairs(10, 92, L2, 2);
+        }
         return;
     }
     {
@@ -797,8 +907,11 @@ static void draw_io(int32_t y0)
             io_slot_name(r, sizeof r, ui.io_type, s);
             list_row(i * 16, l, r, s == ui.io_slot, 0);
         }
-        cv_text(10, 116, &AF_S, ui.mode == M_SAVE ? "OCT+ SAVE    SAVE: LOAD PAGE" : "OCT+ LOAD    SAVE: SAVE PAGE",
-                T_MID);
+        {
+            static const char *const LS[4] = {"OCT+", "save", "SAVE", "the load page"};
+            static const char *const LL[4] = {"OCT+", "load", "SAVE", "the save page"};
+            help_pairs(10, 116, ui.mode == M_SAVE ? LS : LL, 2);
+        }
     }
 }
 
@@ -936,9 +1049,8 @@ static void draw_links(int32_t y0)
         put_int(b + 5, (int32_t)(ui.link & 7u) + 1);
         cat(b, " is empty.", sizeof b);
         cv_text(8, 30, &AF_M, b, T_TEXT);
-        cv_text(8, 56, &AF_S, "KNOB 2 (Start): a starting point,", T_TEXT);
-        cv_text(8, 71, &AF_S, "or set one up on LINK SETUP.", T_TEXT);
-        cv_text(8, 94, &AF_S, "SHIFT (OCT-) + SEQ opens this page.", T_MID);
+        help_item(help_item(56, "START", "KNOB 2 picks a starting point, or set one up on LINK SETUP"),
+                  "SHIFT + SEQ", "opens this page");
         return;
     }
     if (e > LE_DUCK && e != LE_TRIG)
@@ -985,7 +1097,7 @@ static void draw_load(void)
     uint32_t k;
     for (k = 0; k < NLD - 1u; k++) {
         uint32_t i = ORDER[k], a = (ld_q8[i] * 100u + 128u) >> 8, pk = (ld_pk[i] * 100u + 128u) >> 8;
-        int32_t y = 4 + (int32_t)k * 12, w = (int32_t)(a > 100u ? 100u : a), wp = (int32_t)(pk > 100u ? 100u : pk);
+        int32_t y = 2 + (int32_t)k * 12, w = (int32_t)(a > 100u ? 100u : a), wp = (int32_t)(pk > 100u ? 100u : pk);
         cv_text(10, y, &AF_S, PART[i], T_TEXT);
         put_str(put_int(b, (int32_t)a), "%", 2);
         cv_text_r(104, y, &AF_S, b, T_TEXT, T_BG);
@@ -996,36 +1108,52 @@ static void draw_load(void)
         if (wp)
             cv_rect(152 + wp * 78 / 100, y + 3, 2, 6, T_ACCENT);
     }
+    put_str(b, "CORE 0  ", sizeof b);                /* (37: from the ELIXIR page) core 0: the ISR less its wait */
+    {
+        uint32_t c = cpu_pct(), w = (ld_q8[LD_WAIT] * 100u + 128u) >> 8;
+        put_int(b + str_len(b), (int32_t)(cores_why == CW_TWO && c > w ? c - w : c));
+    }
+    cat(b, "%", sizeof b);
+    cv_text(10, 82, &AF_S, b, T_TEXT);
+    put_str(b, "CORE 1  ", sizeof b);
     if (cores_why == CW_TWO) {
-        put_str(b, "CORES 2  WAIT ", sizeof b);
+        put_int(b + str_len(b), (int32_t)((ld_q8[LD_D13] * 100u + 128u) >> 8));
+        cat(b, "%", sizeof b);
+    } else {
+        cat(b, "OFF", sizeof b);
+    }
+    cv_text(122, 82, &AF_S, b, T_TEXT);
+    if (cores_why == CW_TWO) {
+        put_str(b, "WAIT ", sizeof b);
         put_int(b + str_len(b), (int32_t)((ld_q8[LD_WAIT] * 100u + 128u) >> 8));
         cat(b, "%  STACK ", sizeof b);
         put_int(b + str_len(b), (int32_t)c1_stack());
         cat(b, " B", sizeof b);
-        cv_text(10, 77, &AF_S, b, c1_stack() > 3584u ? T_REC : T_MID);
+        cv_text(10, 96, &AF_S, b, c1_stack() > 3584u ? T_REC : T_MID);
     } else {
-        put_str(b, "CORES 1: ", sizeof b);
+        put_str(b, "1 CORE: ", sizeof b);
         cat(b, WHY[cores_why < sizeof WHY / sizeof WHY[0] ? cores_why : 0], sizeof b);
-        cv_text(10, 77, &AF_S, b, cores_why >= CW_BAD ? T_REC : T_MID);
+        cv_text(10, 96, &AF_S, b, cores_why >= CW_BAD ? T_REC : T_MID);
     }
     {   /* 18a: the main stacks' deepest use (24 KB, 8 KB); red past three quarters */
         uint32_t u = ustack_used(), sv = sstack_used();
         put_str(b, "STACKS ", sizeof b);
         put_int(b + str_len(b), (int32_t)u);
-        cat(b, " + ", sizeof b);
+        cat(b, "+", sizeof b);
         put_int(b + str_len(b), (int32_t)sv);
         cat(b, " B", sizeof b);
-        cv_text(10, 90, &AF_S, b, u > 18432u || sv > 6144u ? T_REC : T_MID);
+        cv_text_r(232, 96, &AF_S, b, u > 18432u || sv > 6144u ? T_REC : T_MID, T_BG);
     }
 }
 
 static void draw_about(void);
 static void draw_config_help(int32_t y0)
 {
+    int32_t y = 6;
     (void)y0;
     if (ui.page % NCONFIG == CF_LOAD) {
         draw_load();
-        draw_cpu(104);
+        draw_cpu(110);
         return;
     }
     if (ui.page % NCONFIG == CF_ABOUT) {
@@ -1034,29 +1162,23 @@ static void draw_config_help(int32_t y0)
     }
     switch (ui.page % NCONFIG) {
     case 0:
-        cv_text(10, 8, &AF_S, "TEMPO: turn it to the bottom for MIDI", T_TEXT);
-        cv_text(10, 22, &AF_S, "clock sync (the LXR's MID).", T_TEXT);
-        cv_text(10, 40, &AF_S, "FOLLOW: the bar follows the playhead", T_TEXT);
-        cv_text(10, 56, &AF_S, "KIT CHANGE AUTO: a pattern loads the", T_TEXT);
-        cv_text(10, 70, &AF_S, "kit it was saved with", T_TEXT);
-        cv_text(10, 86, &AF_S, "MIDI clock goes out on USB always.", T_MID);
+        y = help_item(y, "TEMPO", "at its lowest, Elixir follows MIDI clock");
+        y = help_item(y, "FOLLOW", "the bar shown follows the playhead");
+        help_item(y, "PLAY", "PATTERN loops the pattern; SONG plays the song's rows");
         break;
     case 1:
-        cv_text(10, 8, &AF_S, "GLOBAL: notes play the selected track;", T_TEXT);
-        cv_text(10, 22, &AF_S, "program change picks the pattern", T_TEXT);
-        cv_text(10, 44, &AF_S, "FILTERS: N notes  R clock/start/stop", T_TEXT);
-        cv_text(10, 58, &AF_S, "C CC / NRPN  P program change", T_TEXT);
-        cv_text(10, 80, &AF_S, "ROUTE: TRS>USB forwards the jack", T_TEXT);
-        cv_text(10, 94, &AF_S, "MIDI input to USB (soft thru)", T_TEXT);
+        y = help_item(y, "GLOBAL", "notes play the selected track; program change picks the pattern");
+        y = help_item(y, "FILTERS", "N notes, R clock and transport, C CC and NRPN, P program change");
+        help_item(y, "ROUTE", "TRS>USB passes the jack's MIDI on to USB");
         break;
     case 2:
     case 3:
-        cv_text(10, 8, &AF_S, "Each track's MIDI channel: in and out", T_TEXT);
+        help_item(y, "CHANNEL", "each track's MIDI channel, in and out");
         break;
     case 4:
     case 5:
-        cv_text(10, 8, &AF_S, "ANY: the track plays any note, pitched", T_TEXT);
-        cv_text(10, 22, &AF_S, "A NOTE: only that note triggers it", T_TEXT);
+        y = help_item(y, "ANY", "the track plays any note, pitched");
+        help_item(y, "A NOTE", "only that note triggers the track");
         break;
     case 7: {                                        /* 0.12: the remote; a channel it shares with a track warned of */
         uint32_t t, clash = 0;
@@ -1064,36 +1186,27 @@ static void draw_config_help(int32_t y0)
             uint32_t c = t < NTRACK ? midi_track_ch(t) : midi_global_ch();
             clash |= (remote_ch < 16u && c == remote_ch) || (remote_gch < 16u && c == remote_gch);
         }
-        cv_text(10, 8, &AF_S, "TRACKS: the tracks' knobs, mute, solo", T_TEXT);
-        cv_text(10, 22, &AF_S, "GLOBAL: PERF, FX, density (manual)", T_TEXT);
-        cv_text(10, 40, &AF_S, "PICKUP: a pot acts once it passes", T_TEXT);
-        cv_text(10, 54, &AF_S, "the value. REL: encoders (64 +/- n)", T_TEXT);
+        y = help_item(y, "TRACKS", "the channel for the tracks' knobs, mutes and solo");
+        y = help_item(y, "GLOBAL", "the channel for PERF, FX and density");
+        y = help_item(y, "KNOBS", "PICKUP: a pot acts once it passes the value. REL: encoders");
         if (clash)
-            cv_text(10, 76, &AF_S, "SHARES A TRACK'S OR THE GLOBAL CHANNEL", T_REC);
-        else
-            cv_text(10, 76, &AF_S, "Values go back to it over USB.", T_MID);
+            help_text(HELP_X, y, "SHARES A TRACK'S OR THE GLOBAL CHANNEL", T_REC);
         break;
     }
     case 8:                                          /* 0.12: Control All with morph; 31: and the edits */
-        cv_text(10, 8, &AF_S, "With morph on, a knob's edit (EDITS)", T_TEXT);
-        cv_text(10, 22, &AF_S, "or Control All's (CTRL ALL, OCT+ held)", T_TEXT);
-        cv_text(10, 40, &AF_S, "BOTH KITS: the morph target moves", T_TEXT);
-        cv_text(10, 54, &AF_S, "too: heard at any morph amount", T_TEXT);
-        cv_text(10, 72, &AF_S, "KIT ONLY: the kit alone (full morph:", T_TEXT);
-        cv_text(10, 86, &AF_S, "nothing heard, as the LXR's knobs)", T_TEXT);
+        y = help_item(y, "EDITS, CTRL ALL", "where an edit goes while morph is on");
+        y = help_item(y, "BOTH KITS", "the morph target moves too: heard at any morph amount");
+        help_item(y, "KIT ONLY", "the kit alone: at full morph nothing is heard");
         break;
     case 9:                                          /* 0.13: page memory; 0.19: the kit list's order */
-        cv_text(10, 8, &AF_S, "LAST PAGE: a button opens the page", T_TEXT);
-        cv_text(10, 22, &AF_S, "it showed when you left it (NO: its", T_TEXT);
-        cv_text(10, 36, &AF_S, "first). Pressed again, it moves on.", T_TEXT);
-        cv_text(10, 54, &AF_S, "KITS FIRST: PRESETS' kit list starts", T_TEXT);
-        cv_text(10, 68, &AF_S, "with the FACTORY kits, then LIBRARY,", T_TEXT);
-        cv_text(10, 82, &AF_S, "SLOTS; or with the SLOTS, FACTORY last.", T_TEXT);
+        y = help_item(y, "LAST PAGE", "a button opens the page it showed when you left it; pressed again, it moves on");
+        help_item(y, "KITS FIRST", "where PRESETS' kit list starts: FACTORY or your SLOTS");
         break;
     default:
-        cv_text(10, 8, &AF_S, "LEDS: OFF / LOW / HIGH glow", T_TEXT);
-        cv_text(10, 22, &AF_S, "AUTOSAVE: the session, when stopped", T_TEXT);
-        cv_text(10, 36, &AF_S, "ACCEL: fast turns move faster", T_TEXT);
+        y = help_item(y, "LEDS", "off, low or high glow");
+        y = help_item(y, "AUTOSAVE", "keeps the session when stopped");
+        y = help_item(y, "ACCEL", "fast turns move further");
+        help_item(y, "PALETTE", "the screen's colours");
         break;
     }
 }
@@ -1212,6 +1325,7 @@ static void draw_body(void)
         case M_PATTERN:
             fn = draw_patterns;
             s = sig_add(4, sq.active | sq.pending << 8 | ui.bank << 16);
+            s = sig_add(s, pat[sq.active].kit | (uint32_t)kit_names[pat_kit(&pat[sq.active])][0] << 8);
             break;
         case M_SONG:
             fn = draw_song;
@@ -1336,6 +1450,10 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_SONG_PAT: put_str(b, "Pattern", n); return;
     case VP_SONG_NUM: put_str(b, "Song", n); return;
     case VP_SONG_REP: put_str(b, "Repeats", n); return;
+    case VP_SONG_ROW: put_str(b, "Row", n); return;
+    case VP_SONG_EDIT: put_str(b, "Action", n); return;
+    case VP_PLAY: put_str(b, "Play", n); return;
+    case VP_VOICES: put_str(b, "Voices", n); return;
     case VP_LEDS: put_str(b, "Leds", n); return;
     case VP_AUTOSAVE: put_str(b, "Autosave", n); return;
     case VP_PKEEP: put_str(b, "Edits", n); return;
@@ -1730,6 +1848,17 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
         else { b[0] = 'P'; two_digits(b + 1, v + 1u); }
         return;
     case VP_SONG_NUM: two_digits(b, v + 1u); return;
+    case VP_SONG_ROW: two_digits(b, v + 1u); return;
+    case VP_SONG_EDIT: put_str(b, v == SE_DELETE ? "DELETE" : "INSERT", n); return;
+    case VP_PLAY: put_str(b, v ? "SONG" : "PATTERN", n); return;
+    case VP_VOICES:
+        if (v == PV_KIT) {
+            put_str(b, "KIT ", n);
+            two_digits(b + 4, pat_kit(&pat[sq.active]) + 1u);
+        } else {
+            put_str(b, v == PV_LOCKED ? "LOCKED" : "FREE", n);
+        }
+        return;
     case VP_SONG_REP:                                /* (0.19: END and LOOP play no times) */
         if (song_row(songs[sq.song][ui.song_row & 63u]) >= NUM_PATTERN) {
             put_str(b, "-", n);
@@ -2200,13 +2329,12 @@ static void draw_splash(void)
     draw_text_box(0, 192, 240, &AF_S, "the LXR-02's engine on the FM-1", T_MID, 1);
     draw_text_box(0, 209, 240, &AF_S, "unofficial port, " ELIXIR_VERSION, T_MID, 1);
 }
-/* 29: CONFIG's last page: the potion and the word small, the version, the load of each core (core 0: the audio
- * ISR less its wait for the second; core 1: D1-D3, which it renders), the CPU line with the battery */
+/* 29: CONFIG's last page: the potion and the word small, the version, the CPU line with the battery (37: the load of
+ * each core is on LOAD) */
 static void draw_about(void)
 {
     uint32_t r, k, i;
     int32_t x = 128;
-    char b[40];
     for (r = 0; r < 18u; r++)
         for (k = 0; k < 22u; k++) {
             uint16_t c = potion_col(POTION[r][k]);
@@ -2222,18 +2350,5 @@ static void draw_about(void)
     }
     cv_text(82, 40, &AF_S, ELIXIR_VERSION, T_THEME);
     cv_text(82, 54, &AF_S, "the LXR-02 on the FM-1", T_MID);
-    put_str(b, "CORE 0 ", sizeof b);
-    {
-        uint32_t c = cpu_pct(), w = (ld_q8[LD_WAIT] * 100u + 128u) >> 8;
-        put_int(b + str_len(b), (int32_t)(cores_why == CW_TWO && c > w ? c - w : c));
-    }
-    cat(b, "%   CORE 1 ", sizeof b);
-    if (cores_why == CW_TWO) {
-        put_int(b + str_len(b), (int32_t)((ld_q8[LD_D13] * 100u + 128u) >> 8));
-        cat(b, "%", sizeof b);
-    } else {
-        cat(b, "OFF", sizeof b);
-    }
-    cv_text(10, 82, &AF_S, b, T_TEXT);
-    draw_cpu(104);
+    draw_cpu(110);
 }

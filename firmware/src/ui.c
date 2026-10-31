@@ -52,7 +52,8 @@ enum { VP_BASE = 0x400, VP_NONE = VP_BASE, VP_IO_TYPE, VP_IO_SLOT, VP_NAME_POS, 
        VP_SP, VP_SP_LAST = VP_SP + 17,               /* (32: SPELLS' knobs, spells.c SPV_*) */
        VP_MEL, VP_MEL_LAST = VP_MEL + NML - 1,       /* 20: the track's melody (pattern_t mel: ML_*) */
        VP_GL, VP_GL_LAST = VP_GL + NGLFO * NGLSET - 1,   /* 0.13: the global LFOs' settings (gls: NGLSET each) */
-       VP_P2, VP_P2_LAST = VP_P2 + 7, VP_SONG_REP };
+       VP_P2, VP_P2_LAST = VP_P2 + 7, VP_SONG_REP,
+       VP_SONG_ROW, VP_SONG_EDIT, VP_PLAY, VP_VOICES };   /* (37) */
 _Static_assert(NPAR <= VP_BASE, "the virtual parameters after the parameters (25b + 27a: NPAR 525, past 0x200)");
 /* the ACTION page's action (OCT+ does it); 0.10: those of the track's generator (gen_acts) */
 enum { ACT_NONE, ACT_DICE, ACT_COMMIT, ACT_UNDO, ACT_RESET, NACT };
@@ -94,6 +95,7 @@ static struct {
     uint8_t lib_kit, lib_sound;      /* .. the library's kit and sound last loaded or saved */
     char io_name[8];
     uint8_t song_row;
+    uint8_t song_edit;               /* 37: SONG: ROWS: INSERT or DELETE (SE_*) */
     uint8_t bank;                    /* PATTERN / SONG: the bank of 16 the keys show */
     char msg[32];
     uint32_t msg_ms;
@@ -482,7 +484,7 @@ static const char *const MIXER_TITLE[NMIXER / 2u] = {"MIXER: VOLUME", "MIXER: PA
                                                      "MIXER: REVERB SEND"};
 #define NCONFIG 12u
 static const uint16_t P_CONFIG[NCONFIG][4] = {
-    {PAR_BPM, PAR_SHUFFLE, PAR_FOLLOW, PAR_PATTERN_MODE},
+    {PAR_BPM, PAR_SHUFFLE, PAR_FOLLOW, VP_PLAY},     /* (37: Play in place of Kit chg) */
     {PAR_MIDI_CHAN_GLOBAL, PAR_MIDI_FILT_TX, PAR_MIDI_FILT_RX, PAR_MIDI_ROUTING},
     {PAR_MIDI_CHAN_1, PAR_MIDI_CHAN_2, PAR_MIDI_CHAN_3, PAR_MIDI_CHAN_4},
     {PAR_MIDI_CHAN_5, PAR_MIDI_CHAN_6, PAR_MIDI_CHAN_7, VP_NONE},
@@ -500,8 +502,11 @@ static const char *const CONFIG_TITLE[NCONFIG] = {"SEQUENCER", "MIDI", "MIDI CHA
 #define CF_LOAD 10u                                   /* 17a, 17b: the load by part, the cores (ui_draw.c draw_load) */
 #define CF_ABOUT 11u                                  /* 29: the potion, the version, the load of each core */
 static const uint16_t P_NAME[4] = {VP_NAME_POS, VP_NAME_CHAR, VP_NAME_CASE, VP_NONE};
-static const uint16_t P_SONG[4] = {VP_SONG_PAT, VP_SONG_NUM, VP_SONG_REP, VP_NONE};
-static const uint16_t P_PATTERN[4] = {PAR_PATTERN_MODE, PAR_SHUFFLE, VP_PKEEP, VP_NONE};
+/* 37: the song: KNOB 2 the row (SELECT pages); ROWS: insert or delete one (OCT+), the play mode */
+static const uint16_t P_SONG[2][4] = {{VP_SONG_NUM, VP_SONG_ROW, VP_SONG_PAT, VP_SONG_REP},
+                                      {VP_SONG_ROW, VP_SONG_EDIT, VP_SONG_PAT, VP_PLAY}};
+enum { SE_INSERT, SE_DELETE, NSE };
+static const uint16_t P_PATTERN[4] = {VP_VOICES, PAR_SHUFFLE, VP_PKEEP, VP_PLAY};   /* (37: Voices, Play) */
 static const uint16_t P_LAST[4] = {PAR_TRACK_LENGTH, VP_NONE, VP_NONE, VP_NONE};
 static const uint16_t P_RECOPT[4] = {PAR_AUTOM_TRACK, VP_NONE, VP_NONE, VP_NONE};
 static const uint16_t P_KEYS[4] = {VP_KOCT, VP_KVEL, VP_KACC, VP_NONE};
@@ -520,6 +525,7 @@ static uint32_t mode_pages(void)
     }
     case M_MIXER: return NMIXER;
     case M_CONFIG: return NCONFIG;
+    case M_SONG: return 2;
     default: return 1;
     }
 }
@@ -578,7 +584,7 @@ static void page_params(uint16_t out[4])
                : ui.io_type == IO_SOUND ? VP_IO_TRACK : VP_NONE;
         out[3] = VP_NONE;
         return;
-    case M_SONG: p = P_SONG; break;
+    case M_SONG: p = P_SONG[ui.page % 2u]; break;
     case M_PATTERN: p = P_PATTERN; break;
     case M_LAST: p = P_LAST; break;
     case M_RECOPT: p = P_RECOPT; break;
@@ -857,6 +863,10 @@ static uint32_t vp_get(uint32_t p)
     }
     case VP_SONG_NUM: return sq.song;
     case VP_SONG_REP: return song_rep_i(sq.song, ui.song_row);
+    case VP_SONG_ROW: return ui.song_row;
+    case VP_SONG_EDIT: return ui.song_edit;
+    case VP_PLAY: return sq.song_mode;
+    case VP_VOICES: return pat_voices(&pat[sq.active]);
     case VP_LEDS: return kset.leds;
     case VP_AUTOSAVE: return autosave_on;
     case VP_PKEEP: return pat_keep;
@@ -1018,6 +1028,10 @@ static uint32_t vp_max(uint32_t p)
     case VP_SONG_PAT: return NUM_PATTERN + 1u;
     case VP_SONG_NUM: return NUM_SONGS - 1u;
     case VP_SONG_REP: return NSONGREP - 1u;
+    case VP_SONG_ROW: return MAX_SONG_LENGTH - 1u;
+    case VP_SONG_EDIT: return NSE - 1u;
+    case VP_PLAY: return 1;
+    case VP_VOICES: return NPV - 1u;
     case VP_LEDS: return 2;
     case VP_AUTOSAVE: case VP_ACCEL: case VP_IO_SRC: case VP_PKEEP: case VP_KBSLOTS: return 1;
     case VP_KB_SRC: return 2;
@@ -1204,6 +1218,14 @@ static void vp_set(uint32_t p, uint32_t v)
     case VP_SONG_REP:
         if (song_row(songs[sq.song][ui.song_row & 63u]) < NUM_PATTERN)
             song_put(sq.song, ui.song_row, song_row(songs[sq.song][ui.song_row & 63u]), v);
+        return;
+    case VP_SONG_ROW: ui.song_row = (uint8_t)v; return;
+    case VP_SONG_EDIT: ui.song_edit = (uint8_t)v; return;
+    case VP_PLAY: seq_play_song(v); return;
+    case VP_VOICES:
+        pv_set(v);
+        ui_message(v == PV_LOCKED ? "VOICES KEPT IN ITS KIT SLOT" : v == PV_KIT ? "PLAYS ITS SAVED KIT"
+                                                                             : "SHARED VOICES");
         return;
     case VP_LEDS: kset.leds = (uint8_t)v; settings_later(); return;
     case VP_AUTOSAVE: autosave_on = (uint8_t)v; settings_later(); return;
@@ -1756,14 +1778,14 @@ static void io_ok(void)
             ui_message("KIT SAVED");
             break;
         case IO_PATTERN:                              /* preset_savePatternRAM */
-            pat[sq.active].kit = kit_loaded;
+            if (pat_voices(&pat[sq.active]) == PV_FREE)   /* (37: KIT keeps its slot; bits 6-7 its voices) */
+                pat_set_voices(&pat[sq.active], PV_FREE, kit_loaded);
             pat[sq.active].shuffle = par[PAR_SHUFFLE];
             if (s == sq.active) {
                 pat_backup = pat[s];
             } else {
-                if (par[PAR_PATTERN_MODE] == 1u)
-                    par[PAR_PATTERN_MODE] = 2;       /* (no kit reload when it switches) */
-                pat[s] = pat[sq.active];
+                pv_skip = pat_voices(&pat[sq.active]) == PV_KIT;   /* (no kit reload when it switches) */
+                pv_copy(sq.active, s);
                 seq_set_next_pattern(s);
             }
             ui_message("PATTERN SAVED");
@@ -1804,6 +1826,7 @@ static void io_ok(void)
             break;
         }
         kit_load_ram(s);
+        pv_loaded(s);
         ui_message("KIT LOADED");
         break;
     case IO_SOUND: {
@@ -2081,7 +2104,10 @@ static void white_down(uint32_t w)
         case 10: io_open(M_LOAD, IO_PROJECT); return;
         case 11: mode_set(M_CONFIG); return;
         case 12:                                      /* RELOAD: the kit and the pattern as saved */
-            kit_load_ram(kit_loaded);
+            if (pat_voices(&pat[sq.active]) == PV_LOCKED)
+                kit_unstash(PV_SLOT(sq.active));     /* (37: a LOCKED pattern's: as last kept) */
+            else
+                kit_load_ram(kit_loaded);
             sq.pending = sq.active;
             sq.load_pending = 1;
             pat_revert = 1;
@@ -2116,7 +2142,7 @@ static void white_down(uint32_t w)
                 ui.copy_src = (uint8_t)(n + 1u);
                 ui_message("COPY: PICK THE TARGET");
             } else {
-                pat[n] = pat[ui.copy_src - 1u];
+                pv_copy(ui.copy_src - 1u, n);       /* (37: a LOCKED one's voices too) */
                 if (n == sq.active)
                     pat_backup = pat[n];
                 ui.copy_src = 0;
@@ -2372,6 +2398,7 @@ static void button_down(uint32_t b)
                 return;
             }
             kit_load_ram(ui.kb_sel);
+            pv_loaded(ui.kb_sel);
             ui_message("KIT LOADED");
             return;
         }
@@ -2422,9 +2449,14 @@ static void button_down(uint32_t b)
             ui_message(gls[n].mode == GM_FREE ? "FREE: NO TRIGGER (SEE MODE)" : TR[n]);
             return;
         }
-        if (ui.mode == M_SONG) {                      /* COPY in the song: insert a row (a copy of the one above) */
+        if (ui.mode == M_SONG) {                      /* COPY in the song: insert a row (a copy of the one above); */
+            if (ui.page % 2u && ui.song_edit == SE_DELETE) {   /* (37: ROWS: its action) */
+                song_delete_row(sq.song, ui.song_row);
+                ui_message("ROW DELETED");
+                return;
+            }
             song_insert_row(sq.song, ui.song_row);
-            ui_message("ROW INSERTED");
+            ui_message("ROW INSERTED: PICK ITS PATTERN");
             return;
         }
         ui.copy = 1;
@@ -2441,12 +2473,10 @@ static void button_down(uint32_t b)
             seq_start(1);
             return;
         }
-        if (sq.running) {
+        if (sq.running)                               /* (37: the pattern or the song, as Play says) */
             seq_stop_now();
-        } else {
-            sq.song_mode = 0;
+        else
             seq_start(1);
-        }
         return;
     case B_REC:
         if (ui.shift) {
@@ -2636,8 +2666,6 @@ static void ui_input(void)
             ui.kb_ms = fm1_ms;
         } else if (ui.sb_open) {
             sb_turn(n);
-        } else if (ui.mode == M_SONG) {
-            ui.song_row = (uint8_t)clamp32((int32_t)ui.song_row + n, 0, MAX_SONG_LENGTH - 1);
         } else if (ui.mode == M_SAVE || ui.mode == M_LOAD) {
             if (ui.io_naming)
                 ui.io_pos = (uint8_t)clamp32((int32_t)ui.io_pos + n, 0, 7);

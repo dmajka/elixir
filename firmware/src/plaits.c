@@ -288,7 +288,7 @@ static void bd_render(pl_bd_t *d, const pl_par_t *p, int32_t *out, int32_t *aux,
         d->lp_out = 0;
     }
     for (i = 0; i < n; i++) {
-        int32_t pulse, fmp = 0, punch, f, ro, factor;
+        int32_t pulse, fmp = 0, punch, ro, factor;
         uint32_t fr;
         if (d->prem) {
             --d->prem;

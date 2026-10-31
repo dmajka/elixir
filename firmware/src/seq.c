@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Elixir: the LXR-02's sequencer. 32 patterns (the LXR's 64, halved for RAM: 3.6 KB each) of 7 tracks x 64 steps (4
+ * Elixir: the LXR-02's sequencer. 32 patterns (the LXR's 64, halved for RAM: 5,162 B each) of 7 tracks x 64 steps (4
  * bars of 16), each step with velocity, note, probability, two automation locks, flam (x2 .. x8) and a shift of -7..+7
  * eighths of a step; per track a length of 1..64; per pattern a shuffle and a kit. 64 songs of 64 entries (a pattern,
  * END or LOOP). Rolls, live recording of notes and automation, mutes, the Euclidean generator, MIDI clock in and out.
@@ -286,6 +286,88 @@ static struct {
     uint32_t mocc[NTRACK];
     int8_t mchg, mspr;
 } sq;
+/* 37: a pattern's voices, in its kit byte's bits 6-7 (bits 0-5: the kit slot, KIT's). FREE (0, the default): the
+ * shared voices, which an edit on any FREE pattern changes; LOCKED: its own, kept in kit slot PV_SLOT(n) (named
+ * "P01 LOCK") while another pattern plays; KIT: the saved kit slot it points at, loaded as it starts (the LXR's KIT
+ * CHANGE AUTO, per pattern: edits there aren't kept). While a LOCKED or KIT pattern plays, the shared voices wait in
+ * kits[KIT_SHARED] (pv_from: the slot they came from) */
+enum { PV_FREE, PV_LOCKED, PV_KIT, NPV };
+#define PV_SLOT(n) (NUM_KITS / 2u + (n))
+static uint8_t pv_from;
+static uint8_t pv_skip;             /* (a pattern saved into another slot: its KIT not reloaded when it switches) */
+static uint32_t pat_voices(const pattern_t *p) { return (uint32_t)(p->kit >> 6) < NPV ? (uint32_t)(p->kit >> 6) : PV_FREE; }
+static uint32_t pat_kit(const pattern_t *p) { return p->kit & 63u; }
+static void pat_set_voices(pattern_t *p, uint32_t v, uint32_t k) { p->kit = (uint8_t)((k & 63u) | (v % NPV) << 6); }
+static void pv_name(uint32_t n)                      /* a LOCKED pattern's slot: "P01 LOCK" */
+{
+    char *d = kit_names[PV_SLOT(n)];
+    d[0] = 'P';
+    d[1] = (char)('0' + (n + 1u) / 10u);
+    d[2] = (char)('0' + (n + 1u) % 10u);
+    memcpy(d + 3, " LOCK", 5);
+}
+/* the playing pattern's voices change from `from` (whose voices were a) to `to`'s */
+static void pv_switch(uint32_t a, uint32_t from, uint32_t to)
+{
+    uint32_t b = pat_voices(&pat[to]);
+    if (a == PV_LOCKED) {
+        kit_stash(PV_SLOT(from));
+    } else if (a == PV_FREE && b != PV_FREE) {
+        kit_stash(KIT_SHARED);
+        pv_from = kit_loaded;
+    }
+    if (b == PV_LOCKED) {
+        kit_unstash(PV_SLOT(to));
+    } else if (b == PV_KIT) {
+        if (!pv_skip)
+            kit_load_ram(pat_kit(&pat[to]));
+    } else if (a != PV_FREE) {
+        kit_unstash(KIT_SHARED);
+        kit_loaded = pv_from;
+    }
+    pv_skip = 0;
+}
+/* the playing pattern's voices set to v (the pattern page): LOCKED takes the voices heard; KIT points at the slot the
+ * shared voices came from */
+static void pv_set(uint32_t v)
+{
+    pattern_t *p = &pat[sq.active];
+    uint32_t n = sq.active, a = pat_voices(p), k = a == PV_FREE ? kit_loaded : pv_from;
+    if (v >= NPV || v == a)
+        return;
+    if (a == PV_FREE) {
+        kit_stash(KIT_SHARED);
+        pv_from = kit_loaded;
+    }
+    pat_set_voices(p, v, v == PV_KIT ? k : pat_kit(p));
+    if (v == PV_LOCKED) {
+        kit_stash(PV_SLOT(n));
+        pv_name(n);
+    } else if (v == PV_KIT) {
+        kit_load_ram(k);
+    } else {
+        kit_unstash(KIT_SHARED);
+        kit_loaded = pv_from;
+    }
+}
+/* a pattern copied over another (COPY, SAVE): a LOCKED one's voices go with it; the playing pattern's voices follow */
+static void pv_copy(uint32_t src, uint32_t dst)
+{
+    uint32_t a = pat_voices(&pat[sq.active]);
+    if (src == dst || src >= NUM_PATTERN || dst >= NUM_PATTERN)
+        return;
+    if (src == sq.active && a == PV_LOCKED)
+        kit_stash(PV_SLOT(src));                     /* (as it sounds now) */
+    if (pat_voices(&pat[src]) == PV_LOCKED) {
+        uint8_t k[KIT_LEN];
+        kit_get(PV_SLOT(src), k);
+        kit_put(PV_SLOT(dst), k);
+        pv_name(dst);
+    }
+    pat[dst] = pat[src];
+    if (dst == sq.active)                            /* (its old voices go unkept: KIT's way out) */
+        pv_switch(a == PV_LOCKED ? PV_KIT : a, dst, dst);
+}
 /* 0.13: what triggers the global LFOs (perform.c glfo_block): PLAY, a pattern change, a bar; OCT+ on LFO n's page:
  * GLE_KEY << n */
 enum { GLE_PLAY = 1, GLE_PATTERN = 2, GLE_BAR = 4, GLE_KEY = 8 };
@@ -1363,6 +1445,7 @@ static void seq_pattern_activate(void)               /* seq_setPendingPatternAct
 {
     uint32_t t;
     if (sq.active != sq.pending || sq.load_pending) {
+        uint32_t was = pat_voices(&pat[sq.active]), from = sq.active;
         seq_reset_tracks();
         sq.gsync = (1u << NTRACK) - 1u;              /* (the generators' live tracks from the new pattern) */
         sq.load_pending = 0;
@@ -1377,15 +1460,12 @@ static void seq_pattern_activate(void)               /* seq_setPendingPatternAct
         sq.active = sq.pending;
         glfo_ev |= GLE_PATTERN;
         seq_set_shuffle_from(sq.active);
-        if (par[PAR_PATTERN_MODE] == 2u)             /* SKIP_NEXT_KIT_AUTOLOAD (saving to a new slot) */
-            par[PAR_PATTERN_MODE] = 1;
-        else if (par[PAR_PATTERN_MODE] == 1u)        /* KIT CHANGE AUTO: the pattern's kit */
-            kit_load_ram(pat[sq.active].kit);
+        pv_switch(was, from, sq.active);             /* (37: its voices; the LXR's KIT CHANGE AUTO is KIT's) */
         midi_out_pc(sq.active);
         for (t = 0; t < NTRACK; t++)
             midi_out_note_off(t);
-    } else if (par[PAR_PATTERN_MODE] == 2u) {
-        par[PAR_PATTERN_MODE] = 1;
+    } else {
+        pv_skip = 0;
     }
 }
 static void seq_set_next_pattern(uint32_t n)         /* seq_setNextPattern */
@@ -1435,6 +1515,29 @@ static uint32_t seq_next_in_song(int advance)        /* seq_determineNextPattern
         sq.song_n = 0;
     }
     return song_row(songs[sq.song][pos]);
+}
+
+/* 37: what PLAY plays: the pattern (0) or the song (1). Switched to the song while playing, it goes on from the first
+ * row with the pattern playing (none: from the song's first row, at the bar) */
+static void seq_play_song(uint32_t on)
+{
+    uint32_t r;
+    if (on && !sq.song_mode && sq.running) {
+        sq.song_pos = 0xFF;
+        sq.song_n = 0;
+        for (r = 0; r < MAX_SONG_LENGTH; r++)
+            if (song_row(songs[sq.song][r]) == sq.active) {
+                sq.song_pos = (uint8_t)r;
+                break;
+            }
+    }
+    sq.song_mode = (uint8_t)(on != 0u);
+}
+/* .. a kit slot loaded (LOAD, PRESETS) while a KIT pattern plays: the pattern points at it */
+static void pv_loaded(uint32_t s)
+{
+    if (pat_voices(&pat[sq.active]) == PV_KIT && s < NUM_KITS)
+        pat_set_voices(&pat[sq.active], PV_KIT, s);
 }
 
 static void seq_stop_now(void);
@@ -1633,7 +1736,6 @@ static void seq_tick_one(void)
 /* -------------------------------------------------------- transport --- */
 static void seq_start(int reset)                     /* seq_setRunning(1) (+ seq_resetPosition) */
 {
-    uint32_t t;
     if (reset || !sq.running) {
         seq_reset_tracks();
         sq.prescale = 0;

@@ -13,6 +13,14 @@
  *   DUST    a crackle of random clicks; COLOUR: sparse .. dense
  *   POP     a jump that slides back; COLOUR: soft .. sharp edge
  *   CHIRP   a sine swept 4 octaves over its length; COLOUR: down .. up
+ * 0.20 (Phase 35i), after Curtis Roads' Microsound:
+ *   PULSAR  a train of pulsarets (a sine's one cycle at the formant, then silence) speeding up 5 octaves (from 5 Hz
+ *           at the least) to the pitch over 3/4 of its length: rhythm turning into pitch (backwards: slowing down into
+ *           clicks); COLOUR: the formant, the pitch x 1 (soft) .. x 16 (bright)
+ *   WAVELET 1 .. 24 cycles (LENGTH) of a sine at the pitch x 2 in a Hann window; COLOUR: smooth .. rough (phase
+ *           modulated by itself)
+ *   SPLINTER an impulse breaking into 2 .. 12 fragments at shrinking, uneven gaps over 6 .. 150 ms (backwards: the
+ *           fragments gather into the impulse); COLOUR: whole .. shattered
  * The knobs (the MODEL page's): LENGTH (DECAY), COLOUR (BRIGHT), JITTER (STRUCT: each hit's length and colour, a
  * train's gaps), REVERSE (EXCITER: the chance a hit plays backwards: a swell into a cut, a train growing, a sweep the
  * other way), TENSION (a hit's pitch up, falling back). The voice's pitch (its note, pitch EG, random, tape) sets the
@@ -21,7 +29,8 @@
  * A hit sets up at the voice's next block (mi_block, on the core that renders the voice), from the pitch then; each
  * voice has its own noise, so the sound doesn't depend on the core or the order. Samples Q15, envelopes Q30. */
 
-enum { MI_CLICK, MI_TRAIN, MI_CRUNCH, MI_BITS, MI_BURST, MI_SNAP, MI_GRAIN, MI_DUST, MI_POP, MI_CHIRP, NMI };
+enum { MI_CLICK, MI_TRAIN, MI_CRUNCH, MI_BITS, MI_BURST, MI_SNAP, MI_GRAIN, MI_DUST, MI_POP, MI_CHIRP, MI_PULSAR,
+       MI_WAVELET, MI_SPLINTER, NMI };
 _Static_assert(NMI == NMICRO, "rings.c: the MODEL list's MICRO types");
 #define MI_C4 25480320u                              /* the oscillator's increment at C4 (261.63 Hz x 2^32 / FS) */
 #define MI_HZ 97391u                                 /* .. at 1 Hz */
@@ -39,8 +48,10 @@ typedef struct {
     uint32_t ph, inc, wph, winc;                     /* the rate's phase, its window's (GRAIN) */
     int32_t sweep;                                   /* CHIRP: the increment's multiplier a sample, Q30 */
     int32_t reps, gap, hold, width, ratio, spacing;  /* TRAIN: clicks left, the gap so far, its length; the ratio Q16;
-                                                      * the gap Q8 */
-    int32_t levels, inv_lv, sp;                      /* CRUNCH: the levels, 65536 / levels, the hold's speed Q16 */
+                                                      * the gap Q8 (SPLINTER: the same, the gap in samples; PULSAR:
+                                                      * reps a pulsaret sounding) */
+    int32_t levels, inv_lv, sp;                      /* CRUNCH: the levels, 65536 / levels, the hold's speed Q16
+                                                      * (PULSAR: the rate's top and bottom) */
     int32_t l, c;                                    /* this hit's LENGTH and COLOUR, Q16 */
     int32_t ten;                                     /* TENSION: Q16 over 1 */
     int32_t inv_n;                                   /* 2^31 / n */
@@ -51,7 +62,8 @@ static micro_t mi[NVOICE];
  * struck type peaks near an LXR voice (tests/render_test.c) */
 static const uint16_t MI_GAIN[NMI] = {
     [MI_CLICK] = 2048, [MI_TRAIN] = 2253, [MI_CRUNCH] = 2253, [MI_BITS] = 3584, [MI_BURST] = 4608,
-    [MI_SNAP] = 717, [MI_GRAIN] = 2007, [MI_DUST] = 2560, [MI_POP] = 2688, [MI_CHIRP] = 1024};
+    [MI_SNAP] = 717, [MI_GRAIN] = 2007, [MI_DUST] = 2560, [MI_POP] = 2688, [MI_CHIRP] = 1024,
+    [MI_PULSAR] = 1536, [MI_WAVELET] = 1024, [MI_SPLINTER] = 2048};
 
 static inline int32_t mi_noise(micro_t *m) { return (int32_t)xs32(&m->rng) >> 16; }   /* -32768 .. 32767 */
 static inline int32_t mi_q16(uint32_t k) { return (int32_t)(k >= 127u ? 65536u : k * 65536u / 127u); }
@@ -170,6 +182,61 @@ static void mi_setup(micro_t *m, uint32_t inc)
         n = fall * 7 / 10 + 64;
         m->a1 = clamp32(mi_mul(328 + mi_mul(29491, mi_mul(c, c)), r), 98, 32767);
         break;
+    case MI_PULSAR: {                                /* the pitch / 32 (5 Hz at the least) up to the pitch, 30 .. 600 ms */
+        uint64_t f = inc, w;
+        int32_t e;
+        f = f < 20u * MI_HZ ? 20u * MI_HZ : f > 8000u * MI_HZ ? 8000u * MI_HZ : f;
+        n = mi_samples(1966080 + mi_mul(37355520, l));
+        e = ((5 << 16) >> 4) * 11357 / (n * 3 / 4) << 4;   /* (as CHIRP's: ln 2 x 5 over 3/4 of it, Q30; the pitch
+                                                      * held after) */
+        m->levels = (int32_t)f;
+        m->inv_lv = (int32_t)(f >> 5 < 5u * MI_HZ ? 5u * MI_HZ : f >> 5);
+        if (m->back)                                 /* (from the pitch down: 1 / (1 + e)) */
+            e = -e + (int32_t)(((int64_t)e * e) >> 30);
+        else
+            f = (uint32_t)m->inv_lv;
+        m->sweep = (1 << 30) + e;
+        m->inc = (uint32_t)f;
+        w = ((uint64_t)m->levels * (uint32_t)exp2_q16(4 * c)) >> 16;   /* (the formant: x 1 .. 16) */
+        m->winc = (uint32_t)(w > 12000u * (uint64_t)MI_HZ ? 12000u * (uint64_t)MI_HZ : w);
+        m->reps = 1;                                 /* (a pulsaret at once) */
+        break;
+    }
+    case MI_WAVELET: {                               /* 1 .. 24 cycles at the pitch x 2 (523 Hz at C4) */
+        uint64_t f = (uint64_t)inc << 1;
+        int32_t cyc = 1 + (23 * mi_mul(l, l) >> 16);
+        f = f < 40u * MI_HZ ? 40u * MI_HZ : f > 12000u * MI_HZ ? 12000u * MI_HZ : f;
+        m->inc = (uint32_t)f;
+        n = (int32_t)(0xFFFFFFFFu / (uint32_t)f) * cyc;
+        m->winc = 0xFFFFFFFFu / (uint32_t)(n < 2 ? 2 : n);   /* (the window: a turn over the wavelet) */
+        m->amp = mi_mul(c, 41716);                   /* (the phase modulation's depth: 2 radians at 127) */
+        m->hp = 0;                                   /* (low, it's a sub blip) */
+        break;
+    }
+    case MI_SPLINTER: {                              /* the impulse and 2 .. 12 fragments over 6 .. 150 ms */
+        int32_t span = mi_samples(393216 + mi_mul(9437184, l)), i;
+        m->reps = 3 + (10 * c >> 16);
+        m->ratio = 45875 - mi_mul(13107, c);         /* (each gap 0.7 .. 0.5 of the one before) */
+        m->spacing = clamp32(mi_mul(span, 65536 - m->ratio), 6, 20000);
+        m->a1 = clamp32(mi_mul(26214, r), 6554, 32767);   /* (the edges' low pass, Q15: brighter higher) */
+        m->amp = 29491;                              /* (the impulse's level, Q15: 0.9) */
+        m->gap = 0;
+        if (m->back) {                               /* the smallest first, the impulse last */
+            for (i = 1; i < m->reps; i++)
+                m->amp = mi_mul(m->amp, 47186);      /* (x 0.72) */
+            for (i = 2; i < m->reps; i++)
+                m->spacing = mi_mul(m->spacing, m->ratio);
+            m->ratio = (int32_t)(0xFFFFFFFFu / (uint32_t)m->ratio);
+            m->width = 2 + (int32_t)(xs32(&m->rng) & 1u);
+            m->held = mi_mul(m->held, m->amp << 1);
+        } else {
+            m->width = 6;
+            m->held = mi_mul(m->held, 58982);        /* (0.9) */
+        }
+        m->hold = clamp32(m->spacing, 6, 20000);
+        n = 0x7FFFFFFF;                              /* (it ends after its fragments) */
+        break;
+    }
     default: {                                       /* MI_CHIRP: from the pitch x 2.68 (700 Hz at C4) */
         int32_t oct = (c - 32768) * 8, e;            /* (-4 .. +4 octaves, Q16) */
         uint64_t f = ((uint64_t)inc * 175636u) >> 16;
@@ -336,6 +403,63 @@ static void mi_block(uint32_t vi, const voice_t *v, int16_t *buf)
         case MI_POP:
             m->lp += (int32_t)(((int64_t)(m->held - m->lp) * m->a1) >> 15);   /* the edge of the jump */
             y = mi_mul(m->lp, 52429);                /* (0.8) */
+            break;
+        case MI_PULSAR: {
+            uint32_t last = m->ph;
+            int32_t x2 = (x * x) >> 15, gate = 32767 - ((x2 * x2) >> 15);   /* (flat, then a quick close) */
+            uint64_t k;
+            m->ph += m->inc;
+            if (m->ph < last) {                      /* a period begins: its pulsaret */
+                m->wph = 0;
+                m->reps = 1;
+            }
+            if (m->reps) {
+                uint32_t w0 = m->wph;
+                y = mi_mul(sine_at(m->wph + 0x40000000u), mi_mul(gate << 1, 39322));   /* (0.6) */
+                m->wph += m->winc;
+                if (m->wph < w0)                     /* (its cycle done: silence till the next period) */
+                    m->reps = 0;
+            }
+            k = ((uint64_t)m->inc * (uint32_t)m->sweep) >> 30;   /* (it stops at the pitch, or at the bottom) */
+            m->inc = (uint32_t)(k < (uint32_t)m->inv_lv ? (uint32_t)m->inv_lv : k > (uint32_t)m->levels ? (uint32_t)m->levels : k);
+            break;
+        }
+        case MI_WAVELET: {
+            int32_t s = sine_at(m->ph + 0x40000000u), w;
+            y = sine_at(m->ph + (uint32_t)(s * m->amp) + 0x40000000u);
+            m->ph += m->inc;
+            w = m->back ? (x * x) >> 15 : (32767 + sine_at(m->wph)) >> 1;   /* (Hann: (1 - cos) / 2; backwards a
+                                                                              * swell into the cut) */
+            m->wph += m->winc;
+            y = mi_mul(y, mi_mul(w << 1, 45875));    /* (0.7) */
+            break;
+        }
+        case MI_SPLINTER:
+            m->lp += (int32_t)(((int64_t)((m->gap < m->width ? m->held : 0) - m->lp) * m->a1) >> 15);
+            y = m->lp;
+            if (++m->gap >= m->hold) {
+                int32_t s, nz = mi_noise(m);
+                if (--m->reps <= 0) {
+                    m->on = 0;
+                    for (; i < BLOCK; i++)
+                        buf[i] = 0;
+                    return;
+                }
+                m->gap = 0;
+                if (m->back && m->reps == 1) {       /* (backwards, the impulse last) */
+                    m->width = 6;
+                    m->held = nz < 0 ? -29491 : 29491;
+                } else {
+                    m->amp = m->back ? clamp32(mi_mul(m->amp, 91022), 0, 29491) : mi_mul(m->amp, 47186);   /* (x 1/0.72,
+                                                                                                    * x 0.72) */
+                    m->width = 2 + (int32_t)(xs32(&m->rng) % 3u);
+                    m->held = mi_mul(m->amp, 49152 + (nz < 0 ? -nz : nz) / 2);   /* (0.75 .. 1 of it) */
+                    m->held = nz < 0 ? -m->held : m->held;
+                }
+                m->spacing = mi_mul(m->spacing, m->ratio);
+                s = m->spacing + mi_mul(m->spacing, mi_mul(mi_noise(m) << 1, 26214));   /* (+-40%: uneven) */
+                m->hold = m->reps == 1 ? m->width + 48 : clamp32(s, 6, 20000);   /* (the last: its edge's tail) */
+            }
             break;
         default: {                                   /* MI_CHIRP */
             int32_t e = m->back ? mi_mul(x << 1, clamp32((m->n - m->cnt < 22 ? m->n - m->cnt : 22) * 2979, 0, 65536))

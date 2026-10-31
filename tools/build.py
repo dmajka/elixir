@@ -300,10 +300,14 @@ def check(img, syms, dis, rt):
                      f"{rt_org + rt_len - rb_end} B free of {rt_len}")
     if region["RAM"][0] + ram_len != region["POOL"][0]:
         errors.append("app.ld: POOL does not start where RAM ends")
-    if ram_len - bss < 4096:                      # keep >= 4 KiB of .bss spare (state the audio side touches)
-        errors.append(f"RAM headroom {ram_len - bss} B < 4096 B")
-    if pool_len - pool < 8192:                    # keep >= 8 KiB of the pool spare
-        errors.append(f"pool headroom {pool_len - pool} B < 8192 B")
+    # 34: RAM and POOL are one SRAM split by app.ld (no heap; the stacks have their own guarded regions), so the
+    # spare is one reserve: >= 8 KiB across both (was 4 KiB of .bss and 8 KiB of pool apart). The linker still
+    # stops either side at its length; move the split in app.ld when one side fills
+    spare = (ram_len - bss) + (pool_len - pool)
+    notes.append(f"SRAM spare {spare} B (RAM {ram_len - bss} + pool {pool_len - pool}), {spare - 8192} B above the "
+                 f"8 KiB reserve")
+    if spare < 8192:
+        errors.append(f"SRAM spare {spare} B < 8192 B (RAM {ram_len - bss} + pool {pool_len - pool})")
     return errors, notes
 
 

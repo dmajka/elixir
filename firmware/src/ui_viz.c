@@ -214,6 +214,25 @@ static int32_t ic_wave(uint32_t m, uint32_t i, uint32_t a, uint32_t b, uint32_t 
         int32_t e = 32767 - (int32_t)i * 400;
         return (int32_t)(((int64_t)vz_sin(p) * (e > 4000 ? e : 4000)) >> 15);
     }
+    case 30: {                                         /* PULSAR: pulsarets closer and closer, narrower with COLOUR */
+        uint32_t p = i * i * (0xFFFFFFFFu / (IW * IW)) * 7u, k = 1u + b / 16u;
+        return p < 0xFFFFFFFFu / k ? vz_sin(p * k) * 7 / 8 : 0;
+    }
+    case 31: {                                         /* WAVELET: a few cycles in a window, more with LENGTH */
+        int32_t w = (32767 - vz_sin(ph + 0x40000000u)) / 2;
+        return (int32_t)(((int64_t)vz_sin(ph * (1u + a / 8u)) * w) >> 15);
+    }
+    case 32: {                                         /* SPLINTER: a spike, then smaller ones closer and closer */
+        int32_t x = 4, g = IW / 3, h = 30000, k, n = 3 + (int32_t)b / 13;
+        for (k = 0; k < n && x < IW; k++) {
+            if ((int32_t)i >= x && (int32_t)i < x + (k ? 1 : 3))
+                return (k & 1) ? -h : h;
+            x += g;
+            g = g * 2 / 3 > 2 ? g * 2 / 3 : 2;
+            h = h * 3 / 4;
+        }
+        return 0;
+    }
     default: {                                         /* (29) CHIRP: a sine swept up */
         uint32_t p = i * i * (0xFFFFFFFFu / (IW * IW)) * (4u + b / 16u);
         return vz_sin(p) * 7 / 8;
@@ -313,20 +332,44 @@ static void ic_chord(uint32_t a)
     }
     cv_rect(IX + 35, y0 + 27 - CH[a >> 5 & 3u][3] * 3 - 22, 1, 24, T_THEME);
 }
-static void ic_head(uint32_t b)
+/* 37: P SPEECH: a wizard's head (the hat, its stars, the brows, the beard); the lips move as any knob turns (a new
+ * shape at each step; it says nothing about the values), words coming out when they're open */
+static void ic_wizard(uint32_t a, uint32_t b, uint32_t c)
 {
-    static const uint8_t P[][2] = {{20, 64}, {20, 52}, {13, 42}, {11, 30}, {15, 17}, {25, 8}, {37, 5}, {47, 9},
-                                   {53, 17}, {54, 26}, {60, 34}, {55, 37}, {56, 41}, {53, 43}, {56, 46}, {52, 49},
-                                   {51, 53}, {44, 55}, {40, 57}, {40, 64}};
-    uint32_t k;
-    int32_t n;
-    for (k = 0; k + 1u < sizeof P / sizeof P[0]; k++)
-        cv_line_t(IX - 6 + P[k][0], IY0 - 4 + P[k][1], IX - 6 + P[k + 1u][0], IY0 - 4 + P[k + 1u][1], T_THEME, 2);
-    for (n = 1; n <= 1 + (int32_t)b / 48; n++)         /* (its words: arcs from the mouth) */
-        for (k = 0; k < 9u; k++) {
-            int32_t y = (int32_t)k * 2 - 8;
-            cv_pset(IX + 52 + n * 5 - (y * y) / (12 + n * 4), IY0 + 40 + y, ux_mix(vz_bg(), T_THEME, 70 - n * 15));
-        }
+    uint32_t mo = (a * 3u + b * 5u + c * 7u) % 5u;     /* the mouth: 0 shut .. 4 wide */
+    int32_t cx = IX + 33, y, k;
+    uint16_t hat = ux_mix(vz_bg(), T_THEME, 85), face = ux_mix(vz_bg(), T_TEXT, 62);
+    uint16_t beard = ux_mix(vz_bg(), T_TEXT, 92), dark = vz_bg();
+    for (y = 0; y < 26; y++) {                        /* the hat: a cone, its tip bent over to the right */
+        int32_t hw = 2 + y * 19 / 26, sx = (25 - y) * (25 - y) / 50;
+        cv_rect(cx - hw + sx, 22 + y, 2 * hw + 1, 1, hat);
+    }
+    cv_rrect(cx - 27, 46, 55, 6, 3, hat, vz_bg());    /* .. its brim */
+    vz_sparkle(cx - 4, 36, 2);
+    vz_sparkle(cx + 7, 28, 1);
+    ic_disc(cx, 61, 15, 10, face);                    /* the face */
+    for (y = 0; y < 34; y++) {                        /* the beard: wide at the cheeks, to a point */
+        int32_t hw = 17 - y * y / 70 + (y & 3) / 2;
+        if (hw < 1)
+            hw = 1;
+        cv_rect(cx - hw, 63 + y, 2 * hw + 1, 1, beard);
+    }
+    cv_rect(cx - 10, 55, 8, 2, beard);                /* the brows, the eyes */
+    cv_rect(cx + 3, 55, 8, 2, beard);
+    cv_rect(cx - 7, 58, 3, 3, dark);
+    cv_rect(cx + 5, 58, 3, 3, dark);
+    cv_rect(cx - 1, 60, 3, 4, ux_mix(face, T_THEME, 25));   /* the nose */
+    for (k = 0; k < 9; k++) {                         /* the moustache, over the lips */
+        cv_rect(cx - 2 - k, 65 + k / 3, 2, 2, ux_mix(beard, T_TEXT, 30));
+        cv_rect(cx + 1 + k, 65 + k / 3, 2, 2, ux_mix(beard, T_TEXT, 30));
+    }
+    if (mo) {                                         /* the lips: open by mo, words out to the right */
+        ic_disc(cx, 70, 3 + (int32_t)mo, (int32_t)mo, dark);
+        for (k = 1; k <= (int32_t)mo / 2 + 1; k++)
+            ic_ellipse(cx + 18 + k * 6, 70, 2, 4 + k * 2, ux_mix(vz_bg(), T_THEME, 80 - k * 18), 1);
+    } else {
+        cv_rect(cx - 4, 70, 9, 1, dark);
+    }
 }
 static void ic_particles(uint32_t c, int ring)
 {
@@ -404,7 +447,7 @@ static void ic_model(uint32_t m, uint32_t v, uint32_t a, uint32_t b, uint32_t c)
     case 8: ic_bars(b); return;
     case 9: ic_table(b, c); return;
     case 10: ic_chord(a); return;
-    case 11: ic_head(b); return;
+    case 11: ic_wizard(a, b, c); return;
     case 12: ic_swarm(b); return;
     case 14: ic_particles(c, 1); return;
     case 17: ic_drum(0, a); return;
@@ -462,7 +505,8 @@ static const char *model_line(uint32_t m, uint32_t v)
         "A modal resonator: a bell or a bar", "An analog kick", "An analog snare", "An analog hat",
         "A square click, or a doublet", "A train of clicks", "Crunchy, held noise", "An LFSR's bits",
         "A burst of noise", "A snap: noise and a click", "A resonant grain", "A crackle of dust",
-        "A pop that slides back", "A sine swept four octaves"};
+        "A pop that slides back", "A sine swept four octaves", "Pulses speeding up into a pitch",
+        "A few cycles of a sine in a window", "An impulse splintering apart"};
     static const char *const LXR[4] = {"The LXR's drum: OSC, FM, a transient",
                                        "The LXR's snare: OSC, noise, a transient", "The LXR's cymbal: 3 OSCs in FM",
                                        "The LXR's hats: 3 OSCs in FM"};
@@ -1483,45 +1527,121 @@ static uint32_t track_viz_sig(void)
 }
 
 /* -------------------------------------------------------- the FX pages --- */
-/* REVERB: a room in 3-D on the right (ROOM a box, HALL a big one, PLATE a thin sheet, SPRING a long tank, its coil
- * inside), SIZE growing it; its echoes boxes going back into it, LEVEL their strength, DAMPING them fading sooner.
- * The type's name and what it is on the left */
+/* REVERB (37): what makes the sound, on the right: ROOM a hut, HALL a castle, PLATE a metal shield, SPRING a bare
+ * coil; SIZE grows it (the spring longer), its echoes arcs going out to the right, LEVEL their strength, DAMPING them
+ * fading sooner. The type's name and what it is on the left */
+static void vz_arc(int32_t cx, int32_t cy, int32_t r, uint16_t c)   /* an arc, -50 .. +50 degrees, to the right */
+{
+    int32_t k, px = 0, py = 0;
+    for (k = -5; k <= 5; k++) {
+        uint32_t ph = (uint32_t)(k * 0x02400000);
+        int32_t x = cx + ((vz_sin(ph + 0x40000000u) * r) >> 15), y = cy + ((vz_sin(ph) * r) >> 15);
+        if (k > -5)
+            cv_line(px, py, x, y, c);
+        px = x;
+        py = y;
+    }
+}
+static void vz_cone(int32_t cx, int32_t top, int32_t hw, int32_t h, uint16_t c)   /* a roof: apex up, base hw */
+{
+    int32_t y;
+    for (y = 0; y < h; y++) {
+        int32_t w = hw * (y + 1) / h;
+        cv_rect(cx - w, top + y, 2 * w + 1, 1, c);
+    }
+}
 static void viz_reverb(void)
 {
-    static const char *const D[NREV] = {"Close walls: quick, early echoes", "A spring in a tank: twangy, bright",
-                                        "A big hall: a long, slow swell", "A steel plate: dense and smooth"};
-    static const uint8_t SH[NREV][3] = {{70, 66, 44}, {100, 30, 30}, {100, 92, 70}, {94, 74, 16}};   /* w h depth % */
+    static const char *const D[NREV] = {"A little hut: close walls, quick echoes", "A bare spring: twangy, bright",
+                                        "A castle hall: a long, slow swell", "A steel shield: dense and smooth"};
     uint32_t ty = par[PAR_REV_TYPE] % NREV, sz = par[PAR_REV_SIZE], dp = par[PAR_REV_DAMP], lv = par[PAR_REV_LEVEL];
-    int32_t f = 55 + (int32_t)sz * 45 / 127, w = 84 * SH[ty][0] * f / 10000, h = 64 * SH[ty][1] * f / 10000;
-    int32_t dx = 40 * SH[ty][2] * f / 10000, dy = dx * 2 / 3, x0, y0, i, n = 2 + (int32_t)sz * 5 / 127;
-    uint16_t edge = ux_mix(vz_bg(), T_THEME, 90);
-    if (w < 8)
-        w = 8;
-    if (h < 6)
-        h = 6;
-    x0 = 112 + (VX1 - 112 - w - dx) / 2;             /* (the front face's top left: the whole centred on the right) */
-    y0 = VY0 + 2 + dy + (VY1 - VY0 - 2 - h - dy) / 2;
+    int32_t f = 55 + (int32_t)sz * 45 / 127, gy = VY1 - 4, cx = 166, cy, rx, i, n = 2 + (int32_t)sz * 4 / 127;
+    uint16_t line = ux_mix(vz_bg(), T_THEME, 90), fill = ux_mix(vz_bg(), T_THEME, 30), dark = ux_mix(vz_bg(), T_TEXT, 8);
+    uint16_t roof = ux_mix(vz_bg(), T_THEME, 70);
     vz_panel("REVERB");
     cv_text(VX0, 26, &AF_M, L_REVMODEL[ty], T_THEME);
     vz_wrap(VX0, 50, 92, 14, 3u, D[ty], T_TEXT);
-    cv_rect(x0 + dx, y0 - dy, w, h, ux_mix(vz_bg(), T_THEME, 4 + (int32_t)lv * 22 / 127));   /* (the back wall: */
-    cv_frame(x0 + dx, y0 - dy, w, h, ux_mix(vz_bg(), T_THEME, 35));   /* .. LEVEL tints it; the edges to it) */
-    cv_line(x0, y0, x0 + dx, y0 - dy, ux_mix(vz_bg(), T_THEME, 55));
-    cv_line(x0 + w - 1, y0, x0 + w - 1 + dx, y0 - dy, ux_mix(vz_bg(), T_THEME, 55));
-    cv_line(x0, y0 + h - 1, x0 + dx, y0 + h - 1 - dy, ux_mix(vz_bg(), T_THEME, 35));
-    cv_line(x0 + w - 1, y0 + h - 1, x0 + w - 1 + dx, y0 + h - 1 - dy, ux_mix(vz_bg(), T_THEME, 55));
-    for (i = n; i >= 1; i--) {                       /* (the echoes, back first: fainter the further, damped sooner) */
-        int32_t ex = dx * i / (n + 1), ey = dy * i / (n + 1), a;
-        a = ((int32_t)lv + 30) * 70 / 157 - i * (20 + (int32_t)dp * 40 / 127) / n;
-        if (a > 4)
-            cv_frame(x0 + ex, y0 - ey, w, h, ux_mix(vz_bg(), T_THEME, a));
+    if (ty == 0u) {                                  /* ROOM: a hut, its thatched roof, a door, a window */
+        int32_t w = 58 * f / 100, h = 32 * f / 100, x0 = cx - w / 2, rh = h + 4;
+        cv_rect(112, gy, VX1 - 112, 1, vz_faint());
+        cv_rect(x0, gy - h, w, h, fill);
+        cv_frame(x0, gy - h, w, h, line);
+        vz_cone(cx, gy - h - rh, w / 2 + 7, rh, roof);
+        for (i = 1; i < 4; i++)                      /* (the thatch) */
+            cv_line(cx - (w / 2 + 7) * i / 4, gy - h - rh + rh * i / 4, cx + (w / 2 + 7) * i / 4, gy - h - rh + rh * i / 4,
+                    ux_mix(roof, vz_bg(), 35));
+        cv_rrect(cx - w / 8 - 1, gy - h * 6 / 10, w / 4 + 2, h * 6 / 10, 3, dark, fill);
+        cv_rect(x0 + w - w / 4 - 3, gy - h + h / 4, w / 6 + 2, w / 6 + 2, ux_mix(vz_bg(), T_ACCENT, 70));
+        cy = gy - h;
+        rx = w / 2 + 8;
+    } else if (ty == 2u) {                           /* HALL: a castle, its wall, two towers, a gate */
+        int32_t w = 88 * f / 100, h = 30 * f / 100, x0 = cx - w / 2, tw = w / 5, th = h * 3 / 2, t;
+        cv_rect(112, gy, VX1 - 112, 1, vz_faint());
+        cv_rect(x0, gy - h, w, h, fill);
+        for (i = x0 + tw; i + 4 < x0 + w - tw; i += 8)   /* (the battlements) */
+            cv_rect(i + 2, gy - h - 4, 4, 4, fill);
+        for (t = 0; t < 2; t++) {
+            int32_t tx = t ? x0 + w - tw : x0;
+            cv_rect(tx, gy - th, tw, th, ux_mix(vz_bg(), T_THEME, 42));
+            cv_frame(tx, gy - th, tw, th, line);
+            vz_cone(tx + tw / 2, gy - th - tw, tw / 2 + 2, tw, roof);
+            cv_rect(tx + tw / 2, gy - th - tw - 7, 1, 7, line);   /* (the flag) */
+            cv_rect(tx + tw / 2 + 1, gy - th - tw - 7, 5, 3, T_ACCENT);
+            cv_rect(tx + tw / 2 - 1, gy - th + th / 3, 2, 5, dark);
+        }
+        cv_frame(x0, gy - h, w, h, line);
+        cv_rrect(cx - w / 10, gy - h * 6 / 10, w / 5, h * 6 / 10, w / 10, dark, fill);
+        cy = gy - h;
+        rx = w / 2 + 6;
+    } else if (ty == 3u) {                           /* PLATE: a metal shield, a boss and rivets, its edge */
+        int32_t w = 52 * f / 100, h = 66 * f / 100, x0 = cx - w / 2, top = (VY0 + VY1) / 2 - h / 2, y;
+        uint16_t steel = ux_mix(vz_bg(), T_TEXT, 48), shine = ux_mix(vz_bg(), T_TEXT, 78);
+        for (y = 0; y < h; y++) {
+            int32_t hw = w / 2, t = y - h * 2 / 5;
+            if (t > 0) {
+                int32_t r = h - h * 2 / 5;
+                hw = w / 2 * (r * r - t * t) / (r * r);
+            }
+            if (hw < 1)
+                hw = 1;
+            cv_rect(cx - hw, top + y, 2 * hw + 1, 1, line);
+            if (hw > 2) {
+                cv_rect(cx - hw + 2, top + y, hw - 2, 1, shine);
+                cv_rect(cx, top + y, hw - 1, 1, steel);
+            }
+        }
+        cv_rect(x0 + 2, top, w - 3, 2, line);
+        ic_disc(cx, top + h * 2 / 5, w / 7 + 1, w / 7 + 1, line);
+        ic_disc(cx - 1, top + h * 2 / 5 - 1, w / 7 - 2, w / 7 - 2, shine);
+        for (i = 0; i < 4; i++)
+            cv_rect(x0 + 5 + i * (w - 12) / 3, top + 4, 2, 2, line);
+        cy = top + h * 2 / 5;
+        rx = w / 2 + 6;
+    } else {                                         /* SPRING: a bare coil, longer with SIZE */
+        int32_t len = 36 + (int32_t)sz * 64 / 127, x0 = 118, turns = 4 + (int32_t)sz * 6 / 127, ry = 15, pass;
+        cy = (VY0 + VY1) / 2 + 4;
+        for (pass = 0; pass < 2; pass++) {           /* (its far side first, dim; its near side over it) */
+            int32_t k, px = 0, py = 0, N = turns * 24;
+            for (k = 0; k <= N; k++) {
+                uint32_t ph = (uint32_t)k * 0x0AAAAAABu;   /* (24 steps a turn) */
+                int32_t x = x0 + len * k / N + ((vz_sin(ph) * (len / turns * 3 / 5)) >> 15);   /* (leaning) */
+                int32_t y = cy - ((vz_sin(ph + 0x40000000u) * ry) >> 15), near = vz_sin(ph) > 0;
+                if (k && near == pass)
+                    cv_line_t(px, py, x, y, pass ? T_THEME : ux_mix(vz_bg(), T_THEME, 55), pass ? 2 : 1);
+                px = x;
+                py = y;
+            }
+        }
+        cv_line_t(x0 - 4, cy + ry, x0, cy + ry, T_THEME, 2);   /* (its hooks) */
+        cv_line_t(x0 + len, cy - ry, x0 + len + 4, cy - ry, T_THEME, 2);
+        cx = x0 + len / 2;
+        rx = len / 2 + 6;
     }
-    if (ty == 1u) {                                  /* SPRING: its coil along the tank */
-        int32_t cy = y0 + h / 2 - dy / 2, x;
-        for (x = x0 + 4; x + 4 < x0 + w + dx / 2; x += 4)
-            cv_line(x, cy - h / 3, x + 2, cy + h / 3, T_ACCENT);
+    for (i = 1; i <= n; i++) {                       /* the echoes: LEVEL their strength, DAMPING fading them sooner */
+        int32_t al = ((int32_t)lv + 30) * 70 / 157 - i * (20 + (int32_t)dp * 40 / 127) / n;
+        if (al > 4 && cx + rx + i * 5 < VX1)
+            vz_arc(cx, cy, rx + i * 5, ux_mix(vz_bg(), T_THEME, al));
     }
-    cv_frame(x0, y0, w, h, edge);
 }
 /* the delay's echoes: each a bar, FEEDBACK's power of the first; PING PONG left above, right below; TAPE wobbles;
  * TONE darkens the later ones; (DUB) the pitch climbing or falling, GLITCH breaking some; (SEND) the echoes into a wash */

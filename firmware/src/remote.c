@@ -181,8 +181,7 @@ static void rm_button(uint32_t j, int down)          /* button j (TRACKS' 0 .., 
             if (sq.running) {
                 seq_stop_now();
             } else {
-                sq.song_mode = 0;
-                seq_start(1);
+                seq_start(1);                        /* (37: the pattern or the song, as Play says) */
             }
         } else if (f == RM_REC && down) {
             sq.rec ^= 1u;

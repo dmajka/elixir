@@ -109,10 +109,11 @@ def main():
          "#pragma once", "#include <stdint.h>", "",
          "/* sine, 4096 points + the wrap point (Oscillator.c: 12-bit index, 20-bit fraction) */"]
     L += arr("int16_t", "LXR_SINE", "[4097]", sine)
-    L += ["", "/* band-limited saw / square / triangle, 11 overtone tables of 1024 (freqToTableIndex picks one) */"]
-    L += arr("int16_t", "LXR_SAW", "[11][1024]", tabs["sawTable"])
-    L += arr("int16_t", "LXR_REC", "[11][1024]", tabs["recTable"])
-    L += arr("int16_t", "LXR_TRI", "[11][1024]", tabs["triTable"])
+    L += ["", "/* band-limited saw / square / triangle, the LXR's overtone tables 4..10 of 1024 (freqToTableIndex picks one; it never",
+          " * picks 0..3, so they are left out: LXR_TAB0) */", "#define LXR_TAB0 4"]
+    L += arr("int16_t", "LXR_SAW", "[7][1024]", tabs["sawTable"][4 * 1024:])     # (34: 24 KB of flash)
+    L += arr("int16_t", "LXR_REC", "[7][1024]", tabs["recTable"][4 * 1024:])
+    L += arr("int16_t", "LXR_TRI", "[7][1024]", tabs["triTable"][4 * 1024:])
     L += ["", "/* the transient generator's one-shots: 12 x 2205 signed 8-bit samples (~50 ms) */",
           "#define LXR_TRANS_N 12", "#define LXR_TRANS_LEN 2205"]
     L += arr("int8_t", "LXR_TRANS", "[12][2205]", trans, 24)

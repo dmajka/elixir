@@ -4,8 +4,9 @@
  * modulation targets of Cc2Text.c; Copyright (C) 2012-2026 Erica Synths, GPL-3.0-only), with the LXR's 3-letter
  * value lists spelled out for a larger screen; and Elixir's own parameters (sound.c: the sends, the reverb). */
 
-static uint8_t par_text_of[NPAR];                /* TEXT_* (its name), from the pages and the target list */
-static uint8_t par_voice_of[NPAR];               /* the voice 0..5 a sound parameter belongs to, 0xFF none */
+static uint8_t par_text_of[NPAR] POOL;           /* TEXT_* (its name), from the pages and the target list */
+static uint8_t par_voice_of[NPAR] POOL;          /* the voice 0..5 a sound parameter belongs to, 0xFF none (34: both in
+                                                  * the pool, which is zeroed at boot as .bss is) */
 static uint32_t par_k_voice(uint32_t p);
 
 static uint32_t par_voice(uint32_t p) { return p < NPAR ? par_voice_of[p] : 0xFFu; }
@@ -76,7 +77,8 @@ static const char *const L_MODEL[] = {"LXR", "MODAL", "STRING", "FM",   /* (0.9:
                                       "P SPEECH", "P SWARM", "P NOISE", "P PARTCL", "P STRING", "P MODAL", "P BD",
                                       "P SD", "P HH",   /* (0.15: Plaits' engines, plaits.c) */
                                       "CLICK", "TRAIN", "CRUNCH", "BITS", "BURST", "SNAP", "GRAIN", "DUST", "POP",
-                                      "CHIRP"};   /* (24: MICRO's, micro.c) */
+                                      "CHIRP", "PULSAR", "WAVELET", "SPLINTER"};   /* (24: MICRO's, micro.c; 0.20:
+                                                                                     * the last three) */
 _Static_assert(sizeof L_MODEL / sizeof L_MODEL[0] == NMODEL, "rings.c: the MODEL list");
 static const char *const L_BITS[] = {"OFF", "15", "14", "13", "12", "11", "10", "9", "8", "7", "6", "5", "4", "3",
                                      "2", "1"};

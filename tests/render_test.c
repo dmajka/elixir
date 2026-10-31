@@ -280,7 +280,8 @@ int main(int argc, char **argv)
     {   /* 24: MICRO, each type on each voice, struck (LENGTH, COLOUR at the middle): it sounds, doesn't clip, ends;
          * backwards it sounds too; its level (over where it sounds) near the others'; SN-HH can't take Rings' */
         static const char *const MI_NAMES[NMICRO] = {"CLICK", "TRAIN", "CRUNCH", "BITS", "BURST", "SNAP", "GRAIN",
-                                                     "DUST", "POP", "CHIRP"};
+                                                     "DUST", "POP", "CHIRP", "PULSAR", "WAVELET",
+                                                     "SPLINTER"};
         uint32_t v, e, back, i;
         for (v = 0; v < NVOICE; v++) {
             par_set(PAR_MDECAY1 + v, 64);

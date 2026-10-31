@@ -104,6 +104,8 @@ static void osc_set_freq(osc_t *o, uint32_t pmod)
     o->tab = (uint8_t)t;
 }
 
+/* the table's row (34: tables 0..3 aren't kept; a voice before its first osc_set_freq plays table 4) */
+static inline uint32_t osc_lv(const osc_t *o) { return o->tab > LXR_TAB0 ? o->tab - LXR_TAB0 : 0u; }
 static inline int32_t wt_at(const int16_t *t, uint32_t ph)      /* 1024-point table, 22-bit fraction */
 {
     uint32_t i = ph >> 22, f = (ph >> 7) & 0x7FFFu;
@@ -140,7 +142,7 @@ static void osc_block(osc_t *o, int16_t *buf, int32_t gain, const int16_t *fm, i
     case W_TRI:
     case W_SAW:
     case W_REC: {
-        const int16_t *t = WT[o->wave] + o->tab * 1024u;
+        const int16_t *t = WT[o->wave] + osc_lv(o) * 1024u;
         for (i = 0; i < BLOCK; i++) {
             uint32_t idx = ph;
             if (fm) {
@@ -154,7 +156,7 @@ static void osc_block(osc_t *o, int16_t *buf, int32_t gain, const int16_t *fm, i
         break;
     }
     case W_PWM: {                                           /* calcPwmBlock: saw - saw shifted by pwm */
-        const int16_t *t = LXR_SAW[o->tab];
+        const int16_t *t = LXR_SAW[osc_lv(o)];
         for (i = 0; i < BLOCK; i++) {
             uint32_t idx = ph;
             if (fm) {

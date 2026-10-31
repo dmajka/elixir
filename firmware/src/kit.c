@@ -12,7 +12,8 @@
  * the library and LXR files keep a byte a value. kit_get / kit_put a whole kit; kit_load_ram unpacks straight into
  * par[] (it runs in the audio ISR too: a pattern's kit, MIDI's bank select), with no buffer shared with the main loop */
 #define KIT_PK 344                                   /* (a slot's bytes: kit_pk_init checks the widths fit) */
-static uint8_t kits[NUM_KITS][KIT_PK] POOL;          /* (the pool, the fast RAM kept for the ISR) */
+#define KIT_SHARED NUM_KITS                          /* 37: a row past the slots: the shared voices (seq.c PV_*) */
+static uint8_t kits[NUM_KITS + 1][KIT_PK] POOL;      /* (the pool, the fast RAM kept for the ISR) */
 static uint8_t kit_w[KIT_LEN] POOL;                  /* each value's bits (kit_pk_init) */
 static uint16_t kit_pk_bits;
 static char kit_names[NUM_KITS][KIT_NAME_LEN];
@@ -90,12 +91,10 @@ static int kit_pk_init(void)                         /* 0: the packed kit fits K
     kit_pk_bits = (uint16_t)t;
     return t <= KIT_PK * 8u ? 0 : -1;
 }
-static void kit_put(uint32_t n, const uint8_t *k)    /* a kit (kit layout) into slot n; a value past its bits: its most */
+static void kit_pack(uint32_t n, const uint8_t *k)   /* a kit (kit layout) into row n; a value past its bits: its most */
 {
     uint8_t *d = kits[n];
     uint32_t i, acc = 0, b = 0, o = 0;
-    if (n >= NUM_KITS)
-        return;
     for (i = 0; i < KIT_LEN; i++) {
         uint32_t w = kit_w[i], v = k[i], top = (1u << w) - 1u;
         acc |= (v > top ? top : v) << b;
@@ -110,6 +109,11 @@ static void kit_put(uint32_t n, const uint8_t *k)    /* a kit (kit layout) into 
         d[o++] = (uint8_t)acc;
     while (o < KIT_PK)
         d[o++] = 0;
+}
+static void kit_put(uint32_t n, const uint8_t *k)    /* .. into slot n */
+{
+    if (n < NUM_KITS)
+        kit_pack(n, k);
 }
 #define KIT_UNPACK(n, put) do { const uint8_t *s_ = kits[n]; uint32_t i_, acc_ = 0, b_ = 0, o_ = 0; \
         for (i_ = 0; i_ < KIT_LEN; i_++) { uint32_t w_ = kit_w[i_]; \
@@ -126,6 +130,15 @@ static void kit_get(uint32_t n, uint8_t *out)        /* slot n as a kit (kit lay
     KIT_UNPACK(n, KIT_TO_BUF);
 }
 
+static void kit_get_row(uint32_t n, uint8_t *out)    /* 37: row n (KIT_SHARED too) as a kit */
+{
+    if (n > KIT_SHARED) {
+        kit_init_values(out);
+        return;
+    }
+    KIT_UNPACK(n, KIT_TO_BUF);
+}
+
 /* preset_loadDrumsetRam: a slot into the edit buffer (the morph target stays) */
 static void kit_load_ram(uint32_t n)
 {
@@ -133,6 +146,36 @@ static void kit_load_ram(uint32_t n)
         return;
     KIT_UNPACK(n, KIT_TO_PAR);
     kit_loaded = (uint8_t)n;
+    kit_loads++;
+    snd_post_all();
+}
+/* 37: the edit buffer as it is (no morph) into row n (a slot, or KIT_SHARED), and back; kit_loaded stays */
+static void kit_stash(uint32_t n)                    /* (straight from par[]: it runs in the audio ISR, no buffer) */
+{
+    uint8_t *d = kits[n <= KIT_SHARED ? n : KIT_SHARED];
+    uint32_t i, acc = 0, b = 0, o = 0;
+    if (n > KIT_SHARED)
+        return;
+    for (i = 0; i < KIT_LEN; i++) {
+        uint32_t w = kit_w[i], v = par[kit_par(i)], top = (1u << w) - 1u;
+        acc |= (v > top ? top : v) << b;
+        b += w;
+        while (b >= 8u) {
+            d[o++] = (uint8_t)acc;
+            acc >>= 8;
+            b -= 8u;
+        }
+    }
+    if (b)
+        d[o++] = (uint8_t)acc;
+    while (o < KIT_PK)
+        d[o++] = 0;
+}
+static void kit_unstash(uint32_t n)
+{
+    if (n > KIT_SHARED)
+        return;
+    KIT_UNPACK(n, KIT_TO_PAR);
     kit_loads++;
     snd_post_all();
 }
