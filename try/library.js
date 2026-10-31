@@ -192,6 +192,27 @@ export class Library {
 }
 export const KL_KIT = 1, KL_SOUND = 2;
 
+// 0.19: the Hrtl kit packs (tools/gen_kit_packs.py: .ktlb files in the emulator's kits/), each in its own library
+// slots. addPacks puts them into the slots that are empty: a slot holding a kit keeps it.
+export const KIT_PACKS = [
+  { id: "hrtl-dlc", name: "Hrtl DLC kits", file: "hrtl-dlc.ktlb", slots: "97–112" },
+  { id: "hrtl-untz", name: "Hrtl UNTZ kits", file: "hrtl-untz.ktlb", slots: "113–128" },
+];
+export async function fetchPack(base, pack) {          // base: where kits/ is ("../try/", "")
+  const r = await fetch(base + "kits/" + pack.file);
+  if (!r.ok) throw new Error(`${pack.file}: HTTP ${r.status}`);
+  return unpackKitLib(await r.arrayBuffer());
+}
+export async function addPacks(lib, entries, onProgress = () => {}) {   // -> { added, kept }
+  const used = new Set((await lib.libList(KL_KIT)).map((e) => e.slot));
+  const todo = entries.filter((e) => e.kind === KL_KIT && !used.has(e.slot));
+  for (let i = 0; i < todo.length; i++) {
+    await lib.libPut(KL_KIT, todo[i].slot, todo[i].name, todo[i].data);
+    onProgress(i + 1, todo.length);
+  }
+  return { added: todo.length, kept: entries.length - todo.length };
+}
+
 // a kit library backup file: "KTLB", a count, then (kind, slot, name[8], length (2), data) for each entry
 export function packKitLib(entries) {
   const out = [0x4b, 0x54, 0x4c, 0x42, ...u32(entries.length)];
