@@ -1,0 +1,278 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only
+     Elixir's cheat sheet: two landscape pages, printed to web/cheatsheet.pdf by tools/cheatsheet.sh (headless
+     Chrome); web/make_site.py puts the PDF at the site's root. Everything here is from MANUAL.md. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elixir Cheat Sheet</title>
+<style>
+  @page { size: letter landscape; margin: 0.32in; }
+  :root { --fg: #1d1b18; --dim: #6a645a; --line: #e5dfd3; --well: #f4f0e8; --accent: #a85f00; --fill: #f0a43a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #fff; color: var(--fg); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font: 8.3pt/1.36 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; }
+  .page { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 16px; grid-template-rows: auto 1fr;
+          height: 7.85in; overflow: hidden; }
+  .page + .page { break-before: page; }
+  .col { min-width: 0; }
+  header { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 10px; border-bottom: 2px solid var(--fill);
+           padding-bottom: 3px; margin-bottom: 6px; }
+  header h1 { font-size: 15pt; margin: 0; letter-spacing: -0.01em; }
+  header h1 span { color: var(--accent); }
+  header p { margin: 0; color: var(--dim); }
+  header .right { margin-left: auto; }
+  h2 { font-size: 9.2pt; margin: 9px 0 2px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.04em; }
+  h2:first-child { margin-top: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 0 0 2px; }
+  td, th { padding: 1.3px 4px 1.3px 0; vertical-align: top; text-align: left; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; color: var(--dim); }
+  td:first-child { font-weight: 650; white-space: nowrap; }
+  .knobs td:first-child { white-space: normal; }
+  .knobs td { font-size: 7.7pt; }
+  .k { display: inline-block; background: var(--well); border: 1px solid var(--line); border-radius: 3px; padding: 0 3px;
+       font-weight: 650; }
+  p { margin: 2px 0 4px; }
+  .note { color: var(--dim); }
+  .shot { float: right; width: 1.45in; margin: 0 0 4px 8px; image-rendering: pixelated; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<section class="page">
+  <header>
+    <h1><span>Elixir</span> cheat sheet</h1>
+    <p>drum machine firmware for the M-VAVE FM-1 · 1 of 2</p>
+    <p class="right">Black keys numbered 1–11 and white keys 1–16, left to right</p>
+  </header>
+
+  <div class="col">
+    <h2>A beat in a minute</h2>
+    <p><span class="k">HOME</span> grid · black <span class="k">1</span> (D1) · white 1 5 9 13 · black
+      <span class="k">4</span> (SN) · white 5 13 · black <span class="k">6</span> (CH) · white 1 3 5 … 15 ·
+      <span class="k">PLAY</span>. Turn <span class="k">PRESETS</span> for kits, <span class="k">OCT+</span> loads one.</p>
+
+    <h2>Keys and knobs</h2>
+    <table>
+      <tr><td>White 1–16</td><td>Steps of the bar on screen · patterns (pattern page) · rolls and effects (PERF)</td></tr>
+      <tr><td>Black 1–7</td><td>Track: D1 D2 D3 SN CY CH OH (CH and OH share a voice)</td></tr>
+      <tr><td>Black 8–11</td><td>Bar 1–4 · banks on pattern, song, save and load pages · repeat length in PERF</td></tr>
+      <tr><td>OCT−</td><td><b>SHIFT</b> (hold): the screen shows what SHIFT (OCT−) + each key does</td></tr>
+      <tr><td>OCT+</td><td><b>COPY</b> (hold) · OK in dialogs · casts a spell</td></tr>
+      <tr><td>ALGORITHM</td><td>Select the track</td></tr>
+      <tr><td>SELECT</td><td>The page; in lists, the row</td></tr>
+      <tr><td>PRESETS</td><td>Kit browser; on a sound page, the sound browser</td></tr>
+      <tr><td>KNOB 1–4</td><td>The four cards at the bottom of the screen</td></tr>
+      <tr><td>MASTER</td><td>Output volume</td></tr>
+    </table>
+
+    <h2>Buttons (press again for the next page)</h2>
+    <table>
+      <tr><td>HOME</td><td>Grid → patterns → song</td></tr>
+      <tr><td>EDIT</td><td>Model → oscillator → FM → transient</td></tr>
+      <tr><td>ENV</td><td>Amp EG → gate → mod EG / velocity</td></tr>
+      <tr><td>SCL</td><td>Filter → shape → insert FX</td></tr>
+      <tr><td>LFO</td><td>LFO 1 → LFO 2 → random per hit → cross mod / choke</td></tr>
+      <tr><td>GLO</td><td>Mixer → config</td></tr>
+      <tr><td>FX</td><td>FX bus → reverb (SELECT for the pages)</td></tr>
+      <tr><td>SEQ</td><td>Track pages (track, generator, action, groove, bounce, melody, scale) → step edit</td></tr>
+      <tr><td>ARP</td><td>PERF: PERFORM → SPELLS → GLOBAL MOD</td></tr>
+      <tr><td>SAVE</td><td>Save → load</td></tr>
+      <tr><td>PLAY · REC</td><td>Start / stop · record on / off</td></tr>
+    </table>
+  </div>
+
+  <div class="col">
+    <h2>SHIFT (OCT−) + …</h2>
+    <table>
+      <tr><td>white 1–7</td><td>Play that track's voice</td></tr>
+      <tr><td>white 8 · 9</td><td>KIT: load a kit · MORPH: load the morph target</td></tr>
+      <tr><td>white 10 · 16</td><td>SONG page · PATTERN page</td></tr>
+      <tr><td>white 11 · 12</td><td>PROJECT: load a project · CONFIG</td></tr>
+      <tr><td>white 13</td><td>RELOAD the kit and pattern as saved</td></tr>
+      <tr><td>white 14</td><td>LAST: tap the track's last step (again: all tracks)</td></tr>
+      <tr><td>white 15</td><td>FX</td></tr>
+      <tr><td>track key</td><td>Mute / unmute</td></tr>
+      <tr><td>bar key</td><td>Track length 16 / 32 / 48 / 64</td></tr>
+      <tr><td>OCT+</td><td><b>CLEAR</b>: SELECT a choice, SHIFT (OCT−) + OCT+ again to confirm</td></tr>
+      <tr><td>GLO</td><td>Solo / unsolo the selected track</td></tr>
+      <tr><td>HOME</td><td>PERF RESET: every performance effect off</td></tr>
+      <tr><td>EDIT</td><td>KEYS: the keys play the track's voice</td></tr>
+      <tr><td>SEQ</td><td>The links</td></tr>
+      <tr><td>PLAY</td><td>Play the song from its start</td></tr>
+      <tr><td>REC · SAVE</td><td>Record options · load page</td></tr>
+    </table>
+
+    <h2>COPY (OCT+) + …</h2>
+    <table>
+      <tr><td>bar key</td><td>Copy the shown bar there (on the grid: every track)</td></tr>
+      <tr><td>track, track</td><td>Copy a track</td></tr>
+      <tr><td>pattern, pattern</td><td>Copy a pattern (pattern page)</td></tr>
+      <tr><td>held + knob</td><td>Control All (sound page): the knob on every track; let go, then OCT+ reverts, OCT− keeps</td></tr>
+    </table>
+
+    <h2>Locks</h2>
+    <p>On a sound page, <b>hold a step key and turn a knob</b>: that value for that step only. Turning knobs while
+      recording writes locks too.</p>
+
+    <h2>The grid</h2>
+    <p>Bar height: velocity · outline: chance under 100% · notch: flam · tick below: shift · dot top right: lock ·
+      dot top left: condition · bar below: ratchet. Knobs: tempo (down to MIDI: follow clock), shuffle, length,
+      volume.</p>
+  </div>
+
+  <div class="col">
+    <img class="shot" src="../docs/card.png" alt="">
+    <h2>Step edit (SEQ twice)</h2>
+    <p>Tap a white key to select a step (again: on / off). SELECT for the pages.</p>
+    <table class="knobs">
+      <tr><th>Page</th><th>K1</th><th>K2</th><th>K3</th><th>K4</th></tr>
+      <tr><td>STEP</td><td>Velocity</td><td>Note</td><td>Chance</td><td>Condition</td></tr>
+      <tr><td>TIMING</td><td>Flam</td><td>Shift</td><td>Length</td><td>–</td></tr>
+      <tr><td>LOCKS</td><td>Lock 1</td><td>value</td><td>Lock 2</td><td>value</td></tr>
+      <tr><td>RATCHET</td><td>Hits</td><td>Shape</td><td>Rate</td><td>Fade</td></tr>
+    </table>
+    <p class="note">Length: AUTO, 1/32 … 1/2, TIE (slides into the next note). Shape: even or BOUNCE.</p>
+
+    <h2>Sound pages</h2>
+    <p>Each page has two rows of four knobs: the button again (or SELECT) gives the other row. MODEL picks LXR,
+      Rings or Plaits (D1–D3) or a MICRO type (any track).</p>
+
+    <h2>Saving (SAVE · SHIFT (OCT−) + SAVE loads)</h2>
+    <table>
+      <tr><td>KIT</td><td>64 slots or the library's 128 · OCT+, name, OCT+</td></tr>
+      <tr><td>PATTERN</td><td>32 · a white key saves to that pattern</td></tr>
+      <tr><td>SONG</td><td>64 · OCT+</td></tr>
+      <tr><td>MORPH</td><td>Saves the mixture you hear; loads as the morph target</td></tr>
+      <tr><td>SOUND</td><td>The library's 128: one track's sound</td></tr>
+      <tr><td>PROJECT</td><td>4 · everything</td></tr>
+      <tr><td>FACTORY</td><td>The 85 factory kits (load only)</td></tr>
+    </table>
+    <p class="note">Naming: K1 position, K2 letter, K3 case; OCT+ saves, OCT− alone goes back.</p>
+
+    <h2>Patterns and songs (HOME)</h2>
+    <p>Pattern page: white key queues a pattern, bar keys pick the bank. Song page: K1 song, K2 row, K3 the
+      row's pattern (END, LOOP), K4 repeats (x1 … x16).</p>
+  </div>
+</section>
+
+<section class="page">
+  <header>
+    <h1><span>Elixir</span> cheat sheet</h1>
+    <p>sequencing and performance · 2 of 2</p>
+    <p class="right">Full manual: dmajka.github.io/elixir/manual</p>
+  </header>
+
+  <div class="col">
+    <h2>Track pages (SEQ once, SELECT)</h2>
+    <table class="knobs">
+      <tr><th>Page</th><th>K1</th><th>K2</th><th>K3</th><th>K4</th></tr>
+      <tr><td>TRACK</td><td>Length</td><td>Clock</td><td>Direction</td><td>Follow</td></tr>
+      <tr><td>GENERATOR</td><td>Generator</td><td colspan="3">its settings</td></tr>
+      <tr><td>ACTION</td><td>Action</td><td colspan="3">Grids map X / Y, chaos · Euclid's second pulse</td></tr>
+      <tr><td>GROOVE</td><td>Groove</td><td>Amount</td><td>Humanize</td><td>Follow</td></tr>
+      <tr><td>BOUNCE</td><td>Bounce</td><td>Bnc pitch</td><td>–</td><td>–</td></tr>
+      <tr><td>MELODY 1</td><td>Shape</td><td>Spread</td><td>Bias</td><td>Steps</td></tr>
+      <tr><td>MELODY 2</td><td>Deja vu</td><td>Loop</td><td>Length</td><td>Len var</td></tr>
+      <tr><td>SCALE</td><td>Root</td><td>Scale</td><td>Follow</td><td>–</td></tr>
+    </table>
+
+    <h2>Each track on its own clock</h2>
+    <p><b>Clock:</b> /4 · /3 · /2 · 2/3 · 3/4 · <b>1x</b> · 4/3 · 3/2 · x2 · x3 · x4. A hat at x2 plays 32nds;
+      3/4 fits 12 steps in a bar. Add a length of its own (1–64) for polymeters.</p>
+    <table>
+      <tr><td>FWD · REV</td><td>1 2 3 4 1 … · 4 3 2 1 4 …</td></tr>
+      <tr><td>PING</td><td>1 2 3 4 3 2 1 2 … (the ends once)</td></tr>
+      <tr><td>PING2</td><td>1 2 3 4 4 3 2 1 1 2 … (the ends twice)</td></tr>
+      <tr><td>RAND · WALK</td><td>Any step · one step either way</td></tr>
+    </table>
+
+    <h2>Generators</h2>
+    <table>
+      <tr><td>EUCLID</td><td>Length, Hits, Rotate; a second pulse on ACTION (OR, XOR, AND, SUB)</td></tr>
+      <tr><td>MUTATE</td><td>Small changes each time round · Freeze stops it</td></tr>
+      <tr><td>TURING</td><td>Shift register: Length, Lock (127 repeats), Density</td></tr>
+      <tr><td>CELLULAR</td><td>Each time round the next row of rule 0–255</td></tr>
+      <tr><td>GRIDS</td><td>The Grids drum map: Part, Density, Accent</td></tr>
+    </table>
+    <p class="note">All but EUCLID play a live copy; COMMIT (ACTION page, OCT+) writes it into the pattern.</p>
+  </div>
+
+  <div class="col">
+    <h2>PERF (ARP): white keys act while held</h2>
+    <p>SHIFT (OCT−) + key latches it. Black keys mute. Bar keys: repeat length 1/4 … 1/32. ALGORITHM picks the
+      throw track.</p>
+    <table>
+      <tr><th>Key</th><th>PERFORM</th><th>PERFORM 2</th></tr>
+      <tr><td>1–7</td><td>Roll the track</td><td>DRILL: random fast ratchets</td></tr>
+      <tr><td>8</td><td>FILL</td><td>HLF: half time</td></tr>
+      <tr><td>9</td><td>RPT: repeat</td><td>JIT: jitter</td></tr>
+      <tr><td>10</td><td>FRZ: freeze the delay</td><td>CUT: random cuts</td></tr>
+      <tr><td>11</td><td>T.RV: throw to reverb</td><td>SHT: decays short</td></tr>
+      <tr><td>12</td><td>T.FX: throw to FX bus</td><td>PMP: pump off D1</td></tr>
+      <tr><td>13</td><td>FB+: feedback push</td><td>RES: comb resonator</td></tr>
+      <tr><td>14</td><td>STP: tape stop</td><td>SPC: reverb pad</td></tr>
+      <tr><td>15</td><td>LP~: low-pass sweep</td><td>CRS: crush</td></tr>
+      <tr><td>16</td><td>HP~: high-pass sweep</td><td>REV: reverse</td></tr>
+    </table>
+
+    <h2>PERF pages (SELECT)</h2>
+    <table class="knobs">
+      <tr><th>Page</th><th>K1</th><th>K2</th><th>K3</th><th>K4</th></tr>
+      <tr><td>PERFORM</td><td>Tempo</td><td>Roll rate</td><td>Morph</td><td>SRate</td></tr>
+      <tr><td>MORE</td><td>DJ filter</td><td>Repeat</td><td>Shuffle</td><td>Tape time</td></tr>
+      <tr><td>DENSITY</td><td>Density</td><td>Ghost vel</td><td>Build</td><td>Vary</td></tr>
+      <tr><td>STUTTER</td><td>Chance</td><td>Size</td><td>Length</td><td>Vary</td></tr>
+      <tr><td>2: SETUP 1</td><td>Drill</td><td>Jitter</td><td>Cuts</td><td>Pump</td></tr>
+      <tr><td>2: SETUP 2</td><td>Comb</td><td>Comb fb</td><td>Crush</td><td>Reverse</td></tr>
+    </table>
+    <p class="note">Hold a roll key and turn K2 on PERFORM: a sweep from 1/4 to 1/192.</p>
+
+    <h2>Global mod (ARP three times)</h2>
+    <table class="knobs">
+      <tr><td>LFO 1–3</td><td>Dest, Depth, Speed (1/16 … 256 bars), Wave · Mode, Trig, Phase</td></tr>
+      <tr><td>MACROS</td><td>Four knobs, each a parameter between Min and Max (MACRO SETUP)</td></tr>
+      <tr><td>LINKS</td><td>Eight couplings between tracks: When, Target, Effect, Window</td></tr>
+    </table>
+  </div>
+
+  <div class="col">
+    <h2>Spells (ARP twice)</h2>
+    <p>A spell changes the sound and the pattern of the tracks you pick, at random but in a direction.</p>
+    <table>
+      <tr><td>1 Targets</td><td>Black keys (bar key 1: all / none)</td></tr>
+      <tr><td>2 Parts</td><td>White keys: what may change</td></tr>
+      <tr><td>3 Spell</td><td>K1 on GRIMOIRE (NONE: plain chance)</td></tr>
+      <tr><td>4 Cast</td><td>COPY (OCT+) · again rolls again</td></tr>
+      <tr><td>5 Undo / keep</td><td>SHIFT (OCT−) alone takes it back · bar key 2 keeps it</td></tr>
+    </table>
+    <table class="knobs">
+      <tr><th colspan="2">Sound (white 1–8)</th><th colspan="2">Pattern (white 9–16)</th></tr>
+      <tr><td>1 PIT</td><td>pitch</td><td>9 HIT</td><td>which steps play</td></tr>
+      <tr><td>2 OSC</td><td>osc, FM, models</td><td>10 ACC</td><td>accents</td></tr>
+      <tr><td>3 TRN</td><td>transient</td><td>11 PRB</td><td>chance, conditions</td></tr>
+      <tr><td>4 ENV</td><td>envelopes, level</td><td>12 TIM</td><td>timing, flams</td></tr>
+      <tr><td>5 FLT</td><td>filter</td><td>13 RAT</td><td>ratchets</td></tr>
+      <tr><td>6 DRV</td><td>drive, shaper, bits</td><td>14 NOT</td><td>notes</td></tr>
+      <tr><td>7 FX</td><td>sends, pan, insert</td><td>15 LEN</td><td>length, clock, direction</td></tr>
+      <tr><td>8 MOD</td><td>random, LFO 2, xmod</td><td>16 LNK</td><td>links, generators</td></tr>
+    </table>
+
+    <h2>Mixer and FX</h2>
+    <table>
+      <tr><td>GLO</td><td>Volume, pan, FX send, reverb send (2 pages each)</td></tr>
+      <tr><td>FX send</td><td>How much of the voice goes through the FX bus</td></tr>
+      <tr><td>Reverb send</td><td>Feeds the reverb on top of the output</td></tr>
+      <tr><td>FX</td><td>FX bus (delay with TAPE modes, dirt, compressor) → reverb</td></tr>
+    </table>
+
+    <h2>MIDI</h2>
+    <p>In: USB and the TRS jack · out: USB. Clock out always; tempo down to MIDI follows clock in. CC <i>n</i>
+      sets parameter <i>n</i> − 1 (as on the LXR), NRPN reaches the rest. Program change 0–31 queues a
+      pattern.</p>
+  </div>
+</section>
+
+</body>
+</html>

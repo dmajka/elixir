@@ -11,6 +11,8 @@
 #                               not linked from anywhere and noindex while it's tried out
 #   library/                    backup, restore and LXR-02 kit import over Web MIDI (web/library.html, library.js)
 #   manual/index.html           MANUAL.md as a page
+#   cheatsheet.pdf              two pages of keys and knobs (web/cheatsheet.pdf: tools/cheatsheet.sh); fmhub.json
+#                               links to it
 #   firmware/                   elixir-VER.fwsc, elixir-VER-src.tar.gz (the source, as the GPL asks), MANUAL.md,
 #                               LICENSE, NOTICE.md, LICENSES/, and a page listing them
 #
@@ -363,6 +365,7 @@ def main(pkg, out):
     # 0.14: the front page at the root, the install page at install/
     shutil.copy(ROOT / "web/site.css", out / "site.css")
     shutil.copytree(ROOT / "web/shots", out / "shots")
+    shutil.copy(ROOT / "web/cheatsheet.pdf", out / "cheatsheet.pdf")
     (out / "favicon.svg").write_text(favicon(), encoding="utf-8")
     front = (ROOT / "web/index.html").read_text(encoding="utf-8")
     for mark, text in (("<!--NAV-->", nav(0)), ("<!--WORD-->", word_svg()), ("<!--POTION-->", potion_svg()),
