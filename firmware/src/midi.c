@@ -126,7 +126,7 @@ static void midi_note_on(uint32_t t, uint32_t note, uint32_t vel, int rec)
     if (par[PAR_MIDI_NOTE1 + t]) {
         if (note != par[PAR_MIDI_NOTE1 + t])
             return;
-        note = SEQ_DEFAULT_NOTE;
+        note = tb_note(t);
     }
     midi_out_note_off(t);
     voice_trigger(t, vel, note);

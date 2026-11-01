@@ -38,6 +38,7 @@ static void engine_globals_default(void)            /* the LXR's settings as a n
 }
 
 static void sp_defaults(void);                      /* (32: SPELLS, spells.c) */
+static void wd_defaults(void);                      /* (40: WANDER, wander.c) */
 static void engine_init(void)
 {
     uint32_t i;
@@ -50,6 +51,7 @@ static void engine_init(void)
     reverb_init();
     perf_init();
     sp_defaults();
+    wd_defaults();
     seq_init();
     kit_pk_init();                                  /* (25-0: the slots' packing; ui_test checks it fits) */
     {

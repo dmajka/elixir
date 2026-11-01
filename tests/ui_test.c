@@ -73,7 +73,8 @@ static void perf_goto(uint32_t g)                    /* 29: PERF's page g (ARP: 
 {
     uint32_t i;
     goto_mode(B_ARP, M_PERF);
-    for (i = 0; i < 3u && (g >= PG_GMOD ? 2u : g >= PG_SPELL) != perf_set(); i++)   /* (32: three sets) */
+    for (i = 0; i < NPSET && (g >= PG_GMOD ? 3u : g >= PG_WANDER ? 2u : g >= PG_SPELL) != perf_set(); i++)   /* (32,
+                                                      * 40: four sets) */
         press(B_ARP);
     for (i = 0; i < NPERF && ui.page != g; i++)
         turn(EN_SELECT, ui.page < g ? 1 : -1);
@@ -806,11 +807,12 @@ static void phase4(void)
     press(B_SEQ);
     white(0);
     kset.accel = 0;
-    turn(EN_K4, 9 + 1);
+    turn(EN_SELECT, 1);                               /* (0.23-t11: TRIG, the second page: Chance, Condition ..) */
+    turn(EN_K2, 9 + 1);
     kset.accel = 1;
     check(p->cond[0][0] == COND_AB + 1, "STEP: the condition (2:2)");
     shot("step-cond");
-    turn(EN_SELECT, 3);
+    turn(EN_SELECT, 2);
     turn(EN_K1, 2);
     turn(EN_K3, 1);
     turn(EN_K4, 2);
@@ -1223,7 +1225,7 @@ static void phase5c(void)
         main_set(p, 0, k, 1);
     pat_backup = *p;
     perf_goto(PG_PERF2);
-    check(ui.page == PG_PERF2 && perf_bank2(), "PERFORM 2: the fifth PERF page");
+    check(ui.page == PG_PERF2 && perf_bank2(), "PERFORM 2: the seventh PERF page");
     /* HALF: the ticks at half the rate */
     start_now();
     t0 = sq.ticks;
@@ -2044,6 +2046,8 @@ static void phase14(void)
     press(B_ARP);
     check(ui.mode == M_PERF && perf_spells(), "ARP again: SPELLS (32)");
     press(B_ARP);
+    check(ui.mode == M_PERF && perf_wander(), "ARP again: WANDER (40)");
+    press(B_ARP);
     check(ui.mode == M_PERF && ui.page == PG_MACRO, "ARP again: GLOBAL MOD, on MACROS as it was left");
     kset.pmem = 0;
     press(B_HOME);
@@ -2053,13 +2057,140 @@ static void phase14(void)
 }
 
 /* ------------------------------------------------------- Phase 9 (0.8) --- */
+/* 39: RUSH (after Elixir Desktop's): the kit goes over to the rush track as the knob rises, then a roll on the grid,
+ * then a free roll up to TOP; REC writes it into the steps as RUSH locks; a step held takes a lock; the STEP page's
+ * RUSH target; the project keeps the settings */
+static uint32_t rush_bar(uint32_t t, uint32_t *ch, uint32_t *d1)   /* a bar's hits: track t's (CH's, D1's) */
+{
+    uint32_t a = trig_count[t], c = trig_count[5], d = trig_count[0];
+    run_ms(2000);
+    *ch = trig_count[5] - c;
+    *d1 = trig_count[0] - d;
+    return trig_count[t] - a;
+}
+static void rturn(int32_t n)                         /* (0.23-t7: RUSH turned slowly, 1% a detent: n x 2) */
+{
+    int32_t i;
+    for (i = 0; i < 2 * (n < 0 ? -n : n); i++) {
+        web_enc(EN_K1, n < 0 ? -1 : 1);
+        run_ms(60);
+    }
+}
+static void phase39_rush(void)
+{
+    pattern_t *p = &pat[0];
+    uint32_t n, ch, d1, k, locked = 0;
+    p4_reset();
+    kset.accel = 0;
+    sq.muted = sq.solo = 0;
+    for (k = 0; k < 16u; k++) {                      /* D1 on the beats, SN on 2 and 4, CH every 16th */
+        main_set(p, 5, k, 1);
+        p->step[5][k].volume = 90;
+        if (!(k & 3u)) {
+            main_set(p, 0, k, 1);
+            p->step[0][k].volume = 100;
+        }
+    }
+    main_set(p, 3, 4, 1);
+    main_set(p, 3, 12, 1);
+    p->step[3][4].volume = p->step[3][12].volume = 100;
+    perf_goto(PG_RUSH);
+    check(ui.mode == M_PERF && perf_rush(), "RUSH: its PERF page");
+    black(3);
+    check(ui.track == 3u && sq.ru_t == 3u, "RUSH: a black key picks its track");
+    press(B_PLAY);
+    run_ms(100);
+    n = rush_bar(3, &ch, &d1);
+    printf("  RUSH OFF: SN %u, CH %u, D1 %u in a bar\n", n, ch, d1);
+    check(n == 2u && ch == 16u && d1 == 4u, "RUSH: off, the pattern as it is");
+    rturn(25);
+    check(sq.ru_live == 50u, "RUSH: 1% a slow detent");
+    run_ms(50);
+    n = rush_bar(3, &ch, &d1);
+    printf("  RUSH 50%%: SN %u, CH %u, D1 %u\n", n, ch, d1);
+    check(n > 2u && ch < 16u && ch > 4u && d1 == 4u, "RUSH 50%: some hits go over to the snare, the kick stays");
+    rturn(14);
+    run_ms(50);
+    n = rush_bar(3, &ch, &d1);
+    printf("  RUSH 78%% (32nds on the grid): SN %u, CH %u, D1 %u\n", n, ch, d1);
+    check(n >= 28u && n <= 34u && ch <= 3u && d1 == 4u, "RUSH 78%: a 32nd roll on the grid, the hats gone");
+    rturn(11);
+    run_ms(300);
+    n = rush_bar(3, &ch, &d1);
+    printf("  RUSH 100%%: SN %u (1/256 = 256), CH %u, D1 %u\n", n, ch, d1);
+    check(n >= 200u && ch == 0u && d1 == 0u, "RUSH 100%: the free roll at the top, only the roll");
+    check(sq.ru_hp > 20000, "RUSH 100%: the filter open");
+    rturn(-50);
+    run_ms(500);
+    check(sq.ru_live == 0u && sq.ru_hp == 0 && !sq.ru_R, "RUSH: off again, the filter shut");
+    shot("rush");
+    /* recording: the knob into every step it passes */
+    rturn(40);
+    sq.rec = 1;
+    run_ms(2000);
+    sq.rec = 0;
+    rturn(-40);
+    for (k = 0; k < 16u; k++)
+        locked += rush_lock(p, 3, k) == 80u;
+    printf("  RUSH recorded: %u of 16 steps locked\n", locked);
+    check(locked >= 15u, "RUSH: REC writes its locks into the steps");
+    run_ms(50);
+    n = rush_bar(3, &ch, &d1);
+    printf("  RUSH from the locks (80%%): SN %u, CH %u\n", n, ch);
+    check(n >= 28u && ch <= 3u, "RUSH: the locks rush the bar, the knob down");
+    /* a step held on the page: its lock */
+    seq_clear_pattern(p);
+    p2_key(3, 1);
+    rturn(30);
+    p2_key(3, 0);
+    check(rush_lock(p, 3, 3) == 60u && main_on(p, 3, 3) && sq.ru_live == 0u, "RUSH: a step held takes the lock");
+    p2_key(3, 1);
+    rturn(-30);
+    p2_key(3, 0);
+    check(lock_get(p, 3, 3, 0) != RUSH_CODE && lock_get(p, 3, 3, 1) != RUSH_CODE, "RUSH: .. turned to 0, gone");
+    press(B_PLAY);
+    /* the STEP page: RUSH, the last lock target */
+    ui.mode = M_STEP;
+    ui.track = 2;
+    ui.step = 5;
+    vp_set(PAR_P1_DEST, LOCK_RUSH_IDX);
+    vp_set(PAR_P1_VAL, 90);
+    main_set(p, 2, 5, 1);
+    check(lock_get(p, 2, 5, 0) == RUSH_CODE && rush_lock(p, 2, 5) == 90u && vp_get(PAR_P1_DEST) == LOCK_RUSH_IDX,
+          "STEP: RUSH as a lock target");
+    {
+        char b[24] = {0};
+        card_value(b, sizeof b, PAR_P1_VAL, 90);
+        check(!strcmp(b, "90%"), "STEP: a RUSH lock reads as its amount");
+    }
+    goto_mode(B_HOME, M_HOME);
+    /* the project: the settings and the locks */
+    sq.ru_start = 60;
+    sq.ru_free_at = 70;
+    sq.ru_top = RT_64;
+    sq.ru_flam = 33;
+    sq.ru_pitch = -5;
+    sq.ru_filt = 0;
+    sq.ru_glide = 20;
+    {
+        int rc = proj_save(1, "RUSH    ");
+        rush_defaults();
+        seq_clear_pattern(p);
+        rc |= proj_load(1);
+        check(rc == 0 && sq.ru_start == 60u && sq.ru_free_at == 70u && sq.ru_top == RT_64 && sq.ru_flam == 33u &&
+              sq.ru_pitch == -5 && sq.ru_filt == 0u && sq.ru_glide == 20u && rush_lock(&pat[0], 2, 5) == 90u,
+              "project: RUSH's settings and locks");
+    }
+    rush_defaults();
+    kset.accel = 1;
+}
 /* 9b, 9g: PERF's pages (the performance ones, then the macros, then PERFORM 2), MIX, the global sample rate */
 static void phase9_perf(void)
 {
     static const char *const T[NPERF] = {"PERFORM", "PERFORM: MORE", "PERFORM: DENSITY", "PERFORM: STUTTER",
-                                         "PERFORM 2", "PERFORM 2: SETUP (1/2)", "PERFORM 2: SETUP (2/2)",
+                                         "PERFORM: RUSH", "PERFORM: RUSH SETUP", "PERFORM: TRANSPOSE", "PERFORM 2", "PERFORM 2: SETUP (1/2)", "PERFORM 2: SETUP (2/2)",
                                          "SPELLS: GRIMOIRE", "SPELLS: CAST", "SPELLS: CHARACTER", "SPELLS: LIMITS",
-                                         "SPELLS: MOTION",
+                                         "SPELLS: MOTION", "WANDER: QUEST", "WANDER: PACE", "WANDER: HOME",
                                          "GLOBAL LFO 1 (1/2)", "GLOBAL LFO 1 (2/2)", "GLOBAL LFO 2 (1/2)",
                                          "GLOBAL LFO 2 (2/2)", "GLOBAL LFO 3 (1/2)", "GLOBAL LFO 3 (2/2)", "MACROS",
                                          "MACRO SETUP", "LINKS", "LINK SETUP"};
@@ -2072,11 +2203,13 @@ static void phase9_perf(void)
         uint32_t pg, np;
         char b[40];
         title_text(b, sizeof b, &pg, &np);
-        uint32_t f = i >= PG_GMOD ? PG_GMOD : i >= PG_SPELL ? PG_SPELL : 0u;
+        uint32_t f = i >= PG_GMOD ? PG_GMOD : i >= PG_WANDER ? PG_WANDER : i >= PG_SPELL ? PG_SPELL : 0u;
         ok &= !strcmp(b, T[i]) && pg == i - f &&
-              np == (i >= PG_GMOD ? NPERF - PG_GMOD : i >= PG_SPELL ? PG_GMOD - PG_SPELL : PG_SPELL) &&
+              np == (i >= PG_GMOD ? NPERF - PG_GMOD : i >= PG_WANDER ? PG_GMOD - PG_WANDER
+                     : i >= PG_SPELL ? PG_WANDER - PG_SPELL : PG_SPELL) &&
               (i >= PG_PERF2 && i < PG_SPELL) == (uint32_t)perf_bank2();
-        if (i + 1u == PG_GMOD || i + 1u == PG_SPELL) {   /* (29: SELECT stays in the set; ARP: the next) */
+        if (i + 1u == PG_GMOD || i + 1u == PG_WANDER || i + 1u == PG_SPELL) {   /* (29: SELECT stays in the set; ARP:
+                                                      * the next) */
             turn(EN_SELECT, 1);
             ok &= ui.page == i;
             press(B_ARP);
@@ -2084,7 +2217,7 @@ static void phase9_perf(void)
             turn(EN_SELECT, 1);
         }
     }
-    check(ok, "PERF: its pages in order, in three sets (PERFORM, SPELLS, GLOBAL MOD), PERFORM 2's bank in the first");
+    check(ok, "PERF: its pages in order, in four sets (PERFORM, SPELLS, WANDER, GLOBAL MOD), PERFORM 2's bank in the first");
     press(B_ARP);
     turn(EN_SELECT, -(int32_t)NPERF);
     page_params(kp);
@@ -3318,7 +3451,7 @@ static void phase19(void)
         g = 0;
         for (i = 1; i < 16u; i++)
             g += dens_ghost(p, 0, i, 0);
-        check(dens_part(0) == 256u && g < 12u && !dens_rat(p, 0, 0, 0), "a third of the way: the chances, a few ghosts");
+        check(dens_part(0, 0) == 256u && g < 12u && !dens_rat(p, 0, 0, 0), "a third of the way: the chances, a few ghosts");
     }
     sq.dens = 0;
     check(gen_dens(0, 60) == 60, "DENSITY 0: a GRIDS density as it is");
@@ -4368,10 +4501,10 @@ static void gen_step_edit_test(void)
     ui.track = 1;
     run_ms(40);
     goto_mode(B_SEQ, M_STEP);
-    ui.page = 0;
+    ui.page = 1;                                     /* (0.23-t11: TRIG: Chance on K1) */
     ui.step = 4;
     run_ms(40);
-    turn(EN_K3, -100);
+    turn(EN_K1, -100);
     check(step_prob(&pt->step[1][4]) == 0u && step_prob(&gpat.step[1][4]) == 0u,
           "step edit's chance on a generator's track: the live copy too");
     n0 = trig_count[1];
@@ -5896,6 +6029,40 @@ static void phase30(void)
             viz_set(S_MODEL, 0, 3, 40);
             shot(N[i]);
         }
+        viz_set(S_MODEL, 0, 0, 9);                   /* (0.23-t7: P WTABLE's waves, another place; its cards) */
+        viz_set(S_MODEL, 0, 1, 20);
+        viz_set(S_MODEL, 0, 2, 64);
+        viz_set(S_MODEL, 0, 3, 100);
+        shot("viz-model-pwtable-2");
+        {
+            char b[24] = {0};
+            card_value(b, sizeof b, sect_par(0, S_MODEL, 0, 1), 20);
+            check(!strcmp(b, "B"), "P WTABLE: HARMONICS reads as the bank");
+            {
+                static const uint8_t V[8] = {0, 9, 18, 36, 64, 80, 100, 127};
+                uint32_t k;
+                printf("  P WTABLE banks:");
+                for (k = 0; k < 8u; k++) {
+                    card_value(b, sizeof b, sect_par(0, S_MODEL, 0, 1), V[k]);
+                    printf(" %u=%s", V[k], b);
+                }
+                printf("\n");
+            }
+            card_value(b, sizeof b, sect_par(0, S_MODEL, 0, 2), 127);
+            check(!strcmp(b, "100%"), "P WTABLE: TIMBRE reads as Bright");
+            card_value(b, sizeof b, sect_par(0, S_MODEL, 0, 3), 64);
+            check(!strcmp(b, "4-5"), "P WTABLE: MORPH reads as the Family, blending");
+        }
+        viz_set(S_MODEL, 0, 0, 10);                  /* (P CHORD: the table's waves past half) */
+        viz_set(S_MODEL, 0, 3, 110);
+        shot("viz-model-pchord-table");
+        {
+            char b[24] = {0};
+            card_value(b, sizeof b, sect_par(0, S_MODEL, 0, 1), 0);
+            check(!strcmp(b, "OCTAVE"), "P CHORD: the chord by name");
+            card_value(b, sizeof b, sect_par(0, S_MODEL, 0, 3), 20);
+            check(!strcmp(b, "ORGAN"), "P CHORD: WAVE's organ half");
+        }
     }
     viz_set(S_MODEL, 0, 0, 15);
     viz_page(0, S_OSC, 0);
@@ -6192,6 +6359,887 @@ static void phase37(void)
     goto_mode(B_HOME, M_HOME);
 }
 
+
+/* 40: WANDER: the pages, the keys, setting out (threads move the voices, Energy the hits), REST, KEEP, a spell's side
+ * journey, SHIFT home (the voices back exactly), the JOURNEY's end and its FATE, the mutes at the bottom, KWND */
+static uint32_t wd_kit_diff(void)                    /* the kit's values not at home */
+{
+    uint32_t i, n = 0;
+    for (i = 0; i < KIT_LEN; i++)
+        n += par[kit_par(i)] != wd_home[i] || morph_par[i] != wd_mhome[i];
+    return n;
+}
+static void wd_bars(uint32_t n) { run_ms(n * 240000u / seq_bpm() + 30u); }
+static void wd_slot_copy(pattern_t *c)               /* (41) the slot with its footprints retraced */
+{
+    uint32_t i;
+    *c = pat[wd.slot];
+    for (i = wd.nfoot; i--;)
+        wd_put(c, wd_fp[i].t & 7u, wd_fp[i].s, &wd_fp[i]);
+}
+static int wd_slot_home(const pattern_t *home)       /* .. home exactly */
+{
+    static pattern_t c;
+    wd_slot_copy(&c);
+    return !memcmp(&c, home, sizeof c);
+}
+static void phase40(void)
+{
+    pattern_t p0 = pat[0], pb, pbeat;
+    uint8_t k0[KIT_LEN];
+    uint16_t kp[4];
+    uint32_t i, t, ok, b0;
+    char b[40];
+    printf("phase 40: wander\n");
+    sp_kit(k0);
+    if (sq.running)
+        press(B_PLAY);
+    seq_set_next_pattern(0);
+    seq_clear_pattern(&pat[0]);
+    for (t = 0; t < NTRACK; t++)                     /* (a beat: every track something) */
+        for (i = 0; i < 16u; i++)
+            if ((t == 0u && !(i & 3u)) || (t == 3u && (i & 7u) == 4u) || (t == 5u && !(i & 1u)) ||
+                (t == 6u && (i & 3u) == 2u) || ((t == 1u || t == 2u || t == 4u) && i == 10u + t))
+                main_set(&pat[0], t, i, 1);
+    pb = pbeat = pat[0];
+    par[PAR_BPM] = 240;
+    seq_tempo_changed();
+    wd_defaults();
+    for (i = 0, ok = 1; i < NQUEST; i++) {           /* (the words fit: the cards, the top lines) */
+        wd_card_value(b, sizeof b, WV_QUEST, i);
+        ok &= text_w(&AF_S, b) <= 56 && text_w(&AF_M, QUEST[i].name) <= 160 && text_w(&AF_S, QUEST[i].line) <= 236;
+    }
+    for (i = 0; i < NGEST; i++)
+        ok &= text_w(&AF_S, GEST[i].name) <= 62;
+    for (i = 0; i < NWV * 8u; i++) {                 /* (every knob's values on its card) */
+        if (wd_vdead(i / 8u))
+            continue;
+        wd_card_value(b, sizeof b, i / 8u, i % 8u > wd_vmax(i / 8u) ? wd_vmax(i / 8u) : i % 8u);
+        ok &= text_w(&AF_S, b) <= 56;
+    }
+    check(ok, "WANDER: the quests' names and the gestures fit");
+    perf_goto(PG_WANDER);
+    title_text(b, sizeof b, &i, &t);
+    page_params(kp);
+    check(perf_wander() && !strcmp(b, "WANDER: QUEST") && kp[0] == VP_WD + WV_QUEST && kp[3] == VP_WD + WV_GOAL,
+          "ARP: WANDER's first page, QUEST");
+    check(wd.k[WV_QUEST] == Q_HOMECOMING && wd.tracks == 0x7Fu && wd.mask == WD_MASK0 && wd.state == WS_IDLE,
+          "WANDER at first: HOMECOMING, every track, ENV FILTER FX MOD HITS ACC CHANCE, at home");
+    turn(EN_K4, 3);
+    check(wd.k[WV_GOAL] == 3u && !vp_dead(VP_WD + WV_GOAL), "GOAL: P03 (41)");
+    turn(EN_K4, -3);
+    turn(EN_K1, 1);
+    check(wd.k[WV_QUEST] == Q_SPIRE && wd.k[WV_FATE] == WF_TREASURE && wd.k[WV_JOURNEY] == 4u,
+          "QUEST: THE SPIRE, its FATE (TREASURE) and JOURNEY (256 bars)");
+    run_ms(60);
+    shot("p40-wander-quest-turned");
+    ui.hot = 0;
+    /* the keys: black the tracks, white the parts (SHIFT: only), bar 1 ALL / NONE */
+    black(2);
+    check(!((wd.tracks >> 2) & 1u), "a black key: the track stays home");
+    black(2);
+    white(4);
+    check(!(wd.mask & SC_FILTER), "a white key: FILTER out");
+    white(4);
+    black(NTRACK);
+    check(!wd.tracks, "bar 1: no track");
+    press(B_OCTUP);
+    check(wd.state == WS_IDLE, "no track: COPY (OCT+) doesn't set out");
+    black(NTRACK);
+    check(wd.tracks == 0x7Fu, "bar 1 again: every track");
+    /* setting out: the voices move (threads, glided), Energy the hits */
+    wd.k[WV_JOURNEY] = 1;                            /* (32 bars) */
+    wd.k[WV_SOUND] = 1;
+    wd.k[WV_RHYTHM] = 1;
+    wd.k[WV_RANGE] = 127;
+    wd.k[WV_STRIDE] = 127;
+    wd.k[WV_FATE] = WF_HOME;
+    wd.k[WV_RETURN] = 1;                             /* (1 bar) */
+    press(B_PLAY);
+    press(B_OCTUP);
+    check(wd.state == WS_ROAD && wd.home_p == 0u && wd_kit_diff() == 0u && wd.quest == Q_SPIRE,
+          "COPY (OCT+): setting out, home the pattern and the voices");
+    wd_bars(6);
+    {
+        uint32_t th = 0, gl = 0, dn = 0;
+        for (i = 0; i < NTHREAD; i++)
+            th += wd.th[i].on;
+        for (i = 0; i < NGLIDE; i++)
+            gl += wgl[i].p != 0;
+        for (t = 0; t < NTRACK; t++)
+            dn += sq.wdens[t] != 0;
+        printf("  6 bars: %u bars, %u kit values moved, %u threads, %u gliding, lvl %d, %u tracks' density\n",
+               (unsigned)wd.bars, (unsigned)wd_kit_diff(), (unsigned)th, (unsigned)gl, wd.lvl, (unsigned)dn);
+        check(wd.bars >= 5u && wd_kit_diff() > 0u && th >= 1u, "on the road: the threads move the voices");
+        check(wd.lvl > 0 && sq.wdens[5] > 0 && sq.wdens[5] >= sq.wdens[0], "THE SPIRE: Energy up, the hats first");
+        check(wd_slot_home(&pb) && (wd.cur[WM_L] | wd.cur[WM_S] | wd.cur[WM_G]) != 0,
+              "the road's mood moves; its steps all in the footprints");
+    }
+    {                                                /* (only the parts the white keys let in) */
+        uint32_t bad = 0;
+        for (i = 0; i < KIT_LEN; i++) {
+            uint32_t p = kit_par(i), r;
+            if (par[p] == wd_home[i])
+                continue;
+            for (r = 0; r < NROLE; r++)
+                for (t = 0; t < NVOICE; t++)
+                    if (sp_role_par(r, t) == p && !(WD_MASK0 & sp_role_cat(r)))
+                        bad++;
+        }
+        check(!bad, "the voices: only ENV, FILTER, FX, MOD moved");
+    }
+    turn(EN_SELECT, 1);
+    run_ms(60);
+    shot("p40-wander-pace");
+    turn(EN_SELECT, 1);
+    run_ms(60);
+    shot("p40-wander-home");
+    turn(EN_SELECT, -2);
+    run_ms(60);
+    shot("p40-wander-road");
+    /* a knob a thread moves, turned by hand: it lets go */
+    for (i = 0; i < NGLIDE && !wgl[i].p; i++)
+        ;
+    if (i < NGLIDE) {
+        uint32_t p = wgl[i].p, th = wgl[i].th;
+        par[p] = (uint8_t)(par[p] > 64u ? par[p] - 9u : par[p] + 9u);
+        run_ms(5);
+        check(!wgl[i].p && (!th || !wd.th[th - 1u].on), "a knob turned by hand: the glide and its thread let go");
+    }
+    /* REST: the road waits */
+    black(NTRACK + 2);
+    b0 = wd.bars;
+    wd_bars(2);
+    check(wd.rest && wd.bars == b0, "bar 3: REST, the road waits");
+    run_ms(60);
+    shot("p40-wander-rest");
+    black(NTRACK + 2);
+    wd_bars(1);
+    check(!wd.rest && wd.bars > b0, "bar 3 again: on");
+    /* a spell: a side journey */
+    perf_goto(PG_SPELL);
+    sp.sel = SP_DUB;
+    sp.tracks = 0x7Fu;
+    sp_roll();
+    check(wd.side && sp_pending(), "a spell cast on the road: a side journey, the road waits");
+    b0 = wd.bars;
+    wd_bars(2);
+    check(wd.bars == b0, "aside: no bars travelled");
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    check(!wd.side && !sp_pending(), "the spell reversed: on the road again");
+    sp_roll();
+    perf_goto(PG_WANDER);
+    check(wd.side, "cast again, back on WANDER: aside");
+    press(B_OCTUP);
+    check(!wd.side && wd.state == WS_ROAD, "COPY (OCT+): on the road again, the spell's sound with it");
+    /* SHIFT (OCT-): home over RETURN, the voices exactly */
+    perf_goto(PG_SPELL);                             /* (a cast still to reverse when the road turns home: its
+                                                      * pattern back; one kept, by leaving SPELLS: it stays) */
+    wd.rest = 1;                                     /* (resting through the roll: the road's steps stay put) */
+    pb = pat[0];
+    wd_slot_copy(&pbeat);                            /* (the slot as the road found it: the cast kept above in it) */
+    sp_roll();
+    wd_home_go(WF_HOME, 0);
+    check(wd.state == WS_RETURN && !sp_pending() && !memcmp(&pat[0], &pb, sizeof pb),
+          "coming home: a spell still to reverse, its pattern back");
+    perf_goto(PG_WANDER);
+    run_ms(60);
+    shot("p40-wander-coming-home");
+    wd_bars(3);
+    for (t = 0, ok = 1; t < NTRACK; t++)
+        ok &= !sq.wdens[t];
+    check(wd.state == WS_IDLE && wd_kit_diff() == 0u && ok && !sq.wmute, "home over a bar: the voices exactly, no Energy");
+    check(!memcmp(&pat[0], &pbeat, sizeof pbeat) && !wd.nfoot, "home: the pattern exactly as it was");
+    /* SHIFT twice: at once */
+    wd.k[WV_RETURN] = 9;                             /* (256 bars) */
+    press(B_OCTUP);
+    wd_bars(3);
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    run_ms(40);
+    check(wd.state == WS_IDLE && wd_kit_diff() == 0u, "SHIFT (OCT-) twice: home at once");
+    /* KEEP: here is home */
+    press(B_OCTUP);
+    wd_bars(4);
+    black(NTRACK + 2);                               /* (resting: nothing glides on) */
+    {
+        pattern_t pk;
+        sq.wdens[5] = 60;                            /* (the hats as busy as they get: ghosts) */
+        pat[0].main[5][0] = 0x1111u;                 /* (the hats on the beats: room for ghosts) */
+        pk = pat[0];
+        black(NTRACK + 1);
+        check(wd.state == WS_ROAD && wd_kit_diff() == 0u && !sq.wdens[5] && wd.lvl == 0 &&
+              memcmp(pk.main[5], pat[0].main[5], sizeof pk.main[5]), "bar 2: KEEP, here is home (Energy written in)");
+    }
+    black(NTRACK + 2);
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    run_ms(40);
+    /* the JOURNEY's end: LOST keeps where it ended */
+    wd_vset(WV_QUEST, Q_LONG);
+    wd.k[WV_JOURNEY] = 0;                            /* (16 bars) */
+    wd.k[WV_FATE] = WF_LOST;
+    press(B_OCTUP);
+    wd_bars(18);
+    check(wd.state == WS_IDLE && wd_kit_diff() == 0u, "THE LONG ROAD, 16 bars, LOST: the end, here is home");
+    /* TREASURE: home, the leg that moved most kept */
+    wd.k[WV_FATE] = WF_TREASURE;
+    wd.k[WV_RETURN] = 0;
+    press(B_OCTUP);
+    wd_bars(10);
+    black(NTRACK + 2);                               /* (resting: nothing glides on) */
+    {
+        uint32_t bt = wd.best_t, bg = wd.best_g, best = wd.best, p = 0, v0 = 0;
+        for (i = 0; i < 3u && !p; i++)
+            if ((p = wd_par(GEST[bg].r[i], bt)) != 0u)
+                v0 = par[p];
+        hold(B_OCTDN);
+        release(B_OCTDN);
+        run_ms(40);
+        check(best && wd.state == WS_IDLE && (!p || par[p] == v0), "TREASURE: home, the leg that moved most stays");
+    }
+    /* THE HOLLOW HILL, RANGE all the way: the colour mutes at the bottom; home unmutes */
+    wd_vset(WV_QUEST, Q_HOLLOW);
+    wd.k[WV_JOURNEY] = 2;                            /* (64 bars) */
+    wd.k[WV_RANGE] = 127;
+    wd.k[WV_FATE] = WF_HOME;
+    wd.k[WV_RETURN] = 2;
+    press(B_OCTUP);
+    for (i = 0; i < 40u && !sq.wmute; i++)
+        wd_bars(1);
+    printf("  THE HOLLOW HILL: muted 0x%02x after %u bars (lvl %d, chapter %u)\n", (unsigned)sq.wmute,
+           (unsigned)wd.bars, wd.lvl, (unsigned)wd.chap);
+    check(sq.wmute && !(sq.wmute & 0x09u) && sq.wdens[0] >= -20, "THE HOLLOW HILL: the colour mutes, the kick and snare kept");
+    run_ms(60);
+    shot("p40-wander-hollow");
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    check(!sq.wmute, "SHIFT (OCT-): the mutes lifted");
+    wd_bars(4);
+    check(wd.state == WS_IDLE && !sq.wdens[5], "home: the hats' density back");
+    /* the project: KWND */
+    {
+        int rc;
+        wd.k[WV_STRIDE] = 99;
+        wd.tracks = 0x35u;
+        wd.mask = SC_FILTER | SC_HITS;
+        rc = proj_save(1, "WANDER  ");
+        wd_defaults();
+        rc |= proj_load(1);
+        check(rc == 0 && wd.k[WV_STRIDE] == 99u && wd.k[WV_QUEST] == Q_HOLLOW && wd.tracks == 0x35u &&
+              wd.mask == (SC_FILTER | SC_HITS), "the project: WANDER's knobs and keys back");
+    }
+    press(B_PLAY);
+    pat[0] = p0;
+    for (i = 0; i < KIT_LEN; i++)
+        par[kit_par(i)] = k0[i];
+    snd_post_all();
+    wd_defaults();
+    par[PAR_BPM] = 120;
+    seq_tempo_changed();
+    goto_mode(B_HOME, M_HOME);
+}
+static uint32_t wd_pdiff(const pattern_t *a, const pattern_t *b)   /* (41) the steps on in one, not the other */
+{
+    uint32_t t, s, n = 0;
+    for (t = 0; t < NTRACK; t++)
+        for (s = 0; s < NUM_STEPS; s++)
+            n += main_on(a, t, s) != main_on(b, t, s);
+    return n;
+}
+static void wd_steps(uint32_t n)                     /* (41) n of the rhythm's steps */
+{
+    uint32_t r = wd.rsteps, i;
+    for (i = 0; i < 4000u && n; i++) {
+        run_ms(10);
+        if (wd.rsteps != r) {
+            r = wd.rsteps;
+            n--;
+        }
+    }
+}
+static void wd_beat(pattern_t *p, int b)             /* (41) two beats: A, B */
+{
+    uint32_t t, i;
+    seq_clear_pattern(p);
+    for (t = 0; t < NTRACK; t++)
+        for (i = 0; i < 16u; i++) {
+            int on = b ? (t == 0u && (i == 0u || i == 6u || i == 8u || i == 11u)) || (t == 3u && (i == 4u || i == 12u || i == 14u)) ||
+                             t == 5u || (t == 6u && (i == 2u || i == 10u)) || (t == 4u && i == 0u)
+                       : (t == 0u && !(i & 3u)) || (t == 3u && (i & 7u) == 4u) || (t == 5u && !(i & 1u)) ||
+                             (t == 6u && (i & 3u) == 2u) || ((t == 1u || t == 2u || t == 4u) && i == 10u + t);
+            if (on) {
+                main_set(p, t, i, 1);
+                p->step[t][i].volume = (uint8_t)(STEP_ACTIVE_MASK | (b && t == 5u ? (i & 1u ? 60u : 100u) : 100u));
+            }
+        }
+}
+static void phase41(void)
+{
+    pattern_t p0 = pat[0], p1 = pat[1], pa, pb, pc;
+    uint8_t k0[KIT_LEN];
+    uint32_t i, ok, n, seen;
+    char b[40];
+    printf("phase 41: wander's rhythm and destinations\n");
+    sp_kit(k0);
+    if (sq.running)
+        press(B_PLAY);
+    seq_set_next_pattern(0);
+    wd_beat(&pat[0], 0);
+    wd_beat(&pat[1], 1);
+    pa = pat[0];
+    pb = pat[1];
+    par[PAR_BPM] = 240;
+    seq_tempo_changed();
+    wd_defaults();
+    perf_goto(PG_WANDER);
+    /* the cards: GOAL, MEMORY */
+    wd_card_value(b, sizeof b, WV_GOAL, 7);
+    ok = !strcmp(b, "P07");
+    wd_card_value(b, sizeof b, WV_GOAL, 0);
+    ok &= !strcmp(b, "NONE");
+    wd_card_value(b, sizeof b, WV_MEMORY, 0);
+    ok &= !strcmp(b, "NEVER");
+    check(ok && !vp_dead(VP_WD + WV_MEMORY) && !vp_dead(VP_WD + WV_ORDER), "GOAL P07 / NONE, MEMORY NEVER; ORDER live (42)");
+    for (i = Q_SIDE; i < NQUEST; i++) {              /* (the six new roads) */
+        wd_vset(WV_QUEST, i);
+        run_ms(40);
+        snprintf(b, sizeof b, "p41-quest-%u", (unsigned)i);
+        shot(b);
+    }
+    wd_vset(WV_QUEST, Q_WHEEL);
+    check(wd.k[WV_SOUND] == 0u && wd.k[WV_MEMORY] == 96u && wd.k[WV_FATE] == WF_LOST && wd.k[WV_JOURNEY] == WJ_ENDLESS,
+          "THE TURNING WHEEL: rhythm only, MEMORY up, LOST, ENDLESS");
+    wd_vset(WV_QUEST, Q_HOMECOMING);
+    check(wd.k[WV_SOUND] == WD_K0[WV_SOUND] && wd.k[WV_MEMORY] == WD_K0[WV_MEMORY], "away from the wheel: SOUND, MEMORY as at first");
+    /* an open road: the rhythm wanders, every step it changes in the footprints */
+    wd.k[WV_JOURNEY] = WJ_ENDLESS;
+    wd.k[WV_RHYTHM] = 1;
+    wd.k[WV_STRIDE] = 127;
+    wd.mask = WD_MASK0 | SC_RAT;
+    press(B_PLAY);
+    press(B_OCTUP);
+    for (i = 0, seen = 0; i < 16u; i++) {
+        wd_bars(1);
+        seen |= wd.rmove[0] != 0;
+    }
+    n = wd_pdiff(&pat[0], &pa);
+    printf("  16 bars: %u steps differ, %u footprints, last move \"%s\"\n", (unsigned)n, (unsigned)wd.nfoot, wd.rmove);
+    check(wd.state == WS_ROAD && seen && wd.nfoot && wd_slot_home(&pa), "an open road: the rhythm moves, all of it in the footprints");
+    check(!memcmp(&pat[1], &pb, sizeof pb), "the other patterns untouched");
+    {                                                /* (the kick and the snare's rhythm stay: not THE ROSARY ..) */
+        check(!memcmp(pat[0].main[0], pa.main[0], sizeof pa.main[0]) && !memcmp(pat[0].main[3], pa.main[3], sizeof pa.main[3]),
+              "the kick and the snare's hits as they were");
+    }
+    turn(EN_SELECT, 1);
+    run_ms(60);
+    shot("p41-wander-pace-rhythm");
+    turn(EN_SELECT, -1);
+    /* a pattern changed by hand: the one left exactly as it was, the road goes on in the new one */
+    seq_set_next_pattern(1);
+    wd_bars(2);
+    check(sq.active == 1u && !memcmp(&pat[0], &pa, sizeof pa) && wd.slot == 1u && wd.state == WS_ROAD,
+          "another pattern by hand: P01 exactly as it was, the road goes on on P02");
+    hold(B_OCTDN);                                   /* (home at once: P01) */
+    release(B_OCTDN);
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    wd_bars(5);
+    check(wd.state == WS_IDLE && sq.active == 0u && !memcmp(&pat[0], &pa, sizeof pa) && !memcmp(&pat[1], &pb, sizeof pb) &&
+              wd_kit_diff() == 0u, "home: P01, both patterns exactly as they were, the voices too");
+    /* a destination: P01 to P02 over 16 bars */
+    wd.k[WV_JOURNEY] = 0;                            /* (16 bars) */
+    wd.k[WV_RHYTHM] = 0;                             /* (a destination's pace is the JOURNEY's) */
+    turn(EN_K4, 2);
+    check(wd.k[WV_GOAL] == 2u, "GOAL: P02");
+    run_ms(60);
+    shot("p41-wander-goal");
+    press(B_OCTUP);
+    n = wd.gl;
+    wd_bars(8);
+    printf("  P01 to P02: %u steps to change, %u after 8 bars\n", (unsigned)n, (unsigned)wd.gl);
+    check(wd.goal == 2u && n && wd.gl < n && sq.active == 0u && wd_pdiff(&pat[0], &pb) < wd_pdiff(&pa, &pb),
+          "on the way: P01 nearer P02 step by step");
+    run_ms(60);
+    shot("p41-wander-on-the-way");
+    for (i = 0; i < 16u && !wd.arrived; i++)
+        wd_bars(1);
+    wd_card_value(b, sizeof b, WV_GOAL, wd.k[WV_GOAL]);
+    check(wd.arrived && sq.active == 1u && !strcmp(b, "--") && !memcmp(&pat[0], &pa, sizeof pa) &&
+              !memcmp(&pat[1], &pb, sizeof pb), "arrived: P02 plays, GOAL reads --, both patterns exactly as they were");
+    run_ms(60);
+    shot("p41-wander-arrived");
+    press(B_OCTUP);
+    check(wd.arrived, "arrived: COPY (OCT+) waits for another GOAL");
+    /* chained: on to P01 again, by the road */
+    turn(EN_K4, -1);
+    check(wd.k[WV_GOAL] == 1u && !wd.gdash, "GOAL: P01");
+    press(B_OCTUP);
+    check(wd.state == WS_ROAD && !wd.arrived && wd.home_p == 0u, "a new course from P02, home still P01");
+    for (i = 0; i < 24u && !wd.arrived; i++)
+        wd_bars(1);
+    check(wd.arrived && sq.active == 0u && !memcmp(&pat[1], &pb, sizeof pb) && !memcmp(&pat[0], &pa, sizeof pa),
+          "back at P01 by the road: P02 as it was");
+    /* home from another pattern: the rhythm back over RETURN, then home's */
+    turn(EN_K4, 1);
+    press(B_OCTUP);
+    for (i = 0; i < 24u && !wd.arrived; i++)
+        wd_bars(1);
+    wd.k[WV_RETURN] = 3;                             /* (4 bars) */
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    wd_bars(2);
+    check(wd.state == WS_RETURN && sq.active == 1u && wd_pdiff(&pat[1], &pa) < wd_pdiff(&pb, &pa),
+          "SHIFT (OCT-) from P02: its rhythm walks back towards home's");
+    for (i = 0; i < 10u && wd.state != WS_IDLE; i++)
+        wd_bars(1);
+    check(wd.state == WS_IDLE && sq.active == 0u && !memcmp(&pat[0], &pa, sizeof pa) && !memcmp(&pat[1], &pb, sizeof pb) &&
+              wd_kit_diff() == 0u, "home: P01, both exactly, the voices exactly");
+    turn(EN_K4, -2);
+    check(!wd.k[WV_GOAL], "GOAL: NONE");
+    /* THE CLOCKWORK MAZE: by rule, the same each time */
+    wd_vset(WV_QUEST, Q_MAZE);
+    wd.k[WV_RHYTHM] = 1;
+    wd.k[WV_RETURN] = 0;
+    press(B_OCTUP);
+    wd_steps(4);
+    pc = pat[0];
+    check(wd_pdiff(&pc, &pa) && wd_slot_home(&pa), "THE CLOCKWORK MAZE: tracks turned");
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    wd_bars(2);
+    check(wd.state == WS_IDLE && !memcmp(&pat[0], &pa, sizeof pa), "home: as it was");
+    press(B_OCTUP);
+    wd_steps(4);
+    check(!memcmp(pat[0].main, pc.main, sizeof pc.main), "again: the same changes (the same seed)");
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    wd_bars(2);
+    /* THE ROSARY: the hits leave one by one, then come back */
+    wd_vset(WV_QUEST, Q_ROSARY);
+    wd.k[WV_JOURNEY] = 1;                            /* (32 bars) */
+    wd.k[WV_RHYTHM] = 1;
+    press(B_OCTUP);
+    for (i = 0, n = 999; i < 16u; i++) {
+        uint32_t t, h = 0;
+        wd_bars(1);
+        for (t = 0; t < NTRACK; t++)
+            h += wd_hits(&pat[0], t);
+        n = h < n ? h : n;
+    }
+    printf("  THE ROSARY: down to %u hits (k %u)\n", (unsigned)n, (unsigned)wd.rosk);
+    check(n <= 2u && n >= 1u, "THE ROSARY: down to a hit or two by half the road");
+    for (i = 0; i < 24u && wd.state != WS_IDLE; i++)
+        wd_bars(1);
+    check(wd.state == WS_IDLE && !memcmp(&pat[0], &pa, sizeof pa), ".. and back, home");
+    /* THE TURNING WHEEL: a beat that comes back to waymarks; its anchors kept */
+    wd_vset(WV_QUEST, Q_WHEEL);
+    wd.k[WV_RHYTHM] = 1;
+    wd.k[WV_MEMORY] = 127;
+    press(B_OCTUP);
+    for (i = 0, seen = 0; i < 48u; i++) {
+        wd_bars(1);
+        seen |= !strcmp(wd.rmove, "A PLACE I KNOW");
+    }
+    for (i = 0, ok = 1; i < 16u; i += 4u)
+        ok &= main_on(&pat[0], 0, i) && (i != 4u && i != 12u ? 1 : main_on(&pat[0], 3, i));
+    check(seen && ok && wd_slot_home(&pa), "THE TURNING WHEEL: back at a waymark now and then; the kick's beats, the backbeat kept");
+    /* POSTCARD: where you are, into the next empty pattern */
+    hold(B_OCTDN);
+    black(NTRACK + 2);
+    release(B_OCTDN);
+    for (i = 0, n = 0; i < NTRACK * 4u; i++)         /* (the road may have taken a step since: a hit or two off) */
+        n += (uint32_t)__builtin_popcount((uint32_t)(pat[2].main[i / 4u][i % 4u] ^ pat[0].main[i / 4u][i % 4u]));
+    check(wd.state == WS_ROAD && !pat_blank(&pat[2]) && n <= 2u && !wd.rest,
+          "SHIFT (OCT-) + REST: POSTCARD into P03, still on the road");
+    check(pat_voices(&pat[2]) == PV_LOCKED && pat_voices(&pat[0]) != PV_LOCKED,
+          "POSTCARD: its voices LOCKED (as they sounded), home's left as they were");
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    wd_bars(2);
+    check(wd.state == WS_IDLE && !memcmp(&pat[0], &pa, sizeof pa), "home");
+    seq_clear_pattern(&pat[2]);
+    /* a model swap (OSC / MODELS in): the level down, the model, the level back */
+    wd_vset(WV_QUEST, Q_HOMECOMING);
+    wd.mask |= SC_OSC;
+    press(B_OCTUP);
+    for (i = 0; i < 200u && !wd.ms_t; i++)
+        wd_swap_start();
+    if (wd.ms_t) {
+        uint32_t v = track_voice(wd.ms_t - 1u), vol = par[PAR_VOL1 + v], md = wd.ms_md;
+        wd_bars(5);
+        printf("  model swap: voice %u to %u, level %u -> %u\n", (unsigned)v, (unsigned)md, (unsigned)vol, (unsigned)par[PAR_VOL1 + v]);
+        check(par[PAR_MODEL1 + v] == md && !wd.ms_t && par[PAR_VOL1 + v] >= vol - 2u, "a model swap: the new model, its level back");
+    } else {
+        check(0, "a model swap started");
+    }
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    wd_bars(2);
+    check(wd.state == WS_IDLE && wd_kit_diff() == 0u, "home: the models back too");
+    /* the project: GOAL, MEMORY */
+    {
+        int rc;
+        wd.k[WV_GOAL] = 5;
+        wd.k[WV_MEMORY] = 77;
+        rc = proj_save(1, "WANDER  ");
+        wd_defaults();
+        rc |= proj_load(1);
+        check(rc == 0 && wd.k[WV_GOAL] == 5u && wd.k[WV_MEMORY] == 77u, "the project: GOAL, MEMORY back");
+    }
+    press(B_PLAY);
+    pat[0] = p0;
+    pat[1] = p1;
+    for (i = 0; i < KIT_LEN; i++)
+        par[kit_par(i)] = k0[i];
+    snd_post_all();
+    wd_defaults();
+    par[PAR_BPM] = 120;
+    seq_tempo_changed();
+    goto_mode(B_HOME, M_HOME);
+}
+/* 42: the song's roads: ROADS on the SONG page (a song by its own chances), WANDER's GOAL SONG */
+static void song_set(uint32_t s, const uint8_t *r, uint32_t n)
+{
+    memset(songs[s], SONG_END, MAX_SONG_LENGTH);
+    memcpy(songs[s], r, n);
+}
+static void phase42(void)
+{
+    static const uint8_t S1[6] = {0, 1, 0, 1, 0, 2}, S2[7] = {0, 1, 2, 0, 3, 1, 4}, S3[4] = {0, 1, 0, 2}, S4[2] = {0, 1};
+    uint8_t s0[MAX_SONG_LENGTH], r0 = song_rd[0], k0[KIT_LEN];
+    pattern_t p0 = pat[0], p1 = pat[1], pa, pb;
+    uint32_t i, ok, n, last, seen, legs[8], bad;
+    char b[40];
+    printf("phase 42: the song's roads\n");
+    memcpy(s0, songs[0], sizeof s0);
+    sp_kit(k0);
+    if (sq.running)
+        press(B_PLAY);
+    sq.song = 0;
+    /* the picker: the commonest next (SURPRISE 0), order 2, any row at the top */
+    song_set(0, S1, sizeof S1);
+    for (i = 0, ok = 1; i < 50u; i++)
+        ok &= song_pat(0, song_road(0, 4, 0xFF, 0, 0xFF)) == 1u;
+    check(ok && song_len(0) == 6u, "ROADS: SURPRISE 0, P01 goes on to its commonest next, P02");
+    for (i = 0, seen = 0; i < 200u; i++)
+        seen |= 1u << song_pat(0, song_road(0, 4, 0xFF, 64, 0xFF));
+    check(seen == 7u, "ROADS: SURPRISE up, P03 (once in the song) now and then");
+    song_set(0, S2, sizeof S2);
+    for (i = 0, ok = 1; i < 50u; i++)
+        ok &= song_pat(0, song_road(0, 5, 4, 0, 0xFF)) == 4u;
+    for (i = 0, seen = 0; i < 100u; i++)
+        seen |= 1u << song_pat(0, song_road(0, 5, 0xFF, 1, 0xFF));
+    check(ok && seen == ((1u << 2) | (1u << 4)), "ROADS: order 2 (P04 P02: P05); order 1 (P02: P03 or P05)");
+    for (i = 0, ok = 1; i < 50u; i++)
+        ok &= song_pat(0, song_road(0, 0, 0xFF, 0, 1)) != 1u;
+    check(ok, "ROADS: a pattern to avoid (the fourth in a row): another");
+    /* the SONG page's third page: Way, Surprise, Home */
+    song_set(0, S3, sizeof S3);
+    song_rd[0] = 0;
+    goto_mode(B_HOME, M_SONG);
+    turn(EN_SELECT, 2);
+    check(ui.page == 2u, "SONG: SELECT to its third page, ROADS");
+    turn(EN_K2, 1);
+    turn(EN_K3, -4);
+    turn(EN_K4, 3);
+    check((song_rd[0] & 0x80u) && vp_get(VP_RSUR) == 0u && SONG_HOME[vp_get(VP_RHOME)] == 32u && song_sur(0) == 0u,
+          "ROADS: Way ROADS, Surprise 0%, Home 32 bars (this song's)");
+    card_value(b, sizeof b, VP_RHOME, vp_get(VP_RHOME));
+    check(!strcmp(b, "32 BARS"), "ROADS: the Home card");
+    run_ms(60);
+    shot("p42-song-roads");
+    /* a ROADS song playing: P01 then P02 or P03, then P01 again; it never stops at the END */
+    par[PAR_BPM] = 240;
+    seq_tempo_changed();
+    seq_set_next_pattern(0);
+    seq_play_song(1);
+    press(B_PLAY);
+    last = 0xFF;
+    n = seen = bad = 0;
+    for (i = 0; i < 2400u && sq.running; i++) {
+        if (sq.active != last) {
+            if (last != 0xFFu && (last == 0u) == (sq.active == 0u))
+                bad++;
+            last = sq.active;
+            seen |= 1u << last;
+            n++;
+        }
+        run_ms(20);
+    }
+    printf("  ROADS: %u patterns played, seen %#x, %u wrong turns\n", (unsigned)n, (unsigned)seen, (unsigned)bad);
+    check(sq.running && n > 12u && seen == 7u && !bad, "ROADS playing: P01, then P02 or P03 by chance, on and on");
+    press(B_PLAY);
+    seq_play_song(0);
+    {                                                /* (the project keeps each song's ROADS) */
+        int rc;
+        song_rd[3] = 0xA7;
+        rc = proj_save(1, "ROADS   ");
+        memset(song_rd, 0, sizeof song_rd);
+        rc |= proj_load(1);
+        check(rc == 0 && song_rd[3] == 0xA7u && (song_rd[0] & 0x80u), "the project: each song's ROADS back");
+        song_rd[3] = 0;
+    }
+    /* WANDER, GOAL SONG: the song's rows one by one, the voices wandering, the slots as they were */
+    song_set(0, S4, sizeof S4);
+    song_rd[0] = 0;
+    seq_set_next_pattern(0);
+    wd_beat(&pat[0], 0);
+    wd_beat(&pat[1], 1);
+    pa = pat[0];
+    pb = pat[1];
+    wd_defaults();
+    perf_goto(PG_WANDER);
+    wd_vset(WV_GOAL, WG_SONG);
+    wd_card_value(b, sizeof b, WV_GOAL, WG_SONG);
+    ok = !strcmp(b, "SONG");
+    wd_card_value(b, sizeof b, WV_ORDER, WO_ROADS);
+    ok &= !strcmp(b, "ROADS");
+    wd_card_value(b, sizeof b, WV_SWAY, 0);
+    ok &= !strcmp(b, "EVEN");
+    check(ok, "WANDER: GOAL SONG, ORDER ROADS, SWAY EVEN");
+    run_ms(40);
+    shot("p42-wander-goal-song");
+    wd.k[WV_JOURNEY] = 0;                            /* (16 bars a row) */
+    wd.k[WV_ORDER] = WO_ORDER;
+    sq.song_mode = 1;
+    press(B_PLAY);
+    press(B_OCTUP);
+    check(wd.state == WS_ROAD && wd_song() && wd.sdest == 1u && wd.sleg == 16u && !sq.song_mode,
+          "COPY (OCT+): on the road to the song's next row, P02, 16 bars (WANDER plays the rows)");
+    wd_bars(8);
+    run_ms(40);
+    shot("p42-wander-song-road");
+    for (i = 0; i < 12u && sq.active != 1u; i++)
+        wd_bars(1);
+    check(sq.active == 1u && wd.state == WS_ROAD && !wd.arrived && wd.sdest == 0u && !memcmp(&pat[0], &pa, sizeof pa),
+          "there: P02 plays, P01's slot as it was; on to the next row, P01");
+    for (i = 0; i < 20u && sq.active != 0u; i++)
+        wd_bars(1);
+    check(sq.active == 0u && wd.sdest == 1u && !memcmp(&pat[1], &pb, sizeof pb), "and round again: P01, its slot P02 as it was");
+    wd.k[WV_SWAY] = 127;                             /* (SWAY WILD: a quarter to four times the JOURNEY) */
+    for (i = 0, ok = 1, seen = 0; i < 8u; i++) {
+        wd_leg();
+        legs[i] = wd.sleg;
+        ok &= wd.sleg >= 4u && wd.sleg <= 64u;
+        seen |= legs[i] != legs[0];
+    }
+    printf("  SWAY WILD legs: %u %u %u %u %u %u %u %u\n", (unsigned)legs[0], (unsigned)legs[1], (unsigned)legs[2],
+           (unsigned)legs[3], (unsigned)legs[4], (unsigned)legs[5], (unsigned)legs[6], (unsigned)legs[7]);
+    check(ok && seen, "SWAY WILD: each row's time between 4 and 64 bars");
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    hold(B_OCTDN);
+    release(B_OCTDN);
+    for (i = 0; i < 6u && wd.state != WS_IDLE; i++)
+        wd_bars(1);
+    check(wd.state == WS_IDLE && sq.active == 0u && !memcmp(&pat[0], &pa, sizeof pa) && !memcmp(&pat[1], &pb, sizeof pb),
+          "SHIFT (OCT-) twice: home in P01, both slots as they were");
+    {                                                /* (an empty song: nothing to follow) */
+        memset(songs[0], SONG_END, MAX_SONG_LENGTH);
+        press(B_OCTUP);
+        check(wd.state == WS_IDLE, "GOAL SONG, no rows: it stays home");
+    }
+    press(B_PLAY);
+    memcpy(songs[0], s0, sizeof s0);
+    song_rd[0] = r0;
+    pat[0] = p0;
+    pat[1] = p1;
+    for (i = 0; i < KIT_LEN; i++)
+        par[kit_par(i)] = k0[i];
+    snd_post_all();
+    wd_defaults();
+    sq.song_mode = 0;
+    par[PAR_BPM] = 120;
+    seq_tempo_changed();
+    goto_mode(B_HOME, M_HOME);
+}
+
+/* 0.23-test11: a step's long lengths (3/4 .. 64 bars, INF) beside its locks; STEP's pages as the Elektrons' */
+static void phase_023t11(void)
+{
+    pattern_t *p;
+    uint32_t i, ok;
+    printf("0.23-test11: long lengths, INF, the STEP pages\n");
+    p4_reset();
+    p = &pat[sq.active];
+    for (i = 0, ok = 1; i < NLEN_ALL; i++) {         /* (every length beside two locks of the highest codes) */
+        lock_set(p, 0, 3, 0, NPAR - 1u);
+        lock_set(p, 0, 3, 1, NPAR - 2u);
+        step_len_set(p, 0, 3, i);
+        ok &= step_len(p, 0, 3) == i && lock_get(p, 0, 3, 0) == NPAR - 1u && lock_get(p, 0, 3, 1) == NPAR - 2u;
+        lock_set(p, 0, 3, i & 1u, NO_AUTOMATION);
+        ok &= step_len(p, 0, 3) == i;
+        ok &= len_knob(len_pos(i)) == i;
+    }
+    check(ok, "a step's length (all 23) and its two locks kept apart");
+    {                                                /* (the arps' orders over 4 tones, as the user's table) */
+        static const struct { uint8_t sh; char want[20]; } A[] = {
+            {MEL_ARP_UP, "1234"}, {MEL_ARP_DN, "4321"}, {MEL_ARP_UD, "123432"}, {MEL_CONV, "1423"},
+            {MEL_DIV, "2314"}, {MEL_CONDIV, "14232314"}, {MEL_LEAP, "1324"}, {MEL_SPIRAL, "1243"},
+            {MEL_ALT, "1324"}, {MEL_PAIR, "2143"}, {MEL_ROTATE, "1234234134124123"}, {MEL_INVERT, "12344321"},
+            {MEL_PEDAL, "121314"}};
+        uint32_t j;
+        for (i = 0, ok = 1; i < sizeof A / sizeof A[0]; i++) {
+            char got[20];
+            int32_t per = arp_per(A[i].sh, 4);
+            for (j = 0; j < (uint32_t)per && j < 19u; j++)
+                got[j] = (char)('1' + arp_idx(A[i].sh, (int32_t)j, 4, per));
+            got[j] = 0;
+            if (strcmp(got, A[i].want)) {
+                printf("  arp %u: %s, want %s\n", A[i].sh, got, A[i].want);
+                ok = 0;
+            }
+        }
+        for (i = MEL_ARP_UP; i < NMEL; i++)          /* (every order in range for 2 .. 38 tones) */
+            for (j = 2; j <= 38u && mel_arp(i); j++) {
+                int32_t per = arp_per(i, (int32_t)j), k;
+                for (k = 0; k < per; k++)
+                    ok &= arp_idx(i, k, (int32_t)j, per) >= 0 && arp_idx(i, k, (int32_t)j, per) < (int32_t)j;
+            }
+        check(ok, "the arps' orders: the table's, and in range");
+    }
+    seq_clear_pattern(p);
+    main_set(p, 0, 0, 1);
+    goto_mode(B_SEQ, M_STEP);
+    ui.page = 0;
+    ui.step = 0;
+    ui.track = 0;
+    run_ms(40);
+    check(P_STEP[0][0] == PAR_STEP_NOTE && P_STEP[0][1] == VP_LEN && P_STEP[0][2] == PAR_STEP_VOLUME &&
+          P_STEP[1][0] == PAR_STEP_PROB && P_STEP[1][1] == VP_COND && P_STEP[1][2] == PAR_STEP_SHIFT &&
+          P_STEP[1][3] == PAR_STEP_FLAM, "STEP: Note, Length, Velocity; TRIG: Chance, Condition, Shift, Flam");
+    kset.accel = 0;
+    turn(EN_K2, 12);                                 /* (AUTO + 12: 4 BARS) */
+    kset.accel = 1;
+    check(step_len(p, 0, 0) == LEN_LONG + 5u, "K2: 4 BARS");
+    press(B_PLAY);
+    run_ms(4000);                                    /* (2 bars at 120 BPM: still held) */
+    check(sq.glen[0] > 0u && sq.glen[0] <= 64u * 24u * 2u + 48u, "4 BARS: held two bars in, two to go");
+    kset.accel = 0;
+    turn(EN_K2, 30);                                 /* (past INF: TIE, the last) */
+    turn(EN_K2, -1);
+    kset.accel = 1;
+    check(step_len(p, 0, 0) == LEN_INF, "K2: INF before TIE");
+    run_ms(8500);
+    check(sq.glen[0] == 0u && (sq.gmidi & 1u) && !(sq.tie & 1u), "INF: held, no countdown, not a tie");
+    press(B_PLAY);
+    check(!(sq.gmidi & 1u), "INF: STOP lets it go");
+    perf_goto(PG_WANDER);
+    hold(B_OCTDN);
+    shot("wander-shift-postcard");
+    black(NTRACK + 2);
+    check(!strncmp(ui.msg, "POSTCARD SAVED TO P", 19) && pat_voices(&pat[1]) == PV_LOCKED,
+          "WANDER: SHIFT + black key 10: POSTCARD SAVED TO P02, its voices LOCKED");
+    release(B_OCTDN);
+    goto_mode(B_HOME, M_HOME);
+}
+
+/* 0.23-test7: a track's BASE note (0.23-t7), note locks, TRANSPOSE (0.23-t7), RUSH by the turn's speed (0.23-t7) */
+static void phase_t7(void)
+{
+    pattern_t *p;
+    uint16_t pp[4];
+    uint32_t n0, n1;
+    printf("0.23-test7: BASE, note locks, TRANSPOSE, RUSH speed\n");
+    p4_reset();
+    if (sq.running)
+        press(B_PLAY);
+    p = &pat[sq.active];
+    sq.muted = 0;
+    kset.accel = 0;
+    track_select(2);
+    p->step[2][0].note = SEQ_DEFAULT_NOTE + 2u;      /* (a melody's note, plain) */
+    p->step[2][1].note = (uint8_t)((SEQ_DEFAULT_NOTE + 7u) | NOTE_LOCK);   /* (locked: G4) */
+    seq_goto(PG_SCALE);
+    page_params(pp);
+    check(pp[3] == VP_TBASE, "SCALE: KNOB 4 the track's BASE");
+    turn(EN_K4, 5);
+    check(p->tbase[2] == 5 && snote(p, 2, 0) == SEQ_DEFAULT_NOTE + 7u && snote(p, 2, 1) == SEQ_DEFAULT_NOTE + 7u,
+          "BASE +5: a plain note moves, a locked one stays");
+    shot("scale-base");
+    n0 = note_keep(2, SEQ_DEFAULT_NOTE + 9u);
+    check(n0 == SEQ_DEFAULT_NOTE + 4u && tb_note(2) == SEQ_DEFAULT_NOTE + 5u, "BASE: a played note kept as it plays back");
+    ui.step = 0;
+    step_note_lock(p, 2, 0, SEQ_DEFAULT_NOTE + 3u);
+    check(p->step[2][0].note == ((SEQ_DEFAULT_NOTE + 3u) | NOTE_LOCK), "STEP Note: a lock");
+    step_note_lock(p, 2, 0, SEQ_DEFAULT_NOTE + 5u);
+    check(p->step[2][0].note == SEQ_DEFAULT_NOTE, "STEP Note at BASE: plain again");
+    p->tbase[2] = 0;
+    p->step[2][0].note = p->step[2][1].note = SEQ_DEFAULT_NOTE;
+    /* TRANSPOSE: degrees of the pattern's scale */
+    goto_mode(B_ARP, M_PERF);
+    ui.page = PG_TRP;
+    ui.force = 1;
+    run_ms(40);
+    page_params(pp);
+    check(pp[0] == VP_TRP && pp[1] == VP_TRWHEN && pp[2] == VP_TRHOLD, "PERF: TRANSPOSE's page");
+    p->scale = SC_CHROM;
+    sq.trmask = 0;
+    black(2);
+    check(sq.trmask == 4u && ui.track == 2u, "TRANSPOSE: a black key, its track");
+    white(10);
+    check(sq.trp[2] == 3 && trp_fit(2, SEQ_DEFAULT_NOTE) == SEQ_DEFAULT_NOTE + 3u && trp_fit(1, SEQ_DEFAULT_NOTE) ==
+          SEQ_DEFAULT_NOTE, "TRANSPOSE CHROMATIC: +3 semitones, the others not");
+    p->scale = SC_MAJOR;
+    p->sroot = 0;
+    {
+        int32_t c = (int32_t)(vc[2].osc.midi_freq >> 8), d = scale_q(SC_MAJOR, 0, c, 0) - c;
+        n1 = trp_fit(2, (uint32_t)(SEQ_DEFAULT_NOTE + d));
+        check((int32_t)n1 - (SEQ_DEFAULT_NOTE + d) == scale_q(SC_MAJOR, 0, c + d, 3) - (c + d),
+              "TRANSPOSE MAJOR: 3 degrees up");
+    }
+    shot("transpose");
+    white(7);
+    check(sq.trp[2] == 0, "TRANSPOSE: the middle key, back to 0");
+    sq.trhold = 1;
+    keys |= 1u << WHITE_KEY[0];
+    web_keys(keys);
+    run_ms(40);
+    check(sq.trp[2] == -7, "TRANSPOSE HOLD: an octave down while held");
+    keys &= ~(1u << WHITE_KEY[0]);
+    web_keys(keys);
+    run_ms(40);
+    check(sq.trp[2] == 0, "TRANSPOSE HOLD: let go, back");
+    sq.trhold = 0;
+    sq.trwhen = 2;
+    press(B_PLAY);
+    run_ms(100);
+    white(9);
+    check(sq.trp[2] == 0 && sq.trdue && sq.trpend[2] == 2, "TRANSPOSE WHEN BAR: waits");
+    run_ms(2500);
+    check(sq.trp[2] == 2 && !sq.trdue, "TRANSPOSE WHEN BAR: on the bar");
+    press(B_PLAY);
+    white(7);
+    sq.trwhen = 0;
+    sq.trmask = 0;
+    p->scale = SC_CHROM;
+    /* RUSH: slow 1% a detent, fast more */
+    ui.page = PG_RUSH;
+    ui.force = 1;
+    run_ms(40);
+    sq.ru_live = 0;
+    turn(EN_K1, 3);
+    {
+        uint32_t slow = sq.ru_live, i;
+        run_ms(200);
+        for (i = 0; i < 10u; i++) {
+            web_enc(EN_K1, 1);
+            run_ms(4);
+        }
+        check(slow <= 6u && sq.ru_live >= slow + 30u, "RUSH: slow turns fine, fast ones far");
+    }
+    sq.ru_live = 0;
+}
 int main(int argc, char **argv)
 {
     uint32_t t;
@@ -6261,8 +7309,8 @@ int main(int argc, char **argv)
     press(B_SEQ);
     check(ui.mode == M_STEP, "SEQ again: the steps");
     white(4);
-    turn(EN_K1, -30);
-    check((pat[0].step[0][4].volume & 127u) < 127u, "STEP: K1 sets the velocity");
+    turn(EN_K3, -30);
+    check((pat[0].step[0][4].volume & 127u) < 127u, "STEP: K3 sets the velocity");
     shot("step");
     turn(EN_SELECT, 1);
     turn(EN_K1, 2);
@@ -6626,6 +7674,7 @@ int main(int argc, char **argv)
     phase5c();
     phase5d();
     phase9_perf();
+    phase39_rush();
     phase9_keys();
     phase9_library();
     phase9_patkeep();
@@ -6682,6 +7731,11 @@ int main(int argc, char **argv)
     phase30();
     gen_step_edit_test();
     phase37();
+    phase40();
+    phase41();
+    phase42();
+    phase_t7();
+    phase_023t11();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;
 }

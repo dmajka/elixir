@@ -28,7 +28,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REPO = "https://github.com/dmajka/elixir"   # the source repository's URL, once public: the pages link it
 BLOCKS, BLK, KEEP = 20, 0x30, 0x2F
-SRC = ["build.sh", "LICENSE", "LICENSES", "NOTICE.md", "README.md", "ROADMAP.md", "MANUAL.md",
+SRC = ["build.sh", "LICENSE", "LICENSES", "NOTICE.md", "README.md", "ROADMAP.md", "MANUAL.md", "TECHNICAL_DOCUMENTATION.md",
        "firmware", "tools", "tests", "web", "assets"]
 
 
@@ -44,6 +44,28 @@ def nav(depth, here=None):
         links += f'<a href="{REPO}">Source</a>'
     return (f'<header class="site"><div class="wrap"><a class="brand" href="{up or "./"}">{potion_svg(small=True)}'
             f"Elixir</a><nav>{links}</nav></div></header>")
+
+
+# the header on a page without site.css (try/: the emulator has its own styles, and site.css's would restyle its
+# buttons): the same header, on a dark bar, its rules scoped to it
+NAV_CSS = """<style>
+header.site { background: #131210; border-bottom: 1px solid #2d2a25; font: 15px/1.4 -apple-system, BlinkMacSystemFont,
+  "Segoe UI", "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+header.site .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; display: flex; align-items: center; gap: 24px;
+  min-height: 56px; flex-wrap: wrap; box-sizing: border-box; }
+header.site .brand { display: flex; align-items: center; gap: 10px; color: #f2ede3; text-decoration: none;
+  font-weight: 650; font-size: 19px; letter-spacing: .02em; }
+header.site .brand svg { width: 26px; height: auto; display: block; shape-rendering: crispEdges; }
+header.site nav { display: flex; gap: 20px; flex-wrap: wrap; margin-left: auto; }
+header.site nav a { color: #a29b8e; text-decoration: none; padding: 4px 0; }
+header.site nav a:hover, header.site nav a[aria-current] { color: #f2ede3; }
+header.site nav a[aria-current] { box-shadow: inset 0 -2px #f0a43a; }
+header.site .px-c { fill: #96603a; } header.site .px-o { fill: #f2ede3; } header.site .px-g { fill: rgba(242,237,227,.08); }
+header.site .px-h { fill: #fff; } header.site .px-l { fill: #f0a43a; } header.site .px-L { fill: #f8d394; }
+header.site .px-d { fill: #a8640f; }
+@media (max-width: 560px) { header.site .wrap { gap: 4px 16px; padding-top: 10px; padding-bottom: 10px; }
+  header.site nav { margin-left: 0; gap: 14px; } }
+</style>"""
 
 
 # the pixel art: the splash's potion and word (firmware/src/ui_draw.c POTION, WORD, WORD_W), as svg, a class a colour
@@ -156,6 +178,9 @@ def markdown(md):
         if ln.strip() == "<!-- grid -->":
             grid = True
             i += 1
+        elif ln.strip() == "<!-- panel -->":           # (the FM-1 at a glance: panel_svg, after the parse)
+            out.append("<!--PANEL-->")
+            i += 1
         elif ln.startswith("```"):
             j = i + 1
             while j < len(lines) and not lines[j].startswith("```"):
@@ -204,24 +229,192 @@ def markdown(md):
     return title, "\n".join(out), heads
 
 
+# the manual's chapters (the site's only: MANUAL.md stays numbered sections). Each groups sections by number
+# ("A" the appendix), and gets an opening page (chapter_head) before its first section and a heading in the side bar
+CHAPTERS = [
+    ("I", "The Threshold", "Installing, a first beat, and the panel", [1, 2, 3]),
+    ("II", "The Book of Rhythm", "Tracks, patterns, steps, recording and songs", [4, 5, 6, 7, 8]),
+    ("III", "The Book of Sound", "Voices, the mixer and effects, kits and morph", [9, 10, 11]),
+    ("IV", "The Book of Conjuring", "Generators, performance, spells and wandering", [12, 13]),
+    ("V", "The Keeping", "Saving, MIDI and settings", [14, 15, 16]),
+    ("VI", "The Appendices", "Tables, differences, troubleshooting and credits", [17, 18, 19, 20, "A"]),
+]
+
+
+def sec_no(text):                                    # "12. Generating tracks" -> 12, "Appendix: .." -> "A"
+    m = re.match(r"(\d+)\.", text)
+    return int(m[1]) if m else "A" if text.lower().startswith("appendix") else None
+
+
+def sections(heads):                                 # {section number: its heading's id}
+    return {sec_no(t): hid for n, hid, t in heads if n == 2 and sec_no(t) is not None}
+
+
+def chapter_of(no):
+    return next((c for c in CHAPTERS if no in c[3]), None)
+
+
+def chapter_head(c):
+    num, name, line, _ = c
+    return (f'<header class="chapter" id="chapter-{num.lower()}"><p class="cnum">Chapter {num}</p>'
+            f'<p class="ctitle" role="heading" aria-level="2">{name}</p><p class="cline">{line}</p>'
+            '<p class="flourish" aria-hidden="true"><span>&#x25C6;</span></p></header>')
+
+
+def chapters(body, heads):
+    """each chapter's opening page put before its first section"""
+    sec = sections(heads)
+    for c in CHAPTERS:
+        first = next((sec[n] for n in c[3] if n in sec), None)
+        if first:
+            mark = f'<h2 id="{first}">'
+            if body.count(mark) != 1:
+                raise SystemExit(f"MANUAL.md: section {first} not found once")
+            body = body.replace(mark, chapter_head(c) + "\n" + mark)
+    return body
+
+
 def toc(heads):
-    """the side bar: the sections, each with its subsections (shown for the section being read)"""
-    out, open_ul = [], False
+    """the side bar: the chapters, their sections, each with its subsections (shown for the section being read)"""
+    out, sub, li, chap = [], False, False, None
     for n, hid, text in heads:
         if n == 2:
-            if open_ul:
+            if sub:
                 out.append("</ul>")
-                open_ul = False
-            if out:
+                sub = False
+            if li:
                 out.append("</li>")
-            out.append(f'<li><a href="#{hid}">{inline(text)}</a>')
-        else:
-            if not open_ul:
+            c = chapter_of(sec_no(text))
+            if c is not chap or not out:
+                if out:
+                    out.append("</ul>")
+                chap = c
+                if c:
+                    out.append(f'<p class="chap"><a href="#chapter-{c[0].lower()}"><span>{c[0]}</span> {c[1]}</a></p>')
                 out.append("<ul>")
-                open_ul = True
+            out.append(f'<li><a href="#{hid}">{inline(text)}</a>')
+            li = True
+        else:
+            if not sub:
+                out.append("<ul>")
+                sub = True
             out.append(f'<li><a href="#{hid}">{inline(text)}</a></li>')
-    out.append("</ul></li>" if open_ul else "</li>")
-    return "<ul>" + "".join(out) + "</ul>"
+    out.append(("</ul>" if sub else "") + ("</li>" if li else "") + "</ul>")
+    return "".join(out)
+
+
+# the FM-1 at a glance (MANUAL.md's <!-- panel --> line): the panel as the emulator draws it (web/emu/index.html
+# LAYOUTS.wide), each control linking to the section that explains it, and the same as a table under it for phones
+PANEL_SEC = {                                        # control: (sections, what it does)
+    "SCREEN": ([3], "The grid, or the page and its four knobs"),
+    "MASTER": ([10], "Output volume"),
+    "SELECT": ([3], "The page; in lists, the row"),
+    "PRESETS": ([11], "The kit browser; on a sound page, sounds"),
+    "ALGORITHM": ([4], "Selects the track"),
+    "KNOB 1": ([9], "The four parameters on screen"),
+    "OCT-": ([3], "SHIFT (hold): what each key does on screen"),
+    "OCT+": ([3], "COPY (hold), OK in dialogs; with SHIFT: CLEAR"),
+    "FX": ([10], "FX bus, reverb, dirt, compressor"),
+    "SCL": ([9], "Filter, shape, insert FX"),
+    "ENV": ([9], "Amp envelope, gate, mod envelope"),
+    "LFO": ([9], "LFOs, random per hit, cross mod"),
+    "EDIT": ([9], "Model, oscillator, FM, transient; SHIFT: KEYS"),
+    "GLO": ([10, 16], "Mixer, then CONFIG"),
+    "HOME": ([5, 8], "Grid, patterns, song"),
+    "SAVE": ([14], "Save and load"),
+    "ARP": ([13], "PERFORM, SPELLS, WANDER, GLOBAL MOD"),
+    "SEQ": ([6, 12], "Track pages, generators, step edit"),
+    "PLAY": ([8], "Start and stop the pattern or song"),
+    "REC": ([7], "Record; SHIFT: record options"),
+    "WHITE": ([5], "White keys 1–16: the steps (patterns, rolls)"),
+    "TRACKS": ([4], "Black keys 1–7: tracks D1 D2 D3 SN CY CH OH"),
+    "BARS": ([8], "Black keys 8–11: bars 1–4, banks"),
+}
+
+
+def panel_svg(heads):
+    sec = sections(heads)
+    title = {n: t for n2, hid, t in heads if n2 == 2 for n in [sec_no(t)]}
+
+    def ref(name):
+        nums = PANEL_SEC[name][0]
+        return f"#{sec[nums[0]]}", "·".join(str(n) for n in nums)
+
+    def link(name, inner, label):
+        href, _ = ref(name)
+        return (f'<a href="{href}" class="ctl"><title>{html.escape(label)}: {html.escape(PANEL_SEC[name][1])} '
+                f'(section {ref(name)[1]})</title>{inner}</a>')
+
+    def badge(x, y, name):
+        n = ref(name)[1]
+        w = 12 + 8 * len(n)
+        return (f'<rect class="bdg" x="{x - w / 2:.1f}" y="{y - 10}" width="{w}" height="20" rx="10"/>'
+                f'<text class="bdgt" x="{x}" y="{y + 4.5}">{n}</text>')
+
+    s = ['<svg class="panel" viewBox="0 0 1000 624" role="img" aria-label="The M-VAVE FM-1\'s panel: each control '
+         'with the number of the section that explains it">',
+         '<rect class="body" x="4" y="4" width="992" height="616" rx="40"/>',
+         '<rect class="tray" x="50" y="250" width="220" height="50" rx="14"/>',
+         '<rect class="tray" x="568" y="160" width="400" height="140" rx="14"/>']
+    s.append(link("SCREEN", '<rect class="scr" x="292" y="44" width="256" height="256" rx="18"/>'
+                  '<rect class="glass" x="300" y="52" width="240" height="240" rx="6"/>'
+                  '<image href="../shots/pattern.png" x="300" y="52" width="240" height="240" '
+                  'preserveAspectRatio="xMidYMid slice"/>' + badge(526, 66, "SCREEN"), "Screen"))
+    knobs = [("MASTER", 105, 100), ("SELECT", 215, 100), ("PRESETS", 105, 205), ("ALGORITHM", 215, 205)]
+    for name, x, y in knobs:
+        s.append(link(name, f'<circle class="tray" cx="{x}" cy="{y}" r="29"/><circle class="knob" cx="{x}" cy="{y}" '
+                      f'r="24"/><text class="lbl" x="{x}" y="{y - 36}">{name}</text>' + badge(x, y, name), name))
+    for k in range(4):
+        x = 610 + 104 * k
+        s.append(link("KNOB 1", f'<circle class="tray" cx="{x}" cy="100" r="27"/><circle class="knob" cx="{x}" '
+                      f'cy="100" r="22"/><text class="lbl" x="{x}" y="66">KNOB {k + 1}</text>' + badge(x, 100, "KNOB 1"),
+                      f"KNOB {k + 1}"))
+    for name, sub, x in (("OCT-", "SHIFT", 60), ("OCT+", "COPY / OK", 170)):
+        s.append(link(name, f'<rect class="btn" x="{x}" y="258" width="90" height="34" rx="8"/>'
+                      f'<text class="bl" x="{x + 45}" y="273">{name.replace("-", "−")}</text>'
+                      f'<text class="bs" x="{x + 45}" y="286">{sub}</text>' + badge(x + 45, 314, name),
+                      f"{name.replace('-', '−')} ({sub})"))
+    rows = (["FX", "SCL", "ENV", "LFO", "EDIT", "GLO"], ["HOME", "SAVE", "ARP", "SEQ", "PLAY", "REC"])
+    for r, row in enumerate(rows):
+        for i, name in enumerate(row):
+            x, y = 582 + 63 * i, 174 + 62 * r
+            s.append(link(name, f'<rect class="btn" x="{x}" y="{y}" width="54" height="48" rx="8"/>'
+                          f'<text class="bl{" rec" if name == "REC" else ""}" x="{x + 27}" y="{y + 20}">{name}</text>'
+                          + badge(x + 27, y + 34, name), name))
+    x0, y0, w, h = 36, 332, 928, 256
+    pitch, kw, kh = (w - 24) / 16, (w - 24) / 16 * 0.78, h * 0.425
+    s.append(f'<rect class="tray" x="{x0}" y="{y0}" width="{w}" height="{h}" rx="18"/>')
+    keys = []
+    for i in range(16):
+        cx = x0 + 12 + (i + 0.5) * pitch
+        keys.append(f'<rect class="key" x="{cx - kw / 2:.1f}" y="{y0 + h * 0.75 - kh / 2:.1f}" width="{kw:.1f}" '
+                    f'height="{kh:.1f}" rx="{kw / 2:.1f}"/><text class="kl" x="{cx:.1f}" y="{y0 + h - 6}">{i + 1}</text>')
+    s.append(link("WHITE", "".join(keys) + badge(500, y0 + h * 0.75, "WHITE"), "White keys"))
+    after = [0, 1, 2, 4, 5, 7, 8, 9, 11, 12, 14]
+    names = ["D1", "D2", "D3", "SN", "CY", "CH", "OH", "B1", "B2", "B3", "B4"]
+    for grp, lo, hi in (("TRACKS", 0, 7), ("BARS", 7, 11)):
+        g, xs = [], []
+        for j in range(lo, hi):
+            cx = x0 + 12 + (after[j] + 1) * pitch
+            xs.append(cx)
+            g.append(f'<rect class="key" x="{cx - kw / 2:.1f}" y="{y0 + h * 0.25 - kh / 2:.1f}" width="{kw:.1f}" '
+                     f'height="{kh:.1f}" rx="{kw / 2:.1f}"/><text class="kl {"tk" if grp == "TRACKS" else "bk"}" '
+                     f'x="{cx:.1f}" y="{y0 + h * 0.5 + 8}">{names[j]}</text>')
+        mid = (xs[0] + xs[-1]) / 2
+        g.append(f'<path class="brace" d="M{xs[0] - kw / 2:.1f} {y0 + 12} v-6 H{xs[-1] + kw / 2:.1f} v6"/>')
+        s.append(link(grp, "".join(g) + badge(mid, y0 + h * 0.25, grp), "Black keys " + ("1–7" if lo == 0 else "8–11")))
+    s.append("</svg>")
+    rows_html = []
+    for name, (nums, what) in PANEL_SEC.items():
+        label = {"OCT-": "OCT− (SHIFT)", "OCT+": "OCT+ (COPY)", "KNOB 1": "KNOB 1–4", "WHITE": "White keys",
+                 "TRACKS": "Black keys 1–7", "BARS": "Black keys 8–11", "SCREEN": "Screen"}.get(name, name)
+        refs = ", ".join(f'<a href="#{sec[n]}">{html.escape(title[n])}</a>' for n in nums)
+        rows_html.append(f"<tr><th>{label}</th><td>{html.escape(what)}</td><td>{refs}</td></tr>")
+    return (f'<figure class="fm1">{"".join(s)}<figcaption>The FM-1 at a glance. Each control carries the number of '
+            'the section that explains it: tap one to go there.</figcaption></figure>'
+            '<details class="fm1-key"><summary>Every control and its section</summary><div class="table"><table>'
+            '<thead><tr><th>Control</th><th>What it does</th><th>Read</th></tr></thead><tbody>' + "".join(rows_html) +
+            "</tbody></table></div></details>")
 
 
 PAGE = """<!doctype html>
@@ -231,82 +424,150 @@ PAGE = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
+<meta name="description" content="The Elixir manual: the LXR-02's drum machine on the M-VAVE FM-1, key by key.">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../site.css">
 <style>
-  :root {{ --bg: #fff; --fg: #111; --dim: #666; --line: #ddd; --code: #f3f3f3; }}
+  /* the manual as an old book: site.css's colours, a page of parchment, serif headings, chapters with openings.
+     The text stays plain and large; the theme is in the frame */
+  :root {{ --paper: #f3ead8; --leaf: #fcf8ef; --ink: #2a241b; --rule: #d9ccb2; --gild: #a85f00; --well2: #f3ecdf;
+           --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", "URW Palladio L", Georgia, serif; }}
   @media (prefers-color-scheme: dark) {{
-    :root:not([data-theme="light"]) {{ --bg: #0b0b0b; --fg: #eee; --dim: #999; --line: #333; --code: #1b1b1b; }}
+    :root:not([data-theme="light"]) {{ --paper: #0f0d0a; --leaf: #1a1713; --ink: #ece4d3; --rule: #3a332a;
+                                       --gild: #f5b04f; --well2: #221e19; }}
   }}
-  :root[data-theme="dark"] {{ --bg: #0b0b0b; --fg: #eee; --dim: #999; --line: #333; --code: #1b1b1b; }}
-  body {{ margin: 0; background: var(--bg); color: var(--fg);
-         font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; }}
-  .wrap {{ display: grid; grid-template-columns: 280px minmax(0, 760px); gap: 48px; justify-content: center;
-           padding: 0 16px; }}
-  main {{ padding: 32px 0 80px; min-width: 0; }}
-  aside {{ position: sticky; top: 0; align-self: start; max-height: 100vh; overflow-y: auto; padding: 32px 0 32px;
-           font-size: 14px; line-height: 1.4; }}
+  :root[data-theme="dark"] {{ --paper: #0f0d0a; --leaf: #1a1713; --ink: #ece4d3; --rule: #3a332a; --gild: #f5b04f;
+                              --well2: #221e19; }}
+  body {{ background: var(--paper); color: var(--ink); }}
+  header.site {{ background: var(--bg); }}
+  .book {{ display: grid; grid-template-columns: 270px minmax(0, 800px); gap: 40px; justify-content: center;
+           padding: 0 16px; max-width: 1180px; margin: 0 auto; }}
+  main {{ min-width: 0; margin: 32px 0 80px; padding: 48px 56px 64px; background: var(--leaf);
+          border: 1px solid var(--rule); border-radius: 4px;
+          box-shadow: 0 1px 0 var(--rule), 0 18px 40px -28px rgba(60, 40, 10, .45),
+                      inset 0 0 80px rgba(168, 95, 0, .045); font: 17px/1.7 var(--serif); }}
+  main > h1 {{ font: 600 40px/1.15 var(--serif); letter-spacing: .01em; margin: 0 0 6px; text-align: center; }}
+  main > h1 + p {{ text-align: center; color: var(--dim); font-style: italic; }}
+  h2 {{ font: 600 27px/1.25 var(--serif); margin: 56px 0 14px; padding-bottom: 8px; color: var(--ink);
+        border-bottom: 3px double var(--rule); letter-spacing: 0; }}
+  h3 {{ font: 600 20px/1.3 var(--serif); margin: 34px 0 8px; color: var(--gild); }}
+  h4 {{ font: 600 17px/1.3 var(--serif); margin: 24px 0 6px; }}
+  h2, h3, h4, .chapter {{ scroll-margin-top: 16px; }}
+  p, li {{ hyphens: auto; }}
+  p {{ margin: 0 0 14px; }}
+  ul, ol {{ padding-left: 1.4em; margin: 0 0 14px; }}
+  li {{ margin-bottom: 5px; }}
+  strong {{ font-weight: 650; }}
+  hr {{ border: 0; height: 24px; margin: 28px 0; background: none; text-align: center; }}
+  hr::after {{ content: "\\2042"; color: var(--rule); font-size: 18px; }}
+  a {{ color: var(--gild); }}
+  code {{ font: 0.84em ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--well2); padding: 1px 5px;
+          border-radius: 3px; }}
+  pre {{ background: var(--well2); padding: 12px 14px; overflow-x: auto; border-radius: 4px; border: 1px solid var(--rule); }}
+  pre code {{ padding: 0; background: none; }}
+  .table, pre, ul, ol, h3, h4 {{ clear: both; }}
+  .table {{ overflow-x: auto; margin: 0 0 18px; }}
+  table {{ border-collapse: collapse; min-width: 100%;
+           font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif; }}
+  th, td {{ text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--rule); }}
+  thead th {{ font-weight: 650; border-bottom: 2px solid var(--rule); }}
+  tbody tr:nth-child(even) {{ background: color-mix(in srgb, var(--well2) 55%, transparent); }}
+  .grid table {{ border: 1px solid var(--rule); table-layout: fixed; }}
+  .grid th, .grid td {{ border: 1px solid var(--rule); text-align: center; vertical-align: middle; padding: 6px 4px;
+                        font-size: 13px; }}
+  .grid th:first-child, .grid td:first-child {{ text-align: left; width: 9em; font-weight: 600; padding-left: 8px; }}
+  .grid th:last-child, .grid td:last-child {{ background: var(--well2); }}
+  .grid strong {{ display: block; font-size: 15px; }}
+
+  /* a chapter's opening */
+  .chapter {{ margin: 88px -56px 8px; padding: 40px 56px 28px; text-align: center; border-top: 1px solid var(--rule);
+              background: linear-gradient(var(--well2), transparent 85%); }}
+  main > .chapter:first-of-type {{ margin-top: 40px; }}
+  .chapter .cnum {{ margin: 0; font: 600 13px/1 var(--serif); letter-spacing: .32em; text-transform: uppercase;
+                    color: var(--gild); }}
+  .chapter .ctitle {{ margin: 12px 0 6px; font: 600 38px/1.15 var(--serif); }}
+  .chapter .cline {{ margin: 0; font-style: italic; color: var(--dim); }}
+  .chapter .flourish {{ margin: 16px auto 0; display: flex; align-items: center; gap: 12px; max-width: 220px;
+                       font-size: 11px; line-height: 1; color: var(--gild); }}
+  .chapter .flourish::before, .chapter .flourish::after {{ content: ""; flex: 1; height: 1px; background: var(--gild);
+                                                           opacity: .55; }}
+  .chapter + h2 {{ margin-top: 28px; }}
+  .chapter + h2 + p::first-letter, .chapter + h2 + h3 + p::first-letter {{
+    float: left; font: 600 3.3em/0.82 var(--serif); padding: 6px 8px 0 0; color: var(--gild); }}
+
+  /* the FM-1 at a glance */
+  .fm1 {{ margin: 20px 0 10px; }}
+  .fm1 svg {{ display: block; width: 100%; height: auto; }}
+  .fm1 figcaption {{ font-size: 14px; color: var(--dim); font-style: italic; text-align: center; margin-top: 8px; }}
+  .fm1 .body {{ fill: #1d1d1f; }} .fm1 .tray {{ fill: #141415; }} .fm1 .scr {{ fill: #0b0b0c; }}
+  .fm1 .glass {{ fill: #000; stroke: #2a2a2d; }}
+  .fm1 .knob {{ fill: #2a2a2d; stroke: #3a3a3e; stroke-width: 2; }}
+  .fm1 .btn {{ fill: #2a2a2d; stroke: #3a3a3e; stroke-width: 1.5; }}
+  .fm1 .key {{ fill: #0c0c0d; stroke: #3a3a3e; stroke-width: 1.5; }}
+  .fm1 text {{ font: 600 12px -apple-system, "Helvetica Neue", Arial, sans-serif; text-anchor: middle; letter-spacing: .04em; }}
+  .fm1 .lbl {{ fill: #d6d6d8; font-size: 15px; }} .fm1 .bl {{ fill: #d6d6d8; font-size: 12px; }}
+  .fm1 .bs {{ fill: #8d8d92; font-size: 9.5px; }} .fm1 .rec {{ fill: #ff453a; }}
+  .fm1 .kl {{ fill: #8d8d92; font-size: 11px; }} .fm1 .tk {{ fill: #c9a46a; }} .fm1 .bk {{ fill: #7fb0d8; }}
+  .fm1 .brace {{ fill: none; stroke: #5a5a5e; stroke-width: 1.5; }}
+  .fm1 .bdg {{ fill: #f0a43a; }} .fm1 .bdgt {{ fill: #1d1b18; font-size: 12px; font-weight: 700; letter-spacing: 0; }}
+  .fm1 a.ctl {{ cursor: pointer; }}
+  .fm1 a.ctl:hover .bdg, .fm1 a.ctl:focus .bdg {{ fill: #f8d394; }}
+  .fm1 a.ctl:hover .btn, .fm1 a.ctl:hover .knob, .fm1 a.ctl:hover .key, .fm1 a.ctl:focus .btn {{ stroke: #f0a43a; }}
+  .fm1 a.ctl:focus {{ outline: none; }}
+  .fm1-key {{ margin: 0 0 22px; }}
+  .fm1-key summary {{ cursor: pointer; color: var(--gild); font-weight: 600; margin-bottom: 8px; }}
+  .fm1-key th {{ white-space: nowrap; }}
+
+  /* the side bar: the book's contents */
+  aside {{ position: sticky; top: 0; align-self: start; max-height: 100vh; overflow-y: auto; padding: 32px 0;
+           font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif; }}
   aside summary {{ display: none; }}
-  aside .title {{ font-weight: 600; margin: 0 0 12px; }}
-  aside ul {{ list-style: none; margin: 0; padding: 0; }}
+  aside .title {{ font: 600 13px/1 var(--serif); letter-spacing: .28em; text-transform: uppercase; color: var(--gild);
+                  margin: 0 0 14px 8px; }}
+  aside ul {{ list-style: none; margin: 0 0 4px; padding: 0; }}
   aside li {{ margin: 0; }}
+  aside .chap {{ margin: 16px 0 4px; }}
+  aside .chap a {{ font: 600 15px/1.3 var(--serif); color: var(--ink); border: 0; padding: 2px 8px; }}
+  aside .chap span {{ display: inline-block; min-width: 2em; color: var(--gild); font-variant: small-caps; }}
   aside a {{ display: block; padding: 4px 8px; text-decoration: none; color: var(--dim); border-left: 2px solid
              transparent; }}
-  aside a:hover {{ color: var(--fg); }}
-  aside a.on {{ color: var(--fg); border-left-color: var(--fg); font-weight: 600; }}
+  aside a:hover {{ color: var(--ink); }}
+  aside a.on {{ color: var(--ink); border-left-color: var(--gild); font-weight: 600; }}
   aside li ul {{ display: none; margin: 2px 0 6px; }}
   aside li.open > ul {{ display: block; }}
   aside li ul a {{ padding-left: 20px; font-size: 13px; }}
   aside li ul a.on {{ font-weight: 500; }}
-  @media (max-width: 900px) {{
-    .wrap {{ display: block; }}
-    aside {{ position: sticky; top: 0; z-index: 1; background: var(--bg); padding: 8px 0; max-height: 70vh;
-             border-bottom: 1px solid var(--line); }}
+  @media (max-width: 960px) {{
+    .book {{ display: block; padding: 0; }}
+    aside {{ position: sticky; top: 0; z-index: 1; background: var(--paper); padding: 8px 16px; max-height: 70vh;
+             border-bottom: 1px solid var(--rule); }}
     aside summary {{ display: list-item; cursor: pointer; font-weight: 600; padding: 4px 0; }}
     aside .title {{ display: none; }}
-    h2, h3 {{ scroll-margin-top: 56px; }}
+    main {{ margin: 0; border: 0; border-radius: 0; padding: 28px 16px 56px; box-shadow: none; font-size: 17px; }}
+    main > h1 {{ font-size: 32px; }}
+    .chapter {{ margin: 64px -16px 8px; padding: 32px 16px 22px; }}
+    .chapter .ctitle {{ font-size: 30px; }}
+    h2, h3, h4, .chapter {{ scroll-margin-top: 56px; }}
   }}
-  nav.top {{ font-size: 14px; margin-bottom: 24px; }}
-  nav.top a {{ margin-right: 16px; }}
-  a {{ color: inherit; }}
-  h1 {{ font-size: 30px; margin: 0 0 16px; }}
-  h2 {{ font-size: 22px; margin: 40px 0 12px; }}
-  h3 {{ font-size: 17px; margin: 28px 0 8px; }}
-  h2, h3 {{ scroll-margin-top: 16px; }}
-  hr {{ border: 0; border-top: 1px solid var(--line); margin: 32px 0; }}
-  code {{ font: 14px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code); padding: 1px 4px;
-          border-radius: 3px; }}
-  pre {{ background: var(--code); padding: 12px; overflow-x: auto; border-radius: 4px; }}
-  pre code {{ padding: 0; background: none; }}
-  .table {{ overflow-x: auto; margin: 0 0 16px; }}
-  table {{ border-collapse: collapse; font-size: 14px; min-width: 100%; }}
-  th, td {{ text-align: left; vertical-align: top; padding: 6px 10px; border-bottom: 1px solid var(--line); }}
-  th {{ font-weight: 600; }}
-  .grid table {{ border: 1px solid var(--line); table-layout: fixed; }}
-  .grid th, .grid td {{ border: 1px solid var(--line); text-align: center; vertical-align: middle; padding: 6px 4px;
-                        font-size: 13px; }}
-  .grid th:first-child, .grid td:first-child {{ text-align: left; width: 9em; font-weight: 600; padding-left: 8px; }}
-  .grid th:last-child, .grid td:last-child {{ background: var(--code); }}
-  .grid strong {{ display: block; font-size: 15px; }}
-  li {{ margin-bottom: 4px; }}
 </style>
 </head>
 <body>
-<div class="wrap">
+{nav}
+<div class="book">
 <aside><details id="toc" open><summary>Contents</summary>
 <p class="title">Contents</p>
 {toc}
 </details></aside>
 <main>
-<nav class="top"><a href="../">Elixir</a> <a href="../try/">Try it</a> <a href="../install/">Install</a>
-  <a href="../library/">Library</a> <a href="../firmware/">Files</a></nav>
 {body}
 </main>
 </div>
 <script>
 // the side bar follows the reading: the section in view marked, its subsections shown; on a phone it folds away
 (() => {{
-  const toc = document.getElementById("toc"), narrow = matchMedia("(max-width: 900px)");
+  const toc = document.getElementById("toc"), narrow = matchMedia("(max-width: 960px)");
   if (narrow.matches) toc.open = false;
-  const links = [...toc.querySelectorAll("a")];
+  const links = [...toc.querySelectorAll("li a")];
   const heads = links.map((a) => document.getElementById(a.hash.slice(1))).filter(Boolean);
   toc.addEventListener("click", (e) => {{ if (e.target.closest("a") && narrow.matches) toc.open = false; }});
   let last = null;
@@ -393,8 +654,10 @@ def main(pkg, out):
 
     shutil.copytree(emu, out / "try")
     t = (out / "try/index.html").read_text(encoding="utf-8")
-    back = '<footer>\n  <a href="../">Elixir</a> · <a href="../install/">Install</a> · <a href="../manual/">Manual</a><br>\n'
-    t = t.replace("<footer>\n", back, 1)
+    for mark in ("</head>", "<body>"):
+        if t.count(mark) != 1:
+            raise SystemExit(f"build/emu/index.html must contain {mark} once")
+    t = t.replace("</head>", NAV_CSS + "\n</head>").replace("<body>", "<body>\n" + nav(1, "try/"))
     (out / "try/index.html").write_text(t, encoding="utf-8")
     (out / "try/mobile.html").unlink(missing_ok=True)    # (0.16: the phone page is mobile/, on try/'s files)
     (out / "mobile").mkdir()
@@ -404,8 +667,11 @@ def main(pkg, out):
 
     md = re.sub(r"^## Contents\n.*?^---\n", "", (ROOT / "MANUAL.md").read_text(encoding="utf-8"), flags=re.M | re.S)
     title, body, heads = markdown(md)                # (the side bar replaces the manual's own contents)
-    (man / "index.html").write_text(PAGE.format(title=html.escape(title), body=body, toc=toc(heads)),
-                                    encoding="utf-8")
+    if body.count("<!--PANEL-->") > 1:
+        raise SystemExit("MANUAL.md: <!-- panel --> more than once")
+    body = chapters(body.replace("<!--PANEL-->", panel_svg(heads)), heads)
+    (man / "index.html").write_text(PAGE.format(title=html.escape(title), body=body, toc=toc(heads),
+                                                nav=nav(1, "manual/")), encoding="utf-8")
 
     for f in ("LICENSE", "NOTICE.md", "MANUAL.md"):
         shutil.copy(ROOT / f, fw / f)

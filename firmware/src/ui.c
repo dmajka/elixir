@@ -49,11 +49,15 @@ enum { VP_BASE = 0x400, VP_NONE = VP_BASE, VP_IO_TYPE, VP_IO_SLOT, VP_NAME_POS, 
        VP_GROOVE, VP_GAMT, VP_GHUM, VP_GFOLLOW,      /* (26: GROOVE) */
        VP_STCH, VP_STSIZE, VP_STLEN, VP_STVARY,      /* (0.16: STUTTER) */
        VP_MEDIT, VP_DVARY,                           /* (31: edits under morph; DENSITY's VARY) */
+       VP_RUSH, VP_RTOP, VP_RFILT, VP_RGLIDE, VP_RSTART, VP_RFREE, VP_RFLAM, VP_RPITCH,   /* (39: RUSH) */
        VP_SP, VP_SP_LAST = VP_SP + 17,               /* (32: SPELLS' knobs, spells.c SPV_*) */
+       VP_WD, VP_WD_LAST = VP_WD + 11,               /* (40: WANDER's knobs, wander.c WV_*) */
        VP_MEL, VP_MEL_LAST = VP_MEL + NML - 1,       /* 20: the track's melody (pattern_t mel: ML_*) */
        VP_GL, VP_GL_LAST = VP_GL + NGLFO * NGLSET - 1,   /* 0.13: the global LFOs' settings (gls: NGLSET each) */
        VP_P2, VP_P2_LAST = VP_P2 + 7, VP_SONG_REP,
-       VP_SONG_ROW, VP_SONG_EDIT, VP_PLAY, VP_VOICES };   /* (37) */
+       VP_SONG_ROW, VP_SONG_EDIT, VP_PLAY, VP_VOICES,   /* (37) */
+       VP_ROADS, VP_RSUR, VP_RHOME,                  /* (42: the song's ROADS) */
+       VP_TBASE, VP_TRP, VP_TRWHEN, VP_TRHOLD };     /* (0.23-t7: a track's BASE, TRANSPOSE) */
 _Static_assert(NPAR <= VP_BASE, "the virtual parameters after the parameters (25b + 27a: NPAR 525, past 0x200)");
 /* the ACTION page's action (OCT+ does it); 0.10: those of the track's generator (gen_acts) */
 enum { ACT_NONE, ACT_DICE, ACT_COMMIT, ACT_UNDO, ACT_RESET, NACT };
@@ -78,6 +82,7 @@ static struct {
     uint8_t link;                    /* LINKS: the link shown (0..7) */
     uint8_t shift, copy, shift_used, copy_used;
     int8_t held_step;                /* a step key held (its locks), -1 none */
+    uint8_t trkey;                   /* 0.23-t7: TRANSPOSE: the white key held + 1 (0: none) */
     uint8_t lock_turned;
     uint8_t copy_src;                /* COPY: the source track + 1 / pattern + 1 */
     uint8_t ca, ca_loads;            /* 0.11: Control All under way (the kit as it was: ca_snap), kit_loads then */
@@ -110,7 +115,7 @@ static struct {
     uint8_t mpage[NMODE];            /* 0.13: CONFIG BUTTONS (kset.pmem): each mode's page when it was left, */
     uint8_t gsect[NSECT], ghalf[NSECT];   /* .. each sound button's section (+ 1, 0 none) and half, */
     uint8_t seq_m, glo_m;            /* .. the mode SEQ and GLO showed last (pmem_save), */
-    uint8_t pset[3];                 /* .. 29: PERF's page in each set (PERFORM, 32: SPELLS, GLOBAL MOD) */
+    uint8_t pset[4];                 /* .. 29: PERF's page in each set (PERFORM, 32: SPELLS, 40: WANDER, GLOBAL MOD) */
 } ui = {.held_step = -1, .koct = 3, .knote = 0xFF, .kkey = 0xFF};
 
 
@@ -118,6 +123,12 @@ static uint32_t ui_track(void) { return ui.track; }
 static uint32_t sp_vget(uint32_t i);                 /* (32: spells.c) */
 static uint32_t sp_vmax(uint32_t i);
 static void sp_vset(uint32_t i, uint32_t v);
+static uint32_t wd_vget(uint32_t i);                 /* (40: wander.c) */
+static uint32_t wd_vmax(uint32_t i);
+static void wd_vset(uint32_t i, uint32_t v);
+static int wd_vdead(uint32_t i);
+static int vp_dead(uint32_t p) { return p >= VP_WD && p <= VP_WD_LAST && wd_vdead(p - VP_WD); }   /* (40: a knob not
+                                                      * yet in use: shown --, locked) */
 static uint32_t ui_pattern(void) { return sq.active; }
 
 static void ui_draw(void);
@@ -161,6 +172,7 @@ static void perf_reset(void)
     pfs.st_chance = 0;
     pfs.dens = 0;
     pf.dj = 64;
+    sq.ru_live = 0;                                  /* (39: RUSH's knob down) */
     ui_message("PERF RESET: EFFECTS OFF");
 }
 /* 0.13: the main loop, each ms: morph moved by the global LFOs (perform.c gl.morph; a new mixture at most every
@@ -319,33 +331,39 @@ static void sound_fix(void)                          /* a section this track has
 }
 
 static const uint16_t P_HOME[4] = {PAR_BPM, PAR_SHUFFLE, PAR_TRACK_LENGTH, VP_TRACK_VOL};
-static const uint16_t P_STEP[4][4] = {{PAR_STEP_VOLUME, PAR_STEP_NOTE, PAR_STEP_PROB, VP_COND},
-                                      {PAR_STEP_FLAM, PAR_STEP_SHIFT, VP_LEN, VP_NONE},
+static const uint16_t P_STEP[4][4] = {{PAR_STEP_NOTE, VP_LEN, PAR_STEP_VOLUME, VP_NONE},   /* (0.23-t11: as the */
+                                      {PAR_STEP_PROB, VP_COND, PAR_STEP_SHIFT, PAR_STEP_FLAM},   /* Elektrons') */
                                       {PAR_P1_DEST, PAR_P1_VAL, PAR_P2_DEST, PAR_P2_VAL},
                                       {VP_RAT_N, VP_RAT_SHAPE, VP_RAT_RATE, VP_RAT_FADE}};   /* (29: SHAPE names
                                                                                                * RATE: before it) */
-static const char *const STEP_TITLE[4] = {"STEP", "TIMING", "LOCKS", "RATCHET"};
+static const char *const STEP_TITLE[4] = {"STEP", "TRIG", "LOCKS", "RATCHET"};
 /* 0.8: the performance pages: PERFORM is the LXR's PERFORMANCE page (BPM, roll, morph, sample rate). 0.13: in order,
  * the performance pages (PERFORM 2's last: its keys the second bank), the global LFOs (each: DEST DEPTH SPEED WAVE,
  * then MODE TRIG PHASE), the macros. 19: DENSITY after MORE (its black keys leave tracks out), a third LFO. 0.16:
  * STUTTER after DENSITY (OCT+ held: on). 29: two sets, ARP between them: PERFORM (the MIX pages gone: the mixer has
  * them), GLOBAL MOD (the global LFOs, the macros, the links); SELECT stays in the set. 32: SPELLS between them
- * (0.19: a fifth, MOTION) */
-#define NPERF 22u
+ * (0.19: a fifth, MOTION). 39: RUSH after STUTTER. 40: WANDER after SPELLS, a set of its own (QUEST, PACE, HOME) */
+#define NPERF 28u
 #define PG_DENS 2u
 #define PG_STUT 3u
-#define PG_PERF2 4u                                  /* (3 pages: PERFORM 2 and its setups, its keys the second bank) */
-#define PG_SPELL 7u                                  /* 32: SPELLS (5 pages: GRIMOIRE, CAST, CHARACTER, LIMITS, MOTION;
+#define PG_RUSH 4u                                   /* (2 pages: RUSH, RUSH SETUP) */
+#define PG_TRP 6u                                    /* 0.23-t7: TRANSPOSE (white keys: the degrees, black: the tracks) */
+#define PG_PERF2 7u                                  /* (3 pages: PERFORM 2 and its setups, its keys the second bank) */
+#define PG_SPELL 10u                                  /* 32: SPELLS (5 pages: GRIMOIRE, CAST, CHARACTER, LIMITS, MOTION;
                                                       * spells.c) */
-#define PG_GMOD 12u                                  /* GLOBAL MOD's first page */
-#define PG_GLFO 12u                                  /* (6 pages: LFO 1, its mode, LFO 2 .., LFO 3 ..) */
-#define PG_MACRO 18u                                 /* (2 pages: MACROS, MACRO SETUP) */
-#define PG_LINKS 20u                                 /* (2 pages: LINKS, LINK SETUP) */
+#define PG_WANDER 15u                                /* 40: WANDER (3 pages: QUEST, PACE, HOME; wander.c) */
+#define PG_GMOD 18u                                  /* GLOBAL MOD's first page */
+#define PG_GLFO 18u                                  /* (6 pages: LFO 1, its mode, LFO 2 .., LFO 3 ..) */
+#define PG_MACRO 24u                                 /* (2 pages: MACROS, MACRO SETUP) */
+#define PG_LINKS 26u                                 /* (2 pages: LINKS, LINK SETUP) */
 #define GLV(n, k) (VP_GL + (n) * NGLSET + (k))
 static const uint16_t P_PERF[NPERF][4] = {{PAR_BPM, PAR_ROLL, PAR_MORPH, PAR_VOICE_DECIMATION_ALL},
                                           {VP_DJ, VP_REPEAT, PAR_SHUFFLE, VP_TAPE},
                                           {VP_DENS, VP_GHOST, VP_BUILD, VP_DVARY},
                                           {VP_STCH, VP_STSIZE, VP_STLEN, VP_STVARY},
+                                          {VP_RUSH, VP_RTOP, VP_RFILT, VP_RGLIDE},
+                                          {VP_RSTART, VP_RFREE, VP_RFLAM, VP_RPITCH},
+                                          {VP_TRP, VP_TRWHEN, VP_TRHOLD, VP_NONE},
                                           {PAR_BPM, PAR_ROLL, PAR_MORPH, PAR_VOICE_DECIMATION_ALL},
                                           {VP_P2, VP_P2 + 1, VP_P2 + 2, VP_P2 + 3},
                                           {VP_P2 + 4, VP_P2 + 5, VP_P2 + 6, VP_P2 + 7},
@@ -354,6 +372,9 @@ static const uint16_t P_PERF[NPERF][4] = {{PAR_BPM, PAR_ROLL, PAR_MORPH, PAR_VOI
                                           {VP_SP + 8, VP_SP + 9, VP_SP + 10, VP_SP + 11},
                                           {VP_SP + 12, VP_SP + 13, VP_SP + 14, VP_SP + 15},
                                           {VP_SP + 16, VP_SP + 17, VP_NONE, VP_NONE},
+                                          {VP_WD, VP_WD + 1, VP_WD + 2, VP_WD + 3},
+                                          {VP_WD + 4, VP_WD + 5, VP_WD + 6, VP_WD + 7},
+                                          {VP_WD + 8, VP_WD + 9, VP_WD + 10, VP_WD + 11},
                                           {GLV(0, 0), GLV(0, 1), GLV(0, 2), GLV(0, 3)},
                                           {GLV(0, 4), GLV(0, 5), GLV(0, 6), VP_NONE},
                                           {GLV(1, 0), GLV(1, 1), GLV(1, 2), GLV(1, 3)},
@@ -365,18 +386,28 @@ static const uint16_t P_PERF[NPERF][4] = {{PAR_BPM, PAR_ROLL, PAR_MORPH, PAR_VOI
                                           {VP_LINK, VP_LSTART, VP_LAMT, VP_DEPTH},
                                           {VP_LWHEN, VP_LTGT, VP_LEFF, VP_LWIN}};
 static const char *const PERF_TITLE[NPERF] = {"PERFORM", "PERFORM: MORE", "PERFORM: DENSITY", "PERFORM: STUTTER",
+                                              "PERFORM: RUSH", "PERFORM: RUSH SETUP", "PERFORM: TRANSPOSE",
                                               "PERFORM 2", "PERFORM 2: SETUP (1/2)", "PERFORM 2: SETUP (2/2)",
                                               "SPELLS: GRIMOIRE", "SPELLS: CAST", "SPELLS: CHARACTER",
-                                              "SPELLS: LIMITS", "SPELLS: MOTION", "GLOBAL LFO 1 (1/2)", "GLOBAL LFO 1 (2/2)", "GLOBAL LFO 2 (1/2)",
+                                              "SPELLS: LIMITS", "SPELLS: MOTION", "WANDER: QUEST", "WANDER: PACE",
+                                              "WANDER: HOME", "GLOBAL LFO 1 (1/2)", "GLOBAL LFO 1 (2/2)", "GLOBAL LFO 2 (1/2)",
                                               "GLOBAL LFO 2 (2/2)", "GLOBAL LFO 3 (1/2)", "GLOBAL LFO 3 (2/2)",
                                               "MACROS", "MACRO SETUP", "LINKS", "LINK SETUP"};
 static int perf_dens(void) { return ui.mode == M_PERF && ui.page % NPERF == PG_DENS; }
 static int perf_stut(void) { return ui.mode == M_PERF && ui.page % NPERF == PG_STUT; }
+static int perf_rush(void) { return ui.mode == M_PERF && (ui.page % NPERF == PG_RUSH || ui.page % NPERF == PG_RUSH + 1u); }
+static int perf_trp(void) { return ui.mode == M_PERF && ui.page % NPERF == PG_TRP; }
 static int perf_links(void) { return ui.mode == M_PERF && ui.page % NPERF >= PG_LINKS; }
-static int perf_spells(void) { return ui.mode == M_PERF && ui.page % NPERF >= PG_SPELL && ui.page % NPERF < PG_GMOD; }
-/* 29: the set of PERF pages shown (32: 0 PERFORM, 1 SPELLS, 2 GLOBAL MOD): its first page, how many */
-static const uint8_t PERF_SET0[4] = {0, PG_SPELL, PG_GMOD, NPERF};
-static uint32_t perf_set(void) { return ui.page % NPERF >= PG_GMOD ? 2u : ui.page % NPERF >= PG_SPELL ? 1u : 0u; }
+static int perf_spells(void) { return ui.mode == M_PERF && ui.page % NPERF >= PG_SPELL && ui.page % NPERF < PG_WANDER; }
+static int perf_wander(void) { return ui.mode == M_PERF && ui.page % NPERF >= PG_WANDER && ui.page % NPERF < PG_GMOD; }
+/* 29: the set of PERF pages shown (32: 0 PERFORM, 1 SPELLS, 40: 2 WANDER, 3 GLOBAL MOD): its first page, how many */
+#define NPSET 4u
+static const uint8_t PERF_SET0[NPSET + 1u] = {0, PG_SPELL, PG_WANDER, PG_GMOD, NPERF};
+static uint32_t perf_set(void)
+{
+    uint32_t g = ui.page % NPERF;
+    return g >= PG_GMOD ? 3u : g >= PG_WANDER ? 2u : g >= PG_SPELL ? 1u : 0u;
+}
 static uint32_t perf_first(void) { return PERF_SET0[perf_set()]; }
 static uint32_t perf_count(void) { return (uint32_t)PERF_SET0[perf_set() + 1u] - PERF_SET0[perf_set()]; }
 /* 0.13: the global LFO a PERF page sets (0, 1), -1 none */
@@ -405,7 +436,7 @@ static const uint16_t P_EUCLID[NEUCLID][4] = {{PAR_TRACK_LENGTH, VP_CLOCK, VP_DI
                                               {VP_BSTART, VP_BPITCH, VP_NONE, VP_NONE},
                                               {VP_MEL + ML_SHAPE, VP_MEL + ML_SPREAD, VP_MEL + ML_BIAS, VP_MEL + ML_STEPS},
                                               {VP_MEL + ML_DEJA, VP_MEL + ML_LOOP, VP_MEL + ML_LEN, VP_MEL + ML_LVAR},
-                                              {VP_SROOT, VP_SCALE, VP_SFOLLOW, VP_NONE}};
+                                              {VP_SROOT, VP_SCALE, VP_SFOLLOW, VP_TBASE}};
 static const char *const EUCLID_TITLE[NEUCLID] = {"TRACK", "GENERATOR", "ACTION", "GROOVE", "BOUNCE", "MELODY (1/2)",
                                                   "MELODY (2/2)", "SCALE"};
 /* the GENERATOR knob's order (KNOB 1: the value's index here) */
@@ -502,9 +533,12 @@ static const char *const CONFIG_TITLE[NCONFIG] = {"SEQUENCER", "MIDI", "MIDI CHA
 #define CF_LOAD 10u                                   /* 17a, 17b: the load by part, the cores (ui_draw.c draw_load) */
 #define CF_ABOUT 11u                                  /* 29: the potion, the version, the load of each core */
 static const uint16_t P_NAME[4] = {VP_NAME_POS, VP_NAME_CHAR, VP_NAME_CASE, VP_NONE};
-/* 37: the song: KNOB 2 the row (SELECT pages); ROWS: insert or delete one (OCT+), the play mode */
-static const uint16_t P_SONG[2][4] = {{VP_SONG_NUM, VP_SONG_ROW, VP_SONG_PAT, VP_SONG_REP},
-                                      {VP_SONG_ROW, VP_SONG_EDIT, VP_SONG_PAT, VP_PLAY}};
+/* 37: the song: KNOB 2 the row (SELECT pages); ROWS: insert or delete one (OCT+), the play mode; 42: ROADS: the
+ * song played as written or by its chances, how surprising, back to its first row every so many bars */
+#define NSONGPG 3u
+static const uint16_t P_SONG[NSONGPG][4] = {{VP_SONG_NUM, VP_SONG_ROW, VP_SONG_PAT, VP_SONG_REP},
+                                            {VP_SONG_ROW, VP_SONG_EDIT, VP_SONG_PAT, VP_PLAY},
+                                            {VP_SONG_NUM, VP_ROADS, VP_RSUR, VP_RHOME}};
 enum { SE_INSERT, SE_DELETE, NSE };
 static const uint16_t P_PATTERN[4] = {VP_VOICES, PAR_SHUFFLE, VP_PKEEP, VP_PLAY};   /* (37: Voices, Play) */
 static const uint16_t P_LAST[4] = {PAR_TRACK_LENGTH, VP_NONE, VP_NONE, VP_NONE};
@@ -525,7 +559,7 @@ static uint32_t mode_pages(void)
     }
     case M_MIXER: return NMIXER;
     case M_CONFIG: return NCONFIG;
-    case M_SONG: return 2;
+    case M_SONG: return NSONGPG;
     default: return 1;
     }
 }
@@ -584,7 +618,7 @@ static void page_params(uint16_t out[4])
                : ui.io_type == IO_SOUND ? VP_IO_TRACK : VP_NONE;
         out[3] = VP_NONE;
         return;
-    case M_SONG: p = P_SONG[ui.page % 2u]; break;
+    case M_SONG: p = P_SONG[ui.page % NSONGPG]; break;
     case M_PATTERN: p = P_PATTERN; break;
     case M_LAST: p = P_LAST; break;
     case M_RECOPT: p = P_RECOPT; break;
@@ -725,6 +759,32 @@ static void bank_fix(void)
         ui.bank = 0;
 }
 static step_t *sel_step(void) { return &shown_pat()->step[ui.track][ui.step & 63u]; }
+/* 0.23-t7: a step's note as it plays in pattern p (its BASE); set from the STEP page: a NOTE_LOCK, but at BASE: plain,
+ * following BASE again */
+static uint32_t step_note_shown(const pattern_t *p, uint32_t t, uint32_t k)
+{
+    uint32_t n = p->step[t][k].note;
+    return n & NOTE_LOCK ? n & 127u : (uint32_t)clamp32((int32_t)n + p->tbase[t], 0, 127);
+}
+static void step_note_lock(pattern_t *p, uint32_t t, uint32_t k, uint32_t v)
+{
+    p->step[t][k].note = (uint8_t)((int32_t)v == SEQ_DEFAULT_NOTE + p->tbase[t] ? SEQ_DEFAULT_NOTE : (v & 127u) | NOTE_LOCK);
+}
+/* 0.23-t7: TRANSPOSE: the keys' tracks (none: the shown one) to x degrees, now or at WHEN */
+static void trp_set(int32_t x)
+{
+    uint32_t t;
+    if (!sq.trmask)
+        sq.trmask = (uint8_t)(1u << ui.track);
+    for (t = 0; t < NTRACK; t++)
+        if ((sq.trmask >> t) & 1u)
+            sq.trpend[t] = (int8_t)x;
+    if (!sq.running || !sq.trwhen)
+        memcpy(sq.trp, sq.trpend, sizeof sq.trp);
+    else
+        sq.trdue = 1;
+    ui.force = 1;
+}
 static uint32_t vp_min(uint32_t p);
 static uint32_t vp_max(uint32_t p);
 static const char *const FX_P_NAME[NFX][4] = {
@@ -831,13 +891,14 @@ static uint32_t vp_get(uint32_t p)
     switch (p) {
     case PAR_TRACK_LENGTH: return track_len(pt, ui.track);
     case PAR_STEP_VOLUME: return sel_step()->volume & STEP_VOLUME_MASK;
-    case PAR_STEP_NOTE: return sel_step()->note & 127u;
+    case PAR_STEP_NOTE: return step_note_shown(shown_pat(), ui.track, ui.step & 63u);
     case PAR_STEP_PROB: return step_prob(sel_step()) > 100u ? 100u : step_prob(sel_step());
     case PAR_STEP_FLAM: return pt->timing[ui.track][ui.step & 63u] & 15u;
     case PAR_STEP_SHIFT: return pt->timing[ui.track][ui.step & 63u] >> 4;
     case PAR_P1_DEST:
     case PAR_P2_DEST: {
-        return lock_idx_of(autodest_to_par(lock_get(pt, ui.track, ui.step & 63u, p == PAR_P2_DEST)));
+        uint32_t c = lock_get(pt, ui.track, ui.step & 63u, p == PAR_P2_DEST);
+        return c == RUSH_CODE ? LOCK_RUSH_IDX : lock_idx_of(autodest_to_par(c));   /* (39: RUSH) */
     }
     case PAR_P1_VAL: return sel_step()->p1v;
     case PAR_P2_VAL: return sel_step()->p2v;
@@ -866,6 +927,9 @@ static uint32_t vp_get(uint32_t p)
     case VP_SONG_ROW: return ui.song_row;
     case VP_SONG_EDIT: return ui.song_edit;
     case VP_PLAY: return sq.song_mode;
+    case VP_ROADS: return song_rd[sq.song % NUM_SONGS] >> 7;
+    case VP_RSUR: return (song_rd[sq.song % NUM_SONGS] & 15u) ^ 4u;
+    case VP_RHOME: return (song_rd[sq.song % NUM_SONGS] >> 4) & 7u;
     case VP_VOICES: return pat_voices(&pat[sq.active]);
     case VP_LEDS: return kset.leds;
     case VP_AUTOSAVE: return autosave_on;
@@ -896,19 +960,33 @@ static uint32_t vp_get(uint32_t p)
     case VP_MMIN: return pfs.m[ui.msel].lo;
     case VP_MMAX: return pfs.m[ui.msel].hi;
     case VP_COND: return step_cond(pt, ui.track, ui.step & 63u);
-    case VP_LEN: return step_len(pt, ui.track, ui.step & 63u);
+    case VP_LEN: return len_pos(step_len(pt, ui.track, ui.step & 63u));   /* (0.23-t11: the knob's position) */
     case VP_DENS: return (uint32_t)(pfs.dens + 64);
     case VP_GHOST: return pfs.ghost;
     case VP_BUILD: return pfs.build < NDB ? pfs.build : DB_GHOSTS;
     case VP_DVARY: return pfs.dvary;
     case VP_SP ... VP_SP_LAST: return sp_vget(p - VP_SP);
+    case VP_WD ... VP_WD_LAST: return wd_vget(p - VP_WD);
     case VP_STCH: return pfs.st_chance;
+    case VP_RUSH:                                    /* (39: a step held: its RUSH lock) */
+        return ui.held_step >= 0 ? rush_lock(shown_pat(), ui.track, (uint32_t)ui.held_step) : sq.ru_live;
+    case VP_RTOP: return sq.ru_top < NRT ? sq.ru_top : RT_256;
+    case VP_RFILT: return sq.ru_filt;
+    case VP_RGLIDE: return sq.ru_glide;
+    case VP_RSTART: return sq.ru_start;
+    case VP_RFREE: return sq.ru_free_at;
+    case VP_RFLAM: return sq.ru_flam;
+    case VP_RPITCH: return (uint32_t)(sq.ru_pitch + 12);
     case VP_STSIZE: return pfs.st_size < NSTSIZE ? pfs.st_size : 1u;
     case VP_STLEN: return pfs.st_len < NSTLEN ? pfs.st_len : 2u;
     case VP_STVARY: return pfs.st_vary < NSV ? pfs.st_vary : SV_OFF;
     case VP_SROOT: return pt->sroot % 12u;
     case VP_SCALE: return pt->scale < NSCALE ? pt->scale : SC_CHROM;
     case VP_SFOLLOW: return (pt->sfollow >> ui.track) & 1u;
+    case VP_TBASE: return (uint32_t)(pt->tbase[ui.track] + TBASE_MAX);
+    case VP_TRP: return (uint32_t)(sq.trpend[ui.track] + 7);
+    case VP_TRWHEN: return sq.trwhen;
+    case VP_TRHOLD: return sq.trhold;
     case VP_GROOVE: return pt->groove <= NGROOVE ? pt->groove : 0u;
     case VP_GAMT: return pt->gamt > 127u ? 127u : pt->gamt;
     case VP_GHUM: return pt->ghum > 127u ? 127u : pt->ghum;
@@ -1004,7 +1082,7 @@ static uint32_t vp_max(uint32_t p)
     case PAR_STEP_PROB: return 100;
     case PAR_STEP_FLAM: return 5;
     case PAR_STEP_SHIFT: return 14;
-    case PAR_P1_DEST: case PAR_P2_DEST: return NUM_MOD_TARGETS - 1u + NLOCK_K;
+    case PAR_P1_DEST: case PAR_P2_DEST: return LOCK_RUSH_IDX;   /* (39: RUSH last) */
     case PAR_ROLL: return 13;
     case PAR_MORPH: return 255;
     case PAR_AUTOM_TRACK: return 1;
@@ -1030,7 +1108,9 @@ static uint32_t vp_max(uint32_t p)
     case VP_SONG_REP: return NSONGREP - 1u;
     case VP_SONG_ROW: return MAX_SONG_LENGTH - 1u;
     case VP_SONG_EDIT: return NSE - 1u;
-    case VP_PLAY: return 1;
+    case VP_PLAY: case VP_ROADS: return 1;
+    case VP_RSUR: return 15;
+    case VP_RHOME: return NSONGHOME - 1u;
     case VP_VOICES: return NPV - 1u;
     case VP_LEDS: return 2;
     case VP_AUTOSAVE: case VP_ACCEL: case VP_IO_SRC: case VP_PKEEP: case VP_KBSLOTS: return 1;
@@ -1052,17 +1132,27 @@ static uint32_t vp_max(uint32_t p)
     case VP_MTARGET: return NUM_MOD_TARGETS - 1u + NLOCK_K;
     case VP_MMIN: case VP_MMAX: return macro_max(ui.msel);
     case VP_COND: return NCOND - 1u;
-    case VP_LEN: return NLEN - 1u;
+    case VP_LEN: return NLEN_KNOB - 1u;
     case VP_DENS: case VP_GHOST: case VP_DVARY: return 127;
     case VP_SP ... VP_SP_LAST: return sp_vmax(p - VP_SP);
+    case VP_WD ... VP_WD_LAST: return wd_vmax(p - VP_WD);
     case VP_BUILD: return NDB - 1u;
     case VP_STCH: return 127;
+    case VP_RUSH: case VP_RFILT: case VP_RGLIDE: case VP_RFLAM: return RUSH_MAX;   /* (39: GLIDE in 5 ms) */
+    case VP_RSTART: return RUSH_MAX - 2u;
+    case VP_RFREE: return RUSH_MAX - 1u;
+    case VP_RTOP: return NRT - 1u;
+    case VP_RPITCH: return 24;
     case VP_STSIZE: return NSTSIZE - 1u;
     case VP_STLEN: return NSTLEN - 1u;
     case VP_STVARY: return NSV - 1u;
     case VP_SROOT: return 11;
     case VP_SCALE: return NSCALE - 1u;
     case VP_SFOLLOW: return 1;
+    case VP_TBASE: return 2u * TBASE_MAX;
+    case VP_TRP: return 15;
+    case VP_TRWHEN: return 2;
+    case VP_TRHOLD: return 1;
     case VP_GROOVE: return NGROOVE;
     case VP_GAMT: case VP_GHUM: return 127;
     case VP_GFOLLOW: return 1;
@@ -1128,7 +1218,7 @@ static void vp_set(uint32_t p, uint32_t v)
     case PAR_STEP_VOLUME:
         sel_step()->volume = (uint8_t)((sel_step()->volume & STEP_ACTIVE_MASK) | v);
         return;
-    case PAR_STEP_NOTE: sel_step()->note = (uint8_t)v; return;
+    case PAR_STEP_NOTE: step_note_lock(shown_pat(), ui.track, ui.step & 63u, v); return;
     case PAR_STEP_PROB: sel_step()->prob = (uint8_t)((sel_step()->prob & ~PROB_MASK) | v); return;
     case PAR_STEP_FLAM:
         pt->timing[ui.track][ui.step & 63u] = (uint8_t)((pt->timing[ui.track][ui.step & 63u] & 0xF0u) | v);
@@ -1138,7 +1228,7 @@ static void vp_set(uint32_t p, uint32_t v)
         return;
     case PAR_P1_DEST:
     case PAR_P2_DEST: {
-        uint32_t d = v ? par_to_autodest(lock_target_par(v)) : NO_AUTOMATION;
+        uint32_t d = v == LOCK_RUSH_IDX ? RUSH_CODE : v ? par_to_autodest(lock_target_par(v)) : NO_AUTOMATION;
         lock_set(pt, ui.track, ui.step & 63u, p == PAR_P2_DEST, d);
         return;
     }
@@ -1214,7 +1304,10 @@ static void vp_set(uint32_t p, uint32_t v)
         song_put(sq.song, ui.song_row, v < NUM_PATTERN ? v : v == NUM_PATTERN ? SONG_END : SONG_LOOP,
                  song_rep_i(sq.song, ui.song_row));   /* (0.19: its times kept) */
         return;
-    case VP_SONG_NUM: sq.song = (uint8_t)v; return;
+    case VP_SONG_NUM:
+        sq.song = (uint8_t)v;
+        sq.song_nx = 0xFF;
+        return;
     case VP_SONG_REP:
         if (song_row(songs[sq.song][ui.song_row & 63u]) < NUM_PATTERN)
             song_put(sq.song, ui.song_row, song_row(songs[sq.song][ui.song_row & 63u]), v);
@@ -1222,6 +1315,13 @@ static void vp_set(uint32_t p, uint32_t v)
     case VP_SONG_ROW: ui.song_row = (uint8_t)v; return;
     case VP_SONG_EDIT: ui.song_edit = (uint8_t)v; return;
     case VP_PLAY: seq_play_song(v); return;
+    case VP_ROADS: case VP_RSUR: case VP_RHOME: {   /* (42: this song's) */
+        uint8_t *r = &song_rd[sq.song % NUM_SONGS];
+        *r = (uint8_t)(p == VP_ROADS ? (*r & 0x7Fu) | v << 7
+                       : p == VP_RSUR ? (*r & 0xF0u) | (v ^ 4u) : (*r & 0x8Fu) | v << 4);
+        sq.song_nx = 0xFF;
+        return;
+    }
     case VP_VOICES:
         pv_set(v);
         ui_message(v == PV_LOCKED ? "VOICES KEPT IN ITS KIT SLOT" : v == PV_KIT ? "PLAYS ITS SAVED KIT"
@@ -1286,13 +1386,34 @@ static void vp_set(uint32_t p, uint32_t v)
     case VP_COND:
         pt->cond[ui.track][ui.step & 63u] = (uint8_t)((pt->cond[ui.track][ui.step & 63u] & ~COND_MASK) | v);
         return;
-    case VP_LEN: step_len_set(pt, ui.track, ui.step & 63u, v); return;
+    case VP_LEN: step_len_set(pt, ui.track, ui.step & 63u, len_knob(v)); return;
     case VP_DENS: pfs.dens = (int8_t)((int32_t)v - 64); return;
     case VP_GHOST: pfs.ghost = (uint8_t)v; return;
     case VP_BUILD: pfs.build = (uint8_t)v; return;
     case VP_DVARY: pfs.dvary = (uint8_t)v; return;
     case VP_SP ... VP_SP_LAST: sp_vset(p - VP_SP, v); return;
+    case VP_WD ... VP_WD_LAST: wd_vset(p - VP_WD, v); return;
     case VP_STCH: pfs.st_chance = (uint8_t)v; return;
+    case VP_RUSH:                                    /* (from OFF: the shown track's) */
+        if (!sq.ru_live)
+            sq.ru_t = (uint8_t)(ui.track < NTRACK ? ui.track : 0u);
+        sq.ru_live = (uint8_t)v;
+        return;
+    case VP_RTOP: sq.ru_top = (uint8_t)v; return;
+    case VP_RFILT: sq.ru_filt = (uint8_t)v; return;
+    case VP_RGLIDE: sq.ru_glide = (uint8_t)v; return;
+    case VP_RSTART:                                  /* (START under FREE: FREE moves up) */
+        sq.ru_start = (uint8_t)v;
+        if (sq.ru_free_at <= v)
+            sq.ru_free_at = (uint8_t)(v + 1u);
+        return;
+    case VP_RFREE:
+        sq.ru_free_at = (uint8_t)(v ? v : 1u);
+        if (sq.ru_start >= sq.ru_free_at)
+            sq.ru_start = (uint8_t)(sq.ru_free_at - 1u);
+        return;
+    case VP_RFLAM: sq.ru_flam = (uint8_t)v; return;
+    case VP_RPITCH: sq.ru_pitch = (int8_t)((int32_t)v - 12); return;
     case VP_STSIZE: pfs.st_size = (uint8_t)v; return;
     case VP_STLEN: pfs.st_len = (uint8_t)v; return;
     case VP_STVARY: pfs.st_vary = (uint8_t)v; return;
@@ -1305,6 +1426,13 @@ static void vp_set(uint32_t p, uint32_t v)
         scl_last.scale = pt->scale;
         return;
     case VP_SFOLLOW: pt->sfollow = (uint8_t)(v ? pt->sfollow | 1u << ui.track : pt->sfollow & ~(1u << ui.track)); return;
+    case VP_TBASE: pt->tbase[ui.track] = (int8_t)((int32_t)v - TBASE_MAX); return;
+    case VP_TRP:                                     /* (0.23-t7: the shown track and the keys' tracks) */
+        sq.trmask |= (uint8_t)(1u << ui.track);
+        trp_set((int32_t)v - 7);
+        return;
+    case VP_TRWHEN: sq.trwhen = (uint8_t)v; return;
+    case VP_TRHOLD: sq.trhold = (uint8_t)v; return;
     case VP_GROOVE:                                  /* (26: from OFF with the amount at 0: as written) */
         if (v && !pt->groove && !pt->gamt)
             pt->gamt = GAMT_DEFAULT;
@@ -1554,7 +1682,8 @@ static void knob_turn(uint32_t k, int32_t n)
     int32_t v, step = n;
     page_params(pp);
     p = pp[k];
-    if (p == VP_NONE || !n || (ui.mode == M_SOUND && par_unheard(ui.track, p)))   /* (0.19: a model's: locked) */
+    if (p == VP_NONE || !n || (ui.mode == M_SOUND && par_unheard(ui.track, p)) || vp_dead(p))   /* (0.19: a
+                                                      * model's: locked; 40: not yet in use) */
         return;
     mn = vp_min(p);
     mx = vp_max(p);
@@ -1565,11 +1694,29 @@ static void knob_turn(uint32_t k, int32_t n)
         else if (dt < 40u)
             step = n * 2;
     }
+    if (p == VP_RUSH) {                              /* 0.23-t7: RUSH by the turn's speed: 1% a detent slow, up to 10% fast */
+        uint32_t dt = fm1_ms - ui.knob_ms[k], sp = (uint32_t)(n < 0 ? -n : n) * 1000u / (dt + 1u);
+        step = n * (sp >= 80u ? 10 : sp >= 40u ? 5 : sp >= 20u ? 2 : 1);
+    }
     ui.knob_ms[k] = fm1_ms;
     ui.hot = (uint8_t)(k + 1u);
     ui.hot_ms = fm1_ms;
     if (ui.copy && ui.mode == M_SOUND && ui.held_step < 0 && !ui.sb_open && !ui.kb_open) {
         control_all(k, step);                        /* 0.11: OCT+ held: every voice */
+        return;
+    }
+    if (ui.held_step >= 0 && p == VP_RUSH) {         /* 39: a step held on RUSH's page: its RUSH lock (0: gone) */
+        pattern_t *pt = shown_pat();
+        uint32_t hs = (uint32_t)ui.held_step, c;
+        v = clamp32((int32_t)rush_lock(pt, ui.track, hs) + step, 0, (int32_t)RUSH_MAX);
+        if (v)
+            rush_lock_set(pt, ui.track, hs, (uint32_t)v);
+        else
+            for (c = 0; c < 2u; c++)
+                if (lock_get(pt, ui.track, hs, c) == RUSH_CODE)
+                    lock_set(pt, ui.track, hs, c, NO_AUTOMATION);
+        live_step_sync(pt, ui.track, hs);
+        ui.lock_turned = 1;
         return;
     }
     /* a step key held: that step's lock (sequencer automation), in the lane that has the parameter or is free */
@@ -1791,8 +1938,10 @@ static void io_ok(void)
             ui_message("PATTERN SAVED");
             break;
         case IO_SONG:
-            if (s != sq.song)
+            if (s != sq.song) {
                 memcpy(songs[s], songs[sq.song], MAX_SONG_LENGTH);
+                song_rd[s % NUM_SONGS] = song_rd[sq.song % NUM_SONGS];   /* (42: its ROADS too) */
+            }
             sq.song = (uint8_t)s;
             ui_message("SONG SAVED");
             break;
@@ -1936,7 +2085,7 @@ static void sb_audition(uint32_t e)
     uint32_t from, n = sb_values(e, ui.sb_voice, v, &from);
     if (n)
         voice_put_par(ui.sb_voice, v, n, from);
-    key_note_post(ui.track, SEQ_DEFAULT_NOTE, key_vel, 0);
+    key_note_post(ui.track, tb_note(ui.track), key_vel, 0);
 }
 static void sb_turn(int32_t n)                       /* PRESETS on a sound page: opens it, moves through it */
 {
@@ -1983,7 +2132,10 @@ static void dens_commit_key(void)
         ui_message("DENSITY AT 0: NOTHING TO COMMIT");
     }
 }
+static void wd_side_cast(void);                      /* (40: wander.c: a spell cast while wandering, reversed) */
+static void wd_side_end(void);
 #include "spells.c"                                  /* (32: SPELLS) */
+#include "wander.c"                                  /* (40: WANDER) */
 /* ------------------------------------------------------------- keys --- */
 /* 31: KEYS (SHIFT + EDIT) stays on as the pages change, so the knobs can be turned while playing; the keys play notes
  * on every page but those whose keys are the page's own (patterns, song, save and load, step edit, LAST, PERF) */
@@ -2091,6 +2243,17 @@ static void white_down(uint32_t w)
         sp_white(w, ui.shift);
         return;
     }
+    if (perf_wander()) {                             /* 40: WANDER: the parts that travel (SHIFT: only that) */
+        if (ui.shift)
+            ui.shift_used = 1;
+        wd_white(w, ui.shift);
+        return;
+    }
+    if (perf_trp()) {                                /* 0.23-t7: TRANSPOSE: the middle key 0, -7 .. 8 degrees about it */
+        trp_set((int32_t)w - 7);
+        ui.trkey = (uint8_t)(w + 1u);
+        return;
+    }
     if (ui.perf && ui.shift) {                        /* PERF: SHIFT latches */
         perf_key(w, 1);
         return;
@@ -2127,7 +2290,7 @@ static void white_down(uint32_t w)
         case 14: mode_set(M_FX); return;
         case 15: mode_set(M_PATTERN); return;
         default:                                      /* 1..7: play the voice (at the keys' velocity) */
-            key_note_post(w, SEQ_DEFAULT_NOTE, key_vel, 0);
+            key_note_post(w, tb_note(w), key_vel, 0);
             return;
         }
     }
@@ -2187,6 +2350,12 @@ static void white_down(uint32_t w)
     default:
         break;
     }
+    if (perf_rush()) {                               /* 39: RUSH's page: a step held, the knob its RUSH lock */
+        ui.held_step = (int8_t)s;
+        ui.lock_turned = 0;
+        ui.force = 1;
+        return;
+    }
     if (ui.perf) {                                   /* PERF: rolls, FILL, the effects */
         perf_key(w, 1);
         return;
@@ -2201,8 +2370,13 @@ static void white_down(uint32_t w)
 static void white_up(uint32_t w)
 {
     uint32_t b2 = (ui.kbank >> w) & 1u;
-    if (keys_live() || sp_white_up(w))
+    if (keys_live() || sp_white_up(w) || wd_white_up(w))
         return;
+    if (ui.trkey == w + 1u) {                        /* (0.23-t7: TRANSPOSE's key let go: HOLD back to 0) */
+        ui.trkey = 0;
+        if (sq.trhold && perf_trp())
+            trp_set(0);
+    }
     if (ui.perf || (w >= NTRACK && (ui.pf_held & (1u << ((b2 ? NPF : 0u) + w - NTRACK)))) ||
         (w < NTRACK && b2 && (ui.drill_held & (1u << w))))
         perf_key(w, 0);                               /* (an effect held when PERF was left lets go too) */
@@ -2251,6 +2425,23 @@ static void black_down(uint32_t k)
             sp_black(t);
             return;
         }
+        if (perf_wander()) {                         /* 40: WANDER: the track travels (again: stays home) */
+            wd_black(t);
+            return;
+        }
+        if (perf_trp()) {                            /* 0.23-t7: TRANSPOSE: the track one the keys move (again: not) */
+            sq.trmask ^= (uint8_t)(1u << t);
+            if ((sq.trmask >> t) & 1u)
+                track_select(t);
+            ui.force = 1;
+            return;
+        }
+        if (perf_rush()) {                           /* 39: RUSH's page: the track it rushes (the knob up: at once) */
+            sq.ru_t = (uint8_t)t;
+            track_select(t);
+            ui.force = 1;
+            return;
+        }
         if (ui.perf && ui.mode == M_PERF) {
             sq.muted ^= (uint8_t)(1u << t);
             ui.force = 1;
@@ -2262,6 +2453,10 @@ static void black_down(uint32_t k)
     k -= NTRACK;                                      /* the bars */
     if (perf_spells()) {                             /* 32: SPELLS: ALL / NONE, KEEP, SAVE, DEFAULTS */
         sp_bar(k);
+        return;
+    }
+    if (perf_wander()) {                             /* 40: WANDER: ALL / NONE, KEEP, REST, DEFAULTS */
+        wd_bar_key(k);
         return;
     }
     if (ui.mode == M_PERF) {                          /* PERF: the bar keys pick the STUTTER length */
@@ -2442,6 +2637,10 @@ static void button_down(uint32_t b)
             sp_cast_key();
             return;
         }
+        if (perf_wander()) {                         /* 40: OCT+ on WANDER: set out (a new course; resting: on) */
+            wd_copy_key();
+            return;
+        }
         if (glfo_page() >= 0) {                      /* 0.13: OCT+ on a global LFO's page: it starts again */
             uint32_t n = (uint32_t)glfo_page();
             static const char *const TR[NGLFO] = {"LFO 1 TRIGGERED", "LFO 2 TRIGGERED", "LFO 3 TRIGGERED"};
@@ -2450,7 +2649,7 @@ static void button_down(uint32_t b)
             return;
         }
         if (ui.mode == M_SONG) {                      /* COPY in the song: insert a row (a copy of the one above); */
-            if (ui.page % 2u && ui.song_edit == SE_DELETE) {   /* (37: ROWS: its action) */
+            if (ui.page % NSONGPG == 1u && ui.song_edit == SE_DELETE) {   /* (37: ROWS: its action) */
                 song_delete_row(sq.song, ui.song_row);
                 ui_message("ROW DELETED");
                 return;
@@ -2517,8 +2716,8 @@ static void button_down(uint32_t b)
             mode_set(M_EUCLID);
             return;
         }
-        if (ui.mode == M_PERF) {                      /* 29: PERFORM, 32: SPELLS, GLOBAL MOD (and back) */
-            uint32_t o = (perf_set() + 1u) % 3u;
+        if (ui.mode == M_PERF) {                      /* 29: PERFORM, 32: SPELLS, 40: WANDER, GLOBAL MOD (and back) */
+            uint32_t o = (perf_set() + 1u) % NPSET;
             ui.pset[perf_set()] = ui.page;
             ui.page = PERF_SET0[o];
             if (kset.pmem && ui.pset[o] >= PERF_SET0[o] && ui.pset[o] < PERF_SET0[o + 1u])
@@ -2605,6 +2804,8 @@ static void button_up(uint32_t b)
             sb_close(0);
         } else if (!ui.shift_used && perf_spells()) {   /* 32: OCT- alone on SPELLS: REVERSE */
             sp_reverse_key();
+        } else if (!ui.shift_used && perf_wander()) {   /* 40: OCT- alone on WANDER: home (again: at once) */
+            wd_shift_key();
         }
     } else if (b == B_OCTUP) {
         pf.st_hold = 0;                              /* (0.16: STUTTER lets go) */
@@ -2716,6 +2917,7 @@ static void ui_input(void)
         if ((n = panel_enc(EN_K1 + k)) != 0 && !ui.ca_ask)
             knob_turn(k, n);
     sp_service();                                    /* (32: the die's roll) */
+    wd_service();                                    /* (40: the road) */
     remote_service();
     if (ui.kb_open && fm1_ms - ui.kb_ms > 6000u) {   /* the kit browser closes by itself, nothing loaded */
         ui.kb_open = 0;
@@ -2793,6 +2995,17 @@ static void ui_leds(void)
         case M_PERF:                                 /* (lit: on; breathing: latched; PERFORM 2: its bank) */
             if (perf_spells()) {                     /* (32: SPELLS: lit, what the spell may change) */
                 led_put(nl, id, (sp.mask >> k) & 1u);
+            } else if (perf_wander()) {              /* (40: WANDER: lit, the parts that travel) */
+                led_put(nl, id, (wd.mask >> k) & 1u);
+            } else if (perf_trp()) {                 /* (0.23-t7: TRANSPOSE: breathing, the middle; lit, the shown track's;
+                                                      * mid, one waiting for WHEN) */
+                led_put(nb, id, k == 7u);
+                led_put(nl, id, (int32_t)k == sq.trp[ui.track] + 7);
+                led_put(nm, id, (int32_t)k == sq.trpend[ui.track] + 7);
+            } else if (perf_rush()) {                /* (39: RUSH: lit, a step's RUSH; dim, the steps on) */
+                const pattern_t *vp = view_pat(ui.track);
+                led_put(nl, id, rush_lock(vp, ui.track, s) != 0u || (sq.running && s == play_step));
+                led_put(nm, id, main_on(vp, ui.track, s) && !rush_lock(vp, ui.track, s));
             } else if (k < NTRACK && perf_bank2()) {
                 led_put(nb, id, (ui.drill_latch >> k) & 1u);
                 led_put(nl, id, (sq.drill >> k) & 1u);
@@ -2833,6 +3046,28 @@ static void ui_leds(void)
             led_put(nd, id, 1);
             continue;
         }
+        if (perf_wander()) {                         /* (40: WANDER: lit, the tracks that travel; breathing, a thread
+                                                      * moving it) */
+            uint32_t i, th = 0;
+            for (i = 0; i < NTHREAD; i++)
+                th |= wd.th[i].on && wd.th[i].t == k && wd.state == WS_ROAD;
+            led_put(nl, id, ((wd.tracks >> k) & 1u) && !th);
+            led_put(nb, id, th);
+            led_put(nd, id, 1);
+            continue;
+        }
+        if (perf_trp()) {                            /* (0.23-t7: TRANSPOSE: lit, the keys' tracks; breathing, one moved) */
+            led_put(nl, id, (sq.trmask >> k) & 1u);
+            led_put(nb, id, sq.trp[k] != 0);
+            led_put(nd, id, !muted);
+            continue;
+        }
+        if (perf_rush()) {                           /* (39: RUSH: lit, its track) */
+            led_put(nl, id, k == ui.track);
+            led_put(nb, id, sq.ru_R && k == sq.ru_tr);
+            led_put(nd, id, !muted);
+            continue;
+        }
         led_put(nl, id, (k == ui.track && !ui.perf) || (flash && !muted));
         led_put(nb, id, ui.copy_src == k + 1u && ui.mode != M_PATTERN);
         led_put(nd, id, !muted);
@@ -2846,6 +3081,11 @@ static void ui_leds(void)
                                                       * DEFAULTS) */
             led_put(nl, id, k == 0u && sp.tracks == (1u << NTRACK) - 1u);
             led_put(nb, id, k == 1u && sp_pending());
+            led_put(nd, id, 1);
+        } else if (perf_wander()) {                  /* (40: ALL lit with every track; KEEP breathing on the road; REST
+                                                      * lit resting) */
+            led_put(nl, id, (k == 0u && wd.tracks == (1u << NTRACK) - 1u) || (k == 2u && wd.rest));
+            led_put(nb, id, (k == 1u && wd.state != WS_IDLE && !ui.shift) || (k == 2u && ui.shift));
             led_put(nd, id, 1);
         } else if (ui.mode == M_PERF) {              /* (the STUTTER length) */
             led_put(nl, id, pfs.repeat == k);
@@ -2865,6 +3105,11 @@ static void ui_leds(void)
     if (perf_spells() && !ui.shift) {                /* (32: OCT+ breathing: a spell to cast; OCT-: one to reverse) */
         led_put(nb, panel.btn[B_OCTUP], sp_castable());
         led_put(nb, panel.btn[B_OCTDN], sp_pending());
+    }
+    if (perf_wander() && !ui.shift) {                /* (40: OCT+ breathing: a road to set out on, or to go on; OCT-:
+                                                      * a way home) */
+        led_put(nb, panel.btn[B_OCTUP], wd_course());
+        led_put(nb, panel.btn[B_OCTDN], wd.state != WS_IDLE);
     }
     led_put(nb, panel.btn[B_OCTUP], ui.ca || ui.ca_ask || ui.clear_open || ui.kb_open || ui.sb_open || ui.copy_src || ((ui.mode == M_SAVE ||
                                                                                      ui.mode == M_LOAD) && !ui.copy));
@@ -2898,7 +3143,7 @@ static int ui_step_note_edit(uint32_t note)
 {
     if (ui.mode != M_STEP)
         return 0;
-    sel_step()->note = (uint8_t)note;
+    step_note_lock(shown_pat(), ui.track, ui.step & 63u, note);
     live_step_sync(shown_pat(), ui.track, ui.step & 63u);
     return 1;
 }

@@ -214,25 +214,6 @@ static int32_t ic_wave(uint32_t m, uint32_t i, uint32_t a, uint32_t b, uint32_t 
         int32_t e = 32767 - (int32_t)i * 400;
         return (int32_t)(((int64_t)vz_sin(p) * (e > 4000 ? e : 4000)) >> 15);
     }
-    case 30: {                                         /* PULSAR: pulsarets closer and closer, narrower with COLOUR */
-        uint32_t p = i * i * (0xFFFFFFFFu / (IW * IW)) * 7u, k = 1u + b / 16u;
-        return p < 0xFFFFFFFFu / k ? vz_sin(p * k) * 7 / 8 : 0;
-    }
-    case 31: {                                         /* WAVELET: a few cycles in a window, more with LENGTH */
-        int32_t w = (32767 - vz_sin(ph + 0x40000000u)) / 2;
-        return (int32_t)(((int64_t)vz_sin(ph * (1u + a / 8u)) * w) >> 15);
-    }
-    case 32: {                                         /* SPLINTER: a spike, then smaller ones closer and closer */
-        int32_t x = 4, g = IW / 3, h = 30000, k, n = 3 + (int32_t)b / 13;
-        for (k = 0; k < n && x < IW; k++) {
-            if ((int32_t)i >= x && (int32_t)i < x + (k ? 1 : 3))
-                return (k & 1) ? -h : h;
-            x += g;
-            g = g * 2 / 3 > 2 ? g * 2 / 3 : 2;
-            h = h * 3 / 4;
-        }
-        return 0;
-    }
     default: {                                         /* (29) CHIRP: a sine swept up */
         uint32_t p = i * i * (0xFFFFFFFFu / (IW * IW)) * (4u + b / 16u);
         return vz_sin(p) * 7 / 8;
@@ -320,18 +301,6 @@ static void ic_string(uint32_t a, uint32_t b)
     }
     vz_trace(IX + 3, IW - 6, ICY, T_THEME, vz_bg());
 }
-static void ic_chord(uint32_t a)
-{
-    static const int8_t CH[4][4] = {{0, 2, 4, 6}, {0, 2, 4, 7}, {0, 3, 5, 7}, {0, 2, 5, 8}};   /* (staff steps) */
-    int32_t k, y0 = ICY - 12;
-    for (k = 0; k < 5; k++)
-        cv_rect(IX, y0 + k * 6, IW, 1, vz_faint());
-    for (k = 0; k < 4; k++) {
-        int32_t y = y0 + 27 - CH[a >> 5 & 3u][k] * 3, x = IX + 22 + (k & 1) * 9;
-        ic_disc(x, y, 4, 3, T_THEME);
-    }
-    cv_rect(IX + 35, y0 + 27 - CH[a >> 5 & 3u][3] * 3 - 22, 1, 24, T_THEME);
-}
 /* 37: P SPEECH: a wizard's head (the hat, its stars, the brows, the beard); the lips move as any knob turns (a new
  * shape at each step; it says nothing about the values), words coming out when they're open */
 static void ic_wizard(uint32_t a, uint32_t b, uint32_t c)
@@ -395,24 +364,6 @@ static void ic_bars(uint32_t b)                        /* P ADDTV: its harmonics
         cv_rect(IX + 2 + k * 5, IY1 - h, 3, h, k & 1 ? ux_mix(vz_bg(), T_THEME, 60) : T_THEME);
     }
 }
-static void ic_table(uint32_t b, uint32_t c)           /* P WTABLE: its waves stacked, the row TIMBRE picks lit */
-{
-    int32_t r, i, row = (int32_t)b * 5 / 128;
-    for (r = 4; r >= 0; r--) {
-        int32_t x0 = IX + r * 4, y0 = ICY + 14 - r * 7, px = 0, py = 0;
-        uint16_t col = r == row ? T_THEME : ux_mix(vz_bg(), T_THEME, 35);
-        for (i = 0; i < IW - 18; i++) {
-            uint32_t ph = (uint32_t)i * (0xFFFFFFFFu / (IW - 18));
-            int32_t s = vz_sin(ph), sq = ph < 0x80000000u ? 32767 : -32767, w;
-            w = (s * (4 - r) + ((int32_t)(ph >> 16) - 32768) * r) / 4;   /* (sine to saw down the table) */
-            w = (w * (127 - (int32_t)c / 2) + sq / 2 * ((int32_t)c / 2)) / 127;   /* (MORPH: squarer) */
-            if (i)
-                cv_line(px, py, x0 + i, y0 - ((w * 10) >> 15), col);
-            px = x0 + i;
-            py = y0 - ((w * 10) >> 15);
-        }
-    }
-}
 static void ic_swarm(uint32_t b)                       /* P SWARM: saws drifting apart, further with TIMBRE */
 {
     int32_t k, i;
@@ -445,8 +396,6 @@ static void ic_model(uint32_t m, uint32_t v, uint32_t a, uint32_t b, uint32_t c)
     case 1: case 16: ic_bell(a); return;
     case 2: case 15: ic_string(a, b); return;
     case 8: ic_bars(b); return;
-    case 9: ic_table(b, c); return;
-    case 10: ic_chord(a); return;
     case 11: ic_wizard(a, b, c); return;
     case 12: ic_swarm(b); return;
     case 14: ic_particles(c, 1); return;
@@ -505,14 +454,180 @@ static const char *model_line(uint32_t m, uint32_t v)
         "A modal resonator: a bell or a bar", "An analog kick", "An analog snare", "An analog hat",
         "A square click, or a doublet", "A train of clicks", "Crunchy, held noise", "An LFSR's bits",
         "A burst of noise", "A snap: noise and a click", "A resonant grain", "A crackle of dust",
-        "A pop that slides back", "A sine swept four octaves", "Pulses speeding up into a pitch",
-        "A few cycles of a sine in a window", "An impulse splintering apart"};
+        "A pop that slides back", "A sine swept four octaves"};
     static const char *const LXR[4] = {"The LXR's drum: OSC, FM, a transient",
                                        "The LXR's snare: OSC, noise, a transient", "The LXR's cymbal: 3 OSCs in FM",
                                        "The LXR's hats: 3 OSCs in FM"};
     if (m && m < NMODEL)
         return D[m];
     return LXR[v <= 2u ? 0 : v == 3u ? 1 : v == 4u ? 2 : 3];
+}
+/* 0.23-t7: P WTABLE and P CHORD: the waves they play, drawn from Plaits' own table. PL_WAVES holds each wave
+ * integrated (plaits_va.c), so the wave heard is the difference of neighbouring samples */
+static int32_t wv_pos(uint32_t k) { return pm(pl_knob((uint8_t)k), 117438841); }   /* a knob: 0 .. 7, Q24 */
+/* WTABLE at HARMONICS a, TIMBRE b, MORPH c (as wt_render, unsmoothed): 128 samples of the blend into s */
+static void wv_wtable(uint32_t a, uint32_t b, uint32_t c, int32_t *s)
+{
+    int32_t x = wv_pos(b), y = wv_pos(c), z = wv_pos(a), q = pclamp(z - 3 * PL1, 0, PL1), xf, yf, zf, xi, yi, zi;
+    int32_t z0, z1, i, prev = 0;
+    xf = x & 0xFFFFFF;
+    yf = y & 0xFFFFFF;
+    zf = z & 0xFFFFFF;
+    x = (x & ~0xFFFFFF) + xf + pm(q, wt_clamp(xf) - xf);
+    y = (y & ~0xFFFFFF) + yf + pm(q, wt_clamp(yf) - yf);
+    z = (z & ~0xFFFFFF) + zf + pm(q, wt_clamp(zf) - zf);
+    xi = x >> 24;
+    yi = y >> 24;
+    zi = z >> 24;
+    xf = x & 0xFFFFFF;
+    yf = y & 0xFFFFFF;
+    zf = z & 0xFFFFFF;
+    z0 = zi >= 4 ? 7 - zi : zi;
+    z1 = zi + 1 >= 4 ? 6 - zi : zi + 1;
+    for (i = 0; i <= 128; i++) {
+        int32_t p, r, c0, c1, m;
+        p = wt_read(xi, yi, z0, i, 0);
+        p += pm(wt_read(xi + 1, yi, z0, i, 0) - p, xf);
+        r = wt_read(xi, yi + 1, z0, i, 0);
+        r += pm(wt_read(xi + 1, yi + 1, z0, i, 0) - r, xf);
+        c0 = p + pm(r - p, yf);
+        p = wt_read(xi, yi, z1, i, 0);
+        p += pm(wt_read(xi + 1, yi, z1, i, 0) - p, xf);
+        r = wt_read(xi, yi + 1, z1, i, 0);
+        r += pm(wt_read(xi + 1, yi + 1, z1, i, 0) - r, xf);
+        c1 = p + pm(r - p, yf);
+        m = c0 + pm(c1 - c0, zf);
+        if (i)
+            s[i - 1] = m - prev;
+        prev = m;
+    }
+}
+/* n samples in s scaled so the peak is h px; the curve (cols columns, cyc cycles) into vz_y about mid */
+static void wv_curve(const int32_t *s, uint32_t n, int32_t cols, uint32_t cyc, int32_t mid, int32_t h)
+{
+    int32_t i, pk = 1;
+    for (i = 0; i < (int32_t)n; i++)
+        pk = s[i] > pk ? s[i] : -s[i] > pk ? -s[i] : pk;
+    for (i = 0; i < cols; i++) {                     /* (between two samples: the line between them) */
+        uint32_t ps = (uint32_t)i * n * cyc * 256u / (uint32_t)cols, k = (ps >> 8) % n, fr = ps & 255u;
+        int32_t v = s[k] + (int32_t)(((int64_t)(s[(k + 1u) % n] - s[k]) * (int32_t)fr) >> 8);
+        vz_y[i] = (int16_t)(mid * 16 - (int32_t)((int64_t)v * h * 16 / pk));
+    }
+}
+/* HARMONICS v as the bank it plays (as wt_render: up through A-D, then back down, stepped): a letter, or two while it
+ * blends ("A-B"); " STEP" where the waves step rather than blend */
+static void wv_bank_txt(char *b, uint32_t n, uint32_t v)
+{
+    int32_t z = wv_pos(v), zi = z >> 24, f = z & 0xFFFFFF, z0 = zi >= 4 ? 7 - zi : zi, z1 = zi + 1 >= 4 ? 6 - zi : zi + 1;
+    uint32_t k = 0;
+    if (z >= 4 * PL1)                                 /* (stepped: no blend, the nearer one) */
+        z0 = z1 = f < (PL1 >> 1) ? z0 : z1;
+    b[k++] = (char)('A' + (f > PL1 - (PL1 >> 3) ? z1 : z0));
+    if (z0 != z1 && f >= (PL1 >> 3) && f <= PL1 - (PL1 >> 3)) {
+        b[k++] = '-';
+        b[k++] = (char)('A' + z1);
+    }
+    put_str(b + k, z >= 3 * PL1 + (PL1 >> 1) ? " STEP" : "", n - k);
+}
+/* a wave, smoothed a little ([1 2 1] / 4, round): easier to read, as the engine's low-pass hears it */
+static void wv_smooth(int32_t *s)
+{
+    int32_t i, f = s[0], p = s[127];
+    for (i = 0; i < 128; i++) {
+        int32_t c = s[i];
+        s[i] = (p + 2 * c + (i < 127 ? s[i + 1] : f)) >> 2;
+        p = c;
+    }
+}
+/* WTABLE: the wave it plays, one cycle, large */
+static void viz_wtable(uint32_t a, uint32_t b, uint32_t c)
+{
+    int32_t s[128];
+    char t[24];
+    wv_wtable(a, b, c, s);
+    wv_smooth(s);
+    vz_hguide(70, vz_faint());
+    wv_curve(s, 128, VN, 1, 70, 24);
+    vz_trace(VX0, VN, 70, T_THEME, vz_fill());
+    put_str(t, "BANK ", sizeof t);
+    wv_bank_txt(t + 5, sizeof t - 5, a);
+    cv_text_r(VX1, 26, &AF_S, t, T_MID, vz_bg());
+}
+/* CHORD's WAVE: up to half, the divide-down organ (saws an octave apart, as its registration); past it, the table's
+ * 15 waves; two cycles */
+static void viz_chordwave(uint32_t c)
+{
+    int32_t s[128], m = pl_knob((uint8_t)c), wform = pmax(pm(m - 8975794, 36071014), 0), i;
+    if (wform) {
+        int32_t wf = pm(wform, 234879877), wi = pmin(wf >> 24, 13), fr = wf & 0xFFFFFF;
+        const int16_t *t0 = PL_WAVES + PL_CH_WAVES[wi] * 132, *t1 = PL_WAVES + PL_CH_WAVES[wi + 1] * 132;
+        for (i = 0; i < 128; i++) {
+            int32_t d0 = t0[i + 1] - t0[i], d1 = t1[i + 1] - t1[i];
+            s[i] = d0 + pm(d1 - d0, fr);
+        }
+    } else {
+        int32_t rg = pm(pmax(PL1 - pm(m, 36071014), 0), 117423063), ri = rg >> 24, rf = rg & 0xFFFFFF, r[6], g[4], k;
+        for (k = 0; k < 6; k++)
+            r[k] = PL_CH_REG[ri][k] + pm(PL_CH_REG[ri + 1][k] - PL_CH_REG[ri][k], rf);
+        g[0] = r[0] + 2 * r[1];                      /* (8', 4', 2', 1': ss_render's) */
+        g[1] = r[2] - r[1] + 2 * r[3];
+        g[2] = r[4] - r[3] + 2 * r[5];
+        g[3] = -r[5];
+        for (i = 0; i < 128; i++) {
+            int32_t v = 0;
+            for (k = 0; k < 4; k++)
+                v += (int32_t)(((int64_t)(((i << (k + 1)) & 255) - 128) * (g[k] >> 8)) >> 7);
+            s[i] = v;
+        }
+    }
+    wv_smooth(s);
+    vz_hguide(72, vz_faint());
+    wv_curve(s, 128, VN, 2, 72, 24);
+    vz_trace(VX0, VN, 72, T_THEME, vz_fill());
+    cv_text_r(VX1, 26, &AF_S, wform ? "THE TABLE'S WAVES" : "THE ORGAN", T_MID, vz_bg());
+}
+/* the MODEL page's card: P WTABLE's knobs as the bank, the brightness and the family; P CHORD's chord by name, its WAVE (1: done) */
+static int pl_card(char *b, uint32_t n, uint32_t p, uint32_t v)
+{
+    static const char *const CH[11] = {"OCTAVE", "FIFTH", "SUS4", "MINOR", "MINOR 7", "MINOR 9", "MINOR 11", "6/9",
+                                       "MAJOR 9", "MAJOR 7", "MAJOR"};
+    uint32_t vi = (p - PAR_MDECAY1) % 6u, r = (p - PAR_MDECAY1) / 6u;
+    if (p < PAR_MDECAY1 || p >= PAR_MPOS1 || vi >= 3u || mi[vi].type)
+        return 0;
+    if (mdl[vi].want == MD_PL0 + PE_WTBL) {
+        int32_t x = wv_pos(v), tn;
+        if (!r) {
+            wv_bank_txt(b, n, v);
+            return 1;
+        }
+        if (r == 1u) {                               /* (Bright: TIMBRE, 0 .. 100%) */
+            put_str(put_int(b, (int32_t)(v * 100u / 127u)), "%", 2);
+            return 1;
+        }
+        tn = (x + (PL1 >> 3)) >> 24;                 /* (Family: MORPH, 1 .. 8; "3-4" while it blends) */
+        b = put_int(b, tn + 1);
+        if ((x & 0xFFFFFF) > (PL1 >> 3) && (x & 0xFFFFFF) < PL1 - (PL1 >> 3)) {
+            *b++ = '-';
+            put_int(b, tn + 2);
+        }
+        return 1;
+    }
+    if (mdl[vi].want == MD_PL0 + PE_CHORD && r != 1u) {
+        int32_t h = pl_knob((uint8_t)v), w;
+        if (!r) {
+            put_str(b, CH[pclamp(pm(pm(h, 17112760), PL_CHN * PL1) >> 24, 0, PL_CHN - 1)], n);
+            return 1;
+        }
+        w = pmax(pm(h - 8975794, 36071014), 0);
+        if (!w) {
+            put_str(b, "ORGAN", n);
+            return 1;
+        }
+        put_str(b, "WAVE ", n);
+        put_int(b + 5, pmin(pm(w, 234879877) >> 24, 13) + 1);
+        return 1;
+    }
+    return 0;
 }
 static void viz_model(void)
 {
@@ -530,6 +645,14 @@ static void viz_model(void)
         c = sv(S_MODEL, 0, 3);
     }
     cv_text(VX0, 22, &AF_M, m ? L_MODEL[m] : "LXR", T_THEME);
+    if (m == MD_PL0 + PE_WTBL) {            /* (0.23-t7: the waves themselves) */
+        viz_wtable(a, b, c);
+        return;
+    }
+    if (m == MD_PL0 + PE_CHORD) {
+        viz_chordwave(c);
+        return;
+    }
     vz_wrap(VX0, 44, IX - VX0 - 12, 14, 3u, model_line(m, v), T_TEXT);
     ic_model(m, v, a, b, c);
 }
@@ -1373,7 +1496,9 @@ static void viz_melody(void)
     int32_t semi, n = 0, c, r, lo, hi, a;
     uint8_t set[12];
     char b[40];
-    static const char *const S[NMEL] = {"MELODY OFF", "RANDOM", "WALK", "ARP UP", "ARP DOWN", "ARP UP/DOWN", "MOTIF"};
+    static const char *const S[NMEL] = {"MELODY OFF", "RANDOM", "WALK", "ARP UP", "ARP DOWN", "ARP UP/DOWN", "MOTIF",
+                                        "ARP CONVERGE", "ARP DIVERGE", "ARP CON/DIV", "ARP LEAPFROG", "ARP SPIRAL",
+                                        "ARP ALTERNATE", "ARP PAIRS", "ARP ROTATE", "ARP INVERT", "ARP PEDAL"};
     for (s = 0; s < 12u; s++)
         if (((m >> s) & 1u) && W[s] >= th)
             set[n++] = (uint8_t)s;

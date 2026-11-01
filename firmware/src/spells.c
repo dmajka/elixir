@@ -1038,7 +1038,7 @@ notes:
             return;
         for (s = 0; s < len; s++)
             if (main_on(p, t, s) && sp_rnd(256) < (S->note * c->pm >> 7)) {
-                int32_t nn = scale_q(sc0, r, (int32_t)note, sp_pm(sp_));
+                int32_t nn = scale_q(sc0, r, (int32_t)(note & 127u), sp_pm(sp_));
                 p->step[t][s].note = (uint8_t)clamp32(nn, 24, 108);
                 sp.nstep++;
             }
@@ -1316,6 +1316,7 @@ static void sp_service(void)                         /* each ms: the roll's end;
             sp_snapshot();
         sp_cast(sp.seed);
         sp.last = sp.seed;
+        wd_side_cast();                              /* (40: WANDERing: a side journey, the road waits) */
         put_str(b, SPELL[sp_spell() % NSPELL].card, sizeof b);
         put_str(b + str_len(b), sp.nsnd || sp.nstep ? " CAST (OCT-: UNDO)" : sp_why(), sizeof b - str_len(b));
         ui_message(b);
@@ -1332,6 +1333,7 @@ static int sp_reverse_key(void)                      /* OCT- alone: the cast tak
     sp_restore();
     sp.pend = 0;
     ui_message("SPELL REVERSED");
+    wd_side_end();                                   /* (40: back on WANDER's road) */
     return 1;
 }
 static void sp_black(uint32_t t)                     /* a track key: the track a target (again: not) */

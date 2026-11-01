@@ -1,6 +1,6 @@
 # Elixir manual
 
-Elixir is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 0.16: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Elixir adds.
+Elixir is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 0.23: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Elixir adds.
 
 Elixir is **unofficial**. It is not affiliated with or endorsed by Erica Synths, M-VAVE or Hügelton Instruments. It is free software under the GPL-3.0 (see *Licence and credits* at the end).
 
@@ -93,6 +93,8 @@ Elixir has installed and started on one real FM-1, from V15, with the install pa
 
 ## 3. The panel
 
+<!-- panel -->
+
 ### Keys, buttons and knobs
 
 The FM-1's keyboard has 16 white keys and 11 black keys, numbered left to right in this manual.
@@ -111,7 +113,7 @@ The FM-1's keyboard has 16 white keys and 11 black keys, numbered left to right 
 | **GLO** | Mixer → config |
 | **FX** | FX bus → reverb (turn SELECT for the pages) |
 | **SEQ** | The track's pages (track, generator, action, groove, bounce, melody, scale) → step edit (press again: back; SELECT for the pages). SHIFT (OCT−) + SEQ: the links |
-| **ARP** | PERF: PERFORM → SPELLS → GLOBAL MOD (the global LFOs, macros, links); press again for the next set, SELECT for its pages |
+| **ARP** | PERF: PERFORM → SPELLS → WANDER → GLOBAL MOD (the global LFOs, macros, links); press again for the next set, SELECT for its pages |
 | **HOME** | Grid → patterns → song |
 | **SAVE** | Save → load (SHIFT (OCT−) + SAVE: load) |
 | **PLAY** | Start / stop: the pattern or the song, as **Play** says (the pattern page). SHIFT (OCT−) + PLAY: play the song from its start. |
@@ -218,16 +220,16 @@ Press **SEQ** twice (the first press opens the track's pages, [section 12](#12-g
 
 | Page | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
-| STEP | Velocity | Note | Chance | Condition |
-| TIMING | Flam | Shift | Length | – |
+| STEP | Note | Length | Velocity | – |
+| TRIG | Chance | Condition | Shift | Flam |
 | LOCKS | Lock 1 parameter | its value | Lock 2 parameter | its value |
 | RATCHET | Hits | Shape | Rate (bouncing: Curve) | Fade |
 
-- **Note:** the pitch the voice plays at (C4 = as set).
+- **Note:** the pitch the voice plays at (C4 = as set). From 0.23-test7 a step plays relative to its track's **Base** (the SCALE page, [Scale](#scale-from-016)): change Base and every step moves with it. Turning Note here **locks** the step's note (the label reads **Locked**): Base leaves it where you put it. Turn a locked note back to the Base note and it follows Base again. Notes played in from the keys, melodies and spells all follow Base.
 - **Chance:** the probability the step plays (PERF's FILL key plays it anyway).
 - **Flam:** OFF, x2, x3, x4, x6, x8: the step repeats evenly inside its length.
 - **Shift:** −7 … +7 eighths of a step, early or late.
-- **Length** (from 0.16): how long the note lasts. **AUTO** (the default) is the LXR's: the voice's own envelope, and MIDI's note-off at the next tick. **1/32, 1/16, 1/8, 1/8., 1/4, 1/2** hold the note that long: a voice with **Gate** on (the amp EG's next page, see [section 9](#elixirs-sound-pages)) holds its attack's top until then, and MIDI out sends the note-off at the end, so a synth over USB plays real lengths. **TIE** slides into the next note: its pitch changes, nothing is struck again (MIDI: the new note on, then the old one off). A tied step shows a line into the next one on the grid.
+- **Length** (from 0.16): how long the note lasts. **AUTO** (the default) is the LXR's: the voice's own envelope, and MIDI's note-off at the next tick. **1/32, 1/16, 1/8, 1/8., 1/4, 1/2**, and from 0.23-test11 **3/4, 1 BAR, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64 BARS** hold the note that long: a voice with **Gate** on (the amp EG's next page, see [section 9](#elixirs-sound-pages)) holds its attack's top until then, and MIDI out sends the note-off at the end, so a synth over USB plays real lengths. **INF** holds it until the track's next note (or STOP): a drone. **TIE** (the knob's last) slides into the next note: its pitch changes, nothing is struck again (MIDI: the new note on, then the old one off). A tied step shows a line into the next one on the grid. A new note on the track always cuts a long one short, as on the Elektrons. A length uses none of the step's two locks.
 - **Ratchet:** the step plays Hits times, evenly at Rate (1/32, 1/48, 1/64, 1/24). Fade: FLAT, DOWN or UP.
 
 ### Bouncing ratchets
@@ -274,6 +276,8 @@ The Condition knob (STEP page) sets *when* a step plays:
 ### Ratchets
 
 A ratchet repeats the step: **Hits** 2–8, at a **Rate** of 1/32, 1/48, 1/64 or 1/24, with the velocity **FLAT**, fading **DOWN** or rising **UP**. Unlike a flam (which divides the step), a ratchet keeps its own rate and can run past its step.
+
+For a roll you play with a knob, see [Rush](#rush-from-023): it can be recorded as a lock on each step.
 
 ---
 
@@ -333,6 +337,14 @@ A song is up to 64 rows, each a pattern (or END / LOOP).
 - **COPY (OCT+)** on the first page inserts a row too, and **CLEAR → DELETE SONG ROW** removes it, as before.
 
 **Playing a song.** **Play** (on the ROWS page, the pattern page and CONFIG → SEQUENCER) sets what **PLAY** plays: **PATTERN** loops the pattern; **SONG** plays the song from its first row. Switched to SONG while playing, the song carries on from the first row with the playing pattern. **SHIFT (OCT−) + PLAY** plays the song from the start and sets Play to SONG. The header shows SONG and its number while Play is on SONG.
+
+**ROADS: a song by chance** (from 0.23-test6). SELECT again for the third page, **ROADS** (each song has its own):
+- **KNOB 1 (Song):** which song.
+- **KNOB 2 (Way):** **PLAY** plays the rows as written; **ROADS** plays the song by its own chances. When a row is done, Elixir looks at every row of the song with the same pattern and goes on to the row after one of them. If P01 goes on to P02 three times in the song and to P03 once, it goes to P02 three times in four. When the rows before match too (the pattern before this one), it follows those first, so a phrase you wrote stays together. The title says **ROADS: BY CHANCE** or **AS WRITTEN**.
+- **KNOB 3 (Surprise):** 0% always takes the commonest next pattern; turned up, the rarer ones come more often, now and then any row of the song plays next, and a row's Repeats may be one more or one less.
+- **KNOB 4 (Home):** NEVER, or 8 to 512 bars: after that long the song goes back to its first row, so it keeps coming home.
+
+A ROADS song never stops at END or LOOP: the row after the last is the first. The same pattern doesn't play more than four rows in a row (its Repeats aside) when the song has another. Each song's ROADS settings are saved with the project.
 
 ---
 
@@ -452,7 +464,7 @@ LFO 1 has one page more because it can move another voice (Voice: the voice its 
 - **CPU** (estimated, not yet measured on the FM-1): a phaser, flanger, chorus or ring should cost well under 1% a track, the shifter about 1%. Six shifters on a busy kit can push the CPU meter up: see CONFIG's CPU meter.
 - A comb is in the filter (COMB+ and COMB−), not here.
 
-**Gate** (ENV, after the amp EG; from 0.16): **OFF** (the LXR's: a hit runs the attack and the decay, whatever the step) or **ON**: the voice holds the top of its attack for the step's **Length** (step edit's TIMING page), then decays. With Length AUTO a gated voice plays as before. Part of the kit; it doesn't morph. A Plaits model's low-pass gate stays open while it holds, so P VA or P WTABLE can play a held bass note or a pad.
+**Gate** (ENV, after the amp EG; from 0.16): **OFF** (the LXR's: a hit runs the attack and the decay, whatever the step) or **ON**: the voice holds the top of its attack for the step's **Length** (step edit's STEP page), then decays. With Length AUTO a gated voice plays as before. Part of the kit; it doesn't morph. A Plaits model's low-pass gate stays open while it holds, so P VA or P WTABLE can play a held bass note or a pad.
 
 **Random per hit** (LFO, after LFO 1 and LFO 2):
 
@@ -513,7 +525,7 @@ A port of the sixteen original engines of Mutable Instruments' **Plaits** (its f
 - **Pitch:** the voice's Coarse and Fine, the step's note, the pitch EG and KEYS, as on the other models.
 - **Colour:** Plaits' low-pass gate. At 0 (the default) the engine goes through the voice's amp EG as through a plain VCA; turned up, its filter also closes as the amp EG falls, the sound darkening as it dies away, as a vactrol does. The drum, string and modal engines shape their own decay (Morph), so the amp EG and Colour don't apply to them.
 - **Aux:** Plaits has two outputs, OUT and AUX (a variant of the sound, listed below). Aux blends from OUT (0) to AUX (127).
-- **Env:** how far the amp EG opens Timbre and Morph at each hit (Plaits' internal envelope, patched to its TIMBRE and MORPH inputs).
+- **Env:** how far the amp EG opens Timbre and Morph at each hit (Plaits' internal envelope, patched to its TIMBRE and MORPH inputs). On P WTABLE (from 0.23-test10) it opens **Bright** alone, the classic wavetable pluck: bright on the attack, closing like a filter, the family kept.
 
 | Model | Plaits engine | Harmonic | Timbre | Morph | AUX |
 |---|---|---|---|---|---|
@@ -522,8 +534,8 @@ A port of the sixteen original engines of Mutable Instruments' **Plaits** (its f
 | P FM | Two-operator FM | ratio | FM index | feedback | sub-oscillator |
 | P GRAIN | Formant / grains | formant ratio | formant frequency | formant width | windowed sines |
 | P ADDTV | Additive (harmonics) | bumps in the spectrum | most prominent harmonic | bump shape | organ harmonics only |
-| P WTABLE | Wavetables | bank | row | column | lo-fi (5-bit) |
-| P CHORD | Chords | chord type (the knob is named **Chord** and shows it: OCT, 5, sus4, m, m7, m9, m11, 69, M9, M7, M; from 0.18) | inversion (**Invert**) | waveform (**Wave**) | the chord's root |
+| P WTABLE | Wavetables | the set of 64 waves (**Bank**: A, A-B, B … D as it blends up, then back down D … A with **STEP**: the waves stepped, not blended, PPG-like) | brightness (**Bright**, 0–100%) | the family of waves (**Family**, 1–8; "3-4" while it blends) | lo-fi (5-bit) |
+| P CHORD | Chords | chord type (the knob is named **Chord** and shows it: OCTAVE, FIFTH, SUS4, MINOR, MINOR 7, MINOR 9, MINOR 11, 6/9, MAJOR 9, MAJOR 7, MAJOR) | inversion (**Invert**) | waveform (**Wave**: ORGAN up to half, then WAVE 1–15 from the wavetable) | the chord's root |
 | P SPEECH | Speech | vowels, then word banks | species (formant shift) | phoneme or word | raw vocal cords |
 | P SWARM | Eight sawtooth swarm | pitch spread | grain density | grain length | sine swarm |
 | P NOISE | Clocked filtered noise | filter LP → BP → HP | clock rate | resonance | two band-passes |
@@ -533,6 +545,8 @@ A port of the sixteen original engines of Mutable Instruments' **Plaits** (its f
 | P BD | Analog bass drum | attack, drive | brightness | decay | a synthetic kick |
 | P SD | Analog snare | tone against noise | the head's modes | decay | a synthetic snare |
 | P HH | Analog hi-hat | metal against noise | high-pass | decay | a synthetic hat |
+
+**The waves on the MODEL page** (from 0.23-test7). On P WTABLE the picture shows the real wave it plays now, one cycle, blended from its neighbours as you turn Bank, Bright and Family, the bank at the top. Bank A is clean and additive, B and C rougher and more synth-like, D the other three shuffled. **To play it:** pick a Bank and a Family for the character, then play Bright: with Env for plucks and basses, a slow LFO for pads. Between D and the top of the Bank knob the bank changes slowly while the waves start to step, so the shape still changes there. On P CHORD it shows the Wave knob's waveform: up to half, the organ (octave-apart saws, as its registration), past half, the wavetable's 15 waves. The pictures follow the knobs, not ENV's movement.
 
 Where the port differs from Plaits: P STRING plays one string a voice (Plaits overlaps three); P PARTCL's diffuser (its reverb-like smear) belongs to the first drum voice on P PARTCL, and the others play it dry; P SPEECH has no prosody or speed control; Plaits' sustain modes (with nothing patched to TRIGGER) and its user wavetables aren't ported. In the first measurements on an FM-1, P NOISE, P ADDTV and P PARTCL cost the most (each about three LXR voices), P VA a little less; Rings' MODAL is heavier than any of them, STRING and FM lighter.
 
@@ -546,7 +560,7 @@ The model replaces the oscillators, transient and amp EG in the output: the mode
 
 ### MICRO: microsound voices (every track)
 
-From 0.17, any track can play a **microsound** instead of its LXR voice: a click a fraction of a millisecond long, a rasp of clicks, crunchy sample-and-hold bits, a burst of noise, a resonant noise grain. They are for glitch, clicks-and-cuts and microhouse beats, after the sounds of **GLITCH**, ttreu's FM-1 firmware. From 0.20 three more (PULSAR, WAVELET, SPLINTER) follow Curtis Roads' book *Microsound*.
+From 0.17, any track can play a **microsound** instead of its LXR voice: a click a fraction of a millisecond long, a rasp of clicks, crunchy sample-and-hold bits, a burst of noise, a resonant noise grain. They are for glitch, clicks-and-cuts and microhouse beats, after the sounds of **GLITCH**, ttreu's FM-1 firmware. (0.20's PULSAR, WAVELET and SPLINTER, after Curtis Roads' *Microsound*, were taken out in 0.23-test5 to make room; a kit that used one plays its LXR voice.)
 
 Pick one with **Model** on the MODEL page (EDIT's first page). On the snare, cymbal and hats the page holds only Model until a MICRO type is picked, and Model steps from **LXR** straight to the MICRO types; on D1–D3 they come after Plaits' engines. The closed and open hats share one voice, so they share one MICRO type, as they share every other sound setting.
 
@@ -564,9 +578,6 @@ The type replaces the voice's oscillators, FM and transient. There is nothing el
 | **DUST** | a crackle of random clicks | sparse → dense |
 | **POP** | a speaker pop: a jump that slides back | soft → a sharp edge |
 | **CHIRP** | a fast sine sweep | sweeping down → up |
-| **PULSAR** | pulses that speed up five octaves until they become the note's pitch: rhythm turning into a tone (from 0.20) | soft → bright (each pulse's own tone, the note × 1 to × 16) |
-| **WAVELET** | a few cycles of a sine (Length: 1 to 24) in a smooth window: a pitched blip an octave above the note, down into the bass (from 0.20) | smooth → rough |
-| **SPLINTER** | one impulse breaking into 2–12 smaller fragments, closer and closer, over 6–150 ms (from 0.20) | whole → shattered (more fragments, faster) |
 
 The knobs:
 
@@ -575,10 +586,10 @@ The knobs:
 | Row 1 | Model | Length | Colour | Jitter |
 | Row 2 | Reverse | Tension | | |
 
-- **Length:** how long the sound lasts: a click's width, how many clicks a train has, a grain's window, a crackle's duration, a pulsar's sweep (30–600 ms), a wavelet's cycles, a splinter's spread.
+- **Length:** how long the sound lasts: a click's width, how many clicks a train has, a grain's window, a crackle's duration.
 - **Colour:** the type's own character (the table above).
 - **Jitter:** each hit a little different: its length and colour vary, and a train's gaps go uneven. At 0 every hit is the same.
-- **Reverse:** the chance that a hit plays backwards: a swell that stops with a cut, a train that grows louder and faster, a sweep the other way, a pulsar slowing from a tone into clicks, fragments gathering into one impulse. At 127 every hit is backwards.
+- **Reverse:** the chance that a hit plays backwards: a swell that stops with a cut, a train that grows louder and faster and a sweep the other way. At 127 every hit is backwards.
 - **Tension:** each hit's pitch is thrown up and falls back (an octave at 127 and full velocity), as on Rings' and Plaits' models.
 
 **The pitch** (the voice's coarse and fine tune, its pitch EG, the scale, the melody generator, KEYS, random pitch) moves the sound: a higher note makes a click shorter, a train faster, crunch and bits clocked faster, a grain or a snap's band higher, a pop sharper, a chirp start higher. A grain played by the melody generator is a pitched blip.
@@ -733,7 +744,7 @@ Press **SEQ** (once; twice is step edit). Turn SELECT for eight pages. Most are 
 | BOUNCE | Bounce | Bnc pitch | – | – |
 | MELODY (1/2) | Shape | Spread | Bias | Steps |
 | MELODY (2/2) | Deja vu | Loop | Length | Len var |
-| SCALE | Root | Scale | Follow | – |
+| SCALE | Root | Scale | Follow | Base |
 
 The links, which belong to the pattern, are on ARP's GLOBAL MOD pages from 0.19 ([links](#links-track-coupling)).
 
@@ -787,7 +798,7 @@ The notes are degrees of the pattern's scale (SCALE page, below; with CHROMATIC,
 
 | Knob | Does |
 |---|---|
-| **Shape** | **OFF** (the default: the steps' own notes), **RANDOM** (a bell round Bias), **WALK** (one or two degrees up or down from the last: smooth lines, good for bass), **ARP UP**, **ARP DN**, **ARP U/D** (the chord tones), **MOTIF** (a 4-note motif, then moved up two degrees, inverted, played backwards ending on the root; a new motif now and then) |
+| **Shape** | **OFF** (the default: the steps' own notes), **RANDOM** (a bell round Bias), **WALK** (one or two degrees up or down from the last: smooth lines, good for bass), **ARP UP**, **ARP DN**, **ARP U/D** (the chord tones), **MOTIF** (a 4-note motif, then moved up two degrees, inverted, played backwards ending on the root; a new motif now and then), and from 0.23-test11 more arp orders over the chord tones (shown for 4 notes): **CONVERGE** 1-4-2-3 (outside in), **DIVERGE** 2-3-1-4 (the middle out), **CON/DIV** one then the other, **LEAPFROG** 1-3-2-4-3-5 (up two, back one), **SPIRAL** 1-2-4-3, **ALTERNATE** (the low half and the high half interleaved), **PAIRS** 2-1-4-3, **ROTATE** 1234 2341 3412 4123, **INVERT** 1234 4321, **PEDAL** 1-2-1-3-1-4 (the lowest note between the others) |
 | **Spread** | The range, up to an octave either side (wider for the arpeggios) |
 | **Bias** | The centre, up to an octave down or up |
 | **Steps** | Which degrees: low, all of them; then the chord tones (root, third, fifth, seventh), the triad, and at the top only the root and fifth |
@@ -803,6 +814,8 @@ Turning Steps up while a loop plays simplifies the phrase as it is. The global L
 Each pattern has a **Root** (C … B) and a **Scale**: CHROM (off: every semitone; the default), MAJOR, MINOR, DORIAN, PHRYG (Phrygian), MIXOLYD (Mixolydian), LYDIAN, H MINOR (harmonic minor), MIN PNT, MAJ PNT (the pentatonics), BLUES, MINOR 7 (1 ♭3 5 ♭7), FIFTHS (1 5), PHR DOM (Phrygian dominant, Hijaz), HIRAJO (Hirajoshi), PELOG and WHOLE T (whole tone).
 
 **Follow** (on SCALE and on TRACK) sets which tracks keep to it: D1–D3 by default. On a track that follows, every note it plays goes to the nearest note of the scale (a tie: the lower), counted from what the voice actually sounds (its coarse tune plus the note), so every following voice is in key whatever its tuning; fine tune is kept. That covers the steps' notes, the links' PITCH, ratchets and bounces, random pitch per hit (whole degrees), DENSITY's ghost notes, KEYS (the white keys play the scale) and MIDI notes in. An empty or cleared pattern starts with the scale chosen last. Copying a pattern copies its scale. The global LFOs' **TRANSPOSE** moves the notes by up to 7 degrees.
+
+**Base** (KNOB 4, from 0.23-test7; per track, saved with the pattern) is the track's base note, as an Elektron's track NOTE: C4 by default, two octaves either way. Every note the track plays moves with it (the steps, the notes played in, melodies, spells, the track key's own hit), except steps whose note you **locked** on the STEP page. It is the quick way to move a bass line or a tom melody without touching Coarse. On a track that follows the scale, the moved notes still land in the scale; to move a line *within* the scale, use PERFORM: TRANSPOSE.
 
 ### Groove (from 0.18)
 
@@ -922,7 +935,7 @@ The screen shows all 16 keys (lit: on, outlined: latched), the repeat length, th
 
 ### PERF pages (ARP, SELECT)
 
-The pages are in three sets. ARP opens **PERFORM** (the performance pages, PERFORM 2's last); ARP again opens **SPELLS** ([spells](#spells-from-019)), again **GLOBAL MOD** (the global LFOs, the macros and the links), and again goes back. SELECT stays within the set. The white keys stay PERF's keys on both.
+The pages are in four sets. ARP opens **PERFORM** (the performance pages, PERFORM 2's last); ARP again opens **SPELLS** ([spells](#spells-from-019)), again **WANDER** ([wander](#wander-from-023)), again **GLOBAL MOD** (the global LFOs, the macros and the links), and again goes back. SELECT stays within the set. The white keys stay PERF's keys on both, except on the RUSH pages, where they are the steps ([rush](#rush-from-023)).
 
 | Page | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
@@ -930,6 +943,9 @@ The pages are in three sets. ARP opens **PERFORM** (the performance pages, PERFO
 | PERFORM: MORE | DJ filter | Repeat | Shuffle | Tape time |
 | PERFORM: DENSITY | Density | Ghost vel | Build | Vary |
 | PERFORM: STUTTER | Chance | Size | Length | Vary |
+| PERFORM: RUSH | Rush | Top | Filter | Glide |
+| PERFORM: RUSH SETUP | Roll at | Free at | Flam | Pitch |
+| PERFORM: TRANSPOSE | Degrees | When | Keys | – |
 | PERFORM 2 | Tempo | Roll (rate) | Morph | SRate |
 | PERFORM 2: SETUP (1/2) | Drill | Jitter | Cuts | Pump |
 | PERFORM 2: SETUP (2/2) | Comb (note) | Comb fb | Crush | Reverse (length) |
@@ -938,6 +954,9 @@ The pages are in three sets. ARP opens **PERFORM** (the performance pages, PERFO
 | SPELLS: CHARACTER | the spell's own four (see below) | | | |
 | SPELLS: LIMITS | Rev Send | FX Send | Rev Level | FX Mix |
 | SPELLS: MOTION | Motion | Lengths | – | – |
+| *WANDER:* QUEST | Quest | Journey | Fate | Goal |
+| WANDER: PACE | Sound | Rhythm | Range | Stride |
+| WANDER: HOME | Return | Memory | Order | Sway |
 | *GLOBAL MOD:* GLOBAL LFO 1 (1/2) | Dest | Depth | Speed | Wave |
 | GLOBAL LFO 1 (2/2) | Mode | Trig | Phase | – |
 | GLOBAL LFO 2 (1/2) | Dest | Depth | Speed | Wave |
@@ -985,6 +1004,45 @@ The settings are saved with the project, so they hold across pattern changes. Th
 - The global LFOs' **STUTTER** destination raises the chance with the wave, so bursts come and go over bars: a square LFO stutters every other bar, a slow triangle makes them thicken and thin out.
 
 It records the last quarter second of the master in mono at half the sample rate, the same recorder REVERSE uses, so it needs no extra memory and little CPU. That also means the repeats are mono and a little dark, and a slice longer than the recorder (a 1/8 below 120 BPM) plays at half its length. The settings are saved with the project.
+
+### Rush (from 0.23)
+
+**PERFORM: RUSH** turns the whole kit into a snare rush with one knob, the way Aphex Twin and Venetian Snares do it. Pick a track with a **black key** (the snare, usually), then turn **Rush** up from OFF:
+
+- **0 to Roll at (75%):** the other drums' hits go over to the rush track, a few at first, then more and more. The same hits go first every time, so it builds instead of flickering. The hats go fastest (all of them by 80%). The kick keeps its four beats until 90%, then only the bar's first, then none from 95%.
+- **Roll at to Free at (75–80%):** the track plays only a roll, on the grid: 16ths, then 32nds halfway. Every hit is at one level that swells from 60% to full as you turn, so the pattern's own snares don't poke out. An accent it took plays on the step's first hit.
+- **Free at to 100%:** a free roll off the grid, from 32nds up to **Top** (1/64, 1/128 or 1/256) at 100%. Its rate glides (**Glide**, 40 ms at first), so turning the knob never makes it jump.
+- **90 to 100%:** the DJ filter's high-pass opens on the whole mix, up to **Filter** at 100% (OFF: no filter).
+
+Rush follows how fast you turn (from 0.23-test7): a slow turn moves it 1% a detent, for subtle takeovers; a quicker one 2% or 5%, and a fast spin 10% a detent, so a flick takes it from OFF to the free roll in about ten detents. Turn it down and it all comes back the same way.
+
+**RUSH SETUP:** **Roll at** and **Free at** move where the roll starts and goes free. **Flam** (0% at first): while the free roll's rate is moving, the chance that a hit becomes a flam (a quiet grace note just before it). **Pitch** (−12 … +12 semitones): the roll bends as it rises, all of it at 100%; a track that follows the scale stays in it.
+
+The picture shows the whole rush over the knob's range: the roll's speed (from Roll at), the other drums left (the hats dashed), the filter at the top, and a bar where the knob is now. Under it, the shown bar's RUSH locks.
+
+**Recording (p-locks):**
+- Press **REC**, play, and turn Rush: the amount goes into each step of the rush track as a **RUSH lock** (empty steps are turned on at the KEYS velocity). Turn Rush back to OFF and the pattern plays the rush by itself, the other drums going over and all, in copies and in songs too.
+- On the RUSH pages the **white keys are the steps** of the shown bar: hold one and turn Rush to set its RUSH lock (OFF removes it). The keys light where a step has one.
+- **RUSH** is also the last lock target on the step's LOCKS page; its value reads as a percentage.
+- A locked step sets the rush for its step, gliding to the next step's lock. A step without one ends the rush. The first track with a RUSH lock leads; the knob, while up, overrides the locks. A rush takes one of the step's two locks.
+
+Muting the rush track silences the roll, but its takeover still clears the other drums. **PERF RESET** (SHIFT (OCT−) + HOME) puts Rush to OFF; recorded locks stay. The settings are saved with the project; the knob isn't (the locks are the saved rush).
+
+Rush is adapted from the snare rush in Elixir Desktop by johnnyhawk02 (GPL-3.0, github.com/johnnyhawk02/elixir-desktop).
+
+The **roll sweep** on the PERFORM page (KNOB 2 while a roll key is held) still plays plain rolls, as before.
+
+### Transpose (from 0.23-test7)
+
+**PERFORM: TRANSPOSE** (after RUSH SETUP) moves tracks up and down the pattern's scale live, as the Oxi One does. The **white keys** are the steps of the move: the middle one (the 8th, breathing) is 0, the seven below it −7 … −1 and the eight above +1 … +8 **degrees** of the scale (−7 and +7 are an octave in a seven-note scale). In CHROMATIC they are semitones. The **black keys** choose which tracks the keys move (lit; again: not); with none chosen, the shown track. A track's black key breathes while it is moved.
+
+| Knob | Does |
+|---|---|
+| **Degrees** | The shown track's move, as the keys set it (turning it moves the chosen tracks) |
+| **When** | **NOW**, or on the next **BEAT** or **BAR**, so a change lands in time (the key waiting glows dimly) |
+| **Keys** | **LATCH** (a key stays until another; the middle key back to 0) or **HOLD** (back to 0 when you let go) |
+
+Each track keeps its own move, so the bass can go up a fifth while the lead stays. A note out of the scale stays as far out as it was. The move is for performing: it isn't saved, and it stays until you set it back (the middle key).
 
 ### Global LFOs
 
@@ -1130,6 +1188,104 @@ Like LIMITS, MOTION and VOICES are shared by every spell and saved with the proj
 **Recipes:** bar key 3 saves the spell, its knobs, the white keys, the targets and its last roll as a recipe (U1–U8; on a recipe it saves over it). Picking a recipe brings back its targets and white keys. Recipes and every spell's knobs are saved with the project.
 
 The reverse is one level, shared with a track action's undo and DENSITY's OCT+: using either after a cast keeps the cast.
+
+### Wander (from 0.23)
+
+WANDER changes a pattern slowly, over minutes, so that after a while you are somewhere else and can't remember where you started. It doesn't nudge knobs at random (that only blurs): a **quest** is a short story of chapters, each with a mood, and the road walks towards it a little at a time. Press ARP three times for **WANDER**.
+
+1. **Pick the tracks** that travel with the black keys (lit; all at first). Bar key 1: all, and again none.
+2. **Pick what may change** with the white keys, the same sixteen parts as SPELLS (lit: in). At first: envelopes, filter, FX and sends, modulation (the sound) and hits, accents, chance (the rhythm); not pitch or the oscillator. SHIFT (OCT−) + a white key leaves only that one. Leave **HIT** (key 9) out and the hits stay as they are. Put **OSC / MODELS** (key 2) in and, now and then at a chapter's edge, a voice changes its model: its level fades out over a bar, the model changes in the silence, and the level comes back.
+3. **Pick a quest** with KNOB 1 on QUEST, and how long it lasts with **Journey**.
+4. **Set out** with **COPY (OCT+)**. Where you are is **home**: the pattern playing and a copy of every voice (and the morph kit).
+5. **Listen.** Every **Sound** bars one voice moves a notch, glided over the bar; every **Rhythm** bars the hits thin out or fill in and the rhythm itself changes a little, at the start of the pattern. **SHIFT (OCT−)** comes home over **Return** bars: the voices glide back to exactly where they were, the steps walk back to how they were, and if you are in another pattern by then, home's pattern follows. SHIFT (OCT−) again: home at once.
+
+**How it moves.** Each chapter of a quest has a mood in four directions: **Energy** (how busy), **Light** (dark or bright), **Space** (dry or wet) and **Grit** (clean or dirty). The road moves towards it with **threads**: one track and one **gesture**, a few knobs that agree (DARKER: the cutoff and the tilt down, a little resonance; WETTER: the reverb and FX sends up; LONGER, SHORTER, DIRTIER, CLEANER, METALLIC, ROUNDER, SNAPPIER, SOFTER, RINGING, WIDER, RESTLESS, STILLER, HIGHER, LOWER, CRUSHED, WARMER, BRIGHTER, DRIER). A thread keeps going the same way for three to eight notches, so you hear it as a line, then the next one is picked by what still fits the mood and what tends to follow (darker leads to wetter or longer more than to brighter), sometimes handing the gesture to the next track (the hats open, then the snare). One to three threads move at once (Stride). The gestures come from the land of the spell picked on SPELLS' GRIMOIRE: wandering through Haunted Dub's land darkens and drips, NONE lets in every gesture. Turn a knob a thread is moving and it lets go (you win); it still goes home with the rest.
+
+**Energy** moves the hits through each track's own density (as [Density](#density-from-016) does, on top of it): thinning drops the weakest steps first, filling adds chances, then ghosts, then ratchets. The hats go first and the other tracks follow, overlapping; the kick and the snare (the backbone) only gain or lose a ghost or two. At the very bottom, with Range near the top, the hats and the other colour tracks fall silent (their keys go dim) until only the pulse and the reverb are left. Nothing jumps: a track's density moves a little each bar.
+
+**The rhythm** (from 0.23-test4). With no Goal, each Rhythm step also changes the steps themselves, one change at a time (two at a high Stride), so you hear each version before the next. Wander tries six possible changes and keeps the one that fits best:
+- a hit **grows** on a rest: it comes in as a ghost and rises over the next steps to the track's own level;
+- a hit is **shed**: it fades over a few steps, then goes;
+- an **answer**: one track gains a hit where another loses one;
+- a hit moves a step **earlier** or **later**;
+- a figure of two to four steps is **borrowed** from elsewhere in the track (or another track) and copied a beat or two away, so the variation sounds composed;
+- an **accent** up or down, a **chance** (MAYBE) on a weak step or back to SURE, a **ratchet** (with RATCHET's white key in).
+
+What fits best: what the track already does at that place in the bar after the same few steps (a new hat sounds like the hats, a new kick lands where kicks go), the number of hits staying near home's (Energy leans it), the kick and snare not on the same step, a new hat not on the snare, and not a version you heard a moment ago. Stride is how freely it picks among them. The kick and the snare's own rhythm stays as it is except on The Lost Wizard, The Rosary and The Turning Wheel (and there the kick's beats and the backbeat stay). PACE shows the last change ("CH +HIT", "OH BORROWS", "D3 ANSWERS").
+
+Every few changes the road leaves a **waymark**. With **Memory** up, now and then the road turns back to one: a version from a minute ago comes back (the screen says A PLACE I KNOW), and you recognise it.
+
+**Footprints.** The road writes its changes into the pattern playing, but first notes how each step was. When another pattern plays (you change it, the song does, or the road arrives somewhere), the pattern you left gets its steps back exactly. So travelling never changes a pattern for good; only KEEP (and LOST) does, and POSTCARD copies where you are into an empty pattern. A road can change about 80 steps of a pattern; past that, only steps it already changed move.
+
+**Destinations.** Set **Goal** to a pattern (P01 to P32) before you press COPY (OCT+), and the road goes there: at the start of each pattern, the steps that differ from the goal's change to the goal's, the hats and colour first, the kick and snare last, paced to arrive by the end of the Journey (an ENDLESS Journey takes 128 bars). The top line counts the steps still to go ("7 TO P04") and the castle at the road's end flies the goal's flag. Then the goal pattern plays, the one you left is exactly as it was, Goal reads **--** and nothing more moves: the rhythm is the goal's, the voices are where the road left them. Turn Goal and press COPY (OCT+) to go on (to another pattern, or back home by the road), or SHIFT (OCT−) to come home. A goal with its own voices (LOCKED or KIT) draws the voices towards them a bar at a time, so they don't jump when it starts. Changing the pattern by hand on the way counts as arriving there.
+
+**Following a song** (from 0.23-test6). Set **Goal** to **SONG** (past P32) and the road follows the song's rows (the song on the SONG page): each row is a destination in turn, reached as above, and when it plays the road sets out at once for the next. The voices keep wandering all the way, and it never arrives: SHIFT (OCT−) brings you home, with the Fate. **Order** (HOME page) says which row comes next: **IN ORDER** (the rows as written, from the row with the pattern you set out from), **ROADS** (by the song's chances, as ROADS on the SONG page, with the song's Surprise) or **ANY** (any row). Rows with the pattern already playing are skipped. The **Journey** is the time between rows (ENDLESS: 128 bars), and **Sway** how much it varies: EVEN, every row the Journey; turned up, from a quarter of it to four times it, by chance. The top line counts the bars of this row's leg ("8/16"), the castle flies the next row's pattern. Setting out turns Play to PATTERN: Wander plays the song's rows itself.
+
+**The quests**
+
+| Quest | The road | Fate at first |
+|---|---|---|
+| **The Long Road** | One steady walk in one direction (to dusk, to dawn, to the forge, into mist, to market, over the moor) | LOST |
+| **Homecoming** | Out through two or three chapters (far fields, a strange town) and back | HOME |
+| **The Spire** | Energy and light climb chapter by chapter to the summit, then the slow walk down (Journey 256 bars at first) | TREASURE |
+| **The Hollow Hill** | Down into the cave: fewer hits, darker, wetter, until only a pulse and the reverb are left; then out into the light | HOME |
+| **The Tide** | Ebb and flood: Space and Energy breathe in and out, and nothing arrives (Journey ENDLESS at first) | LOST |
+| **Side Quests** | From the village into the marshes, the fair or the old tower and back again, two to four detours | DICE |
+| **The Lost Wizard** | Anywhere at all, never home: short legs, any gesture, and the kick and snare's rhythm wanders too (ENDLESS) | LOST |
+| **Clockwork Maze** | By rule, not chance: each Rhythm step one track turns a step later, in turn; the voices take two opposite gestures in turn, track after track. The same every time you set out | HOME |
+| **The Rosary** | The hits leave one by one, the hats first and the weakest first, until one is left halfway; then they come back in the order they left. Energy stays put | HOME |
+| **The Still Pond** | One thread at a time, very long legs, the smallest notches: you only notice it has changed (Journey 512 bars) | LOST |
+| **Turning Wheel** | An endless beat: rhythm only (Sound OFF, Rhythm every 4 bars), Memory high, the backbone kept. It turns through versions of itself and now and then comes back to one you remember | LOST |
+
+A quest's chapters are chosen as it sets out, so it has a shape but never quite the same path. The screen shows the road in the quest's shape (straight, a loop home, a mountain, a dip into a cave, a wavy shore, detours, a path fading into fog, corridors, a string of beads, round a pond, a wheel), the cottage you set out from, the wizard walking it bar by bar with his footprints behind him, the chapter on a signboard and the Fate at the road's end.
+
+**QUEST**
+- **Quest:** the eleven above (ROAD, ROUND, SPIRE, HOLLOW, TIDE, DETOUR, ASTRAY, MAZE, ROSARY, POND, WHEEL on the card). Picking one sets its Fate and Journey (the Turning Wheel also Sound, Rhythm and Memory; leaving it puts those back).
+- **Journey:** 16, 32, 64, 128, 256 or 512 bars, or ENDLESS. Turn it and the top line says how long that is at the tempo.
+- **Fate:** what happens when the Journey ends: **HOME** everything back as it was; **TREASURE** (CHEST on the card) home, but the thread that moved most stays as it is; **WOUND** home, but one track comes back darker or thinner; **LOST** never back: where the road ends is the new home (as KEEP), and an ENDLESS road never ends; **DICE** the d12 picks one of the four. Coming home with SHIFT (OCT−) brings the Fate too, LOST aside (you asked to come home).
+- **Goal:** NONE (an open road), a destination, P01 to P32 (see Destinations), or SONG (see Following a song). It reads -- once you've arrived.
+
+**PACE**
+- **Sound:** how often a thread takes a notch: OFF, every 1, 2, 4, 8 or 16 bars, or every PHRASE (the pattern's length).
+- **Rhythm:** how often Energy and the rhythm take a step, the same values; a step always lands at the start of the pattern. With a Goal, the Journey sets the pace instead.
+- **Range:** how far Energy may swing, from ±10% of the hits to all of it (near silence to twice as busy). The quest decides the direction; this is the depth of the cut-out and the height of the build.
+- **Stride:** how big each step is (a notch you won't hear alone, to one you notice), how many threads at once (one below a third, two, three above two thirds) and how far Energy moves a step.
+
+The PACE page draws a compass of the four moods: the shape is where the road has got to (home is the ring), the ghost is the chapter's aim. Beside it, the threads moving now ("D3 DARKER") and how far Energy has thinned or filled the hits.
+
+**HOME**
+- **Return:** how long SHIFT (OCT−) and the Fate take to come home: INSTANT, or 1 to 256 bars.
+- **Memory:** how often an open road turns back to a waymark: NEVER, or up to OFTEN (about one step in three).
+- **Order:** with Goal SONG, the next row: IN ORDER, ROADS (by the song's chances) or ANY.
+- **Sway:** with Goal SONG, how much the time between rows varies: EVEN, or up to a quarter to four times the Journey.
+
+The page draws the cottage, the home pattern and how far away you are.
+
+**The keys on WANDER**
+
+| Key | Does |
+|---|---|
+| COPY (OCT+) | Set out, to the Goal if there is one (it breathes when you can). On the road: a new course from where you are, the same home. Resting or aside: on again. Arrived: turn Goal first |
+| SHIFT (OCT−) | Come home over Return bars; again, at once |
+| black keys | The tracks that travel (breathing: a thread is moving it) |
+| white keys | What may change (SPELLS' sixteen parts) |
+| bar key 1 (black key 8) | Every track, or none |
+| bar key 2 (black key 9) | **KEEP**: here is home now. The voices are copied again, and the road's steps and the hits as Energy has them stay in the playing pattern (a track Wander silenced stays muted); the road goes on from here |
+| bar key 3 (black key 10) | **REST**: the road waits (a fire beside the wizard); again, on |
+| hold SHIFT (OCT−), press black key 10 (bar key 3) | **POSTCARD**: the screen says POSTCARD SAVED TO Pnn. Where you are (the steps and Energy as you hear them) copied into the first empty pattern, without stopping. From 0.23-test11 its Voices are **LOCKED** to the sound as it was then (its own kit slot), so later travelling doesn't change it; SAVE the project to keep it |
+| bar key 4 (black key 11) | Wander's knobs and keys as at first |
+
+**Spells on the road.** A spell cast while travelling is a side journey: the road waits (the screen says ASIDE: A SPELL). Reverse the spell (SHIFT (OCT−) on SPELLS) and you are back on the road where you were, and it goes on; or press COPY (OCT+) on WANDER to go on with the spell's sound. Coming home after a spell, the voices still go home from the copy. A cast you kept (bar key 2 on SPELLS, or by leaving the page) keeps its steps in the pattern.
+
+**Good to know**
+- The bar keys are the four black keys on the right (8–11). Holding SHIFT (OCT−) on WANDER says so on the screen, and POSTCARD's key breathes. SHIFT + a *white* key is something else here: only that part travels.
+- Coming home, each track's melody (an arp, a motif, a Deja vu loop) starts again from its top at the start of the track's next loop, as it did from PLAY.
+- **Rhythm with a morph between two kits:** set PACE's Sound to OFF (or pick THE TURNING WHEEL) and leave OSC/MODELS out on the white keys, and the road changes only the steps and Energy; a global LFO with Dest MORPH can sweep between the kit and the morph target meanwhile. Neither kit is touched, and coming home leaves the LFO running. With Sound on, the road's changes move both kits alike (unless CONFIG's morph **Edits** is KIT ONLY), so the morph still works.
+- The road only moves while the sequencer plays; it counts bars at 16 steps each.
+- Loading a kit (or a pattern with its own voices) while travelling makes that kit home.
+- A project saves Wander's knobs and keys, not the road: the voices are saved as they are when you save.
+- Changing the pattern by hand while travelling is fine: the pattern you left gets its steps back, the road goes on in the new one (with a Goal: you've arrived), and coming home walks back to the home pattern.
+- In song mode, coming home stays in the pattern the song is playing: its steps walk back, the song goes on.
 
 ---
 
@@ -1496,7 +1652,7 @@ What Elixir adds:
 
 - **Sound:** Control All (OCT+ held, a knob: every track); LFO modes (hold, one-shot, half); a second LFO and an insert effect (phaser, flanger, chorus, tremolo, autopan, frequency shifter, ring) on every track; seven more filter types; FX and reverb sends per voice; four reverbs (Clouds' plate among them); nine waveshapers; bits; tilt EQ; random per hit; choke groups; cross modulation; a gate per voice; phaser and flanger; a tape delay with sync, glitches and pitch-shifted repeats, its echoes into the reverb; dirt on the FX bus and the master; a sound browser and a kit library.
 - **Models (experimental):** Rings' resonators and Plaits' sixteen engines on the drum voices, two at a time. Not in the LXR-02.
-- **MICRO:** thirteen microsound types (clicks, click trains, crunch, bits, noise bursts, snaps, resonant grains, dust, pops, chirps, after GLITCH; pulsars, wavelets and splinters, after Curtis Roads) on every track.
+- **MICRO:** ten microsound types (clicks, click trains, crunch, bits, noise bursts, snaps, resonant grains, dust, pops, chirps, after GLITCH) on every track.
 - **Performance:** PERF with fill, repeat, freeze, throws, feedback push, tape stop, filter sweeps, a DJ filter, four macros, the voices' volumes on two pages, PERFORM 2, DENSITY (thinning or building the whole pattern) and three global LFOs (morph, the DJ filter, the effects, density, transpose, the delay, macros, down to 256 bars a cycle); KEYS, to play a voice from the keyboard.
 - **Sequencing:** trig conditions, ratchets, note lengths and ties, per-track clocks, generators (mutate, Turing machine, cellular automata, Grids, Euclid with a second pulse), a melody generator, a scale per pattern, dice, commit and undo, and copying a bar across all tracks.
 - **Safety:** the automatic session save, a CPU meter with the load by part, and backup and restore over USB (the library page).

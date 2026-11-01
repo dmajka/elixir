@@ -77,8 +77,7 @@ static const char *const L_MODEL[] = {"LXR", "MODAL", "STRING", "FM",   /* (0.9:
                                       "P SPEECH", "P SWARM", "P NOISE", "P PARTCL", "P STRING", "P MODAL", "P BD",
                                       "P SD", "P HH",   /* (0.15: Plaits' engines, plaits.c) */
                                       "CLICK", "TRAIN", "CRUNCH", "BITS", "BURST", "SNAP", "GRAIN", "DUST", "POP",
-                                      "CHIRP", "PULSAR", "WAVELET", "SPLINTER"};   /* (24: MICRO's, micro.c; 0.20:
-                                                                                     * the last three) */
+                                      "CHIRP"};   /* (24: MICRO's, micro.c) */
 _Static_assert(sizeof L_MODEL / sizeof L_MODEL[0] == NMODEL, "rings.c: the MODEL list");
 static const char *const L_BITS[] = {"OFF", "15", "14", "13", "12", "11", "10", "9", "8", "7", "6", "5", "4", "3",
                                      "2", "1"};
@@ -195,6 +194,12 @@ static const char *pl_knob_name(uint32_t p, uint32_t which)
         static const char *const C[3][4] = {{"Chord", "Plaits", "chd", "Chord"}, {"Invert", "Plaits", "inv", "Invert"},
                                             {"Wave", "Plaits", "wav", "Wave"}};
         return C[(p - PAR_MDECAY1) / 6u][which];
+    }
+    if (mdl[vi].want == MD_PL0 + PE_WTBL && p < PAR_MPOS1) {   /* (0.23-t7: P WTABLE's: the bank, TIMBRE the brightness, MORPH
+                                                      * the family; measured on the table) */
+        static const char *const W[3][4] = {{"Bank", "Plaits", "bnk", "Bank"}, {"Bright", "Plaits", "brt", "Bright"},
+                                            {"Family", "Plaits", "fam", "Family"}};
+        return W[(p - PAR_MDECAY1) / 6u][which];
     }
     return N[(p - PAR_MDECAY1) / 6u][which];
 }
@@ -338,6 +343,10 @@ static void note_name(char *b, uint32_t n)
 static void mod_target_name(char *b, uint32_t idx, int with_voice, uint32_t max)
 {
     uint32_t p, v;
+    if (idx == LOCK_RUSH_IDX) {                      /* (39) */
+        put_str(b, "RUSH", max);
+        return;
+    }
     if (idx >= NUM_MOD_TARGETS && (p = lock_target_par(idx)) != 0u) {
         b[0] = 0;
         if (par_k_voice(p) < 6u) {                   /* a per-voice one: its voice */

@@ -1441,7 +1441,8 @@ static void pl_block(uint32_t vi, const voice_t *v, int16_t *buf)
     p.note = pl_f_note(f);
     p.harm = pl_knob(m->dec);
     p.timbre = pclamp(pl_knob(m->damp) + pm(env, g1), 0, PL1);   /* ENV: the amp EG on TIMBRE and MORPH */
-    p.morph = pclamp(pl_knob(m->mat) + pm(env, g1), 0, PL1);
+    p.morph = pclamp(pl_knob(m->mat) + (e == PE_WTBL ? 0 : pm(env, g1)), 0, PL1);   /* (0.23-t7: P WTABLE: ENV
+                                                      * on its brightness alone, the family kept) */
     p.accent = d->accent;
     gs = (g1 - g0) / (int32_t)(BLOCK / PLSUB);
     for (k = 0; k < BLOCK / PLSUB; k++) {

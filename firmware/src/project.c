@@ -19,7 +19,7 @@
 #define PROJ_AUTO 4u                                /* the session */
 #define PROJ_NLOG 5u
 #define PROJ_MAGIC 0x4A52504Bu                      /* "KPRJ" (Kettle's, kept: its projects load) */
-#define PROJ_VERSION 11u                            /* (1 .. 10 still load: proj_read_payload) */
+#define PROJ_VERSION 12u                            /* (1 .. 11 still load: proj_read_payload) */
 #define PROJ_PAYLOAD (PROJ_SLOT - 256u)
 
 typedef struct {
@@ -113,6 +113,9 @@ static void pr_bytes(void *p, uint32_t n)
 static void sp_defaults(void);                      /* (32: SPELLS, spells.c: KSP2) */
 static void sp_write(void);
 static void sp_read(void);
+static void wd_defaults(void);                      /* (40: WANDER, wander.c: KWND) */
+static void wd_write(void);
+static void wd_read(void);
 
 /* ------------------------------------------------------------ format --- */
 /* Version 2 (Elixir 0.2): 32 patterns; Elixir's parameters (the sends, the reverb) in the edit buffer and the
@@ -129,7 +132,8 @@ static void sp_read(void);
  * pulse (off before); a step's length in its condition's and
  * chance's top bits; three global LFOs (two before: the third off); the scale last chosen, DENSITY and STUTTER after
  * the LFOs (KSC1; STUTTER off before). Version 11 (0.18): a pattern's GROOVE (groove, amount, HUMANIZE, the tracks
- * that don't follow) after its scale (off before). */
+ * that don't follow) after its scale (off before). Version 12 (0.23): a track's BASE note after its melody (0
+ * before); a step's note may have NOTE_LOCK (bit 7). */
 #define SF_VOL 0x01u
 #define SF_PROB 0x02u
 #define SF_NOTE 0x04u
@@ -156,6 +160,8 @@ static int track_is_default(const pattern_t *p, uint32_t t)
     for (k = 0; k < NML; k++)
         if (p->mel[t][k])
             return 0;
+    if (p->tbase[t])
+        return 0;
     for (k = 0; k < NUM_STEPS; k++)
         if (step_diff(p, t, k))
             return 0;
@@ -265,6 +271,7 @@ static void proj_write_payload(void)
             pw_byte(p->dir[t]);
             pw_bytes(p->eu2[t], 3);
             pw_bytes(p->mel[t], NML);               /* (version 10: the melody) */
+            pw_byte((uint8_t)p->tbase[t]);          /* (version 12: BASE) */
             for (k = 0; k < 4u; k++)
                 pw_u16(p->main[t][k]);
             for (k = 0; k < NUM_STEPS; k++)
@@ -335,8 +342,11 @@ static void proj_write_payload(void)
         pw_byte(gls[i].trig);
         pw_byte(gls[i].phase);
     }
-    pw_bytes("KSC1", 4);                            /* 19: the scale last chosen, DENSITY, STUTTER (0.16), VARY (31) */
-    pw_byte(11);
+    pw_bytes("KSC1", 4);                            /* 19: the scale last chosen, DENSITY, STUTTER (0.16), VARY (31),
+                                                      * 39: RUSH: a byte unused (0.23-test1's GHOST), FLAM, PITCH,
+                                                      * START, FREE, TOP, FILTER, GLIDE (older firmware: the 11 read,
+                                                      * these skipped) */
+    pw_byte(19);
     pw_byte(scl_last.root);
     pw_byte(scl_last.scale);
     pw_byte((uint8_t)pfs.dens);
@@ -348,8 +358,21 @@ static void proj_write_payload(void)
     pw_byte(pfs.st_len);
     pw_byte(pfs.st_vary);
     pw_byte(pfs.dvary);
+    pw_byte(0);
+    pw_byte(sq.ru_flam);
+    pw_byte((uint8_t)(sq.ru_pitch + 12));
+    pw_byte(sq.ru_start);
+    pw_byte(sq.ru_free_at);
+    pw_byte(sq.ru_top);
+    pw_byte(sq.ru_filt);
+    pw_byte(sq.ru_glide);
     pw_bytes("KSP2", 4);                            /* 32: SPELLS: the knobs, the targets, the GRIMOIRE's recipes */
     sp_write();
+    pw_bytes("KWND", 4);                            /* 40: WANDER: the knobs, the tracks, the parts (not the road) */
+    wd_write();
+    pw_bytes("KRDS", 4);                            /* 42: each song's ROADS */
+    pw_byte(NUM_SONGS);
+    pw_bytes(song_rd, NUM_SONGS);
 }
 
 /* a version-2 lock code: Elixir's parameters were at the numbers the LXR leaves free (247..254: PAR_FX_SEND1 ..,
@@ -475,6 +498,7 @@ static int proj_read_payload(uint32_t ver)
     kit_sanitize(morph_par);
     out_migrate(&par[PAR_AUDIO_OUT1], &par[PAR_FX_SEND1]);
     scl_last.root = scl_last.scale = 0;             /* (a pattern without a scale: CHROMATIC; KSC1 sets the last) */
+    rush_defaults();                                /* (39: RUSH's, KSC1 sets them) */
     npat = ver < 2u ? 64u : pr_byte();
     for (i = 0; i < npat; i++) {                    /* (patterns past NUM_PATTERN: read into pat_backup, dropped) */
         pattern_t *p = i < NUM_PATTERN ? &pat[i] : &pat_backup;
@@ -552,6 +576,8 @@ static int proj_read_payload(uint32_t ver)
                 if (p->mel[t][ML_SHAPE] >= NMEL)
                     p->mel[t][ML_SHAPE] = MEL_OFF;
             }
+            if (ver >= 12u)
+                p->tbase[t] = (int8_t)clamp32((int8_t)pr_byte(), -TBASE_MAX, TBASE_MAX);
             for (k = 0; k < 4u; k++)
                 p->main[t][k] = (uint16_t)pr_u16();
             pr_bytes(bits, 8);
@@ -580,6 +606,8 @@ static int proj_read_payload(uint32_t ver)
     }
     perf_defaults();                                /* PERF's settings, when the project has them */
     sp_defaults();                                  /* (32: SPELLS', KSP2) */
+    wd_defaults();                                  /* (40: WANDER's, KWND; a road under way ends) */
+    memset(song_rd, 0, sizeof song_rd);             /* (42: KRDS; PLAY, as written) */
     if (!pr.err && pr.pos + 4u <= pr.end) {
         pr_bytes(tag, 4);
         if (!memcmp(tag, "KPF1", 4)) {
@@ -632,10 +660,10 @@ static int proj_read_payload(uint32_t ver)
     if (!pr.err && pr.pos + 4u <= pr.end) {
         pr_bytes(tag, 4);
         if (!memcmp(tag, "KSC1", 4)) {               /* 19: the scale last chosen, DENSITY; STUTTER */
-            uint8_t b[11] = {0, 0, 0, 40, DB_GHOSTS, 0, 0, 1, 2, SV_OFF, 0};   /* (31: VARY 0 before) */
-            n = pr_byte();
-            pr_bytes(b, n < 11u ? n : 11u);
-            pr_skip(n > 11u ? n - 11u : 0u);
+            uint8_t b[19] = {0, 0, 0, 40, DB_GHOSTS, 0, 0, 1, 2, SV_OFF, 0, 0, 0, 12, 75, 80, RT_256, 60, 8};
+            n = pr_byte();                           /* (31: VARY 0 before; 39: RUSH's) */
+            pr_bytes(b, n < 19u ? n : 19u);
+            pr_skip(n > 19u ? n - 19u : 0u);
             scl_last.root = (uint8_t)(b[0] % 12u);
             scl_last.scale = (uint8_t)(b[1] < NSCALE ? b[1] : SC_CHROM);
             pfs.dens = (int8_t)clamp32((int8_t)b[2], -64, 63);
@@ -647,12 +675,32 @@ static int proj_read_payload(uint32_t ver)
             pfs.st_len = (uint8_t)(b[8] < NSTLEN ? b[8] : 2u);
             pfs.st_vary = (uint8_t)(b[9] < NSV ? b[9] : SV_OFF);
             pfs.dvary = (uint8_t)(b[10] & 127u);
+            sq.ru_flam = (uint8_t)(b[12] <= RUSH_MAX ? b[12] : RUSH_MAX);   /* (39) */
+            sq.ru_pitch = (int8_t)((b[13] <= 24u ? b[13] : 12u) - 12);
+            sq.ru_free_at = (uint8_t)(b[15] >= 1u && b[15] < RUSH_MAX ? b[15] : 80u);
+            sq.ru_start = (uint8_t)(b[14] < sq.ru_free_at ? b[14] : sq.ru_free_at - 1u);
+            sq.ru_top = (uint8_t)(b[16] < NRT ? b[16] : RT_256);
+            sq.ru_filt = (uint8_t)(b[17] <= RUSH_MAX ? b[17] : 60u);
+            sq.ru_glide = (uint8_t)(b[18] <= RUSH_MAX ? b[18] : 8u);
         }
     }
     if (!pr.err && pr.pos + 4u <= pr.end) {
         pr_bytes(tag, 4);
         if (!memcmp(tag, "KSP2", 4))                 /* 32: SPELLS (0.19-test6's KSP1: left, the defaults) */
             sp_read();
+    }
+    if (!pr.err && pr.pos + 4u <= pr.end) {
+        pr_bytes(tag, 4);
+        if (!memcmp(tag, "KWND", 4))                 /* 40: WANDER */
+            wd_read();
+    }
+    if (!pr.err && pr.pos + 4u <= pr.end) {
+        pr_bytes(tag, 4);
+        if (!memcmp(tag, "KRDS", 4)) {               /* 42: the songs' ROADS */
+            n = pr_byte();
+            pr_bytes(song_rd, n < NUM_SONGS ? n : NUM_SONGS);
+            pr_skip(n > NUM_SONGS ? n - NUM_SONGS : 0u);
+        }
     }
     return pr.err;
 }
@@ -801,6 +849,7 @@ static uint32_t session_sig(void)                   /* FNV-1a over what a projec
     SIG(kit_names, sizeof kit_names);
     SIG(pat, sizeof pat);
     SIG(songs, sizeof songs);
+    SIG(song_rd, sizeof song_rd);
     SIG(morph_par, sizeof morph_par);
     SIG(&pfs, sizeof pfs);
     SIG(gls, sizeof gls);

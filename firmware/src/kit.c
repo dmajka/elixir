@@ -255,23 +255,33 @@ static void kit_sanitize(uint8_t *p)
 }
 
 /* 0.7: a bank of LXR-02 kits built in (tools/gen_factory_kits.py); from 0.19 the LXR-02's factory kits, always (Erica
- * Synths' permission). FACTORY_KITS[f]: the .SND file (8 name bytes, the LXR's 247). The kit browser and LOAD >
+ * Synths' permission). 0.23-test5: packed, its names apart (FACTORY_NAMES) and the LXR's 247 values in FACTORY_BITS,
+ * each the bank's lowest for it (FK_LO) plus FK_W bits, one after another, low bits first. The kit browser and LOAD >
  * FACTORY load one into the edit buffer; LOAD > FACTORY's ALL > SLOTS puts the first 64 into the slots (a fresh unit
  * no longer starts with them there: 0.19). */
 #include "factory_kits.h"
 static void kit_factory_values(uint32_t f, uint8_t *p)
 {
-    uint32_t i;
+    const uint8_t *s = FACTORY_BITS[f];
+    uint32_t i, acc = 0, b = 0;
     kit_init_values(p);
-    for (i = 0; i < END_OF_SOUND_PARAMETERS; i++)
-        p[i] = FACTORY_KITS[f][8u + i];
+    for (i = 0; i < END_OF_SOUND_PARAMETERS && i < sizeof FK_W; i++) {
+        uint32_t w = FK_W[i];
+        while (b < w) {
+            acc |= (uint32_t)*s++ << b;
+            b += 8u;
+        }
+        p[i] = (uint8_t)(FK_LO[i] + (acc & ((1u << w) - 1u)));
+        acc >>= w;
+        b -= w;
+    }
     kit_sanitize(p);
 }
 static void kit_factory_name(uint32_t f, char *b)
 {
     uint32_t i;
     for (i = 0; i < KIT_NAME_LEN; i++) {
-        uint8_t c = FACTORY_KITS[f][i];
+        uint8_t c = FACTORY_NAMES[f][i];
         b[i] = (char)(c >= 32u && c < 127u ? c : ' ');
     }
 }

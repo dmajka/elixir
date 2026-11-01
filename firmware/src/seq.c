@@ -48,7 +48,11 @@ typedef struct {
     uint8_t mel[NTRACK][8];                      /* 20: the track's melody (ML_*: MEL_* and its settings) */
     uint8_t groove, gamt, ghum, gskip;           /* 26: the GROOVE (0 off, 1.. GROOVE_T's + 1), its amount (100: as
                                                   * written), HUMANIZE 0..127, the tracks that don't follow (bit t) */
+    int8_t tbase[NTRACK];                        /* 0.23-t7: the track's BASE note, semitones from C4 (-24..24): a step's
+                                                  * note (but a NOTE_LOCK one) plays this much off */
 } pattern_t;
+#define NOTE_LOCK 0x80u                              /* 0.23-t7: a step's note bit 7: locked (as set), BASE leaves it */
+#define TBASE_MAX 24
 #define NLINK 8u
 /* 26: the grooves. A step's offset in 24ths of a step (its ticks at 1x; + late) and its velocity's, by its place in
  * the bar (s & 15), both scaled by the pattern's amount / 100. SWING nn: the second 16th of each 8th at nn% of it */
@@ -148,18 +152,37 @@ static struct { uint8_t root, scale; } scl_last;
  * spare bits: cond's top two (44 conditions use 6) and prob's top one (0..100 uses 7) */
 enum { LEN_AUTO, LEN_32, LEN_16, LEN_8, LEN_8D, LEN_4, LEN_2, LEN_TIE, NLEN };
 static const uint8_t LEN_TICKS[NLEN] = {0, 12, 24, 48, 72, 96, 192, 0};
+/* 0.23-t11: a step's longer lengths, 3/4 .. 64 bars and INF (held till the track's next note: a drone), codes 8 ..
+ * (3 more bits in lhi's spare ones, 2, 3 and 6: the codes' bits 10-11, which no code uses). In steps of 1/16; the melody keeps
+ * NLEN's. The knob: AUTO 1/32 .. 1/2, 3/4 .. 64 BARS, INF, TIE (len_knob) */
+#define LEN_LONG 8u
+static const uint16_t LEN_STEPS[] = {12, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024};
+#define NLEN_LONG (sizeof LEN_STEPS / sizeof LEN_STEPS[0])
+#define LEN_INF (LEN_LONG + NLEN_LONG)
+#define NLEN_ALL (LEN_INF + 1u)
+#define NLEN_KNOB NLEN_ALL                           /* (the knob's positions: as many as the codes) */
+static inline uint32_t len_knob(uint32_t i)          /* the knob's position i: its code (TIE last) */
+{
+    return i < LEN_TIE ? i : i + 1u >= NLEN_KNOB ? LEN_TIE : i + 1u;
+}
+static inline uint32_t len_pos(uint32_t l)           /* .. and back */
+{
+    return l < LEN_TIE ? l : l == LEN_TIE ? NLEN_KNOB - 1u : l < NLEN_ALL ? l - 1u : 0u;
+}
 #define COND_MASK 0x3Fu
 #define PROB_MASK 0x7Fu
 static inline uint32_t step_cond(const pattern_t *p, uint32_t t, uint32_t s) { return p->cond[t][s] & COND_MASK; }
 static inline uint32_t step_prob(const step_t *x) { return x->prob & PROB_MASK; }
 static inline uint32_t step_len(const pattern_t *p, uint32_t t, uint32_t s)
 {
-    return (uint32_t)(p->cond[t][s] >> 6) | (uint32_t)(p->step[t][s].prob >> 7) << 2;
+    return (uint32_t)(p->cond[t][s] >> 6) | (uint32_t)(p->step[t][s].prob >> 7) << 2 |
+           (uint32_t)(p->lhi[t][s] >> 2 & 3u) << 3 | (uint32_t)(p->lhi[t][s] >> 6 & 1u) << 5;
 }
 static void step_len_set(pattern_t *p, uint32_t t, uint32_t s, uint32_t l)
 {
     p->cond[t][s] = (uint8_t)((p->cond[t][s] & COND_MASK) | (l & 3u) << 6);
     p->step[t][s].prob = (uint8_t)((p->step[t][s].prob & PROB_MASK) | ((l >> 2) & 1u) << 7);
+    p->lhi[t][s] = (uint8_t)((p->lhi[t][s] & ~0x4Cu) | ((l >> 3) & 3u) << 2 | ((l >> 5) & 1u) << 6);
 }
 /* 19d: DENSITY's BUILD: what its positive side adds */
 enum { DB_CHANCE, DB_GHOSTS, DB_RATCHETS, NDB };
@@ -177,11 +200,17 @@ static pattern_t upat POOL;         /* UNDO: a track as it was before DICE, COMM
 /* 20: the melody's notes as they played, step by step (bit 7: played; COMMIT writes them in), their lengths */
 static uint8_t mel_n[NTRACK][NUM_STEPS] POOL, mel_l[NTRACK][NUM_STEPS] POOL;
 static uint8_t songs[NUM_SONGS][MAX_SONG_LENGTH] POOL;
+static uint8_t song_rd[NUM_SONGS] POOL;   /* 42: a song's ROADS: bit 7 on; bits 0-3 SURPRISE ^ 4 (0..15); bits 4-6 HOME
+                                           * (SONG_HOME's) */
 
 static struct {
     uint8_t running, active, pending, load_pending;
     uint8_t song_mode, song, song_pos;
     uint8_t song_n;                              /* (0.19: the times the row has played, less 1) */
+    uint8_t song_nx, song_prv, song_run;         /* 42: ROADS: the next row (0xFF: not picked yet), the row before,
+                                                  * the rows in a row on one pattern */
+    int8_t song_dn;                              /* .. this time the row's times one more or less */
+    uint16_t song_hb;                            /* .. bars since the song's first row */
     int8_t idx[NTRACK];                          /* the playing step (-1: before the first) */
     uint8_t prescale, master_cnt;
     uint8_t muted, roll, roll_rate, last_on;
@@ -242,6 +271,18 @@ static struct {
     uint32_t brng;
     uint8_t roll_free, roll_k;                   /* the swept rate in use; its position 0..127 (1/4 .. 1/192) */
     int32_t rl_cnt;                              /* samples to the swept rolls' next hit, Q8 */
+    /* 39: RUSH (seq_rush, after Elixir Desktop's snare rush, GPL-3.0, github.com/johnnyhawk02/elixir-desktop): the
+     * knob 0..100 (0 off) and its track; the project's settings: where the roll starts and goes free (%), the top
+     * speed (RT_*), FLAM (%), PITCH (-12..12), the filter at 100 (% of the DJ filter's high-pass side, 0 off), the
+     * glide (5 ms units); in use: the amount, its track; this step: an accent taken, a pattern hit, the master step
+     * the rush track last played on (below the roll); the free roll: running, its rate (log2 hits a step, Q16), its
+     * phase (Q16), an accent waiting; a flam's hit held back (samples Q8); the filter's push; the step recorded */
+    uint8_t ru_live, ru_t, ru_start, ru_free_at, ru_top, ru_flam, ru_filt, ru_glide;
+    int8_t ru_pitch;
+    uint8_t ru_R, ru_tr, ru_acc, ru_orig, ru_free, ru_head, ru_pvel, ru_pnote;
+    uint32_t ru_lastk, ru_ph;
+    int32_t ru_log, ru_pcnt, ru_hp;
+    int8_t ru_rk[NTRACK];
     /* 0.6: the links (seq_links): each track's steps since the start; a link's window (target steps), armed;
      * a TRIGGER waiting for its step; each track's occurrence its events and changes were worked out for */
     uint32_t nst[NTRACK];
@@ -268,6 +309,10 @@ static struct {
     /* 19: TRANSPOSE (scale degrees: the global LFOs); the notes held: ticks to go (0: none), a step's length set
      * (its MIDI note-off then), tied into the next note; each track's last note (DENSITY's ghosts play it) */
     int8_t transp;
+    /* 0.23-t7: TRANSPOSE (PERF): each track's degrees (-7..8), those waiting for WHEN (trdue), the keys' tracks (bit t),
+     * WHEN (0 now, 1 the beat, 2 the bar), the keys HOLD (1: back to 0 when let go) */
+    int8_t trp[NTRACK], trpend[NTRACK];
+    uint8_t trdue, trmask, trwhen, trhold;
     uint16_t glen[NTRACK];
     uint8_t gmidi, tie;
     uint8_t lnote[NTRACK];
@@ -275,13 +320,20 @@ static struct {
      * BUILD (DB_*), the tracks it leaves alone (bit t) */
     int8_t dens;
     uint8_t dghost, dbuild, dex;
+    /* 40: WANDER's Energy (wander.c): each track's own DENSITY on top, -64..63; the tracks it mutes (seq_mutes);
+     * wonly: 1 its part alone (its KEEP writes it into the pattern), 2 the knob's alone (DENSITY's COMMIT) */
+    int8_t wdens[NTRACK];
+    uint8_t wmute, wonly;
     uint8_t dvary;                               /* 31: VARY, 0..127: the order shuffled each time round */
     /* 20: the melody: DEJA VU's loop (semitones above the root, lengths), where it is, the notes played (MOTIF's
      * phrase), the last note (WALK), MOTIF's four, the occurrence a note was chosen for; CHANGE and SPREAD from
      * the global LFOs (perf_block), -64..64 */
     int8_t mloop[NTRACK][16];
     uint8_t mlen[NTRACK][16], mfull[NTRACK][2], mmok;   /* (filled: the loop's places, bit t: MOTIF's four) */
-    uint8_t mpos[NTRACK], mcnt[NTRACK];
+    uint8_t mpos[NTRACK];
+    uint16_t mcnt[NTRACK];                       /* (0.23-t11: 16 bits: ROTATE's cycle is n * n notes) */
+    uint8_t mre;                                 /* 0.23-t11: the tracks whose melody starts again at their loop's
+                                                  * start (WANDER home: the arps from their top, as from PLAY) */
     int8_t mlast[NTRACK], mmot[NTRACK][4];
     uint32_t mocc[NTRACK];
     int8_t mchg, mspr;
@@ -373,7 +425,10 @@ static void pv_copy(uint32_t src, uint32_t dst)
 enum { GLE_PLAY = 1, GLE_PATTERN = 2, GLE_BAR = 4, GLE_KEY = 8 };
 static volatile uint8_t glfo_ev;
 /* 0.10: the tracks silent: muted, or not soloed while any is */
-static uint32_t seq_mutes(void) { return sq.muted | (sq.solo ? ~(uint32_t)sq.solo & ((1u << NTRACK) - 1u) : 0u); }
+static uint32_t seq_mutes(void)
+{
+    return sq.muted | sq.wmute | (sq.solo ? ~(uint32_t)sq.solo & ((1u << NTRACK) - 1u) : 0u);
+}
 
 /* MIDI out and the voices (midi.c, voices.c) */
 static void midi_out_note(uint32_t track, uint32_t note, uint32_t vel);
@@ -390,7 +445,7 @@ static uint32_t ui_pattern(void);                    /* the pattern it shows */
 static uint32_t lock_get(const pattern_t *p, uint32_t t, uint32_t k, uint32_t lane)
 {
     const step_t *s = &p->step[t][k];
-    return (lane ? s->p2n : s->p1n) | ((p->lhi[t][k] >> (lane * 4u)) & 15u) << 8;
+    return (lane ? s->p2n : s->p1n) | ((p->lhi[t][k] >> (lane * 4u)) & 3u) << 8;   /* (bits 2, 3, 6: the length) */
 }
 static void lock_set(pattern_t *p, uint32_t t, uint32_t k, uint32_t lane, uint32_t code)
 {
@@ -399,7 +454,7 @@ static void lock_set(pattern_t *p, uint32_t t, uint32_t k, uint32_t lane, uint32
         s->p2n = (uint8_t)code;
     else
         s->p1n = (uint8_t)code;
-    p->lhi[t][k] = (uint8_t)((p->lhi[t][k] & (lane ? 0x0Fu : 0xF0u)) | ((code >> 8) & 15u) << (lane * 4u));
+    p->lhi[t][k] = (uint8_t)((p->lhi[t][k] & (lane ? 0xCFu : 0xFCu)) | ((code >> 8) & 3u) << (lane * 4u));
 }
 
 static void step_reset(step_t *s)                    /* seq_resetNote */
@@ -431,6 +486,7 @@ static void seq_clear_track(uint32_t t, pattern_t *p)   /* seq_clearTrack */
     memset(p->mel[t], 0, sizeof p->mel[t]);
     p->bnc[t] = BNC_DEFAULT;
     p->dir[t] = DIR_FWD;
+    p->tbase[t] = 0;
 }
 static void seq_clear_pattern(pattern_t *p)
 {
@@ -540,6 +596,27 @@ static uint32_t scale_fit(uint32_t t, uint32_t note, int32_t deg)
     return (uint32_t)clamp32((int32_t)note + scale_q(scale_on(t) ? p->scale : SC_CHROM, p->sroot % 12u, n, deg) - n,
                              0, 127);
 }
+/* 0.23-t7: track t's BASE (the playing pattern's), a step's note as it plays, a played note as a step keeps it */
+static int32_t tbase(uint32_t t) { return t < NTRACK ? pat[sq.active].tbase[t] : 0; }
+static uint32_t tb_note(uint32_t t) { return (uint32_t)(SEQ_DEFAULT_NOTE + tbase(t)); }   /* (a plain hit's) */
+static uint32_t snote(const pattern_t *p, uint32_t t, uint32_t s)
+{
+    uint32_t n = p->step[t][s].note;
+    return n & NOTE_LOCK ? n & 127u : (uint32_t)clamp32((int32_t)n + tbase(t), 0, 127);
+}
+static uint8_t note_keep(uint32_t t, uint32_t note) { return (uint8_t)clamp32((int32_t)note - tbase(t), 0, 127); }
+/* 0.23-t7: TRANSPOSE (PERF): track t's notes x degrees of the pattern's scale on (CHROMATIC: semitones), the note kept
+ * as far off its degree as it was (out of the scale: still out) */
+static uint32_t trp_fit(uint32_t t, uint32_t note)
+{
+    const pattern_t *p = &pat[sq.active];
+    int32_t x = t < NTRACK ? sq.trp[t] : 0, n;
+    uint32_t sc = p->scale < NSCALE ? p->scale : SC_CHROM, r = p->sroot % 12u;
+    if (!x)
+        return note;
+    n = (int32_t)(vc[t < V_HAT ? t : V_HAT].osc.midi_freq >> 8) + (int32_t)note - SEQ_DEFAULT_NOTE;
+    return (uint32_t)clamp32((int32_t)note + scale_q(sc, r, n, x) - scale_q(sc, r, n, 0), 0, 127);
+}
 static uint32_t seq_rand(void);
 /* seq_triggerVoice: track t's voice, with step k's locks of pattern p (p 0: none, a roll). 19a: the note in the
  * scale; random pitch per hit there in whole degrees (up to 7 either way, the amount squared) */
@@ -555,7 +632,7 @@ static void seq_trigger(uint32_t t, const pattern_t *p, uint32_t k, uint32_t vel
         deg = span ? (int32_t)(seq_rand() % (uint32_t)(2 * span + 1)) - span : 0;
         rp_scaled = 1;
     }
-    note = scale_fit(t, note, deg);
+    note = trp_fit(t, scale_fit(t, note, deg));
     midi_out_note_off(t);
     voice_trigger(t, vel, note);
     midi_out_note(t, note, vel);
@@ -567,7 +644,7 @@ static void seq_legato(uint32_t t, const pattern_t *p, uint32_t k, uint32_t vel,
     const step_t *s = &p->step[t][k];
     auto_set(t, 0, lock_get(p, t, k, 0), s->p1v);
     auto_set(t, 1, lock_get(p, t, k, 1), s->p2v);
-    note = scale_fit(t, note, 0);
+    note = trp_fit(t, scale_fit(t, note, 0));
     voice_legato(t, note);
     midi_out_legato(t, note, vel);
 }
@@ -581,12 +658,12 @@ static void gate_start(uint32_t t, uint32_t l)
     sq.tie &= (uint8_t)~b;
     sq.gmidi = (uint8_t)(l != LEN_AUTO ? sq.gmidi | b : sq.gmidi & ~b);
     voice_hold(t, 1);
-    if (l == LEN_TIE) {
-        sq.tie |= b;
+    if (l == LEN_TIE || l >= LEN_INF) {              /* (INF: held, no countdown, till the next note) */
+        sq.tie |= l == LEN_TIE ? b : 0u;
         sq.glen[t] = 0;
         return;
     }
-    sq.glen[t] = (uint16_t)(l ? LEN_TICKS[l < NLEN ? l : 0u] : trk_ticks(t));
+    sq.glen[t] = (uint16_t)(l >= LEN_LONG ? LEN_STEPS[l - LEN_LONG] * 24u : l ? LEN_TICKS[l] : trk_ticks(t));
 }
 static void gate_end(uint32_t t)
 {
@@ -688,22 +765,29 @@ static uint32_t dens_rank(const pattern_t *p, uint32_t t, uint32_t s, int on, ui
     }
     return r;
 }
+static int32_t dens_at(uint32_t t)                   /* track t's DENSITY: the knob's (but a track left out), 40: and
+                                                      * WANDER's */
+{
+    int32_t d = sq.wonly == 1u || ((sq.dex >> t) & 1u) ? 0 : sq.dens;
+    return clamp32(d + (sq.wonly == 2u ? 0 : sq.wdens[t]), -64, 63);
+}
 static int dens_on(uint32_t t)                       /* DENSITY moves track t's steps (GRIDS, TURING: their density) */
 {
     uint32_t g = pat[sq.active].gen[t][0];
-    return sq.dens && !((sq.dex >> t) & 1u) && g != GEN_GRIDS && g != GEN_TURING;
+    return dens_at(t) && g != GEN_GRIDS && g != GEN_TURING;
 }
 static int dens_drop(const pattern_t *p, uint32_t t, uint32_t s, uint32_t loop)
 {
-    return sq.dens < 0 && dens_on(t) && dens_rank(p, t, s, 1, loop) <= (uint32_t)(-sq.dens) * 3u;   /* (at -64: up to the
-                                                                                                      * beats) */
+    int32_t d = dens_at(t);
+    return d < 0 && dens_on(t) && dens_rank(p, t, s, 1, loop) <= (uint32_t)(-d) * 3u;   /* (at -64: up to the beats) */
 }
 /* the positive side in parts: the chances up to 100% (all of it with BUILD CHANCE), then the ghosts, then (RATCHETS)
  * ratchets of 2 on the strongest hits; a part's amount 0..256 (dens_part) */
-static uint32_t dens_part(uint32_t part)
+static uint32_t dens_part(uint32_t t, uint32_t part)
 {
-    uint32_t n = sq.dbuild == DB_CHANCE ? 1u : sq.dbuild == DB_GHOSTS ? 2u : 3u, lo, hi, d = (uint32_t)sq.dens;
-    if (sq.dens <= 0 || part >= n)
+    int32_t dd = dens_at(t);
+    uint32_t n = sq.dbuild == DB_CHANCE ? 1u : sq.dbuild == DB_GHOSTS ? 2u : 3u, lo, hi, d = (uint32_t)dd;
+    if (dd <= 0 || part >= n)
         return 0;
     lo = part * 64u / n;
     hi = (part + 1u) * 64u / n;
@@ -712,18 +796,18 @@ static uint32_t dens_part(uint32_t part)
 static uint32_t dens_prob(const pattern_t *p, uint32_t t, uint32_t s)   /* a step's chance, DENSITY's push in it */
 {
     uint32_t pr = step_prob(&p->step[t][s]);
-    if (sq.dens <= 0 || !dens_on(t))
+    if (dens_at(t) <= 0 || !dens_on(t))
         return pr;
-    return pr + (100u - (pr > 100u ? 100u : pr)) * dens_part(0) / 256u;
+    return pr + (100u - (pr > 100u ? 100u : pr)) * dens_part(t, 0) / 256u;
 }
 static int dens_ghost(const pattern_t *p, uint32_t t, uint32_t s, uint32_t loop)   /* an empty step plays a ghost */
 {
-    uint32_t a = dens_on(t) ? dens_part(1) : 0u;
+    uint32_t a = dens_on(t) ? dens_part(t, 1) : 0u;
     return a && dens_rank(p, t, s, 0, loop) > 256u - a;
 }
 static int dens_rat(const pattern_t *p, uint32_t t, uint32_t s, uint32_t loop)     /* a hit gets a ratchet of 2 */
 {
-    uint32_t a = dens_on(t) ? dens_part(2) : 0u;
+    uint32_t a = dens_on(t) ? dens_part(t, 2) : 0u;
     return a && dens_rank(p, t, s, 1, loop) > 256u - a;
 }
 static uint32_t dens_ghost_vel(uint32_t t, uint32_t s, uint32_t loop)   /* 31: a ghost's velocity (VARY: +-a third) */
@@ -734,7 +818,7 @@ static uint32_t dens_ghost_vel(uint32_t t, uint32_t s, uint32_t loop)   /* 31: a
 static uint32_t gen_dens(uint32_t t, uint32_t d)    /* a GRIDS or TURING track's density, DENSITY's push in it */
 {
     d = d > 127u ? 127u : d;
-    return sq.dens && !((sq.dex >> t) & 1u) ? (uint32_t)clamp32((int32_t)d + sq.dens * 2, 0, 127) : d;
+    return dens_at(t) ? (uint32_t)clamp32((int32_t)d + dens_at(t) * 2, 0, 127) : d;
 }
 
 /* 20: MELODY: which note a track's hit plays (its rhythm the steps', or its generator's). The random part is
@@ -745,7 +829,53 @@ static uint32_t gen_dens(uint32_t t, uint32_t d)    /* a GRIDS or TURING track's
  * MOTIF (four notes, then transposed, inverted, backwards ending on the root; new with DEJA VU's chance every
  * sixteen). LENGTH a note's length (19b's), LEN VAR the chance of another. Live, as TURING: the steps stay as they
  * are; what played is kept (mel_n, mel_l) and COMMIT writes it in */
-enum { MEL_OFF, MEL_RANDOM, MEL_WALK, MEL_ARP_UP, MEL_ARP_DN, MEL_ARP_UD, MEL_MOTIF, NMEL };
+enum { MEL_OFF, MEL_RANDOM, MEL_WALK, MEL_ARP_UP, MEL_ARP_DN, MEL_ARP_UD, MEL_MOTIF,
+       MEL_CONV, MEL_DIV, MEL_CONDIV, MEL_LEAP, MEL_SPIRAL, MEL_ALT, MEL_PAIR, MEL_ROTATE, MEL_INVERT, MEL_PEDAL, NMEL };
+/* 0.23-t11: the arps' orders over the n chord tones (0 the lowest), each a cycle of arp_per's notes: CONVERGE
+ * 1-4-2-3 (outside in), DIVERGE 2-3-1-4 (the middle out), CON/DIV the one then the other, LEAPFROG 1-3-2-4-3-5 (up
+ * two, back one), SPIRAL 1-2-4-3, ALTERNATE the low half and the high half interleaved, PAIRS 2-1-4-3, ROTATE
+ * 1234 2341 3412 .., INVERT 1234 4321, PEDAL 1-2-1-3-1-4 (the lowest between each) */
+static int mel_arp(uint32_t sh) { return (sh >= MEL_ARP_UP && sh <= MEL_ARP_UD) || (sh >= MEL_CONV && sh < NMEL); }
+static int32_t arp_per(uint32_t sh, int32_t n)
+{
+    switch (sh) {
+    case MEL_ARP_UD: return 2 * n - 2;
+    case MEL_CONDIV: case MEL_INVERT: return 2 * n;
+    case MEL_LEAP: return n >= 3 ? 2 * (n - 2) : n;
+    case MEL_ROTATE: return n * n;
+    case MEL_PEDAL: return 2 * (n - 1);
+    default: return n;
+    }
+}
+static int32_t arp_div(int32_t k, int32_t n)        /* DIVERGE's k-th */
+{
+    int32_t c = (n & 1) ? n / 2 : n / 2 - 1, j;
+    if (n & 1) {
+        j = (k + 1) / 2;
+        return (k & 1) ? c - j : c + j;
+    }
+    j = k / 2;
+    return (k & 1) ? c + 1 + j : c - j;
+}
+static int32_t arp_idx(uint32_t sh, int32_t k, int32_t n, int32_t per)   /* the k-th (0 .. per - 1) note's tone */
+{
+    int32_t i;
+    switch (sh) {
+    case MEL_ARP_DN: return n - 1 - k;
+    case MEL_ARP_UD: return k < n ? k : per - k;
+    case MEL_CONV: return (k & 1) ? n - 1 - k / 2 : k / 2;
+    case MEL_DIV: return arp_div(k, n);
+    case MEL_CONDIV: return k < n ? ((k & 1) ? n - 1 - k / 2 : k / 2) : arp_div(k - n, n);
+    case MEL_LEAP: return n >= 3 ? k / 2 + (k & 1) * 2 : k;
+    case MEL_SPIRAL: i = (k & ~3) + (int32_t)((0x2310u >> ((k & 3) * 4)) & 3u); return i < n ? i : k;
+    case MEL_ALT: return (k & 1) ? (n + 1) / 2 + k / 2 : k / 2;
+    case MEL_PAIR: i = k ^ 1; return i < n ? i : k;
+    case MEL_ROTATE: return (k % n + k / n) % n;
+    case MEL_INVERT: return k < n ? k : 2 * n - 1 - k;
+    case MEL_PEDAL: return (k & 1) ? k / 2 + 1 : 0;
+    default: return k;
+    }
+}
 enum { ML_SHAPE, ML_SPREAD, ML_BIAS, ML_STEPS, ML_DEJA, ML_LOOP, ML_LEN, ML_LVAR, NML };
 static const uint8_t MEL_DEFAULT[NML] = {MEL_RANDOM, 64, 64, 40, 0, 8, LEN_AUTO, 0};
 static int mel_on(const pattern_t *p, uint32_t t) { return t < NTRACK && p->mel[t][ML_SHAPE] && p->mel[t][ML_SHAPE] < NMEL; }
@@ -820,12 +950,14 @@ static uint32_t mel_note(uint32_t t, uint32_t s, uint32_t occ, uint32_t *len)
     sq.mocc[t] = occ;
     fresh = dv < 127 && gen_rand(2000) < ((uint32_t)((127 - dv) * (127 - dv) * (127 - dv)) >> 10);
     n = (int32_t)mel_set(th, set);
-    if (g[ML_SHAPE] >= MEL_ARP_UP && g[ML_SHAPE] <= MEL_ARP_UD) {   /* the chord tones up and down, SPREAD's range */
+    if (mel_arp(g[ML_SHAPE])) {                     /* the chord tones in the arp's order, SPREAD's range */
         uint8_t as[12];
         int32_t an = (int32_t)mel_set(th < 2u ? 2u : th, as), span = 2 + sp * 3 * an / 127, k = sq.mcnt[t];
         int32_t b = ((int32_t)g[ML_BIAS] - 64) * an / 64 - span / 2;
-        k = g[ML_SHAPE] == MEL_ARP_UP ? k % span : g[ML_SHAPE] == MEL_ARP_DN ? span - 1 - k % span
-          : (k % (2 * span - 2) < span ? k % (2 * span - 2) : 2 * span - 2 - k % (2 * span - 2));
+        int32_t per = arp_per(g[ML_SHAPE], span);
+        k %= per;                                    /* (0.23-t11: the count kept in the cycle: a byte's wrap at 256 */
+        sq.mcnt[t] = (uint16_t)k;                    /* jumped an arp of 6, 7, 10 .. notes to elsewhere in it) */
+        k = arp_idx(g[ML_SHAPE], k, span, per);
         semi = mel_semi(as, an, b + k);
         *len = mel_length(g);
     } else if (g[ML_SHAPE] == MEL_MOTIF) {
@@ -872,6 +1004,13 @@ static void mel_reset(uint32_t t)                    /* the melody from its star
     sq.mpos[t] = sq.mcnt[t] = 0;
     sq.mocc[t] = 0;
     sq.mlast[t] = 0;
+}
+static void mel_realign(uint32_t t)                  /* (a loop's start: a melody due to start again) */
+{
+    if ((sq.mre >> t) & 1u) {
+        sq.mre &= (uint8_t)~(1u << t);
+        mel_reset(t);
+    }
 }
 
 /* 26: GROOVE and HUMANIZE for track t's step s in its time round loop (the playing pattern's: a generator's live
@@ -943,7 +1082,7 @@ static void bounce_start(uint32_t t, uint32_t r, uint32_t s, uint32_t vel, uint3
 static uint32_t seq_rand(void);
 static void step_hit(uint32_t t, const pattern_t *p, uint32_t s, uint32_t loop, const lmod_t *m)
 {
-    uint32_t r = p->rat[t][s], n, vel = p->step[t][s].volume & STEP_VOLUME_MASK, note = p->step[t][s].note;
+    uint32_t r = p->rat[t][s], n, vel = p->step[t][s].volume & STEP_VOLUME_MASK, note = snote(p, t, s);
     uint32_t occ = (loop << 6 | s) + 1u, ln = step_len(p, t, s);
     if (!main_on(p, t, s)) {                         /* 19d: DENSITY's ghost: the track's last note, no locks */
         sq.last_on |= 1u << t;
@@ -952,7 +1091,7 @@ static void step_hit(uint32_t t, const pattern_t *p, uint32_t s, uint32_t loop, 
         return;
     }
     if (mel_on(&pat[sq.active], t))                  /* (20: the melody's note and length) */
-        note = mel_note(t, s, occ, &ln);
+        note = (uint32_t)clamp32((int32_t)mel_note(t, s, occ, &ln) + tbase(t), 0, 127);   /* (0.23-t7: BASE) */
     {                                                /* (26: the groove's and HUMANIZE's velocity) */
         int32_t gv;
         groove_at(t, s, loop, &gv);
@@ -1113,10 +1252,263 @@ static void seq_roll_sweep(void)                     /* the block's swept rolls 
     for (t = 0; t < NTRACK; t++)
         if (sq.roll & (1u << t)) {
             uint32_t i = sq.idx[t] < 0 ? 0u : (uint32_t)sq.idx[t];
-            uint32_t note = tpat(t)->step[t][i].note;
+            uint32_t note = snote(tpat(t), t, i);
             seq_trigger(t, 0, 0, key_vel, note);
             seq_add_note(t, key_vel, note);
         }
+}
+
+/* 39: RUSH, after Elixir Desktop's snare rush (GPL-3.0, github.com/johnnyhawk02/elixir-desktop, app/player.js): one
+ * knob 0..100% that turns the kit into a roll on one track. Rising, the other tracks' hits go over to it (a fixed
+ * hash of track and step under (R / 98)^2.5, so the same hits go first and more join; the hats under (R / 80)^2.5);
+ * the kick keeps its beats until 90 and the bar's first until 95. From START the track plays only the roll: 16ths
+ * on the straight grid, 32nds halfway to FREE, at one level that swells from 60% to full, an accent it took on the
+ * step's first; from FREE a free roll off the grid, 32nds up to TOP (1/64, 1/128, 1/256) at 100, its rate gliding
+ * (GLIDE) so the knob never steps it; from 90 the DJ filter's high-pass opens to FILTER at 100. Elixir's own: FLAM
+ * (while the free roll's rate moves, a grace note before a hit) and PITCH (+-12 semitones at 100).
+ * A step's RUSH lock (the lock code of the LXR's roll parameter, 247: no sound takes it) sets the amount for its
+ * step, gliding to the next step's; the first track with one leads. The knob, while up, overrides them */
+#define RUSH_CODE 247u
+static void rush_defaults(void)                      /* (Elixir Desktop's: START 75, FREE 80, TOP 1/256, 40 ms) */
+{
+    sq.ru_start = 75;
+    sq.ru_free_at = 80;
+    sq.ru_top = 2;
+    sq.ru_flam = 0;
+    sq.ru_pitch = 0;
+    sq.ru_filt = 60;
+    sq.ru_glide = 8;
+}
+#define RUSH_MAX 100u
+#define RU_HATS 80u                                  /* (the hats all taken by) */
+#define RU_ONLY 98u                                  /* (every other hit by) */
+#define RU_KICKS 90u                                 /* (the kick's four beats until) */
+#define RU_FIRST 95u                                 /* (the bar's first kick until) */
+#define RU_HPFROM 90u                                /* (the filter from) */
+enum { RT_64, RT_128, RT_256, NRT };
+static uint32_t trk_dir(uint32_t t);
+static void live_step_sync(const pattern_t *p, uint32_t t, uint32_t s);
+static uint32_t rush_lock(const pattern_t *p, uint32_t t, uint32_t k)   /* step k's RUSH (0: none) */
+{
+    uint32_t v = 0;
+    if (!main_on(p, t, k))
+        return 0;
+    if (lock_get(p, t, k, 0) == RUSH_CODE)
+        v = p->step[t][k].p1v;
+    else if (lock_get(p, t, k, 1) == RUSH_CODE)
+        v = p->step[t][k].p2v;
+    return v > RUSH_MAX ? RUSH_MAX : v;
+}
+/* step k of track t gets a RUSH of v (the lane that has one, else a free one, else the recording lane); turned on
+ * at the keys' velocity if it was off */
+static void rush_lock_set(pattern_t *p, uint32_t t, uint32_t k, uint32_t v)
+{
+    uint32_t d0 = lock_get(p, t, k, 0), d1 = lock_get(p, t, k, 1), lane = sq.lane;
+    if (d0 == RUSH_CODE || (d1 != RUSH_CODE && d0 == NO_AUTOMATION))
+        lane = 0;
+    else if (d1 == RUSH_CODE || d1 == NO_AUTOMATION)
+        lane = 1;
+    lock_set(p, t, k, lane, RUSH_CODE);
+    if (lane)
+        p->step[t][k].p2v = (uint8_t)v;
+    else
+        p->step[t][k].p1v = (uint8_t)v;
+    if (!main_on(p, t, k)) {
+        p->step[t][k].volume = (uint8_t)((p->step[t][k].volume & ~STEP_VOLUME_MASK) | key_vel);
+        main_set(p, t, k, 1);
+    }
+}
+static uint32_t rush_at(uint32_t t)                  /* track t's RUSH lock now, gliding to the next (0: none) */
+{
+    const pattern_t *p = tpat(t);
+    uint32_t k, r, n;
+    if (sq.idx[t] < 0)
+        return 0;
+    k = (uint32_t)sq.idx[t];
+    r = rush_lock(p, t, k);
+    if (!r || trk_dir(t) != DIR_FWD)
+        return r;
+    n = rush_lock(p, t, (k + 1u) % track_len(p, t));
+    if (!n)
+        return r;
+    return (uint32_t)((int32_t)r + ((int32_t)n - (int32_t)r) * (int32_t)sq.tph[t] / (int32_t)trk_ticks(t));
+}
+static void rush_now(void)                           /* the amount in use and its track: the knob, else a lock */
+{
+    uint32_t t, r;
+    if (sq.ru_live) {
+        sq.ru_R = sq.ru_live;
+        sq.ru_tr = sq.ru_t;
+        return;
+    }
+    for (t = 0; t < NTRACK; t++)
+        if ((r = rush_at(t)) != 0u) {
+            sq.ru_R = (uint8_t)r;
+            sq.ru_tr = (uint8_t)t;
+            return;
+        }
+    sq.ru_R = 0;
+}
+static uint32_t rush_hash(uint32_t t, uint32_t s)    /* 0..65535, fixed for a track's step */
+{
+    uint32_t h = (t * 131u + s + 1u) * 0x9E3779B1u;
+    h ^= h >> 15;
+    h *= 0x85EBCA77u;
+    h ^= h >> 13;
+    return h >> 16;
+}
+static uint32_t rush_share(uint32_t r, uint32_t all)   /* (min(1, r / all))^2.5, 0..65536 */
+{
+    uint32_t x = r >= all ? 65536u : r * 65536u / all, x2 = (uint32_t)(((uint64_t)x * x) >> 16), s = 0, b;
+    for (b = 1u << 16; b; b >>= 1)                   /* (sqrt(x) in Q16: sqrt(x << 16)) */
+        if ((uint64_t)(s + b) * (s + b) <= (uint64_t)x << 16)
+            s += b;
+    return (uint32_t)(((uint64_t)x2 * s) >> 16);
+}
+static void rush_hit(uint32_t vel, uint32_t note)    /* the rush track, at vel (its PITCH added) */
+{
+    uint32_t t = sq.ru_tr;
+    if ((seq_mutes() >> t) & 1u)
+        return;
+    if (sq.ru_pitch)
+        note = (uint32_t)clamp32((int32_t)note + (sq.ru_pitch * (int32_t)sq.ru_R + (sq.ru_pitch > 0 ? 50 : -50)) /
+                                                     (int32_t)RUSH_MAX, 0, 127);
+    seq_trigger(t, 0, 0, vel ? vel : 1u, note);
+}
+static uint32_t rush_note(void)
+{
+    uint32_t t = sq.ru_tr, k = sq.idx[t] < 0 ? 0u : (uint32_t)sq.idx[t];
+    return snote(tpat(t), t, k);
+}
+static uint32_t rush_vel(int acc)                    /* the roll's level: 60% at START to full at 100 */
+{
+    uint32_t R = sq.ru_R, st = sq.ru_start < RUSH_MAX ? sq.ru_start : RUSH_MAX - 1u;
+    if (acc)
+        return 127;
+    if (R <= st)
+        return key_vel;
+    return key_vel * (154u + 102u * (R - st) / (RUSH_MAX - st)) >> 8;
+}
+/* seq_flam: a hit of track t's step s while RUSH is up: 1 if the rush takes it (or covers it) */
+static int rush_take(uint32_t t, uint32_t s)
+{
+    const pattern_t *p = tpat(t);
+    uint32_t R = sq.ru_R, vel = p->step[t][s].volume & STEP_VOLUME_MASK, k = sq.ticks / 24u;
+    int down = t == 0u && !(s & 3u);
+    sq.ru_orig = 1;
+    if (t == sq.ru_tr) {                             /* its own: the roll's from START; below, one a step */
+        if (vel > LINK_ACCENT)
+            sq.ru_acc = 1;
+        if (R > sq.ru_start || sq.ru_lastk == k + 1u)
+            return 1;
+        sq.ru_lastk = k + 1u;
+        return 0;
+    }
+    if (down) {                                      /* the kick's beats: kept, then the bar's first, then none */
+        return R >= RU_FIRST || (R >= RU_KICKS && (s & 15u));
+    }
+    if (rush_hash(t, s) >= rush_share(R, t >= 5u ? RU_HATS : RU_ONLY))
+        return 0;
+    if (vel > LINK_ACCENT)                           /* taken: its accent goes over */
+        sq.ru_acc = 1;
+    if (R <= sq.ru_start && sq.ru_lastk != k + 1u) {   /* (below the roll: the rush track plays it, once a step) */
+        sq.ru_lastk = k + 1u;
+        rush_hit(vel > key_vel ? vel : key_vel, rush_note());
+    }
+    return 1;
+}
+/* seq_tick_one: the grid roll, START .. FREE: 16ths, 32nds from halfway; above FREE the step's first hands its
+ * accent to the free roll */
+static void rush_grid(void)
+{
+    uint32_t ph = sq.ticks % 24u, R = sq.ru_R, half = (sq.ru_start + sq.ru_free_at) / 2u, acc, orig;
+    if (ph && ph != 12u)
+        return;
+    acc = sq.ru_acc;
+    orig = sq.ru_orig;
+    if (!ph)
+        sq.ru_acc = sq.ru_orig = 0;
+    if (!R || R <= sq.ru_start)
+        return;
+    if (R > sq.ru_free_at) {
+        if (!ph && orig && acc)
+            sq.ru_head = 1;
+        return;
+    }
+    if (ph == 12u && R <= half)
+        return;
+    rush_hit(rush_vel(!ph && acc), rush_note());
+}
+/* the block: the amount, recording, the free roll, a held flam, the filter */
+static void seq_rush(void)
+{
+    uint32_t t = sq.ru_tr, adv = (uint32_t)(((uint64_t)(BLOCK << 8) * tape_q16) >> 16), R;
+    uint32_t steplen = (uint32_t)(((uint64_t)24u * sq.tick_q16) >> 8);   /* (a 16th, samples Q8) */
+    int32_t k = (int32_t)((uint32_t)BLOCK * 65536u / ((uint32_t)sq.ru_glide * 5u * (FS / 1000u) + BLOCK)), hpt;
+    rush_now();
+    R = sq.ru_R;
+    if (sq.ru_pcnt) {                                /* a flam's hit, held back */
+        sq.ru_pcnt -= (int32_t)adv;
+        if (sq.ru_pcnt <= 0) {
+            sq.ru_pcnt = 0;
+            rush_hit(sq.ru_pvel, sq.ru_pnote);
+        }
+    }
+    for (t = 0; t < NTRACK; t++)                     /* recording: the knob into each step its track passes */
+        if (!(sq.rec && sq.ru_live && t == sq.ru_t)) {
+            sq.ru_rk[t] = -1;
+        } else if (sq.idx[t] >= 0 && sq.ru_rk[t] != sq.idx[t]) {
+            sq.ru_rk[t] = (int8_t)sq.idx[t];
+            rush_lock_set(&pat[sq.active], t, (uint32_t)sq.idx[t], sq.ru_live);
+            live_step_sync(&pat[sq.active], t, (uint32_t)sq.idx[t]);
+        }
+    hpt = R > RU_HPFROM && sq.ru_filt ? (int32_t)((uint32_t)sq.ru_filt * 655u * (R - RU_HPFROM) / (RUSH_MAX - RU_HPFROM))
+                                      : 0;
+    sq.ru_hp += (int32_t)(((int64_t)(hpt - sq.ru_hp) * (k > 4096 ? k : 4096)) >> 16);
+    if (!hpt && sq.ru_hp < 64)
+        sq.ru_hp = 0;
+    if (R <= sq.ru_free_at || !steplen) {
+        sq.ru_free = 0;
+        sq.ru_head = 0;
+        return;
+    }
+    {
+        int32_t top = (int32_t)(sq.ru_top < NRT ? sq.ru_top : RT_256) + 2;   /* (log2 hits a step at 100: 2 .. 4) */
+        int32_t tgt = 65536 + (int32_t)((R - sq.ru_free_at) * (uint32_t)(top - 1) * 65536u /
+                                         (RUSH_MAX - sq.ru_free_at));
+        uint32_t rate, cap = steplen * 2u, d;        /* (at most a hit every 128 samples) */
+        int32_t diff;
+        if (!sq.ru_free) {                           /* in step with the 32nds it takes over from */
+            sq.ru_free = 1;
+            sq.ru_log = tgt;
+            sq.ru_ph = (sq.ticks % 12u) * 65536u / 12u;
+        } else {
+            sq.ru_log += (int32_t)(((int64_t)(tgt - sq.ru_log) * k) >> 16);
+        }
+        diff = tgt - sq.ru_log;
+        rate = (uint32_t)exp2_q16(sq.ru_log);
+        if (rate > cap)
+            rate = cap;
+        d = (rate >> 4) * (uint32_t)(BLOCK << 8) / ((steplen >> 4) ? (steplen >> 4) : 1u);
+        d = (uint32_t)(((uint64_t)d * tape_q16) >> 16);
+        sq.ru_ph += d;
+        while (sq.ru_ph >= 65536u) {
+            uint32_t vel = rush_vel(sq.ru_head), note = rush_note(), c = (uint32_t)(diff < 0 ? -diff : diff) >> 9;
+            sq.ru_ph -= 65536u;
+            sq.ru_head = 0;
+            if (c > 127u)
+                c = 127u;
+            if (c && !sq.ru_pcnt && sq.ru_flam && seq_rand() % 12700u < c * sq.ru_flam) {
+                uint32_t gap = (steplen / ((rate >> 8) ? (rate >> 8) : 1u)) << 6;   /* (a quarter of the gap) */
+                rush_hit(vel * 5u / 9u, note);       /* a flam: the grace note, the hit a moment after */
+                sq.ru_pvel = (uint8_t)vel;
+                sq.ru_pnote = (uint8_t)note;
+                sq.ru_pcnt = (int32_t)(gap < (1100u << 8) ? gap : 1100u << 8);
+                continue;
+            }
+            rush_hit(vel, note);
+        }
+    }
 }
 
 /* 0.6: the links. Step s of track t is due to play (on, its chance, its condition), the SILENT event's test */
@@ -1224,7 +1616,7 @@ static void seq_links(uint32_t hm, const uint8_t *hs, const uint32_t *hl, const 
         if ((trig >> t & 1u) && !(seq_mutes() >> t & 1u)) {
             uint32_t i = sq.idx[t] < 0 ? 0u : (uint32_t)sq.idx[t];
             sq.last_on |= 1u << t;
-            seq_trigger(t, 0, 0, tvel[t], tpat(t)->step[t][i].note);
+            seq_trigger(t, 0, 0, tvel[t], snote(tpat(t), t, i));
         }
 }
 
@@ -1355,6 +1747,8 @@ static void seq_flam(void)
         uint32_t d = 0;
         if (!(hm >> t & 1u) || (m && m->drop))
             continue;
+        if (sq.ru_R && rush_take(t, hs[t]))         /* 39: RUSH takes it */
+            continue;
         if (m && m->shift)                           /* SHIFT: up to half a step late */
             d = m->shift * trk_ticks(t) / 200u + 1u;
         if (sq.jit) {                                /* JITTER: late by a random part of its most, an occurrence's
@@ -1415,6 +1809,7 @@ static void trk_copy(pattern_t *d, const pattern_t *s, uint32_t t)
     d->dir[t] = s->dir[t];
     d->sfollow = (uint8_t)((d->sfollow & ~(1u << t)) | (s->sfollow & (1u << t)));
     memcpy(d->mel[t], s->mel[t], sizeof d->mel[t]);
+    d->tbase[t] = s->tbase[t];
 }
 static void seq_gen_sync(uint32_t t);
 static void seq_reset_tracks(void)                   /* every track before its first step, its counts from 0 */
@@ -1496,25 +1891,98 @@ static void song_put(uint32_t s, uint32_t r, uint32_t v, uint32_t i)   /* row r:
     i %= NSONGREP;
     songs[s % NUM_SONGS][r & 63u] = (uint8_t)(v >= NUM_PATTERN ? v : v | (i < 2u ? i : i + 1u) << 5);
 }
+/* 42: ROADS: a song played by its own chances. At a row's end, the rows that play this pattern (order 2: after the
+ * pattern before it too, when any do), one of the rows after them: SURPRISE 0 the commonest, up the chances
+ * flatter (now and then any row), its times one more or less; HOME: back to the first row every so many bars; a
+ * pattern's fourth row in a row: another if the song has one. A row after the last (END, LOOP): the first */
+#define NSONGHOME 8u
+static const uint16_t SONG_HOME[NSONGHOME] = {0, 8, 16, 32, 64, 128, 256, 512};
+static uint32_t song_len(uint32_t s)                 /* the rows before the first END or LOOP */
+{
+    uint32_t n = 0;
+    while (n < MAX_SONG_LENGTH && song_row(songs[s % NUM_SONGS][n]) < NUM_PATTERN)
+        n++;
+    return n;
+}
+static uint32_t song_pat(uint32_t s, uint32_t r) { return song_row(songs[s % NUM_SONGS][r & 63u]); }
+static uint32_t song_sur(uint32_t s) { return ((song_rd[s % NUM_SONGS] & 15u) ^ 4u) * 127u / 15u; }   /* 0..127 */
+/* the row after row r (prev: the one before it, 0xFF none) by song s's chances; sur 0..127 (128: any row); avoid:
+ * a pattern not to go to if another can be */
+static uint32_t song_road(uint32_t s, uint32_t r, uint32_t prev, uint32_t sur, uint32_t avoid)
+{
+    uint8_t c[MAX_SONG_LENGTH];
+    uint32_t n = song_len(s), nc = 0, i, j, o, best = 0, bn = 0;
+    if (!n)
+        return 0;
+    if (r >= n || (seq_rand() & 127u) < sur)         /* (any row: SURPRISE's top, or from outside the song) */
+        nc = 0;
+    else
+        for (o = 2; o && !nc; o--)                    /* (order 2, then 1) */
+            for (i = 0; i < n; i++)
+                if (song_pat(s, i) == song_pat(s, r) &&
+                    (o == 1u || (prev < n && song_pat(s, i ? i - 1u : n - 1u) == song_pat(s, prev))) &&
+                    song_pat(s, i + 1u < n ? i + 1u : 0u) != avoid)
+                    c[nc++] = (uint8_t)(i + 1u < n ? i + 1u : 0u);
+    if (!nc) {
+        for (i = 0; i < n; i++)
+            if (song_pat(s, i) != avoid || i + 1u == n)
+                c[nc++] = (uint8_t)i;
+        return c[seq_rand() % nc];
+    }
+    if (sur)                                         /* (by the chances: a row after one of them) */
+        return c[seq_rand() % nc];
+    for (i = 0, o = seq_rand() % nc; i < nc; i++) {  /* (0: the commonest next pattern, a tie by chance) */
+        uint32_t k = (i + o) % nc, m = 0;
+        for (j = 0; j < nc; j++)
+            m += song_pat(s, c[j]) == song_pat(s, c[k]);
+        if (m > bn) {
+            bn = m;
+            best = c[k];
+        }
+    }
+    return best;
+}
+static uint32_t song_times(void)                     /* the playing row's times (ROADS: one more or less) */
+{
+    int32_t i = (int32_t)song_rep_i(sq.song, sq.song_pos) + sq.song_dn;
+    return SONG_REPS[i < 0 ? 0 : i >= (int32_t)NSONGREP ? NSONGREP - 1u : (uint32_t)i];
+}
+static int song_roads(void) { return (song_rd[sq.song % NUM_SONGS] & 0x80u) && song_len(sq.song); }
 static uint32_t seq_next_in_song(int advance)        /* seq_determineNextPattern (0.19: a row its times first) */
 {
-    uint32_t pos;
+    uint32_t pos, s = sq.song % NUM_SONGS;
     if (!sq.song_mode)
         return sq.active;
-    if (sq.song_pos < MAX_SONG_LENGTH && song_row(songs[sq.song][sq.song_pos]) < NUM_PATTERN &&
-        sq.song_n + 1u < song_reps(sq.song, sq.song_pos)) {
+    if (sq.song_pos < MAX_SONG_LENGTH && song_row(songs[s][sq.song_pos]) < NUM_PATTERN &&
+        sq.song_n + 1u < song_times()) {
         if (advance)
             sq.song_n++;
-        return song_row(songs[sq.song][sq.song_pos]);
+        return song_row(songs[s][sq.song_pos]);
     }
-    pos = (uint32_t)(uint8_t)(sq.song_pos + 1u);
-    if (pos >= MAX_SONG_LENGTH)
-        pos = 0;
+    if (song_roads()) {                              /* (42: picked once, so a look ahead finds the same) */
+        if (sq.song_nx >= MAX_SONG_LENGTH) {
+            uint32_t h = SONG_HOME[(song_rd[s] >> 4) % NSONGHOME];
+            sq.song_nx = (uint8_t)(sq.song_pos >= MAX_SONG_LENGTH || (h && sq.song_hb >= h) ? 0u
+                                   : song_road(s, sq.song_pos, sq.song_prv, song_sur(s),
+                                               sq.song_run >= 4u ? song_pat(s, sq.song_pos) : 0xFFu));
+        }
+        pos = sq.song_nx;
+    } else {
+        pos = (uint32_t)(uint8_t)(sq.song_pos + 1u);
+        if (pos >= MAX_SONG_LENGTH)
+            pos = 0;
+    }
     if (advance) {
+        sq.song_hb = (uint16_t)(pos ? sq.song_hb + (pat_ticks() + 383u) / 384u * (sq.song_n + 1u) : 0u);
+        sq.song_run = (uint8_t)(sq.song_pos < MAX_SONG_LENGTH && song_pat(s, pos) == song_pat(s, sq.song_pos)
+                                ? sq.song_run + 1u : 1u);
+        sq.song_prv = sq.song_pos;
         sq.song_pos = (uint8_t)pos;
         sq.song_n = 0;
+        sq.song_nx = 0xFF;
+        sq.song_dn = (int8_t)(song_roads() && (seq_rand() & 255u) < song_sur(s) ? (seq_rand() & 2u) - 1 : 0);
     }
-    return song_row(songs[sq.song][pos]);
+    return song_row(songs[s][pos]);
 }
 
 /* 37: what PLAY plays: the pattern (0) or the song (1). Switched to the song while playing, it goes on from the first
@@ -1525,6 +1993,8 @@ static void seq_play_song(uint32_t on)
     if (on && !sq.song_mode && sq.running) {
         sq.song_pos = 0xFF;
         sq.song_n = 0;
+        sq.song_nx = 0xFF;
+        sq.song_dn = 0;
         for (r = 0; r < MAX_SONG_LENGTH; r++)
             if (song_row(songs[sq.song][r]) == sq.active) {
                 sq.song_pos = (uint8_t)r;
@@ -1580,6 +2050,7 @@ static void seq_track_step(uint32_t t)
             if (sq.idx[t] >= 0) {                    /* round again */
                 sq.loops[t]++;
                 seq_gen_loop(t);
+                mel_realign(t);
             }
         }
         sq.dpos[t] = (uint8_t)i;
@@ -1593,6 +2064,7 @@ static void seq_track_step(uint32_t t)
             sq.dpos[t] = 0;
             sq.loops[t]++;
             seq_gen_loop(t);
+            mel_realign(t);
         }
     }
     if (d == DIR_RAND)                               /* (the next one drawn now: a negative shift sees it) */
@@ -1709,17 +2181,24 @@ static void seq_tick_one(void)
     seq_stutter();
     if (sq.running && sq.ticks % 384u == 0u)         /* (0.13: a bar, for the global LFOs) */
         glfo_ev |= GLE_BAR;
+    if (sq.running)
+        rush_now();                                  /* (39: RUSH's amount for this tick's hits) */
     seq_advance(1);
     if (!sq.running)
         return;
     seq_gates();
+    rush_grid();
+    if (sq.trdue && (!sq.trwhen || !(sq.ticks % (sq.trwhen == 1u ? 96u : 384u)))) {   /* (0.23-t7: TRANSPOSE on time) */
+        memcpy(sq.trp, sq.trpend, sizeof sq.trp);
+        sq.trdue = 0;
+    }
     if (sq.roll && !sq.roll_free && sq.roll_rate && sq.roll_rate < 14u) {   /* rolls: on their own grid */
         uint32_t every = ROLL_TICKS[sq.roll_rate];
         if (sq.ticks % every == 0u)
             for (t = 0; t < NTRACK; t++)
                 if (sq.roll & (1u << t)) {
                     uint32_t i = sq.idx[t] < 0 ? 0u : (uint32_t)sq.idx[t];
-                    uint32_t note = tpat(t)->step[t][i].note;
+                    uint32_t note = snote(tpat(t), t, i);
                     seq_trigger(t, 0, 0, key_vel, note);
                     seq_add_note(t, key_vel, note);
                 }
@@ -1750,7 +2229,8 @@ static void seq_start(int reset)                     /* seq_setRunning(1) (+ seq
         sq.ext_clk = 0;
         sq.stut_on = 0;
         if (sq.song_mode)
-            sq.song_pos = 0xFF;                      /* (seq_nextStep advances to 0) */
+            sq.song_pos = sq.song_nx = 0xFF;         /* (seq_nextStep advances to 0) */
+        sq.song_dn = 0;
         glfo_ev |= GLE_PLAY;
     }
     sq.running = 1;
@@ -1835,7 +2315,10 @@ static void seq_block(void)
         seq_play_due(BLOCK);
         seq_bounces();
         seq_roll_sweep();
+        seq_rush();
     } else {
+        sq.ru_R = sq.ru_free = 0;
+        sq.ru_hp = 0;
         sq.due = 0;
     }
 }
@@ -1897,7 +2380,7 @@ static void seq_add_note(uint32_t t, uint32_t vel, uint32_t note)
         }
         sq.skip[t] = (int8_t)q;
     }
-    p->step[t][q].note = (uint8_t)note;
+    p->step[t][q].note = note_keep(t, note);       /* (0.23-t7: as BASE plays it back) */
     p->step[t][q].volume = (uint8_t)(vel | STEP_ACTIVE_MASK);
     p->step[t][q].prob = (uint8_t)((p->step[t][q].prob & ~PROB_MASK) | 100u);   /* (19b: its length kept) */
     main_set(p, t, q, 1);
@@ -1944,8 +2427,8 @@ static void seq_set_roll(uint32_t t, int on)         /* seq_setRoll */
             sq.rl_cnt = 0;                           /* (swept: the first hit at once) */
         sq.roll |= (uint8_t)(1u << t);
         if ((sq.roll_rate == 0u && !sq.roll_free) || !sq.running) {   /* ONE, or stopped: a single hit */
-            seq_trigger(t, 0, 0, key_vel, SEQ_DEFAULT_NOTE);
-            seq_add_note(t, key_vel, SEQ_DEFAULT_NOTE);
+            seq_trigger(t, 0, 0, key_vel, tb_note(t));
+            seq_add_note(t, key_vel, tb_note(t));
         }
     } else {
         sq.roll &= (uint8_t)~(1u << t);
@@ -2133,9 +2616,9 @@ static void seq_gen_loop(uint32_t t)                 /* track t round again: MUT
                 } else {                             /* drift a lock's value, else the velocity */
                     step_t *st = &p->step[t][s];
                     int32_t dv = (int32_t)gen_rand(17) - 8;
-                    if (st->p1n != NO_AUTOMATION || p->lhi[t][s] & 15u)
+                    if (st->p1n != NO_AUTOMATION || p->lhi[t][s] & 3u)
                         st->p1v = (uint8_t)clamp32((int32_t)st->p1v + dv, 0, 127);
-                    else if (st->p2n != NO_AUTOMATION || p->lhi[t][s] >> 4)
+                    else if (st->p2n != NO_AUTOMATION || p->lhi[t][s] >> 4 & 3u)
                         st->p2v = (uint8_t)clamp32((int32_t)st->p2v + dv, 0, 127);
                     else
                         st->volume = (uint8_t)((st->volume & STEP_ACTIVE_MASK) |
@@ -2217,12 +2700,9 @@ static void seq_commit(uint32_t t)                   /* COMMIT: the live track i
  * velocity), its ratchets; DENSITY then goes back to 0, as it sounded. The whole pattern is kept for its UNDO (OCT+
  * again, DENSITY still at 0: the pattern and DENSITY as they were; again: redo). Returns the steps it changed */
 static uint8_t dundo_p;                              /* (dundo: 1 a COMMIT to undo, 2 to redo; its pattern) */
-static uint32_t seq_dens_commit(void)
+static uint32_t dens_write(pattern_t *p)             /* DENSITY now, into p (the playing pattern) */
 {
-    pattern_t *p = &pat[sq.active];
     uint32_t t, s, n = 0;
-    upat = *p;
-    undo_t = -1;                                     /* (upat holds the pattern now: no track's UNDO) */
     for (t = 0; t < NTRACK; t++) {
         uint32_t len = track_len(p, t), lp = sq.loops[t];
         if (!dens_on(t))
@@ -2233,7 +2713,7 @@ static uint32_t seq_dens_commit(void)
                 if (!dens_ghost(p, t, s, lp))
                     continue;
                 main_set(p, t, s, 1);                /* (a ghost: a plain step, as a recorded one) */
-                x->note = sq.lnote[t];
+                x->note = note_keep(t, sq.lnote[t]);
                 x->volume = (uint8_t)(dens_ghost_vel(t, s, lp) | STEP_ACTIVE_MASK);
                 x->prob = 100u;                      /* (its length AUTO, no condition) */
                 lock_set(p, t, s, 0, NO_AUTOMATION);
@@ -2262,8 +2742,31 @@ static uint32_t seq_dens_commit(void)
         if (gen_live(p, t))                          /* (a live generator: from the pattern again) */
             sq.gsync |= (uint8_t)(1u << t);
     }
+    return n;
+}
+static uint32_t seq_dens_commit(void)
+{
+    uint32_t n;
+    upat = pat[sq.active];
+    undo_t = -1;                                     /* (upat holds the pattern now: no track's UNDO) */
+    sq.wonly = 2;
+    n = dens_write(&pat[sq.active]);
+    sq.wonly = 0;
     dundo = 1;
     dundo_p = sq.active;
+    return n;
+}
+/* 40: WANDER's KEEP: its Energy (each track's own DENSITY) written into the playing pattern as DENSITY's COMMIT
+ * writes the knob's, and the tracks it muted muted (no UNDO: here is home now). Returns the steps it changed */
+static uint32_t seq_wander_commit(void)
+{
+    uint32_t n;
+    sq.wonly = 1;
+    n = dens_write(&pat[sq.active]);
+    sq.wonly = 0;
+    memset(sq.wdens, 0, sizeof sq.wdens);
+    sq.muted |= sq.wmute;
+    sq.wmute = 0;
     return n;
 }
 static int seq_dens_undo(void)                       /* the pattern and the kept copy swapped */
@@ -2311,6 +2814,8 @@ static void seq_init(void)                           /* seq_init */
         for (t = 0; t < MAX_SONG_LENGTH; t++)
             songs[i][t] = SONG_END;
     songs[0][0] = 0;
+    memset(song_rd, 0, sizeof song_rd);              /* (42: PLAY, as written) */
+    sq.song_nx = 0xFF;
     for (i = 0; i < NUM_PATTERN; i++) {
         seq_clear_pattern(&pat[i]);
         pat[i].shuffle = 0;
@@ -2324,6 +2829,8 @@ static void seq_init(void)                           /* seq_init */
     }
     sq.armed_step = sq.armed_track = -1;
     sq.roll_rate = 5;                                /* 1/16 */
+    rush_defaults();                                 /* 39 */
+    memset(sq.ru_rk, -1, sizeof sq.ru_rk);
     memset(sq.lnote, SEQ_DEFAULT_NOTE, sizeof sq.lnote);
     sq.dghost = 40;
     seq_reset_tracks();

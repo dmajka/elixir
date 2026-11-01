@@ -113,8 +113,9 @@ static uint32_t par_to_autodest(uint32_t p)
         return p < NPAR && p != PAR_REV_TYPE ? p : NO_AUTOMATION;
     return p == 0u ? NO_AUTOMATION : p < 127u ? p + 1u : p;
 }
-_Static_assert(NPAR < 4096 && NUM_PARAMS >= 256, "lock codes: 12 bits, Elixir's past the LXR's byte");
+_Static_assert(NPAR < 1024 && NUM_PARAMS >= 256, "lock codes: 10 bits (seq.c lhi: the rest a step's length), Elixir's past the LXR's byte");
 #define NLOCK_K (NPAR - NUM_PARAMS - 1u)             /* Elixir's lockable parameters: all but PAR_REV_TYPE */
+#define LOCK_RUSH_IDX (NUM_MOD_TARGETS + NLOCK_K)    /* 39: the STEP page's last lock target: RUSH (seq.c RUSH_CODE) */
 static inline int par_lockable(uint32_t p)
 {
     return par_sound(p) && !(p >= PAR_UNUSED_1 && p <= PAR_UNUSED_7) && par_to_autodest(p) != NO_AUTOMATION;

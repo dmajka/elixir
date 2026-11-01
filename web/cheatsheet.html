@@ -51,7 +51,7 @@
 <section class="page">
   <header>
     <h1><!--POTION--><span><span>Elixir</span> cheat sheet</span></h1>
-    <p>drum machine firmware for the M-VAVE FM-1 · 1 of 3</p>
+    <p>drum machine firmware for the M-VAVE FM-1 · 1 of 4</p>
     <p class="right">Black keys numbered 1–11 and white keys 1–16, left to right</p>
   </header>
 
@@ -85,7 +85,7 @@
       <tr><td>GLO</td><td>Mixer → config</td></tr>
       <tr><td>FX</td><td>FX bus → reverb (SELECT for the pages)</td></tr>
       <tr><td>SEQ</td><td>Track pages (track, generator, action, groove, bounce, melody, scale) → step edit</td></tr>
-      <tr><td>ARP</td><td>PERF: PERFORM → SPELLS → GLOBAL MOD</td></tr>
+      <tr><td>ARP</td><td>PERF: PERFORM → SPELLS → WANDER → GLOBAL MOD</td></tr>
       <tr><td>SAVE</td><td>Save → load</td></tr>
       <tr><td>PLAY · REC</td><td>Start / stop · record on / off</td></tr>
     </table>
@@ -136,12 +136,12 @@
     <p>Tap a white key to select a step (again: on / off). SELECT for the pages.</p>
     <table class="knobs">
       <tr><th>Page</th><th>K1</th><th>K2</th><th>K3</th><th>K4</th></tr>
-      <tr><td>STEP</td><td>Velocity</td><td>Note</td><td>Chance</td><td>Condition</td></tr>
-      <tr><td>TIMING</td><td>Flam</td><td>Shift</td><td>Length</td><td>–</td></tr>
+      <tr><td>STEP</td><td>Note</td><td>Length</td><td>Velocity</td><td>–</td></tr>
+      <tr><td>TRIG</td><td>Chance</td><td>Condition</td><td>Shift</td><td>Flam</td></tr>
       <tr><td>LOCKS</td><td>Lock 1</td><td>value</td><td>Lock 2</td><td>value</td></tr>
       <tr><td>RATCHET</td><td>Hits</td><td>Shape</td><td>Rate</td><td>Fade</td></tr>
     </table>
-    <p class="note">Length: AUTO, 1/32 … 1/2, TIE (slides into the next note). Shape: even or BOUNCE.</p>
+    <p class="note">Length: AUTO, 1/32 … 1/2, 3/4 … 64 BARS, INF (a drone), TIE (slides into the next note). Shape: even or BOUNCE.</p>
 
     <h2>Sound pages</h2>
     <p>Each page has two rows of four knobs: the button again (or SELECT) gives the other row. MODEL picks LXR,
@@ -172,7 +172,7 @@
 <section class="page">
   <header>
     <h1><!--POTION--><span><span>Elixir</span> cheat sheet</span></h1>
-    <p>sequencing and performance · 2 of 3</p>
+    <p>sequencing and performance · 2 of 4</p>
     <p class="right">Full manual: dmajka.github.io/elixir/manual</p>
   </header>
 
@@ -187,7 +187,7 @@
       <tr><td>BOUNCE</td><td>Bounce</td><td>Bnc pitch</td><td>–</td><td>–</td></tr>
       <tr><td>MELODY 1</td><td>Shape</td><td>Spread</td><td>Bias</td><td>Steps</td></tr>
       <tr><td>MELODY 2</td><td>Deja vu</td><td>Loop</td><td>Length</td><td>Len var</td></tr>
-      <tr><td>SCALE</td><td>Root</td><td>Scale</td><td>Follow</td><td>–</td></tr>
+      <tr><td>SCALE</td><td>Root</td><td>Scale</td><td>Follow</td><td>Base</td></tr>
     </table>
 
     <h2>Each track on its own clock</h2>
@@ -236,12 +236,15 @@
       <tr><td>MORE</td><td>DJ filter</td><td>Repeat</td><td>Shuffle</td><td>Tape time</td></tr>
       <tr><td>DENSITY</td><td>Density</td><td>Ghost vel</td><td>Build</td><td>Vary</td></tr>
       <tr><td>STUTTER</td><td>Chance</td><td>Size</td><td>Length</td><td>Vary</td></tr>
+      <tr><td>RUSH</td><td>Rush</td><td>Top</td><td>Filter</td><td>Glide</td></tr>
+      <tr><td>RUSH SETUP</td><td>Roll at</td><td>Free at</td><td>Flam</td><td>Pitch</td></tr>
+      <tr><td>TRANSPOSE</td><td>Degrees</td><td>When</td><td>Keys</td><td>–</td></tr>
       <tr><td>2: SETUP 1</td><td>Drill</td><td>Jitter</td><td>Cuts</td><td>Pump</td></tr>
       <tr><td>2: SETUP 2</td><td>Comb</td><td>Comb fb</td><td>Crush</td><td>Reverse</td></tr>
     </table>
     <p class="note">Hold a roll key and turn K2 on PERFORM: a sweep from 1/4 to 1/192.</p>
 
-    <h2>Global mod (ARP three times)</h2>
+    <h2>Global mod (ARP four times)</h2>
     <table class="knobs">
       <tr><td>LFO 1–3</td><td>Dest, Depth, Speed (1/16 … 256 bars), Wave · Mode, Trig, Phase</td></tr>
       <tr><td>MACROS</td><td>Four knobs, each a parameter between Min and Max (MACRO SETUP)</td></tr>
@@ -294,7 +297,7 @@
 <section class="page">
   <header>
     <h1><!--POTION--><span><span>Elixir</span> cheat sheet</span></h1>
-    <p>spells, and what's not obvious · 3 of 3</p>
+    <p>spells, and what's not obvious · 3 of 4</p>
     <p class="right">Full manual: dmajka.github.io/elixir/manual</p>
   </header>
 
@@ -394,6 +397,94 @@
     <p>The engines a cast may use: <b>1 LXR</b> · <b>2 RNG</b> Rings · <b>3 PLT</b> Plaits · <b>4 MIC</b> MICRO ·
       <b>5 KCK</b> D1 the LXR's kick. All lit: the spell picks; none: engines kept.</p>
 
+  </div>
+</section>
+
+<section class="page">
+  <header>
+    <h1><!--POTION--><span><span>Elixir</span> cheat sheet</span></h1>
+    <p>wander, rush, transpose, roads · 4 of 4</p>
+    <p class="right">Full manual: dmajka.github.io/elixir/manual</p>
+  </header>
+
+  <div class="col">
+    <h2>Wander (ARP three times)</h2>
+    <p>The pattern changes slowly, over minutes, until you are somewhere else. Patterns are never changed for good:
+      the one you leave gets its steps back.</p>
+    <table>
+      <tr><td>1 Tracks</td><td>Black keys (bar key 1: all / none)</td></tr>
+      <tr><td>2 Parts</td><td>White keys: what may change (SHIFT (OCT−) + white: only that one)</td></tr>
+      <tr><td>3 Quest</td><td>K1 on QUEST, how long with Journey</td></tr>
+      <tr><td>4 Set out</td><td>COPY (OCT+): here is home (the pattern, the voices, the morph kit)</td></tr>
+      <tr><td>5 Home</td><td>SHIFT (OCT−): back over Return bars; again: at once</td></tr>
+    </table>
+    <table class="knobs">
+      <tr><th>Page</th><th>K1</th><th>K2</th><th>K3</th><th>K4</th></tr>
+      <tr><td>QUEST</td><td>Quest</td><td>Journey</td><td>Fate</td><td>Goal</td></tr>
+      <tr><td>PACE</td><td>Sound</td><td>Rhythm</td><td>Range</td><td>Stride</td></tr>
+      <tr><td>HOME</td><td>Return</td><td>Memory</td><td>Order</td><td>Sway</td></tr>
+    </table>
+    <table class="knobs sk">
+      <tr><td>Sound</td><td>Bars a voice moves a notch (OFF: rhythm only)</td></tr>
+      <tr><td>Rhythm</td><td>Bars an Energy / rhythm step, at the pattern's start</td></tr>
+      <tr><td>Range</td><td>How far Energy swings (thin to twice as busy)</td></tr>
+      <tr><td>Stride</td><td>Step size, threads at once (1–3)</td></tr>
+      <tr><td>Goal</td><td>NONE (open road: the steps change), P01–P32 (walk there), SONG (the song's rows)</td></tr>
+      <tr><td>Fate</td><td>HOME · TREASURE (one change kept) · WOUND · LOST (here is home) · DICE</td></tr>
+      <tr><td>Memory</td><td>How often the road returns to a version you heard</td></tr>
+      <tr><td>Order, Sway</td><td>Goal SONG: the next row (IN ORDER, ROADS, ANY); how much the time varies</td></tr>
+    </table>
+  </div>
+
+  <div class="col">
+    <h2>Wander's bar keys (black 8–11)</h2>
+    <table>
+      <tr><td>black 8</td><td>Every track, or none</td></tr>
+      <tr><td>black 9</td><td><b>KEEP</b>: here is home now</td></tr>
+      <tr><td>black 10</td><td><b>REST</b>: the road waits; again, on</td></tr>
+      <tr><td>SHIFT + black 10</td><td><b>POSTCARD</b>: where you are into the first empty pattern, its voices
+        LOCKED (SAVE to keep it)</td></tr>
+      <tr><td>black 11</td><td>Wander's knobs and keys as at first</td></tr>
+    </table>
+    <h2>The quests</h2>
+    <p><b>ROAD</b> one steady walk · <b>ROUND</b> out and back · <b>SPIRE</b> climb, summit, down · <b>HOLLOW</b>
+      into the cave, to a pulse, out · <b>TIDE</b> ebb and flood · <b>DETOUR</b> side quests · <b>ASTRAY</b>
+      anywhere, never home · <b>MAZE</b> by rule · <b>ROSARY</b> hits leave one by one, then return · <b>POND</b>
+      the slowest · <b>WHEEL</b> an endless, rhythm-only beat</p>
+    <p class="tip"><b>Rhythm under a morph:</b> Sound OFF (or WHEEL), OSC/MODELS out, and a global LFO on MORPH
+      sweeps between two kits while the road changes the steps.</p>
+    <p class="note">A spell cast on the road is a side journey: reverse it and the road goes on. Coming home, each
+      melody starts again from its top.</p>
+
+    <h2>Rush (PERFORM: RUSH)</h2>
+    <p>Black key: the rush track. Turn <b>Rush</b>: the other drums go over to it (hats first, kick last), it
+      rolls on the grid (16ths, 32nds), then free up to Top (1/64–1/256); the high-pass opens at the top. Slow turns
+      1% a detent, fast spins 10%.</p>
+    <p><b>REC</b> + turn: RUSH locks in the steps. On RUSH pages the white keys are the steps: hold one and turn to
+      lock it.</p>
+  </div>
+
+  <div class="col">
+    <h2>Transpose (PERFORM: TRANSPOSE)</h2>
+    <p>White keys: −7 … +8 degrees of the scale (the 8th, breathing, is 0). Black keys: which tracks move. When:
+      NOW, BEAT, BAR. Keys: LATCH or HOLD. Not saved.</p>
+    <h2>Base and note locks</h2>
+    <p><b>Base</b> (SCALE, K4): the track's base note, ±2 octaves; every note follows it, but a step whose
+      <b>Note</b> you turned on STEP (it reads Locked).</p>
+    <h2>Long notes</h2>
+    <p>STEP's <b>Length</b>: AUTO, 1/32 … 1/2, 3/4, 1 BAR … 64 BARS, <b>INF</b> (a drone till the track's next note),
+      TIE. Holds a voice with Gate ON (amp EG's next page).</p>
+    <h2>Arps (MELODY: Shape)</h2>
+    <p>ARP UP, DN, U/D, then CONVERGE 1-4-2-3 · DIVERGE 2-3-1-4 · CON/DIV · LEAPFROG 1-3-2-4 · SPIRAL 1-2-4-3 ·
+      ALTERNATE · PAIRS 2-1-4-3 · ROTATE 1234 2341 · INVERT 1234 4321 · PEDAL 1-2-1-3-1-4. Over the chord tones,
+      Spread wide.</p>
+    <h2>Roads (SONG, third page)</h2>
+    <table class="knobs">
+      <tr><th>K1</th><th>K2</th><th>K3</th><th>K4</th></tr>
+      <tr><td>Song</td><td>Way: PLAY / ROADS</td><td>Surprise</td><td>Home</td></tr>
+    </table>
+    <p>ROADS plays the song by its own chances: after a row, the row after another with the same pattern. Surprise
+      lets in the rarer turns; Home brings it back to row 1 every so many bars.</p>
   </div>
 </section>
 

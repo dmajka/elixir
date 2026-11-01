@@ -121,8 +121,9 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
     case M_HOME: put_str(b, "PATTERN", n); break;
     case M_PATTERN: put_str(b, "PATTERNS", n); break;
     case M_SONG:                                     /* (37: ROWS: what OCT+ does, as ACTION's) */
-        put_str(b, !(ui.page % 2u) ? "SONG" : ui.song_edit == SE_DELETE ? "PRESS OCT+ TO DELETE THE ROW"
-                                                                       : "PRESS OCT+ TO INSERT A ROW", n);
+        put_str(b, ui.page % NSONGPG == 2u ? (song_rd[sq.song % NUM_SONGS] & 0x80u ? "ROADS: BY CHANCE" : "ROADS: AS WRITTEN")
+                   : !(ui.page % NSONGPG) ? "SONG" : ui.song_edit == SE_DELETE ? "PRESS OCT+ TO DELETE THE ROW"
+                                                                              : "PRESS OCT+ TO INSERT A ROW", n);
         break;
     case M_SOUND: {
         uint8_t l[NSPG][2];
@@ -399,6 +400,7 @@ static const char *const SCALE_NAME[NSCALE] = {"CHROM", "MAJOR", "MINOR", "DORIA
                                                "FIFTHS", "PHR DOM", "HIRAJO", "PELOG", "WHOLE T"};   /* (52 px at most) */
 #include "ui_viz.c"                                  /* (30: the pages' pictures) */
 #include "spells_viz.c"                              /* (32: SPELLS' wizard and die) */
+#include "wander_viz.c"                              /* (40: WANDER's road, compass, cottage) */
 
 /* ---------------------------------------------------- the other bodies --- */
 /* the body's top h rows in two strips (the canvas holds half of it): draw(y0) draws with the strip's origin at -y0 */
@@ -507,6 +509,109 @@ static const char *const PERF_KEY[NPF2] = {"FILL", "RPT", "FRZ", "T.RV", "T.FX",
 static const char *const PERF_NAME[NPF2] = {"FILL", "REPEAT", "FREEZE", "THROW REV", "THROW FX", "FB PUSH",
                                             "TAPE STOP", "LP SWEEP", "HP SWEEP", "HALF", "JITTER", "CUTS", "SHORT",
                                             "PUMP", "COMB", "SPACE", "CRUSH", "REVERSE"};
+/* 39: RUSH's roll at amount r: hits a step x 16, so a note value 1/16 .. 1/256 (0: no roll yet, below START) */
+static uint32_t rush_den(uint32_t r)
+{
+    uint32_t top = (sq.ru_top < NRT ? sq.ru_top : RT_256) + 2u;
+    if (r <= sq.ru_start)
+        return 0;
+    if (r <= sq.ru_free_at)
+        return r > (sq.ru_start + sq.ru_free_at) / 2u ? 32u : 16u;
+    return (16u * (uint32_t)exp2_q16((int32_t)(65536u + (r - sq.ru_free_at) * (top - 1u) * 65536u /
+                                                (RUSH_MAX - sq.ru_free_at))) + 32768u) >> 16;
+}
+/* 39: PERF's RUSH pages: one picture of the whole rush over the knob's 0..100%: the roll's speed (from START, log),
+ * the other drums left (the hats dashed), the filter (from 90), START and FREE marked, the knob where it is; the
+ * stage and the roll large; under it the shown bar's RUSH locks */
+static void draw_rush(int32_t y0)
+{
+    uint32_t t = ui.track < NTRACK ? ui.track : 0u, R = sq.ru_live ? sq.ru_live : sq.ru_R, i, den = rush_den(R);
+    const pattern_t *vp = view_pat(t);
+    uint16_t col = TRACK_COL[sq.ru_live || sq.ru_R ? sq.ru_tr : t];
+    char b[24];
+    (void)y0;
+    cv_text(6, 4, &AF_M, VOICE_NAME[sq.ru_live || sq.ru_R ? sq.ru_tr : t], col);
+    if (!R)
+        put_str(b, "OFF", sizeof b);
+    else if (!den)
+        put_str(put_int(b, (int32_t)R), "%", 4);
+    else {
+        b[0] = '1';
+        b[1] = '/';
+        put_int(b + 2, (int32_t)den);
+    }
+    cv_text_r(234, 0, &AF_L, b, R ? T_ACCENT : T_DIM, T_BG);
+    cv_text(6, 22, &AF_S, !R ? "TURN RUSH" : R <= sq.ru_start ? "THE KIT GOES OVER" : R <= sq.ru_free_at ? "ON THE GRID"
+                                                                                      : "FREE ROLL", R ? T_TEXT : T_MID);
+    cv_rect(6, 92, 228, 1, T_LINE);                  /* (the graph: 0..100% across, 52 px up) */
+    for (i = 0; i < 228u; i++) {
+        uint32_t r = i * RUSH_MAX / 227u, d = rush_den(r), y;
+        int32_t x = 6 + (int32_t)i;
+        y = 65536u - rush_share(r, RU_ONLY);         /* the other drums left */
+        cv_rect(x, 91 - (int32_t)(y * 50u >> 16), 1, 1, T_MID);
+        y = 65536u - rush_share(r, RU_HATS);
+        if (i & 2u)
+            cv_rect(x, 91 - (int32_t)(y * 50u >> 16), 1, 1, T_DIM);
+        if (d)                                       /* the roll: log2 of 1/16 .. 1/256 */
+            cv_rect(x, 90 - (int32_t)((uint32_t)(log2_q16(d) - (4 << 16)) * 50u / (4u << 16)), 1, 3, col);
+        if (sq.ru_filt && r > RU_HPFROM)
+            cv_rect(x, 92 - (int32_t)((r - RU_HPFROM) * sq.ru_filt / 100u * 12u / (RUSH_MAX - RU_HPFROM)), 1, 1,
+                    T_REC);
+    }
+    cv_rect(6 + (int32_t)(sq.ru_start * 227u / RUSH_MAX), 88, 1, 8, T_MID);
+    cv_rect(6 + (int32_t)(sq.ru_free_at * 227u / RUSH_MAX), 88, 1, 8, T_MID);
+    if (R)
+        cv_rect(6 + (int32_t)(R * 227u / RUSH_MAX) - 1, 38, 3, 58, T_ACCENT);
+    for (i = 0; i < 16u; i++) {                      /* the shown bar's RUSH locks */
+        uint32_t s = ui.bar * 16u + i, v = rush_lock(vp, t, s), h = v * 8u / RUSH_MAX;
+        int32_t bx = 6 + (int32_t)i * 14;
+        int at = sq.running && sq.idx[t] == (int32_t)s, held = ui.held_step == (int8_t)s;
+        cv_rect(bx, 107, 12, 1, main_on(vp, t, s) ? T_MID : T_SURF);
+        if (h)
+            cv_rect(bx, 107 - (int32_t)h, 12, (int32_t)h, held ? T_ACCENT : TRACK_COL[t]);
+        if (at || held)
+            cv_rect(bx, 108, 12, 1, held ? T_ACCENT : T_THEME);
+    }
+    if (ui.held_step >= 0)
+        cv_text(6, 112, &AF_S, "TURN RUSH: THIS STEP'S LOCK", T_ACCENT);
+    else if (sq.rec && sq.running)
+        cv_text(6, 112, &AF_S, "REC: RUSH WRITES INTO THE STEPS", T_REC);
+    else
+        cv_text(6, 112, &AF_S, "BLACK: TRACK  HOLD A STEP: LOCK", T_MID);
+}
+/* 0.23-t7: TRANSPOSE: the white keys, the middle one 0; each track where it is (lit: the keys move it) */
+static void draw_trp(int32_t y0)
+{
+    const pattern_t *p = &pat[sq.active];
+    uint32_t t = ui.track < NTRACK ? ui.track : 0u, i;
+    int32_t x = sq.trp[t];
+    char b[24];
+    (void)y0;
+    cv_text(6, 4, &AF_M, VOICE_NAME[t], TRACK_COL[t]);
+    if (x > 0) {
+        b[0] = '+';
+        put_int(b + 1, x);
+    } else {
+        put_int(b, x);
+    }
+    cv_text_r(234, 0, &AF_L, b, x ? T_ACCENT : T_DIM, T_BG);
+    cv_text(6, 22, &AF_S, p->scale && p->scale < NSCALE ? SCALE_NAME[p->scale] : "SEMITONES", T_MID);
+    for (i = 0; i < 16u; i++) {                      /* (the keys) */
+        int32_t kx = 6 + (int32_t)i * 14;
+        cv_rrect(kx, 40, 12, 30, 2, i == 7u ? T_THEME : T_SURF, T_BG);
+        if ((int32_t)i == x + 7)
+            cv_rect(kx + 2, 58, 8, 10, TRACK_COL[t]);
+        if ((int32_t)i == sq.trpend[t] + 7 && sq.trdue)
+            cv_rect(kx + 2, 42, 8, 2, T_ACCENT);
+    }
+    for (i = 0; i < NTRACK; i++) {                   /* (each track, a row) */
+        int on = (sq.trmask >> i) & 1u;
+        if (on || sq.trp[i])
+            cv_rect(6 + (sq.trp[i] + 7) * 14 + 1, 76 + (int32_t)i * 4, 10, 3, on ? TRACK_COL[i] : T_DIM);
+    }
+    cv_text(6, 112, &AF_S, sq.trdue ? (sq.trwhen == 2u ? "ON THE NEXT BAR" : "ON THE NEXT BEAT")
+                                    : "BLACK: TRACKS  WHITE: DEGREES", sq.trdue ? T_ACCENT : T_MID);
+}
 static void draw_perf(int32_t y0)
 {
     static const char *const REP[4] = {"1/4", "1/8", "1/16", "1/32"};
@@ -809,6 +914,8 @@ static void draw_song(int32_t y0)
             uint32_t n = song_reps(sq.song, r);
             put_str(b, "PATTERN ", sizeof b);
             two_digits(b + 8, v + 1u);
+            if (sq.song_mode && sq.running && sq.song_pos == r)
+                n = song_times();                    /* (42: ROADS: this time's) */
             if (sq.song_mode && sq.running && sq.song_pos == r && n > 1u) {   /* (0.19: playing: the time it is) */
                 put_str(b + 10, "  ", sizeof b - 10u);
                 put_str(put_int(b + 12, (int32_t)sq.song_n + 1), "/", 2);
@@ -1286,6 +1393,26 @@ static void draw_body(void)
     } else if (perf_spells() && !ui.clear_open && !ui.kb_open && !(ui.shift && ui.shift_used)) {   /* (32) */
         fn = draw_spells;
         s = spells_sig();
+    } else if (perf_wander() && !ui.clear_open && !ui.kb_open && !(ui.shift && ui.shift_used)) {   /* (40) */
+        fn = draw_wander;
+        s = wander_sig();
+    } else if (perf_rush() && !ui.shift && !ui.clear_open && !ui.kb_open) {   /* (39: RUSH) */
+        uint32_t t = ui.track < NTRACK ? ui.track : 0u, k;
+        const pattern_t *vp = view_pat(t);
+        fn = draw_rush;
+        s = sig_add(39, sq.ru_live | (uint32_t)sq.ru_R << 8 | t << 16 | (uint32_t)(uint8_t)ui.held_step << 20);
+        s = sig_add(s, sq.ru_start | (uint32_t)sq.ru_free_at << 8 | (uint32_t)sq.ru_top << 16 | (uint32_t)sq.ru_tr << 20 |
+                           (uint32_t)sq.rec << 24 | ui.bar << 28);
+        s = sig_add(s, sq.ru_filt | (uint32_t)(uint8_t)sq.idx[t] << 8);
+        for (k = 0; k < 16u; k++)
+            s = sig_add(s, rush_lock(vp, t, ui.bar * 16u + k) | (uint32_t)main_on(vp, t, ui.bar * 16u + k) << 8);
+    } else if (perf_trp() && !ui.shift && !ui.clear_open && !ui.kb_open) {   /* (0.23-t7: TRANSPOSE) */
+        uint32_t k;
+        fn = draw_trp;
+        s = sig_add(43, sq.trmask | (uint32_t)sq.trdue << 8 | (uint32_t)sq.trwhen << 9 | ui.track << 12 |
+                            (uint32_t)pat[sq.active].scale << 16);
+        for (k = 0; k < NTRACK; k++)
+            s = sig_add(s, (uint32_t)(uint8_t)sq.trp[k] | (uint32_t)(uint8_t)sq.trpend[k] << 8);
     } else if (perf_links() && !ui.shift && !ui.clear_open && !ui.kb_open) {   /* (29: PERF's GLOBAL MOD) */
         uint32_t l;
         const pattern_t *pt = shown_pat();
@@ -1453,6 +1580,9 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_SONG_ROW: put_str(b, "Row", n); return;
     case VP_SONG_EDIT: put_str(b, "Action", n); return;
     case VP_PLAY: put_str(b, "Play", n); return;
+    case VP_ROADS: put_str(b, "Way", n); return;
+    case VP_RSUR: put_str(b, "Surprise", n); return;
+    case VP_RHOME: put_str(b, "Home", n); return;
     case VP_VOICES: put_str(b, "Voices", n); return;
     case VP_LEDS: put_str(b, "Leds", n); return;
     case VP_AUTOSAVE: put_str(b, "Autosave", n); return;
@@ -1471,16 +1601,29 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_EOP: put_str(b, "Join", n); return;
     case VP_DENS: put_str(b, "Density", n); return;
     case VP_SP ... VP_SP_LAST: sp_card_name(b, n, p - VP_SP); return;
+    case VP_WD ... VP_WD_LAST: wd_card_name(b, n, p - VP_WD); return;
     case VP_GHOST: put_str(b, "Ghost vel", n); return;
     case VP_BUILD: put_str(b, "Build", n); return;
     case VP_DVARY: put_str(b, "Vary", n); return;
     case VP_STCH: put_str(b, "Chance", n); return;
+    case VP_RUSH: put_str(b, "Rush", n); return;
+    case VP_RTOP: put_str(b, "Top", n); return;
+    case VP_RFILT: put_str(b, "Filter", n); return;
+    case VP_RGLIDE: put_str(b, "Glide", n); return;
+    case VP_RSTART: put_str(b, "Roll at", n); return;
+    case VP_RFREE: put_str(b, "Free at", n); return;
+    case VP_RFLAM: put_str(b, "Flam", n); return;
+    case VP_RPITCH: put_str(b, "Pitch", n); return;
     case VP_STSIZE: put_str(b, "Size", n); return;
     case VP_STLEN: put_str(b, "Length", n); return;
     case VP_STVARY: put_str(b, "Vary", n); return;
     case VP_SROOT: put_str(b, "Root", n); return;
     case VP_SCALE: put_str(b, "Scale", n); return;
     case VP_SFOLLOW: put_str(b, "Follow", n); return;
+    case VP_TBASE: put_str(b, "Base", n); return;
+    case VP_TRP: put_str(b, "Degrees", n); return;
+    case VP_TRWHEN: put_str(b, "When", n); return;
+    case VP_TRHOLD: put_str(b, "Keys", n); return;
     case VP_GROOVE: put_str(b, "Groove", n); return;
     case VP_GAMT: put_str(b, "Amount", n); return;
     case VP_GHUM: put_str(b, "Humanize", n); return;
@@ -1557,7 +1700,7 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_FX_SUB: put_str(b, fx.type == FX_DRIVE ? "Shape" : fx.type == FX_RING ? "Wave" : fx.type == FX_COMP ? "Ratio"
                                                             : fx.type == FX_DELAY ? "Mode" : "-", n); return;
     case PAR_STEP_VOLUME: put_str(b, "Velocity", n); return;
-    case PAR_STEP_NOTE: put_str(b, "Note", n); return;
+    case PAR_STEP_NOTE: put_str(b, sel_step()->note & NOTE_LOCK ? "Locked" : "Note", n); return;   /* (0.23-t7) */
     case PAR_STEP_PROB: put_str(b, "Chance", n); return;
     case PAR_STEP_FLAM: put_str(b, "Flam", n); return;
     case PAR_STEP_SHIFT: put_str(b, "Shift", n); return;
@@ -1796,6 +1939,13 @@ static int card_unit(char *b, uint32_t n, uint32_t p, uint32_t v)
 
 static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
 {
+    if (pl_card(b, n, p, v))                         /* (0.23-t7: P WTABLE's, P CHORD's) */
+        return;
+    if ((p == PAR_P1_VAL || p == PAR_P2_VAL) && ui.mode == M_STEP &&
+        lock_get(shown_pat(), ui.track, ui.step & 63u, p == PAR_P2_VAL) == RUSH_CODE) {
+        put_str(put_int(b, (int32_t)(v > RUSH_MAX ? RUSH_MAX : v)), "%", 2);   /* (39: a RUSH lock: its amount) */
+        return;
+    }
     switch (p) {                                     /* (0.16: the master compressor) */
     case PAR_MC_THR: put_str(put_int(b, -(int32_t)((127u - v) * 48u + 63u) / 127), " dB", 4); return;
     case PAR_MC_ATK: {
@@ -1851,6 +2001,14 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
     case VP_SONG_ROW: two_digits(b, v + 1u); return;
     case VP_SONG_EDIT: put_str(b, v == SE_DELETE ? "DELETE" : "INSERT", n); return;
     case VP_PLAY: put_str(b, v ? "SONG" : "PATTERN", n); return;
+    case VP_ROADS: put_str(b, v ? "ROADS" : "PLAY", n); return;
+    case VP_RSUR: put_str(put_int(b, (int32_t)(v * 100u / 15u)), "%", 2); return;
+    case VP_RHOME:
+        if (SONG_HOME[v % NSONGHOME])
+            put_str(put_int(b, SONG_HOME[v % NSONGHOME]), " BARS", 6);
+        else
+            put_str(b, "NEVER", n);
+        return;
     case VP_VOICES:
         if (v == PV_KIT) {
             put_str(b, "KIT ", n);
@@ -1924,8 +2082,23 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
     }
     case VP_GHOST: put_int(b, (int32_t)v); return;
     case VP_SP ... VP_SP_LAST: sp_card_value(b, n, p - VP_SP, v); return;
+    case VP_WD ... VP_WD_LAST: wd_card_value(b, n, p - VP_WD, v); return;
     case VP_DVARY: if (v) put_int(b, (int32_t)v); else put_str(b, "OFF", n); return;
     case VP_STCH: put_str(put_int(b, (int32_t)(v * 100u / 127u)), "%", 2); return;
+    case VP_RUSH: case VP_RFILT:
+        if (v)
+            put_str(put_int(b, (int32_t)v), "%", 2);
+        else
+            put_str(b, "OFF", n);
+        return;
+    case VP_RSTART: case VP_RFREE: case VP_RFLAM: put_str(put_int(b, (int32_t)v), "%", 2); return;
+    case VP_RTOP: put_str(b, v == RT_64 ? "1/64" : v == RT_128 ? "1/128" : "1/256", n); return;
+    case VP_RGLIDE: put_str(put_int(b, (int32_t)v * 5), " ms", 4); return;
+    case VP_RPITCH:
+        if (v > 12u)
+            b[0] = '+';
+        put_str(put_int(b + (v > 12u), (int32_t)v - 12), " st", 4);
+        return;
     case VP_STSIZE: {
         static const char *const Z[NSTSIZE] = {"1/8", "1/16", "1/16T", "1/32", "1/32T", "1/64", "RANDOM"};
         put_str(b, Z[v < NSTSIZE ? v : 1u], n);
@@ -1952,6 +2125,14 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
         return;
     }
     case VP_SCALE: put_str(b, SCALE_NAME[v < NSCALE ? v : 0], n); return;
+    case VP_TBASE: note_name(b, v + SEQ_DEFAULT_NOTE - TBASE_MAX); return;
+    case VP_TRP:
+        if (v > 7u)
+            *b++ = '+';
+        put_int(b, (int32_t)v - 7);
+        return;
+    case VP_TRWHEN: put_str(b, v == 2u ? "BAR" : v ? "BEAT" : "NOW", n); return;
+    case VP_TRHOLD: put_str(b, v ? "HOLD" : "LATCH", n); return;
     case VP_SFOLLOW: case VP_GFOLLOW: put_str(b, v ? "ON" : "OFF", n); return;
     case VP_GROOVE: {                                /* (26: seq.c GROOVE_T's order) */
         static const char *const G[NGROOVE + 1u] = {"OFF", "SW 54%", "SW 58%", "SW 62%", "SW 66%", "SW 71%", "LAZY",
@@ -1961,12 +2142,19 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
     }
     case VP_GAMT: put_str(put_int(b, (int32_t)v), "%", 2); return;
     case VP_LEN: case VP_MEL + ML_LEN: {
-        static const char *const L[NLEN] = {"AUTO", "1/32", "1/16", "1/8", "1/8.", "1/4", "1/2", "TIE"};
-        put_str(b, L[v < NLEN ? v : 0], n);
+        static const char *const L[NLEN_ALL] = {"AUTO", "1/32", "1/16", "1/8", "1/8.", "1/4", "1/2", "TIE", "3/4",
+                                                "1 BAR", "1.5 BARS", "2 BARS", "3 BARS", "4 BARS", "6 BARS", "8 BARS",
+                                                "12 BARS", "16 BARS", "24 BARS", "32 BARS", "48 BARS", "64 BARS",
+                                                "INF"};
+        if (p == VP_LEN)                             /* (0.23-t11: the step's knob, TIE last; the melody's: NLEN) */
+            v = len_knob(v);
+        put_str(b, L[v < NLEN_ALL ? v : 0], n);
         return;
     }
     case VP_MEL + ML_SHAPE: {
-        static const char *const S[NMEL] = {"OFF", "RANDOM", "WALK", "ARP UP", "ARP DN", "ARP U/D", "MOTIF"};
+        static const char *const S[NMEL] = {"OFF", "RANDOM", "WALK", "ARP UP", "ARP DN", "ARP U/D", "MOTIF",
+                                            "CONVERGE", "DIVERGE", "CON/DIV", "LEAPFROG", "SPIRAL", "ALTERNATE",
+                                            "PAIRS", "ROTATE", "INVERT", "PEDAL"};
         put_str(b, S[v < NMEL ? v : 0], n);
         return;
     }
@@ -2171,7 +2359,8 @@ static void draw_card(uint32_t k, uint32_t p)
 {
     char nm[24], v[24];
     uint32_t val, mn, mx, s;
-    int lock = 0, hot = ui.hot == k + 1u, idle = ui.mode == M_SOUND && p != VP_NONE && par_unheard(ui.track, p);
+    int lock = 0, hot = ui.hot == k + 1u, idle = (ui.mode == M_SOUND && p != VP_NONE && par_unheard(ui.track, p)) ||
+                                                 vp_dead(p);
     uint16_t bg = T_SURF, fg = T_TEXT;
     int32_t x0 = (int32_t)k * 60;
     if (p != VP_NONE && ui.held_step >= 0 && par_lockable(p) && ui.mode != M_STEP) {
@@ -2204,7 +2393,8 @@ static void draw_card(uint32_t k, uint32_t p)
     if (!region(R_CARD0 + k, s))
         return;
     cv_begin(60, CARD_H, T_BG);
-    if (idle) {                                      /* (0.19: a model's own sound: this knob unheard, locked) */
+    if (idle) {                                      /* (0.19: a model's own sound: this knob unheard, locked; 40: a
+                                                      * knob not yet in use) */
         uint16_t f = ux_mix(T_BG, T_SURF, 50);
         cv_rrect(2, 2, 56, CARD_H - 6, 5, f, T_BG);
         cv_text_in(2, 8, 56, &AF_S, nm, ux_mix(f, T_MID, 55), f);

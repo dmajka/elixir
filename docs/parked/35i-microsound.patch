@@ -1,0 +1,306 @@
+--- a/firmware/src/micro.c
++++ b/firmware/src/micro.c
+@@ -13,8 +13,14 @@
+  *   DUST    a crackle of random clicks; COLOUR: sparse .. dense
+  *   POP     a jump that slides back; COLOUR: soft .. sharp edge
+  *   CHIRP   a sine swept 4 octaves over its length; COLOUR: down .. up
+- * 0.20's PULSAR, WAVELET and SPLINTER (Phase 35i, after Curtis Roads' Microsound) are parked out of the firmware
+- * (0.23-test5, for flash): docs/parked/35i-microsound.patch puts them back.
++ * 0.20 (Phase 35i), after Curtis Roads' Microsound:
++ *   PULSAR  a train of pulsarets (a sine's one cycle at the formant, then silence) speeding up 5 octaves (from 5 Hz
++ *           at the least) to the pitch over 3/4 of its length: rhythm turning into pitch (backwards: slowing down into
++ *           clicks); COLOUR: the formant, the pitch x 1 (soft) .. x 16 (bright)
++ *   WAVELET 1 .. 24 cycles (LENGTH) of a sine at the pitch x 2 in a Hann window; COLOUR: smooth .. rough (phase
++ *           modulated by itself)
++ *   SPLINTER an impulse breaking into 2 .. 12 fragments at shrinking, uneven gaps over 6 .. 150 ms (backwards: the
++ *           fragments gather into the impulse); COLOUR: whole .. shattered
+  * The knobs (the MODEL page's): LENGTH (DECAY), COLOUR (BRIGHT), JITTER (STRUCT: each hit's length and colour, a
+  * train's gaps), REVERSE (EXCITER: the chance a hit plays backwards: a swell into a cut, a train growing, a sweep the
+  * other way), TENSION (a hit's pitch up, falling back). The voice's pitch (its note, pitch EG, random, tape) sets the
+@@ -23,7 +29,8 @@
+  * A hit sets up at the voice's next block (mi_block, on the core that renders the voice), from the pitch then; each
+  * voice has its own noise, so the sound doesn't depend on the core or the order. Samples Q15, envelopes Q30. */
+ 
+-enum { MI_CLICK, MI_TRAIN, MI_CRUNCH, MI_BITS, MI_BURST, MI_SNAP, MI_GRAIN, MI_DUST, MI_POP, MI_CHIRP, NMI };
++enum { MI_CLICK, MI_TRAIN, MI_CRUNCH, MI_BITS, MI_BURST, MI_SNAP, MI_GRAIN, MI_DUST, MI_POP, MI_CHIRP, MI_PULSAR,
++       MI_WAVELET, MI_SPLINTER, NMI };
+ _Static_assert(NMI == NMICRO, "rings.c: the MODEL list's MICRO types");
+ #define MI_C4 25480320u                              /* the oscillator's increment at C4 (261.63 Hz x 2^32 / FS) */
+ #define MI_HZ 97391u                                 /* .. at 1 Hz */
+@@ -41,8 +48,10 @@
+     uint32_t ph, inc, wph, winc;                     /* the rate's phase, its window's (GRAIN) */
+     int32_t sweep;                                   /* CHIRP: the increment's multiplier a sample, Q30 */
+     int32_t reps, gap, hold, width, ratio, spacing;  /* TRAIN: clicks left, the gap so far, its length; the ratio Q16;
+-                                                      * the gap Q8 */
+-    int32_t levels, inv_lv, sp;                      /* CRUNCH: the levels, 65536 / levels, the hold's speed Q16 */
++                                                      * the gap Q8 (SPLINTER: the same, the gap in samples; PULSAR:
++                                                      * reps a pulsaret sounding) */
++    int32_t levels, inv_lv, sp;                      /* CRUNCH: the levels, 65536 / levels, the hold's speed Q16
++                                                      * (PULSAR: the rate's top and bottom) */
+     int32_t l, c;                                    /* this hit's LENGTH and COLOUR, Q16 */
+     int32_t ten;                                     /* TENSION: Q16 over 1 */
+     int32_t inv_n;                                   /* 2^31 / n */
+@@ -53,7 +62,8 @@
+  * struck type peaks near an LXR voice (tests/render_test.c) */
+ static const uint16_t MI_GAIN[NMI] = {
+     [MI_CLICK] = 2048, [MI_TRAIN] = 2253, [MI_CRUNCH] = 2253, [MI_BITS] = 3584, [MI_BURST] = 4608,
+-    [MI_SNAP] = 717, [MI_GRAIN] = 2007, [MI_DUST] = 2560, [MI_POP] = 2688, [MI_CHIRP] = 1024};
++    [MI_SNAP] = 717, [MI_GRAIN] = 2007, [MI_DUST] = 2560, [MI_POP] = 2688, [MI_CHIRP] = 1024,
++    [MI_PULSAR] = 1536, [MI_WAVELET] = 1024, [MI_SPLINTER] = 2048};
+ 
+ static inline int32_t mi_noise(micro_t *m) { return (int32_t)xs32(&m->rng) >> 16; }   /* -32768 .. 32767 */
+ static inline int32_t mi_q16(uint32_t k) { return (int32_t)(k >= 127u ? 65536u : k * 65536u / 127u); }
+@@ -171,7 +181,62 @@
+         fall = mi_samples(196608 + mi_mul(7864320, mi_mul(l, l)));   /* 3 .. 123 ms */
+         n = fall * 7 / 10 + 64;
+         m->a1 = clamp32(mi_mul(328 + mi_mul(29491, mi_mul(c, c)), r), 98, 32767);
++        break;
++    case MI_PULSAR: {                                /* the pitch / 32 (5 Hz at the least) up to the pitch, 30 .. 600 ms */
++        uint64_t f = inc, w;
++        int32_t e;
++        f = f < 20u * MI_HZ ? 20u * MI_HZ : f > 8000u * MI_HZ ? 8000u * MI_HZ : f;
++        n = mi_samples(1966080 + mi_mul(37355520, l));
++        e = ((5 << 16) >> 4) * 11357 / (n * 3 / 4) << 4;   /* (as CHIRP's: ln 2 x 5 over 3/4 of it, Q30; the pitch
++                                                      * held after) */
++        m->levels = (int32_t)f;
++        m->inv_lv = (int32_t)(f >> 5 < 5u * MI_HZ ? 5u * MI_HZ : f >> 5);
++        if (m->back)                                 /* (from the pitch down: 1 / (1 + e)) */
++            e = -e + (int32_t)(((int64_t)e * e) >> 30);
++        else
++            f = (uint32_t)m->inv_lv;
++        m->sweep = (1 << 30) + e;
++        m->inc = (uint32_t)f;
++        w = ((uint64_t)m->levels * (uint32_t)exp2_q16(4 * c)) >> 16;   /* (the formant: x 1 .. 16) */
++        m->winc = (uint32_t)(w > 12000u * (uint64_t)MI_HZ ? 12000u * (uint64_t)MI_HZ : w);
++        m->reps = 1;                                 /* (a pulsaret at once) */
++        break;
++    }
++    case MI_WAVELET: {                               /* 1 .. 24 cycles at the pitch x 2 (523 Hz at C4) */
++        uint64_t f = (uint64_t)inc << 1;
++        int32_t cyc = 1 + (23 * mi_mul(l, l) >> 16);
++        f = f < 40u * MI_HZ ? 40u * MI_HZ : f > 12000u * MI_HZ ? 12000u * MI_HZ : f;
++        m->inc = (uint32_t)f;
++        n = (int32_t)(0xFFFFFFFFu / (uint32_t)f) * cyc;
++        m->winc = 0xFFFFFFFFu / (uint32_t)(n < 2 ? 2 : n);   /* (the window: a turn over the wavelet) */
++        m->amp = mi_mul(c, 41716);                   /* (the phase modulation's depth: 2 radians at 127) */
++        m->hp = 0;                                   /* (low, it's a sub blip) */
++        break;
++    }
++    case MI_SPLINTER: {                              /* the impulse and 2 .. 12 fragments over 6 .. 150 ms */
++        int32_t span = mi_samples(393216 + mi_mul(9437184, l)), i;
++        m->reps = 3 + (10 * c >> 16);
++        m->ratio = 45875 - mi_mul(13107, c);         /* (each gap 0.7 .. 0.5 of the one before) */
++        m->spacing = clamp32(mi_mul(span, 65536 - m->ratio), 6, 20000);
++        m->a1 = clamp32(mi_mul(26214, r), 6554, 32767);   /* (the edges' low pass, Q15: brighter higher) */
++        m->amp = 29491;                              /* (the impulse's level, Q15: 0.9) */
++        m->gap = 0;
++        if (m->back) {                               /* the smallest first, the impulse last */
++            for (i = 1; i < m->reps; i++)
++                m->amp = mi_mul(m->amp, 47186);      /* (x 0.72) */
++            for (i = 2; i < m->reps; i++)
++                m->spacing = mi_mul(m->spacing, m->ratio);
++            m->ratio = (int32_t)(0xFFFFFFFFu / (uint32_t)m->ratio);
++            m->width = 2 + (int32_t)(xs32(&m->rng) & 1u);
++            m->held = mi_mul(m->held, m->amp << 1);
++        } else {
++            m->width = 6;
++            m->held = mi_mul(m->held, 58982);        /* (0.9) */
++        }
++        m->hold = clamp32(m->spacing, 6, 20000);
++        n = 0x7FFFFFFF;                              /* (it ends after its fragments) */
+         break;
++    }
+     default: {                                       /* MI_CHIRP: from the pitch x 2.68 (700 Hz at C4) */
+         int32_t oct = (c - 32768) * 8, e;            /* (-4 .. +4 octaves, Q16) */
+         uint64_t f = ((uint64_t)inc * 175636u) >> 16;
+@@ -339,6 +404,63 @@
+             m->lp += (int32_t)(((int64_t)(m->held - m->lp) * m->a1) >> 15);   /* the edge of the jump */
+             y = mi_mul(m->lp, 52429);                /* (0.8) */
+             break;
++        case MI_PULSAR: {
++            uint32_t last = m->ph;
++            int32_t x2 = (x * x) >> 15, gate = 32767 - ((x2 * x2) >> 15);   /* (flat, then a quick close) */
++            uint64_t k;
++            m->ph += m->inc;
++            if (m->ph < last) {                      /* a period begins: its pulsaret */
++                m->wph = 0;
++                m->reps = 1;
++            }
++            if (m->reps) {
++                uint32_t w0 = m->wph;
++                y = mi_mul(sine_at(m->wph + 0x40000000u), mi_mul(gate << 1, 39322));   /* (0.6) */
++                m->wph += m->winc;
++                if (m->wph < w0)                     /* (its cycle done: silence till the next period) */
++                    m->reps = 0;
++            }
++            k = ((uint64_t)m->inc * (uint32_t)m->sweep) >> 30;   /* (it stops at the pitch, or at the bottom) */
++            m->inc = (uint32_t)(k < (uint32_t)m->inv_lv ? (uint32_t)m->inv_lv : k > (uint32_t)m->levels ? (uint32_t)m->levels : k);
++            break;
++        }
++        case MI_WAVELET: {
++            int32_t s = sine_at(m->ph + 0x40000000u), w;
++            y = sine_at(m->ph + (uint32_t)(s * m->amp) + 0x40000000u);
++            m->ph += m->inc;
++            w = m->back ? (x * x) >> 15 : (32767 + sine_at(m->wph)) >> 1;   /* (Hann: (1 - cos) / 2; backwards a
++                                                                              * swell into the cut) */
++            m->wph += m->winc;
++            y = mi_mul(y, mi_mul(w << 1, 45875));    /* (0.7) */
++            break;
++        }
++        case MI_SPLINTER:
++            m->lp += (int32_t)(((int64_t)((m->gap < m->width ? m->held : 0) - m->lp) * m->a1) >> 15);
++            y = m->lp;
++            if (++m->gap >= m->hold) {
++                int32_t s, nz = mi_noise(m);
++                if (--m->reps <= 0) {
++                    m->on = 0;
++                    for (; i < BLOCK; i++)
++                        buf[i] = 0;
++                    return;
++                }
++                m->gap = 0;
++                if (m->back && m->reps == 1) {       /* (backwards, the impulse last) */
++                    m->width = 6;
++                    m->held = nz < 0 ? -29491 : 29491;
++                } else {
++                    m->amp = m->back ? clamp32(mi_mul(m->amp, 91022), 0, 29491) : mi_mul(m->amp, 47186);   /* (x 1/0.72,
++                                                                                                    * x 0.72) */
++                    m->width = 2 + (int32_t)(xs32(&m->rng) % 3u);
++                    m->held = mi_mul(m->amp, 49152 + (nz < 0 ? -nz : nz) / 2);   /* (0.75 .. 1 of it) */
++                    m->held = nz < 0 ? -m->held : m->held;
++                }
++                m->spacing = mi_mul(m->spacing, m->ratio);
++                s = m->spacing + mi_mul(m->spacing, mi_mul(mi_noise(m) << 1, 26214));   /* (+-40%: uneven) */
++                m->hold = m->reps == 1 ? m->width + 48 : clamp32(s, 6, 20000);   /* (the last: its edge's tail) */
++            }
++            break;
+         default: {                                   /* MI_CHIRP */
+             int32_t e = m->back ? mi_mul(x << 1, clamp32((m->n - m->cnt < 22 ? m->n - m->cnt : 22) * 2979, 0, 65536))
+                                 : mi_mul(clamp32((m->cnt < 22 ? m->cnt : 22) * 2979, 0, 65536), (32767 - x) << 1);
+--- a/firmware/src/rings.c
++++ b/firmware/src/rings.c
+@@ -25,7 +25,7 @@
+ 
+ #include "rings_tables.h"
+ 
+-#define NMICRO 10                                    /* (Phase 24: MICRO's types, micro.c, on every voice) */
++#define NMICRO 13                                    /* (Phase 24: MICRO's types, micro.c, on every voice) */
+ enum { MD_LXR, MD_MODAL, MD_STRING, MD_FM, MD_PL0, MD_MC0 = MD_PL0 + 16, NMODEL = MD_MC0 + NMICRO };   /* (0.15:
+                                                      * Plaits' 16, plaits.c) */
+ #define RG_MODES 32u
+--- a/firmware/src/params.c
++++ b/firmware/src/params.c
+@@ -77,7 +77,8 @@
+                                       "P SPEECH", "P SWARM", "P NOISE", "P PARTCL", "P STRING", "P MODAL", "P BD",
+                                       "P SD", "P HH",   /* (0.15: Plaits' engines, plaits.c) */
+                                       "CLICK", "TRAIN", "CRUNCH", "BITS", "BURST", "SNAP", "GRAIN", "DUST", "POP",
+-                                      "CHIRP"};   /* (24: MICRO's, micro.c) */
++                                      "CHIRP", "PULSAR", "WAVELET", "SPLINTER"};   /* (24: MICRO's, micro.c; 0.20:
++                                                                                     * the last three) */
+ _Static_assert(sizeof L_MODEL / sizeof L_MODEL[0] == NMODEL, "rings.c: the MODEL list");
+ static const char *const L_BITS[] = {"OFF", "15", "14", "13", "12", "11", "10", "9", "8", "7", "6", "5", "4", "3",
+                                      "2", "1"};
+--- a/firmware/src/ui_viz.c
++++ b/firmware/src/ui_viz.c
+@@ -213,6 +213,25 @@
+         uint32_t p = i * i * (0xFFFFFFFFu / (IW * IW)) * 3u + ph * 2u;
+         int32_t e = 32767 - (int32_t)i * 400;
+         return (int32_t)(((int64_t)vz_sin(p) * (e > 4000 ? e : 4000)) >> 15);
++    }
++    case 30: {                                         /* PULSAR: pulsarets closer and closer, narrower with COLOUR */
++        uint32_t p = i * i * (0xFFFFFFFFu / (IW * IW)) * 7u, k = 1u + b / 16u;
++        return p < 0xFFFFFFFFu / k ? vz_sin(p * k) * 7 / 8 : 0;
++    }
++    case 31: {                                         /* WAVELET: a few cycles in a window, more with LENGTH */
++        int32_t w = (32767 - vz_sin(ph + 0x40000000u)) / 2;
++        return (int32_t)(((int64_t)vz_sin(ph * (1u + a / 8u)) * w) >> 15);
++    }
++    case 32: {                                         /* SPLINTER: a spike, then smaller ones closer and closer */
++        int32_t x = 4, g = IW / 3, h = 30000, k, n = 3 + (int32_t)b / 13;
++        for (k = 0; k < n && x < IW; k++) {
++            if ((int32_t)i >= x && (int32_t)i < x + (k ? 1 : 3))
++                return (k & 1) ? -h : h;
++            x += g;
++            g = g * 2 / 3 > 2 ? g * 2 / 3 : 2;
++            h = h * 3 / 4;
++        }
++        return 0;
+     }
+     default: {                                         /* (29) CHIRP: a sine swept up */
+         uint32_t p = i * i * (0xFFFFFFFFu / (IW * IW)) * (4u + b / 16u);
+@@ -486,7 +505,8 @@
+         "A modal resonator: a bell or a bar", "An analog kick", "An analog snare", "An analog hat",
+         "A square click, or a doublet", "A train of clicks", "Crunchy, held noise", "An LFSR's bits",
+         "A burst of noise", "A snap: noise and a click", "A resonant grain", "A crackle of dust",
+-        "A pop that slides back", "A sine swept four octaves"};
++        "A pop that slides back", "A sine swept four octaves", "Pulses speeding up into a pitch",
++        "A few cycles of a sine in a window", "An impulse splintering apart"};
+     static const char *const LXR[4] = {"The LXR's drum: OSC, FM, a transient",
+                                        "The LXR's snare: OSC, noise, a transient", "The LXR's cymbal: 3 OSCs in FM",
+                                        "The LXR's hats: 3 OSCs in FM"};
+--- a/tests/render_test.c
++++ b/tests/render_test.c
+@@ -280,7 +280,8 @@
+     {   /* 24: MICRO, each type on each voice, struck (LENGTH, COLOUR at the middle): it sounds, doesn't clip, ends;
+          * backwards it sounds too; its level (over where it sounds) near the others'; SN-HH can't take Rings' */
+         static const char *const MI_NAMES[NMICRO] = {"CLICK", "TRAIN", "CRUNCH", "BITS", "BURST", "SNAP", "GRAIN",
+-                                                     "DUST", "POP", "CHIRP"};
++                                                     "DUST", "POP", "CHIRP", "PULSAR", "WAVELET",
++                                                     "SPLINTER"};
+         uint32_t v, e, back, i;
+         for (v = 0; v < NVOICE; v++) {
+             par_set(PAR_MDECAY1 + v, 64);
+--- a/MANUAL.md
++++ b/MANUAL.md
+@@ -548,7 +548,7 @@
+ 
+ ### MICRO: microsound voices (every track)
+ 
+-From 0.17, any track can play a **microsound** instead of its LXR voice: a click a fraction of a millisecond long, a rasp of clicks, crunchy sample-and-hold bits, a burst of noise, a resonant noise grain. They are for glitch, clicks-and-cuts and microhouse beats, after the sounds of **GLITCH**, ttreu's FM-1 firmware. (0.20's PULSAR, WAVELET and SPLINTER, after Curtis Roads' *Microsound*, were taken out in 0.23-test5 to make room; a kit that used one plays its LXR voice.)
++From 0.17, any track can play a **microsound** instead of its LXR voice: a click a fraction of a millisecond long, a rasp of clicks, crunchy sample-and-hold bits, a burst of noise, a resonant noise grain. They are for glitch, clicks-and-cuts and microhouse beats, after the sounds of **GLITCH**, ttreu's FM-1 firmware. From 0.20 three more (PULSAR, WAVELET, SPLINTER) follow Curtis Roads' book *Microsound*.
+ 
+ Pick one with **Model** on the MODEL page (EDIT's first page). On the snare, cymbal and hats the page holds only Model until a MICRO type is picked, and Model steps from **LXR** straight to the MICRO types; on D1–D3 they come after Plaits' engines. The closed and open hats share one voice, so they share one MICRO type, as they share every other sound setting.
+ 
+@@ -566,6 +566,9 @@
+ | **DUST** | a crackle of random clicks | sparse → dense |
+ | **POP** | a speaker pop: a jump that slides back | soft → a sharp edge |
+ | **CHIRP** | a fast sine sweep | sweeping down → up |
++| **PULSAR** | pulses that speed up five octaves until they become the note's pitch: rhythm turning into a tone (from 0.20) | soft → bright (each pulse's own tone, the note × 1 to × 16) |
++| **WAVELET** | a few cycles of a sine (Length: 1 to 24) in a smooth window: a pitched blip an octave above the note, down into the bass (from 0.20) | smooth → rough |
++| **SPLINTER** | one impulse breaking into 2–12 smaller fragments, closer and closer, over 6–150 ms (from 0.20) | whole → shattered (more fragments, faster) |
+ 
+ The knobs:
+ 
+@@ -574,10 +577,10 @@
+ | Row 1 | Model | Length | Colour | Jitter |
+ | Row 2 | Reverse | Tension | | |
+ 
+-- **Length:** how long the sound lasts: a click's width, how many clicks a train has, a grain's window, a crackle's duration.
++- **Length:** how long the sound lasts: a click's width, how many clicks a train has, a grain's window, a crackle's duration, a pulsar's sweep (30–600 ms), a wavelet's cycles, a splinter's spread.
+ - **Colour:** the type's own character (the table above).
+ - **Jitter:** each hit a little different: its length and colour vary, and a train's gaps go uneven. At 0 every hit is the same.
+-- **Reverse:** the chance that a hit plays backwards: a swell that stops with a cut, a train that grows louder and faster and a sweep the other way. At 127 every hit is backwards.
++- **Reverse:** the chance that a hit plays backwards: a swell that stops with a cut, a train that grows louder and faster, a sweep the other way, a pulsar slowing from a tone into clicks, fragments gathering into one impulse. At 127 every hit is backwards.
+ - **Tension:** each hit's pitch is thrown up and falls back (an octave at 127 and full velocity), as on Rings' and Plaits' models.
+ 
+ **The pitch** (the voice's coarse and fine tune, its pitch EG, the scale, the melody generator, KEYS, random pitch) moves the sound: a higher note makes a click shorter, a train faster, crunch and bits clocked faster, a grain or a snap's band higher, a pop sharper, a chirp start higher. A grain played by the melody generator is a pitched blip.
+@@ -1619,7 +1622,7 @@
+ 
+ - **Sound:** Control All (OCT+ held, a knob: every track); LFO modes (hold, one-shot, half); a second LFO and an insert effect (phaser, flanger, chorus, tremolo, autopan, frequency shifter, ring) on every track; seven more filter types; FX and reverb sends per voice; four reverbs (Clouds' plate among them); nine waveshapers; bits; tilt EQ; random per hit; choke groups; cross modulation; a gate per voice; phaser and flanger; a tape delay with sync, glitches and pitch-shifted repeats, its echoes into the reverb; dirt on the FX bus and the master; a sound browser and a kit library.
+ - **Models (experimental):** Rings' resonators and Plaits' sixteen engines on the drum voices, two at a time. Not in the LXR-02.
+-- **MICRO:** ten microsound types (clicks, click trains, crunch, bits, noise bursts, snaps, resonant grains, dust, pops, chirps, after GLITCH) on every track.
++- **MICRO:** thirteen microsound types (clicks, click trains, crunch, bits, noise bursts, snaps, resonant grains, dust, pops, chirps, after GLITCH; pulsars, wavelets and splinters, after Curtis Roads) on every track.
+ - **Performance:** PERF with fill, repeat, freeze, throws, feedback push, tape stop, filter sweeps, a DJ filter, four macros, the voices' volumes on two pages, PERFORM 2, DENSITY (thinning or building the whole pattern) and three global LFOs (morph, the DJ filter, the effects, density, transpose, the delay, macros, down to 256 bars a cycle); KEYS, to play a voice from the keyboard.
+ - **Sequencing:** trig conditions, ratchets, note lengths and ties, per-track clocks, generators (mutate, Turing machine, cellular automata, Grids, Euclid with a second pulse), a melody generator, a scale per pattern, dice, commit and undo, and copying a bar across all tracks.
+ - **Safety:** the automatic session save, a CPU meter with the load by part, and backup and restore over USB (the library page).
+--- a/README.md
++++ b/README.md
+@@ -126,7 +126,7 @@
+ 
+ From 0.15 the MODEL list also has Plaits' sixteen original engines (**P VA** … **P HH**: virtual analog, waveshaping, FM, grain, additive, wavetable, chords, speech, swarm, filtered and particle noise, inharmonic string, modal, bass drum, snare, hi-hat), ported from Mutable Instruments **Plaits** (MIT licence). Their knobs are Plaits': **Harmonic**, **Timbre**, **Morph**, plus **Colour** (Plaits' low-pass gate on the amp EG; 0 a plain VCA), **Aux** (OUT to AUX) and **Env** (the amp EG's amount on Timbre and Morph). `tests/plaits_compare.sh` checks them against Plaits' own code. The models are **experimental** (not part of the LXR-02) and heavy: at most two play at once, rendered with D1–D3 on the FM-1's second core (one on a unit that falls back to one core; CONFIG → LOAD shows the cores and the load by part).
+ 
+-From 0.17 every track's MODEL also has **MICRO** types, after GLITCH (ttreu's FM-1 firmware): **CLICK** (0.1–1.5 ms), **TRAIN**, **CRUNCH**, **BITS**, **BURST**, **SNAP**, **GRAIN** (resonant noise grains), **DUST**, **POP** and **CHIRP**. The type replaces the voice's oscillators, FM and transient; its knobs are **Length**, **Colour**, **Jitter**, **Reverse** (the chance a hit plays backwards) and **Tension**. The voice's pitch moves the sound, and its filter, shape, sends and locks still apply; the amp EG doesn't (Length does). On the snare, cymbal and hats Model goes from LXR straight to the MICRO types. They cost less than the LXR voice they replace and aren't counted in the two-model limit.
++From 0.17 every track's MODEL also has **MICRO** types, after GLITCH (ttreu's FM-1 firmware): **CLICK** (0.1–1.5 ms), **TRAIN**, **CRUNCH**, **BITS**, **BURST**, **SNAP**, **GRAIN** (resonant noise grains), **DUST**, **POP** and **CHIRP**, and from 0.20 three after Curtis Roads' *Microsound*: **PULSAR** (pulses speeding up into a pitch), **WAVELET** (a few cycles in a window) and **SPLINTER** (an impulse breaking apart). The type replaces the voice's oscillators, FM and transient; its knobs are **Length**, **Colour**, **Jitter**, **Reverse** (the chance a hit plays backwards) and **Tension**. The voice's pitch moves the sound, and its filter, shape, sends and locks still apply; the amp EG doesn't (Length does). On the snare, cymbal and hats Model goes from LXR straight to the MICRO types. They cost less than the LXR voice they replace and aren't counted in the two-model limit.
+ 
+ **Control All** (as on Elektron's boxes): hold OCT+ on a sound page and turn a knob, and that parameter moves on every track that has it, each from its own value, so the kit keeps its balance. Keep holding and page (SELECT, the sound buttons) to move more. Letting go of OCT+ asks whether to revert: OCT+ again reverts the kit (the default), OCT− keeps the changes, so a slipped thumb never keeps them by accident. It records no locks.
+ 

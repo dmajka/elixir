@@ -517,7 +517,7 @@ static void stutter(int16_t *l, int16_t *r)
 /* the master (engine_block): the DJ filter, the tape's fade; l, r: the block, saturated */
 static void perf_master(int16_t *l, int16_t *r)
 {
-    int32_t d = clamp32(((int32_t)pf.dj - 64) * 1040 + pf.sweep + gl.dj, -65536, 65536), a = iabs(d), w;
+    int32_t d = clamp32(((int32_t)pf.dj - 64) * 1040 + pf.sweep + gl.dj + sq.ru_hp, -65536, 65536), a = iabs(d), w;
     uint32_t i, c, type;
     int16_t f[BLOCK];
     pf.dj_d = d;
