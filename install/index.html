@@ -604,8 +604,8 @@ class Updater {
 // Elixir's install page: what the device check says (0.14). web/make_site.py inlines it after fm1pkg.js and
 // fm1ota.js; tests/install_test.mjs runs it against simulated FM-1s.
 //
-// The FM-1 answers the same identity (FM-1_9xx) whatever alternative firmware runs, so the port's name tells them
-// apart: Elixir names its port "Elixir" (a computer may keep showing an older name for it after an update, which
+// Most alternative firmwares answer FM-1_9xx (Elixir did until 0.21; from 0.22 FM-1_359XXYYZZ) and many share
+// one, so the port's name tells them apart: Elixir names its port "Elixir" (a computer may keep showing an older name for it after an update, which
 // is Elixir too); Felucca's is "Felucca …".
 
 // the firmware a port's name says: "elixir", "felucca" or null
@@ -632,7 +632,7 @@ function describe(dev) {
 }
 
 const $ = (id) => document.getElementById(id);
-const meta = {"version": "v0.21", "product": "FM-1_900", "pkg": "../firmware/elixir-v0.21.fwsc"};
+const meta = {"version": "v0.22", "product": "FM-1_359002200", "pkg": "../firmware/elixir-v0.22.fwsc"};
 const MSG = {
   nomidi: "This browser has no Web MIDI. Open the page in Chrome or Edge.",
   loadfail: "Could not load the Elixir package: ",

@@ -46,7 +46,7 @@ The Rings and Plaits models are **experimental**: they are not part of the LXR-0
 
 Put the FM-1 on M-VAVE's official firmware **V15** before installing Elixir for the first time. This is what everyone who makes FM-1 firmware recommends. Elixir's package, like Felucca's, is built for V15's flash layout and update loader, and V15 is the firmware you return to.
 
-The install page has a **Check my FM-1** button. It asks the FM-1 what it runs: `FM-1_015` is official V15, `FM-1_9xx` is an alternative firmware (Felucca or Elixir), and anything else is an older official version. If it isn't V15, get V15 (`FM-1.fwsc`) from M-VAVE's download page and install it with the page's **Official V15** section, or with M-VAVE's own updater.
+The install page has a **Check my FM-1** button. It asks the FM-1 what it runs: `FM-1_015` is official V15, `FM-1_359…` is Elixir (from 0.22; before that Elixir answered `FM-1_900`), other numbers of 900 and up are alternative firmwares (Felucca and others), and anything lower is an older official version. If it isn't V15, get V15 (`FM-1.fwsc`) from M-VAVE's download page and install it with the page's **Official V15** section, or with M-VAVE's own updater.
 
 ### Installing
 
