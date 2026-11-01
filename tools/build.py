@@ -50,9 +50,25 @@ SDK_SHA256 = {
     "cfg/eq_cfg_hw.bin": "41167491bffed4651750719c973d2758adeb9021a5670d02d6a53c85ed80ea7d",
 }
 
-PRODUCT = "FM-1_900"                # package identity; release builds are FM-1_9XY
+PRODUCT = None                      # package identity: FM-1_359XXYYZZ (product_for); Felucca's FM-1_900 until 0.21
+ID_PREFIX = "359"                   # (0.22) "ELX" on a phone keypad: free on The Firmware Hub, nine digits so no
+                                    # firmware claiming FM-1_ + 3 to 8 digits matches it
 VERSION = None                      # ELIXIR_VERSION for release builds (default: firmware/src/elixir.c)
 CPU2 = True                         # 0.15 (Phase 17): the second core is built in (firmware/src/elixir.c FELUCCA_CPU2 1)
+
+
+def product_for(version):
+    """the package identity for a version string: v0.22 -> FM-1_359002200 (X, Y, Z two digits each; a -testN or
+    -rcN build shares its release's)"""
+    m = re.fullmatch(r"v?(\d+)\.(\d+)(?:\.(\d+))?(?:\.\d+)?(?:-[A-Za-z0-9]+)?", version)
+    if not m or max(int(m[1]), int(m[2]), int(m[3] or 0)) > 99:
+        raise SystemExit(f"version {version!r}: no identity for it (X.Y or X.Y.Z, up to 99 each)")
+    return f"FM-1_{ID_PREFIX}{int(m[1]):02d}{int(m[2]):02d}{int(m[3] or 0):02d}"
+
+
+def source_version():
+    m = re.search(r'^#define ELIXIR_VERSION "([^"]+)"', (FW / "src" / "elixir.c").read_text(), re.M)
+    return m[1]
 
 
 def toolchain():
@@ -358,17 +374,14 @@ def mmio_check():
 def main():
     global PRODUCT, VERSION
     ap = argparse.ArgumentParser()
-    ap.add_argument("--release", metavar="X.Y", help="release build: identity FM-1_9XY, version string vX.Y")
+    ap.add_argument("--release", metavar="X.Y", help="release build: version string vX.Y (and its identity)")
     ap.add_argument("--sdk", type=Path, help="JieLi AC79 SDK checkout (default: $AC79_SDK)")
     a = ap.parse_args()
     name = "elixir.fwsc"
-    if a.release:                   # one digit each: the identity has room for two (X.Y.Z and X.Y.Z.W keep X.Y's)
-        m = re.fullmatch(r"(\d)\.(\d)(?:\.\d){0,2}(-[A-Za-z0-9]+)?", a.release)
-        if not m:
-            raise SystemExit(f"--release {a.release}: use X.Y, X.Y.Z, X.Y.Z.W or X.Y-suffix, one digit each")
-        PRODUCT = "FM-1_9" + m[1] + m[2]
+    if a.release:
         VERSION = "v" + a.release.lower()      # e.g. v1.0, v1.1-rc1
         name = f"elixir-{a.release}.fwsc"
+    PRODUCT = product_for(VERSION or source_version())
     fm1pkg_make.SDK = a.sdk
     for rel, sha in SDK_SHA256.items():          # fail early without the SDK
         if hashlib.sha256(fm1pkg_make.sdk_file(rel)).hexdigest() != sha:

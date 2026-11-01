@@ -344,8 +344,8 @@ def main(pkg, out):
     pkg, out = Path(pkg), Path(out)
     raw = pkg.read_bytes()
     product, ver = product_of(raw), version()
-    if not re.fullmatch(r"FM-1_9\d\d", product):
-        raise SystemExit(f"{pkg}: identity {product!r} is not an alternative-firmware package (FM-1_9xx)")
+    if not re.fullmatch(r"FM-1_359\d{6}", product):   # (0.22: Elixir's own, tools/build.py product_for)
+        raise SystemExit(f"{pkg}: identity {product!r} is not Elixir's (FM-1_359XXYYZZ)")
     if b"FELUCCA-LOADER-1" not in raw:              # Felucca's own loader: never publish a package with vendor files
         raise SystemExit(f"{pkg}: no Felucca loader in it "
                          "(a package patched from an official one carries vendor files)")

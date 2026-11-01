@@ -1,7 +1,8 @@
 <!doctype html>
 <!-- SPDX-License-Identifier: GPL-3.0-only
-     Elixir's cheat sheet: two landscape pages, printed to web/cheatsheet.pdf by tools/cheatsheet.sh (headless
-     Chrome); web/make_site.py puts the PDF at the site's root. Everything here is from MANUAL.md. -->
+     Elixir's cheat sheet: three landscape pages, printed to web/cheatsheet.pdf by tools/cheatsheet.sh (headless
+     Chrome, with the splash's potion put in for the POTION marks); web/make_site.py puts the PDF at the site's root.
+     Everything here is from MANUAL.md: regenerate it when a release adds or changes keys, pages or knobs. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -14,13 +15,20 @@
   html, body { margin: 0; background: #fff; color: var(--fg); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body { font: 8.3pt/1.36 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; }
   .page { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 16px; grid-template-rows: auto 1fr;
-          height: 7.85in; overflow: hidden; }
+          height: 7.75in; overflow: hidden; }
   .page + .page { break-before: page; }
   .col { min-width: 0; }
   header { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 10px; border-bottom: 2px solid var(--fill);
            padding-bottom: 3px; margin-bottom: 6px; }
-  header h1 { font-size: 15pt; margin: 0; letter-spacing: -0.01em; }
-  header h1 span { color: var(--accent); }
+  header h1 { font-size: 15pt; margin: 0; letter-spacing: -0.01em; display: flex; align-items: center; gap: 7px; }
+  header h1 svg { width: 15px; height: auto; align-self: flex-end; margin-bottom: 1px; }
+  .px-c { fill: #96603a; } .px-o { fill: var(--fg); } .px-g { fill: rgba(29, 27, 24, .07); } .px-h { fill: #fff; }
+  .px-l { fill: #f0a43a; } .px-L { fill: #f8d394; } .px-d { fill: #a8640f; } .px-s { fill: #e9a640; }
+  svg.pixel { shape-rendering: crispEdges; display: block; }
+  .tip b { color: var(--accent); }
+  .knobs.spells td:first-child { width: 0.95in; }
+  .knobs.sk td:first-child { width: 0.62in; }
+  header h1 span span { color: var(--accent); }
   header p { margin: 0; color: var(--dim); }
   header .right { margin-left: auto; }
   h2 { font-size: 9.2pt; margin: 9px 0 2px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.04em; }
@@ -42,8 +50,8 @@
 
 <section class="page">
   <header>
-    <h1><span>Elixir</span> cheat sheet</h1>
-    <p>drum machine firmware for the M-VAVE FM-1 · 1 of 2</p>
+    <h1><!--POTION--><span><span>Elixir</span> cheat sheet</span></h1>
+    <p>drum machine firmware for the M-VAVE FM-1 · 1 of 3</p>
     <p class="right">Black keys numbered 1–11 and white keys 1–16, left to right</p>
   </header>
 
@@ -154,13 +162,17 @@
     <h2>Patterns and songs (HOME)</h2>
     <p>Pattern page: white key queues a pattern, bar keys pick the bank. Song page: K1 song, K2 row, K3 the
       row's pattern (END, LOOP), K4 repeats (x1 … x16).</p>
+
+    <h2>MIDI</h2>
+    <p>In: USB and the TRS jack · out: USB. Clock out always; tempo down to MIDI follows clock in. CC <i>n</i>
+      sets parameter <i>n</i> − 1 (as on the LXR), NRPN reaches the rest. Program change 0–31 queues a pattern.</p>
   </div>
 </section>
 
 <section class="page">
   <header>
-    <h1><span>Elixir</span> cheat sheet</h1>
-    <p>sequencing and performance · 2 of 2</p>
+    <h1><!--POTION--><span><span>Elixir</span> cheat sheet</span></h1>
+    <p>sequencing and performance · 2 of 3</p>
     <p class="right">Full manual: dmajka.github.io/elixir/manual</p>
   </header>
 
@@ -238,15 +250,112 @@
   </div>
 
   <div class="col">
+    <h2>Density (PERFORM: DENSITY)</h2>
+    <table>
+      <tr><td>Density</td><td>−100% thins the groove, weakest steps first (off-beat 16ths, then 8ths, quiet before
+        loud); +100% raises chances, then adds</td></tr>
+      <tr><td>Ghost vel</td><td>Velocity of the added notes</td></tr>
+      <tr><td>Build</td><td>What + adds: CHANCE, GHOSTS, RATCHETS</td></tr>
+      <tr><td>Vary</td><td>OFF the same steps go first; up, a new order each time round</td></tr>
+    </table>
+    <p class="note">Black keys leave a track out. OCT+ commits it into the pattern.</p>
+
+    <h2>Stutter (PERFORM: STUTTER)</h2>
+    <table>
+      <tr><td>Chance</td><td>Chance of a burst at each Length (0%: only OCT+ and LFOs)</td></tr>
+      <tr><td>Size</td><td>The slice: 1/8 … 1/64, triplets, RANDOM</td></tr>
+      <tr><td>Length</td><td>How long a burst lasts: 1/16 … 1 bar</td></tr>
+      <tr><td>Vary</td><td>OFF, SHRINK, PITCH DN / UP, REVERSE, RANDOM</td></tr>
+    </table>
+    <p class="note">OCT+ held on the page stutters now. It repeats the sound itself, tails and reverb included.</p>
+
+    <h2>Links (SHIFT (OCT−) + SEQ)</h2>
+    <p>Up to 8 per pattern, read as a sentence: <i>When D1 hits, CH chance −60%, on the next step.</i></p>
+    <table>
+      <tr><td>When</td><td>A track that hits, accents (vel. over 100) or rests</td></tr>
+      <tr><td>Effect</td><td>DUCK, ONLY, TRIG, RATCH, VEL, PITCH, SHIFT, DECAY</td></tr>
+      <tr><td>Window</td><td>SAME step, NEXT, NEXT 2, the rest of the BAR</td></tr>
+    </table>
+
+    <h2>Morph</h2>
+    <p>SHIFT (OCT−) + white 9 loads a second kit as the target; PERFORM's K3 crossfades every sound parameter to it
+      (switches flip halfway). M in the header while it's above 0.</p>
+
+    <h2>Mixer and FX</h2>
+    <table>
+      <tr><td>GLO</td><td>Volume, pan, FX send, reverb send (2 pages each)</td></tr>
+      <tr><td>FX send</td><td>How much of the voice goes through the FX bus</td></tr>
+      <tr><td>Reverb send</td><td>Feeds the reverb on top of the output</td></tr>
+      <tr><td>FX</td><td>FX bus (delay with TAPE modes, dirt, compressor) → reverb</td></tr>
+    </table>
+  </div>
+</section>
+
+<section class="page">
+  <header>
+    <h1><!--POTION--><span><span>Elixir</span> cheat sheet</span></h1>
+    <p>spells, and what's not obvious · 3 of 3</p>
+    <p class="right">Full manual: dmajka.github.io/elixir/manual</p>
+  </header>
+
+  <div class="col">
     <h2>Spells (ARP twice)</h2>
-    <p>A spell changes the sound and the pattern of the tracks you pick, at random but in a direction.</p>
+    <p>Changes the sound and pattern of the tracks you pick, at random but in a direction.</p>
     <table>
       <tr><td>1 Targets</td><td>Black keys (bar key 1: all / none)</td></tr>
-      <tr><td>2 Parts</td><td>White keys: what may change</td></tr>
-      <tr><td>3 Spell</td><td>K1 on GRIMOIRE (NONE: plain chance)</td></tr>
-      <tr><td>4 Cast</td><td>COPY (OCT+) · again rolls again</td></tr>
-      <tr><td>5 Undo / keep</td><td>SHIFT (OCT−) alone takes it back · bar key 2 keeps it</td></tr>
+      <tr><td>2 Parts</td><td>White keys: what may change (below)</td></tr>
+      <tr><td>3 Spell</td><td>K1 on GRIMOIRE</td></tr>
+      <tr><td>4 Cast</td><td>COPY (OCT+); again: a new roll from before the first</td></tr>
+      <tr><td>5 Undo</td><td>SHIFT (OCT−) alone: the pattern and kit as before</td></tr>
+      <tr><td>Bar keys</td><td>1 all / none · 2 keep · 3 save a recipe · 4 knobs reset</td></tr>
     </table>
+
+    <h2>The knobs, page by page</h2>
+    <table class="knobs sk">
+      <tr><th colspan="2">GRIMOIRE: which spell</th></tr>
+      <tr><td>Spell</td><td>NONE, the eleven spells, then your recipes U1–U8</td></tr>
+      <tr><td>Variation</td><td>EXACT casts the knobs as set; higher nudges them a little each cast</td></tr>
+      <tr><td>Scope</td><td>White-key presets: ALL, SOUND, PATTERN, VOICE, SHAPE, SPACE …</td></tr>
+      <tr><td>Roll</td><td>NEW each time; SAME repeats the last roll elsewhere</td></tr>
+      <tr><th colspan="2">CAST: how much</th></tr>
+      <tr><td>Sound</td><td>How far the voices move; 100% (FREE) frees the kick and toms</td></tr>
+      <tr><td>Pattern</td><td>How much the steps change (OFF: none)</td></tr>
+      <tr><td>Density</td><td>Fewer hits (left) or more (right); AS IS in the middle</td></tr>
+      <tr><td>Chaos</td><td>Low follows the beats; high anything goes</td></tr>
+      <tr><th colspan="2">CHARACTER: which way (names: next column)</th></tr>
+      <tr><td>K1</td><td>The sound's character</td></tr>
+      <tr><td>K2</td><td>The rhythm's character</td></tr>
+      <tr><td>K3</td><td>Evolution: how much keeps changing after the cast</td></tr>
+      <tr><td>K4</td><td>Protection: keeps kick, snare, key, main pulse</td></tr>
+      <tr><th colspan="2">LIMITS: the most any spell sets (shared, saved)</th></tr>
+      <tr><td>Sends</td><td>Rev Send, FX Send: cap each target's sends</td></tr>
+      <tr><td>Levels</td><td>Rev Level, FX Mix: cap the shared FX</td></tr>
+      <tr><th colspan="2">MOTION: how far the tracks part (needs 15 LEN)</th></tr>
+      <tr><td>Motion</td><td>SAME · ONE track at its own speed or direction · FEW · MANY · FREE</td></tr>
+      <tr><td>Lengths</td><td>BARS 16/32/64 · EVEN +12, 24 · ODD +7, 14, 15, 20</td></tr>
+    </table>
+  </div>
+
+  <div class="col">
+    <h2>The spells and their CHARACTER knobs</h2>
+    <table class="knobs spells">
+      <tr><td>None</td><td>Plain chance: Sound from a nudge to anything</td><td>Spread, Detail, Motion, Protect</td></tr>
+      <tr><td>Poltergeist</td><td>Metallic, unstable hits and rattles</td><td>Metal, Rattle, Haunting, Preserve</td></tr>
+      <tr><td>Skeleton</td><td>The groove stripped to its bones (pattern only)</td><td>Emphasis, Syncope, Variety, Anchors</td></tr>
+      <tr><td>Glitch Storm</td><td>Digital errors, bursts, cuts, fills</td><td>Corrupt, Fragment, Unstable, Groove</td></tr>
+      <tr><td>Haunted Dub</td><td>Dark filters, echoes, space; kick dry</td><td>Darkness, Echo, Drift, Dry Kick</td></tr>
+      <tr><td>Forbidden Ritual</td><td>All at once: models, steps, links, FX</td><td>Alchemy, Disorder, Possess, Protect</td></tr>
+      <tr><td>Raster Séance</td><td>Microsound clicks, grains, silences</td><td>Grain, Fragment, Jitter, Backbone</td></tr>
+      <tr><td>Concrete Drift</td><td>Minimal changes over many bars</td><td>Texture, Motion, Drift, Stability</td></tr>
+      <tr><td>Rust Circuit</td><td>Industrial metal, drive, cycles</td><td>Corrode, Machine, Malfunct, Pulse</td></tr>
+      <tr><td>Glass Cathedral</td><td>Resonant, tuned, glassy, in one key</td><td>Brilliance, Harmony, Shimmer, Tuning</td></tr>
+      <tr><td>Biofeedback</td><td>Tracks answering each other</td><td>Coupling, Response, Adapt, Freedom</td></tr>
+      <tr><td>Whispering Motes</td><td>Soft microsound dust and chirps</td><td>Grain, Scatter, Whisper, Anchors</td></tr>
+    </table>
+    <p class="note">The screen says what a CHARACTER knob does as you turn it. D1 stays a kick and D2, D3 toms
+      unless Sound is 100%. SHIFT (OCT−) + a white key: only that part.</p>
+
+    <h2>Parts (white keys)</h2>
     <table class="knobs">
       <tr><th colspan="2">Sound (white 1–8)</th><th colspan="2">Pattern (white 9–16)</th></tr>
       <tr><td>1 PIT</td><td>pitch</td><td>9 HIT</td><td>which steps play</td></tr>
@@ -259,18 +368,32 @@
       <tr><td>8 MOD</td><td>random, LFO 2, xmod</td><td>16 LNK</td><td>links, generators</td></tr>
     </table>
 
-    <h2>Mixer and FX</h2>
-    <table>
-      <tr><td>GLO</td><td>Volume, pan, FX send, reverb send (2 pages each)</td></tr>
-      <tr><td>FX send</td><td>How much of the voice goes through the FX bus</td></tr>
-      <tr><td>Reverb send</td><td>Feeds the reverb on top of the output</td></tr>
-      <tr><td>FX</td><td>FX bus (delay with TAPE modes, dirt, compressor) → reverb</td></tr>
-    </table>
+  </div>
 
-    <h2>MIDI</h2>
-    <p>In: USB and the TRS jack · out: USB. Clock out always; tempo down to MIDI follows clock in. CC <i>n</i>
-      sets parameter <i>n</i> − 1 (as on the LXR), NRPN reaches the rest. Program change 0–31 queues a
-      pattern.</p>
+  <div class="col">
+    <h2>Worth knowing</h2>
+    <p class="tip"><b>Lost?</b> SHIFT (OCT−) + HOME (PERF RESET) turns every held, latched or running performance
+      effect off. The LFOs, morph and macros stay.</p>
+    <p class="tip"><b>Control All lets you back out.</b> Hold OCT+ on a sound page and turn: every track moves.
+      Let go and it asks: OCT+ reverts the whole kit, OCT− keeps it.</p>
+    <p class="tip"><b>Generators don't touch your pattern</b> (but EUCLID does): MUTATE, TURING, CELLULAR and GRIDS
+      play a live copy. COMMIT keeps what you hear; RESET starts over.</p>
+    <p class="tip"><b>Clocks change time, not steps.</b> A track at 3/4 still has 16 steps; they just take 4/3 of
+      a bar. Give it 12 steps to fit a bar.</p>
+    <p class="tip"><b>KEYS stays on</b> as you change pages: play the voice while you turn knobs. The header shows
+      KEYS. SHIFT (OCT−) + a key plays at the accent velocity.</p>
+    <p class="tip"><b>Recording:</b> REC, then PLAY. Knob moves on sound pages become locks on the steps that are
+      on; SHIFT (OCT−) + CLEAR erases the track's steps as they pass.</p>
+    <p class="tip"><b>Morph and edits:</b> with morph up, a knob moves the target too, so you hear the edit at any
+      amount (CONFIG → MORPH to change it).</p>
+    <p class="tip"><b>Solo isn't saved</b> and the mutes come back as they were when the last solo goes.</p>
+    <p class="tip"><b>Kits:</b> PRESETS lists the 85 factory kits, then the library, then the project's 64 slots.
+      The library stays whatever project is loaded.</p>
+
+    <h2>Voices (on MOTION's page, white 1–5)</h2>
+    <p>The engines a cast may use: <b>1 LXR</b> · <b>2 RNG</b> Rings · <b>3 PLT</b> Plaits · <b>4 MIC</b> MICRO ·
+      <b>5 KCK</b> D1 the LXR's kick. All lit: the spell picks; none: engines kept.</p>
+
   </div>
 </section>
 

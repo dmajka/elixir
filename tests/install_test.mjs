@@ -162,7 +162,7 @@ async function scenario(title, app, opts, expect) {
 }
 
 console.log(`package ${PRODUCT}, image ${IMAGE.length} B`);
-check(/^FM-1_9\d\d$/.test(PRODUCT), "an alternative firmware's identity (FM-1_9xx), as Kettle's");
+check(/^FM-1_359\d{6}$/.test(PRODUCT), "Elixir's own identity (FM-1_359XXYYZZ, from 0.22)");
 check(IMAGE.length < 0x97000, "the image ends below the projects (0x97000)");
 check(firmwareOf("Kettle") === "elixir" && firmwareOf("2- Kettle") === "elixir" && firmwareOf("Elixir") === "elixir" &&
       firmwareOf("Felucca Update") === "felucca" && firmwareOf("Digitakt") === null, "port names");
@@ -180,7 +180,9 @@ await scenario("Windows' port name (\"2- Kettle\") -> Elixir", { name: "2- Kettl
   { after: "2- Elixir" }, { before: /Elixir is installed/, after: /Elixir is installed/ });
 await scenario("Kettle -> Elixir, the cable pulled during the write, then resumed", { name: "Kettle", id: "FM-1_900" },
   { cut: 5 }, { before: /Elixir is installed/, after: /Elixir is installed/, cutOff: true });
-await scenario("Elixir -> Elixir (an update)", { name: "Elixir", id: "FM-1_900" }, {},
+await scenario("Elixir 0.21 (FM-1_900) -> Elixir (an update)", { name: "Elixir", id: "FM-1_900" }, {},
+  { before: /Elixir is installed/, after: /Elixir is installed/ });
+await scenario("Elixir 0.22 -> Elixir (an update, its own identity)", { name: "Elixir", id: "FM-1_359002200" }, {},
   { before: /Elixir is installed/, after: /Elixir is installed/ });
 await scenario("official V15 -> Elixir", { name: "FM-1", id: "FM-1_015" }, {},
   { before: /official V15/, after: /Elixir is installed/ });

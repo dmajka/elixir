@@ -5,7 +5,7 @@
  * or supported by Erica Synths or M-VAVE.
  * One compilation unit (the HAL is header-only); each file uses what the files above it define. */
 #ifndef ELIXIR_VERSION
-#define ELIXIR_VERSION "v0.21"
+#define ELIXIR_VERSION "v0.22"
 #endif
 #define FELUCCA_FLASH 1
 #define FELUCCA_OTA 1
@@ -16,7 +16,8 @@
 #define FELUCCA_CPU2 1                   /* 17b: the second core, started at power-on (main.c cores_boot, audio.c) */
 #define FM1_CPU1_USED 1
 #ifndef FELUCCA_ID
-#define FELUCCA_ID "FM-1_900"            /* the package identity the updaters check (build.py) */
+#define FELUCCA_ID "FM-1_359002200"       /* the package identity the updaters check (build.py sets it from the
+                                             * version: FM-1_359XXYYZZ; FM-1_900, Felucca's, until 0.21) */
 #endif
 #define FELUCCA_VERSION ELIXIR_VERSION
 
