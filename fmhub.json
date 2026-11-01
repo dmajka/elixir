@@ -1,5 +1,5 @@
 {
-  "what": "Enhanced port of the Erica Synths LXR-02 drum machine, which adds a ton of new functionality like generative sequencing, extra drum voices from Mutable Instruments Plaits and Rings, global LFOs and modulation, performance effects, a randomization engine, more effects, and extensive MIDI mapping.",
+  "what": "Enhanced port of the Erica Synths LXR-02 drum synthesizer which adds a ton of new functionality like generative sequencing, extra drum voices from Mutable Instruments Plaits and Rings, global LFOs and modulation, performance effects, a randomization engine, more effects, and extensive MIDI mapping.",
   "author": "Dan Majka",
   "kinds": ["drums"],
   "play": "https://dmajka.github.io/elixir/try/",
