@@ -63,6 +63,13 @@ Install the official `FM-1.fwsc` (V15) with the install page's **Official V15** 
 
 Elixir keeps its projects and settings in the same flash area Felucca uses for its own data, so **installing Elixir replaces anything saved by Felucca** (back it up with Felucca's own page first), and installing something else afterwards replaces Elixir's projects.
 
+**Coming from Wyrd** (from 0.24.1). Wyrd uses the same flash areas too. When Elixir starts on a unit that still holds Wyrd's projects, library kits or settings, it shows **WYRD'S DATA IS HERE** before anything else and saves nothing until you answer:
+
+- **SHIFT (OCT−): keep.** Elixir runs but saves nothing this time: no projects, kits, settings or autosave ("WYRD'S DATA: NOT SAVED"). It asks again at the next power-on, so you can go back to Wyrd and back its data up on Wyrd's library page.
+- **COPY (OCT+) twice: erase.** Only Wyrd's records go: its project slots, its settings and its library entries. Elixir's own projects and kits stay, including kits that shared a library sector with Wyrd's. Then Elixir saves normally.
+
+PLAY and REC still work while the question is on screen. Grimoire can't be recognised yet, because it still saves with Elixir's own marks: back up Grimoire's data before installing Elixir.
+
 ### If something goes wrong
 
 How an update works decides what can be recovered. The firmware that is running (official, Felucca or Elixir) answers the installer, checks the package and starts the FM-1's **update loader**. The loader writes the new firmware and restarts. So:
