@@ -6,3 +6,6 @@
 __pycache__/
 *.pyc
 .DS_Store
+# private notes, kept out of the repo and the source package (web/make_site.py skips them too)
+/docs/TO_DO*.md
+/docs/TECHNICAL_DOCUMENTATION.md

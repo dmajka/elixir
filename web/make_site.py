@@ -28,8 +28,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REPO = "https://github.com/dmajka/elixir"   # the source repository's URL, once public: the pages link it
 BLOCKS, BLK, KEEP = 20, 0x30, 0x2F
-SRC = ["build.sh", "LICENSE", "LICENSES", "NOTICE.md", "README.md", "ROADMAP.md", "MANUAL.md", "TECHNICAL_DOCUMENTATION.md",
-       "firmware", "tools", "tests", "web", "assets"]
+SRC = ["build.sh", "LICENSE", "LICENSES", "NOTICE.md", "README.md", "MANUAL.md",
+       "docs", "firmware", "tools", "tests", "web", "assets"]
 
 
 # the header on every page: depth 0 at the root, 1 a folder down; here: the page's own link
@@ -682,7 +682,8 @@ def main(pkg, out):
         "".join(f'<li><a href="{n}">{n}</a></li>' for n in lic) + '</ul><p><a href="../LICENSE">LICENSE (GPL-3.0)</a>'
         ' · <a href="../NOTICE.md">NOTICE.md</a></p>\n', encoding="utf-8")
     src = f"elixir-{ver}-src.tar.gz"
-    skip = lambda ti: None if re.search(r"(__pycache__|\.dSYM|\.DS_Store)", ti.name) else ti
+    skip = lambda ti: None if re.search(r"(__pycache__|\.dSYM|\.DS_Store|docs/TO_DO[^/]*\.md|"
+                                        r"docs/TECHNICAL_DOCUMENTATION\.md)", ti.name) else ti   # (private notes)
     with tarfile.open(fw / src, "w:gz") as tf:
         for f in SRC:
             tf.add(ROOT / f, arcname=f"elixir-{ver}/{f}", filter=skip)

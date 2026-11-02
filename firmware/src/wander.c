@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Elixir: WANDER (40), PERF's third set (ARP: PERFORM > SPELLS > WANDER > GLOBAL MOD): slow change over a long
- * journey (docs/WANDER.md). COPY (OCT+) sets out: home is the pattern playing and a copy of the voices (the kit and
+ * journey (docs/TO_DO.md, WANDER). COPY (OCT+) sets out: home is the pattern playing and a copy of the voices (the kit and
  * the morph target). A QUEST is a chain of chapters, each a mood (Energy, Light, Space, Grit) the road walks towards,
  * planned at the start by a small Markov table (each quest its own), so a quest has a shape but never the same path:
  *   THREADS   1-3 at once (STRIDE's): one track's voice moved one way by a gesture (a few knobs that agree: DARKER,
