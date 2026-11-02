@@ -11,7 +11,7 @@
 #                               not linked from anywhere and noindex while it's tried out
 #   library/                    backup, restore and LXR-02 kit import over Web MIDI (web/library.html, library.js)
 #   manual/index.html           MANUAL.md as a page
-#   cheatsheet.pdf              two pages of keys and knobs (web/cheatsheet.pdf: tools/cheatsheet.sh); fmhub.json
+#   cheatsheet.pdf              four pages of keys and knobs (web/cheatsheet.pdf: tools/cheatsheet.sh); fmhub.json
 #                               links to it
 #   firmware/                   elixir-VER.fwsc, elixir-VER-src.tar.gz (the source, as the GPL asks), MANUAL.md,
 #                               LICENSE, NOTICE.md, LICENSES/, and a page listing them
@@ -33,7 +33,8 @@ SRC = ["build.sh", "LICENSE", "LICENSES", "NOTICE.md", "README.md", "MANUAL.md",
 
 
 # the header on every page: depth 0 at the root, 1 a folder down; here: the page's own link
-NAV = [("try/", "Try it"), ("install/", "Install"), ("manual/", "Manual"), ("library/", "Library")]
+NAV = [("try/", "Try it"), ("install/", "Install"), ("manual/", "Manual"), ("cheatsheet.pdf", "Cheat sheet"),
+       ("library/", "Library")]
 
 
 def nav(depth, here=None):
@@ -65,6 +66,7 @@ header.site .px-h { fill: #fff; } header.site .px-l { fill: #f0a43a; } header.si
 header.site .px-d { fill: #a8640f; }
 @media (max-width: 560px) { header.site .wrap { gap: 4px 16px; padding-top: 10px; padding-bottom: 10px; }
   header.site nav { margin-left: 0; gap: 14px; } }
+@media (max-width: 420px) { header.site nav { gap: 2px 12px; font-size: 14px; } }
 </style>"""
 
 

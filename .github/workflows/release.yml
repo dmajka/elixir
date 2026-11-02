@@ -1,0 +1,19 @@
+# Elixir's releases, built and signed on GitHub by The Firmware Hub's shared workflow (thefirmwarehub.com/kb/#sign):
+# a vX.Y tag builds the package from this commit on GitHub's Ubuntu runner, runs the tests, attests the package
+# (Sigstore) and attaches it to the tag's release. tools/gh_release.sh then sets the notes and fetches the package
+# for the site. Change only `build`, `packages` and `test`; never move a tag.
+name: release
+on:
+  push:
+    tags: ["v*"]
+jobs:
+  build:
+    uses: zvenson/fm1-build/.github/workflows/build.yml@v1
+    permissions:
+      contents: write        # the release
+      id-token: write        # the signing certificate
+      attestations: write    # the attestation
+    with:
+      build: sh tools/ci_build.sh "${GITHUB_REF_NAME#v}"
+      packages: build/elixir-*.fwsc
+      test: sh tests/ci_tests.sh

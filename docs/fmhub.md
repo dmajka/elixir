@@ -89,6 +89,12 @@ Text, picture, cheat sheet and links do **not** go in the mail – they come fro
 ## 6. Afterwards
 
 - New versions: just publish a GitHub release with the `.fwsc` attached. Same asset name and same identity is fine.
+- **Signed releases** (thefirmwarehub.com/kb/#sign; Elixir from the release after 0.23): `.github/workflows/release.yml` calls
+  `zvenson/fm1-build/.github/workflows/build.yml@v1` on a `v*` tag; it builds on GitHub's Ubuntu runner
+  (`tools/ci_build.sh X.Y`), runs `tests/ci_tests.sh`, attests `build/elixir-*.fwsc` (Sigstore) and makes the
+  release. The hub then shows "Built from source on GitHub". Don't upload or replace the asset by hand, don't move
+  tags. `tools/gh_release.sh` waits for the run, sets the notes, verifies the attestation and checks the site's
+  package is the same file (the Linux and macOS builds are byte-identical with the same toolchain).
 - Card text, picture, cheat sheet, browser version, editor: edit `fmhub.json` (and the image file), push, wait up to
   three hours. Never mail text changes.
 - The maker's face on the Wall of Creators (https://thefirmwarehub.com/creators/) is their GitHub profile picture; a
