@@ -165,7 +165,8 @@ console.log(`package ${PRODUCT}, image ${IMAGE.length} B`);
 check(/^FM-1_359\d{6}$/.test(PRODUCT), "Elixir's own identity (FM-1_359XXYYZZ, from 0.22)");
 check(IMAGE.length < 0x97000, "the image ends below the projects (0x97000)");
 check(firmwareOf("Kettle") === "elixir" && firmwareOf("2- Kettle") === "elixir" && firmwareOf("Elixir") === "elixir" &&
-      firmwareOf("Felucca Update") === "felucca" && firmwareOf("Digitakt") === null, "port names");
+      firmwareOf("Felucca Update") === "felucca" && firmwareOf("Digitakt") === null &&
+      firmwareOf("Wyrd") === "wyrd" && firmwareOf("2- Grimoire") === "grimoire", "port names");
 // what Kettle's own page (0.13) matched: it wouldn't find the unit once it is called Elixir; this page finds both
 const OLD = /fm-1|felucca|kettle|ota|composite|sinco|usb-midi/i;
 check(!OLD.test("Elixir"), "(Kettle 0.13's page doesn't see a unit named Elixir: use this page)");
@@ -184,6 +185,10 @@ await scenario("Elixir 0.21 (FM-1_900) -> Elixir (an update)", { name: "Elixir",
   { before: /Elixir is installed/, after: /Elixir is installed/ });
 await scenario("Elixir 0.22 -> Elixir (an update, its own identity)", { name: "Elixir", id: "FM-1_359002200" }, {},
   { before: /Elixir is installed/, after: /Elixir is installed/ });
+await scenario("Wyrd -> Elixir (the suite's other app, FM-1_900)", { name: "Wyrd", id: "FM-1_900" }, {},
+  { before: /Wyrd is installed\. Back up/, after: /Elixir is installed/ });
+await scenario("Grimoire -> Elixir (FM-1_900, as Wyrd's)", { name: "Grimoire", id: "FM-1_900" }, {},
+  { before: /Grimoire is installed\. Back up/, after: /Elixir is installed/ });
 await scenario("official V15 -> Elixir", { name: "FM-1", id: "FM-1_015" }, {},
   { before: /official V15/, after: /Elixir is installed/ });
 

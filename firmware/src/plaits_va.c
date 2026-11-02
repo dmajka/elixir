@@ -668,6 +668,7 @@ static void add_render(pl_add_t *d, const pl_par_t *p, int32_t *out, int32_t *au
     hosc_render(&d->h[2], 1, p->f0, d->amps + 24, aux, 0, n);
 }
 
+#if ELIXIR_WTABLE                                    /* (0.24: parked, rings.c) */
 /* ----------------------------------------------------------- wavetable --- */
 /* 4 banks of 8 x 8 integrated waves (the last, the others' waves scrambled), 128 samples (+ 4) each, differentiated */
 typedef struct { uint32_t ph, pf0; int32_t xpl, ypl, zpl, xl, yl, zl, px, py, pz, dprev, dlp; } pl_wt_t;
@@ -759,6 +760,7 @@ static void wt_render(pl_wt_t *d, const pl_par_t *p, int32_t *out, int32_t *aux,
     d->pz = z;
     d->pf0 = p->f0;
 }
+#endif
 
 /* -------------------------------------------------------------- chords --- */
 /* StringSynthOscillator: a divide-down organ, saws at 8', 4', 2', 1' from one phase (0 .. 8, Q24) */
@@ -829,10 +831,15 @@ static void ss_render(pl_ss_t *o, int32_t f, const int32_t *ureg, int32_t gain, 
 }
 /* WavetableOscillator<128, 15>: the chords' waves (linear), differentiated; samples Q12 of the int16 */
 typedef struct { int32_t ph, f, amp, wf, lp, dprev, dlp; } pl_wto_t;
+#if ELIXIR_WTABLE                                    /* (0.24: P CHORD's wave i: in P WTABLE's table, or its own) */
 static const uint16_t PL_CH_WAVES[15] = {   /* (bank 64 + row 8 + column) */
     2 * 64 + 6 * 8 + 1, 2 * 64 + 6 * 8 + 6, 2 * 64 + 6 * 8 + 4, 6 * 8 + 0, 6 * 8 + 1, 6 * 8 + 2, 6 * 8 + 7,
     2 * 64 + 4 * 8 + 7, 2 * 64 + 4 * 8 + 6, 2 * 64 + 4 * 8 + 5, 2 * 64 + 4 * 8 + 4, 2 * 64 + 4 * 8 + 3,
     2 * 64 + 4 * 8 + 2, 2 * 64 + 4 * 8 + 1, 2 * 64 + 4 * 8 + 0};
+#define PL_CHW_AT(i) (PL_WAVES + PL_CH_WAVES[i] * 132)
+#else
+#define PL_CHW_AT(i) (PL_CHW + (i) * 132)
+#endif
 static void wto_render(pl_wto_t *o, int32_t f, int32_t amp, int32_t wf, int32_t *out, uint32_t n)
 {
     int32_t sf, sa, sw, sh, a;
@@ -860,8 +867,8 @@ static void wto_render(pl_wto_t *o, int32_t f, int32_t amp, int32_t wf, int32_t 
         wfr = o->wf & 0xFFFFFF;
         pi = o->ph >> 17;
         pf = (o->ph & 0x1FFFF) << 7;
-        t0 = PL_WAVES + PL_CH_WAVES[wi] * 132 + pi;
-        t1 = PL_WAVES + PL_CH_WAVES[wi + 1] * 132 + pi;
+        t0 = PL_CHW_AT(wi) + pi;
+        t1 = PL_CHW_AT(wi + 1) + pi;
         x0 = (t0[0] << 12) + pm((t0[1] - t0[0]) << 12, pf);
         x1 = (t1[0] << 12) + pm((t1[1] - t1[0]) << 12, pf);
         s = x0 + pm(x1 - x0, wfr);

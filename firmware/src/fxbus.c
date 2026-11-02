@@ -523,6 +523,7 @@ static void fx_tape(void)
     fb += (int32_t)(((int64_t)(75366 - fb) * fx.push) >> 16);
     if (fx.lfo_fb)
         fb = clamp32(fb + fx.lfo_fb, 0, 75366);
+    tp.w &= mask;                                    /* (TAPE -> TAPE PP: the head was past the half line) */
     tp.tgt = tape_target();
     if (!tp.cur)
         tp.cur = tp.tgt;

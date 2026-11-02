@@ -195,12 +195,14 @@ static const char *pl_knob_name(uint32_t p, uint32_t which)
                                             {"Wave", "Plaits", "wav", "Wave"}};
         return C[(p - PAR_MDECAY1) / 6u][which];
     }
+#if ELIXIR_WTABLE
     if (mdl[vi].want == MD_PL0 + PE_WTBL && p < PAR_MPOS1) {   /* (0.23-t7: P WTABLE's: the bank, TIMBRE the brightness, MORPH
                                                       * the family; measured on the table) */
         static const char *const W[3][4] = {{"Bank", "Plaits", "bnk", "Bank"}, {"Bright", "Plaits", "brt", "Bright"},
                                             {"Family", "Plaits", "fam", "Family"}};
         return W[(p - PAR_MDECAY1) / 6u][which];
     }
+#endif
     return N[(p - PAR_MDECAY1) / 6u][which];
 }
 /* 27a: the insert's B and C are its type's (long, category, short, 8 letters) */

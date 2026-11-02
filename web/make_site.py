@@ -148,7 +148,7 @@ def version():
 
 # the manual: the Markdown MANUAL.md uses (headings, paragraphs, lists, tables, fenced code, rules, emphasis, code,
 # links), with GitHub's heading anchors so its links work. A line <!-- grid --> (hidden on GitHub) makes the table
-# after it a grid: every cell boxed and centred, the last column shaded (the remote map's appendix)
+# after it a grid: every cell boxed and centred, the last column shaded (the remote map's grids, section 15)
 def slug(text):
     return re.sub(r"[^\w\- ]", "", text.lower()).replace(" ", "-")
 

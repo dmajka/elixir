@@ -3776,6 +3776,13 @@ static void phase21(void)
     at2 = first_peak(p21_r, 100, 30000, 1000);
     printf("  TAPE PP: left echo at %u, right at %u\n", at, at2);
     check(at >= 11020u && at <= 11032u && at2 >= 22040u && at2 <= 22064u, "TAPE PP: left, then right a 1/8 later");
+    /* TAPE -> TAPE PP mid-echo: the write head back inside the half line (0.23.1: it wrote past fxbuf) */
+    fx_fresh(DELAY_TAPE);
+    fxbus_process();
+    tp.w = (FXBUF_SIZE >> 1) + 3u;                   /* (TAPE's head in the full line's second half) */
+    par_set(PAR_FX_DELAY_TYPE, DELAY_TAPEPP);
+    run_ms(10);                                      /* (the change reaches the engine, a few PP blocks run) */
+    check(tp.w <= (FXBUF_MASK >> 1), "TAPE -> TAPE PP: the write head inside the PP half");
     /* feedback past 100%, SATURATE: a roar that stays bounded */
     fx_fresh(DELAY_TAPE);
     par_set(PAR_FX_P4, 127);
@@ -4349,7 +4356,7 @@ static void phase31(void)
     /* the cards: a model change redraws them (P CHORD's knobs named and shown, not the last model's) */
     black(0);
     sound_open(S_MODEL, 0);
-    par_set(PAR_MODEL1, MD_PL0 + PE_WTBL);
+    par_set(PAR_MODEL1, MD_PL0 + PE_WTBL - (ELIXIR_WTABLE ? 0 : 1));   /* (0.24: from P ADD, past P WTABLE) */
     par_set(PAR_MDECAY1, 69);
     run_ms(100);
     c = rsig[R_CARD0 + 1];
@@ -4570,7 +4577,7 @@ static void phase24(void)
     sound_fix();
     turn(EN_K1, 1);
     check(par[PAR_MODEL1] == MD_MODAL, "D1: K1 from LXR to MODAL");
-    turn(EN_K1, (int32_t)(MD_MC0 - MD_MODAL));
+    turn(EN_K1, (int32_t)(MD_MC0 - MD_MODAL) - (ELIXIR_WTABLE ? 0 : 1));   /* (0.24: past P WTABLE) */
     check(par[PAR_MODEL1] == MD_MC0 && mi[0].type == 1u && mdl[0].want == 0u && mdl[0].type == 0u,
           "D1 on CLICK: MICRO, not a model the limit counts");
     page_params(pp);
@@ -4613,6 +4620,14 @@ static void phase24(void)
         kit_sanitize(kb);
         check(kb[kit_idx(PAR_MODEL1 + 3)] == MD_LXR && kb[kit_idx(PAR_MODEL1 + 5)] == MD_MC0 + 7u,
               "kit: SN off Rings', the hats on DUST");
+    }
+    if (!ELIXIR_WTABLE) {   /* 0.24: P WTABLE parked: a kit with it plays P ADD; a step lock or a morph to it, the LXR's */
+        static uint8_t kb[KIT_LEN];
+        kit_init_values(kb);
+        kb[kit_idx(PAR_MODEL1 + 1)] = MD_PL0 + PE_WTBL;
+        kit_sanitize(kb);
+        check(kb[kit_idx(PAR_MODEL1 + 1)] == MD_PL0 + PE_ADD, "kit: D2 on P WTABLE (parked) loads on P ADD");
+        check(!model_ok(0, MD_PL0 + PE_WTBL) && model_ok(0, MD_PL0 + PE_CHORD), "P WTABLE no model; P CHORD one");
     }
     /* a project keeps them */
     par_set(PAR_MODEL1 + 5, MD_MC0 + 2u);
@@ -6023,12 +6038,15 @@ static void phase30(void)
                                         "viz-model-pparticle", "viz-model-pwshape", "viz-model-pfm", "viz-model-pswarm"};
         uint32_t i;
         for (i = 0; i < sizeof M; i++) {
+            if (M[i] == MD_PL0 + PE_WTBL && !ELIXIR_WTABLE)   /* (0.24: parked) */
+                continue;
             viz_set(S_MODEL, 0, 0, M[i]);
             viz_set(S_MODEL, 0, 1, 90);
             viz_set(S_MODEL, 0, 2, 70);
             viz_set(S_MODEL, 0, 3, 40);
             shot(N[i]);
         }
+#if ELIXIR_WTABLE
         viz_set(S_MODEL, 0, 0, 9);                   /* (0.23-t7: P WTABLE's waves, another place; its cards) */
         viz_set(S_MODEL, 0, 1, 20);
         viz_set(S_MODEL, 0, 2, 64);
@@ -6053,6 +6071,7 @@ static void phase30(void)
             card_value(b, sizeof b, sect_par(0, S_MODEL, 0, 3), 64);
             check(!strcmp(b, "4-5"), "P WTABLE: MORPH reads as the Family, blending");
         }
+#endif
         viz_set(S_MODEL, 0, 0, 10);                  /* (P CHORD: the table's waves past half) */
         viz_set(S_MODEL, 0, 3, 110);
         shot("viz-model-pchord-table");
@@ -7145,6 +7164,171 @@ static void phase_023t11(void)
 }
 
 /* 0.23-test7: a track's BASE note (0.23-t7), note locks, TRANSPOSE (0.23-t7), RUSH by the turn's speed (0.23-t7) */
+/* 0.24: the CC map (the library page's; project.c kset.ccmap, midi.c midi_cc) */
+static void phase_024(void)
+{
+    uint32_t g = midi_global_ch(), mp = 256u + 128u;   /* (NRPN 256: D1's model, a short list) */
+    elixir_settings_t keep = kset;
+    printf("0.24: the CC map\n");
+    p4_reset();
+    midi_gtakes = GT_ALL;                            /* (the map on the global channel: as the LXR's) */
+    memset(kset.ccmap, 0, sizeof kset.ccmap);
+    par[PAR_COARSE1] = 40;
+    web_midi(0xB0 | g, 9, 50);
+    run_ms(10);
+    check(par[PAR_COARSE1] == 50, "no map: CC 9 is D1 coarse, as the LXR's");
+    kset.ccmap[1] = 9;                               /* the mod wheel -> D1 coarse */
+    kset.ccmap[9] = CCMAP_OFF;
+    web_midi(0xB0 | g, 9, 70);
+    run_ms(10);
+    check(par[PAR_COARSE1] == 50, "CC 9 mapped to nothing: ignored");
+    web_midi(0xB0 | midi_track_ch(0), 1, 90);
+    run_ms(10);
+    check(par[PAR_COARSE1] == 90, "CC 1 mapped to D1 coarse: on D1's channel");
+    web_midi(0xB0 | midi_track_ch(3), 1, 20);
+    run_ms(10);
+    check(midi_track_ch(3) == midi_track_ch(0) || par[PAR_COARSE1] == 90, "CC 1 mapped: not on SN's channel");
+    kset.ccmap[20] = (uint16_t)(mp + 1u);            /* CC 20 -> NRPN 256, stretched */
+    web_midi(0xB0 | g, 20, 127);
+    run_ms(10);
+    check(par[mp] == par_max(mp), "a short list stretched: 127 is its last");
+    web_midi(0xB0 | g, 20, 0);
+    run_ms(10);
+    check(par[mp] == par_min(mp), "0 is its first");
+    kset.ccmap[6] = kset.ccmap[98] = kset.ccmap[99] = 9;   /* (NRPN's CCs: never mapped) */
+    par[PAR_COARSE1] = 33;
+    web_midi(0xB0 | g, 99, 2);                       /* (NRPN 256: MSB 2, LSB 0) */
+    web_midi(0xB0 | g, 98, 0);
+    web_midi(0xB0 | g, 6, 2);
+    run_ms(10);
+    check(par[PAR_COARSE1] == 33 && par[mp] == 2, "CC 6 / 98 / 99 stay NRPN's");
+    kset.ccmap[6] = kset.ccmap[98] = kset.ccmap[99] = 0;
+    st_save(OBJ_SETTINGS, &kset, sizeof kset);
+    memset(kset.ccmap, 0, sizeof kset.ccmap);
+    persist_boot();
+    check(kset.ccmap[1] == 9 && kset.ccmap[9] == CCMAP_OFF && kset.ccmap[20] == mp + 1u, "the map kept at power-on");
+    st_save(OBJ_SETTINGS, &kset, SET_LEN_016);       /* settings from 0.16 .. 0.23: no map */
+    persist_boot();
+    check(kset.ccmap[1] == 9, "settings from 0.23 (20 bytes) read, the map left as it was");
+    kset = keep;
+    st_save(OBJ_SETTINGS, &kset, sizeof kset);
+    persist_boot();
+    check(kset.ccmap[1] == 0 && kset.ccmap[20] == 0, "the map cleared again");
+}
+
+/* 0.24: Global in (CONFIG: MIDI CHANNELS): KEYS, PAT+KIT, ALL, OFF */
+static int is_factory(uint32_t f)                    /* the edit buffer holds factory kit f */
+{
+    uint8_t fk[KIT_LEN];
+    uint32_t i, same = 1;
+    kit_factory_values(f, fk);
+    for (i = 0; i < KIT_LEN; i++)
+        same &= par[kit_par(i)] == fk[i];
+    return (int)same;
+}
+static double note_rms(uint32_t ch)                  /* a note on ch, after quiet: the output */
+{
+    run_ms(1500);
+    web_midi(0x90 | ch, 60, 100);
+    return out_rms(150);
+}
+static void phase_024g(void)
+{
+    uint32_t g = midi_global_ch(), t1 = midi_track_ch(0);
+    double q;
+    printf("0.24: what the global channel takes\n");
+    p4_reset();
+    if (sq.running)
+        press(B_PLAY);
+    check(g != t1, "(the global channel isn't D1's)");
+    ui.track = 0;
+    /* KEYS */
+    vp_set(VP_GTAKES, GT_KEYS);
+    par[PAR_COARSE1] = 40;
+    web_midi(0xB0 | g, 9, 50);
+    run_ms(10);
+    check(par[PAR_COARSE1] == 40, "KEYS: a sound CC on the global channel ignored");
+    web_midi(0xB0 | t1, 9, 50);
+    run_ms(10);
+    check(par[PAR_COARSE1] == 50, "KEYS: .. on D1's own channel as before");
+    web_midi(0xC0 | g, 5, 0);
+    run_ms(10);
+    check(sq.active == 5, "KEYS: program change 5 -> pattern 6");
+    web_midi(0xB0 | g, 0, 9);                        /* (a keyboard's bank select first) */
+    web_midi(0xB0 | g, 32, 0);
+    run_ms(10);
+    check(kit_loaded != 9, "KEYS: CC 0 / 32 (bank select) load nothing");
+    web_midi(0xB0 | g, 102, 3);
+    run_ms(10);
+    check(kit_loaded == 3, "KEYS: CC 102 = 3 -> slot kit 4");
+    web_midi(0xB0 | g, 103, 7);
+    run_ms(10);
+    check(is_factory(7) && kit_loaded == 3, "KEYS: CC 103 = 7 -> factory kit 8 (the slot stays)");
+    web_midi(0xB0 | g, 103, 127);
+    run_ms(10);
+    check(is_factory(7), "KEYS: CC 103 past the 85 factory kits: nothing");
+    web_midi(0xB0 | t1, 1, 7);
+    run_ms(10);
+    check(is_factory(7), "KEYS: CC 1 on a track's channel: nothing (a mod wheel)");
+    pfs.m[0].par = PAR_COARSE1;                      /* MACRO 1 on D1's pitch, 0..127 */
+    pfs.m[0].lo = 0;
+    pfs.m[0].hi = 127;
+    web_midi(0xB0 | g, 1, 100);
+    run_ms(20);
+    check(pfs.m[0].val == 100 && par[PAR_COARSE1] == 100, "KEYS: the mod wheel moves MACRO 1");
+    pfs.m[0].par = 0;
+    web_midi(0xE0 | g, 0, 127);                      /* (pitch bend: nothing, safely) */
+    run_ms(10);
+    q = note_rms(g);
+    printf("  KEYS: a note on the global channel: RMS %.1f\n", q);
+    check(q > 50.0, "KEYS: a note plays the selected track");
+    /* PAT+KIT */
+    vp_set(VP_GTAKES, GT_PATKIT);
+    q = note_rms(g);
+    check(q < 1.0, "PAT+KIT: a note on the global channel plays nothing");
+    web_midi(0xB0 | g, 1, 20);
+    run_ms(20);
+    check(pfs.m[0].val == 100, "PAT+KIT: the wheel moves nothing");
+    web_midi(0xC0 | g, 6, 0);                        /* (the pattern first: a pattern can bring its kit) */
+    run_ms(10);
+    web_midi(0xB0 | g, 102, 4);
+    run_ms(10);
+    check(kit_loaded == 4 && sq.active == 6, "PAT+KIT: kits and patterns");
+    /* OFF */
+    vp_set(VP_GTAKES, GT_OFF);
+    web_midi(0xC0 | g, 7, 0);
+    web_midi(0xB0 | g, 102, 9);
+    run_ms(10);
+    check(sq.active == 6 && kit_loaded == 4, "OFF: the global channel ignored");
+    web_midi(0xB0 | t1, 0, 9);
+    run_ms(10);
+    check(kit_loaded == 9, "OFF: CC 0 on a track's channel still loads a kit (the LXR's)");
+    /* ALL */
+    vp_set(VP_GTAKES, GT_ALL);
+    web_midi(0xB0 | g, 0, 2);                        /* (the kit first: it sets the sound) */
+    run_ms(10);
+    web_midi(0xB0 | g, 9, 77);
+    run_ms(10);
+    check(par[PAR_COARSE1] == 77 && kit_loaded == 2, "ALL: the LXR's way, a sound CC and CC 0's kit");
+    q = note_rms(g);
+    check(q > 50.0, "ALL: .. and a note plays the selected track");
+    check(kset.gtakes == GT_ALL, "kept in the settings");
+    {   /* the card: CONFIG, MIDI CHANNELS (2), KNOB 4 */
+        uint16_t pp[4];
+        goto_mode(B_GLO, M_CONFIG);
+        turn(EN_SELECT, 3 - (int32_t)ui.page);
+        page_params(pp);
+        check(pp[3] == VP_GTAKES, "CONFIG: MIDI CHANNELS (2), KNOB 4: Global in");
+        vp_set(VP_GTAKES, GT_KEYS);
+        run_ms(100);
+        shot("config-global-in");
+        vp_set(VP_GTAKES, GT_ALL);
+        press(B_HOME);
+    }
+    web_midi(0xC0 | g, 0, 0);
+    run_ms(10);
+}
+
 static void phase_t7(void)
 {
     pattern_t *p;
@@ -7248,6 +7432,8 @@ int main(int argc, char **argv)
         shots = argv[1];
     web_nor_erase();
     web_boot();
+    check(kset.gtakes == GT_KEYS && midi_gtakes == GT_KEYS, "0.24: Global in starts at KEYS");
+    midi_gtakes = GT_ALL;                            /* (the tests below send the LXR's CCs there: phase_024g) */
     run_ms(200);
     shot("splash");
     run_ms(1400);
@@ -7736,6 +7922,8 @@ int main(int argc, char **argv)
     phase42();
     phase_t7();
     phase_023t11();
+    phase_024();
+    phase_024g();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;
 }

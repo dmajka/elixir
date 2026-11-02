@@ -1352,7 +1352,9 @@ typedef struct {
         pl_fm_t fm;
         pl_gr_t gr;
         pl_add_t add;
+#if ELIXIR_WTABLE
         pl_wt_t wt;
+#endif
         pl_ch_t ch;
         pl_sp_t sp;
     } u;
@@ -1380,7 +1382,9 @@ static void pl_engine_init(pl_t *v, uint32_t vi, uint32_t e)
     case PE_FM: fm_init(&v->u.fm); break;
     case PE_GRAIN: gr_init(&v->u.gr); break;
     case PE_ADD: add_init(&v->u.add); break;
+#if ELIXIR_WTABLE
     case PE_WTBL: wt_init(&v->u.wt); break;
+#endif
     case PE_CHORD: ch_init(&v->u.ch); break;
     case PE_SPEECH: sp_init(&v->u.sp); break;
     default: break;
@@ -1402,7 +1406,9 @@ static void pl_engine_render(pl_t *v, uint32_t vi, const pl_par_t *p, int32_t *o
     case PE_FM: fm_render(&v->u.fm, p, out, aux, n); break;
     case PE_GRAIN: gr_render(&v->u.gr, p, out, aux, n); break;
     case PE_ADD: add_render(&v->u.add, p, out, aux, n); break;
+#if ELIXIR_WTABLE
     case PE_WTBL: wt_render(&v->u.wt, p, out, aux, n); break;
+#endif
     case PE_CHORD: ch_render(&v->u.ch, p, out, aux, n); break;
     case PE_SPEECH: sp_render(&v->u.sp, p, out, aux, n); break;
     default: memset(out, 0, n * sizeof out[0]); memset(aux, 0, n * sizeof aux[0]); break;

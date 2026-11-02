@@ -1274,13 +1274,15 @@ static void draw_config_help(int32_t y0)
         help_item(y, "PLAY", "PATTERN loops the pattern; SONG plays the song's rows");
         break;
     case 1:
-        y = help_item(y, "GLOBAL", "notes play the selected track; program change picks the pattern");
+        y = help_item(y, "GLOBAL", "program change picks the pattern, CC 102 / 103 the kit (Global in: more)");
         y = help_item(y, "FILTERS", "N notes, R clock and transport, C CC and NRPN, P program change");
         help_item(y, "ROUTE", "TRS>USB passes the jack's MIDI on to USB");
         break;
     case 2:
     case 3:
-        help_item(y, "CHANNEL", "each track's MIDI channel, in and out");
+        y = help_item(y, "CHANNEL", "each track's MIDI channel, in and out");
+        if (ui.page % NCONFIG == 3u)
+            help_item(y, "GLOBAL IN", "KEYS: patterns, kits (CC 102, 103), notes, wheel; PAT+KIT: no notes; ALL: the LXR's");
         break;
     case 4:
     case 5:
@@ -1596,6 +1598,7 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_MEDIT: put_str(b, "Edits", n); return;
     case VP_PMEM: put_str(b, "Last page", n); return;
     case VP_KBSLOTS: put_str(b, "Kits first", n); return;
+    case VP_GTAKES: put_str(b, "Global in", n); return;
     case VP_EH2: put_str(b, "Hits 2", n); return;
     case VP_ER2: put_str(b, "Rotate 2", n); return;
     case VP_EOP: put_str(b, "Join", n); return;
@@ -2221,6 +2224,11 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
         return;
     }
     case VP_KBSLOTS: put_str(b, v ? "SLOTS" : "FACTORY", n); return;
+    case VP_GTAKES: {
+        static const char *const G[NGTAKES] = {"KEYS", "PAT+KIT", "ALL", "OFF"};
+        put_str(b, G[v < NGTAKES ? v : 0u], n);
+        return;
+    }
     case VP_P2 + 4: note_name(b, v); return;
     case VP_P2_LAST: {
         static const char *const L[3] = {"1/16", "1/8", "1/4"};

@@ -40,6 +40,10 @@
  *   42 KL_PUT kind, slot, name[8], n (2), data
  *                                             -> the entry written; n 0 deletes it. A kit's data: the kit layout, up
  *                                                to KIT_LEN (past n: as KIT_PUT)
+ *   50 CCMAP_GET                              -> 0.24, the CC map: 128 entries (2 each: 0 the LXR's, 0xFFFF nothing,
+ *                                                else the parameter + 1: CC n's is n, NRPN n's n + 129)
+ *   51 CCMAP_PUT first, n, entries[n] (2 each)
+ *                                             -> into the map from CC first (saved with the settings, stopped)
  *
  * A write locks the projects (proj_lock: no autosave, no SAVE) until WRITE_END, WRITE_ABORT or 10 s without data;
  * the output is hushed meanwhile (flash writes hold the processor). */
@@ -484,6 +488,31 @@ static uint32_t lib_kl_put(const uint8_t *a, uint32_t n)
     return rc == -20 ? LS_SIZE : rc ? LS_FLASH : LS_OK;
 }
 
+static uint32_t lib_ccmap(uint32_t cmd, const uint8_t *a, uint32_t n)   /* 0.24: 0x50 / 0x51 */
+{
+    uint32_t i, c;
+    if (cmd == 0x50u) {
+        for (i = 0; i < 128u; i++) {
+            lib_put(kset.ccmap[i] & 0xFFu);
+            lib_put(kset.ccmap[i] >> 8);
+        }
+        return LS_OK;
+    }
+    if (n < 2u || n < 2u + 2u * a[1])
+        return LS_BAD;
+    if (a[0] + a[1] > 128u)
+        return LS_ARGS;
+    for (i = 0; i < a[1]; i++) {
+        c = a[2u + 2u * i] | (uint32_t)a[3u + 2u * i] << 8;
+        if (c > NPAR && c != CCMAP_OFF)
+            return LS_ARGS;
+    }
+    for (i = 0; i < a[1]; i++)
+        kset.ccmap[a[0] + i] = (uint16_t)(a[2u + 2u * i] | a[3u + 2u * i] << 8);
+    settings_later();
+    return LS_OK;
+}
+
 static uint32_t lib_kit_get(uint32_t idx)
 {
     if (idx >= NUM_KITS)
@@ -561,6 +590,8 @@ static int lib_in(const uint8_t *p, uint32_t n)
         case 0x40: st = lib_kl_list(a, an); break;
         case 0x41: st = lib_kl_get(a, an); break;
         case 0x42: st = lib_kl_put(a, an); break;
+        case 0x50:
+        case 0x51: st = lib_ccmap(cmd, a, an); break;
         default: st = LS_BAD; break;
         }
     }

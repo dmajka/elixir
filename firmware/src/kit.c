@@ -246,9 +246,9 @@ static void kit_sanitize(uint8_t *p)
         if (p[PAR_TRANS1_WAVE + i] >= LXR_TRANS_N + 2u)  /* packed slot. Some LXR kits have 24) */
             p[PAR_TRANS1_WAVE + i] = 0;
     out_migrate(&p[PAR_AUDIO_OUT1], &p[kit_idx(PAR_FX_SEND1)]);
-    for (i = 3; i < 6u; i++)                         /* (24: SN-HH have the LXR's engine and MICRO's types) */
-        if (!model_ok(i, p[kit_idx(PAR_MODEL1 + i)]))
-            p[kit_idx(PAR_MODEL1 + i)] = 0;
+    for (i = 0; i < 6u; i++)                         /* (24: SN-HH have the LXR's engine and MICRO's types. 0.24: */
+        if (!model_ok(i, p[kit_idx(PAR_MODEL1 + i)]))   /* P WTABLE, not built in, plays as P ADD) */
+            p[kit_idx(PAR_MODEL1 + i)] = i <= 2u ? MD_PL0 + PE_ADD : 0u;
     for (i = END_OF_SOUND_PARAMETERS; i < KIT_LEN; i++)
         if (p[i] > par_max_k(kit_par(i)))
             p[i] = (uint8_t)init_kit_k(kit_par(i));

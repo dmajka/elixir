@@ -909,13 +909,21 @@ static void autosave_poll(void)
  * (16 bytes) start both at their defaults, or both off if the remote was.
  * 31: medit: a knob's edit with morph on moves the morph target too (0, the default: both kits; 1 the kit only). In
  * the struct's padding before: settings from 0.16 .. 0.19 hold 0 there.
- * 0.19 (33): kbslots: the kit browser lists the slots first (0, the default: the factory kits first); in the padding too */
+ * 0.19 (33): kbslots: the kit browser lists the slots first (0, the default: the factory kits first); in the padding too.
+ * 0.24: ccmap: the CC map (midi.c midi_cc; the library page's 0x50 / 0x51): settings from before (20 bytes) hold none:
+ * all 0, the LXR's. (An Elixir before 0.24 doesn't take these longer settings: it starts from its defaults.)
+ * 0.24: gtakes: what the global channel takes (midi.c GT_*: 0, the default and what older settings hold, KEYS);
+ * in the padding before the map */
 #define SET_LEN_015 16u
+#define SET_LEN_016 20u
 typedef struct {
     uint32_t magic;
-    uint8_t palette, leds, autosave, accel, project, kvel, kacc, pdrop, remote, rknobs, cakit, pmem, rglobal, medit, kbslots;
+    uint8_t palette, leds, autosave, accel, project, kvel, kacc, pdrop, remote, rknobs, cakit, pmem, rglobal, medit, kbslots, gtakes;
+    uint16_t ccmap[128];
 } elixir_settings_t;
+_Static_assert(__builtin_offsetof(elixir_settings_t, ccmap) == SET_LEN_016, "settings: the map after 0.16's 20 bytes");
 static elixir_settings_t kset = {SET_MAGIC, 2, 1, 1, 1, 0xFF, 100, 127, 0, 0, 0, 0, 0, 0, 0, 0};   /* (palette 2: AMBER) */
+static uint32_t cc_map_at(uint32_t cc) { return kset.ccmap[cc & 127u]; }
 static uint8_t remote_of(uint32_t v, uint32_t dflt) { return (uint8_t)(v > 16u ? 0xFFu : v ? v - 1u : dflt - 1u); }
 static uint8_t settings_dirty;
 static uint32_t settings_ms;
@@ -945,7 +953,7 @@ static void persist_boot(void)                      /* power-on: the flash, the 
         return;
     n = st_load(OBJ_SETTINGS, &s, sizeof s);
     if (n >= (int)SET_LEN_015 && s.magic == SET_MAGIC) {
-        if (n < (int)sizeof s) {                     /* (before 0.16: one remote channel; the map is new) */
+        if (n < (int)SET_LEN_016) {                  /* (before 0.16: one remote channel; the map is new) */
             s.remote = s.remote > 16u ? 17u : 0u;
             s.rglobal = s.remote;
         }
@@ -957,6 +965,7 @@ static void persist_boot(void)                      /* power-on: the flash, the 
     pat_keep = !kset.pdrop;
     remote_ch = remote_of(kset.remote, 15u);
     remote_gch = remote_of(kset.rglobal, 16u);
+    midi_gtakes = kset.gtakes;
     proj_scan();
     kl_scan();
 }

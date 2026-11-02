@@ -57,7 +57,8 @@ enum { VP_BASE = 0x400, VP_NONE = VP_BASE, VP_IO_TYPE, VP_IO_SLOT, VP_NAME_POS, 
        VP_P2, VP_P2_LAST = VP_P2 + 7, VP_SONG_REP,
        VP_SONG_ROW, VP_SONG_EDIT, VP_PLAY, VP_VOICES,   /* (37) */
        VP_ROADS, VP_RSUR, VP_RHOME,                  /* (42: the song's ROADS) */
-       VP_TBASE, VP_TRP, VP_TRWHEN, VP_TRHOLD };     /* (0.23-t7: a track's BASE, TRANSPOSE) */
+       VP_TBASE, VP_TRP, VP_TRWHEN, VP_TRHOLD,       /* (0.23-t7: a track's BASE, TRANSPOSE) */
+       VP_GTAKES };                                  /* (0.24: what the global channel takes) */
 _Static_assert(NPAR <= VP_BASE, "the virtual parameters after the parameters (25b + 27a: NPAR 525, past 0x200)");
 /* the ACTION page's action (OCT+ does it); 0.10: those of the track's generator (gen_acts) */
 enum { ACT_NONE, ACT_DICE, ACT_COMMIT, ACT_UNDO, ACT_RESET, NACT };
@@ -518,7 +519,7 @@ static const uint16_t P_CONFIG[NCONFIG][4] = {
     {PAR_BPM, PAR_SHUFFLE, PAR_FOLLOW, VP_PLAY},     /* (37: Play in place of Kit chg) */
     {PAR_MIDI_CHAN_GLOBAL, PAR_MIDI_FILT_TX, PAR_MIDI_FILT_RX, PAR_MIDI_ROUTING},
     {PAR_MIDI_CHAN_1, PAR_MIDI_CHAN_2, PAR_MIDI_CHAN_3, PAR_MIDI_CHAN_4},
-    {PAR_MIDI_CHAN_5, PAR_MIDI_CHAN_6, PAR_MIDI_CHAN_7, VP_NONE},
+    {PAR_MIDI_CHAN_5, PAR_MIDI_CHAN_6, PAR_MIDI_CHAN_7, VP_GTAKES},
     {PAR_MIDI_NOTE1, PAR_MIDI_NOTE2, PAR_MIDI_NOTE3, PAR_MIDI_NOTE4},
     {PAR_MIDI_NOTE5, PAR_MIDI_NOTE6, PAR_MIDI_NOTE7, VP_NONE},
     {VP_LEDS, VP_AUTOSAVE, VP_ACCEL, VP_PALETTE},
@@ -943,6 +944,7 @@ static uint32_t vp_get(uint32_t p)
     case VP_MEDIT: return kset.medit == 1u;
     case VP_PMEM: return kset.pmem;
     case VP_KBSLOTS: return kset.kbslots;
+    case VP_GTAKES: return kset.gtakes;
     case VP_GL ... VP_GL_LAST: {
         const uint32_t n = (p - VP_GL) / NGLSET, k = (p - VP_GL) % NGLSET;
         const uint8_t f[NGLSET] = {gls[n].dest, (uint8_t)(gls[n].depth + 127), gls[n].len, gls[n].wave, gls[n].mode,
@@ -1115,6 +1117,7 @@ static uint32_t vp_max(uint32_t p)
     case VP_LEDS: return 2;
     case VP_AUTOSAVE: case VP_ACCEL: case VP_IO_SRC: case VP_PKEEP: case VP_KBSLOTS: return 1;
     case VP_KB_SRC: return 2;
+    case VP_GTAKES: return NGTAKES - 1u;
     case VP_IO_TRACK: return NTRACK - 1u;
     case VP_PALETTE: return NPALETTES - 1u;
     case VP_RCH: case VP_RCH2: return 16;
@@ -1353,6 +1356,7 @@ static void vp_set(uint32_t p, uint32_t v)
     case VP_MEDIT: kset.medit = (uint8_t)v; settings_later(); return;
     case VP_PMEM: kset.pmem = (uint8_t)v; settings_later(); return;
     case VP_KBSLOTS: kset.kbslots = (uint8_t)v; ui.kb_at = 0; settings_later(); return;
+    case VP_GTAKES: kset.gtakes = midi_gtakes = (uint8_t)v; settings_later(); return;
     case VP_GL ... VP_GL_LAST: {
         const uint32_t n = (p - VP_GL) / NGLSET;
         switch ((p - VP_GL) % NGLSET) {
@@ -1611,8 +1615,10 @@ static uint32_t ca_par(uint32_t u, uint32_t k)
 /* 24: a MODEL knob on SN-HH steps from the LXR's engine to MICRO's types and back, past Rings' and Plaits' */
 static uint32_t model_step(uint32_t p, uint32_t from, uint32_t to)
 {
-    if (p < PAR_MODEL1 + 3u || p >= PAR_MODEL1 + 6u || model_ok(p - PAR_MODEL1, to))
+    if (p < PAR_MODEL1 || p >= PAR_MODEL1 + 6u || model_ok(p - PAR_MODEL1, to))
         return to;
+    if (p < PAR_MODEL1 + 3u)                         /* (0.24: D1-D3 past P WTABLE, when it isn't built in) */
+        return to > from ? to + 1u : to - 1u;
     return to > from ? MD_MC0 : 0u;
 }
 static void control_all(uint32_t k, int32_t step)

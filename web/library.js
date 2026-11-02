@@ -182,6 +182,14 @@ export class Library {
     }
     return out;
   }
+  // 0.24: the CC map (library.c 0x50 / 0x51): 128 codes (ccTargets: 0 the LXR's, CCMAP_OFF nothing)
+  async ccMapGet() {
+    const d = await this.call(0x50, [], 3);
+    return Array.from({ length: 128 }, (_, i) => d[2 * i] | (d[2 * i + 1] << 8));
+  }
+  ccMapPut(first, codes) {
+    return this.call(0x51, [first, codes.length, ...codes.flatMap((c) => [c & 255, c >> 8])]);
+  }
   async libRestore(entries, onProgress) {
     let i = 0;
     for (const e of entries) {
@@ -191,6 +199,105 @@ export class Library {
   }
 }
 export const KL_KIT = 1, KL_SOUND = 2;
+
+// 0.24: the CC map's targets: a code is the parameter + 1, so CC n's is n and NRPN n's is n + 129. The names are the
+// manual's (MANUAL.md, "The sound by CC" on). Six numbers per voice-based setting, D1 D2 D3 SN CY HH.
+export const CCMAP_OFF = 0xffff;
+const VOICES = ["D1", "D2", "D3", "SN", "CY", "HH"];
+const LXR_CC = [                                     // [name, the CC per voice (null: none)]
+  ["Volume", [89, 90, 91, 92, 93, 94]], ["Pan", [95, 96, 97, 100, 101, 102]], ["Drive", [103, 104, 105, 106, 107, 108]],
+  ["Sample rate", [109, 110, 111, 112, 113, 114]], ["Coarse", [9, 11, 13, 15, 17, 19]], ["Fine", [10, 12, 14, 16, 18, 20]],
+  ["Waveform", [2, 3, 4, 5, 7, 8]], ["FM waveform", [21, 22, 23, null, null, null]],
+  ["Mod 1 waveform", [null, null, null, null, 24, 26]], ["Mod 2 waveform", [null, null, null, null, 25, 27]],
+  ["Filter frequency", [38, 39, 40, 41, 42, 43]], ["Filter resonance", [44, 45, 46, 47, 48, 49]],
+  ["Attack", [50, 52, 54, 56, 58, 60]], ["Decay", [51, 53, 55, 57, 59, null]], ["Amp slope", [63, 64, 65, 66, 67, 68]],
+  ["Repeat", [null, null, null, 69, 70, null]], ["Pitch EG decay", [71, 72, 73, 74, null, null]],
+  ["Pitch EG amount", [75, 76, 77, 78, null, null]], ["Pitch EG slope", [79, 80, 81, 82, null, null]],
+  ["FM amount", [83, 85, 87, null, null, null]], ["FM frequency", [84, 86, 88, null, null, null]],
+  ["LFO frequency", [116, 117, 118, 119, 120, 121]], ["LFO amount", [122, 123, 124, 125, 126, 127]],
+];
+const LXR_CC1 = [[61, "HH Decay (CH)"], [62, "HH Decay (OH)"], [28, "SN Noise frequency"], [29, "SN Noise / osc mix"],
+  [30, "CY Mod 1 frequency"], [31, "CY Mod 2 frequency"], [32, "CY Mod 1 gain"], [33, "CY Mod 2 gain"],
+  [34, "HH Mod 1 frequency"], [35, "HH Mod 2 frequency"], [36, "HH Mod 1 gain"], [37, "HH Mod 2 gain"],
+  [115, "Global sample rate"]];
+const NRPN6 = [                                      // [first NRPN, name, voices (6, or 3: D1-D3)]
+  [0, "Filter overdrive"], [6, "FM mode", 3], [15, "Velocity amount"], [27, "LFO waveform"], [51, "LFO clock sync"],
+  [57, "LFO offset"], [63, "Filter type"], [69, "Transient volume"], [75, "Transient waveform"],
+  [81, "Transient frequency"], [100, "Pulse width"], [174, "FX send"], [180, "Reverb send"], [190, "Bits"],
+  [196, "Waveshaper"], [202, "Tilt"], [208, "Choke group"], [214, "Random pitch"], [220, "Random decay"],
+  [226, "Random filter"], [232, "Random pan"], [238, "Cross-mod source"], [244, "Cross-mod mode"],
+  [250, "Cross-mod amount"], [256, "Model", 3], [262, "Model decay", 3], [268, "Model bright", 3],
+  [274, "Model structure", 3], [280, "Model position", 3], [286, "Model exciter", 3], [292, "Model tension", 3],
+  [298, "LFO mode"], [304, "Gate"], [325, "LFO 2 rate"], [331, "LFO 2 amount"], [337, "LFO 2 target"],
+  [343, "LFO 2 wave"], [349, "LFO 2 mode"], [355, "LFO 2 sync"], [361, "LFO 2 retrigger"], [367, "LFO 2 offset"],
+  [373, "Insert type"], [379, "Insert amount"], [385, "Insert knob 3"], [391, "Insert knob 4"],
+];
+const NRPN1 = [[106, "FX bus type"], [107, "FX bus output"], [108, "FX bus dry/wet"], [109, "Drive curve"],
+  [110, "FX bus P1"], [111, "FX bus P2"], [112, "FX bus P3"], [113, "FX bus P4"], [114, "Comp ratio"],
+  [115, "Ring carrier waveform"], [117, "Delay mode"], [119, "Roll rate"], [120, "Morph"], [133, "Shuffle"],
+  [186, "Reverb size"], [187, "Reverb damping"], [188, "Reverb level"], [189, "Reverb model"], [310, "Delay sync"],
+  [311, "Delay saturate"], [312, "Delay echo > reverb"], [313, "Delay glitch"], [314, "Delay pitch"],
+  [315, "Bus dirt"], [316, "Master dirt type"], [317, "Master dirt amount"], [318, "Master comp ratio"],
+  [319, "Master comp threshold"], [320, "Master comp attack"], [321, "Master comp release"],
+  [322, "Master comp sidechain"], [323, "Master comp makeup"], [324, "Master comp mix"]];
+export const NO_MAP = new Set([6, 98, 99]);         // (NRPN's own CCs: the firmware never maps them)
+const NAMES = new Map();                             // code -> name
+for (const [n, ccs] of LXR_CC) ccs.forEach((c, v) => c != null && NAMES.set(c, `${VOICES[v]} ${n}`));
+for (const [c, n] of LXR_CC1) NAMES.set(c, n);
+for (const [first, n, k = 6] of NRPN6) for (let v = 0; v < k; v++) NAMES.set(first + v + 129, `${VOICES[v]} ${n}`);
+for (const [nr, n] of NRPN1) NAMES.set(nr + 129, n);
+const NPAR_CODES = 525;                              // (the firmware's NPAR: a code above it is refused)
+// a code as a number to type: "CC 9", "NRPN 174"
+export const ccCodeRef = (c) => (c <= 128 ? `CC ${c}` : `NRPN ${c - 129}`);
+// the label shown and typed: "D1 Coarse (CC 9)"; "" the LXR's, "Off"
+export function ccTargetLabel(c) {
+  if (!c) return "";
+  if (c === CCMAP_OFF) return "Off";
+  return NAMES.has(c) ? `${NAMES.get(c)} (${ccCodeRef(c)})` : ccCodeRef(c);
+}
+// every target, in the page's list order (the LXR's CCs, then by NRPN)
+export const CC_TARGETS = [...NAMES.keys()].sort((a, b) => a - b).map((c) => ({ code: c, label: ccTargetLabel(c) }));
+// what CC n does with no map
+export function ccDefault(cc) {
+  if (cc === 0) return "Load a kit";
+  if (cc === 1) return "Nothing (the mod wheel)";
+  if (NO_MAP.has(cc)) return "NRPN (" + (cc === 6 ? "data entry" : cc === 98 ? "LSB" : "MSB") + ")";
+  return NAMES.get(cc) || "Nothing";
+}
+// a typed target -> its code (0 the LXR's), or null if it isn't one
+export function ccParseTarget(text) {
+  const t = (text || "").trim();
+  if (!t || /^(lxr|default|as the lxr)$/i.test(t)) return 0;
+  if (/^(off|none|nothing)$/i.test(t)) return CCMAP_OFF;
+  const m = /(?:^|\()\s*(cc|nrpn)\s*(\d+)\s*\)?$/i.exec(t);
+  if (m) {
+    const n = +m[2], c = /cc/i.test(m[1]) ? n : n + 129;
+    if (/cc/i.test(m[1]) ? n >= 2 && n <= 127 && !NO_MAP.has(n) : c <= NPAR_CODES) return c;
+    return null;
+  }
+  const hit = CC_TARGETS.find((x) => x.label.toLowerCase() === t.toLowerCase() || NAMES.get(x.code).toLowerCase() === t.toLowerCase());
+  return hit ? hit.code : null;
+}
+// the map as a CSV: the CCs that differ from the LXR's
+export function ccMapCsv(map) {
+  const rows = ["cc,sets,name"];
+  map.forEach((c, cc) => { if (c) rows.push(`${cc},${c === CCMAP_OFF ? "off" : ccCodeRef(c)},"${c === CCMAP_OFF ? "" : NAMES.get(c) || ""}"`); });
+  return rows.join("\n") + "\n";
+}
+// a CSV back into a whole map (CCs not in it: the LXR's). -> { map, errors: ["line 3: ..."] }
+export function ccMapParseCsv(text) {
+  const map = new Array(128).fill(0), errors = [];
+  text.split(/\r?\n/).forEach((line, i) => {
+    const cols = line.split(/[,;\t]/).map((x) => x.trim().replace(/^"|"$/g, ""));
+    if (!cols[0] || /^#/.test(cols[0]) || /^cc$/i.test(cols[0])) return;
+    const cc = /^\d+$/.test(cols[0]) ? +cols[0] : NaN, c = ccParseTarget(cols[1]);
+    if (!(cc >= 0 && cc <= 127)) errors.push(`line ${i + 1}: "${cols[0]}" isn't a CC (0-127)`);
+    else if (NO_MAP.has(cc)) errors.push(`line ${i + 1}: CC ${cc} is NRPN's, it can't be mapped`);
+    else if (c === null) errors.push(`line ${i + 1}: "${cols[1]}" isn't a parameter (CC n, NRPN n, off)`);
+    else map[cc] = c;
+  });
+  return { map, errors };
+}
 
 // 0.19: the Hrtl kit packs (tools/gen_kit_packs.py: .ktlb files in the emulator's kits/). addPacks puts each kit into
 // the library's first empty slot (from L1, so they're near the top of the kit browser's LIBRARY): a slot holding a

@@ -1,6 +1,6 @@
 <!doctype html>
 <!-- SPDX-License-Identifier: GPL-3.0-only
-     Elixir's cheat sheet: three landscape pages, printed to web/cheatsheet.pdf by tools/cheatsheet.sh (headless
+     Elixir's cheat sheet: six landscape pages (5 and 6: MIDI), printed to web/cheatsheet.pdf by tools/cheatsheet.sh (headless
      Chrome, with the splash's potion put in for the POTION marks); web/make_site.py puts the PDF at the site's root.
      Everything here is from MANUAL.md: regenerate it when a release adds or changes keys, pages or knobs. -->
 <html lang="en">
@@ -44,6 +44,13 @@
   p { margin: 2px 0 4px; }
   .note { color: var(--dim); }
   .shot { float: right; width: 1.45in; margin: 0 0 4px 8px; image-rendering: pixelated; border-radius: 4px; }
+  .page.midi2 { grid-template-columns: 1fr 1.6fr; }
+  table.grid td, table.grid th { text-align: center; padding: 1.2px 2px; font-size: 7.4pt; }
+  table.grid td:first-child, table.grid th:first-child { text-align: left; white-space: nowrap; }
+  table.cells td { font-size: 6.9pt; text-align: left; padding: 1.4px 2px; line-height: 1.2; }
+  table.cells td b { display: block; color: var(--accent); font-size: 7.4pt; }
+  table.cells td:first-child { font-size: 7.4pt; }
+  .big { font-size: 9pt; }
 </style>
 </head>
 <body>
@@ -51,7 +58,7 @@
 <section class="page">
   <header>
     <h1><!--POTION--><span><span>Elixir</span> cheat sheet</span></h1>
-    <p>drum machine firmware for the M-VAVE FM-1 · 1 of 4</p>
+    <p>drum machine firmware for the M-VAVE FM-1 · 1 of 6</p>
     <p class="right">Black keys numbered 1–11 and white keys 1–16, left to right</p>
   </header>
 
@@ -164,15 +171,15 @@
       row's pattern (END, LOOP), K4 repeats (x1 … x16).</p>
 
     <h2>MIDI</h2>
-    <p>In: USB and the TRS jack · out: USB. Clock out always; tempo down to MIDI follows clock in. CC <i>n</i>
-      sets parameter <i>n</i> − 1 (as on the LXR), NRPN reaches the rest. Program change 0–31 queues a pattern.</p>
+    <p>CC <i>n</i> sets parameter <i>n</i> − 1 (as the LXR), NRPN the rest; program change 0–31 (global
+      channel) queues a pattern. Every channel, CC and the remote map: <b>pages 5–6</b>.</p>
   </div>
 </section>
 
 <section class="page">
   <header>
     <h1><!--POTION--><span><span>Elixir</span> cheat sheet</span></h1>
-    <p>sequencing and performance · 2 of 4</p>
+    <p>sequencing and performance · 2 of 6</p>
     <p class="right">Full manual: dmajka.github.io/elixir/manual</p>
   </header>
 
@@ -297,7 +304,7 @@
 <section class="page">
   <header>
     <h1><!--POTION--><span><span>Elixir</span> cheat sheet</span></h1>
-    <p>spells, and what's not obvious · 3 of 4</p>
+    <p>spells, and what's not obvious · 3 of 6</p>
     <p class="right">Full manual: dmajka.github.io/elixir/manual</p>
   </header>
 
@@ -403,7 +410,7 @@
 <section class="page">
   <header>
     <h1><!--POTION--><span><span>Elixir</span> cheat sheet</span></h1>
-    <p>wander, rush, transpose, roads · 4 of 4</p>
+    <p>wander, rush, transpose, roads · 4 of 6</p>
     <p class="right">Full manual: dmajka.github.io/elixir/manual</p>
   </header>
 
@@ -485,6 +492,184 @@
     </table>
     <p>ROADS plays the song by its own chances: after a row, the row after another with the same pattern. Surprise
       lets in the rarer turns; Home brings it back to row 1 every so many bars.</p>
+  </div>
+</section>
+
+<section class="page">
+  <header>
+    <h1><!--POTION--><span><span>Elixir</span> cheat sheet</span></h1>
+    <p>MIDI: channels, launching, channel 10, the sound by CC · 5 of 6</p>
+    <p class="right">Set the channels in CONFIG → MIDI CHANNELS and REMOTE</p>
+  </header>
+
+  <div class="col">
+    <h2>Channels</h2>
+    <table>
+      <tr><th>Channel</th><th>Default</th><th>Takes</th></tr>
+      <tr><td>Tracks D1 … OH</td><td>1–7</td><td>notes play the track · the LXR's CCs for its voice</td></tr>
+      <tr><td>Global</td><td>10</td><td><b>patterns (program change), kits (CC 102, 103)</b>, a keyboard (notes, mod wheel): Global in (right)</td></tr>
+      <tr><td>Remote TRACKS</td><td>15</td><td>the remote map (page 6): per-track knobs, mute, solo</td></tr>
+      <tr><td>Remote GLOBAL</td><td>16</td><td>the remote map (page 6): transport, effects, patterns</td></tr>
+    </table>
+    <p class="note">Keep the remote channels apart from the track and global ones. A CC for a voice is taken on its
+      track's channel; one with no voice (FX bus, SRate) on any track's.</p>
+
+    <h2>Launching patterns and kits</h2>
+    <table>
+      <tr><td>Program change 0–31</td><td><b>Channel 10: pattern 1–32</b>, at the pattern's end (stopped: at once)</td></tr>
+      <tr><td>CC 102, value 0–63</td><td><b>Channel 10: slot kit 1–64</b>, at once</td></tr>
+      <tr><td>CC 103, value 0–84</td><td><b>Channel 10: factory kit 1–85</b>, at once</td></tr>
+      <tr><td>CC 0, value 0–63</td><td>A track's channel (10 at ALL): slot kit, as the LXR</td></tr>
+      <tr><td>GLOBAL 60 / 61</td><td>Remote channel 16, CC or note: the previous / next pattern</td></tr>
+    </table>
+
+    <h2>The rest</h2>
+    <table>
+      <tr><td>One channel</td><td>Every track on one channel (MIDI CHANNELS) + a note each (MIDI NOTES): as a TR-8S</td></tr>
+      <tr><td>Clock</td><td>Out always (24 PPQ, start, stop). In: turn the tempo down to MIDI</td></tr>
+      <tr><td>Filters</td><td>CONFIG → MIDI: N notes, R clock, C CC + NRPN, P program change</td></tr>
+      <tr><td>Route</td><td>TRS&gt;USB: the jack's input on to USB</td></tr>
+      <tr><td>Your own CCs</td><td>The library page's CC map: any CC to any parameter (by name), or off; CSV in and out</td></tr>
+    </table>
+    <p class="note">USB is the only MIDI out, so the remote's lights need both on a USB host.</p>
+  </div>
+
+  <div class="col">
+    <h2>The sound by CC (track channels; 10 at ALL)</h2>
+    <table class="grid">
+      <tr><th></th><th>D1</th><th>D2</th><th>D3</th><th>SN</th><th>CY</th><th>HH</th></tr>
+      <tr><td>Volume</td><td>89</td><td>90</td><td>91</td><td>92</td><td>93</td><td>94</td></tr>
+      <tr><td>Pan</td><td>95</td><td>96</td><td>97</td><td>100</td><td>101</td><td>102</td></tr>
+      <tr><td>Drive</td><td>103</td><td>104</td><td>105</td><td>106</td><td>107</td><td>108</td></tr>
+      <tr><td>Sample rate</td><td>109</td><td>110</td><td>111</td><td>112</td><td>113</td><td>114</td></tr>
+      <tr><td>Coarse</td><td>9</td><td>11</td><td>13</td><td>15</td><td>17</td><td>19</td></tr>
+      <tr><td>Fine</td><td>10</td><td>12</td><td>14</td><td>16</td><td>18</td><td>20</td></tr>
+      <tr><td>Waveform</td><td>2</td><td>3</td><td>4</td><td>5</td><td>7</td><td>8</td></tr>
+      <tr><td>FM / mod wave</td><td>21</td><td>22</td><td>23</td><td>–</td><td>24 25</td><td>26 27</td></tr>
+      <tr><td>Filter freq</td><td>38</td><td>39</td><td>40</td><td>41</td><td>42</td><td>43</td></tr>
+      <tr><td>Resonance</td><td>44</td><td>45</td><td>46</td><td>47</td><td>48</td><td>49</td></tr>
+      <tr><td>Attack</td><td>50</td><td>52</td><td>54</td><td>56</td><td>58</td><td>60</td></tr>
+      <tr><td>Decay</td><td>51</td><td>53</td><td>55</td><td>57</td><td>59</td><td>61 CH 62 OH</td></tr>
+      <tr><td>Amp slope</td><td>63</td><td>64</td><td>65</td><td>66</td><td>67</td><td>68</td></tr>
+      <tr><td>Repeat</td><td>–</td><td>–</td><td>–</td><td>69</td><td>70</td><td>–</td></tr>
+      <tr><td>Pitch EG decay</td><td>71</td><td>72</td><td>73</td><td>74</td><td>–</td><td>–</td></tr>
+      <tr><td>Pitch EG amt</td><td>75</td><td>76</td><td>77</td><td>78</td><td>–</td><td>–</td></tr>
+      <tr><td>Pitch EG slope</td><td>79</td><td>80</td><td>81</td><td>82</td><td>–</td><td>–</td></tr>
+      <tr><td>FM amount</td><td>83</td><td>85</td><td>87</td><td>–</td><td>–</td><td>–</td></tr>
+      <tr><td>FM freq</td><td>84</td><td>86</td><td>88</td><td>–</td><td>–</td><td>–</td></tr>
+      <tr><td>LFO freq</td><td>116</td><td>117</td><td>118</td><td>119</td><td>120</td><td>121</td></tr>
+      <tr><td>LFO amount</td><td>122</td><td>123</td><td>124</td><td>125</td><td>126</td><td>127</td></tr>
+    </table>
+    <p class="note">Values go in as they are: lists (waveforms 0–5) take their small numbers, pans 63/64 centre.
+      HH CCs act on CH and OH, but for the decays.</p>
+
+    <h2>More CCs</h2>
+    <table>
+      <tr><td>28, 29</td><td>SN noise frequency, noise / osc mix</td></tr>
+      <tr><td>30–33 · 34–37</td><td>CY · HH: mod 1 freq, mod 2 freq, mod 1 gain, mod 2 gain</td></tr>
+      <tr><td>115</td><td>Global sample rate</td></tr>
+    </table>
+  </div>
+
+  <div class="col">
+    <h2>Channel 10 (global): Global in</h2>
+    <p>CONFIG → MIDI CHANNELS, page 2, KNOB 4. OFF: nothing.</p>
+    <table>
+      <tr><th>Message on 10</th><th>KEYS (default)</th><th>PAT+KIT</th><th>ALL</th></tr>
+      <tr><td>Program change 0–31</td><td>pattern</td><td>pattern</td><td>pattern</td></tr>
+      <tr><td>CC 102 · CC 103</td><td>slot · factory kit</td><td>slot · factory kit</td><td>the sound</td></tr>
+      <tr><td>Notes</td><td>selected track</td><td>–</td><td>selected track</td></tr>
+      <tr><td>CC 1 mod wheel</td><td>MACRO 1</td><td>–</td><td>–</td></tr>
+      <tr><td>CC 0 / 32 bank</td><td>–</td><td>–</td><td>CC 0: slot kit</td></tr>
+      <tr><td>Bend, other CCs</td><td>–</td><td>–</td><td>CCs: the sound, NRPN</td></tr>
+    </table>
+    <p class="note">Elixir sends a program change on 10 when its pattern changes (TX filter P). Clock and start/stop
+      have no channel: followed with the tempo at MIDI. Send a kit after the pattern: a pattern can bring its own.</p>
+
+    <h2>The same control on 10 (at ALL) and the remote</h2>
+    <table>
+      <tr><th>Remote</th><th>Channel 10 CC (D1 … HH)</th></tr>
+      <tr><td>15: Volume</td><td>89–94</td></tr>
+      <tr><td>15: Pan</td><td>95 96 97 100 101 102</td></tr>
+      <tr><td>15: Filter · Reso</td><td>38–43 · 44–49</td></tr>
+      <tr><td>15: Decay</td><td>51 53 55 57 59 · 61 CH, 62 OH</td></tr>
+      <tr><td>15: Pitch</td><td>9 11 13 15 17 19</td></tr>
+      <tr><td>15: Drive</td><td>103–108</td></tr>
+      <tr><td>15: Sample rate</td><td>109–114</td></tr>
+      <tr><td>15: LFO amount</td><td>122–127</td></tr>
+      <tr><td>16: SRate (11)</td><td>115</td></tr>
+      <tr><td>16: 60 / 61</td><td>program change (any pattern)</td></tr>
+    </table>
+    <p class="note">Whichever arrives last wins. The remote's sends, random pitch, shuffle, morph, roll, FX and
+      reverb knobs match NRPNs on 10. Remote 16's transport, mutes, solo, select, rolls and effects have no
+      channel 10 twin.</p>
+
+  </div>
+</section>
+
+<section class="page midi2">
+  <header>
+    <h1><!--POTION--><span><span>Elixir</span> cheat sheet</span></h1>
+    <p>MIDI: the remote map · 6 of 6</p>
+    <p class="right">For an 8-column controller (Launch Control XL) · ⇄ toggles</p>
+  </header>
+
+  <div class="col">
+    <h2>TRACKS (channel 15)</h2>
+    <table class="grid">
+      <tr><th></th><th>D1</th><th>D2</th><th>D3</th><th>SN</th><th>CY</th><th>CH</th><th>OH</th><th>sel</th></tr>
+      <tr><td>Volume</td><td>8</td><td>9</td><td>10</td><td>11</td><td>12</td><td>13</td><td>14</td><td>15</td></tr>
+      <tr><td>Pan</td><td>16</td><td>17</td><td>18</td><td>19</td><td>20</td><td>21</td><td>22</td><td>23</td></tr>
+      <tr><td>Filter freq</td><td>24</td><td>25</td><td>26</td><td>27</td><td>28</td><td>29</td><td>30</td><td>31</td></tr>
+      <tr><td>Resonance</td><td>32</td><td>33</td><td>34</td><td>35</td><td>36</td><td>37</td><td>38</td><td>39</td></tr>
+      <tr><td>Decay</td><td>40</td><td>41</td><td>42</td><td>43</td><td>44</td><td>45</td><td>46</td><td>47</td></tr>
+      <tr><td>Pitch</td><td>48</td><td>49</td><td>50</td><td>51</td><td>52</td><td>53</td><td>54</td><td>55</td></tr>
+      <tr><td>Drive</td><td>56</td><td>57</td><td>58</td><td>59</td><td>60</td><td>61</td><td>62</td><td>63</td></tr>
+      <tr><td>FX send</td><td>64</td><td>65</td><td>66</td><td>67</td><td>68</td><td>69</td><td>70</td><td>71</td></tr>
+      <tr><td>Reverb send</td><td>72</td><td>73</td><td>74</td><td>75</td><td>76</td><td>77</td><td>78</td><td>79</td></tr>
+      <tr><td>Sample rate</td><td>80</td><td>81</td><td>82</td><td>83</td><td>84</td><td>85</td><td>86</td><td>87</td></tr>
+      <tr><td>LFO amount</td><td>88</td><td>89</td><td>90</td><td>91</td><td>92</td><td>93</td><td>94</td><td>95</td></tr>
+      <tr><td>Random pitch</td><td>96</td><td>97</td><td>98</td><td>99</td><td>100</td><td>101</td><td>102</td><td>103</td></tr>
+      <tr><td>Mute ⇄</td><td>104</td><td>105</td><td>106</td><td>107</td><td>108</td><td>109</td><td>110</td><td>111</td></tr>
+      <tr><td>Solo ⇄</td><td>112</td><td>113</td><td>114</td><td>115</td><td>116</td><td>117</td><td>118</td><td>119</td></tr>
+    </table>
+    <p class="note">Knobs are CCs (8–103); buttons (104–119) a CC or a note. Column 8: the selected track. CH and OH
+      share the hat voice, but for their decays.</p>
+
+    <h2>How it behaves</h2>
+    <table>
+      <tr><td>Buttons</td><td>A CC above 0 or a note on presses, CC 0 or a note off lets go</td></tr>
+      <tr><td>PICKUP</td><td>(default) a knob acts once it passes the value: nothing jumps</td></tr>
+      <tr><td>ABS · REL</td><td>Straight to the position · endless encoders (64 ± n, or 1 / 127)</td></tr>
+      <tr><td>Recording</td><td>Under REC, a TRACKS knob records locks on its track</td></tr>
+      <tr><td>Feedback</td><td>Values and button states go back out on USB, so rings and lights follow</td></tr>
+      <tr><td>Patterns</td><td>60 / 61 step them; to launch one, send <b>program change 0–31 on the global channel</b> (page 5)</td></tr>
+    </table>
+    <p class="note">CONFIG → REMOTE: Tracks, Global (channels), Knobs (PICKUP / ABS / REL).</p>
+  </div>
+
+  <div class="col">
+    <h2>GLOBAL (channel 16): knobs and faders</h2>
+    <table class="grid cells">
+      <tr><td>8–15</td><td><b>8</b>Tempo</td><td><b>9</b>Shuffle</td><td><b>10</b>Morph</td><td><b>11</b>SRate</td><td><b>12</b>DJ filter</td><td><b>13</b>Roll rate</td><td><b>14</b>Repeat</td><td><b>15</b>Tape time</td></tr>
+      <tr><td>16–23</td><td><b>16</b>FX wet</td><td><b>17</b>P1</td><td><b>18</b>P2</td><td><b>19</b>P3</td><td><b>20</b>P4</td><td><b>21</b>Bus dirt</td><td><b>22</b>Echo>rev</td><td><b>23</b>Saturate</td></tr>
+      <tr><td>24–31</td><td><b>24</b>Rev level</td><td><b>25</b>Rev size</td><td><b>26</b>Rev damp</td><td><b>27</b>Mstr dirt</td><td><b>28</b>DENSITY</td><td><b>29</b>Ghost vel</td><td><b>30</b>Build</td><td><b>31</b>Vary</td></tr>
+      <tr><td>32–39</td><td><b>32</b>Macro 1</td><td><b>33</b>Macro 2</td><td><b>34</b>Macro 3</td><td><b>35</b>Macro 4</td><td><b>36</b>DRILL</td><td><b>37</b>JITTER</td><td><b>38</b>CUTS</td><td><b>39</b>PUMP</td></tr>
+      <tr><td>40–47</td><td><b>40</b>COMB note</td><td><b>41</b>COMB fb</td><td><b>42</b>CRUSH</td><td><b>43</b>REV len</td><td><b>44</b>LFO1 dep</td><td><b>45</b>LFO2 dep</td><td><b>46</b>LFO3 dep</td><td></td></tr>
+    </table>
+    <h2>GLOBAL (channel 16): buttons, CC or note</h2>
+    <table class="grid cells">
+      <tr><td>Transport · held</td><td><b>48</b>PLAY/STOP</td><td><b>49</b>REC</td><td><b>50</b>FILL</td><td><b>51</b>REPEAT</td><td><b>52</b>FREEZE</td><td><b>53</b>THROW REV</td><td><b>54</b>THROW FX</td><td><b>55</b>FB PUSH</td></tr>
+      <tr><td>Held · patterns</td><td><b>56</b>TAPE STOP</td><td><b>57</b>LP sweep</td><td><b>58</b>HP sweep</td><td><b>59</b>REVERSE</td><td><b>60</b><b>◀ pattern</b></td><td><b>61</b><b>pattern ▶</b></td><td></td><td></td></tr>
+      <tr><td>Select</td><td><b>64</b>D1</td><td><b>65</b>D2</td><td><b>66</b>D3</td><td><b>67</b>SN</td><td><b>68</b>CY</td><td><b>69</b>CH</td><td><b>70</b>OH</td><td></td></tr>
+      <tr><td>Roll (held)</td><td><b>72</b>D1</td><td><b>73</b>D2</td><td><b>74</b>D3</td><td><b>75</b>SN</td><td><b>76</b>CY</td><td><b>77</b>CH</td><td><b>78</b>OH</td><td><b>79</b>sel</td></tr>
+      <tr><td>DRILL (held)</td><td><b>80</b>D1</td><td><b>81</b>D2</td><td><b>82</b>D3</td><td><b>83</b>SN</td><td><b>84</b>CY</td><td><b>85</b>CH</td><td><b>86</b>OH</td><td><b>87</b>sel</td></tr>
+      <tr><td>Effects, held</td><td><b>88</b>HALF</td><td><b>89</b>JITTER</td><td><b>90</b>CUTS</td><td><b>91</b>SHORT</td><td><b>92</b>PUMP</td><td><b>93</b>COMB</td><td><b>94</b>SPACE</td><td><b>95</b>CRUSH</td></tr>
+      <tr><td>Effects ⇄</td><td><b>96</b>HALF</td><td><b>97</b>JITTER</td><td><b>98</b>CUTS</td><td><b>99</b>SHORT</td><td><b>100</b>PUMP</td><td><b>101</b>COMB</td><td><b>102</b>SPACE</td><td><b>103</b>CRUSH</td></tr>
+      <tr><td>DENSITY out ⇄</td><td><b>104</b>D1</td><td><b>105</b>D2</td><td><b>106</b>D3</td><td><b>107</b>SN</td><td><b>108</b>CY</td><td><b>109</b>CH</td><td><b>110</b>OH</td><td><b>111</b>all in</td></tr>
+    </table>
+    <p class="note">The effects are PERF's and work from any page. DENSITY out: 104–110 leave a track out of DENSITY
+      (again: back in), 111 puts them all back.</p>
   </div>
 </section>
 

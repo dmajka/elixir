@@ -14,7 +14,17 @@
  *     M2U, M2A; the LXR's routes to its DIN out have no jack here);
  *   - 0.12: the remote channels (CONFIG: REMOTE; 0.16: two, TRACKS and GLOBAL): their CCs and notes go to the
  *     remote map (remote.c, the main loop) and nowhere else, past the filters; the remote's feedback goes out from
- *     here. */
+ *     here.
+ *   - 0.24: the CC map (the library page writes it; project.c keeps it in the settings): a CC can set another
+ *     parameter (any the CCs and NRPNs reach) or nothing. Its channel is then the new parameter's voice's (or the
+ *     global one); a short-range parameter (a list, 0..15) is stretched over 0..127. CC 6, 98 and 99 stay NRPN's.
+ *   - 0.24: what the global channel takes (CONFIG: MIDI CHANNELS, Global in; kset.gtakes):
+ *       KEYS (the default): program change 0..31 the pattern, CC 102 a slot kit (0..63), CC 103 a factory kit
+ *         (0..84, into the edit buffer as LOAD > FACTORY), notes play the selected track, CC 1 (the mod wheel) moves
+ *         MACRO 1; the rest a keyboard sends (bank select, pitch bend, sustain ..) is nothing;
+ *       PAT+KIT: the same without the notes and the wheel (a launch lane);
+ *       ALL: the LXR's (notes, every CC, NRPN, CC 0 the kit); OFF: nothing.
+ *     The track channels and the remote's are as before (CC 0 a slot kit there, as the LXR's). */
 
 enum { MF_NOTE = 1, MF_RT = 2, MF_CC = 4, MF_PC = 8 };
 enum { MR_OFF, MR_U2M, MR_M2M, MR_A2M, MR_M2U, MR_M2A };
@@ -99,6 +109,20 @@ static void midi_out_pc(uint32_t pattern)
 }
 
 /* ----------------------------------------------------------------- in --- */
+#define CCMAP_OFF 0xFFFFu
+enum { GT_KEYS, GT_PATKIT, GT_ALL, GT_OFF, NGTAKES };
+#define GTM_PC ((1u << GT_KEYS) | (1u << GT_PATKIT) | (1u << GT_ALL))   /* what each message needs */
+#define GTM_NOTE ((1u << GT_KEYS) | (1u << GT_ALL))
+#define GTM_ALL (1u << GT_ALL)
+#define GT_CC_SLOT 102u                              /* (undefined in the MIDI spec: a keyboard doesn't send them) */
+#define GT_CC_FACTORY 103u
+static uint8_t midi_gtakes;                          /* (project.c sets it from kset.gtakes) */
+static volatile uint8_t midi_modw = 0xFF;            /* KEYS: the wheel for MACRO 1 (remote.c, the main loop) */
+static int midi_glob(uint32_t ch, uint32_t mask)     /* the global channel, taking this (GTM_*) */
+{
+    return ch == midi_global_ch() && ((mask >> midi_gtakes) & 1u);
+}
+static uint32_t cc_map_at(uint32_t cc);              /* (project.c) 0: the LXR's, CCMAP_OFF: nothing, else parameter + 1 */
 /* midiParser_cc2voiceNr: the voice (1..6) a CC's parameter belongs to; 0 none, 7 all */
 static uint32_t cc_voice(uint32_t cc)
 {
@@ -168,18 +192,34 @@ static void midi_param(uint32_t p, uint32_t v)
 
 static void midi_cc(uint32_t ch, uint32_t cc, uint32_t v)
 {
-    uint32_t vo = cc_voice(cc), t, ok = 0;
-    if (!(par[PAR_MIDI_FILT_RX] & MF_CC))
+    uint32_t m = (cc == 6u || cc == 98u || cc == 99u) ? 0u : cc_map_at(cc), p = m - 1u, t, ok = 0;
+    uint32_t vo = m ? par_voice(p) + 1u : cc_voice(cc), gl = (uint32_t)midi_glob(ch, GTM_ALL);
+    if (!(par[PAR_MIDI_FILT_RX] & MF_CC) || m == CCMAP_OFF)
         return;
+    if (!m && midi_glob(ch, GTM_PC & ~GTM_ALL)) {    /* 0.24: KEYS, PAT+KIT: the global channel's own CCs */
+        if (cc == GT_CC_SLOT && v < NUM_KITS)
+            kit_load_ram(v);
+        else if (cc == GT_CC_FACTORY)
+            kit_factory_load(v);
+        else if (cc == 1u && midi_gtakes == GT_KEYS)
+            midi_modw = (uint8_t)v;
+        if (cc == GT_CC_SLOT || cc == GT_CC_FACTORY || cc == 1u)
+            return;
+    }
     if (vo == 0u || vo >= 7u) {                      /* any channel the LXR listens on */
-        ok = ch == midi_global_ch();
+        ok = gl;
         for (t = 0; t < NTRACK; t++)
             ok |= ch == midi_track_ch(t);
     } else {
-        ok = ch == midi_track_ch(vo - 1u) || ch == midi_global_ch();
+        ok = ch == midi_track_ch(vo - 1u) || gl;
     }
     if (!ok)
         return;
+    if (m) {                                         /* 0.24: mapped */
+        uint32_t lo = par_min(p), r = par_max(p) - lo;
+        midi_param(p, r < 127u ? lo + (v * r + 63u) / 127u : v);
+        return;
+    }
     switch (cc) {
     case 0:                                          /* bank select: the kit */
         if (v < NUM_KITS)
@@ -229,7 +269,7 @@ static void midi_message(uint32_t pkt, uint32_t src)   /* midiParser_parseMidiMe
         uint32_t ch = st & 15u, t, q = 0xFFu;
         if (!(rx & MF_NOTE) || (st & 0xF0u) == 0x80u || d2 == 0u)
             return;                                  /* (drum voices ignore note off) */
-        if (ch == midi_global_ch()) {
+        if (midi_glob(ch, GTM_NOTE)) {
             q = ui_track();
             midi_note_on(q, d1, d2, 1);
         }
@@ -239,7 +279,7 @@ static void midi_message(uint32_t pkt, uint32_t src)   /* midiParser_parseMidiMe
         return;
     }
     case 0xC0u:
-        if ((rx & MF_PC) && (st & 15u) == midi_global_ch())
+        if ((rx & MF_PC) && midi_glob(st & 15u, GTM_PC))
             seq_set_next_pattern(d1);
         return;
     case 0xB0u:

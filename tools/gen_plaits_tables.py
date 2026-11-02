@@ -78,8 +78,17 @@ def main():
     L += arr("PL_FM_Q", "int32_t", q(res["lut_fm_frequency_quantizer"], 16), 8)
     L += ["/* the LPC speech synthesizer's excitation pulse */"]
     L += arr("PL_LPC_PULSE", "int8_t", [int(v) for v in res["lut_lpc_excitation_pulse"]])
+    waves = [int(v) for v in res["wav_integrated_waves"]]
+    ch = [2 * 64 + 6 * 8 + 1, 2 * 64 + 6 * 8 + 6, 2 * 64 + 6 * 8 + 4, 6 * 8 + 0, 6 * 8 + 1, 6 * 8 + 2, 6 * 8 + 7] + \
+         [2 * 64 + 4 * 8 + c for c in range(7, -1, -1)]   # (Plaits' chords' wavetable, in the order P CHORD plays it)
+    L += ["#if !ELIXIR_WTABLE                                   /* (with P WTABLE: PL_WAVES holds them) */",
+          "/* P CHORD's 15 waves, in the order it plays them (Plaits' chords' wavetable: bank 64 + row 8 + column of",
+          " * wav_integrated_waves: 2:6:1, 2:6:6, 2:6:4, 0:6:0-2, 0:6:7, 2:4:7 down to 2:4:0), 132 samples each */"]
+    L += arr("PL_CHW", "int16_t", [v for w in ch for v in waves[w * 132:(w + 1) * 132]], 16)
+    L += ["#else", "/* P WTABLE's: all 192 waves (built in only with ELIXIR_WTABLE, rings.c; docs/parked/README.md) */"]
     L += ["/* the wavetables: 4 banks x 8 x 8 waves of 256 + 4 samples, integrated (Plaits' wav_integrated_waves) */"]
-    L += arr("PL_WAVES", "int16_t", [int(v) for v in res["wav_integrated_waves"]], 16)
+    L += arr("PL_WAVES", "int16_t", waves, 16)
+    L += ["#endif"]
     L += ["/* the speech synthesizer's LPC word banks (TI ROMs' LPC10 words) */"]
     for i in range(5):
         L += arr(f"PL_BANK{i}", "uint8_t", [int(v) for v in words[f"bank_{i}"]], 16)

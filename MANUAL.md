@@ -28,7 +28,6 @@ Elixir is **unofficial**. It is not affiliated with or endorsed by Erica Synths,
 18. [How Elixir differs from the LXR-02](#18-how-elixir-differs-from-the-lxr-02)
 19. [Troubleshooting](#19-troubleshooting)
 20. [Licence and credits](#20-licence-and-credits)
-- [Appendix: the remote map at a glance](#appendix-the-remote-map-at-a-glance)
 
 ---
 
@@ -514,7 +513,7 @@ The modes a MODAL voice runs drop as more drums use MODAL: 32 with one, 24 with 
 
 #### Plaits
 
-A port of the sixteen original engines of Mutable Instruments' **Plaits** (its first two banks; the six engines Plaits added in its 1.2 firmware aren't ported). The voice strikes the engine at each hit, as Plaits plays with its TRIGGER patched; velocity is the hit's accent. On a P model the MODEL section's knobs become Plaits':
+A port of the original engines of Mutable Instruments' **Plaits** (its first two banks; the six engines Plaits added in its 1.2 firmware aren't ported): fifteen of its sixteen. Its wavetable engine (P WTABLE, in 0.23) was taken out in 0.24 to free 48 KB of flash for new features; a kit that used it loads on P ADDTV. The voice strikes the engine at each hit, as Plaits plays with its TRIGGER patched; velocity is the hit's accent. On a P model the MODEL section's knobs become Plaits':
 
 | | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
@@ -525,7 +524,7 @@ A port of the sixteen original engines of Mutable Instruments' **Plaits** (its f
 - **Pitch:** the voice's Coarse and Fine, the step's note, the pitch EG and KEYS, as on the other models.
 - **Colour:** Plaits' low-pass gate. At 0 (the default) the engine goes through the voice's amp EG as through a plain VCA; turned up, its filter also closes as the amp EG falls, the sound darkening as it dies away, as a vactrol does. The drum, string and modal engines shape their own decay (Morph), so the amp EG and Colour don't apply to them.
 - **Aux:** Plaits has two outputs, OUT and AUX (a variant of the sound, listed below). Aux blends from OUT (0) to AUX (127).
-- **Env:** how far the amp EG opens Timbre and Morph at each hit (Plaits' internal envelope, patched to its TIMBRE and MORPH inputs). On P WTABLE (from 0.23-test10) it opens **Bright** alone, the classic wavetable pluck: bright on the attack, closing like a filter, the family kept.
+- **Env:** how far the amp EG opens Timbre and Morph at each hit (Plaits' internal envelope, patched to its TIMBRE and MORPH inputs).
 
 | Model | Plaits engine | Harmonic | Timbre | Morph | AUX |
 |---|---|---|---|---|---|
@@ -534,7 +533,6 @@ A port of the sixteen original engines of Mutable Instruments' **Plaits** (its f
 | P FM | Two-operator FM | ratio | FM index | feedback | sub-oscillator |
 | P GRAIN | Formant / grains | formant ratio | formant frequency | formant width | windowed sines |
 | P ADDTV | Additive (harmonics) | bumps in the spectrum | most prominent harmonic | bump shape | organ harmonics only |
-| P WTABLE | Wavetables | the set of 64 waves (**Bank**: A, A-B, B … D as it blends up, then back down D … A with **STEP**: the waves stepped, not blended, PPG-like) | brightness (**Bright**, 0–100%) | the family of waves (**Family**, 1–8; "3-4" while it blends) | lo-fi (5-bit) |
 | P CHORD | Chords | chord type (the knob is named **Chord** and shows it: OCTAVE, FIFTH, SUS4, MINOR, MINOR 7, MINOR 9, MINOR 11, 6/9, MAJOR 9, MAJOR 7, MAJOR) | inversion (**Invert**) | waveform (**Wave**: ORGAN up to half, then WAVE 1–15 from the wavetable) | the chord's root |
 | P SPEECH | Speech | vowels, then word banks | species (formant shift) | phoneme or word | raw vocal cords |
 | P SWARM | Eight sawtooth swarm | pitch spread | grain density | grain length | sine swarm |
@@ -546,7 +544,7 @@ A port of the sixteen original engines of Mutable Instruments' **Plaits** (its f
 | P SD | Analog snare | tone against noise | the head's modes | decay | a synthetic snare |
 | P HH | Analog hi-hat | metal against noise | high-pass | decay | a synthetic hat |
 
-**The waves on the MODEL page** (from 0.23-test7). On P WTABLE the picture shows the real wave it plays now, one cycle, blended from its neighbours as you turn Bank, Bright and Family, the bank at the top. Bank A is clean and additive, B and C rougher and more synth-like, D the other three shuffled. **To play it:** pick a Bank and a Family for the character, then play Bright: with Env for plucks and basses, a slow LFO for pads. Between D and the top of the Bank knob the bank changes slowly while the waves start to step, so the shape still changes there. On P CHORD it shows the Wave knob's waveform: up to half, the organ (octave-apart saws, as its registration), past half, the wavetable's 15 waves. The pictures follow the knobs, not ENV's movement.
+**The wave on the MODEL page** (from 0.23-test7). On P CHORD the picture shows the Wave knob's waveform: up to half, the organ (octave-apart saws, as its registration), past half, the wavetable's 15 waves. The pictures follow the knobs, not ENV's movement.
 
 Where the port differs from Plaits: P STRING plays one string a voice (Plaits overlaps three); P PARTCL's diffuser (its reverb-like smear) belongs to the first drum voice on P PARTCL, and the others play it dry; P SPEECH has no prosody or speed control; Plaits' sustain modes (with nothing patched to TRIGGER) and its user wavetables aren't ported. In the first measurements on an FM-1, P NOISE, P ADDTV and P PARTCL cost the most (each about three LXR voices), P VA a little less; Rings' MODAL is heavier than any of them, STRING and FM lighter.
 
@@ -1328,6 +1326,7 @@ The **library page** (`library/` on Elixir's site, from 0.7) connects to the FM-
 - **Add Hrtl's kit packs** (from 0.19): the DLC and UNTZ kits, 16 each, into the kit library's first empty slots (L1 on, so they're near the top of the kit browser's LIBRARY). A slot that already holds a kit keeps it, and a pack kit already in the library isn't added twice. Together they take about a quarter of the library's flash (each about 12%); save your own kits over them whenever you like. The install page offers them too, after installing.
 - **Back up and restore the kit library** (from 0.8, a `.ktlb` file).
 - **Export kits** as LXR-02 .SND files (the LXR's parameters only).
+- **Remap MIDI CCs** (from 0.24): point your controller's CC numbers at the parameters you want, search by name, and save or load the map as a CSV. See [MIDI](#15-midi).
 
 While a restore is being written, the output is silent and saving is held off. If the computer stops sending, Elixir gives up after 10 seconds.
 
@@ -1341,71 +1340,141 @@ The emulator has the same functions under **Library**, below the panel, so you c
 
 **In:** USB MIDI and the TRS MIDI jack. **Out:** USB MIDI (the FM-1 has no MIDI out jack).
 
-- **Notes:** each track has a MIDI channel (CONFIG: MIDI CHANNELS). A note on a track's channel plays it. With the track's MIDI note set to ANY, it plays at the note's pitch; with a note set, only that note triggers it. Notes on the **global channel** play the selected track.
-- **Notes out:** the sequencer sends each track's hits on its channel.
-- **CC:** CC *n* sets parameter *n* − 1, as on the LXR. **NRPN** (CC 99 / 98, data entry CC 6) reaches every parameter: NRPN *n* sets parameter *n* + 128. The tables are [below](#the-sound-by-cc): the LXR's sound by CC, the rest by NRPN, and Elixir's own parameters.
-- **CC 0** loads a kit. **Program change** 0–31 on the global channel queues a pattern; Elixir sends one when its pattern changes.
+### MIDI at a glance
+
+Elixir listens on up to ten channels. Set them in CONFIG: **MIDI CHANNELS** (the tracks and the global channel) and **REMOTE** (the remote map's two). Keep the remote channels apart from the others: the REMOTE page warns if one is shared.
+
+From 0.24 the global channel is made for a **keyboard and a launcher at once**: by default it plays the selected track from a keyboard and launches patterns and kits, and the other things a keyboard sends (bank select, pitch bend, sustain, other CCs) do nothing. **Global in** (CONFIG: MIDI CHANNELS, the second page's KNOB 4) sets what it takes:
+
+| Global in | The global channel takes |
+|---|---|
+| **KEYS** (the default) | Program change 0–31 (patterns 1–32), **CC 102** (slot kits 1–64), **CC 103** (factory kits 1–85), notes (the selected track), CC 1 the mod wheel (MACRO 1). Nothing else. |
+| **PAT+KIT** | The same without the notes and the mod wheel: a launch lane only (a sequencer's drum track on the same channel then plays nothing) |
+| **ALL** | Everything, as on the LXR and Elixir before 0.24: notes, every voice's CCs, NRPN, program change, CC 0 loads a slot kit |
+| **OFF** | Nothing |
+
+CC 102 and 103 are numbers the MIDI standard leaves undefined, so a keyboard doesn't send them unless you set a knob to. The track channels and the remote channels take what they always did, whatever Global in is.
+
+| Channel (default) | Notes | CCs | Also |
+|---|---|---|---|
+| **Track** D1 … OH (1–7) | Play that track | The LXR's map, for the track's voice ([the sound by CC](#the-sound-by-cc)) | Its hits go out on it |
+| **Global** (10) | Play the selected track (KEYS, ALL) | **CC 102 a slot kit, CC 103 a factory kit**, CC 1 MACRO 1 (KEYS); with ALL, the LXR's map | **Program change 0–31 launches patterns 1–32** |
+| **Remote TRACKS** (15) | Buttons (mute, solo) | Volume, pan, filter … per track, 8 columns | [The remote map](#the-remote-map) |
+| **Remote GLOBAL** (16) | Buttons (transport, effects, rolls, select, patterns) | Tempo, morph, FX, reverb, macros … | [The remote map](#the-remote-map) |
+
+- **One channel for all the tracks** (as on a TR-8S or an Elektron): set every track's channel to the same one (CONFIG: MIDI CHANNELS) and give each track its own note (CONFIG: MIDI NOTES). Left at ANY, every track on that channel plays every note. The sound CCs then all work on that channel too.
+- **Notes:** a note on a track's channel plays it. With the track's MIDI note set to ANY, it plays at the note's pitch; with a note set, only that note triggers it. With **Global in** at KEYS (the default) or ALL, notes on the global channel play the selected track. The sequencer sends each track's hits on its channel.
+- **CC:** CC *n* sets parameter *n* − 1, as on the LXR. **NRPN** (CC 99 / 98, data entry CC 6) reaches every parameter: NRPN *n* sets parameter *n* + 128. The tables are in [the reference](#the-sound-by-cc): the LXR's sound by CC, the rest by NRPN, and Elixir's own parameters. CC 1 (the mod wheel) is nothing on the track channels; on the global channel at KEYS it moves MACRO 1. Pitch bend does nothing.
+- **Your own CC numbers** (from 0.24): if your controller sends other numbers, the [library page](#backing-up-restoring-and-lxr-02-kits) remaps them. Each CC can set any parameter in [the reference tables](#the-sound-by-cc) (by name: search for a voice, "decay" or "NRPN 174"), or nothing. A CC aimed at a short list (a waveform, a filter type, a model) sweeps the whole list over the knob's travel; the channel rules stay the parameter's. CC 6, 98 and 99 stay NRPN's. The map belongs to the FM-1, not to a project, and is saved with the settings a second after the sequencer stops. Download it as a CSV to keep or share it, or load one (`cc,sets,name`, e.g. `1,CC 9,D1 Coarse`).
 - **Clock out:** always on, 24 PPQ, with start and stop.
 - **Clock in:** turn the tempo all the way down to **MIDI**. Elixir then follows incoming clock, start, continue and stop. The header shows MIDI and the measured tempo.
-- **Filters** (CONFIG: MIDI): what is received and sent: N notes, R clock and start/stop, C CC and NRPN, P program change.
+- **Filters** (CONFIG: MIDI): what is received and sent: N notes, R clock and start/stop, C CC and NRPN, P program change. The remote channels ignore them.
 - **Route:** TRS>USB forwards the jack's input to USB (soft thru).
-- **Remote** (CONFIG: REMOTE, channels 15 and 16 by default): a second map on two channels of its own, made for an 8-column controller such as Novation's Launch Control XL. See below.
+
+### Launching patterns and kits
+
+- **Program change 0–31 on the global channel** (10 by default) queues pattern 1–32, as a white key on the pattern page does: while playing it starts when the current pattern ends (the header shows >nn), while stopped at once. Elixir sends a program change on the global channel whenever its pattern changes, so a controller or DAW can follow. Program changes on any other channel, the remote ones included, do nothing.
+- **Remote GLOBAL buttons 60 and 61** (CC or note): the previous and the next pattern, queued the same way.
+- **CC 102 on the global channel** loads slot kit 1–64 (values 0–63) at once (Global in KEYS or PAT+KIT).
+- **CC 103 on the global channel** loads factory kit 1–85 (values 0–84) at once, as LOAD → FACTORY does: into the sound; the slot shown as loaded stays.
+- **CC 0** loads slot kit 1–64 on a track's channel, as on the LXR, and on the global channel at ALL. At KEYS and PAT+KIT it is a keyboard's bank select there, and does nothing.
+- A pattern can bring its own kit (its Voices at KIT): send the kit after the program change, or it is replaced when the pattern starts.
+
+A pad controller can launch patterns if it can send program changes on the global channel; one that sends only notes or CCs can step through them with 60 and 61 on the GLOBAL channel.
+
+### What the global channel receives
+
+Worth knowing in a bigger setup (a Hapax, several controllers): what a message on the global channel does, by Global in.
+
+| Message on the global channel | KEYS (default) | PAT+KIT | ALL |
+|---|---|---|---|
+| Program change 0–31 | Pattern 1–32 | Pattern 1–32 | Pattern 1–32 |
+| CC 102 (0–63) | Slot kit 1–64 | Slot kit 1–64 | HH pan (the LXR's) |
+| CC 103 (0–84) | Factory kit 1–85 | Factory kit 1–85 | D1 drive (the LXR's) |
+| Note | Plays the **selected** track (recorded under REC) | – | Plays the selected track |
+| CC 1 (mod wheel) | MACRO 1 | – | – |
+| CC 0, 32 (bank select) | – | – | CC 0: slot kit 1–64 |
+| Pitch bend, aftertouch | – | – | – |
+| Other CCs, NRPN | – | – | [The sound by CC](#the-sound-by-cc), every voice; NRPN |
+| *Sent:* program change | When Elixir's pattern changes (switch off with the TX filter's P) | | |
+
+With OFF, none of these do anything. Clock, start, continue and stop have no channel: Elixir follows them only with the tempo turned down to MIDI. The MIDI filters (CONFIG: MIDI) turn notes, CCs or program changes off on every track and global channel at once; the remote channels ignore the filters.
+
+**The same control on the global channel (with Global in at ALL) and the remote.** Whichever arrives last sets the value. At KEYS and PAT+KIT none of these act on the global channel; the track channels' CCs still do.
+
+| Remote | Global channel (D1 D2 D3 SN CY HH) |
+|---|---|
+| TRACKS: volume | CC 89–94 |
+| TRACKS: pan | CC 95 96 97 100 101 102 |
+| TRACKS: filter frequency, resonance | CC 38–43, 44–49 |
+| TRACKS: decay | CC 51 53 55 57 59; 61 (CH), 62 (OH) |
+| TRACKS: pitch | CC 9 11 13 15 17 19 |
+| TRACKS: drive | CC 103–108 |
+| TRACKS: sample rate | CC 109–114 |
+| TRACKS: LFO amount | CC 122–127 |
+| TRACKS: FX send, reverb send, random pitch | NRPN 174–179, 180–185, 214–219 |
+| GLOBAL: SRate (11) | CC 115 |
+| GLOBAL: shuffle, morph, roll rate (9, 10, 13) | NRPN 133, 120, 119 |
+| GLOBAL: FX dry/wet, P1–P4 (16–20) | NRPN 108, 110–113 |
+| GLOBAL: bus dirt, echo > reverb, saturate (21–23) | NRPN 315, 312, 311 |
+| GLOBAL: reverb level, size, damping, master dirt (24–27) | NRPN 188, 186, 187, 317 |
+| GLOBAL: previous / next pattern (60, 61) | Program change (any pattern) |
+
+The remote's transport, mutes, solo, select, rolls, DRILL, the performance effects, DENSITY and the macros have no twin on the global channel.
 
 ### The remote map
 
-The remote map has **two channels** of its own, and everything on them goes to it and nowhere else (the LXR's CC map and the notes ignore them, and the MIDI filters don't apply):
+The remote map has **two channels** of its own, made for an 8-column controller such as Novation's Launch Control XL. Everything on them goes to the map and nowhere else (the LXR's CC map, the notes and the MIDI filters ignore them):
 
 - **TRACKS** (channel 15 by default): what belongs to a track. Columns 1–7 are the tracks **D1 D2 D3 SN CY CH OH**, column 8 the **selected track**. CH and OH both act on the hat voice, except their decays.
-- **GLOBAL** (channel 16 by default): the performance, the effects, the tempo, morph and the rest.
+- **GLOBAL** (channel 16 by default): the transport, the performance, the effects, the tempo, morph and the rest.
 
-Every number is used once on its channel, so a knob and a button never share one. A button can be a **CC or a note** of its number, whichever the controller sends: a CC above 0 or a note on is a press, CC 0 or a note off (or velocity 0) a release. Set both channels to ones no track and not the global channel use; the REMOTE page warns if one is shared. On a Launch Control XL, give one template the TRACKS channel and another the GLOBAL channel (or one template's knobs one channel and its buttons the other). The whole map, laid out as the controller is: [the appendix](#appendix-the-remote-map-at-a-glance).
+Knobs and faders are CCs. Every number is used once on its channel, so a knob and a button never share one. A button can be a **CC or a note** of its number, whichever the controller sends: a CC above 0 or a note on is a press, CC 0 or a note off (or velocity 0) a release. Mute, solo, the latched effects and the DENSITY tracks toggle; the held ones act while held; select, PLAY / STOP, REC and the patterns act on the press. Their lights follow the state. On a Launch Control XL, give one template the TRACKS channel and another the GLOBAL channel (or one template's knobs one channel and its buttons the other). The cheat sheet has this map on one page.
 
-**TRACKS: knobs and faders, CC = row + column − 1** (column 8: the selected track)
+**TRACKS (channel 15): knobs CC 8–103, buttons 104–119.** The number is 8 + 8 × row + column − 1.
 
-| CC | |
-|---|---|
-| 8–15 | Volume |
-| 16–23 | Pan |
-| 24–31 | Filter frequency |
-| 32–39 | Resonance |
-| 40–47 | Decay (CH closed, OH open) |
-| 48–55 | Pitch (coarse) |
-| 56–63 | Drive |
-| 64–71 | FX send |
-| 72–79 | Reverb send |
-| 80–87 | Sample rate |
-| 88–95 | LFO amount |
-| 96–103 | Random pitch |
+<!-- grid -->
+| | D1 | D2 | D3 | SN | CY | CH | OH | Selected |
+|---|---|---|---|---|---|---|---|---|
+| Volume | **8** | **9** | **10** | **11** | **12** | **13** | **14** | **15** |
+| Pan | **16** | **17** | **18** | **19** | **20** | **21** | **22** | **23** |
+| Filter frequency | **24** | **25** | **26** | **27** | **28** | **29** | **30** | **31** |
+| Resonance | **32** | **33** | **34** | **35** | **36** | **37** | **38** | **39** |
+| Decay | **40** | **41** | **42** | **43** | **44** | **45** closed | **46** open | **47** |
+| Pitch (coarse) | **48** | **49** | **50** | **51** | **52** | **53** | **54** | **55** |
+| Drive | **56** | **57** | **58** | **59** | **60** | **61** | **62** | **63** |
+| FX send | **64** | **65** | **66** | **67** | **68** | **69** | **70** | **71** |
+| Reverb send | **72** | **73** | **74** | **75** | **76** | **77** | **78** | **79** |
+| Sample rate | **80** | **81** | **82** | **83** | **84** | **85** | **86** | **87** |
+| LFO amount | **88** | **89** | **90** | **91** | **92** | **93** | **94** | **95** |
+| Random pitch | **96** | **97** | **98** | **99** | **100** | **101** | **102** | **103** |
+| Mute | **104** | **105** | **106** | **107** | **108** | **109** | **110** | **111** |
+| Solo | **112** | **113** | **114** | **115** | **116** | **117** | **118** | **119** |
 
-**TRACKS: buttons**
+**GLOBAL (channel 16): knobs and faders, CC 8–47**
 
-| CC or note | |
-|---|---|
-| 104–111 | Mute (toggle) |
-| 112–119 | Solo (toggle) |
+<!-- grid -->
+| | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|
+| 8–15 | **8** Tempo | **9** Shuffle | **10** Morph | **11** SRate | **12** DJ filter | **13** Roll rate | **14** Repeat | **15** Tape time |
+| 16–23 | **16** FX dry/wet | **17** P1 | **18** P2 | **19** P3 | **20** P4 | **21** Bus dirt | **22** Echo > rev | **23** Saturate |
+| 24–31 | **24** Rev level | **25** Rev size | **26** Rev damp | **27** Master dirt | **28** DENSITY | **29** Ghost vel | **30** Build | **31** Vary |
+| 32–39 | **32** Macro 1 | **33** Macro 2 | **34** Macro 3 | **35** Macro 4 | **36** DRILL | **37** JITTER | **38** CUTS | **39** PUMP |
+| 40–47 | **40** COMB note | **41** COMB fb | **42** CRUSH | **43** REV length | **44** LFO 1 depth | **45** LFO 2 depth | **46** LFO 3 depth |  |
 
-**GLOBAL: knobs and faders**
+**GLOBAL (channel 16): buttons, CC or note 48–111**
 
-| CC | Columns 1–8 |
-|---|---|
-| 8–15 | Tempo (60–187 BPM), shuffle, morph, global sample rate (SRate), DJ filter (middle: off), roll rate, repeat length, tape stop time |
-| 16–23 | FX bus dry/wet, P1, P2, P3, P4, bus dirt, echo > reverb, saturate |
-| 24–31 | Reverb level, size, damping, master dirt, DENSITY, ghost velocity, build, – |
-| 32–39 | Macros 1–4, then DRILL, JITTER, CUTS, PUMP (their PERFORM 2 settings) |
-| 40–47 | COMB note, COMB feedback, CRUSH, REVERSE length, global LFO 1, 2 and 3 depth, – |
-
-**GLOBAL: buttons**
-
-| CC or note | Columns 1–8 |
-|---|---|
-| 48–55 | PLAY / STOP, REC, then held: FILL, REPEAT, FREEZE, THROW REV, THROW FX, FB PUSH |
-| 56–61 | Held: TAPE STOP, LP sweep, HP sweep, REVERSE; then the previous pattern, the next |
-| 64–70 | Select D1 … OH |
-| 72–79 | Roll (held) D1 … OH; 79 the selected track |
-| 80–87 | DRILL (held) D1 … OH; 87 the selected track |
-| 88–95 | Held: HALF, JITTER, CUTS, SHORT, PUMP, COMB, SPACE, CRUSH |
-| 96–103 | The same eight, latched: press on, press again off |
-| 104–111 | DENSITY: 104–110 leave D1 … OH out of DENSITY (press again: back in), 111 puts them all back in |
+<!-- grid -->
+| | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|
+| Transport, held | **48** PLAY / STOP | **49** REC | **50** FILL | **51** REPEAT | **52** FREEZE | **53** THROW REV | **54** THROW FX | **55** FB PUSH |
+| Held · patterns | **56** TAPE STOP | **57** LP sweep | **58** HP sweep | **59** REVERSE | **60** previous | **61** next |  |  |
+| Select | **64** D1 | **65** D2 | **66** D3 | **67** SN | **68** CY | **69** CH | **70** OH |  |
+| Roll (held) | **72** D1 | **73** D2 | **74** D3 | **75** SN | **76** CY | **77** CH | **78** OH | **79** selected |
+| DRILL (held) | **80** D1 | **81** D2 | **82** D3 | **83** SN | **84** CY | **85** CH | **86** OH | **87** selected |
+| Effects, held | **88** HALF | **89** JITTER | **90** CUTS | **91** SHORT | **92** PUMP | **93** COMB | **94** SPACE | **95** CRUSH |
+| Effects, latched | **96** HALF | **97** JITTER | **98** CUTS | **99** SHORT | **100** PUMP | **101** COMB | **102** SPACE | **103** CRUSH |
+| DENSITY out | **104** D1 | **105** D2 | **106** D3 | **107** SN | **108** CY | **109** CH | **110** OH | **111** all in |
 
 The effects are PERF's (see [Performance mode](#13-performance-mode-perf)); they work from any page, and leaving PERF doesn't turn off what the remote latched. DENSITY's knob (CC 28) thins or builds the pattern as on the DENSITY page; its buttons are the page's track toggles, and their lights show the tracks left out.
 
@@ -1420,8 +1489,6 @@ The effects are PERF's (see [Performance mode](#13-performance-mode-perf)); they
 
 **Connecting:** a controller with a DIN out into the TRS input (with a TRS-to-DIN adapter: check the FM-1's TRS type), or both over a USB host. The FM-1 and the Launch Control XL are both USB devices, so neither plugs straight into the other.
 
----
-
 ## 16. Settings (CONFIG) and the CPU meter
 
 GLO twice (past the mixer) opens CONFIG. Turn SELECT for its pages:
@@ -1430,7 +1497,7 @@ GLO twice (past the mixer) opens CONFIG. Turn SELECT for its pages:
 |---|---|
 | SEQUENCER | Tempo, Shuffle, Follow (the screen follows the playhead), Play (PATTERN or SONG: what PLAY plays). Kit change moved to each pattern's Voices in 0.20 (KIT) |
 | MIDI | Global channel, TX filter, RX filter, Route |
-| MIDI CHANNELS (2 pages) | Each track's channel |
+| MIDI CHANNELS (2 pages) | Each track's channel; page 2's KNOB 4, **Global in**: what the global channel takes (KEYS, the default; PAT+KIT; ALL; OFF: see [MIDI at a glance](#midi-at-a-glance)) |
 | MIDI NOTES (2 pages) | Each track's note (ANY or a note) |
 | DEVICE | LEDs (OFF / LOW / HIGH glow), Autosave, Accel (fast knob turns move further), Colours (screen palette: GREY, GREEN, AMBER, ICE, VIOLET, ROSE, PAPER, HI-CON, NIGHT, MONO or HYRULE, forest green and Triforce gold) |
 | REMOTE | Tracks (the TRACKS channel: OFF, 1–16; 15 by default), Global (the GLOBAL channel; 16 by default; never the same as Tracks), Knobs (PICKUP / ABS / REL): see [the remote map](#the-remote-map) |
@@ -1510,7 +1577,7 @@ In PERF, SHIFT (OCT−) + a white key latches it instead.
 
 ### The sound by CC
 
-Each CC is received on its voice's track channel or on the global channel (10 by default). A CC with no voice (FX bus, global sample rate) is received on any of Elixir's channels. To control everything from one channel, send every CC on the global channel. The values go in as they are, so set list-type controls (waveform, filter type) to the range shown and pans to 0–127 with 63/64 as the centre. CH and OH share the HH voice: a CC for HH acts on both, except the two decays. CY and HH have three oscillators: Wave 2 and 3 are their FM oscillators' waveforms.
+Each CC is received on its voice's track channel, or on the global channel (10 by default) with Global in at ALL. A CC with no voice (FX bus, global sample rate) is received on any of Elixir's track channels (and the global one at ALL). To control everything from one channel, set Global in to ALL and send every CC on the global channel. The values go in as they are, so set list-type controls (waveform, filter type) to the range shown and pans to 0–127 with 63/64 as the centre. CH and OH share the HH voice: a CC for HH acts on both, except the two decays. CY and HH have three oscillators: Wave 2 and 3 are their FM oscillators' waveforms.
 
 | Parameter | D1 | D2 | D3 | SN | CY | HH |
 |---|---|---|---|---|---|---|
@@ -1651,7 +1718,7 @@ What changed in the port:
 What Elixir adds:
 
 - **Sound:** Control All (OCT+ held, a knob: every track); LFO modes (hold, one-shot, half); a second LFO and an insert effect (phaser, flanger, chorus, tremolo, autopan, frequency shifter, ring) on every track; seven more filter types; FX and reverb sends per voice; four reverbs (Clouds' plate among them); nine waveshapers; bits; tilt EQ; random per hit; choke groups; cross modulation; a gate per voice; phaser and flanger; a tape delay with sync, glitches and pitch-shifted repeats, its echoes into the reverb; dirt on the FX bus and the master; a sound browser and a kit library.
-- **Models (experimental):** Rings' resonators and Plaits' sixteen engines on the drum voices, two at a time. Not in the LXR-02.
+- **Models (experimental):** Rings' resonators and fifteen of Plaits' engines on the drum voices, two at a time. Not in the LXR-02.
 - **MICRO:** ten microsound types (clicks, click trains, crunch, bits, noise bursts, snaps, resonant grains, dust, pops, chirps, after GLITCH) on every track.
 - **Performance:** PERF with fill, repeat, freeze, throws, feedback push, tape stop, filter sweeps, a DJ filter, four macros, the voices' volumes on two pages, PERFORM 2, DENSITY (thinning or building the whole pattern) and three global LFOs (morph, the DJ filter, the effects, density, transpose, the delay, macros, down to 256 bars a cycle); KEYS, to play a voice from the keyboard.
 - **Sequencing:** trig conditions, ratchets, note lengths and ties, per-track clocks, generators (mutate, Turing machine, cellular automata, Grids, Euclid with a second pulse), a melody generator, a scale per pattern, dice, commit and undo, and copying a bar across all tracks.
@@ -1699,55 +1766,3 @@ It is built from:
 ### Building and testing
 
 See `README.md`: building the firmware (`./build.sh`), the browser emulator (`web/emu/build.sh`), and the host tests (`render_test`, `ui_test`, `compare_test`, `rings_compare`, `plaits_compare`, `reverb_compare`, the library tests).
-
----
-
-## Appendix: the remote map at a glance
-
-The [remote map](#the-remote-map) laid out as the controller is: the columns across, the rows down. Two channels (CONFIG → REMOTE): **TRACKS**, 15 by default, and **GLOBAL**, 16 by default. Knobs are CCs (PICKUP, ABS or REL: [the remote map](#the-remote-map)); buttons are a CC or a note of the number, whichever the controller sends. Mute, solo, the latched effects and the DENSITY tracks toggle; the held ones act while held; select, PLAY / STOP, REC and the patterns act on the press. Their lights follow the state.
-
-**TRACKS (channel 15).** CH and OH both act on the hat voice, except their decays.
-
-<!-- grid -->
-| | D1 | D2 | D3 | SN | CY | CH | OH | Selected |
-|---|---|---|---|---|---|---|---|---|
-| Volume | **8** | **9** | **10** | **11** | **12** | **13** | **14** | **15** |
-| Pan | **16** | **17** | **18** | **19** | **20** | **21** | **22** | **23** |
-| Filter frequency | **24** | **25** | **26** | **27** | **28** | **29** | **30** | **31** |
-| Resonance | **32** | **33** | **34** | **35** | **36** | **37** | **38** | **39** |
-| Decay | **40** | **41** | **42** | **43** | **44** | **45** closed | **46** open | **47** |
-| Pitch (coarse) | **48** | **49** | **50** | **51** | **52** | **53** | **54** | **55** |
-| Drive | **56** | **57** | **58** | **59** | **60** | **61** | **62** | **63** |
-| FX send | **64** | **65** | **66** | **67** | **68** | **69** | **70** | **71** |
-| Reverb send | **72** | **73** | **74** | **75** | **76** | **77** | **78** | **79** |
-| Sample rate | **80** | **81** | **82** | **83** | **84** | **85** | **86** | **87** |
-| LFO amount | **88** | **89** | **90** | **91** | **92** | **93** | **94** | **95** |
-| Random pitch | **96** | **97** | **98** | **99** | **100** | **101** | **102** | **103** |
-| Mute | **104** | **105** | **106** | **107** | **108** | **109** | **110** | **111** |
-| Solo | **112** | **113** | **114** | **115** | **116** | **117** | **118** | **119** |
-
-**GLOBAL (channel 16): knobs and faders**
-
-<!-- grid -->
-| | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
-|---|---|---|---|---|---|---|---|---|
-| 8–15 | **8** Tempo | **9** Shuffle | **10** Morph | **11** SRate | **12** DJ filter | **13** Roll rate | **14** Repeat | **15** Tape time |
-| 16–23 | **16** FX dry/wet | **17** P1 | **18** P2 | **19** P3 | **20** P4 | **21** Bus dirt | **22** Echo > rev | **23** Saturate |
-| 24–31 | **24** Rev level | **25** Rev size | **26** Rev damp | **27** Master dirt | **28** DENSITY | **29** Ghost vel | **30** Build | **31** Vary |
-| 32–39 | **32** Macro 1 | **33** Macro 2 | **34** Macro 3 | **35** Macro 4 | **36** DRILL | **37** JITTER | **38** CUTS | **39** PUMP |
-| 40–47 | **40** COMB note | **41** COMB fb | **42** CRUSH | **43** REV length | **44** LFO 1 depth | **45** LFO 2 depth | **46** LFO 3 depth |  |
-
-**GLOBAL (channel 16): buttons**
-
-<!-- grid -->
-| | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
-|---|---|---|---|---|---|---|---|---|
-| Transport, held | **48** PLAY / STOP | **49** REC | **50** FILL | **51** REPEAT | **52** FREEZE | **53** THROW REV | **54** THROW FX | **55** FB PUSH |
-| Held, patterns | **56** TAPE STOP | **57** LP sweep | **58** HP sweep | **59** REVERSE | **60** previous | **61** next |  |  |
-| Select | **64** D1 | **65** D2 | **66** D3 | **67** SN | **68** CY | **69** CH | **70** OH |  |
-| Roll (held) | **72** D1 | **73** D2 | **74** D3 | **75** SN | **76** CY | **77** CH | **78** OH | **79** selected |
-| DRILL (held) | **80** D1 | **81** D2 | **82** D3 | **83** SN | **84** CY | **85** CH | **86** OH | **87** selected |
-| Effects, held | **88** HALF | **89** JITTER | **90** CUTS | **91** SHORT | **92** PUMP | **93** COMB | **94** SPACE | **95** CRUSH |
-| Effects, latched | **96** HALF | **97** JITTER | **98** CUTS | **99** SHORT | **100** PUMP | **101** COMB | **102** SPACE | **103** CRUSH |
-| DENSITY out | **104** D1 | **105** D2 | **106** D3 | **107** SN | **108** CY | **109** CH | **110** OH | **111** all in |
-

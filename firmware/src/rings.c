@@ -25,6 +25,10 @@
 
 #include "rings_tables.h"
 
+#ifndef ELIXIR_WTABLE                                /* (0.24: P WTABLE, Plaits' wavetable engine: 1 builds it in, */
+#define ELIXIR_WTABLE 0                              /* ~47 KB of flash; parked for a unit with room. Its model number
+                                                     * stays: a kit with it plays P ADD. docs/parked/README.md) */
+#endif
 #define NMICRO 10                                    /* (Phase 24: MICRO's types, micro.c, on every voice) */
 enum { MD_LXR, MD_MODAL, MD_STRING, MD_FM, MD_PL0, MD_MC0 = MD_PL0 + 16, NMODEL = MD_MC0 + NMICRO };   /* (0.15:
                                                      * Plaits' 16, plaits.c) */

@@ -206,6 +206,8 @@ def build_app():
     version = VERSION
     if version:
         flags.append(f'-DELIXIR_VERSION="{version}"')
+    if os.environ.get("ELIXIR_WTABLE") == "1":       # (0.24: P WTABLE, parked; ~48 KB: docs/parked/README.md)
+        flags.append("-DELIXIR_WTABLE=1")
     cmain = ("cc", *flags, "-c", FW / "src" / "elixir.c", "-o", OUT / "elixir.o")
     (OUT / "fm1_cpu1.o").unlink(missing_ok=True)
     tc_all(("cc", "-c", FW / "crt0.S", "-o", OUT / "crt0.o"),

@@ -257,6 +257,11 @@ static void rm_in(uint32_t ch, uint32_t st, uint32_t d1, uint32_t d2)
 static void remote_service(void)
 {
     uint32_t i, n;
+    if (midi_modw != 0xFFu) {                        /* 0.24: Global in KEYS: the mod wheel moves MACRO 1 */
+        n = midi_modw;
+        midi_modw = 0xFF;
+        macro_set(0, n);
+    }
     if (!rm.init || rm.usb_on != (usb.config != 0)) {
         remote_reset();
         rm.init = 1;

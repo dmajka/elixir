@@ -462,8 +462,10 @@ static const char *model_line(uint32_t m, uint32_t v)
         return D[m];
     return LXR[v <= 2u ? 0 : v == 3u ? 1 : v == 4u ? 2 : 3];
 }
-/* 0.23-t7: P WTABLE and P CHORD: the waves they play, drawn from Plaits' own table. PL_WAVES holds each wave
+/* 0.23-t7: P WTABLE and P CHORD: the waves they play, drawn from Plaits' own table (P CHORD's: PL_CHW; P WTABLE,
+ * parked in 0.24: PL_WAVES). Each wave is held
  * integrated (plaits_va.c), so the wave heard is the difference of neighbouring samples */
+#if ELIXIR_WTABLE
 static int32_t wv_pos(uint32_t k) { return pm(pl_knob((uint8_t)k), 117438841); }   /* a knob: 0 .. 7, Q24 */
 /* WTABLE at HARMONICS a, TIMBRE b, MORPH c (as wt_render, unsmoothed): 128 samples of the blend into s */
 static void wv_wtable(uint32_t a, uint32_t b, uint32_t c, int32_t *s)
@@ -502,6 +504,7 @@ static void wv_wtable(uint32_t a, uint32_t b, uint32_t c, int32_t *s)
         prev = m;
     }
 }
+#endif
 /* n samples in s scaled so the peak is h px; the curve (cols columns, cyc cycles) into vz_y about mid */
 static void wv_curve(const int32_t *s, uint32_t n, int32_t cols, uint32_t cyc, int32_t mid, int32_t h)
 {
@@ -514,6 +517,7 @@ static void wv_curve(const int32_t *s, uint32_t n, int32_t cols, uint32_t cyc, i
         vz_y[i] = (int16_t)(mid * 16 - (int32_t)((int64_t)v * h * 16 / pk));
     }
 }
+#if ELIXIR_WTABLE
 /* HARMONICS v as the bank it plays (as wt_render: up through A-D, then back down, stepped): a letter, or two while it
  * blends ("A-B"); " STEP" where the waves step rather than blend */
 static void wv_bank_txt(char *b, uint32_t n, uint32_t v)
@@ -529,6 +533,7 @@ static void wv_bank_txt(char *b, uint32_t n, uint32_t v)
     }
     put_str(b + k, z >= 3 * PL1 + (PL1 >> 1) ? " STEP" : "", n - k);
 }
+#endif
 /* a wave, smoothed a little ([1 2 1] / 4, round): easier to read, as the engine's low-pass hears it */
 static void wv_smooth(int32_t *s)
 {
@@ -539,6 +544,7 @@ static void wv_smooth(int32_t *s)
         p = c;
     }
 }
+#if ELIXIR_WTABLE
 /* WTABLE: the wave it plays, one cycle, large */
 static void viz_wtable(uint32_t a, uint32_t b, uint32_t c)
 {
@@ -553,6 +559,7 @@ static void viz_wtable(uint32_t a, uint32_t b, uint32_t c)
     wv_bank_txt(t + 5, sizeof t - 5, a);
     cv_text_r(VX1, 26, &AF_S, t, T_MID, vz_bg());
 }
+#endif
 /* CHORD's WAVE: up to half, the divide-down organ (saws an octave apart, as its registration); past it, the table's
  * 15 waves; two cycles */
 static void viz_chordwave(uint32_t c)
@@ -560,7 +567,7 @@ static void viz_chordwave(uint32_t c)
     int32_t s[128], m = pl_knob((uint8_t)c), wform = pmax(pm(m - 8975794, 36071014), 0), i;
     if (wform) {
         int32_t wf = pm(wform, 234879877), wi = pmin(wf >> 24, 13), fr = wf & 0xFFFFFF;
-        const int16_t *t0 = PL_WAVES + PL_CH_WAVES[wi] * 132, *t1 = PL_WAVES + PL_CH_WAVES[wi + 1] * 132;
+        const int16_t *t0 = PL_CHW_AT(wi), *t1 = PL_CHW_AT(wi + 1);
         for (i = 0; i < 128; i++) {
             int32_t d0 = t0[i + 1] - t0[i], d1 = t1[i + 1] - t1[i];
             s[i] = d0 + pm(d1 - d0, fr);
@@ -594,6 +601,7 @@ static int pl_card(char *b, uint32_t n, uint32_t p, uint32_t v)
     uint32_t vi = (p - PAR_MDECAY1) % 6u, r = (p - PAR_MDECAY1) / 6u;
     if (p < PAR_MDECAY1 || p >= PAR_MPOS1 || vi >= 3u || mi[vi].type)
         return 0;
+#if ELIXIR_WTABLE
     if (mdl[vi].want == MD_PL0 + PE_WTBL) {
         int32_t x = wv_pos(v), tn;
         if (!r) {
@@ -612,6 +620,7 @@ static int pl_card(char *b, uint32_t n, uint32_t p, uint32_t v)
         }
         return 1;
     }
+#endif
     if (mdl[vi].want == MD_PL0 + PE_CHORD && r != 1u) {
         int32_t h = pl_knob((uint8_t)v), w;
         if (!r) {
@@ -645,10 +654,12 @@ static void viz_model(void)
         c = sv(S_MODEL, 0, 3);
     }
     cv_text(VX0, 22, &AF_M, m ? L_MODEL[m] : "LXR", T_THEME);
+#if ELIXIR_WTABLE
     if (m == MD_PL0 + PE_WTBL) {            /* (0.23-t7: the waves themselves) */
         viz_wtable(a, b, c);
         return;
     }
+#endif
     if (m == MD_PL0 + PE_CHORD) {
         viz_chordwave(c);
         return;

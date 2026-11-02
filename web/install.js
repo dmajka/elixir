@@ -8,8 +8,10 @@
 
 // the firmware a port's name says: "elixir", "felucca" or null
 export function firmwareOf(portName) {
-  const m = /elixir|kettle|felucca/i.exec(portName || "");
-  return m ? (/felucca/i.test(m[0]) ? "felucca" : "elixir") : null;
+  const m = /elixir|kettle|felucca|wyrd|grimoire/i.exec(portName || "");
+  if (!m) return null;
+  const n = m[0].toLowerCase();
+  return n === "kettle" ? "elixir" : n;              // (by the port's name: Wyrd and Grimoire share FM-1_900 today)
 }
 
 // dev: { id: { text, model, version }, name } as Updater.find returns it
@@ -23,6 +25,11 @@ export function describe(dev) {
   if (id.version >= 900 && fw === "felucca")
     return `${id.text}: Felucca is installed. Back up Felucca's data on its own page first, then install V15 ` +
       "(step 2) if you haven't done so before, or install Elixir (step 3).";
+  if (id.version >= 900 && (fw === "wyrd" || fw === "grimoire")) {
+    const app = fw === "wyrd" ? "Wyrd" : "Grimoire";
+    return `${id.text}: ${app} is installed. Back up ${app}'s data first on its own library page: this Elixir ` +
+      `doesn't yet know ${app}'s saved data and can write over it. Then install Elixir (step 3).`;
+  }
   if (id.version === 15) return `${id.text}: official V15. Ready for Elixir: go to step 3.`;
   if (id.version >= 900) return `${id.text}: an alternative firmware (Elixir, Felucca or another). Elixir: ` +
     "install Elixir (step 3) to update it. Another: install V15 (step 2) first if you haven't before.";

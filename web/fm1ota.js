@@ -120,7 +120,7 @@ export class Updater {
     const outs = [...this.access.outputs.values()];
     for (const input of this.access.inputs.values()) {
       if (input.state === "disconnected") continue;
-      if (!/fm-1|felucca|elixir|kettle|ota|composite|sinco|usb-midi/i.test(input.name || "")) continue;   // (Elixir, under its names)
+      if (!/fm-1|felucca|elixir|kettle|wyrd|grimoire|ota|composite|sinco|usb-midi/i.test(input.name || "")) continue;   // (Elixir, under its names; Wyrd, Grimoire)
       const output = outs.find((o) => o.name === input.name && o.state !== "disconnected");
       if (!output) continue;
       try { await input.open(); await output.open(); } catch (_) { continue; }

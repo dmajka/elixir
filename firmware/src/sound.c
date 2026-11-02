@@ -212,8 +212,12 @@ static uint32_t par_max_k(uint32_t p)
     return 127;
 }
 
-/* 24: the models a voice has: D1-D3 all, SN-HH the LXR's engine and MICRO's (one of Rings' or Plaits': the LXR's) */
-static inline int model_ok(uint32_t vi, uint32_t md) { return vi <= 2u || md == 0u || (md >= MD_MC0 && md < NMODEL); }
+/* 24: the models a voice has: D1-D3 all, SN-HH the LXR's engine and MICRO's (one of Rings' or Plaits': the LXR's).
+ * 0.24: P WTABLE none, unless built in (ELIXIR_WTABLE, rings.c) */
+static inline int model_ok(uint32_t vi, uint32_t md)
+{
+    return (ELIXIR_WTABLE || md != MD_PL0 + PE_WTBL) && (vi <= 2u || md == 0u || (md >= MD_MC0 && md < NMODEL));
+}
 static inline uint32_t model_pick(uint32_t vi, uint32_t md) { return model_ok(vi, md) ? md : 0u; }
 
 /* LXR presetManager.c interpolate: a + (b - a) x / 256, rounded */

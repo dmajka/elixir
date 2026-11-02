@@ -263,6 +263,8 @@ int main(int argc, char **argv)
         par_set(PAR_MDAMP1, 64);
         par_set(PAR_MMAT1, 64);
         for (e = 0; e < 16u; e++) {
+            if (e == 5u && !ELIXIR_WTABLE)           /* (0.24: P WTABLE parked, rings.c) */
+                continue;
             par_set(PAR_MODEL1, MD_PL0 + e);
             render(FS / 4);
             voice_trigger(0, 127, SEQ_DEFAULT_NOTE);
@@ -272,6 +274,24 @@ int main(int argc, char **argv)
             stats(PE_NAMES[e], frames, &peak, &rms);
             if (peak < 1000 || peak >= 32767) {
                 printf("FAIL: %s is silent or clips\n", PE_NAMES[e]);
+                fails++;
+            }
+        }
+        {   /* 0.24: P CHORD bit-exact across its knobs (its 15 waves now a table of their own, P WTABLE parked) */
+            uint32_t k, h = 2166136261u, i;
+            par_set(PAR_MODEL1, MD_PL0 + 6u);        /* (PE_CHORD) */
+            for (k = 0; k < 27u; k++) {
+                par_set(PAR_MDECAY1, (k % 3u) * 63u);
+                par_set(PAR_MDAMP1, ((k / 3u) % 3u) * 63u);
+                par_set(PAR_MMAT1, (k / 9u) * 63u);
+                render(FS / 16);
+                voice_trigger(0, 127, SEQ_DEFAULT_NOTE);
+                frames = render(FS / 8);
+                for (i = 0; i < frames * 2u; i++)
+                    h = (h ^ (uint16_t)out[i]) * 16777619u;
+            }
+            if (h != 0xb5fecaa3u) {                  /* (0.23's, before the split) */
+                printf("FAIL: P CHORD hash %08x, not 0.23's b5fecaa3\n", h);
                 fails++;
             }
         }

@@ -239,8 +239,11 @@ static int kl_write(uint32_t kind, uint32_t slot, const char *name, const uint8_
     h.seq = kl.seq++;
     h.len = (uint16_t)len;
     h.crc = ~st_crc32_add(0xFFFFFFFFu, data, len);
-    for (i = 0; i < 8u; i++)
-        h.name[i] = name && name[i] ? name[i] : ' ';
+    for (i = 0; i < 8u; i++) {                       /* (stops at a terminator: a short name reads no further) */
+        h.name[i] = name && *name ? *name : ' ';
+        if (name && *name)
+            name++;
+    }
     h.hcrc = st_crc32(&h, sizeof h - 4u);
     for (i = 0; i < len && !rc; i += 256u) {         /* the payload, then the record */
         uint32_t off = KL_HDR + i, n = len - i > 256u ? 256u : len - i;

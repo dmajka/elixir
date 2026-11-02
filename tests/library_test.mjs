@@ -10,7 +10,8 @@ import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Library, checkImage, packBackup, unpackBackup, sndFiles, sndBytes, message, KL_KIT, KL_SOUND, packKitLib,
-         unpackKitLib, parsePat, parseSng, songWindow, lxrProject, importLxrProject, KIT_PACKS, addPacks } from "../web/library.js";
+         unpackKitLib, parsePat, parseSng, songWindow, lxrProject, importLxrProject, KIT_PACKS, addPacks, CCMAP_OFF,
+         ccMapCsv, ccMapParseCsv, ccParseTarget } from "../web/library.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const kitDir = process.argv[2] || join(root, "..", "lxr-02_kits", "LXR factory SD image 06.07", "PROJ00");
@@ -246,6 +247,27 @@ check((await transport.request(message(0x01, 1, [5]).map((b, i, a) => (i === a.l
   const r3 = await addPacks(lib, packs[0]);
   check(r3.added === 0 && r3.kept === 16, "packs: a second time adds nothing");
   console.log(`  kit packs: ${r1.added} + ${r2.added} kits added, ${lk.length} in the library`);
+}
+
+// 0.24: the CC map
+{
+  const m0 = await lib.ccMapGet();
+  check(m0.length === 128 && m0.every((c) => c === 0), "CC map: the LXR's at first");
+  await lib.ccMapPut(1, [9]);
+  await lib.ccMapPut(9, [CCMAP_OFF]);
+  const m1 = await lib.ccMapGet();
+  check(m1[1] === 9 && m1[9] === CCMAP_OFF && m1.filter((c) => c).length === 2, "CC map: two entries put");
+  await expectStatus(lib.ccMapPut(5, [526]), 2, "CC map: a code past the parameters");
+  await expectStatus(lib.ccMapPut(127, [9, 9]), 2, "CC map: past CC 127");
+  const { map, errors } = ccMapParseCsv(ccMapCsv(m1) + "20,NRPN 174,D1 FX send\n");
+  check(!errors.length && map[1] === 9 && map[9] === CCMAP_OFF && map[20] === ccParseTarget("NRPN 174") && map[20] === 303,
+        "CC map: the CSV round trip");
+  await lib.ccMapPut(0, map);
+  const m2 = await lib.ccMapGet();
+  check(m2.every((c, i) => c === map[i]), "CC map: a whole map put");
+  await lib.ccMapPut(0, new Array(128).fill(0));
+  check((await lib.ccMapGet()).every((c) => c === 0), "CC map: back to the LXR's");
+  console.log("  CC map: get, put, refusals, CSV");
 }
 
 dev.stdin.end();
