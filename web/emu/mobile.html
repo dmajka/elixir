@@ -53,13 +53,14 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
   .R { display: contents; }
   .stage { margin-top: auto; }   /* (0.25: the buttons in a block at the bottom, 28 px apart; the room left over half
                                     above the screen, half below) */
-  .blacks, .steps { margin-top: 16px; }
-  .btns { margin-top: auto; }
+  .btns { margin-top: 10px; }                    /* (0.25: tight: the screen and the buttons one block, by the thumbs) */
+  .blacks, .steps { margin-top: 2px; }
 }
-/* 0.25: the stage at the top: PRESET, ALGO and SELECT as slim strips down the left of the screen (SELECT lowest, by
+/* 0.25: the stage at the top: SELECT, PRESET and ALGO as slim strips down the left of the screen (top to bottom; by
    the thumb); the screen as large as the rest leaves. KNOB 1-4: drag a parameter on the screen up or down */
-.stage { flex: none; display: flex; gap: 8px; align-items: stretch; justify-content: space-between; }
-.lk { flex: none; display: flex; flex-direction: column; gap: 12px; width: 30px; margin-left: 8px; padding: 4px 0; }   /* (off the edge: easier to catch) */
+.stage { flex: none; display: flex; gap: 10px; align-items: stretch; justify-content: flex-end; }   /* (the strips by the
+                                                                              screen, however wide it is) */
+.lk { flex: none; display: flex; flex-direction: column; gap: 12px; width: 30px; padding: 4px 0; }   /* (off the edge: easier to catch) */
 .mid { flex: none; display: flex; }
 .scr { width: 240px; height: 240px; background: var(--bg); }   /* (no inset: its right edge the buttons') */   /* (0.25: no bezel; the page's black is the
                                                                               screen's, web_bg) */
@@ -359,7 +360,7 @@ volEl.addEventListener("input", () => {
   try { localStorage.setItem("elixir-mobile-vol", volume); } catch {}
 });
 const screenEl = document.getElementById("screen");
-const lks = ["PRESETS", "ALGORITHM", "SELECT"].map((n) => knob(knobs, n === "ALGORITHM" ? "ALGO" : n === "PRESETS" ? "PRESET" : n, (d) => send({ type: "enc", role: EN[n], n: -d })));
+const lks = ["SELECT", "PRESETS", "ALGORITHM"].map((n) => knob(knobs, n === "ALGORITHM" ? "ALGO" : n === "PRESETS" ? "PRESET" : n, (d) => send({ type: "enc", role: EN[n], n: -d })));
 const k4 = ["KNOB 1", "KNOB 2", "KNOB 3", "KNOB 4"].map((n, i) => cellKnob(i, EN[n]));
 // the screen's four parameter cells (its bottom 70 rows of 240): a drag there turns that knob
 dragTurns(screenEl, (e) => {
@@ -374,7 +375,7 @@ let lastFb = null;                                         // (the frame last dr
 const app = document.getElementById("app"), barEl = document.querySelector(".bar");
 const rows = ["btns", "blacks", "steps"].map((id) => document.getElementById(id));
 function fit() {
-  const land = matchMedia("(orientation: landscape)").matches, gap = 8;
+  const land = matchMedia("(orientation: landscape)").matches, gap = 10;
   let w, h;
   if (land) {
     w = innerWidth * 0.5 - lk.offsetWidth - gap;
@@ -382,7 +383,7 @@ function fit() {
   } else {
     const cs = getComputedStyle(app), inner = app.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
     w = stage.clientWidth - lk.offsetWidth - 8 - gap;
-    h = inner - barEl.offsetHeight - 4 * 12 - 3 * 16 - rows.reduce((a, r) => a + r.offsetHeight, 0);
+    h = inner - barEl.offsetHeight - 4 * 12 - 10 - 2 * 2 - rows.reduce((a, r) => a + r.offsetHeight, 0);
   }
   const side = Math.floor(Math.max(120, Math.min(w, h) - 16));   // (0.25: a little under the room: air around it)
   scr.style.width = scr.style.height = `${side}px`;
