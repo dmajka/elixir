@@ -34,7 +34,7 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
        -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 /* one screen high: 100dvh is what Safari's bars leave; the screen takes the room the controls don't */
 .app { display: flex; flex-direction: column; gap: var(--gap); height: 100vh; height: 100dvh; max-width: 560px; margin: 0 auto;
-       padding: max(6px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right))
+       padding: calc(max(6px, env(safe-area-inset-top)) + 16px) max(8px, env(safe-area-inset-right))   /* (0.25: clear of the home-screen app's status bar) */
        max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); }
 .bar { display: flex; align-items: center; gap: 10px; min-height: 28px; flex: none; }
 .bar b { font-size: 14px; letter-spacing: .06em; }
@@ -51,15 +51,17 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
 @media (orientation: portrait) {
   .app { gap: 12px; }
   .R { display: contents; }
-  .stage { margin-top: 6px; margin-bottom: 14px; }   /* (0.25: air between the screen and the buttons) */
-  .btns, .blacks, .steps { margin-top: auto; }
+  .stage { margin-top: auto; }   /* (0.25: the buttons in a block at the bottom, 28 px apart; the room left over half
+                                    above the screen, half below) */
+  .blacks, .steps { margin-top: 16px; }
+  .btns { margin-top: auto; }
 }
 /* 0.25: the stage at the top: PRESET, ALGO and SELECT as slim strips down the left of the screen (SELECT lowest, by
    the thumb); the screen as large as the rest leaves. KNOB 1-4: drag a parameter on the screen up or down */
-.stage { flex: none; display: flex; gap: 8px; align-items: stretch; }
-.lk { flex: none; display: flex; flex-direction: column; gap: 12px; width: 30px; padding: 8px 0 4px; }
+.stage { flex: none; display: flex; gap: 8px; align-items: stretch; justify-content: space-between; }
+.lk { flex: none; display: flex; flex-direction: column; gap: 12px; width: 30px; margin-left: 8px; padding: 4px 0; }   /* (off the edge: easier to catch) */
 .mid { flex: none; display: flex; }
-.scr { width: 240px; height: 240px; padding: 6px; background: var(--bg); }   /* (0.25: no bezel; the page's black is the
+.scr { width: 240px; height: 240px; background: var(--bg); }   /* (no inset: its right edge the buttons') */   /* (0.25: no bezel; the page's black is the
                                                                               screen's, web_bg) */
 .scr canvas { width: 100%; height: 100%; display: block; background: var(--bg); touch-action: none; }
 .row { display: grid; gap: var(--gap); flex: none; }
@@ -379,12 +381,13 @@ function fit() {
     h = stage.clientHeight;
   } else {
     const cs = getComputedStyle(app), inner = app.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
-    w = stage.clientWidth - lk.offsetWidth - gap;
-    h = inner - barEl.offsetHeight - 6 - 14 - 4 * 12 - rows.reduce((a, r) => a + r.offsetHeight, 0);
+    w = stage.clientWidth - lk.offsetWidth - 8 - gap;
+    h = inner - barEl.offsetHeight - 4 * 12 - 3 * 16 - rows.reduce((a, r) => a + r.offsetHeight, 0);
   }
-  const side = Math.floor(Math.max(120, Math.min(w, h)));
+  const side = Math.floor(Math.max(120, Math.min(w, h) - 16));   // (0.25: a little under the room: air around it)
   scr.style.width = scr.style.height = `${side}px`;
-  const px = Math.round((side - 12) * (devicePixelRatio || 1));
+  lk.style.height = `${side}px`;
+  const px = Math.round(side * (devicePixelRatio || 1));
   if (screenEl.width !== px) { screenEl.width = screenEl.height = px; if (lastFb) drawScreen(lastFb); }
 }
 new ResizeObserver(fit).observe(app);
