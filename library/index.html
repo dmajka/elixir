@@ -2,6 +2,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only
      Elixir's library page (0.7): back up and restore the FM-1's projects, import LXR-02 kits (.SND), export kits.
      0.8: the kit library (back up, restore, kits into it), LXR-02 projects (kits, patterns, songs).
+     0.24: the MIDI CC map.
      Talks to firmware/src/library.c over Web MIDI SysEx (web/library.js). web/make_site.py puts it at library/. -->
 <html lang="en">
 <head>
@@ -30,6 +31,14 @@
   progress { width: 100%; height: 8px; display: block; accent-color: var(--accent-fill); margin: 8px 0; }
   .off { opacity: .35; pointer-events: none; }
   label { margin-right: 12px; white-space: nowrap; }
+  #ccmap td { padding: 3px 4px; vertical-align: middle; }
+  #ccmap td:first-child { width: 3em; font-variant-numeric: tabular-nums; }
+  #ccmap td:nth-child(2) { color: var(--dim); }
+  #ccmap input { width: 100%; box-sizing: border-box; font: inherit; font-size: 14px; padding: 3px 6px; }
+  #ccmap tr.changed td:first-child { font-weight: 700; }
+  #ccmap input.bad { outline: 2px solid #c33; }
+  .ccwrap { max-height: 32em; overflow-y: auto; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+  @media (max-width: 560px) { #ccmap td:nth-child(2) { display: none; } }
 </style>
 </head>
 <body>
@@ -138,6 +147,34 @@
   <p>The playing project's 64 kits. Click one to download it as an LXR-02 .SND file (the LXR's parameters only:
     Elixir's own aren't in that format).</p>
   <ul class="kits" id="kits"></ul>
+
+  <h2>MIDI CC map</h2>
+  <p>Elixir takes the LXR-02's CC numbers. If your controller sends other numbers, point each one at the parameter
+    you want here: any parameter Elixir takes by CC or NRPN, or nothing. Every change goes to the FM-1 as you make it.</p>
+  <ul>
+    <li><b>Type into the box</b> to search the parameters (a voice, "decay", "reverb", or a number such as CC 9 or
+      NRPN 174). Empty is the LXR's own. <b>Off</b> makes the FM-1 ignore that CC.</li>
+    <li>A CC aimed at a short list (a waveform, a filter type, a model) sweeps the whole list over the knob's travel;
+      the others take the value as it is.</li>
+    <li>The channels work as before: a CC for a voice's parameter is received on that voice's track channel or on the
+      global channel; one without a voice on any of Elixir's channels. CC 6, 98 and 99 stay NRPN's, and the REMOTE
+      channels have their own map.</li>
+    <li>The map belongs to the FM-1, not a project: it stays whatever you load, and is saved with Elixir's settings
+      a second after the sequencer stops.</li>
+  </ul>
+  <p id="ccnote" class="small"></p>
+  <div id="ccbox">
+  <p><label><input type="checkbox" id="cconly"> only the CCs I've changed</label></p>
+  <div class="ccwrap"><table id="ccmap"><thead><tr><th>CC</th><th>As the LXR</th><th>Sets</th></tr></thead>
+    <tbody id="ccrows"></tbody></table></div>
+  <datalist id="cctargets"></datalist>
+  <p><button class="alt" id="ccsave">Download the map (CSV)</button>
+    <label>Load a map <input type="file" id="ccload" accept=".csv,.txt,text/csv"></label>
+    <button class="alt" id="ccreset">Back to the LXR's map</button></p>
+  <p class="small">The CSV has a row per changed CC: <code>cc,sets,name</code>, for example <code>1,CC 9,D1 Coarse</code>
+    (the mod wheel sets D1's coarse pitch), <code>20,NRPN 174,D1 FX send</code> or <code>9,off</code>. The name column
+    is only for reading. Loading a CSV replaces the whole map: the CCs it doesn't list go back to the LXR's.</p>
+  </div>
   </div>
 
 </main>
@@ -150,7 +187,8 @@
 </footer>
 <script type="module">
 import { Library, midiTransport, sndFiles, sndBytes, packBackup, unpackBackup, checkImage, SLOT_NAMES, KL_KIT, KL_SOUND,
-         packKitLib, unpackKitLib, lxrProject, importLxrProject, KIT_PACKS, fetchPack, addPacks } from "./library.js";
+         packKitLib, unpackKitLib, lxrProject, importLxrProject, KIT_PACKS, fetchPack, addPacks, CC_TARGETS, NO_MAP,
+         ccDefault, ccTargetLabel, ccParseTarget, ccMapCsv, ccMapParseCsv } from "./library.js";
 
 const $ = (id) => document.getElementById(id);
 const say = (s, warn = false) => { $("status").textContent = s; $("status").className = warn ? "warn" : ""; };
@@ -197,7 +235,80 @@ async function refresh() {
   } catch (_) {
     $("libsum").textContent = "This FM-1 has no kit library (Elixir, or Kettle 0.8 or later, has).";
   }
+  try {                                              // (0.24 on: the CC map)
+    ccmap = await lib.ccMapGet();
+    $("ccbox").hidden = false;
+    $("ccnote").textContent = "";
+    ccDraw();
+  } catch (_) {
+    ccmap = null;
+    $("ccbox").hidden = true;
+    $("ccnote").textContent = "The CC map needs Elixir 0.24 or later on the FM-1: update it on the install page.";
+  }
 }
+
+// 0.24: the CC map
+let ccmap = null;
+const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+$("cctargets").innerHTML = ["Off", ...CC_TARGETS.map((t) => t.label)].map((l) => `<option value="${esc(l)}">`).join("");
+function ccDraw() {
+  const only = $("cconly").checked, rows = [];
+  for (let cc = 0; cc < 128; cc++) {
+    const c = ccmap[cc];
+    if (only && !c) continue;
+    rows.push(`<tr${c ? ' class="changed"' : ""}><td>${cc}</td><td>${esc(ccDefault(cc))}</td><td>` +
+      (NO_MAP.has(cc) ? '<span class="small">fixed</span>' :
+        `<input list="cctargets" data-cc="${cc}" value="${esc(ccTargetLabel(c))}" placeholder="as the LXR" aria-label="CC ${cc} sets">`) +
+      "</td></tr>");
+  }
+  $("ccrows").innerHTML = rows.join("") || '<tr><td colspan="3" class="small">None: the FM-1 uses the LXR\'s map.</td></tr>';
+}
+async function ccSendAll(map, what) {
+  await lib.ccMapPut(0, map);
+  ccmap = await lib.ccMapGet();
+  ccDraw();
+  say(what);
+}
+$("cconly").addEventListener("change", () => ccmap && ccDraw());
+$("ccrows").addEventListener("change", (e) => {
+  const inp = e.target, cc = +inp.dataset.cc;
+  if (inp.dataset.cc === undefined) return;
+  const c = ccParseTarget(inp.value);
+  if (c === null) {
+    inp.classList.add("bad");
+    say(`"${inp.value}" isn't a parameter: pick one from the list, or type CC n, NRPN n or Off.`, true);
+    return;
+  }
+  inp.classList.remove("bad");
+  job(async () => {
+    await lib.ccMapPut(cc, [c]);
+    ccmap[cc] = c;
+    ccDraw();
+    say(c ? `CC ${cc} now sets ${c === 0xffff ? "nothing" : ccTargetLabel(c)}.` : `CC ${cc} is the LXR's again (${ccDefault(cc)}).`);
+  });
+});
+$("ccsave").addEventListener("click", () => {
+  if (!ccmap) return;
+  download(new TextEncoder().encode(ccMapCsv(ccmap)), `elixir-ccmap-${stamp()}.csv`);
+  say(`Downloaded the map (${ccmap.filter((c) => c).length} CCs changed).`);
+});
+$("ccload").addEventListener("change", (e) => {
+  const f = e.target.files[0];
+  e.target.value = "";
+  if (!f) return;
+  job(async () => {
+    const { map, errors } = ccMapParseCsv(await f.text());
+    if (errors.length) throw new Error(`Nothing changed: ${errors.slice(0, 3).join("; ")}` + (errors.length > 3 ? ` (and ${errors.length - 3} more)` : "") + ".");
+    const n = map.filter((c) => c).length;
+    if (!confirm(`Replace the FM-1's CC map with ${f.name} (${n} CCs changed, the rest the LXR's)?`)) { say("Nothing changed."); return; }
+    await ccSendAll(map, `The map from ${f.name} is on the FM-1 (${n} CCs changed).`);
+  });
+});
+$("ccreset").addEventListener("click", () => {
+  if (!ccmap || !ccmap.some((c) => c)) { say("The FM-1 already uses the LXR's map."); return; }
+  if (!confirm("Put every CC back to the LXR's? Download the map first if you want to keep it.")) return;
+  job(() => ccSendAll(new Array(128).fill(0), "Every CC is the LXR's again."));
+});
 
 $("connect").addEventListener("click", () => job(async () => {
   if (!navigator.requestMIDIAccess) throw new Error("This browser has no Web MIDI: use Chrome or Edge.");
