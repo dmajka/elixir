@@ -9,13 +9,15 @@
  *     8 volume    16 pan    24 filter    32 resonance    40 decay    48 pitch    56 drive    64 FX send
  *     72 reverb send    80 sample rate    88 LFO amount    96 random pitch
  *   buttons, 104 + 8 x row + column: 104 mute    112 solo
+ *   (0.24.3: CONFIG: REMOTE's Mute/solo: PRESS, a press flips the mute (solo); TOGGLE, the button's state is the
+ *   mute's (solo's): on mutes, off unmutes, for a controller's toggle buttons)
  * GLOBAL (channel 16): the performance, the FX and the rest.
  *   knobs, CC 8 + 8 x row + column:
  *     8   tempo, shuffle, morph, SRate, DJ filter, roll rate, repeat length, tape time
  *     16  FX dry/wet, P1, P2, P3, P4, bus dirt, echo > reverb, saturate
  *     24  reverb level, size, damping, master dirt, density, ghost velocity, build, -
  *     32  macros 1..4, DRILL, JITTER, CUTS, PUMP (PERFORM 2's settings)
- *     40  COMB note, COMB feedback, CRUSH, REVERSE length, global LFO 1, 2, 3 depth, -
+ *     40  COMB note, COMB feedback, CRUSH, REVERSE length, global LFO 1, 2, 3 depth, DJ filter resonance (0.24.3)
  *   buttons, 48 + 8 x row + column:
  *     48  PLAY / STOP, REC, FILL, REPEAT, FREEZE, THROW REV, THROW FX, FB PUSH (held)
  *     56  TAPE STOP, LP sweep, HP sweep, REVERSE (held), the previous pattern, the next, -, -
@@ -45,7 +47,7 @@ static const uint16_t RM_GK[RM_NGK] = {
     PAR_FX_DRY_WET, PAR_FX_P1, PAR_FX_P2, PAR_FX_P3, PAR_FX_P4, PAR_FXDIRT, PAR_ECHOREV, PAR_DSAT,
     PAR_REV_LEVEL, PAR_REV_SIZE, PAR_REV_DAMP, PAR_MDIRT_AMT, VP_DENS, VP_GHOST, VP_BUILD, VP_DVARY,
     VP_M1, VP_M1 + 1, VP_M1 + 2, VP_M1 + 3, VP_P2, VP_P2 + 1, VP_P2 + 2, VP_P2 + 3,
-    VP_P2 + 4, VP_P2 + 5, VP_P2 + 6, VP_P2 + 7, GLV(0, 1), GLV(1, 1), GLV(2, 1), VP_NONE};
+    VP_P2 + 4, VP_P2 + 5, VP_P2 + 6, VP_P2 + 7, GLV(0, 1), GLV(1, 1), GLV(2, 1), VP_DJRESO};
 #define RM_PLAY 0xFEu
 #define RM_REC 0xFDu
 #define RM_PREV 0xFCu
@@ -131,7 +133,7 @@ static void rm_knob(uint32_t i, uint32_t v)
     if (p == VP_NONE)
         return;
     rm_range(p, &lo, &hi);
-    if (kset.rknobs == RK_REL) {                     /* 64 +/- n, or two's complement (1 up, 127 down) */
+    if ((kset.rknobs & RK_KNOBS) == RK_REL) {                     /* 64 +/- n, or two's complement (1 up, 127 down) */
         uint32_t st = hi - lo > 127u ? (hi - lo) / 127u : 1u;
         n = v >= 96u ? (int32_t)v - 128 : v < 32u ? (int32_t)v : (int32_t)v - 64;
         if (p == PAR_BPM) {
@@ -140,7 +142,7 @@ static void rm_knob(uint32_t i, uint32_t v)
         }
         now = (uint32_t)clamp32((int32_t)vp_get(p) + n * (int32_t)st, (int32_t)lo, (int32_t)hi);
     } else {
-        if (kset.rknobs == RK_PICKUP && !rm_bit(rm.picked, i)) {
+        if ((kset.rknobs & RK_KNOBS) == RK_PICKUP && !rm_bit(rm.picked, i)) {
             uint32_t c = rm_to_cc(p), l = rm.last[i];
             rm.last[i] = (uint8_t)v;
             if (!(v + 1u >= c && v <= c + 1u) && !(l != 0xFFu && (l < c) != (v < c)))
@@ -169,12 +171,13 @@ static void rm_button(uint32_t j, int down)          /* button j (TRACKS' 0 .., 
 {
     uint32_t r = (j < RM_NTB ? j : j - RM_NTB) / 8u, c = j % 8u, t = rm_track(c), b = 1u << t;
     if (j < RM_NTB) {
-        if (!down)
-            return;
-        if (r == RB_MUTE)
-            sq.muted ^= (uint8_t)b;
+        uint8_t *m = r == RB_MUTE ? &sq.muted : &sq.solo;
+        if (kset.rknobs & RK_TOGGLE)                 /* (0.24.3: the button's state) */
+            *m = (uint8_t)(down ? *m | b : *m & ~b);
+        else if (down)
+            *m ^= (uint8_t)b;
         else
-            sq.solo ^= (uint8_t)b;
+            return;
     } else if (r == RG_PERF || r == RG_PERF2) {
         uint32_t f = RM_PF[(r - RG_PERF) * 8u + c];
         if (f == RM_PLAY && down) {

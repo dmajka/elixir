@@ -58,7 +58,8 @@ enum { VP_BASE = 0x400, VP_NONE = VP_BASE, VP_IO_TYPE, VP_IO_SLOT, VP_NAME_POS, 
        VP_SONG_ROW, VP_SONG_EDIT, VP_PLAY, VP_VOICES,   /* (37) */
        VP_ROADS, VP_RSUR, VP_RHOME,                  /* (42: the song's ROADS) */
        VP_TBASE, VP_TRP, VP_TRWHEN, VP_TRHOLD,       /* (0.23-t7: a track's BASE, TRANSPOSE) */
-       VP_GTAKES };                                  /* (0.24: what the global channel takes) */
+       VP_GTAKES,                                    /* (0.24: what the global channel takes) */
+       VP_DJRESO, VP_RMUTE };                        /* (0.24.3: the DJ filter's resonance; the remote's mute, solo) */
 _Static_assert(NPAR <= VP_BASE, "the virtual parameters after the parameters (25b + 27a: NPAR 525, past 0x200)");
 /* the ACTION page's action (OCT+ does it); 0.10: those of the track's generator (gen_acts) */
 enum { ACT_NONE, ACT_DICE, ACT_COMMIT, ACT_UNDO, ACT_RESET, NACT };
@@ -193,6 +194,8 @@ static void glfo_morph(void)
 }
 /* 0.12: the remote (remote.c): its knobs' modes, what it has seen forgotten, what came in */
 enum { RK_PICKUP, RK_ABS, RK_REL, NRK };
+#define RK_KNOBS 0x7Fu                               /* settings' rknobs: RK_*, and (0.24.3) */
+#define RK_TOGGLE 0x80u                              /* .. the remote's mute and solo: as the button's state */
 static void remote_reset(void);
 static void remote_service(void);
 
@@ -488,7 +491,7 @@ static const uint16_t P_FX[NFXPG][4] = {{PAR_REV_TYPE, PAR_REV_SIZE, PAR_REV_DAM
                                         {PAR_FX_P1, PAR_FX_P2, PAR_FX_P3, PAR_FX_P4},
                                         {PAR_DSYNC, PAR_DSAT, PAR_GLITCH, PAR_DPITCH},
                                         {PAR_ECHOREV, VP_NONE, VP_NONE, VP_NONE},
-                                        {PAR_FXDIRT, VP_NONE, PAR_MDIRT, PAR_MDIRT_AMT},
+                                        {PAR_FXDIRT, VP_DJRESO, PAR_MDIRT, PAR_MDIRT_AMT},
                                         {PAR_MC_THR, PAR_MC_RATIO, PAR_MC_ATK, PAR_MC_REL},
                                         {PAR_MC_SRC, PAR_MC_GAIN, PAR_MC_MIX, VP_NONE},
                                         {PAR_FX_SEND1, PAR_FX_SEND1 + 1, PAR_FX_SEND1 + 2, PAR_FX_SEND1 + 3},
@@ -541,7 +544,7 @@ static const uint16_t P_CONFIG[NCONFIG][4] = {
     {PAR_MIDI_NOTE1, PAR_MIDI_NOTE2, PAR_MIDI_NOTE3, PAR_MIDI_NOTE4},
     {PAR_MIDI_NOTE5, PAR_MIDI_NOTE6, PAR_MIDI_NOTE7, VP_NONE},
     {VP_LEDS, VP_AUTOSAVE, VP_ACCEL, VP_PALETTE},
-    {VP_RCH, VP_RCH2, VP_RKNOBS, VP_NONE},
+    {VP_RCH, VP_RCH2, VP_RKNOBS, VP_RMUTE},
     {VP_MEDIT, VP_CAKIT, VP_NONE, VP_NONE},
     {VP_PMEM, VP_KBSLOTS, VP_NONE, VP_NONE},
     {VP_NONE, VP_NONE, VP_NONE, VP_NONE},
@@ -957,7 +960,8 @@ static uint32_t vp_get(uint32_t p)
     case VP_PALETTE: return kset.palette;
     case VP_RCH: return kset.remote > 16u ? 0u : kset.remote ? kset.remote : 15u;   /* (0: OFF) */
     case VP_RCH2: return kset.rglobal > 16u ? 0u : kset.rglobal ? kset.rglobal : 16u;
-    case VP_RKNOBS: return kset.rknobs;
+    case VP_RKNOBS: return kset.rknobs & RK_KNOBS;
+    case VP_RMUTE: return (kset.rknobs & RK_TOGGLE) != 0;
     case VP_CAKIT: return kset.cakit;
     case VP_MEDIT: return kset.medit == 1u;
     case VP_PMEM: return kset.pmem;
@@ -974,6 +978,7 @@ static uint32_t vp_get(uint32_t p)
     case VP_DJ: return pf.dj;
     case VP_REPEAT: return pfs.repeat;
     case VP_TAPE: return pfs.tape;
+    case VP_DJRESO: return pfs.dj_reso;
     case VP_M1: case VP_M1 + 1: case VP_M1 + 2: case VP_M1 + 3: return pfs.m[p - VP_M1].val;
     case VP_MSEL: return ui.msel;
     case VP_MTARGET: return lock_idx_of(pfs.m[ui.msel].par);
@@ -1140,7 +1145,7 @@ static uint32_t vp_max(uint32_t p)
     case VP_PALETTE: return NPALETTES - 1u;
     case VP_RCH: case VP_RCH2: return 16;
     case VP_RKNOBS: return NRK - 1u;
-    case VP_CAKIT: case VP_PMEM: case VP_MEDIT: return 1;
+    case VP_CAKIT: case VP_PMEM: case VP_MEDIT: case VP_RMUTE: return 1;
     case VP_GL ... VP_GL_LAST: {
         static const uint8_t MX[NGLSET] = {NGD - 1, 254, NGLEN - 1, NLFO - 1, NGM - 1, NGT - 1, 127};
         return MX[(p - VP_GL) % NGLSET];
@@ -1148,7 +1153,7 @@ static uint32_t vp_max(uint32_t p)
     case VP_EH2: return shown_pat()->gen[ui.track][1] ? shown_pat()->gen[ui.track][1] : 16u;
     case VP_ER2: return (shown_pat()->gen[ui.track][1] ? shown_pat()->gen[ui.track][1] : 16u) - 1u;
     case VP_EOP: return NEUOP - 1u;
-    case VP_MASTER: case VP_DJ: case VP_TAPE: case VP_M1: case VP_M1 + 1: case VP_M1 + 2: case VP_M1 + 3: return 127;
+    case VP_MASTER: case VP_DJ: case VP_TAPE: case VP_DJRESO: case VP_M1: case VP_M1 + 1: case VP_M1 + 2: case VP_M1 + 3: return 127;
     case VP_REPEAT: case VP_MSEL: return 3;
     case VP_MTARGET: return NUM_MOD_TARGETS - 1u + NLOCK_K;
     case VP_MMIN: case VP_MMAX: return macro_max(ui.msel);
@@ -1369,7 +1374,8 @@ static void vp_set(uint32_t p, uint32_t v)
         settings_later();
         return;
     }
-    case VP_RKNOBS: kset.rknobs = (uint8_t)v; remote_reset(); settings_later(); return;
+    case VP_RKNOBS: kset.rknobs = (uint8_t)((kset.rknobs & RK_TOGGLE) | v); remote_reset(); settings_later(); return;
+    case VP_RMUTE: kset.rknobs = (uint8_t)((kset.rknobs & RK_KNOBS) | (v ? RK_TOGGLE : 0u)); settings_later(); return;
     case VP_CAKIT: kset.cakit = (uint8_t)v; settings_later(); return;
     case VP_MEDIT: kset.medit = (uint8_t)v; settings_later(); return;
     case VP_PMEM: kset.pmem = (uint8_t)v; settings_later(); return;
@@ -1392,6 +1398,7 @@ static void vp_set(uint32_t p, uint32_t v)
     case VP_DJ: pf.dj = (uint8_t)v; return;
     case VP_REPEAT: pfs.repeat = (uint8_t)v; return;
     case VP_TAPE: pfs.tape = (uint8_t)v; return;
+    case VP_DJRESO: pfs.dj_reso = (uint8_t)v; return;
     case VP_M1: case VP_M1 + 1: case VP_M1 + 2: case VP_M1 + 3: macro_set(p - VP_M1, v); return;
     case VP_MSEL: ui.msel = (uint8_t)v; return;
     case VP_MTARGET: {

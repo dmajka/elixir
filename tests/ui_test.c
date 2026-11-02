@@ -523,6 +523,41 @@ static void phase3(void)
         check(h[1] < h[0] * 0.5 && lo[2] < lo[0] * 0.7, "DJ filter: LP takes the highs, HP the body");
         pf.dj = 64;
     }
+    /* 0.24.3: the DJ filter's Reso: at 0 the damping as before; up, an impulse rings on, and still dies away */
+    {
+        static const uint8_t DJ[4] = {8, 40, 88, 120};
+        uint32_t d, rz;
+        int ok = 1;
+        for (d = 0; d < 4u; d++) {
+            double ring[2], tail[2];
+            for (rz = 0; rz < 2u; rz++) {
+                uint32_t k, j;
+                int16_t ml[64], mr[64];
+                eng_reset(0);
+                pf.dj = DJ[d];
+                pf.sweep = 0;
+                pfs.dj_reso = (uint8_t)(rz ? 127u : 0u);
+                for (k = 0; k < 400u; k++) {
+                    for (j = 0; j < 64u; j++)
+                        ml[j] = mr[j] = (int16_t)(k == 2u && j == 0u ? 20000 : 0);
+                    perf_master(ml, mr);
+                    for (j = 0; j < 64u; j++)
+                        outl[(k % 100u) * 64u + j] = ml[j];
+                    if (k == 2u && rz == 0u)
+                        ok &= pf.dj_f[0].q == 39322;
+                    if (k == 9u)
+                        ring[rz] = rms(outl + 3u * 64u, 6u * 64u);
+                }
+                tail[rz] = rms(outl + 99u * 64u, 64u);
+            }
+            printf("  DJ %u: ring %.1f / %.1f, tail %.2f / %.2f (Reso 0 / 127)\n", DJ[d], ring[0], ring[1], tail[0],
+                   tail[1]);
+            ok &= ring[1] > ring[0] * 2.0 && tail[1] < 16.0;   /* (a few LSB of rounding, as at 0) */
+        }
+        check(ok, "DJ filter Reso: rings at 127 (LP and HP), dies away; 0.6's damping at 0");
+        pf.dj = 64;
+        pfs.dj_reso = 0;
+    }
     /* FREEZE: the delay keeps what it holds; THROW REV: the throw voice's reverb send at 127 while held */
     {
         double fr, nf;
@@ -3140,6 +3175,38 @@ static void phase12_remote(void)
     rcc(104 + 7, 127);
     check(sq.muted == (2u | 16u), "TRACKS: column 8's mute, the selected track's (CY)");
     sq.muted = sq.solo = 0;
+    /* 0.24.3: Mute/solo TOGGLE: the button's state is the mute's (a controller's toggle buttons) */
+    vp_set(VP_RMUTE, 1);
+    goto_mode(B_GLO, M_CONFIG);
+    while (ui.page != 7u)
+        turn(EN_SELECT, 1);
+    run_ms(50);
+    shot("remote-toggle");
+    goto_mode(B_HOME, M_HOME);
+    check(vp_get(VP_RMUTE) == 1u && vp_get(VP_RKNOBS) == RK_PICKUP, "TOGGLE: kept apart from Knobs");
+    rcc(104 + 1, 127);
+    ok = sq.muted == 2u;
+    rcc(104 + 1, 127);
+    ok &= sq.muted == 2u;
+    rcc(104 + 1, 0);
+    ok &= sq.muted == 0u;
+    rcc(104 + 1, 0);
+    ok &= sq.muted == 0u;
+    web_midi(0x90 | remote_ch, 112 + 3, 127);
+    run_ms(10);
+    ok &= sq.solo == 8u;
+    web_midi(0x80 | remote_ch, 112 + 3, 0);
+    run_ms(10);
+    check(ok && sq.solo == 0u, "TOGGLE: on mutes, again stays muted, off unmutes; solo the same (notes too)");
+    sq.muted = 2u;
+    vp_set(VP_RKNOBS, RK_REL);
+    check(vp_get(VP_RMUTE) == 1u && vp_get(VP_RKNOBS) == RK_REL, "Knobs changed: TOGGLE kept");
+    vp_set(VP_RKNOBS, RK_PICKUP);
+    vp_set(VP_RMUTE, 0);
+    rcc(104 + 1, 127);
+    rcc(104 + 1, 0);
+    check(sq.muted == 0u && kset.rknobs == RK_PICKUP, "PRESS again: a press flips it");
+    sq.muted = sq.solo = 0;
     /* GLOBAL: select, held FILL, a roll, DRILL, an effect held and latched, DENSITY's tracks, patterns */
     gbtn(64 + 4);
     check(ui.track == 4, "GLOBAL: CY selected");
@@ -3504,6 +3571,12 @@ static void phase19(void)
             rc |= proj_load(1);
             check(!rc && gls[2].dest == GD_TRANSPOSE && gls[2].depth == 127 && pfs.dens == -20 && pfs.dex == 0,
                   "project: LFO 3, DENSITY (KSC1)");
+            pfs.dj_reso = 99;
+            rc = proj_save(1, "LFO3    ");
+            pfs.dj_reso = 0;
+            rc |= proj_load(1);
+            check(!rc && pfs.dj_reso == 99, "project: the DJ filter's Reso (KSC1)");
+            pfs.dj_reso = 0;
         }
         memset(gls, 0, sizeof gls);
         pfs.dens = 0;

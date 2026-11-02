@@ -114,6 +114,7 @@ static struct {
     /* 0.16: STUTTER: CHANCE 0..127, SIZE, LENGTH, VARY (ST_SIZE, ST_LEN, SV_*) (KSC1) */
     uint8_t st_chance, st_size, st_len, st_vary;
     uint8_t dvary;                                   /* 31: DENSITY's VARY, 0..127 (KSC1) */
+    uint8_t dj_reso;                                 /* 0.24.3: the DJ filter's resonance, 0..127 (0: 0.6's) (KSC1) */
 } pfs;
 #define NPF2SET 8u                                   /* (KPF2: the bytes from drill) */
 static const uint8_t REPEAT_TICKS[4] = {96, 48, 24, 12};
@@ -521,6 +522,15 @@ static void perf_master(int16_t *l, int16_t *r)
     uint32_t i, c, type;
     int16_t f[BLOCK];
     pf.dj_d = d;
+    {                                                /* 0.24.3: Reso: the damping R from 0.6 (as before) to 0.03, */
+        uint32_t k = 127u - (pfs.dj_reso & 127u);    /* on a square law (most of the knob where it bites) */
+        int32_t q = 1966 + (int32_t)(37356u * k * k / 16129u);
+        for (c = 0; c < 2u; c++)
+            if (pf.dj_f[c].q != q) {
+                pf.dj_f[c].q = q;
+                pf.dj_f[c].dirty = 1;
+            }
+    }
     if (a > 0) {
         type = d < 0 ? F_LP : F_HP;
         w = a >= 8192 ? 32768 : a * 4;               /* (faded in over the first eighth: no click at the middle) */

@@ -1326,8 +1326,10 @@ static void draw_config_help(int32_t y0)
         y = help_item(y, "TRACKS", "the channel for the tracks' knobs, mutes and solo");
         y = help_item(y, "GLOBAL", "the channel for PERF, FX and density");
         y = help_item(y, "KNOBS", "PICKUP: a pot acts once it passes the value. REL: encoders");
-        if (clash)
+        if (clash)                                   /* (in Mute/solo's line: no room for both) */
             help_text(HELP_X, y, "SHARES A TRACK'S OR THE GLOBAL CHANNEL", T_REC);
+        else
+            help_item(y, "MUTE/SOLO", "TOGGLE: for toggle pads");
         break;
     }
     case 8:                                          /* 0.12: Control All with morph; 31: and the edits */
@@ -1625,6 +1627,7 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_RCH: put_str(b, "Tracks", n); return;
     case VP_RCH2: put_str(b, "Global", n); return;
     case VP_RKNOBS: put_str(b, "Knobs", n); return;
+    case VP_RMUTE: put_str(b, "Mute/solo", n); return;
     case VP_CAKIT: put_str(b, "Ctrl all", n); return;
     case VP_MEDIT: put_str(b, "Edits", n); return;
     case VP_PMEM: put_str(b, "Last page", n); return;
@@ -1719,6 +1722,7 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     }
     case VP_REPEAT: put_str(b, "Repeat", n); return;
     case VP_TAPE: put_str(b, "Tape time", n); return;
+    case VP_DJRESO: put_str(b, "DJ reso", n); return;
     case VP_MSEL: put_str(b, "Macro", n); return;
     case VP_MTARGET: put_str(b, "Target", n); return;
     case VP_MMIN: put_str(b, "Min", n); return;
@@ -2065,6 +2069,7 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
     case VP_PALETTE: put_str(b, UI_PALETTES[v % NPALETTES].name, n); return;
     case VP_RCH: case VP_RCH2: if (v) put_int(b, (int32_t)v); else put_str(b, "OFF", n); return;
     case VP_RKNOBS: put_str(b, v == RK_ABS ? "ABS" : v == RK_REL ? "REL" : "PICKUP", n); return;
+    case VP_RMUTE: put_str(b, v ? "TOGGLE" : "PRESS", n); return;
     case VP_CAKIT: case VP_MEDIT: put_str(b, v ? "KIT ONLY" : "BOTH KITS", n); return;
     case VP_PMEM: put_str(b, v ? "YES" : "NO", n); return;
     case VP_GL ... VP_GL_LAST:
