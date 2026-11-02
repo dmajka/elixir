@@ -17,7 +17,7 @@ emcc ${EMU_OPT:--O2} -ffp-contract=off -std=gnu99 -w ${EMU_CFLAGS:-} \
     -o build/emu/elixir.wasm web/emu/elixir_web.c
 sed -e "s/@VERSION@/$VERSION/g" -e "s/@PREVIEW@//g" web/emu/index.html > build/emu/index.html
 sed -e "s/@VERSION@/$VERSION/g" -e "s|@BASE@||g" -e "s|@SITE@|../|g" web/emu/mobile.html > build/emu/mobile.html   # (0.16: phones)
-cp web/emu/worklet.js web/library.js build/emu/
+cp web/emu/worklet.js web/library.js web/emu/apple-touch-icon.png build/emu/
 python3 tools/gen_kit_packs.py build/emu/kits >/dev/null                # (0.19: the Hrtl kit packs, .ktlb)
 cp web/emu/fonts/DotGothic16-subset.woff web/emu/fonts/OFL.txt build/emu/fonts/
 echo "emu: build/emu ($(wc -c < build/emu/elixir.wasm | tr -d ' ') B wasm, $VERSION)"

@@ -666,6 +666,7 @@ def main(pkg, out):
     m = (ROOT / "web/emu/mobile.html").read_text(encoding="utf-8")
     m = m.replace("@VERSION@", ver).replace("@BASE@", "../try/").replace("@SITE@", "../")
     (out / "mobile/index.html").write_text(m, encoding="utf-8")
+    shutil.copy(ROOT / "web/emu/apple-touch-icon.png", out / "mobile/apple-touch-icon.png")   # (0.25: the home-screen icon)
 
     md = re.sub(r"^## Contents\n.*?^---\n", "", (ROOT / "MANUAL.md").read_text(encoding="utf-8"), flags=re.M | re.S)
     title, body, heads = markdown(md)                # (the side bar replaces the manual's own contents)

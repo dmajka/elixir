@@ -13,7 +13,8 @@
 <meta name="theme-color" content="#121214">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">   <!-- (0.25: the page below the status bar, not under it) -->
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-title" content="Elixir">
 <title>Elixir mobile</title>
 <meta name="description" content="Elixir, the LXR-02 drum machine firmware for the M-VAVE FM-1, on your phone: the same code the instrument runs, laid out for touch.">
@@ -50,43 +51,26 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
 @media (orientation: portrait) {
   .app { gap: 12px; }
   .R { display: contents; }
-  .stage { margin-top: 6px; }
+  .stage { margin-top: 6px; margin-bottom: 14px; }   /* (0.25: air between the screen and the buttons) */
   .btns, .blacks, .steps { margin-top: auto; }
 }
-/* 33: the stage at the top: PRESET, ALGO, SELECT down the left of the screen (SELECT lowest, by the thumb), KNOB 1-4
-   under it, each below the parameter it turns (the screen's four cells); drag a knob, or the parameter on the
-   screen, up or down */
-.stage { flex: none; display: flex; gap: var(--gap); align-items: flex-start; justify-content: center; }
-.lk { flex: none; position: relative; width: calc(var(--knob) + 12px); }   /* (as tall as the screen and its knobs: fit) */
-.lk .kn { position: absolute; left: 50%; transform: translateX(-50%); z-index: 1; }   /* (ALGO level with the screen's cells, SELECT
-                                                                            with KNOB 1-4, PRESET as far above ALGO: fit) */
-.mid { flex: none; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+/* 0.25: the stage at the top: PRESET, ALGO and SELECT as slim strips down the left of the screen (SELECT lowest, by
+   the thumb); the screen as large as the rest leaves. KNOB 1-4: drag a parameter on the screen up or down */
+.stage { flex: none; display: flex; gap: 8px; align-items: stretch; }
+.lk { flex: none; display: flex; flex-direction: column; gap: 12px; width: 30px; padding: 8px 0 4px; }
+.mid { flex: none; display: flex; }
 .scr { width: 240px; height: 240px; padding: 6px; background: var(--bg); }   /* (0.25: no bezel; the page's black is the
                                                                               screen's, web_bg) */
 .scr canvas { width: 100%; height: 100%; display: block; background: var(--bg); touch-action: none; }
 .row { display: grid; gap: var(--gap); flex: none; }
-.knobs4 { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 0 6px; width: 240px; }
-.kn { display: flex; flex-direction: column; align-items: center; gap: 3px; touch-action: none; cursor: ns-resize; min-width: 0; }
-/* 0.25: the knobs as touch sliders: a fat rectangle, filled to the parameter's value (KNOB 1-4: web_knob_vals); a
-   touch lifts it a little bigger and shows the number. PRESET, ALGO and SELECT step through lists: ridges that roll
-   with the finger */
-.kn .face { position: relative; width: var(--knob); height: var(--slh); border-radius: 10px; overflow: hidden;
-            background: #19191c; box-shadow: inset 0 0 0 1px var(--edge); transform-origin: 50% 60%;
-            transition: transform .14s cubic-bezier(.2, .9, .3, 1.2), box-shadow .14s; }
-.kn .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; border-radius: 0 0 9px 9px;
-            background: linear-gradient(to top, #f4d04a30, #f4d04a5c); transition: height .06s linear; }
-.kn .fill::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--accent);
-                    box-shadow: 0 0 6px #f4d04a99; }
-.kn .val { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; font-size: 13px;
-           font-variant-numeric: tabular-nums; color: var(--ink); opacity: 0; transition: opacity .1s; text-shadow: 0 1px 3px #000; }
-.kn.off .face { background: #141416; }
-.kn.off .fill { display: none; }
-.kn.rel .face { background: repeating-linear-gradient(to bottom, #19191c 0 7px, #2b2b2f 7px 9px) 0 var(--roll, 0px) / 100% 9px; }
-.kn.rel .face::after { content: ""; position: absolute; inset: 0; border-radius: 10px;
-                       background: linear-gradient(to bottom, #000b 0%, transparent 30%, transparent 70%, #000b 100%); }
-.kn.on .face { transform: scale(1.22); z-index: 3; box-shadow: inset 0 0 0 1.5px var(--accent), 0 8px 22px #000c; }
-.kn.on .val { opacity: 1; }
-.kn .nm { font-size: 9.5px; color: var(--mid); white-space: nowrap; overflow: hidden; max-width: 100%; letter-spacing: .02em; }
+.kn { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; touch-action: none; cursor: ns-resize; }
+.kn .face { flex: 1; width: 20px; position: relative; overflow: hidden; border-radius: 10px; background: #ffffff07;
+            box-shadow: inset 0 0 0 1px #ffffff17; transition: box-shadow .15s, background .15s; }
+.kn .tick { position: absolute; left: 5px; right: 5px; top: calc(50% - 1px); height: 2px; border-radius: 1px; background: var(--mid);
+            transform: translateY(var(--roll, 0px)); transition: transform .3s cubic-bezier(.2, .8, .2, 1), background .15s; }
+.kn.on .face { background: #ffffff0d; box-shadow: inset 0 0 0 1px var(--accent); }
+.kn.on .tick { background: var(--accent); transition: background .15s; }
+.kn .nm { font-size: 8.5px; color: var(--dim); letter-spacing: .1em; white-space: nowrap; }
 .kn.on .nm { color: var(--accent); }
 /* the buttons, two rows of seven as on the FM-1, lit as its are */
 .btns { grid-template-columns: repeat(7, minmax(0, 1fr)); }
@@ -175,7 +159,6 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
     <div class="lk" id="lknobs"></div>
     <div class="mid">
       <div class="scr" id="scr"><canvas id="screen" width="240" height="240" role="img" aria-label="The screen"></canvas></div>
-      <div class="row knobs4" id="knobs4"></div>
     </div>
   </div>
   <div class="R">
@@ -203,7 +186,7 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
   <p><span class="file">Restore a kit library<input id="krestore" type="file" accept=".ktlb"></span></p>
   <p id="kstatus"></p>
   <h3>Playing it</h3>
-  <p>Drag a knob up or down, or drag a parameter at the bottom of the screen to turn the knob below it. The black keys are the FM-1's: D1 … OH select a track, 1–4 show a bar. OCT− is SHIFT,
+  <p>Drag a parameter at the bottom of the screen up or down to turn its knob (KNOB 1–4); drag PRESET, ALGO or SELECT, the strips left of the screen, up or down to turn them. The black keys are the FM-1's: D1 … OH select a track, 1–4 show a bar. OCT− is SHIFT,
     OCT+ is COPY / OK; hold one with a finger and press with another for combinations.</p>
   <p class="fine"><a href="@SITE@">Elixir</a> · <a href="@BASE@index.html">Full emulator</a> · <a href="@SITE@manual/">Manual</a> · GPL-3.0 ·
     an unofficial port of the Erica Synths LXR-02 firmware, not affiliated with Erica Synths or M-VAVE</p>
@@ -212,7 +195,7 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
 
 <div class="sheet" id="ssheet" role="dialog" aria-label="Share a pattern">
   <h2>Share a pattern</h2>
-  <p>The playing pattern and the kit it plays, as it sounds now, with the tempo: a link to send, or a text to keep.
+  <p>The playing pattern and the kit it plays, as it sounds now, with its morph target, the morph and the tempo: a link to send, or a text to keep.
     Whoever opens the link hears your pattern when they switch on.</p>
   <div class="acts"><button id="smake" class="go" type="button">Share link…</button><button id="scopy" type="button">Copy link</button>
     <button id="scopyt" type="button">Copy text</button></div>
@@ -311,56 +294,55 @@ function dragTurns(el, start) {
   for (const t of ["pointerup", "pointercancel"]) el.addEventListener(t, end);
   el.addEventListener("contextmenu", (e) => e.preventDefault());
 }
-// 0.25: a slider. KNOB 1-4 (kn >= 0): filled to the value the firmware reports (setInfo), a drag of about the
-// slider's height across the parameter's whole range (web_knob_turn: no speed-up); the rest (PRESET, ALGO, SELECT):
-// ridges that roll, ~12 px a detent
-function knob(parent, name, onTurn, kn = -1) {
-  const el = div("kn" + (kn < 0 ? " rel" : " off"), parent,
-                 `<span class="face"><span class="fill"></span><span class="val"></span></span><span class="nm">${name}</span>`);
+// 0.25: PRESET, ALGO and SELECT: a slim strip whose mark follows the finger (~12 px a detent; down turns down)
+function knob(parent, name, onTurn) {
+  const el = div("kn", parent, `<span class="face"><span class="tick"></span></span><span class="nm">${name}</span>`);
   el.setAttribute("role", "slider");
   el.setAttribute("aria-label", name);
-  const face = el.querySelector(".face"), fill = el.querySelector(".fill"), val = el.querySelector(".val");
-  let acc = 0, roll = 0, info = null;
-  const show = () => {
-    if (!info || !info.on) return;
-    const span = Math.max(1, info.mx - info.mn);
-    fill.style.height = `${(info.v - info.mn) / span * 100}%`;
-    val.textContent = info.v;
-    el.setAttribute("aria-valuenow", info.v);
-  };
+  const face = el.querySelector(".face");
+  let acc = 0, roll = 0;
   const k = {
     el,
-    setInfo(on, v, mn, mx) {
-      if (el.classList.contains("on") && on && info && info.on) { k.later = [on, v, mn, mx]; return; }   // (dragging: on release)
-      info = { on, v, mn, mx };
-      el.classList.toggle("off", !on);
-      show();
-    },
-    grab() { acc = 0; el.classList.add("on"); },
-    drop() {
-      el.classList.remove("on");
-      if (k.later) { const l = k.later; k.later = null; k.setInfo(...l); }
-    },
+    grab() { acc = roll = 0; el.classList.add("on"); },
+    drop() { el.classList.remove("on"); face.style.setProperty("--roll", "0px"); },
     move(d) {
-      if (kn >= 0 && info && info.on) {
-        const span = Math.max(1, info.mx - info.mn), per = Math.max(1.2, Math.min(28, face.offsetHeight * 1.3 / span));
-        acc += d;
-        const n = Math.trunc(acc / per);
-        if (!n) return;
-        acc -= n * per;
-        send({ type: "knob", k: kn, n });
-        info.v = Math.max(info.mn, Math.min(info.mx, info.v + n));   // (at once; the firmware's value follows)
-        show();
-        return;
-      }
+      const lim = Math.max(0, face.offsetHeight / 2 - 6);
+      roll = Math.max(-lim, Math.min(lim, roll - d));
+      face.style.setProperty("--roll", `${roll}px`);
       acc += d;
-      roll += d;
-      face.style.setProperty("--roll", `${-roll}px`);
       const n = Math.trunc(acc / 12);
       if (n) { acc -= n * 12; onTurn(n); buzz(); }
     },
   };
   dragTurns(el, () => k);
+  return k;
+}
+// KNOB 1-4: no control of their own; a drag on the parameter's cell on the screen, about the screen's height across
+// the parameter's range (web_knob_turn: no speed-up). Their values: web_knob_vals (drawKnobs)
+function cellKnob(kn, role) {
+  let acc = 0, info = null, later = null, held = false;
+  const k = {
+    setInfo(on, v, mn, mx) {
+      if (held && on && info && info.on) { later = [on, v, mn, mx]; return; }
+      info = { on, v, mn, mx };
+    },
+    grab() { acc = 0; held = true; },
+    drop() { held = false; if (later) { const l = later; later = null; k.setInfo(...l); } },
+    move(d) {
+      acc += d;
+      if (!info || !info.on) {                             // (nothing known: as the knob would, ~10 px a detent)
+        const n = Math.trunc(acc / 10);
+        if (n) { acc -= n * 10; send({ type: "enc", role, n }); }
+        return;
+      }
+      const span = Math.max(1, info.mx - info.mn), per = Math.max(1.2, Math.min(28, screenEl.offsetHeight * 0.8 / span));
+      const n = Math.trunc(acc / per);
+      if (!n) return;
+      acc -= n * per;
+      send({ type: "knob", k: kn, n });
+      info.v = Math.max(info.mn, Math.min(info.mx, info.v + n));
+    },
+  };
   return k;
 }
 const knobs = document.getElementById("lknobs");
@@ -374,42 +356,34 @@ volEl.addEventListener("input", () => {
   send({ type: "master", value: volume });
   try { localStorage.setItem("elixir-mobile-vol", volume); } catch {}
 });
-const lks = ["PRESETS", "ALGORITHM", "SELECT"].map((n) => knob(knobs, n === "ALGORITHM" ? "ALGO" : n === "PRESETS" ? "PRESET" : n, (d) => send({ type: "enc", role: EN[n], n: d })));
-const k4 = ["KNOB 1", "KNOB 2", "KNOB 3", "KNOB 4"].map((n, i) => knob(document.getElementById("knobs4"), n, (d) => send({ type: "enc", role: EN[n], n: d }), i));
-// the screen's four parameter cells (its bottom 70 rows of 240): a drag there turns the knob below
 const screenEl = document.getElementById("screen");
+const lks = ["PRESETS", "ALGORITHM", "SELECT"].map((n) => knob(knobs, n === "ALGORITHM" ? "ALGO" : n === "PRESETS" ? "PRESET" : n, (d) => send({ type: "enc", role: EN[n], n: -d })));
+const k4 = ["KNOB 1", "KNOB 2", "KNOB 3", "KNOB 4"].map((n, i) => cellKnob(i, EN[n]));
+// the screen's four parameter cells (its bottom 70 rows of 240): a drag there turns that knob
 dragTurns(screenEl, (e) => {
   const r = screenEl.getBoundingClientRect();
   if ((e.clientY - r.top) / r.height * 240 < 170) return null;
   return k4[Math.max(0, Math.min(3, Math.floor((e.clientX - r.left) / r.width * 4)))];
 });
-// the screen as large as the room the controls leave (33: drawn smoothed at the display's resolution, drawScreen), the
-// knobs below as wide
+// the screen as large as the room the controls leave (33: drawn smoothed at the display's resolution, drawScreen)
 const stage = document.querySelector(".stage"), lk = document.getElementById("lknobs"), scr = document.getElementById("scr");
-const k4row = document.getElementById("knobs4");
 let lastFb = null;                                         // (the frame last drawn: redrawn at a new size)
 // (portrait: the room the bar, the gaps and the controls below leave; the square pads' height comes from the width)
 const app = document.getElementById("app"), barEl = document.querySelector(".bar");
 const rows = ["btns", "blacks", "steps"].map((id) => document.getElementById(id));
 function fit() {
-  const land = matchMedia("(orientation: landscape)").matches, gap = 6, k4h = k4row.offsetHeight;
+  const land = matchMedia("(orientation: landscape)").matches, gap = 8;
   let w, h;
   if (land) {
-    w = innerWidth * 0.48 - lk.offsetWidth - gap;
-    h = stage.clientHeight - k4h - 10;
+    w = innerWidth * 0.5 - lk.offsetWidth - gap;
+    h = stage.clientHeight;
   } else {
     const cs = getComputedStyle(app), inner = app.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
     w = stage.clientWidth - lk.offsetWidth - gap;
-    h = inner - barEl.offsetHeight - 6 - 4 * 12 - rows.reduce((a, r) => a + r.offsetHeight, 0) - k4h - 10;
+    h = inner - barEl.offsetHeight - 6 - 14 - 4 * 12 - rows.reduce((a, r) => a + r.offsetHeight, 0);
   }
   const side = Math.floor(Math.max(120, Math.min(w, h)));
-  scr.style.width = scr.style.height = k4row.style.width = `${side}px`;
-  lk.style.height = `${side + 10 + k4h}px`;
-  // the left knobs by their faces' centres: SELECT with KNOB 1-4, ALGO with the screen's cells (rows 172-236 of 240,
-  // inside the bezel's 6 px), PRESET as far above ALGO
-  const face = lks[0].el.querySelector(".face").offsetHeight, sel = side + 10 + face / 2;
-  const algo = Math.min(6 + (side - 12) * 204 / 240, sel - face - 14), centres = [Math.max(face / 2, 2 * algo - sel), algo, sel];
-  lks.forEach((k, i) => { k.el.style.top = `${Math.round(centres[i] - face / 2)}px`; });
+  scr.style.width = scr.style.height = `${side}px`;
   const px = Math.round((side - 12) * (devicePixelRatio || 1));
   if (screenEl.width !== px) { screenEl.width = screenEl.height = px; if (lastFb) drawScreen(lastFb); }
 }

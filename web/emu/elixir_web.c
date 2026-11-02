@@ -421,7 +421,8 @@ EXPORT uint32_t web_bg(void) { return T_BG; }    /* the screen's background, RGB
  * the page packs into a text (a link). Only between pages of the same layout (KIT_LEN, the pattern's size) */
 #define WEB_SHARE_MAGIC 0x31585045u              /* "EPX1" */
 #define WEB_SHARE_HEAD 12u
-static uint8_t web_share[WEB_SHARE_HEAD + KIT_NAME_LEN + KIT_LEN + sizeof(pattern_t)];
+#define WEB_SHARE_V1 (WEB_SHARE_HEAD + KIT_NAME_LEN + KIT_LEN + sizeof(pattern_t))   /* (before the morph) */
+static uint8_t web_share[WEB_SHARE_V1 + KIT_LEN];   /* .. then the morph target (byte 9: the morph, 10: 1 with it) */
 EXPORT uint8_t *web_share_buf(void) { return web_share; }
 EXPORT uint32_t web_share_size(void) { return sizeof web_share; }
 EXPORT uint32_t web_share_get(void)
@@ -433,7 +434,10 @@ EXPORT uint32_t web_share_get(void)
     b[4] = (uint8_t)KIT_LEN; b[5] = (uint8_t)(KIT_LEN >> 8);
     b[6] = (uint8_t)sizeof(pattern_t); b[7] = (uint8_t)(sizeof(pattern_t) >> 8);
     b[8] = par[PAR_BPM];
-    b[9] = b[10] = b[11] = 0;
+    b[9] = par[PAR_MORPH];
+    b[10] = 1;
+    b[11] = 0;
+    memcpy(b + WEB_SHARE_V1, morph_par, KIT_LEN);
     memcpy(b + WEB_SHARE_HEAD, kit_names[slot], KIT_NAME_LEN);
     for (i = 0; i < KIT_LEN; i++)
         k[i] = par[kit_par(i)];
@@ -450,7 +454,7 @@ EXPORT uint32_t web_share_put(uint32_t n)
     uint32_t i, slot = kit_loaded < 32u ? kit_loaded : 0u;
     if (n < WEB_SHARE_HEAD || (b[0] | b[1] << 8 | (uint32_t)b[2] << 16 | (uint32_t)b[3] << 24) != WEB_SHARE_MAGIC)
         return 1;
-    if (n != sizeof web_share || (b[4] | b[5] << 8) != KIT_LEN || (b[6] | b[7] << 8) != sizeof(pattern_t))
+    if ((n != sizeof web_share && n != WEB_SHARE_V1) || (b[4] | b[5] << 8) != KIT_LEN || (b[6] | b[7] << 8) != sizeof(pattern_t))
         return 2;
     memcpy(kit, k, KIT_LEN);
     kit_sanitize(kit);
@@ -460,6 +464,12 @@ EXPORT uint32_t web_share_put(uint32_t n)
         kit_names[slot][i] = (char)(c >= 32u && c < 127u ? c : ' ');
     }
     kit_load_ram(slot);
+    if (n == sizeof web_share && b[10] == 1u) {  /* the morph target and the morph */
+        memcpy(morph_par, b + WEB_SHARE_V1, KIT_LEN);
+        kit_sanitize(morph_par);
+        kit_set_morph(b[9]);
+        snd_post_all();
+    }
     memcpy(p, k + KIT_LEN, sizeof(pattern_t));
     p->kit = (uint8_t)slot;                      /* (its voices FREE: the kit is the whole sound) */
     if (p->scale >= NSCALE)
