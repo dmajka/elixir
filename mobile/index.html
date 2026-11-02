@@ -23,7 +23,7 @@
   --bg: #0b0b0c; --part: #232326; --edge: #343438; --ink: #e9e9ec; --mid: #8d8d93; --dim: #5b5b61;
   --lit: #fff4d6; --green: #5fe08a; --rec: #ff453a; --accent: #f4d04a;
   --t0: #ff7038; --t1: #ffa62c; --t2: #f4d04a; --t3: #7cd25c; --t4: #3ec6c8; --t5: #509cf0; --t6: #a87cf2; --bar: #7fb0d8;
-  --gap: 6px; --knob: clamp(40px, 13vw, 58px); --btn: clamp(30px, 4.6vh, 40px); --blk: clamp(30px, 4.8vh, 42px);
+  --gap: 6px; --knob: clamp(40px, 13vw, 58px); --slh: calc(var(--knob) * 1.3); --btn: clamp(30px, 4.6vh, 40px); --blk: clamp(30px, 4.8vh, 42px);
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -58,23 +58,34 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
    screen, up or down */
 .stage { flex: none; display: flex; gap: var(--gap); align-items: flex-start; justify-content: center; }
 .lk { flex: none; position: relative; width: calc(var(--knob) + 12px); }   /* (as tall as the screen and its knobs: fit) */
-.lk .kn { position: absolute; left: 50%; transform: translateX(-50%); }   /* (ALGO level with the screen's cells, SELECT
+.lk .kn { position: absolute; left: 50%; transform: translateX(-50%); z-index: 1; }   /* (ALGO level with the screen's cells, SELECT
                                                                             with KNOB 1-4, PRESET as far above ALGO: fit) */
 .mid { flex: none; display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.scr { width: 240px; height: 240px; padding: 6px; border-radius: 12px; background: #050506;
-       box-shadow: 0 0 0 1px #000, 0 0 24px rgba(244, 208, 74, .06), inset 0 0 0 1px #1f1f22; }
-.scr canvas { width: 100%; height: 100%; display: block; border-radius: 3px; background: #000; touch-action: none; }
+.scr { width: 240px; height: 240px; padding: 6px; background: var(--bg); }   /* (0.25: no bezel; the page's black is the
+                                                                              screen's, web_bg) */
+.scr canvas { width: 100%; height: 100%; display: block; background: var(--bg); touch-action: none; }
 .row { display: grid; gap: var(--gap); flex: none; }
 .knobs4 { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 0 6px; width: 240px; }
 .kn { display: flex; flex-direction: column; align-items: center; gap: 3px; touch-action: none; cursor: ns-resize; min-width: 0; }
-.kn .face { position: relative; width: var(--knob); height: var(--knob); border-radius: 50%;
-            background: radial-gradient(circle at 50% 30%, #47474b 0%, #232326 48%, #101011 100%);
-            box-shadow: 0 0 0 1px #070707, 0 3px 6px #000c, inset 0 1px 1px #ffffff1c; }
-.kn .face::after { content: ""; position: absolute; inset: 17%; border-radius: 50%;
-                   background: radial-gradient(circle at 50% 35%, #2d2d30, #151516 75%); box-shadow: 0 1px 2px #0008; }
-.kn .ind { position: absolute; inset: 0; z-index: 1; }
-.kn .ind::before { content: ""; position: absolute; left: calc(50% - 1.5px); top: 7%; width: 3px; height: 30%; border-radius: 2px;
-                   background: var(--accent); box-shadow: 0 0 5px #f4d04a88; }
+/* 0.25: the knobs as touch sliders: a fat rectangle, filled to the parameter's value (KNOB 1-4: web_knob_vals); a
+   touch lifts it a little bigger and shows the number. PRESET, ALGO and SELECT step through lists: ridges that roll
+   with the finger */
+.kn .face { position: relative; width: var(--knob); height: var(--slh); border-radius: 10px; overflow: hidden;
+            background: #19191c; box-shadow: inset 0 0 0 1px var(--edge); transform-origin: 50% 60%;
+            transition: transform .14s cubic-bezier(.2, .9, .3, 1.2), box-shadow .14s; }
+.kn .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; border-radius: 0 0 9px 9px;
+            background: linear-gradient(to top, #f4d04a30, #f4d04a5c); transition: height .06s linear; }
+.kn .fill::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--accent);
+                    box-shadow: 0 0 6px #f4d04a99; }
+.kn .val { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; font-size: 13px;
+           font-variant-numeric: tabular-nums; color: var(--ink); opacity: 0; transition: opacity .1s; text-shadow: 0 1px 3px #000; }
+.kn.off .face { background: #141416; }
+.kn.off .fill { display: none; }
+.kn.rel .face { background: repeating-linear-gradient(to bottom, #19191c 0 7px, #2b2b2f 7px 9px) 0 var(--roll, 0px) / 100% 9px; }
+.kn.rel .face::after { content: ""; position: absolute; inset: 0; border-radius: 10px;
+                       background: linear-gradient(to bottom, #000b 0%, transparent 30%, transparent 70%, #000b 100%); }
+.kn.on .face { transform: scale(1.22); z-index: 3; box-shadow: inset 0 0 0 1.5px var(--accent), 0 8px 22px #000c; }
+.kn.on .val { opacity: 1; }
 .kn .nm { font-size: 9.5px; color: var(--mid); white-space: nowrap; overflow: hidden; max-width: 100%; letter-spacing: .02em; }
 .kn.on .nm { color: var(--accent); }
 /* the buttons, two rows of seven as on the FM-1, lit as its are */
@@ -145,6 +156,11 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
 .sheet label.o { display: block; margin: 6px 0; color: var(--mid); }
 .sheet select, .sheet input[type=number] { font: inherit; font-size: 16px; background: var(--part); color: var(--ink); border: 1px solid var(--edge); border-radius: 6px; }   /* (16 px: iOS zooms into smaller fields) */
 .sheet .fine { color: var(--dim); font-size: 11px; }
+.sheet textarea { width: 100%; min-height: 5.5em; font: 13px/1.35 ui-monospace, Menlo, monospace; color: var(--ink); background: #0f0f11;
+                  border: 1px solid var(--edge); border-radius: 8px; padding: 8px; word-break: break-all; resize: vertical; }
+.sheet .acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.sheet button.go { background: var(--accent); color: #1b1a12; border: 0; }
+#sstatus { color: var(--accent); min-height: 1.5em; }
 #kstatus { color: var(--accent); min-height: 1.5em; }
 @media (prefers-reduced-motion: reduce) { .b.breath, .p.breath::after { animation: none; } .sheet { transition: none; } }
 </style>
@@ -153,6 +169,7 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
 <div class="app" id="app">
   <div class="bar"><b>ELIXIR</b><small>v0.24.2</small><span class="sp"></span>
     <label class="vol">VOL<input id="vol" type="range" min="0" max="1023" step="1" aria-label="Volume"></label>
+    <button id="sharebtn" type="button">Share</button>
     <button id="kitsbtn" type="button">Kits</button></div>
   <div class="stage">
     <div class="lk" id="lknobs"></div>
@@ -191,6 +208,22 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
   <p class="fine"><a href="../">Elixir</a> · <a href="../try/index.html">Full emulator</a> · <a href="../manual/">Manual</a> · GPL-3.0 ·
     an unofficial port of the Erica Synths LXR-02 firmware, not affiliated with Erica Synths or M-VAVE</p>
   <p><button id="kclose" type="button">Close</button></p>
+</div>
+
+<div class="sheet" id="ssheet" role="dialog" aria-label="Share a pattern">
+  <h2>Share a pattern</h2>
+  <p>The playing pattern and the kit it plays, as it sounds now, with the tempo: a link to send, or a text to keep.
+    Whoever opens the link hears your pattern when they switch on.</p>
+  <div class="acts"><button id="smake" class="go" type="button">Share link…</button><button id="scopy" type="button">Copy link</button>
+    <button id="scopyt" type="button">Copy text</button></div>
+  <h3>Load one</h3>
+  <p>Paste a link or a text. It replaces the playing pattern and the kit slot it plays (until you save, the
+    project you have stays as it was saved).</p>
+  <textarea id="stext" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="Paste here"></textarea>
+  <div class="acts"><button id="sload" class="go" type="button">Load</button><button id="spaste" type="button">Paste</button>
+    <button id="sclose" type="button">Close</button></div>
+  <p id="sstatus"></p>
+  <p class="fine">Only this page (Elixir mobile) makes and reads these; a link from another version of Elixir may not load.</p>
 </div>
 
 <script type="module">
@@ -256,7 +289,7 @@ WHITE.forEach((k, i) => {
   keys[k] = { el, k };
   press(el, { key: k });
 });
-// a drag turns: up (or right) for clockwise, ~10 px a detent. start(e): the knob it turns (null: not this touch)
+// a drag turns: up (or right) for clockwise. start(e): the slider it moves (null: not this touch)
 function dragTurns(el, start) {
   let drag = null;
   el.addEventListener("pointerdown", (e) => {
@@ -264,30 +297,69 @@ function dragTurns(el, start) {
     if (!k) return;
     e.preventDefault();
     el.setPointerCapture(e.pointerId);
-    drag = { k, x: e.clientX, y: e.clientY, acc: 0 };
-    k.el.classList.add("on");
+    drag = { k, x: e.clientX, y: e.clientY };
+    k.grab();
   });
   el.addEventListener("pointermove", (e) => {
     if (!drag) return;
     const dx = e.clientX - drag.x, dy = drag.y - e.clientY;
-    drag.acc += Math.abs(dx) > Math.abs(dy) ? dx : dy;
     drag.x = e.clientX;
     drag.y = e.clientY;
-    const n = Math.trunc(drag.acc / 10);
-    if (n) { drag.acc -= n * 10; drag.k.turn(n); }
+    drag.k.move(Math.abs(dx) > Math.abs(dy) ? dx : dy);
   });
-  const end = () => { if (drag) drag.k.el.classList.remove("on"); drag = null; };
+  const end = () => { if (drag) drag.k.drop(); drag = null; };
   for (const t of ["pointerup", "pointercancel"]) el.addEventListener(t, end);
   el.addEventListener("contextmenu", (e) => e.preventDefault());
 }
-// a knob; the indicator turns 15 degrees a detent
-function knob(parent, name, onTurn, cls = "") {
-  const el = div("kn" + cls, parent, `<span class="face"><span class="ind"></span></span><span class="nm">${name}</span>`);
+// 0.25: a slider. KNOB 1-4 (kn >= 0): filled to the value the firmware reports (setInfo), a drag of about the
+// slider's height across the parameter's whole range (web_knob_turn: no speed-up); the rest (PRESET, ALGO, SELECT):
+// ridges that roll, ~12 px a detent
+function knob(parent, name, onTurn, kn = -1) {
+  const el = div("kn" + (kn < 0 ? " rel" : " off"), parent,
+                 `<span class="face"><span class="fill"></span><span class="val"></span></span><span class="nm">${name}</span>`);
   el.setAttribute("role", "slider");
   el.setAttribute("aria-label", name);
-  const ind = el.querySelector(".ind");
-  let angle = 0;
-  const k = { el, ind, turn(n) { const a = onTurn(n); angle = a ?? angle + 15 * n; ind.style.transform = `rotate(${angle}deg)`; } };
+  const face = el.querySelector(".face"), fill = el.querySelector(".fill"), val = el.querySelector(".val");
+  let acc = 0, roll = 0, info = null;
+  const show = () => {
+    if (!info || !info.on) return;
+    const span = Math.max(1, info.mx - info.mn);
+    fill.style.height = `${(info.v - info.mn) / span * 100}%`;
+    val.textContent = info.v;
+    el.setAttribute("aria-valuenow", info.v);
+  };
+  const k = {
+    el,
+    setInfo(on, v, mn, mx) {
+      if (el.classList.contains("on") && on && info && info.on) { k.later = [on, v, mn, mx]; return; }   // (dragging: on release)
+      info = { on, v, mn, mx };
+      el.classList.toggle("off", !on);
+      show();
+    },
+    grab() { acc = 0; el.classList.add("on"); },
+    drop() {
+      el.classList.remove("on");
+      if (k.later) { const l = k.later; k.later = null; k.setInfo(...l); }
+    },
+    move(d) {
+      if (kn >= 0 && info && info.on) {
+        const span = Math.max(1, info.mx - info.mn), per = Math.max(1.2, Math.min(28, face.offsetHeight * 1.3 / span));
+        acc += d;
+        const n = Math.trunc(acc / per);
+        if (!n) return;
+        acc -= n * per;
+        send({ type: "knob", k: kn, n });
+        info.v = Math.max(info.mn, Math.min(info.mx, info.v + n));   // (at once; the firmware's value follows)
+        show();
+        return;
+      }
+      acc += d;
+      roll += d;
+      face.style.setProperty("--roll", `${-roll}px`);
+      const n = Math.trunc(acc / 12);
+      if (n) { acc -= n * 12; onTurn(n); buzz(); }
+    },
+  };
   dragTurns(el, () => k);
   return k;
 }
@@ -303,7 +375,7 @@ volEl.addEventListener("input", () => {
   try { localStorage.setItem("elixir-mobile-vol", volume); } catch {}
 });
 const lks = ["PRESETS", "ALGORITHM", "SELECT"].map((n) => knob(knobs, n === "ALGORITHM" ? "ALGO" : n === "PRESETS" ? "PRESET" : n, (d) => send({ type: "enc", role: EN[n], n: d })));
-const k4 = ["KNOB 1", "KNOB 2", "KNOB 3", "KNOB 4"].map((n) => knob(document.getElementById("knobs4"), n, (d) => send({ type: "enc", role: EN[n], n: d })));
+const k4 = ["KNOB 1", "KNOB 2", "KNOB 3", "KNOB 4"].map((n, i) => knob(document.getElementById("knobs4"), n, (d) => send({ type: "enc", role: EN[n], n: d }), i));
 // the screen's four parameter cells (its bottom 70 rows of 240): a drag there turns the knob below
 const screenEl = document.getElementById("screen");
 dragTurns(screenEl, (e) => {
@@ -336,7 +408,7 @@ function fit() {
   // the left knobs by their faces' centres: SELECT with KNOB 1-4, ALGO with the screen's cells (rows 172-236 of 240,
   // inside the bezel's 6 px), PRESET as far above ALGO
   const face = lks[0].el.querySelector(".face").offsetHeight, sel = side + 10 + face / 2;
-  const algo = 6 + (side - 12) * 204 / 240, centres = [Math.max(face / 2, 2 * algo - sel), algo, sel];
+  const algo = Math.min(6 + (side - 12) * 204 / 240, sel - face - 14), centres = [Math.max(face / 2, 2 * algo - sel), algo, sel];
   lks.forEach((k, i) => { k.el.style.top = `${Math.round(centres[i] - face / 2)}px`; });
   const px = Math.round((side - 12) * (devicePixelRatio || 1));
   if (screenEl.width !== px) { screenEl.width = screenEl.height = px; if (lastFb) drawScreen(lastFb); }
@@ -387,6 +459,19 @@ function drawLights([litB, litK, dimB, dimK, , brB = 0, brK = 0, midK = 0]) {
   }
 }
 
+// 0.25: the sliders' values, and the page's black as the screen's (the palette's background, RGB565)
+let bgWas = -1;
+function drawKnobs(kv) {
+  k4.forEach((k, i) => k.setInfo(kv[i * 4], kv[i * 4 + 1], kv[i * 4 + 2], kv[i * 4 + 3]));
+  const c = kv[16];
+  if (c === undefined || c === bgWas) return;
+  bgWas = c;
+  const hex = "#" + [((c >> 11) & 31) * 255 / 31, ((c >> 5) & 63) * 255 / 63, (c & 31) * 255 / 31]
+    .map((x) => Math.round(x).toString(16).padStart(2, "0")).join("");
+  document.documentElement.style.setProperty("--bg", hex);
+  document.querySelector('meta[name="theme-color"]').content = hex;
+}
+
 // ------------------------------------------------------------------ the flash, kept in this browser (as index.html)
 function loadFlash() {
   try {
@@ -428,10 +513,12 @@ async function switchOn() {
         const m = e.data;
         if (m.type === "ready") res();
         else if (m.type === "error") rej(new Error(m.message));
+        else if (m.type === "share") { const w = shareWait.get(m.id); shareWait.delete(m.id); if (w) w(m); }
         else if (m.type === "lib") { const w = libWait.get(m.id); libWait.delete(m.id); if (w) w(m.wire); }
         else if (m.type === "frame") {
           if (m.fb) drawScreen(m.fb);
           if (m.leds) drawLights(m.leds);
+          if (m.knobs) drawKnobs(m.knobs);
           if (m.sectors) saveFlash(m.sectors);
         }
       };
@@ -442,6 +529,7 @@ async function switchOn() {
     send({ type: "visible", on: !document.hidden });
     keepAwake();
     packsOnce();
+    loadLinked();
     document.addEventListener("visibilitychange", () => {
       send({ type: "visible", on: !document.hidden });
       if (!document.hidden) { ac.resume(); keepAwake(); }
@@ -549,6 +637,80 @@ $("krestore").addEventListener("change", async (ev) => {
     say(`Restored ${entries.length} kits and sounds into the kit library.`);
   } catch (err) { say("Restore failed: " + err.message); }
 });
+// ------------------------------------------------------------------ 0.25: sharing a pattern (only this page)
+// the firmware's bytes (web_share_get: the pattern, the kit, its name, the tempo), deflated, as base64url; a link is
+// this page with #p=<text>
+const shareWait = new Map();
+let shareId = 0;
+function shareCall(m) {
+  if (!node) return Promise.reject(new Error("Switch Elixir on first."));
+  const id = ++shareId;
+  return new Promise((res, rej) => {
+    const tm = setTimeout(() => { shareWait.delete(id); rej(new Error("no answer")); }, 3000);
+    shareWait.set(id, (r) => { clearTimeout(tm); res(r); });
+    node.port.postMessage({ ...m, id }, m.bytes ? [m.bytes.buffer] : []);
+  });
+}
+const pipe = async (bytes, stream) => new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
+const b64u = (u8) => { let s = ""; for (let i = 0; i < u8.length; i += 4096) s += String.fromCharCode.apply(null, u8.subarray(i, i + 4096));
+                       return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
+const unb64u = (t) => Uint8Array.from(atob(t.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+async function shareText() {
+  const r = await shareCall({ type: "shareGet" });
+  if (!r.bytes) throw new Error("this page's Elixir can't share");
+  return b64u(await pipe(r.bytes, new CompressionStream("deflate-raw")));
+}
+const shareLink = (t) => location.origin + location.pathname + "#p=" + t;
+async function shareLoad(text) {
+  const t = (text.match(/[#&?]p=([A-Za-z0-9_-]+)/)?.[1] ?? text).replace(/[^A-Za-z0-9_-]/g, "");
+  if (!t) throw new Error("nothing to load there");
+  let bytes;
+  try { bytes = await pipe(unb64u(t), new DecompressionStream("deflate-raw")); }
+  catch { throw new Error("that isn't a whole pattern text (cut short?)"); }
+  const r = await shareCall({ type: "sharePut", bytes });
+  if (r.status === 1) throw new Error("that isn't an Elixir pattern");
+  if (r.status === 2) throw new Error("that pattern was made with another version of Elixir");
+}
+const ssay = (s) => { $("sstatus").textContent = s; };
+const ssheet = $("ssheet");
+$("sharebtn").addEventListener("click", () => { ssay(node ? "" : "Switch Elixir on first."); ssheet.classList.add("open"); });
+$("sclose").addEventListener("click", () => ssheet.classList.remove("open"));
+async function copy(s) {
+  try { await navigator.clipboard.writeText(s); return true; }
+  catch { $("stext").value = s; $("stext").select(); return false; }
+}
+$("smake").addEventListener("click", async () => {
+  try {
+    const url = shareLink(await shareText());
+    if (navigator.share) { try { await navigator.share({ title: "An Elixir pattern", url }); ssay("Shared."); return; } catch (e) { if (e.name === "AbortError") return; } }
+    ssay(await copy(url) ? "Link copied." : "The link is in the box: select it and copy.");
+  } catch (err) { ssay("Couldn't share: " + err.message); }
+});
+$("scopy").addEventListener("click", async () => {
+  try { const url = shareLink(await shareText()); ssay(await copy(url) ? `Link copied (${url.length} characters).` : "The link is in the box: select it and copy."); }
+  catch (err) { ssay("Couldn't copy: " + err.message); }
+});
+$("scopyt").addEventListener("click", async () => {
+  try { const t = await shareText(); ssay(await copy(t) ? `Text copied (${t.length} characters).` : "The text is in the box: select it and copy."); }
+  catch (err) { ssay("Couldn't copy: " + err.message); }
+});
+$("spaste").addEventListener("click", async () => {
+  try { $("stext").value = await navigator.clipboard.readText(); } catch { ssay("Paste into the box yourself (press and hold)."); }
+});
+$("sload").addEventListener("click", async () => {
+  try { await shareLoad($("stext").value); ssay("Loaded: the playing pattern and its kit."); $("stext").value = ""; }
+  catch (err) { ssay("Couldn't load: " + err.message); }
+});
+// a link: loads once switched on
+const linked = /^#p=/.test(location.hash) ? location.hash : "";
+if (linked) $("status").textContent = "Someone shared a pattern with you: switch on to hear it. " + $("status").textContent;
+async function loadLinked() {
+  if (!linked) return;
+  try { history.replaceState(null, "", location.pathname + location.search); } catch {}
+  try { await shareLoad(linked); }
+  catch (err) { ssay("The shared pattern didn't load: " + err.message); ssheet.classList.add("open"); }
+}
+
 // (Safari: no pinch zoom, and no double-tap zoom off the controls; 33)
 for (const t of ["gesturestart", "gesturechange", "gestureend", "dblclick"]) document.addEventListener(t, (e) => e.preventDefault());
 let lastTap = 0;

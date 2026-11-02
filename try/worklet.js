@@ -91,6 +91,7 @@ if (typeof registerProcessor === "function") {
       if (!ex) return;
       if (m.type === "buttons" || m.type === "keys") this.queue.push(m);
       else if (m.type === "enc") ex.web_enc(m.role, m.n | 0);
+      else if (m.type === "knob" && ex.web_knob_turn) ex.web_knob_turn(m.k | 0, m.n | 0);   // the phone page's sliders
       else if (m.type === "master") ex.web_master(m.value | 0);
       else if (m.type === "midi") ex.web_midi(m.data[0] | 0, m.data[1] | 0, m.data[2] | 0);
       else if (m.type === "visible") this.period = m.on ? 1 / 30 : 1 / 4;
@@ -99,6 +100,13 @@ if (typeof registerProcessor === "function") {
         const n = ex.web_lib_in(m.wire.length);
         const wire = n ? new Uint8Array(ex.memory.buffer, ex.web_lib_out(), n).slice() : null;
         this.port.postMessage({ type: "lib", id: m.id, wire });
+      } else if (m.type === "shareGet" && ex.web_share_get) {   // the phone page: the pattern and its kit, as bytes
+        const n = ex.web_share_get();
+        this.port.postMessage({ type: "share", id: m.id, bytes: new Uint8Array(ex.memory.buffer, ex.web_share_buf(), n).slice() });
+      } else if (m.type === "sharePut" && ex.web_share_put) {
+        const b = m.bytes, size = ex.web_share_size();
+        if (b.length <= size) new Uint8Array(ex.memory.buffer, ex.web_share_buf(), size).set(b);
+        this.port.postMessage({ type: "share", id: m.id, status: b.length <= size ? ex.web_share_put(b.length) : 2 });
       }
     }
 
@@ -119,6 +127,10 @@ if (typeof registerProcessor === "function") {
         msg.load = this.busy / (this.frames / 44.1);
         this.busy = this.frames = 0;
       }
+      if (ex.web_knob_vals) {                         // the phone page's sliders: the knobs' values, the screen's black
+        const kv = Array.from(new Int32Array(mem, ex.web_knob_vals(), 16)).join(",") + "," + ex.web_bg();
+        if (kv !== this.sentKnobs) { this.sentKnobs = kv; msg.knobs = kv.split(",").map(Number); }
+      }
       const transfer = [];
       const draws = ex.web_screen_draws();
       if (draws !== this.sentDraws) {
@@ -133,7 +145,7 @@ if (typeof registerProcessor === "function") {
       }
       const nm = ex.web_midi_out_take ? ex.web_midi_out_take() : 0;
       if (nm) msg.midi = Array.from(new Uint32Array(mem, ex.web_midi_out(), nm));
-      if (msg.leds || msg.fb || msg.sectors || msg.midi || msg.load !== undefined) this.port.postMessage(msg, transfer);
+      if (msg.leds || msg.knobs || msg.fb || msg.sectors || msg.midi || msg.load !== undefined) this.port.postMessage(msg, transfer);
     }
 
     // A click's down and up can arrive within one render quantum, but the FM-1's contacts never close for less than
