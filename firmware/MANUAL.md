@@ -1355,19 +1355,21 @@ From 0.24 the global channel is made for a **keyboard and a launcher at once**: 
 
 | Global in | The global channel takes |
 |---|---|
-| **KEYS** (the default) | Program change 0–31 (patterns 1–32), **CC 102** (slot kits 1–64), **CC 103** (factory kits 1–85), notes (the selected track), CC 1 the mod wheel (MACRO 1). Nothing else. |
+| **KEYS** (the default) | Program change 0–31 (patterns 1–32), **CC 102** or **126** (slot kits 1–64), **CC 103** or **127** (factory kits 1–85), notes (the selected track), CC 1 the mod wheel (MACRO 1). Nothing else. |
 | **PAT+KIT** | The same without the notes and the mod wheel: a launch lane only (a sequencer's drum track on the same channel then plays nothing) |
 | **ALL** | Everything, as on the LXR and Elixir before 0.24: notes, every voice's CCs, NRPN, program change, CC 0 loads a slot kit |
 | **OFF** | Nothing |
 
-CC 102 and 103 are numbers the MIDI standard leaves undefined, so a keyboard doesn't send them unless you set a knob to. The track channels and the remote channels take what they always did, whatever Global in is.
+CC 102 and 103 are numbers the MIDI standard leaves undefined, so a keyboard doesn't send them unless you set a knob to. CC 126 and 127 do the same (from 0.24.2), so one pair of numbers works on the global channel and on the remote channels alike. The track channels and the remote channels take what they always did, whatever Global in is.
+
+**The basics on one channel** (from 0.24.2): the remote channels (15 and 16 by default) also take **program change 0–31** (patterns 1–32), **CC 126** (slot kits 1–64) and **CC 127** (factory kits 1–85). A controller already on a remote channel can launch patterns and kits without a third channel. The remote map itself doesn't use program changes or CCs 120–127.
 
 | Channel (default) | Notes | CCs | Also |
 |---|---|---|---|
 | **Track** D1 … OH (1–7) | Play that track | The LXR's map, for the track's voice ([the sound by CC](#the-sound-by-cc)) | Its hits go out on it |
-| **Global** (10) | Play the selected track (KEYS, ALL) | **CC 102 a slot kit, CC 103 a factory kit**, CC 1 MACRO 1 (KEYS); with ALL, the LXR's map | **Program change 0–31 launches patterns 1–32** |
-| **Remote TRACKS** (15) | Buttons (mute, solo) | Volume, pan, filter … per track, 8 columns | [The remote map](#the-remote-map) |
-| **Remote GLOBAL** (16) | Buttons (transport, effects, rolls, select, patterns) | Tempo, morph, FX, reverb, macros … | [The remote map](#the-remote-map) |
+| **Global** (10) | Play the selected track (KEYS, ALL) | **CC 102 / 126 a slot kit, CC 103 / 127 a factory kit**, CC 1 MACRO 1 (KEYS); with ALL, the LXR's map | **Program change 0–31 launches patterns 1–32** |
+| **Remote TRACKS** (15) | Buttons (mute, solo) | Volume, pan, filter … per track, 8 columns; **CC 126 a slot kit, CC 127 a factory kit** | [The remote map](#the-remote-map); **program change 0–31 launches patterns 1–32** |
+| **Remote GLOBAL** (16) | Buttons (transport, effects, rolls, select, patterns) | Tempo, morph, FX, reverb, macros …; **CC 126 a slot kit, CC 127 a factory kit** | [The remote map](#the-remote-map); **program change 0–31 launches patterns 1–32** |
 
 - **One channel for all the tracks** (as on a TR-8S or an Elektron): set every track's channel to the same one (CONFIG: MIDI CHANNELS) and give each track its own note (CONFIG: MIDI NOTES). Left at ANY, every track on that channel plays every note. The sound CCs then all work on that channel too.
 - **Notes:** a note on a track's channel plays it. With the track's MIDI note set to ANY, it plays at the note's pitch; with a note set, only that note triggers it. With **Global in** at KEYS (the default) or ALL, notes on the global channel play the selected track. The sequencer sends each track's hits on its channel.
@@ -1380,14 +1382,15 @@ CC 102 and 103 are numbers the MIDI standard leaves undefined, so a keyboard doe
 
 ### Launching patterns and kits
 
-- **Program change 0–31 on the global channel** (10 by default) queues pattern 1–32, as a white key on the pattern page does: while playing it starts when the current pattern ends (the header shows >nn), while stopped at once. Elixir sends a program change on the global channel whenever its pattern changes, so a controller or DAW can follow. Program changes on any other channel, the remote ones included, do nothing.
+- **Program change 0–31 on the global channel** (10 by default) queues pattern 1–32, as a white key on the pattern page does: while playing it starts when the current pattern ends (the header shows >nn), while stopped at once. Elixir sends a program change on the global channel whenever its pattern changes, so a controller or DAW can follow. From 0.24.2 the remote channels (15 and 16) take them the same way. Program changes on the track channels do nothing.
 - **Remote GLOBAL buttons 60 and 61** (CC or note): the previous and the next pattern, queued the same way.
 - **CC 102 on the global channel** loads slot kit 1–64 (values 0–63) at once (Global in KEYS or PAT+KIT).
 - **CC 103 on the global channel** loads factory kit 1–85 (values 0–84) at once, as LOAD → FACTORY does: into the sound; the slot shown as loaded stays.
+- **CC 126 and CC 127** (from 0.24.2) do the same as CC 102 and 103, on the global channel (KEYS, PAT+KIT) and on both remote channels, so one controller setup works on any of them.
 - **CC 0** loads slot kit 1–64 on a track's channel, as on the LXR, and on the global channel at ALL. At KEYS and PAT+KIT it is a keyboard's bank select there, and does nothing.
 - A pattern can bring its own kit (its Voices at KIT): send the kit after the program change, or it is replaced when the pattern starts.
 
-A pad controller can launch patterns if it can send program changes on the global channel; one that sends only notes or CCs can step through them with 60 and 61 on the GLOBAL channel.
+A pad controller can launch patterns if it can send program changes on the global channel or a remote one; one that sends only notes or CCs can step through them with 60 and 61 on the GLOBAL channel.
 
 ### What the global channel receives
 
@@ -1398,6 +1401,8 @@ Worth knowing in a bigger setup (a Hapax, several controllers): what a message o
 | Program change 0–31 | Pattern 1–32 | Pattern 1–32 | Pattern 1–32 |
 | CC 102 (0–63) | Slot kit 1–64 | Slot kit 1–64 | HH pan (the LXR's) |
 | CC 103 (0–84) | Factory kit 1–85 | Factory kit 1–85 | D1 drive (the LXR's) |
+| CC 126 (0–63) | Slot kit 1–64 | Slot kit 1–64 | CY LFO amount (the LXR's) |
+| CC 127 (0–84) | Factory kit 1–85 | Factory kit 1–85 | HH LFO amount (the LXR's) |
 | Note | Plays the **selected** track (recorded under REC) | – | Plays the selected track |
 | CC 1 (mod wheel) | MACRO 1 | – | – |
 | CC 0, 32 (bank select) | – | – | CC 0: slot kit 1–64 |
