@@ -7313,6 +7313,34 @@ static void phase_024g(void)
     q = note_rms(g);
     check(q > 50.0, "ALL: .. and a note plays the selected track");
     check(kset.gtakes == GT_ALL, "kept in the settings");
+    /* 0.24.2: the basics on the remote's channels (15, 16) and CC 126 / 127 on the global one */
+    {
+        uint32_t rt = remote_ch, rg = remote_gch;
+        check(rt == 14u && rg == 15u, "(the remote: channels 15 and 16)");
+        web_midi(0xC0 | rt, 3, 0);
+        run_ms(10);
+        check(sq.active == 3, "remote TRACKS: program change 3 -> pattern 4");
+        web_midi(0xC0 | rg, 8, 0);
+        run_ms(10);
+        check(sq.active == 8, "remote GLOBAL: program change 8 -> pattern 9");
+        web_midi(0xB0 | rt, 126, 5);
+        run_ms(10);
+        check(kit_loaded == 5, "remote TRACKS: CC 126 = 5 -> slot kit 6");
+        web_midi(0xB0 | rg, 127, 11);
+        run_ms(10);
+        check(is_factory(11) && kit_loaded == 5, "remote GLOBAL: CC 127 = 11 -> factory kit 12");
+        web_midi(0xB0 | rg, 126, 6);
+        run_ms(10);
+        check(kit_loaded == 6, "remote GLOBAL: CC 126 = 6 -> slot kit 7");
+        vp_set(VP_GTAKES, GT_KEYS);
+        web_midi(0xB0 | g, 126, 7);
+        run_ms(10);
+        check(kit_loaded == 7, "KEYS: CC 126 = 7 -> slot kit 8 (as CC 102)");
+        web_midi(0xB0 | g, 127, 2);
+        run_ms(10);
+        check(is_factory(2) && kit_loaded == 7, "KEYS: CC 127 = 2 -> factory kit 3 (as CC 103)");
+        vp_set(VP_GTAKES, GT_ALL);
+    }
     {   /* the card: CONFIG, MIDI CHANNELS (2), KNOB 4 */
         uint16_t pp[4];
         goto_mode(B_GLO, M_CONFIG);

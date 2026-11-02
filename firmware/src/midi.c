@@ -24,7 +24,10 @@
  *         MACRO 1; the rest a keyboard sends (bank select, pitch bend, sustain ..) is nothing;
  *       PAT+KIT: the same without the notes and the wheel (a launch lane);
  *       ALL: the LXR's (notes, every CC, NRPN, CC 0 the kit); OFF: nothing.
- *     The track channels and the remote's are as before (CC 0 a slot kit there, as the LXR's). */
+ *     The track channels and the remote's are as before (CC 0 a slot kit there, as the LXR's).
+ *   - 0.24.2: the basics on the remote's two channels too (TRACKS' and GLOBAL's, 15 and 16 by default), so one
+ *     channel does it all: program change 0..31 the pattern, CC 126 a slot kit (0..63), CC 127 a factory kit (the
+ *     remote map leaves 120..127 free). Global in KEYS and PAT+KIT take CC 126 / 127 as CC 102 / 103. */
 
 enum { MF_NOTE = 1, MF_RT = 2, MF_CC = 4, MF_PC = 8 };
 enum { MR_OFF, MR_U2M, MR_M2M, MR_A2M, MR_M2U, MR_M2A };
@@ -116,6 +119,17 @@ enum { GT_KEYS, GT_PATKIT, GT_ALL, GT_OFF, NGTAKES };
 #define GTM_ALL (1u << GT_ALL)
 #define GT_CC_SLOT 102u                              /* (undefined in the MIDI spec: a keyboard doesn't send them) */
 #define GT_CC_FACTORY 103u
+#define AK_CC_SLOT 126u                              /* 0.24.2: the same on every channel (the remote's free CCs) */
+#define AK_CC_FACTORY 127u
+static void midi_kit_cc(uint32_t cc, uint32_t v)     /* a slot kit (CC 102 / 126) or a factory one (CC 103 / 127) */
+{
+    if (cc == GT_CC_SLOT || cc == AK_CC_SLOT) {
+        if (v < NUM_KITS)
+            kit_load_ram(v);
+    } else {
+        kit_factory_load(v);
+    }
+}
 static uint8_t midi_gtakes;                          /* (project.c sets it from kset.gtakes) */
 static volatile uint8_t midi_modw = 0xFF;            /* KEYS: the wheel for MACRO 1 (remote.c, the main loop) */
 static int midi_glob(uint32_t ch, uint32_t mask)     /* the global channel, taking this (GTM_*) */
@@ -197,14 +211,15 @@ static void midi_cc(uint32_t ch, uint32_t cc, uint32_t v)
     if (!(par[PAR_MIDI_FILT_RX] & MF_CC) || m == CCMAP_OFF)
         return;
     if (!m && midi_glob(ch, GTM_PC & ~GTM_ALL)) {    /* 0.24: KEYS, PAT+KIT: the global channel's own CCs */
-        if (cc == GT_CC_SLOT && v < NUM_KITS)
-            kit_load_ram(v);
-        else if (cc == GT_CC_FACTORY)
-            kit_factory_load(v);
-        else if (cc == 1u && midi_gtakes == GT_KEYS)
-            midi_modw = (uint8_t)v;
-        if (cc == GT_CC_SLOT || cc == GT_CC_FACTORY || cc == 1u)
+        if (cc == GT_CC_SLOT || cc == GT_CC_FACTORY || cc == AK_CC_SLOT || cc == AK_CC_FACTORY) {
+            midi_kit_cc(cc, v);
             return;
+        }
+        if (cc == 1u) {
+            if (midi_gtakes == GT_KEYS)
+                midi_modw = (uint8_t)v;
+            return;
+        }
     }
     if (vo == 0u || vo >= 7u) {                      /* any channel the LXR listens on */
         ok = gl;
@@ -249,10 +264,20 @@ static void midi_message(uint32_t pkt, uint32_t src)   /* midiParser_parseMidiMe
     midi_seen = 1;
     if (src == 2u && (route == MR_M2U || route == MR_M2A))   /* soft thru: the TRS input to USB */
         midi_out_event(pkt);
-    if (st < 0xF0u && ((st & 15u) == remote_ch || (st & 15u) == remote_gch) &&
-        ((st & 0xE0u) == 0x80u || (st & 0xF0u) == 0xB0u)) {
-        remote_in_post(pkt);                         /* 0.12: the remote's notes and CCs */
-        return;
+    if (st < 0xF0u && ((st & 15u) == remote_ch || (st & 15u) == remote_gch)) {
+        if ((st & 0xF0u) == 0xB0u && (d1 == AK_CC_SLOT || d1 == AK_CC_FACTORY)) {
+            midi_kit_cc(d1, d2);                     /* 0.24.2: the kit, on the remote's channels too */
+            return;
+        }
+        if ((st & 0xF0u) == 0xC0u) {                 /* 0.24.2: .. and the pattern */
+            if (rx & MF_PC)
+                seq_set_next_pattern(d1);
+            return;
+        }
+        if ((st & 0xE0u) == 0x80u || (st & 0xF0u) == 0xB0u) {
+            remote_in_post(pkt);                     /* 0.12: the remote's notes and CCs */
+            return;
+        }
     }
     if (st >= 0xF8u) {
         if (!(rx & MF_RT))

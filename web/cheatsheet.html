@@ -507,18 +507,19 @@
     <table>
       <tr><th>Channel</th><th>Default</th><th>Takes</th></tr>
       <tr><td>Tracks D1 … OH</td><td>1–7</td><td>notes play the track · the LXR's CCs for its voice</td></tr>
-      <tr><td>Global</td><td>10</td><td><b>patterns (program change), kits (CC 102, 103)</b>, a keyboard (notes, mod wheel): Global in (right)</td></tr>
-      <tr><td>Remote TRACKS</td><td>15</td><td>the remote map (page 6): per-track knobs, mute, solo</td></tr>
-      <tr><td>Remote GLOBAL</td><td>16</td><td>the remote map (page 6): transport, effects, patterns</td></tr>
+      <tr><td>Global</td><td>10</td><td><b>patterns (program change), kits (CC 102 / 126, 103 / 127)</b>, a keyboard (notes, mod wheel): Global in (right)</td></tr>
+      <tr><td>Remote TRACKS</td><td>15</td><td>the remote map (page 6): per-track knobs, mute, solo · <b>patterns, kits (PC, CC 126, 127)</b></td></tr>
+      <tr><td>Remote GLOBAL</td><td>16</td><td>the remote map (page 6): transport, effects, patterns · <b>patterns, kits (PC, CC 126, 127)</b></td></tr>
     </table>
     <p class="note">Keep the remote channels apart from the track and global ones. A CC for a voice is taken on its
       track's channel; one with no voice (FX bus, SRate) on any track's.</p>
 
     <h2>Launching patterns and kits</h2>
     <table>
-      <tr><td>Program change 0–31</td><td><b>Channel 10: pattern 1–32</b>, at the pattern's end (stopped: at once)</td></tr>
+      <tr><td>Program change 0–31</td><td><b>Channel 10, 15, 16: pattern 1–32</b>, at the pattern's end (stopped: at once)</td></tr>
       <tr><td>CC 102, value 0–63</td><td><b>Channel 10: slot kit 1–64</b>, at once</td></tr>
       <tr><td>CC 103, value 0–84</td><td><b>Channel 10: factory kit 1–85</b>, at once</td></tr>
+      <tr><td>CC 126 · CC 127</td><td><b>Channel 10, 15, 16: slot · factory kit</b>, as 102 · 103</td></tr>
       <tr><td>CC 0, value 0–63</td><td>A track's channel (10 at ALL): slot kit, as the LXR</td></tr>
       <tr><td>GLOBAL 60 / 61</td><td>Remote channel 16, CC or note: the previous / next pattern</td></tr>
     </table>
@@ -577,7 +578,7 @@
     <table>
       <tr><th>Message on 10</th><th>KEYS (default)</th><th>PAT+KIT</th><th>ALL</th></tr>
       <tr><td>Program change 0–31</td><td>pattern</td><td>pattern</td><td>pattern</td></tr>
-      <tr><td>CC 102 · CC 103</td><td>slot · factory kit</td><td>slot · factory kit</td><td>the sound</td></tr>
+      <tr><td>CC 102 / 126 · 103 / 127</td><td>slot · factory kit</td><td>slot · factory kit</td><td>the sound</td></tr>
       <tr><td>Notes</td><td>selected track</td><td>–</td><td>selected track</td></tr>
       <tr><td>CC 1 mod wheel</td><td>MACRO 1</td><td>–</td><td>–</td></tr>
       <tr><td>CC 0 / 32 bank</td><td>–</td><td>–</td><td>CC 0: slot kit</td></tr>
