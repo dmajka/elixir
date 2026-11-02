@@ -385,3 +385,95 @@ EXPORT uint32_t web_now_ms(void) { return fm1_ms; }
 EXPORT uint32_t web_playing(void) { return sq.running; }
 EXPORT uint32_t web_sample_rate(void) { return FS; }
 EXPORT uint32_t web_cpu_q8(void) { return cpu_q8; }
+
+/* ------------------------------------------------ the phone page (mobile.html) --- */
+/* the four knobs' parameters as the screen shows them: per knob { on, value, min, max } (on 0: nothing to turn) */
+static int32_t web_kv[16];
+EXPORT int32_t *web_knob_vals(void)
+{
+    uint16_t pp[4];
+    uint32_t k;
+    page_params(pp);
+    for (k = 0; k < 4u; k++) {
+        uint32_t p = pp[k];
+        int on = p != VP_NONE && !vp_dead(p) && !(ui.mode == M_SOUND && par_unheard(ui.track, p));
+        web_kv[k * 4u] = on;
+        web_kv[k * 4u + 1u] = on ? (int32_t)vp_get(p) : 0;
+        web_kv[k * 4u + 2u] = on ? (int32_t)vp_min(p) : 0;
+        web_kv[k * 4u + 3u] = on ? (int32_t)vp_max(p) : 0;
+    }
+    return web_kv;
+}
+/* a slider's drag: n detents on KNOB k+1 as the panel's knob turns it, without the knob's speed-up (the page
+ * scales a drag to the parameter's range itself) */
+EXPORT void web_knob_turn(uint32_t k, int32_t n)
+{
+    uint8_t a = kset.accel;
+    if (k >= 4u || !n || ui_asking())
+        return;
+    kset.accel = 0;
+    knob_turn(k, n);
+    kset.accel = a;
+}
+EXPORT uint32_t web_bg(void) { return T_BG; }    /* the screen's background, RGB565 (the palette's) */
+
+/* a pattern to share: the playing pattern, the kit as it sounds (the edit buffer), its name and the tempo, as bytes
+ * the page packs into a text (a link). Only between pages of the same layout (KIT_LEN, the pattern's size) */
+#define WEB_SHARE_MAGIC 0x31585045u              /* "EPX1" */
+#define WEB_SHARE_HEAD 12u
+static uint8_t web_share[WEB_SHARE_HEAD + KIT_NAME_LEN + KIT_LEN + sizeof(pattern_t)];
+EXPORT uint8_t *web_share_buf(void) { return web_share; }
+EXPORT uint32_t web_share_size(void) { return sizeof web_share; }
+EXPORT uint32_t web_share_get(void)
+{
+    uint8_t *b = web_share, *k = b + WEB_SHARE_HEAD + KIT_NAME_LEN;
+    uint32_t i, slot = kit_loaded < NUM_KITS ? kit_loaded : 0u;
+    b[0] = (uint8_t)WEB_SHARE_MAGIC; b[1] = (uint8_t)(WEB_SHARE_MAGIC >> 8);
+    b[2] = (uint8_t)(WEB_SHARE_MAGIC >> 16); b[3] = (uint8_t)(WEB_SHARE_MAGIC >> 24);
+    b[4] = (uint8_t)KIT_LEN; b[5] = (uint8_t)(KIT_LEN >> 8);
+    b[6] = (uint8_t)sizeof(pattern_t); b[7] = (uint8_t)(sizeof(pattern_t) >> 8);
+    b[8] = par[PAR_BPM];
+    b[9] = b[10] = b[11] = 0;
+    memcpy(b + WEB_SHARE_HEAD, kit_names[slot], KIT_NAME_LEN);
+    for (i = 0; i < KIT_LEN; i++)
+        k[i] = par[kit_par(i)];
+    memcpy(k + KIT_LEN, &pat[sq.active], sizeof(pattern_t));
+    return sizeof web_share;
+}
+/* web_share_buf's n bytes into the playing pattern and the slot its kit came from (which loads); 0 done, 1 not a
+ * share, 2 another layout (another version) */
+EXPORT uint32_t web_share_put(uint32_t n)
+{
+    const uint8_t *b = web_share, *k = b + WEB_SHARE_HEAD + KIT_NAME_LEN;
+    uint8_t kit[KIT_LEN];
+    pattern_t *p = &pat[sq.active];
+    uint32_t i, slot = kit_loaded < 32u ? kit_loaded : 0u;
+    if (n < WEB_SHARE_HEAD || (b[0] | b[1] << 8 | (uint32_t)b[2] << 16 | (uint32_t)b[3] << 24) != WEB_SHARE_MAGIC)
+        return 1;
+    if (n != sizeof web_share || (b[4] | b[5] << 8) != KIT_LEN || (b[6] | b[7] << 8) != sizeof(pattern_t))
+        return 2;
+    memcpy(kit, k, KIT_LEN);
+    kit_sanitize(kit);
+    kit_put(slot, kit);
+    for (i = 0; i < KIT_NAME_LEN; i++) {
+        uint8_t c = b[WEB_SHARE_HEAD + i];
+        kit_names[slot][i] = (char)(c >= 32u && c < 127u ? c : ' ');
+    }
+    kit_load_ram(slot);
+    memcpy(p, k + KIT_LEN, sizeof(pattern_t));
+    p->kit = (uint8_t)slot;                      /* (its voices FREE: the kit is the whole sound) */
+    if (p->scale >= NSCALE)
+        p->scale = SC_CHROM;
+    if (p->groove > NGROOVE)
+        p->groove = 0;
+    p->sroot %= 12u;
+    for (i = 0; i < NTRACK; i++)
+        if (p->len[i] > NUM_STEPS)
+            p->len[i] = 16;
+    if (b[8] >= 20u)
+        par[PAR_BPM] = b[8];
+    pat_backup = *p;                             /* (as loaded: a pattern change doesn't drop it) */
+    sq.gsync = (1u << NTRACK) - 1u;
+    ui.force = 1;
+    return 0;
+}
