@@ -26,9 +26,11 @@ export function describe(dev) {
     return `${id.text}: Felucca is installed. Back up Felucca's data on its own page first, then install V15 ` +
       "(step 2) if you haven't done so before, or install Elixir (step 3).";
   if (id.version >= 900 && (fw === "wyrd" || fw === "grimoire")) {
-    const app = fw === "wyrd" ? "Wyrd" : "Grimoire";
-    return `${id.text}: ${app} is installed. Back up ${app}'s data first on its own library page: this Elixir ` +
-      `doesn't yet know ${app}'s saved data and can write over it. Then install Elixir (step 3).`;
+    if (fw === "wyrd")                               // (0.24.1: Elixir finds Wyrd's data and asks)
+      return `${id.text}: Wyrd is installed. Back up Wyrd's data first on its own library page, then install ` +
+        "Elixir (step 3). Elixir finds Wyrd's saved data when it starts and asks before erasing any of it.";
+    return `${id.text}: Grimoire is installed. Back up Grimoire's data first on its own library page: Elixir ` +
+      "can't yet tell Grimoire's saved data from its own and can write over it. Then install Elixir (step 3).";
   }
   if (id.version === 15) return `${id.text}: official V15. Ready for Elixir: go to step 3.`;
   if (id.version >= 900) return `${id.text}: an alternative firmware (Elixir, Felucca or another). Elixir: ` +

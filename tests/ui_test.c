@@ -7424,6 +7424,88 @@ static void phase_t7(void)
     }
     sq.ru_live = 0;
 }
+/* 0.24.1: Wyrd's data on the unit (a project, a library entry beside one of Elixir's kits, settings): asked at
+ * power-on, nothing written while kept, asked again next power-on; erased: only Wyrd's records go */
+static void phase_0241(void)
+{
+    uint32_t ph, pg, sec, w, i, wpg = 0xFFFFu, cp;
+    uint8_t used[PROJ_NPHYS] = {0}, kit[KIT_LEN], back[KIT_LEN];
+    kl_hdr_t h;
+    st_hdr_t a, b;
+    int ha, hb;
+    printf("0.24.1: another app's data\n");
+    p4_reset();
+    check(fx_found == 0 && !data_locked, "Elixir's own data: nothing asked");
+    check(proj_save(3, "MINE    ") == 0, "an Elixir project saved");
+    check(libkit_save(10, "MYKIT   ", 0) == 0 && kl_exists(KLK_KIT, 10), "an Elixir kit in the library");
+    check(kl_peek(KLK_KIT, 10, kit, KIT_LEN) >= 0, "its bytes read");
+    for (i = 0; i < PROJ_NLOG; i++)
+        if (pj.phys[i] >= 0)
+            used[pj.phys[i]] = 1;
+    for (ph = 0; ph < PROJ_NPHYS && used[ph]; ph++)
+        ;
+    check(ph < PROJ_NPHYS, "a free project slot for Wyrd's");
+    memset(nor + phys_base(ph), 0x5A, 4096);         /* Wyrd's project: "WYRD" and its bytes */
+    memcpy(nor + phys_base(ph), "WYRD", 4);
+    sec = (uint32_t)kl.at[KLK_KIT - 1u][10] / 16u;   /* Wyrd's kit, in the sector of Elixir's */
+    for (pg = sec * 16u; pg < sec * 16u + 16u && wpg == 0xFFFFu; pg++)
+        if (kl_is_erased(pg))
+            wpg = pg;
+    check(wpg != 0xFFFFu, "room for Wyrd's kit beside Elixir's");
+    memset(&h, 0, sizeof h);
+    h.magic = 0x5957u;
+    h.kind = 1;
+    h.slot = 10;
+    h.seq = 1;
+    memcpy(h.name, "WYRDKIT ", 8);
+    h.hcrc = st_crc32(&h, sizeof h - 4u);
+    memcpy(nor + kl_off(wpg), &h, sizeof h);
+    ha = st_head(OBJ_SETTINGS, 0, &a);               /* Wyrd's settings, in the copy Elixir's isn't in */
+    hb = st_head(OBJ_SETTINGS, 1, &b);
+    cp = ha ? 0u : hb ? 1u : (int32_t)(a.seq - b.seq) > 0 ? 1u : 0u;
+    memset(nor + st_sector(OBJ_SETTINGS, cp), 0xFF, 4096);
+    memcpy(nor + st_sector(OBJ_SETTINGS, cp), "WYST", 4);
+    persist_boot();
+    ui.dx_seen = 0;
+    run_ms(100);
+    check(fx_found == (FX_PROJ | FX_KITS | FX_SET) && fx_apps == 1u && data_locked, "power-on: Wyrd's data found, locked");
+    check(ui.dx_ask == 1u && !strcmp(fx_name(), "WYRD'S"), "the screen asks");
+    check(fx_kl(sec) != 0u, "kl_scan left Wyrd's kit (its sector not erased)");
+    shot("wyrd-data-ask");
+    w = web_flash_writes;
+    turn(EN_K1, 3);
+    press(B_ARP);
+    check(ui.dx_ask == 1u, "the keys and knobs wait");
+    press(B_OCTDN);
+    check(ui.dx_ask == 0u && data_locked && !strcmp(ui.msg, "KEPT: ELIXIR SAVES NOTHING"), "SHIFT (OCT-): kept");
+    check(proj_save(2, "NEW     ") == ST_LOCKED && libkit_save(11, "NEWKIT  ", 0) == ST_LOCKED, "saves refused");
+    settings_later();
+    par_set(PAR_COARSE1, 77);
+    run_ms(40000);                                   /* (an autosave's time) */
+    check(web_flash_writes == w, "kept: nothing written, not even the autosave or the settings");
+    check(!memcmp(nor + phys_base(ph), "WYRD", 4) && fx_kl(sec) && fx_set(cp), "kept: Wyrd's records as they were");
+    persist_boot();
+    ui.dx_seen = 0;
+    run_ms(100);
+    check(ui.dx_ask == 1u && data_locked, "asked again at the next power-on");
+    press(B_OCTUP);
+    check(ui.dx_ask == 2u, "COPY (OCT+) once: are you sure");
+    shot("wyrd-data-sure");
+    press(B_OCTUP);
+    run_ms(300);
+    check(ui.dx_ask == 0u && fx_found == 0u && !data_locked && !strcmp(ui.msg, "WYRD'S DATA ERASED"),
+          "COPY (OCT+) twice: Wyrd's data erased, unlocked");
+    check(fx_word(phys_base(ph)) == 0xFFFFFFFFu && !fx_kl(sec) && !fx_set(cp), "Wyrd's project, kit, settings gone");
+    check(proj_exists(3) && kl_exists(KLK_KIT, 10) && kl_peek(KLK_KIT, 10, back, KIT_LEN) >= 0 &&
+          !memcmp(kit, back, KIT_LEN), "Elixir's project and kit kept (the kit moved out of the shared sector)");
+    run_ms(3000);
+    check(proj_save(2, "NEW     ") == 0 && libkit_save(11, "NEWKIT  ", 0) == 0, "saves work again");
+    persist_boot();
+    ui.dx_seen = 0;
+    run_ms(100);
+    check(fx_found == 0u && ui.dx_ask == 0u && proj_exists(2) && kl_exists(KLK_KIT, 11), "the next power-on: nothing asked");
+}
+
 int main(int argc, char **argv)
 {
     uint32_t t;
@@ -7924,6 +8006,7 @@ int main(int argc, char **argv)
     phase_023t11();
     phase_024();
     phase_024g();
+    phase_0241();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;
 }

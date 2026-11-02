@@ -169,23 +169,10 @@ static int32_t kl_find(uint32_t np)
     return -1;
 }
 /* garbage collection: the sector with the most dead pages, its live entries into the spare, erased: 0, or -1 */
-static int kl_gc(void)
+static int kl_gc_sec(uint32_t best)                 /* sector best's live entries into the spare, best erased */
 {
-    uint8_t live[KL_PAGES / 8u];
-    uint32_t s, pg, best = 0xFF, most = 0, to = (uint32_t)kl.spare * 16u, k, sl;
-    kl_live(live);
-    for (s = 0; s < KL_NSEC; s++) {
-        uint32_t dead = 0;
-        if (s == kl.spare)
-            continue;
-        for (pg = s * 16u; pg < s * 16u + 16u; pg++)
-            dead += !kl_is_erased(pg) && !((live[pg >> 3] >> (pg & 7u)) & 1u);
-        if (dead > most) {
-            most = dead;
-            best = s;
-        }
-    }
-    if (best == 0xFFu)
+    uint32_t pg, to = (uint32_t)kl.spare * 16u, k, sl;
+    if (!kl.ok || best >= KL_NSEC || best == kl.spare)
         return -1;
     for (k = 0; k < 2u; k++)
         for (sl = 0; sl < 128u; sl++) {
@@ -212,6 +199,24 @@ static int kl_gc(void)
     kl.spare = (uint8_t)best;
     return 0;
 }
+static int kl_gc(void)                              /* the sector with the most dead pages, collected */
+{
+    uint8_t live[KL_PAGES / 8u];
+    uint32_t s, pg, best = 0xFF, most = 0;
+    kl_live(live);
+    for (s = 0; s < KL_NSEC; s++) {
+        uint32_t dead = 0;
+        if (s == kl.spare)
+            continue;
+        for (pg = s * 16u; pg < s * 16u + 16u; pg++)
+            dead += !kl_is_erased(pg) && !((live[pg >> 3] >> (pg & 7u)) & 1u);
+        if (dead > most) {
+            most = dead;
+            best = s;
+        }
+    }
+    return best == 0xFFu ? -1 : kl_gc_sec(best);
+}
 
 /* a slot's new contents (len 0: deleted): 0, -20 the library is full, else a flash error */
 static int kl_write(uint32_t kind, uint32_t slot, const char *name, const uint8_t *data, uint32_t len)
@@ -220,6 +225,8 @@ static int kl_write(uint32_t kind, uint32_t slot, const char *name, const uint8_
     int32_t pg;
     uint32_t i;
     int rc = 0;
+    if (data_locked)                                 /* (0.24.1: another app's data, kept: nothing claimed) */
+        return ST_LOCKED;
     if (!kl.ok || kind < 1u || kind > 2u || slot >= 128u || KL_HDR + len > 512u)
         return -1;
     flash_hush();

@@ -36,7 +36,7 @@ static void flash_hush(void)
         fm1_wdt_feed();
 }
 static void flash_unhush(void) { out_hush = 0; }
-static int st_erase(uint32_t off)
+static int st_erase_dev(uint32_t off)
 {
     uint32_t took, f;
     int rc;
@@ -49,7 +49,7 @@ static int st_erase(uint32_t off)
     irq_restore(f);                             /* flash of the whole panel. Dark rows: the panel just drops out; the tick lights */
     return rc;                                  /* the rows again at its next pass */
 }
-static int st_prog(uint32_t off, const void *src, uint32_t n)
+static int st_prog_dev(uint32_t off, const void *src, uint32_t n)
 {
     if (!FL_STORE_OK(off, n))                   /* only inside the storage areas */
         return -8;

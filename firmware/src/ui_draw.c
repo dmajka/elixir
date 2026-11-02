@@ -492,6 +492,34 @@ static void draw_clear(int32_t y0)
     cv_text_in(10, 90, 220, &AF_S, "let go of SHIFT to cancel", T_MID, T_SURF);
 }
 
+static void cat(char *b, const char *s, uint32_t n);
+/* 0.24.1: another app's data found at power-on (project.c fx_found): what, where to back it up, the answer */
+static void draw_dx_ask(int32_t y0)
+{
+    char b[40], t[32];
+    (void)y0;
+    b[0] = 0;
+    if (fx_found & FX_PROJ)
+        cat(b, "PROJECTS", sizeof b);
+    if (fx_found & FX_KITS)
+        cat(b, b[0] ? ", KITS" : "KITS", sizeof b);
+    if (fx_found & FX_SET)
+        cat(b, b[0] ? ", SETTINGS" : "SETTINGS", sizeof b);
+    put_str(t, fx_name(), sizeof t);
+    cat(t, " DATA IS HERE", sizeof t);
+    cv_rrect(6, 12, 228, 106, 6, T_SURF, T_BG);
+    cv_text_in(6, 17, 228, &AF_S, t, T_MID, T_SURF);
+    cv_text_in(6, 31, 228, &AF_S, b, T_TEXT, T_SURF);
+    if (ui.dx_ask >= 3u) {
+        cv_text_in(6, 58, 228, &AF_M, "ERASING", T_ACCENT, T_SURF);
+        return;
+    }
+    cv_text_in(6, 45, 228, &AF_S, fx_first() < FX_NAPP ? FX_APPS[fx_first()].backup : "", T_MID, T_SURF);
+    cv_text_in(6, 61, 228, &AF_M, ui.dx_ask == 2u ? "SURE? ERASE IT" : "ERASE IT FOR ELIXIR?", T_ACCENT, T_SURF);
+    cv_text_in(6, 85, 228, &AF_S, ui.dx_ask == 2u ? "COPY (OCT+) again: erase" : "COPY (OCT+) twice: erase", T_TEXT,
+               T_SURF);
+    cv_text_in(6, 99, 228, &AF_S, "SHIFT (OCT-): keep, save nothing", T_MID, T_SURF);
+}
 /* 0.11: Control All's dialog, after OCT+ is let go */
 static void draw_ca_ask(int32_t y0)
 {
@@ -1389,7 +1417,10 @@ static void draw_body(void)
 {
     uint32_t s;
     void (*fn)(int32_t) = 0;
-    if (ui.ca_ask) {                                 /* 0.11: Control All's dialog */
+    if (ui.dx_ask) {                                 /* 0.24.1: another app's data */
+        fn = draw_dx_ask;
+        s = sig_add(97, ui.dx_ask | (uint32_t)fx_found << 4 | (uint32_t)fx_apps << 8);
+    } else if (ui.ca_ask) {                          /* 0.11: Control All's dialog */
         fn = draw_ca_ask;
         s = 41;
     } else if (perf_spells() && !ui.clear_open && !ui.kb_open && !(ui.shift && ui.shift_used)) {   /* (32) */

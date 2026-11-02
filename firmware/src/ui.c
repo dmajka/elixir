@@ -88,6 +88,9 @@ static struct {
     uint8_t copy_src;                /* COPY: the source track + 1 / pattern + 1 */
     uint8_t ca, ca_loads;            /* 0.11: Control All under way (the kit as it was: ca_snap), kit_loads then */
     uint8_t ca_ask;                  /* .. OCT+ let go: its dialog (OCT+ reverts, OCT- keeps) */
+    uint8_t dx_ask, dx_seen;         /* 0.24.1: another app's data found (project.c fx_found): 1 asked, 2 COPY (OCT+)
+                                      * once, 3 erasing (dx_ms: when); dx_seen: asked this power-on */
+    uint32_t dx_ms;
     uint8_t clear_open, clear_sel;
     uint8_t last_all;
     uint8_t kb_open;                 /* the kit browser (0.9; 0.19: one list, kb_has) */
@@ -199,6 +202,14 @@ static void ui_message(const char *s)
     ui.msg_ms = fm1_ms;
     ui.msg_long = 0;
     ui.force = 1;
+}
+static int ui_asking(void) { return ui.ca_ask || ui.dx_ask; }   /* a dialog: the keys and knobs wait */
+static const char *fx_msg(const char *what)          /* 0.24.1: "WYRD'S DATA: NOT SAVED" */
+{
+    static char b[32];
+    put_str(b, fx_name(), sizeof b);
+    put_str(b + str_len(b), what, sizeof b - str_len(b));
+    return b;
 }
 
 /* the voice (0..5) of a track: the open hat is the hat voice */
@@ -1923,7 +1934,7 @@ static void io_ok(void)
                 else
                     ui.lib_kit = (uint8_t)s;
                 ui_message(rc == 0 ? (ui.io_type == IO_SOUND ? "SOUND SAVED" : "KIT SAVED TO LIBRARY")
-                           : rc == -20 ? "LIBRARY FULL" : "SAVE FAILED");
+                           : rc == -20 ? "LIBRARY FULL" : rc == ST_LOCKED ? fx_msg(" DATA: NOT SAVED") : "SAVE FAILED");
                 break;
             }
             kit_save_ram(s, ui.io_type == IO_MORPH);
@@ -1962,7 +1973,8 @@ static void io_ok(void)
                 settings_later();
                 ui_message("PROJECT SAVED");
             } else {
-                put_str(b, rc == -20 ? "PROJECT TOO BIG" : "SAVE FAILED", sizeof b);
+                put_str(b, rc == -20 ? "PROJECT TOO BIG" : rc == ST_LOCKED ? fx_msg(" DATA: NOT SAVED") : "SAVE FAILED",
+                        sizeof b);
                 ui_message(b);
             }
             break;
@@ -2541,6 +2553,22 @@ static void bar_copy(pattern_t *p, uint32_t t, uint32_t from, uint32_t to, int a
 /* ---------------------------------------------------------- buttons --- */
 static void button_down(uint32_t b)
 {
+    if (ui.dx_ask) {                                 /* 0.24.1: another app's data: SHIFT (OCT-) keeps, COPY (OCT+) twice
+                                                      * erases it */
+        if (b == B_OCTDN && ui.dx_ask < 3u) {
+            ui.dx_ask = 0;
+            ui.shift_used = 1;
+            ui_message("KEPT: ELIXIR SAVES NOTHING");
+            ui.msg_long = 1;
+        } else if (b == B_OCTUP && ui.dx_ask < 3u) {
+            ui.dx_ask++;
+            ui.dx_ms = fm1_ms;
+            ui.copy_used = 1;
+        }
+        ui.force = 1;
+        if (b != B_PLAY && b != B_REC)               /* (the transport still works; the rest waits) */
+            return;
+    }
     if (ui.ca_ask) {                                 /* 0.11: Control All's dialog: OCT+ reverts, OCT- keeps */
         if (b == B_OCTUP) {
             control_all_undo();
@@ -2835,6 +2863,25 @@ static void ui_input(void)
     int32_t n;
     glfo_morph();                                    /* (0.13: the global LFOs' morph) */
     glfo_macros();                                   /* (19c: .. and the macros) */
+    if (fx_found && !ui.dx_seen) {                   /* 0.24.1: another app's data: asked once a power-on */
+        ui.dx_seen = 1;
+        ui.dx_ask = 1;
+        ui.force = 1;
+    }
+    if (ui.dx_ask == 3u && fm1_ms - ui.dx_ms >= 100u) {   /* (ERASING drawn first) */
+        int rc;
+        char b[32];
+        put_str(b, fx_name(), sizeof b);
+        rc = fx_erase();
+        ui.dx_ask = 0;
+        ui.force = 1;
+        if (rc == 0) {
+            settings_later();
+            put_str(b + str_len(b), " DATA ERASED", sizeof b - str_len(b));
+        }
+        ui_message(rc ? "ERASE FAILED: SAVES NOTHING" : b);
+        ui.msg_long = 1;
+    }
     if ((ui.ca || ui.ca_ask) && kit_loads != ui.ca_loads) {   /* 0.11: a kit loaded: Control All ends (kept) */
         ui.ca = ui.ca_ask = 0;
         ui.force = 1;
@@ -2848,24 +2895,24 @@ static void ui_input(void)
     (void)fm1_input_note_edges();
     ui.keys = keys;
     for (k = 0; k < 16u; k++) {
-        if ((down & (1u << WHITE_KEY[k])) && !ui.ca_ask)
+        if ((down & (1u << WHITE_KEY[k])) && !ui_asking())
             white_down(k);
         if (up & (1u << WHITE_KEY[k]))
             white_up(k);
     }
     for (k = 0; k < 11u; k++)
-        if ((down & (1u << BLACK_KEY[k])) && !ui.ca_ask)
+        if ((down & (1u << BLACK_KEY[k])) && !ui_asking())
             black_down(k);
     if (ui.kkey < 27u && ((up >> ui.kkey) & 1u)) {   /* 19b: the key that played let go: a GATE voice too */
         if (ui.kplay)
             key_note_post(ui.track, ui.knote, 0, KF_REL);
         ui.kkey = 0xFF;
     }
-    if ((n = panel_enc(EN_ALGO)) != 0 && !ui.ca_ask) {
+    if ((n = panel_enc(EN_ALGO)) != 0 && !ui_asking()) {
         int32_t t = clamp32((int32_t)ui.track + n, 0, NTRACK - 1);
         track_select((uint32_t)t);
     }
-    if ((n = panel_enc(EN_SELECT)) != 0 && !ui.ca_ask) {
+    if ((n = panel_enc(EN_SELECT)) != 0 && !ui_asking()) {
         if (ui.clear_open) {
             ui.clear_sel = (uint8_t)clamp32((int32_t)ui.clear_sel + n, 0, NCLEAR - 1);
         } else if (ui.kb_open) {
@@ -2903,7 +2950,7 @@ static void ui_input(void)
         ui.msg_long = 1;
         pj.auto_err = 0;
     }
-    if ((n = panel_enc(EN_PRESET)) != 0 && !ui.ca_ask) {
+    if ((n = panel_enc(EN_PRESET)) != 0 && !ui_asking()) {
         if (ui.mode == M_SAVE || ui.mode == M_LOAD) {
             ui.io_slot = (uint8_t)clamp32((int32_t)ui.io_slot + n, 0, (int32_t)vp_max(VP_IO_SLOT));
         } else if ((ui.mode == M_SOUND || ui.mode == M_KEYS) && !ui.kb_open) {
@@ -2920,7 +2967,7 @@ static void ui_input(void)
         ui.force = 1;
     }
     for (k = 0; k < 4u; k++)
-        if ((n = panel_enc(EN_K1 + k)) != 0 && !ui.ca_ask)
+        if ((n = panel_enc(EN_K1 + k)) != 0 && !ui_asking())
             knob_turn(k, n);
     sp_service();                                    /* (32: the die's roll) */
     wd_service();                                    /* (40: the road) */
@@ -3117,7 +3164,7 @@ static void ui_leds(void)
         led_put(nb, panel.btn[B_OCTUP], wd_course());
         led_put(nb, panel.btn[B_OCTDN], wd.state != WS_IDLE);
     }
-    led_put(nb, panel.btn[B_OCTUP], ui.ca || ui.ca_ask || ui.clear_open || ui.kb_open || ui.sb_open || ui.copy_src || ((ui.mode == M_SAVE ||
+    led_put(nb, panel.btn[B_OCTUP], ui.ca || ui.ca_ask || ui.dx_ask || ui.clear_open || ui.kb_open || ui.sb_open || ui.copy_src || ((ui.mode == M_SAVE ||
                                                                                      ui.mode == M_LOAD) && !ui.copy));
     for (k = 0; k < NB; k++)
         if (k != B_PLAY)

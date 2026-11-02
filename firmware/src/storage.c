@@ -11,6 +11,7 @@
  *
  * Flash access goes through three hooks (also used by the host test):
  *   st_read(off, dst, n)   st_erase(off)   st_prog(off, src, n)
+ * (st_erase, st_prog: the device's st_erase_dev, st_prog_dev, unless the flash is locked, below)
  */
 #define ST_MAGIC 0x4C54454Bu                   /* "KETL" (Kettle's, kept) */
 #define ST_SECTOR 4096u
@@ -30,8 +31,14 @@ typedef struct {
 _Static_assert(sizeof(st_hdr_t) == 32u, "storage commit record layout");
 
 static int st_read(uint32_t off, void *dst, uint32_t n);
-static int st_erase(uint32_t off);
-static int st_prog(uint32_t off, const void *src, uint32_t n);
+static int st_erase_dev(uint32_t off);
+static int st_prog_dev(uint32_t off, const void *src, uint32_t n);
+/* 0.24.1: another app's data found at power-on (project.c fx_scan: Wyrd's) locks the flash until the screen is
+ * answered (ui.c dx_ask): every erase and write returns ST_LOCKED, so nothing of that app's is overwritten */
+#define ST_LOCKED (-30)
+static uint8_t data_locked;
+static int st_erase(uint32_t off) { return data_locked ? ST_LOCKED : st_erase_dev(off); }
+static int st_prog(uint32_t off, const void *src, uint32_t n) { return data_locked ? ST_LOCKED : st_prog_dev(off, src, n); }
 
 static uint32_t st_crc32_add(uint32_t c, const void *p, uint32_t n)   /* zlib CRC-32, 4 bits per step; running:
                                                                          * from 0xFFFFFFFF, the CRC is ~c */

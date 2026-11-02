@@ -148,7 +148,7 @@ static int st_read(uint32_t off, void *dst, uint32_t n)
     memcpy(dst, nor + off, n);
     return 0;
 }
-static int st_erase(uint32_t off)
+static int st_erase_dev(uint32_t off)
 {
     if (off >= sizeof nor || 4096u > sizeof nor - off)
         return -8;
@@ -156,7 +156,7 @@ static int st_erase(uint32_t off)
     web_flash_writes++;
     return 0;
 }
-static int st_prog(uint32_t off, const void *src, uint32_t n)       /* NOR: a write only clears bits */
+static int st_prog_dev(uint32_t off, const void *src, uint32_t n)   /* NOR: a write only clears bits */
 {
     const uint8_t *s = src;
     uint32_t i;

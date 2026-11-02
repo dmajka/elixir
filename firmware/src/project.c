@@ -744,6 +744,8 @@ static int proj_write(uint32_t l, const char *name)
     uint32_t ph, l2, s;
     proj_hdr_t h;
     int used[PROJ_NPHYS] = {0}, target = -1;
+    if (data_locked)                                /* (0.24.1: another app's data, kept) */
+        return ST_LOCKED;
     if (!flash_ok || l >= PROJ_NLOG || proj_lock)
         return -1;
     for (l2 = 0; l2 < PROJ_NLOG; l2++)
@@ -866,7 +868,7 @@ static uint32_t session_sig(void)                   /* FNV-1a over what a projec
 static uint8_t autosave_on = 1;
 static void autosave_poll(void)
 {
-    if (!flash_ok || !autosave_on || proj_lock)
+    if (!flash_ok || !autosave_on || proj_lock || data_locked)
         return;
     if (sq.running) {
         pj.idle_since = fm1_ms;
@@ -934,11 +936,131 @@ static void settings_later(void)
 }
 static void settings_poll(void)                     /* queued: written stopped, a second after the last change */
 {
-    if (!settings_dirty || !flash_ok || sq.running || fm1_ms - settings_ms < 1000u)
+    if (!settings_dirty || !flash_ok || data_locked || sq.running || fm1_ms - settings_ms < 1000u)
         return;
     settings_dirty = 0;
     kset.autosave = autosave_on;
     st_save(OBJ_SETTINGS, &kset, sizeof kset);
+}
+
+/* ------------------------------------------- another app's data (0.24.1) --- */
+/* Elixir, Wyrd (and Grimoire) use the same flash areas: the project slots, the library (KL_BASE) and the settings
+ * sectors. Each reads only its own marks, and treats the others' records as empty room: a save would overwrite them
+ * (a project slot taken as free, a library sector with nothing of Elixir's live erased at kl_scan or by the GC, the
+ * settings written over). So at power-on Elixir looks for the others' marks (FX_APPS). Any found locks the flash
+ * (storage.c data_locked) and the screen asks (ui.c dx_ask): SHIFT (OCT-) keeps it all and Elixir saves nothing
+ * until the next power-on (asked again then); COPY (OCT+) twice erases only the other app's records: its project
+ * slots and settings copies, and in the library its entries (a sector shared with Elixir's kits is collected, the
+ * kits kept). Kettle's records are Elixir's own (the same marks). */
+typedef struct {
+    const char *name, *backup;                       /* (on the screen: "WYRD'S DATA IS HERE", where to back it up) */
+    uint32_t proj, set;                              /* a project slot's first word; a settings copy's commit record */
+    uint16_t kl;                                     /* a library entry's (its header CRC good) */
+} fx_app_t;
+static const fx_app_t FX_APPS[] = {
+    {"WYRD", "back it up first: Wyrd's library page", 0x44525957u, 0x54535957u, 0x5957u},   /* "WYRD", "WYST", "WY" */
+    /* Grimoire: one line here once it has marks of its own (its G0.6); until then it writes Elixir's */
+};
+#define FX_NAPP (sizeof FX_APPS / sizeof FX_APPS[0])
+enum { FX_PROJ = 1, FX_KITS = 2, FX_SET = 4 };
+static uint8_t fx_found, fx_apps;                    /* FX_* found at power-on; the apps (bit i: FX_APPS[i]) */
+static uint32_t fx_word(uint32_t off)
+{
+    uint32_t w = 0xFFFFFFFFu;
+    (void)st_read(off, &w, 4);
+    return w;
+}
+static uint32_t fx_proj(uint32_t ph)                 /* the apps whose project is in slot ph (bits) */
+{
+    uint32_t w = fx_word(phys_base(ph)), i, m = 0;
+    for (i = 0; i < FX_NAPP; i++)
+        m |= (uint32_t)(w == FX_APPS[i].proj) << i;
+    return m;
+}
+static uint32_t fx_set(uint32_t copy)
+{
+    uint32_t w = fx_word(st_sector(OBJ_SETTINGS, copy)), i, m = 0;
+    for (i = 0; i < FX_NAPP; i++)
+        m |= (uint32_t)(w == FX_APPS[i].set) << i;
+    return m;
+}
+static uint32_t fx_kl(uint32_t sec)                  /* the apps with a library entry in sector sec */
+{
+    uint32_t pg, i, m = 0;
+    kl_hdr_t h;
+    for (pg = sec * 16u; pg < sec * 16u + 16u; pg++)
+        if (st_read(kl_off(pg), &h, sizeof h) == 0 && h.hcrc == st_crc32(&h, sizeof h - 4u))
+            for (i = 0; i < FX_NAPP; i++)
+                m |= (uint32_t)(h.magic == FX_APPS[i].kl) << i;
+    return m;
+}
+static uint32_t fx_scan(void)
+{
+    uint32_t i, a;
+    fx_found = fx_apps = 0;
+    for (i = 0; i < PROJ_NPHYS; i++)
+        if ((a = fx_proj(i)) != 0) {
+            fx_found |= FX_PROJ;
+            fx_apps |= (uint8_t)a;
+        }
+    for (i = 0; i < KL_NSEC; i++)
+        if ((a = fx_kl(i)) != 0) {
+            fx_found |= FX_KITS;
+            fx_apps |= (uint8_t)a;
+        }
+    for (i = 0; i < 2u; i++)
+        if ((a = fx_set(i)) != 0) {
+            fx_found |= FX_SET;
+            fx_apps |= (uint8_t)a;
+        }
+    return fx_found;
+}
+static uint32_t fx_first(void)                      /* the first app found (FX_NAPP: none) */
+{
+    uint32_t i;
+    for (i = 0; i < FX_NAPP && !((fx_apps >> i) & 1u); i++)
+        ;
+    return i;
+}
+static const char *fx_name(void)                     /* "WYRD'S" (the first found), for the screen and messages */
+{
+    static char b[16];
+    uint32_t i = fx_first();
+    put_str(b, i < FX_NAPP ? FX_APPS[i].name : "ANOTHER APP", sizeof b - 3u);
+    put_str(b + str_len(b), "'S", 3);
+    return b;
+}
+static int fx_erase(void)                            /* the other apps' records erased; then Elixir's own scanned */
+{
+    uint32_t i, k;
+    int rc = 0;
+    data_locked = 0;
+    flash_hush();
+    for (i = 0; i < PROJ_NPHYS && !rc; i++)
+        if (fx_proj(i))
+            for (k = PROJ_SLOT; k && !rc; k -= ST_SECTOR)   /* (the header's sector last: torn, the rest is found again) */
+                rc = st_erase(phys_base(i) + k - ST_SECTOR);
+    for (i = 0; i < 2u && !rc; i++)
+        if (fx_set(i))
+            rc = st_erase(st_sector(OBJ_SETTINGS, i));
+    kl_scan();                                       /* (Elixir's entries, and a spare sector) */
+    for (i = 0; i < KL_NSEC && !rc; i++)
+        if (fx_kl(i)) {
+            uint8_t live[KL_PAGES / 8u];
+            uint32_t pg, n = 0;
+            kl_live(live);
+            for (pg = i * 16u; pg < i * 16u + 16u; pg++)
+                n += (live[pg >> 3] >> (pg & 7u)) & 1u;
+            rc = n && kl.ok ? kl_gc_sec(i) : st_erase(KL_BASE + i * ST_SECTOR);   /* (Elixir's kits there: moved) */
+            kl_scan();
+        }
+    flash_unhush();
+    if (!rc && fx_scan())
+        rc = -7;
+    data_locked = rc != 0;
+    proj_scan();
+    kl_scan();
+    return rc;
 }
 
 static void persist_boot(void)                      /* power-on: the flash, the settings, the projects, the session */
@@ -966,6 +1088,7 @@ static void persist_boot(void)                      /* power-on: the flash, the 
     remote_ch = remote_of(kset.remote, 15u);
     remote_gch = remote_of(kset.rglobal, 16u);
     midi_gtakes = kset.gtakes;
+    data_locked = fx_scan() != 0;                    /* (0.24.1: before kl_scan, which may erase a sector) */
     proj_scan();
     kl_scan();
 }
