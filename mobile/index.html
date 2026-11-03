@@ -505,6 +505,7 @@ async function switchOn() {
     await ac.resume();
     document.getElementById("start").hidden = true;
     send({ type: "visible", on: !document.hidden });
+    send({ type: "surf", c: 0x18c3 });              // (0.25: the screen's cards and beat columns the keys' grey, #1a1a1d)
     keepAwake();
     packsOnce();
     loadLinked();
@@ -538,9 +539,8 @@ const lib = new Library({
 const $ = (id) => document.getElementById(id), say = (s) => { $("kstatus").textContent = s; };
 // 0.19: Hrtl's kit packs into the library's empty slots, once in this browser (as the emulator page; the same flag)
 async function packsOnce() {
-  const KEY = "elixir-emu-packs";
-  try { if (localStorage.getItem(KEY)) return; } catch { return; }
-  try {
+  const KEY = "elixir-emu-packs";                 // (0.25: every start: addPacks skips the kits already there, so
+  try {                                          //  a library that lost them, or a phone that never got them, has them)
     for (const p of KIT_PACKS) await addPacks(lib, await fetchPack(BASE, p));
     try { localStorage.setItem(KEY, "1"); } catch {}
   } catch (e) { console.warn("Elixir: the kit packs:", e.message); }

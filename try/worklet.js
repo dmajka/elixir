@@ -93,6 +93,7 @@ if (typeof registerProcessor === "function") {
       else if (m.type === "enc") ex.web_enc(m.role, m.n | 0);
       else if (m.type === "knob" && ex.web_knob_turn) ex.web_knob_turn(m.k | 0, m.n | 0);   // the phone page's sliders
       else if (m.type === "master") ex.web_master(m.value | 0);
+      else if (m.type === "surf" && ex.web_set_surf) ex.web_set_surf(m.c | 0);   // the phone page: its keys' grey on the screen
       else if (m.type === "midi") ex.web_midi(m.data[0] | 0, m.data[1] | 0, m.data[2] | 0);
       else if (m.type === "visible") this.period = m.on ? 1 / 30 : 1 / 4;
       else if (m.type === "lib") {                    // 0.7: a library message (library.c), answered at once
