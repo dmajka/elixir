@@ -640,7 +640,48 @@ static void draw_trp(int32_t y0)
     cv_text(6, 112, &AF_S, sq.trdue ? (sq.trwhen == 2u ? "ON THE NEXT BAR" : "ON THE NEXT BEAT")
                                     : "BLACK: TRACKS  WHITE: DEGREES", sq.trdue ? T_ACCENT : T_MID);
 }
+/* 0.25.2: a global LFO's DEST turned: its full name over the page a while, as MODEL shows a model */
+#define DEST_POP_MS 3000u
+static int dest_pop(void)
+{
+    int32_t g = glfo_page();
+    return g >= 0 && ui.dest_ms && fm1_ms - ui.dest_ms < DEST_POP_MS && ui.dest_p == VP_GL + (uint32_t)g * NGLSET;
+}
+static void draw_dest_pop(void)
+{
+    uint32_t n = (uint32_t)glfo_page(), d = gls[n % NGLFO].dest < NGD ? gls[n % NGLFO].dest : GD_OFF, i;
+    char b[40];
+    cv_rrect(4, 4, 232, 76, 6, T_THEME, T_BG);
+    cv_rrect(6, 6, 228, 72, 5, T_SURF, T_THEME);
+    put_str(b, "GLOBAL LFO ", sizeof b);
+    put_int(b + str_len(b), (int32_t)n + 1);
+    put_str(b + str_len(b), d == GD_OFF ? " DEST" : " DEST: ", sizeof b - str_len(b));
+    put_str(b + str_len(b), GD_FULL[d][0], sizeof b - str_len(b));
+    cv_text_fit(14, 10, &AF_S, b, T_MID, T_SURF, 212);
+    cv_text_fit(14, 28, &AF_M, GD_FULL[d][1], d == GD_OFF ? T_DIM : T_THEME, T_SURF, 212);
+    if (d >= GD_MACRO1 && d < GD_MACRO1 + NMACRO) {  /* (a macro: what it moves) */
+        uint32_t q = pfs.m[d - GD_MACRO1].par;
+        if (q)
+            mod_target_name(b, lock_idx_of(q), 1, sizeof b);
+        else
+            put_str(b, "No target (MACRO SETUP)", sizeof b);
+        cv_text_fit(14, 52, &AF_S, b, T_TEXT, T_SURF, 212);
+    }
+    for (i = 0; i < NGD && GD_ORDER[i] != d; i++)    /* (where it is in the list) */
+        ;
+    put_int(b, (int32_t)i + 1);
+    put_str(b + str_len(b), "/", sizeof b - str_len(b));
+    put_int(b + str_len(b), (int32_t)NGD);
+    cv_text_r(226, 10, &AF_S, b, T_DIM, T_SURF);
+}
+static void draw_perf_page(int32_t y0);
 static void draw_perf(int32_t y0)
+{
+    draw_perf_page(y0);
+    if (dest_pop())
+        draw_dest_pop();
+}
+static void draw_perf_page(int32_t y0)
 {
     static const char *const REP[4] = {"1/4", "1/8", "1/16", "1/32"};
     uint32_t i;
@@ -1464,7 +1505,8 @@ static void draw_body(void)
         if (glfo_page() >= 0)                        /* (0.13: the LFOs' bars, which page) */
             s = sig_add(sig_add(s, (uint32_t)gl.out[0] >> 11 | (uint32_t)gl.out[1] >> 11 << 8 |
                                        (uint32_t)gl.out[2] >> 11 << 16 | ui.page << 24),
-                        (uint32_t)gls[0].dest | (uint32_t)gls[1].dest << 8 | (uint32_t)gls[2].dest << 16);
+                        (uint32_t)gls[0].dest | (uint32_t)gls[1].dest << 8 | (uint32_t)gls[2].dest << 16 |
+                            (uint32_t)dest_pop() << 24);   /* (0.25.2: DEST's name over it) */
         if (perf_dens())                             /* (19d: the tracks left out, DENSITY in use; 31: COMMIT) */
             s = sig_add(s, pfs.dex | (uint32_t)(uint8_t)sq.dens << 8 | 1u << 16 | (uint32_t)(pfs.dens != 0) << 17 |
                                (uint32_t)dundo << 18);
@@ -1788,6 +1830,10 @@ static void card_name(char *b, uint32_t n, uint32_t p)
         uint32_t v = p >= PAR_VOL1 && p <= PAR_VOL6 ? p - PAR_VOL1 : p <= PAR_PAN3 ? p - PAR_PAN1 : p - PAR_PAN4 + 3u;
         put_str(b, v == 5u ? "HH" : VOICE_SHORT[v], n);
         put_str(b + 2, p >= PAR_VOL1 && p <= PAR_VOL6 ? " vol" : " pan", n - 2);
+        return;
+    }
+    if (p >= PAR_TARGET_LFO1 && p <= PAR_TARGET_LFO6) {   /* (0.25.2: as LFO 2's and the global LFOs': the LXR's */
+        put_str(b, "Dest", n);                        /* .. DstParam) */
         return;
     }
     if (p == PAR_FX_DRY_WET) {

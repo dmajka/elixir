@@ -1969,7 +1969,20 @@ static void phase14(void)
     check(pp[0] == GLV(0, 0) && pp[3] == GLV(0, 3) && !strcmp(b, "GLOBAL LFO 1 (1/2)") && !perf_bank2(),
           "PERF: GLOBAL LFO 1's page (DEST DEPTH SPEED WAVE), the first bank's keys");
     turn(EN_K1, -20);
+    check(gls[0].dest == GD_OFF && dest_pop(), "GLOBAL LFO: DEST down to OFF, its name over the page (0.25.2)");
     turn(EN_K1, 1);
+    check(gls[0].dest == GD_DENSITY, "GLOBAL LFO: DEST up from OFF: the SEQUENCER's first by name (0.25.2)");
+    {
+        uint32_t i, ok = 1;
+        for (i = 1; i < NGD; i++)                    /* (by group in the signal's order, each by name) */
+            ok &= GD_ORDER[i] != GD_OFF && (str_eq(GD_FULL[GD_ORDER[i]][0], GD_FULL[GD_ORDER[i - 1u]][0]) ?
+                  tgt_before(0, GD_FULL[GD_ORDER[i - 1u]][1], 0, GD_FULL[GD_ORDER[i]][1]) : 1);
+        for (i = 0; i < NGD; i++)
+            ok &= gd_turn(GD_ORDER[i], 0) == GD_ORDER[i];
+        check(ok && gd_turn(GD_ORDER[NGD - 1u], 1) == GD_ORDER[NGD - 1u], "GLOBAL LFO DEST: every one once, by name");
+    }
+    turn(EN_K1, 6);
+    shot("global-lfo-dest");
     turn(EN_K2, 10);
     check(gls[0].dest == GD_MORPH && gls[0].depth == 127, "GLOBAL LFO: DEST and DEPTH by the knobs");
     turn(EN_K2, -10);
@@ -1982,6 +1995,8 @@ static void phase14(void)
     gl.l[0].run = 0;
     press(B_OCTUP);
     check(gl.l[0].run && !strcmp(ui.msg, "LFO 1 TRIGGERED") && !ui.copy, "OCT+ on its page: the LFO again");
+    run_ms(DEST_POP_MS);
+    check(!dest_pop(), "GLOBAL LFO: DEST's name gone after a while");
     shot("global-lfo");
     {
         int rc;
@@ -4831,22 +4846,53 @@ static void phase25a(void)
     }
     page_params(pp);
     target_range(PAR_TARGET_LFO1, &lo, &hi);
-    par_set(PAR_TARGET_LFO1, hi);
-    run_ms(20);
-    turn(EN_K1 + kk, 1);
-    check(par[PAR_TARGET_LFO1] == NUM_MOD_TARGETS && lfo_mod[0].dest == PAR_FX_SEND1, "K past D1's last: D1's FX send");
-    par_format(b, PAR_TARGET_LFO1, par[PAR_TARGET_LFO1], sizeof b);
+    card_name(b, sizeof b, PAR_TARGET_LFO1);
+    check(!strcmp(b, "Dest"), "LFO 1's DEST card: Dest (0.25.2: was DstParam)");
+    {                                                /* 0.25.2: the knob's order: by group as EDIT's pages, by name */
+        uint8_t l[NTGT_LIST], seen[256] = {0};
+        char na[32], nb[32];
+        uint32_t n = tgt_list(PAR_TARGET_LFO1, l), i, ok = l[0] == 0u, ga, gb;
+        for (i = 0; i < n; i++)
+            ok &= !seen[l[i]]++ && (!l[i] || (l[i] >= lo && l[i] <= hi) || (l[i] >= NUM_MOD_TARGETS && l[i] < NUM_TARGETS_X));
+        check(ok && n == 1u + (hi - lo + 1u) + NXT, "D1's DEST list: OFF, then each of D1's targets once");
+        for (ok = 1, i = 2; i < n; i++) {
+            ga = tgt_full(na, sizeof na, 0, l[i - 1u]);
+            gb = tgt_full(nb, sizeof nb, 0, l[i]);
+            ok &= ga < gb || (ga == gb && !tgt_before(gb, nb, ga, na));
+        }
+        check(ok, "D1's DEST list: by group, each by name");
+        ga = tgt_full(na, sizeof na, 0, 22);         /* (the LXR's D1 filter cutoff, Frequncy) */
+        check(!strcmp(na, "Frequency") && !strcmp(tgt_group_name(ga), "FILTER"), "DEST's full name: FILTER Frequency");
+        ga = tgt_full(na, sizeof na, 0, 13);         /* (the velocity's Amount) */
+        check(!strcmp(na, "Velocity amount") && !strcmp(tgt_group_name(ga), "MOD EG / VELO"),
+              "DEST's full name: MOD EG / VELO Velocity amount");
+        ga = tgt_full(na, sizeof na, 0, NUM_MOD_TARGETS + 1u);
+        check(!strcmp(na, "Reverb send") && ga == TG_MIX, "DEST's full name: MIX & SENDS Reverb send");
+        for (i = 0; i < n && l[i] != 22u; i++)
+            ;
+        for (ga = 0; ga < n && l[ga] != 7u; ga++)    /* (AMP EG Decay) */
+            ;
+        for (gb = 0; gb < n && l[gb] != NUM_MOD_TARGETS + 1u; gb++)
+            ;
+        check(i < ga && ga < gb && gb < n, "DEST: FILTER before AMP EG, the sends after the pages");
+        par_set(PAR_TARGET_LFO1, 0);
+        run_ms(20);
+        turn(EN_K1 + kk, -1);
+        check(par[PAR_TARGET_LFO1] == 0u, "K below OFF: OFF");
+        turn(EN_K1 + kk, 1);
+        check(par[PAR_TARGET_LFO1] == l[1], "K up from OFF: the list's first");
+        turn(EN_K1 + kk, 3);
+        check(par[PAR_TARGET_LFO1] == l[4], "K: the list in its order");
+        turn(EN_K1 + kk, 100);
+        check(par[PAR_TARGET_LFO1] == l[n - 1u], "K to the last, no further");
+        turn(EN_K1 + kk, -1);
+        check(par[PAR_TARGET_LFO1] == l[n - 2u], "K back one");
+        par_set(PAR_TARGET_LFO1, 22);
+        run_ms(20);
+        shot("lfo-dest-filter");
+    }
+    par_format(b, PAR_TARGET_LFO1, NUM_MOD_TARGETS, sizeof b);
     check(!strcmp(b, "FX"), "its name: FX");
-    turn(EN_K1 + kk, 30);
-    check(par[PAR_TARGET_LFO1] == NUM_TARGETS_X - 1u, "K to the last, no further");
-    turn(EN_K1 + kk, -(int32_t)NXT);
-    check(par[PAR_TARGET_LFO1] == hi, "K back: D1's last LXR target");
-    par_set(PAR_TARGET_LFO1, lo);
-    run_ms(20);
-    turn(EN_K1 + kk, -1);
-    check(par[PAR_TARGET_LFO1] == 0u, "K below D1's first: OFF");
-    turn(EN_K1 + kk, 1);
-    check(par[PAR_TARGET_LFO1] == lo, "up from OFF: D1's first");
     par_set(PAR_TARGET_LFO1, NUM_MOD_TARGETS + 1u);  /* REV send */
     run_ms(20);
     shot("lfo-target-rev");
@@ -4939,15 +4985,24 @@ static void phase25b(void)
     run_ms(40);
     target_range(PAR_L2TGT1 + 1, &lo, &hi);
     check(lo == MOD_TARGET_VOICE[1][0] && hi == MOD_TARGET_VOICE[1][1], "its targets: D2's own");
-    par_set(PAR_L2TGT1 + 1, 0);
-    run_ms(20);
-    turn(EN_K4, 1);
-    check(par[PAR_L2TGT1 + 1] == lo, "K4 up from OFF: D2's first target");
-    par_set(PAR_L2TGT1 + 1, hi);
-    run_ms(20);
-    turn(EN_K4, 1);
-    run_ms(20);
-    check(par[PAR_L2TGT1 + 1] == NUM_MOD_TARGETS && lfo2_mod[1].dest == PAR_FX_SEND1 + 1u, "past D2's last: D2's FX send");
+    card_name(b, sizeof b, PAR_L2TGT1 + 1);
+    check(!strcmp(b, "Dest"), "LFO 2's DEST card: Dest (0.25.2: was Target)");
+    {
+        uint8_t l[NTGT_LIST];
+        char nm[32];
+        tgt_list(PAR_L2TGT1 + 1, l);
+        par_set(PAR_L2TGT1 + 1, 0);
+        run_ms(20);
+        turn(EN_K4, 1);
+        check(par[PAR_L2TGT1 + 1] == l[1], "K4 up from OFF: D2's first target");
+        par_set(PAR_L2TGT1 + 1, NUM_MOD_TARGETS);
+        run_ms(20);
+        check(lfo2_mod[1].dest == PAR_FX_SEND1 + 1u, "D2's FX send");
+        turn(EN_K4, 1);
+        run_ms(20);
+        tgt_full(nm, sizeof nm, 1, par[PAR_L2TGT1 + 1]);
+        check(!strcmp(nm, "Pan"), "K4 on from D2's FX send: Pan (MIX & SENDS by name)");
+    }
     par_format(b, PAR_L2TGT1 + 1, NUM_MOD_TARGETS + 2u, sizeof b);
     check(!strcmp(b, "Tilt"), "its name: Tilt");
     /* LFO 2 sweeps D2's tilt */

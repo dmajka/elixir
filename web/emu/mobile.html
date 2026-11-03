@@ -39,6 +39,7 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
 .bar { display: flex; align-items: center; gap: 10px; min-height: 28px; flex: none; }
 .bar b { font-size: 14px; letter-spacing: .06em; }
 .bar small { color: var(--mid); font-weight: 500; }
+.bar .home { color: inherit; text-decoration: none; }
 .bar .sp { flex: 1; }
 /* 33: the volume, a slider in the bar (the master level, 0..1023) */
 .bar .vol { display: flex; align-items: center; gap: 6px; color: var(--mid); font-size: 10px; letter-spacing: .04em; }
@@ -154,7 +155,7 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
 </head>
 <body>
 <div class="app" id="app">
-  <div class="bar"><b>ELIXIR</b><small>@VERSION@</small><span class="sp"></span>
+  <div class="bar"><a class="home" href="@SITE@" title="Elixir's home page"><b>ELIXIR</b></a><small>@VERSION@</small><span class="sp"></span>
     <label class="vol">VOL<input id="vol" type="range" min="0" max="1023" step="1" aria-label="Volume"></label>
     <button id="sharebtn" type="button">Share</button>
     <button id="kitsbtn" type="button">Kits</button></div>
@@ -209,7 +210,7 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
   <div class="acts"><button id="sload" class="go" type="button">Load</button><button id="spaste" type="button">Paste</button>
     <button id="sclose" type="button">Close</button></div>
   <p id="sstatus"></p>
-  <p class="fine">Only this page (Elixir mobile) makes and reads these; a link from another version of Elixir may not load.</p>
+  <p class="fine">Only this page (Elixir mobile) makes and reads these; a link from another version of Elixir may not load. <a href="@SITE@">Return to Elixir</a></p>
 </div>
 
 <script type="module">

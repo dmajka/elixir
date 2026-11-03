@@ -149,7 +149,7 @@ static const struct { uint16_t first; uint8_t n; uint16_t dtype; const char *nm[
     {PAR_MC_MIX, 1, DTYPE_0B127, {"Mix", "Comp", "cmx", "C mix"}},
     {PAR_L2RATE1, 6, DTYPE_0B127, {"Rate", "LFO 2", "l2r", "L2 rate"}},           /* (25b) */
     {PAR_L2AMT1, 6, DTYPE_0B127, {"Amount", "LFO 2", "l2a", "L2 amt"}},
-    {PAR_L2TGT1, 6, DTYPE_TARGET_SELECTION_LFO, {"Target", "LFO 2", "l2t", "L2 targt"}},
+    {PAR_L2TGT1, 6, DTYPE_TARGET_SELECTION_LFO, {"Dest", "LFO 2", "l2t", "L2 dest"}},
     {PAR_L2WAVE1, 6, DTYPE_MENU | MENU_LFO_WAVES << 8, {"Wave", "LFO 2", "l2w", "L2 wave"}},
     {PAR_L2MODE1, 6, DTYPE_MENU | MENU_LFOMODE << 8, {"Mode", "LFO 2", "l2m", "L2 mode"}},
     {PAR_L2SYNC1, 6, DTYPE_MENU | MENU_SYNC_RATES << 8, {"Sync", "LFO 2", "l2s", "L2 sync"}},

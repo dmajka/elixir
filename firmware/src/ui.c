@@ -115,6 +115,8 @@ static struct {
     uint8_t hot;                     /* the card last turned (1..4), 0 none */
     uint32_t hot_ms;
     uint32_t knob_ms[4];
+    uint32_t dest_ms;                /* 0.25.2: a global LFO's DEST last turned (its name shown a while: dest_p) */
+    uint16_t dest_p;
     uint32_t trig_seen[NTRACK];
     uint32_t flash_ms[NTRACK];
     uint8_t mpage[NMODE];            /* 0.13: CONFIG BUTTONS (kset.pmem): each mode's page when it was left, */
@@ -835,18 +837,167 @@ static int is_target(uint32_t p)
     return (p >= PAR_VEL_DEST_1 && p <= PAR_VEL_DEST_6) || (p >= PAR_TARGET_LFO1 && p <= PAR_TARGET_LFO6) ||
            (p >= PAR_L2TGT1 && p < PAR_L2TGT1 + 6u);
 }
+static uint32_t target_voice(uint32_t p)            /* (the voice whose targets these are) */
+{
+    uint32_t lo, hi, v;
+    target_range(p, &lo, &hi);
+    for (v = 0; v < 5u && MOD_TARGET_VOICE[v][0] != lo; v++)
+        ;
+    return v;
+}
+
+/* 0.25.2: the targets by group, as EDIT shows the pages (the signal path: SECT_ORDER), each group by name; then the
+ * ones on no sound page: the mix and sends, the FX bus, the reverb, the master. Their full names (the knob's are the
+ * LXR's 8 letters) for the LFO page and the knob's order */
+enum { TG_MIX = NSORD, TG_FXBUS, TG_REVERB, TG_MASTER, TG_NONE };
+static const char *const TG_NAME[TG_NONE - NSORD] = {"MIX & SENDS", "FX BUS", "REVERB", "MASTER"};
+static void card_name(char *b, uint32_t n, uint32_t p);
+static uint32_t tgt_group(uint32_t v, uint32_t p)    /* (SECT_ORDER's rank, or TG_*) */
+{
+    uint32_t i, t, h, k;
+    for (i = 0; i < NSORD; i++) {
+        uint32_t s = SECT_ORDER[i];
+        for (t = v; t <= (v == 5u ? 6u : v); t++)   /* (the hat: the open hat's page too) */
+            for (h = 0; h < 2u; h++)
+                for (k = 0; k < 4u; k++)
+                    if ((s < S_SHAPE ? LXR_PAGES[track_page(t)][s][8u + lxr_slot(s, h, k)]
+                                     : K_PAGES[s - S_SHAPE][h * 4u + k] ? K_PAGES[s - S_SHAPE][h * 4u + k] + v : 0u) == p)
+                        return i;
+    }
+    if ((p >= PAR_VOL1 && p <= PAR_VOL6) || (p >= PAR_PAN1 && p <= PAR_PAN3) || (p >= PAR_PAN4 && p <= PAR_PAN6) ||
+        (p >= PAR_FX_SEND1 && p < PAR_REV_SEND1 + 6u))
+        return TG_MIX;
+    if (p == PAR_REV_SIZE || p == PAR_REV_DAMP || p == PAR_REV_LEVEL)
+        return TG_REVERB;
+    return p == PAR_MDIRT_AMT ? TG_MASTER : TG_FXBUS;
+}
+static const char *tgt_group_name(uint32_t g)
+{
+    return g < NSORD ? SECT_NAME[SECT_ORDER[g]] : g < TG_NONE ? TG_NAME[g - NSORD] : "";
+}
+/* target idx of voice v: its group (TG_NONE: OFF) and its full name in b */
+static uint32_t tgt_full(char *b, uint32_t n, uint32_t v, uint32_t idx)
+{
+    static const char *const X[][2] = {{"Frequncy", "Frequency"}, {"Resnance", "Resonance"}, {"Overdriv", "Overdrive"},
+                                       {"PulsWdth", "Pulse width"}, {"ClockSnc", "Clock sync"}, {"Retriggr", "Retrigger"},
+                                       {"SampleRt", "Sample rate"}, {"RepeatCt", "Repeat count"},
+                                       {"Dcy Clsd", "Decay closed"}, {"Dcy Open", "Decay open"},
+                                       {"Freqcy 1", "Frequency 1"}, {"Freqcy 2", "Frequency 2"},
+                                       {"Vol mod", "To volume"}, {"Panning", "Pan"}, {"Struct", "Structure"},
+                                       {"DstParam", "Dest"}, {"Threshld", "Threshold"}};
+    uint32_t p = idx && idx < NUM_TARGETS_X && idx != 1u ? mod_dest(idx, v) : 0u, g, i;
+    char t[24];
+    if (!p) {
+        put_str(b, "Off", n);
+        return TG_NONE;
+    }
+    g = tgt_group(v, p);
+    if (p >= PAR_FX_SEND1 && p < PAR_REV_SEND1 + 6u) {
+        put_str(b, p < PAR_REV_SEND1 ? "FX send" : "Reverb send", n);
+        return g;
+    }
+    if (g == TG_REVERB) {
+        put_str(b, p == PAR_REV_SIZE ? "Size" : p == PAR_REV_DAMP ? "Damping" : "Level", n);
+        return g;
+    }
+    if (p == PAR_MDIRT_AMT || p == PAR_ECHOREV) {
+        put_str(b, p == PAR_ECHOREV ? "Echo to reverb" : "Dirt amount", n);
+        return g;
+    }
+    card_name(t, sizeof t, p);
+    if (p >= PAR_FX_P1 && p <= PAR_FX_P4 && t[0] == '-') {   /* (no FX bus effect: its knob's number) */
+        put_str(t, "Param ", sizeof t);
+        put_int(t + 6, (int32_t)(p - PAR_FX_P1) + 1);
+    }
+    for (i = 0; i < sizeof X / sizeof X[0]; i++)
+        if (str_eq(t, X[i][0])) {
+            put_str(t, X[i][1], sizeof t);
+            break;
+        }
+    b[0] = 0;
+    if (p < NUM_PARAMS) {                            /* (one page's two of a name: the LXR's category says which) */
+        const char *c = par_cat(p);
+        put_str(b, str_eq(c, "Velocity") ? "Velocity " : str_eq(c, "PitchMod") ? "Pitch mod "
+                   : str_eq(c, "Noise") ? "Noise " : str_eq(c, "Nois/Osc") ? "Noise/osc " : "", n);
+    }
+    if (b[0]) {
+        uint32_t k = str_len(b);
+        put_str(b + k, t, n - k);
+        if (b[k] >= 'A' && b[k] <= 'Z')
+            b[k] = (char)(b[k] + 32);
+    } else {
+        put_str(b, t, n);
+    }
+    return g;
+}
+static int tgt_before(uint32_t ga, const char *a, uint32_t gb, const char *b)   /* (a's place before b's) */
+{
+    if (ga != gb)
+        return ga < gb;
+    for (; *a && *b; a++, b++) {
+        char x = *a >= 'A' && *a <= 'Z' ? (char)(*a + 32) : *a, y = *b >= 'A' && *b <= 'Z' ? (char)(*b + 32) : *b;
+        if (x != y)
+            return x < y;
+    }
+    return !*a && *b;
+}
+/* the knob's list: OFF, then the voice's targets (the LXR's, Elixir's) in that order; n of them */
+#define NTGT_LIST 72u
+_Static_assert(1u + 38u + NXT <= NTGT_LIST, "a voice's targets");
+static uint32_t tgt_list(uint32_t p, uint8_t out[NTGT_LIST])
+{
+    char nm[NTGT_LIST][16];
+    uint8_t gr[NTGT_LIST];
+    uint32_t lo, hi, v = target_voice(p), u, n = 1, i;
+    target_range(p, &lo, &hi);
+    out[0] = 0;
+    for (u = lo; u <= hi + NXT && n < NTGT_LIST; u++) {
+        uint32_t idx = u > hi ? NUM_MOD_TARGETS + u - hi - 1u : u, g;
+        char b[16];
+        g = tgt_full(b, sizeof b, v, idx);
+        for (i = n; i > 1u && tgt_before(g, b, gr[i - 1u], nm[i - 1u]); i--) {   /* (in its place) */
+            out[i] = out[i - 1u];
+            gr[i] = gr[i - 1u];
+            put_str(nm[i], nm[i - 1u], sizeof nm[i]);
+        }
+        out[i] = (uint8_t)idx;
+        gr[i] = (uint8_t)g;
+        put_str(nm[i], b, sizeof nm[i]);
+        n++;
+    }
+    return n;
+}
 static uint32_t target_turn(uint32_t p, uint32_t raw, int32_t n)
 {
-    uint32_t lo, hi;
-    int32_t u;
-    target_range(p, &lo, &hi);
-    u = raw >= NUM_MOD_TARGETS ? (int32_t)(hi + 1u + raw - NUM_MOD_TARGETS) : (int32_t)raw;
-    if (u && u < (int32_t)lo)
-        u = (int32_t)lo;
-    u = clamp32(u + n, 0, (int32_t)(hi + NXT));
-    if (u && u < (int32_t)lo)                        /* (below the voice's first: OFF; up from OFF: the first) */
-        u = n < 0 ? 0 : (int32_t)lo;
-    return u > (int32_t)hi ? NUM_MOD_TARGETS + (uint32_t)u - hi - 1u : (uint32_t)u;
+    uint8_t l[NTGT_LIST];
+    uint32_t c = tgt_list(p, l), i;
+    for (i = 0; i < c && l[i] != raw; i++)
+        ;
+    if (i == c)                                      /* (another voice's: from OFF) */
+        i = 0;
+    return l[clamp32((int32_t)i + n, 0, (int32_t)c - 1)];
+}
+
+/* 0.25.2: the global LFOs' destinations the same way: by group in the signal's order, each group by name */
+static const uint8_t GD_ORDER[NGD] = {GD_OFF, GD_DENSITY, GD_JITTER, GD_MCHANGE, GD_MSPREAD, GD_STUT, GD_TRANSPOSE,
+                                      GD_MORPH, GD_DFB, GD_DTIME, GD_PUSH, GD_RSEND, GD_COMB, GD_CRUSH, GD_CUTS,
+                                      GD_PUMP, GD_FILTER, GD_HP, GD_LP, GD_MACRO1, GD_MACRO1 + 1, GD_MACRO1 + 2,
+                                      GD_MACRO1 + 3};
+static const char *const GD_FULL[NGD][2] = {
+    {"", "Off"}, {"KIT", "Morph"}, {"DJ FILTER", "DJ filter"}, {"DJ FILTER", "Low-pass sweep"},
+    {"DJ FILTER", "High-pass sweep"}, {"DELAY", "Feedback push"}, {"MASTER FX", "Comb"}, {"MASTER FX", "Crush"},
+    {"SEQUENCER", "Jitter"}, {"MASTER FX", "Cuts"}, {"MASTER FX", "Pump"}, {"SEQUENCER", "Density"},
+    {"SEQUENCER", "Transpose"}, {"SEQUENCER", "Melody change"}, {"SEQUENCER", "Melody spread"},
+    {"DELAY", "Delay feedback"}, {"DELAY", "Delay time"}, {"REVERB", "Reverb sends"}, {"MACROS", "Macro 1"},
+    {"MACROS", "Macro 2"}, {"MACROS", "Macro 3"}, {"MACROS", "Macro 4"}, {"SEQUENCER", "Stutter chance"}};
+_Static_assert(NMACRO == 4u && NGD == 23u, "GD_ORDER, GD_FULL: every destination");
+static int is_gl_dest(uint32_t p) { return p >= VP_GL && p <= VP_GL_LAST && (p - VP_GL) % NGLSET == 0u; }
+static uint32_t gd_turn(uint32_t d, int32_t n)
+{
+    uint32_t i;
+    for (i = 0; i < NGD && GD_ORDER[i] != d; i++)
+        ;
+    return GD_ORDER[clamp32((int32_t)(i < NGD ? i : 0u) + n, 0, (int32_t)NGD - 1)];
 }
 
 /* a parameter's index in the lock targets (lock_target_par; 0: none) */
@@ -1775,8 +1926,13 @@ static void knob_turn(uint32_t k, int32_t n)
         return;
     }
     v = sync_knob(p) ? sync_detent(vp_get(p), n) : clamp32((int32_t)vp_get(p) + step, (int32_t)mn, (int32_t)mx);
-    if (is_target(p))                                /* (25a: past the voice's LXR targets, Elixir's) */
-        v = (int32_t)target_turn(p, vp_get(p), step);
+    if (is_target(p))                                /* (25a: past the voice's LXR targets, Elixir's; 0.25.2: by */
+        v = (int32_t)target_turn(p, vp_get(p), step);   /* .. group in EDIT's order) */
+    if (is_gl_dest(p)) {                             /* (0.25.2: the same; its name shown over PERF's page) */
+        v = (int32_t)gd_turn(vp_get(p), n);
+        ui.dest_ms = fm1_ms;
+        ui.dest_p = (uint16_t)p;
+    }
     v = (int32_t)model_step(p, vp_get(p), (uint32_t)v);
     morph_follow(p, (int32_t)v - (int32_t)vp_get(p));
     vp_set(p, (uint32_t)v);

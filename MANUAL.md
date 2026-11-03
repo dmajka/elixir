@@ -371,14 +371,16 @@ From 0.19 the top of each page is a picture of what its knobs do rather than a l
 | **Amp EG** (ENV; then Elixir's GATE page) | Attack, Decay, Slope | Attack, Decay, Repeat count (claps), Slope | Attack, Decay (CH: closed; OH: open), Repeat (cymbal), Slope |
 | **Mod EG / velocity** (ENV) | Pitch EG: Decay, Slope, Amount / Velocity: destination, amount, volume mod | same | Velocity: destination, amount, volume mod |
 | **Filter** (SCL) | Frequency, Resonance, Type (LP HP BP UNITY BP NOTCH PEAK LP2 OFF; then Elixir's, below), Overdrive | same | same |
-| **LFO 1** (LFO, 3 pages) | Frequency, Amount, Waveform, Destination parameter / Destination voice, Clock sync, Retrigger, Offset / Mode (TRIG, HOLD, ONE, HALF: Elixir's, see below) | same | same |
-| **LFO 2** (LFO, Elixir's) | Rate, Amount, Wave, Target / Mode, Sync, Retrigger, Offset (see below) | same | same |
+| **LFO 1** (LFO, 3 pages) | Frequency, Amount, Waveform, Dest (destination parameter) / Destination voice, Clock sync, Retrigger, Offset / Mode (TRIG, HOLD, ONE, HALF: Elixir's, see below) | same | same |
+| **LFO 2** (LFO, Elixir's) | Rate, Amount, Wave, Dest / Mode, Sync, Retrigger, Offset (see below) | same | same |
 
 The LXR's Mix page is gone from 0.19: volume and pan are on the mixer (GLO), the sample rate on SHAPE, the drive on SHAPE, the length on SEQ's TRACK page, the MIDI channel and note on CONFIG. The LXR's output setting is the FX send (see [section 10](#10-mixer-sends-fx-bus-and-reverb)).
 
 The LXR's waveforms are SINE, TRI, SAW, SQUARE, NOISE and PWM; its transients SNAP, OFFSET, CLICK, CLICK 2, TICK, KICK, RIM, DRIP, HAT, CLAP, KICK 2, SNARE, TOM and SNAP 2. Each voice has one LFO, which can modulate any parameter of any voice; the velocity destination can be any of the voice's own parameters.
 
-**Elixir's LFO and velocity targets** (from 0.18). After the LXR's parameters, the LFO's **DstParam** and the velocity's destination go on to Elixir's own: the voice's **FX** and **Rev** sends, **Tilt**, **Bits**, the random-per-hit amounts (**RndPitch**, **RndDecay**, **RndFiltr**, **RndPan**), the cross mod's **XAmount**, and the six MODEL knobs (named for the voice's model: Rings', Plaits' or MICRO's, e.g. Length, Colour, Jitter), then the kit's **Rev size**, **Rev damp**, **Rev level**, **Echo>Rev**, **Glitch**, **Bus dirt** and **Dirt amt**, then the voice's LFO 2 **Rate** and **Amount** and its insert's **Amount** and two knobs. The per-voice ones belong to the LFO's **DstVoice** (and move with it if you change the voice), or for velocity to the voice itself. Switches (the model, the filter type, choke, the output) aren't targets: a moving one would click. Each voice's LFO can already move another voice's LFO rate or amount (the LXR's targets), for a wobble of a wobble. A kit sent to an LXR-02 as a .SND file has OFF in place of these targets.
+**Elixir's LFO and velocity targets** (from 0.18). Besides the LXR's parameters, the LFO's **Dest** and the velocity's destination reach Elixir's own: the voice's **FX** and **Rev** sends, **Tilt**, **Bits**, the random-per-hit amounts (**RndPitch**, **RndDecay**, **RndFiltr**, **RndPan**), the cross mod's **XAmount**, and the six MODEL knobs (named for the voice's model: Rings', Plaits' or MICRO's, e.g. Length, Colour, Jitter), then the kit's **Rev size**, **Rev damp**, **Rev level**, **Echo>Rev**, **Glitch**, **Bus dirt** and **Dirt amt**, then the voice's LFO 2 **Rate** and **Amount** and its insert's **Amount** and two knobs. The per-voice ones belong to the LFO's **DstVoice** (and move with it if you change the voice), or for velocity to the voice itself. Switches (the model, the filter type, choke, the output) aren't targets: a moving one would click. Each voice's LFO can already move another voice's LFO rate or amount (the LXR's targets), for a wobble of a wobble. A kit sent to an LXR-02 as a .SND file has OFF in place of these targets.
+
+**The Dest list** (from 0.25.2). Turning Dest goes from OFF through the targets in groups, in the order EDIT shows the pages (the signal path): MODEL, OSCILLATOR, FM, TRANSIENT, FILTER, SHAPE, INSERT FX, AMP EG, MOD EG / VELO, LFO 1, LFO 2, RANDOM PER HIT, CROSS MOD, then the ones on no sound page: MIX & SENDS (volume, pan, the FX and reverb sends), FX BUS, REVERB and MASTER. Within a group they go by name. The LFO's page shows the group above the target's full name (FILTER, Frequency; MOD EG / VELO, Velocity amount); when LFO 1 moves another voice, the group starts with that voice. The velocity's destination turns through the same order.
 
 ### Elixir's filter types
 
@@ -418,18 +420,18 @@ Every track has a second LFO: **LFO 2** (LFO, after LFO 1). It has LFO 1's waves
 
 | | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
-| LFO 1 (1/3) | Rate | Amount | Wave | Target |
+| LFO 1 (1/3) | Rate | Amount | Wave | Dest |
 | LFO 1 (2/3) | Voice | Sync | Retrig | Offset |
 | LFO 1 (3/3) | Mode | – | – | – |
-| LFO 2 (1/2) | Rate | Amount | Wave | Target |
+| LFO 2 (1/2) | Rate | Amount | Wave | Dest |
 | LFO 2 (2/2) | Mode | Sync | Retrig | Offset |
 
 LFO 1 has one page more because it can move another voice (Voice: the voice its target belongs to, as on the LXR).
 
-- **Target:** OFF, then the track's own parameters: the LXR's for that voice, then Elixir's (the list above). Unlike LFO 1 it has no destination voice: it always moves its own track. Kits start with its Amount at 0.
+- **Dest:** OFF, then the track's own parameters, the LXR's and Elixir's, in the Dest list's order (above). Unlike LFO 1 it has no destination voice: it always moves its own track. Kits start with its Amount at 0.
 - **On the same target as LFO 1** (or as the velocity), LFO 2 adds to it: LFO 1 sweeping the cutoff slowly and LFO 2 wobbling it fast give both movements. (LFO 1 and velocity on one target don't add: the LFO wins, as on the LXR.)
 - Every setting is part of the kit, can be locked per step, and LFO 1 (or another track's LFO 1) can move LFO 2's Rate or Amount.
-- **Morph:** Rate, Amount and Offset glide. Target, Wave, Mode, Sync and Retrigger switch at the halfway point; when they differ between the two kits, the Amount goes down to 0 at the halfway point and up to the other kit's after it, so nothing jumps.
+- **Morph:** Rate, Amount and Offset glide. Dest, Wave, Mode, Sync and Retrigger switch at the halfway point; when they differ between the two kits, the Amount goes down to 0 at the halfway point and up to the other kit's after it, so nothing jumps.
 - A sound moved to another drum takes LFO 2 with it, its target and retrigger following the new voice. A kit sent to an LXR-02 leaves it out.
 
 ### Elixir's sound pages
@@ -1077,13 +1079,15 @@ Three LFOs (the third from 0.16) that move the whole kit's performance controls,
 
 | Knob | Does |
 |---|---|
-| **Dest** | What it moves (below), or OFF |
+| **Dest** | What it moves (below), or OFF. Turning it shows the destination's full name and group over the page for a few seconds (from 0.25.2) |
 | **Depth** | −127 to +127. How far it moves it; negative turns it the other way |
 | **Speed** | One cycle's length at the tempo: 1/16, 1/8, 1/4, 1/2, 1 bar, then 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128 and 256 bars. At 120 BPM, 256 bars is about 8½ minutes. |
 | **Wave** | The LFO waves: SINE, TRI, SAW UP, SAW DN, SQUARE, RANDOM, EXP UP, EXP DN |
 | **Mode** | **FREE** (runs on its own; the default), **TRIG** (starts again at each trigger), **HOLD** (runs, its value held at each trigger), **ONE** (one cycle from a trigger, then still at its end), **HALF** (half a cycle) |
 | **Trig** | What triggers it: **PLAY** (the sequencer starting), **PATTERN** (PLAY and each pattern change), **BAR** (PLAY and each bar) |
 | **Phase** | Where in its cycle a trigger starts it |
+
+Dest turns through them in groups, in the signal's order and each group by name: OFF; SEQUENCER (DENSITY, JITTER, MEL CHANGE, MEL SPREAD, STUTTER, TRANSPOSE); KIT (MORPH); DELAY (DELAY FB, DELAY TIME, FB PUSH); REVERB (REV SEND); MASTER FX (COMB, CRUSH, CUTS, PUMP); DJ FILTER (FILTER, HP, LP); MACROS (MACRO 1–4; the popup names the macro's parameter).
 
 | Dest | Moves |
 |---|---|

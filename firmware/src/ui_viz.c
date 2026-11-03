@@ -1294,6 +1294,7 @@ static void viz_insert(void)
 
 /* LFO 1, LFO 2: one bar of it at the tempo: its wave, amount and offset; the hits that restart it (TRIG), hold it
  * (HOLD) or start one cycle (ONE) or half (HALF): the retrigger track's steps in the shown bar */
+#define LY0 44                                      /* (0.25.2: the LFO's plot under DEST's name) */
 static void viz_lfo(int two)
 {
     uint32_t rate, amt, wave, sync, rtrg, ofs, mode, i, s, hits = 0, tgt;
@@ -1301,7 +1302,7 @@ static void viz_lfo(int two)
     int32_t lastv = 0;
     uint32_t ph = 0, gone = 0, run;
     const pattern_t *pt = shown_pat();
-    char b[48];
+    char b[48], nm[32], rt[24];
     if (two) {
         rate = sv(S_LFO2, 0, 0); amt = sv(S_LFO2, 0, 1); wave = sv(S_LFO2, 0, 2);
         tgt = sect_par(ui.track, S_LFO2, 0, 3);
@@ -1320,16 +1321,31 @@ static void viz_lfo(int two)
         cyc_q16 = (uint32_t)(cyc_q16 > 0xffffffffu ? 0xffffffffu : cyc_q16) / (uint32_t)bpm;   /* (no 64-bit divide here) */
     }
     cyc_q16 = cyc_q16 < 1u ? 1u : cyc_q16 > (24u << 16) ? 24u << 16 : cyc_q16;
-    put_str(b, "TO ", sizeof b);
-    if (tgt && tgt != PAR_NONE && vp_get(tgt))
-        par_format(b + 3, tgt, vp_get(tgt), sizeof b - 3u);
-    else
-        put_str(b, "NO TARGET", sizeof b);
-    if (mode < NLFOMODE && mode) {
-        put_str(b + str_len(b), "  ", sizeof b - str_len(b));
-        put_str(b + str_len(b), L_LFOMODE[mode], sizeof b - str_len(b));
+    if (sync && sync <= 11u) {                       /* (its rate, as its card shows it: drawn last) */
+        put_str(rt, "SYNC ", sizeof rt);
+        put_str(rt + 5, L_SYNC[sync], sizeof rt - 5u);
+    } else {
+        card_value(rt, sizeof rt, sect_par(ui.track, two ? S_LFO2 : S_LFO, 0, 0), rate);
     }
-    vz_panel(b);
+    {                                                /* 0.25.2: DEST: its group (another voice's: that voice), */
+        uint32_t tv = tgt && tgt != PAR_NONE ? target_voice(tgt) : 0u;   /* .. its full name as MODEL's */
+        uint32_t g = tgt && tgt != PAR_NONE ? tgt_full(nm, sizeof nm, tv, vp_get(tgt)) : TG_NONE;
+        b[0] = 0;
+        if (g != TG_NONE && tv != track_voice(ui.track)) {
+            put_str(b, tv == 5u ? "HH" : VOICE_SHORT[tv], sizeof b);
+            put_str(b + str_len(b), " ", sizeof b - str_len(b));
+        }
+        put_str(b + str_len(b), g == TG_NONE ? "NO DEST" : tgt_group_name(g), sizeof b - str_len(b));
+        if (mode < NLFOMODE && mode) {
+            put_str(b + str_len(b), "  ", sizeof b - str_len(b));
+            put_str(b + str_len(b), L_LFOMODE[mode], sizeof b - str_len(b));
+        }
+        vz_panel(b);
+        if (g == TG_NONE)
+            put_str(nm, "Off", sizeof nm);
+        cv_text_fit(VX0, 22, &AF_M, nm, g == TG_NONE ? T_DIM : T_THEME, vz_bg(),
+                    VX1 - VX0 - (int32_t)text_w(&AF_S, rt) - 10);
+    }
     {                                                /* (who restarts it: the RETRIGGER voice's track, or its own) */
         uint32_t rt = rtrg ? rtrg - 1u : (mode != LM_TRIG ? track_voice(ui.track) : 99u);
         if (rt < NVOICE) {
@@ -1346,7 +1362,7 @@ static void viz_lfo(int two)
         }
     }
     for (s = 0; s < 4u; s++)
-        cv_rect(VX0 + (int32_t)(s * VN / 4u), VY0, 1, VY1 - VY0, ux_mix(vz_bg(), T_TEXT, 7));
+        cv_rect(VX0 + (int32_t)(s * VN / 4u), LY0, 1, VY1 - LY0, ux_mix(vz_bg(), T_TEXT, 7));
     vz_hguide(VY1, vz_faint());
     {
         uint32_t step = (uint32_t)((cyc_q16 << 16) / VN), prev = 0xFFFFu, rnd = 0x1234567u;
@@ -1395,20 +1411,16 @@ static void viz_lfo(int two)
             if (mode == LM_HOLD)
                 val = held;
             if (amt < 127u)                          /* (the wave at full depth, faint) */
-                cv_pset(VX0 + (int32_t)i, VY1 - (int32_t)(((int64_t)val * (VY1 - VY0 - 4)) >> 16), vz_faint());
+                cv_pset(VX0 + (int32_t)i, VY1 - (int32_t)(((int64_t)val * (VY1 - LY0 - 4)) >> 16), vz_faint());
             val = (int32_t)(((int64_t)val * (int32_t)amt) / 127);
-            vz_y[i] = (int16_t)(VY1 * 16 - (int32_t)(((int64_t)val * (VY1 - VY0 - 4) * 16) >> 16));
+            vz_y[i] = (int16_t)(VY1 * 16 - (int32_t)(((int64_t)val * (VY1 - LY0 - 4) * 16) >> 16));
         }
     }
     vz_trace(VX0, VN, VY1, T_THEME, vz_fill());
-    if (sync && sync <= 11u) {
-        put_str(b, "SYNC ", sizeof b);
-        put_str(b + 5, L_SYNC[sync], sizeof b - 5u);
-    } else {                                         /* (its rate, as its card shows it) */
-        card_value(b, sizeof b, sect_par(ui.track, ui.sect == S_LFO2 ? S_LFO2 : S_LFO, 0, 0), rate);
-    }
-    cv_text_r(VX1, VZ_Y + 4 + 14, &AF_S, b, T_MID, vz_bg());
+    cv_text_r(VX1, VZ_Y + 4 + 14, &AF_S, rt, T_MID, vz_bg());
 }
+
+#undef LY0
 
 /* RANDOM PER HIT: four lanes, each hit's draw scattered as far as the amount lets it (the same draws each time) */
 static void viz_random(void)
