@@ -82,6 +82,27 @@ footer small { font-size: 11px; opacity: .8; }
 </style>
 </head>
 <body>
+<!-- 0.25: on a phone, offer the mobile emulator (../mobile/) -->
+<div id="gomobile" hidden style="position:fixed;left:12px;right:12px;bottom:12px;z-index:99;padding:14px 16px;border-radius:12px;
+  background:#232326;color:#e9e9ec;font:15px/1.4 system-ui,sans-serif;box-shadow:0 4px 24px #0008;text-align:center">
+  <p style="margin:0 0 10px">Try the new mobile version? It's made for phones (experimental).</p>
+  <a href="../mobile/" style="display:inline-block;padding:9px 18px;border-radius:8px;background:#f4d04a;color:#1b1a12;text-decoration:none;font-weight:600">Open the mobile version</a>
+  <button id="gomobileno" type="button" style="margin-left:8px;padding:9px 14px;border-radius:8px;border:1px solid #343438;background:none;color:#e9e9ec;font:inherit">Stay here</button>
+</div>
+<script>
+(() => {
+  const KEY = "elixir-emu-nomobile";
+  let no = false;
+  try { no = sessionStorage.getItem(KEY) === "1"; } catch {}
+  if (no || !matchMedia("(pointer: coarse) and (max-width: 820px)").matches) return;
+  const b = document.getElementById("gomobile");
+  b.hidden = false;
+  document.getElementById("gomobileno").addEventListener("click", () => {
+    b.hidden = true;
+    try { sessionStorage.setItem(KEY, "1"); } catch {}
+  });
+})();
+</script>
 <main>
 <div class="device" id="device">
   <svg id="panel" viewBox="0 0 1000 624" aria-hidden="true"></svg>
