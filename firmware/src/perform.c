@@ -542,7 +542,7 @@ static void perf_master(int16_t *l, int16_t *r)
         for (c = 0; c < 2u; c++) {
             int16_t *x = c ? r : l;
             svf_t *s = &pf.dj_f[c];
-            uint32_t fv = d < 0 ? 65536u - (uint32_t)((a * 58982) >> 16) : (uint32_t)((a * 45875) >> 16);
+            uint32_t fv = d < 0 ? 65536u - (((uint32_t)a * 58982u) >> 16) : ((uint32_t)a * 45875u) >> 16;   /* (unsigned: a * 58982 passes 2^31) */
             if (s->fval != fv) {
                 s->fval = fv;
                 s->dirty = 1;
