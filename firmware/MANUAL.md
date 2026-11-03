@@ -676,7 +676,7 @@ One effect at a time. The pages come in order: the reverb first, then the bus an
 | FX BUS: *type* | P1 | P2 | P3 | P4 |
 | DELAY: DUB (DELAY only) | Sync | Saturate | Glitch | Pitch |
 | DELAY: SEND (DELAY only) | Echo>Rev | – | – | – |
-| DIRT | Bus dirt | – | Master | Amount |
+| DIRT | Bus dirt | DJ reso | Master | Amount |
 | MASTER COMP | Thresh | Ratio | Attack | Release |
 | COMP: SIDECHAIN | Sidechain | Makeup | Mix | – |
 | FX SEND (1/2) | D1 fx | D2 fx | D3 fx | SN fx |
@@ -719,6 +719,8 @@ The **DIRT** page (the FX bus's last) has two drives, both off at 0:
 - **Master** and **Amount** put a drive on the whole mix, before the DJ filter: **TAPE** (soft, darker as it rises), **TUBE** (soft and lopsided: warm even harmonics), **FUZZ** (a hard clip, mixed in parallel so the kick keeps its punch), **DIODE** (the LXR's diode curve) or **FOLD** (a sine fold, in parallel). Amount sets the drive, and each type's tone and mix follow it; the level is trimmed as it rises so it stays near the dry sound.
 
 They are part of the kit; the amounts morph and can be locked per step, the Master type doesn't morph. The per-voice shapes (SCL → Shape) are the third kind of dirt.
+
+**DJ reso** (from 0.24.3, KNOB 2) is the [DJ filter](#perf-pages-arp-select)'s resonance. At 0 it is the gentle bump it always had; turned up, the filter whistles at its cutoff and rings on every hit, and near 127 it screams as you sweep it (the knob, the LP~ / HP~ keys, a global LFO). It gets louder as it rises, and with Master dirt in front of it, nastier. It costs no extra CPU: the filter is the same, only its damping changes. Unlike the drives it belongs to the project, not the kit (as the tape time does), so loading a kit doesn't change it. At the very top of the low-pass's range (the knob just left of the middle) the filter keeps its resonance low, so the bump comes in as you sweep down. The remote's GLOBAL CC 47 turns it too.
 
 ### Master compressor and sidechain (from 0.16)
 
@@ -996,7 +998,7 @@ The pages are in four sets. ARP opens **PERFORM** (the performance pages, PERFOR
 - **PERFORM** is the LXR's own PERFORMANCE page: tempo, roll rate, morph and the global sample-rate reducer.
 - **SRate:** the LXR's global sample rate: every voice's own rate (SHAPE page) times this one, before the mix. Lower is grittier. It is part of the kit, so a kit can bring its own crush; it can be a macro's target and is recorded as locks under REC.
 - The voices' levels (the LXR's faders) are on the mixer (GLO); before 0.19 PERF had them too.
-- **DJ filter:** off in the middle; left a low-pass on the whole output, right a high-pass.
+- **DJ filter:** off in the middle; left a low-pass on the whole output, right a high-pass. Its resonance is **DJ reso** on the FX bus's DIRT page (from 0.24.3).
 - **Macros:** each macro knob moves one parameter between its Min and Max (Max below Min turns it the other way). Set them up on MACRO SETUP: pick the macro, its target (any lockable parameter), Min and Max. Turning a macro while recording writes locks, as any knob does.
 - **Tape time:** 0.2 to 4 seconds.
 - **Roll sweep:** while a roll key is held (or latched) on the PERFORM page, KNOB 2 turns from the roll rate into a smooth sweep from 1/4 to 1/192, off the grid. Turn it up while holding a kick for a drum-and-bass build, or down for a stutter that slows to a stop. SHIFT (OCT−) + KNOB 2 sets the gridded roll rate instead, which puts rolls back on the grid. The swept rate is not saved.
@@ -1461,7 +1463,7 @@ The remote map has **two channels** of its own, made for an 8-column controller 
 - **TRACKS** (channel 15 by default): what belongs to a track. Columns 1–7 are the tracks **D1 D2 D3 SN CY CH OH**, column 8 the **selected track**. CH and OH both act on the hat voice, except their decays.
 - **GLOBAL** (channel 16 by default): the transport, the performance, the effects, the tempo, morph and the rest.
 
-Knobs and faders are CCs. Every number is used once on its channel, so a knob and a button never share one. A button can be a **CC or a note** of its number, whichever the controller sends: a CC above 0 or a note on is a press, CC 0 or a note off (or velocity 0) a release. Mute, solo, the latched effects and the DENSITY tracks toggle; the held ones act while held; select, PLAY / STOP, REC and the patterns act on the press. Their lights follow the state. On a Launch Control XL, give one template the TRACKS channel and another the GLOBAL channel (or one template's knobs one channel and its buttons the other). The cheat sheet has this map on one page.
+Knobs and faders are CCs. Every number is used once on its channel, so a knob and a button never share one. A button can be a **CC or a note** of its number, whichever the controller sends: a CC above 0 or a note on is a press, CC 0 or a note off (or velocity 0) a release. Mute, solo, the latched effects and the DENSITY tracks toggle (for mute and solo that is the **PRESS** setting below); the held ones act while held; select, PLAY / STOP, REC and the patterns act on the press. Their lights follow the state. On a Launch Control XL, give one template the TRACKS channel and another the GLOBAL channel (or one template's knobs one channel and its buttons the other). The cheat sheet has this map on one page.
 
 **TRACKS (channel 15): knobs CC 8–103, buttons 104–119.** The number is 8 + 8 × row + column − 1.
 
@@ -1492,7 +1494,7 @@ Knobs and faders are CCs. Every number is used once on its channel, so a knob an
 | 16–23 | **16** FX dry/wet | **17** P1 | **18** P2 | **19** P3 | **20** P4 | **21** Bus dirt | **22** Echo > rev | **23** Saturate |
 | 24–31 | **24** Rev level | **25** Rev size | **26** Rev damp | **27** Master dirt | **28** DENSITY | **29** Ghost vel | **30** Build | **31** Vary |
 | 32–39 | **32** Macro 1 | **33** Macro 2 | **34** Macro 3 | **35** Macro 4 | **36** DRILL | **37** JITTER | **38** CUTS | **39** PUMP |
-| 40–47 | **40** COMB note | **41** COMB fb | **42** CRUSH | **43** REV length | **44** LFO 1 depth | **45** LFO 2 depth | **46** LFO 3 depth |  |
+| 40–47 | **40** COMB note | **41** COMB fb | **42** CRUSH | **43** REV length | **44** LFO 1 depth | **45** LFO 2 depth | **46** LFO 3 depth | **47** DJ reso |
 
 **GLOBAL (channel 16): buttons, CC or note 48–111**
 
@@ -1515,6 +1517,10 @@ The effects are PERF's (see [Performance mode](#13-performance-mode-perf)); they
 - **ABS:** the value goes straight to the control's position.
 - **REL:** for endless encoders sending relative values: 64 ± n (65 up, 63 down) or two's complement (1 up, 127 down). Don't use it with faders.
 
+**Mute/solo** (REMOTE page, KNOB 4, from 0.24.3): how the mute and solo buttons (TRACKS 104–119) are read.
+- **PRESS** (the default): for momentary buttons, which send on when pressed and off when let go. Each press mutes or unmutes; the release does nothing.
+- **TOGGLE:** for buttons that keep their own state (a Launch Control XL pad set to Toggle in Components, say): what the button sends is the mute. CC above 0 or a note on mutes (solos), CC 0 or a note off unmutes. With the feedback below looped back to the controller, its pads light with the mutes, and a mute from the panel moves them too.
+
 **Recording:** under REC with the sequencer playing, a TRACKS knob records locks on its own track (column 8 on the selected track), as a panel knob does. The GLOBAL knobs record nothing.
 
 **Feedback:** when a value on the map changes from anywhere (the panel, a kit or pattern load, MIDI), Elixir sends its CC back on its channel, so encoder rings and motorless displays can follow. A button's state goes back the way the button last arrived, as a CC (127 on, 0 off) or a note (velocity 127 on, 0 off); until a button has sent anything, both go. These cover mutes, solo, the selected track, the rolls, DRILL, the effects, the DENSITY tracks, PLAY and REC. A lock playing back isn't sent: the values are the kit's. Out is USB only, so feedback reaches the controller only when both are on a USB host (a computer or a USB MIDI host such as the mioXL), not with the controller's DIN out straight into the FM-1's TRS input.
@@ -1532,7 +1538,7 @@ GLO twice (past the mixer) opens CONFIG. Turn SELECT for its pages:
 | MIDI CHANNELS (2 pages) | Each track's channel; page 2's KNOB 4, **Global in**: what the global channel takes (KEYS, the default; PAT+KIT; ALL; OFF: see [MIDI at a glance](#midi-at-a-glance)) |
 | MIDI NOTES (2 pages) | Each track's note (ANY or a note) |
 | DEVICE | LEDs (OFF / LOW / HIGH glow), Autosave, Accel (fast knob turns move further), Colours (screen palette: GREY, GREEN, AMBER, ICE, VIOLET, ROSE, PAPER, HI-CON, NIGHT, MONO or HYRULE, forest green and Triforce gold) |
-| REMOTE | Tracks (the TRACKS channel: OFF, 1–16; 15 by default), Global (the GLOBAL channel; 16 by default; never the same as Tracks), Knobs (PICKUP / ABS / REL): see [the remote map](#the-remote-map) |
+| REMOTE | Tracks (the TRACKS channel: OFF, 1–16; 15 by default), Global (the GLOBAL channel; 16 by default; never the same as Tracks), Knobs (PICKUP / ABS / REL), Mute/solo (PRESS / TOGGLE): see [the remote map](#the-remote-map) |
 | MORPH | Edits, Ctrl all: BOTH KITS (the default: with morph on, a knob's edit or Control All moves the morph target too, so it is heard) or KIT ONLY (the kit alone, the LXR's way); see [Kits and morph](#11-kits-and-morph) and [Control All](#control-all-every-track-at-once) |
 | BUTTONS & KITS | **Kits first** (KNOB 2, from 0.19): FACTORY (the default) or SLOTS, the kit browser's order (see [Kits and morph](#11-kits-and-morph)). **Last page**: NO (the default) or YES. With YES, a button opens the page it showed when you left it: on CONFIG's BUTTONS & KITS page, press FX, then GLO, and you're back on BUTTONS & KITS. It works for SEQ (the track's pages or step edit, whichever you were on), FX, ARP (and each of its two sets), GLO (the mixer or CONFIG) and the sound buttons (the section and row). Pressed again, a button moves on as always. HOME still goes to the grid. |
 | LOAD | No knobs: where the processor's time goes, and the cores; see [the LOAD page](#the-load-page) |
