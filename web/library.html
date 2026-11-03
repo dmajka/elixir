@@ -177,6 +177,14 @@
   </div>
   </div>
 
+  <h2>Experimental: a phone emulator link into a kit</h2>
+  <p>Paste a link (or its text) from the phone emulator's Share. Its kit (the sound as it played, under its name)
+    goes into a kit library slot on the connected FM-1, or downloads as a .ktlb that Restore above puts on one. Only
+    the kit comes across, not the pattern or WANDER. Experimental: check the kit after loading it.</p>
+  <p><textarea id="shktext" rows="3" style="width:100%" placeholder="https://dmajka.github.io/elixir/try/mobile.html#p=..."></textarea></p>
+  <p><label>Library slot <input type="number" id="shkslot" min="1" max="128" value="128"></label>
+    <button id="shkput">Put it in the library</button> <button class="alt" id="shkdl">Download as .ktlb</button></p>
+
 </main>
 <footer class="site">
   <div class="wrap narrow">
@@ -488,6 +496,35 @@ $("kits").addEventListener("click", (e) => {
     say(`Downloaded kit ${+k + 1}, ${kit.name}.`);
   });
 });
+// 0.25 (experimental): a phone emulator share (mobile.html: web_share_get's bytes, deflated, base64url) into a kit
+async function shareKit() {
+  let t = $("shktext").value.trim();
+  const m = /#p=([A-Za-z0-9_-]+)/.exec(t);
+  if (m) t = m[1];
+  if (!/^[A-Za-z0-9_-]+$/.test(t)) throw new Error("That isn't a phone emulator link.");
+  const raw = Uint8Array.from(atob(t.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+  let b;
+  try { b = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer()); }
+  catch { throw new Error("That link is damaged (copy all of it)."); }
+  if (b.length < 20 || b[0] !== 0x45 || b[1] !== 0x50 || b[2] !== 0x58 || b[3] !== 0x31) throw new Error("That isn't a phone emulator link.");
+  const len = b[4] | (b[5] << 8), name = String.fromCharCode(...b.subarray(12, 20)).replace(/[^ -~]/g, " ").trim() || "PHONE";
+  if (b.length < 20 + len) throw new Error("That link is damaged (copy all of it).");
+  const slot = Math.min(128, Math.max(1, +$("shkslot").value || 128)) - 1;
+  return { kind: KL_KIT, slot, name, data: b.slice(20, 20 + len) };
+}
+$("shkput").addEventListener("click", () => job(async () => {
+  if (!lib) throw new Error("Connect to Elixir first (or download the .ktlb).");
+  const e = await shareKit();
+  if (info && info.kitLen && e.data.length !== info.kitLen) throw new Error("That link is from another Elixir version's emulator.");
+  await lib.libPut(KL_KIT, e.slot, e.name, e.data);
+  await refresh();
+  say(`Put ${e.name} into library kit ${e.slot + 1}.`);
+}));
+$("shkdl").addEventListener("click", () => job(async () => {
+  const e = await shareKit();
+  download(packKitLib([e]), `${safe(e.name)}.ktlb`);
+  say(`Downloaded ${e.name} as a .ktlb (library slot ${e.slot + 1}).`);
+}));
 </script>
 </body>
 </html>

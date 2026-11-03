@@ -33,6 +33,8 @@
 #define ELIXIR_VERSION "WEB"
 #endif
 #define RING_PUBLISH() ((void)0)
+#define WEB_SURF 1
+static uint16_t web_surf;                       /* (the phone page: the cards' and beat columns' grey, RGB565; 0 the palette's) */
 #define POOL
 #define RAMBUF
 static volatile uint32_t fm1_ms;
@@ -415,14 +417,16 @@ EXPORT void web_knob_turn(uint32_t k, int32_t n)
     knob_turn(k, n);
     kset.accel = a;
 }
-EXPORT uint32_t web_bg(void) { return T_BG; }    /* the screen's background, RGB565 (the palette's) */
+EXPORT uint32_t web_bg(void) { return T_BG; }
+EXPORT void web_set_surf(uint32_t c) { web_surf = (uint16_t)c; palette_apply(); ui.force = 1; }    /* the screen's background, RGB565 (the palette's) */
 
 /* a pattern to share: the playing pattern, the kit as it sounds (the edit buffer), its name and the tempo, as bytes
  * the page packs into a text (a link). Only between pages of the same layout (KIT_LEN, the pattern's size) */
 #define WEB_SHARE_MAGIC 0x31585045u              /* "EPX1" */
 #define WEB_SHARE_HEAD 12u
 #define WEB_SHARE_V1 (WEB_SHARE_HEAD + KIT_NAME_LEN + KIT_LEN + sizeof(pattern_t))   /* (before the morph) */
-static uint8_t web_share[WEB_SHARE_V1 + KIT_LEN];   /* .. then the morph target (byte 9: the morph, 10: 1 with it) */
+#define WEB_SHARE_V2 (WEB_SHARE_V1 + KIT_LEN)   /* .. then the morph target (byte 9: the morph, 10: 1 with it) */
+static uint8_t web_share[WEB_SHARE_V2 + 1u + NWV];   /* .. then (0.25) 1 if WANDER was on, and its knobs: it sets out on load */
 EXPORT uint8_t *web_share_buf(void) { return web_share; }
 EXPORT uint32_t web_share_size(void) { return sizeof web_share; }
 EXPORT uint32_t web_share_get(void)
@@ -442,6 +446,8 @@ EXPORT uint32_t web_share_get(void)
     for (i = 0; i < KIT_LEN; i++)
         k[i] = par[kit_par(i)];
     memcpy(k + KIT_LEN, &pat[sq.active], sizeof(pattern_t));
+    b[WEB_SHARE_V2] = wd.state != WS_IDLE;
+    memcpy(b + WEB_SHARE_V2 + 1u, wd.k, NWV);
     return sizeof web_share;
 }
 /* web_share_buf's n bytes into the playing pattern and the slot its kit came from (which loads); 0 done, 1 not a
@@ -454,7 +460,7 @@ EXPORT uint32_t web_share_put(uint32_t n)
     uint32_t i, slot = kit_loaded < 32u ? kit_loaded : 0u;
     if (n < WEB_SHARE_HEAD || (b[0] | b[1] << 8 | (uint32_t)b[2] << 16 | (uint32_t)b[3] << 24) != WEB_SHARE_MAGIC)
         return 1;
-    if ((n != sizeof web_share && n != WEB_SHARE_V1) || (b[4] | b[5] << 8) != KIT_LEN || (b[6] | b[7] << 8) != sizeof(pattern_t))
+    if ((n != sizeof web_share && n != WEB_SHARE_V2 && n != WEB_SHARE_V1) || (b[4] | b[5] << 8) != KIT_LEN || (b[6] | b[7] << 8) != sizeof(pattern_t))
         return 2;
     memcpy(kit, k, KIT_LEN);
     kit_sanitize(kit);
@@ -464,7 +470,7 @@ EXPORT uint32_t web_share_put(uint32_t n)
         kit_names[slot][i] = (char)(c >= 32u && c < 127u ? c : ' ');
     }
     kit_load_ram(slot);
-    if (n == sizeof web_share && b[10] == 1u) {  /* the morph target and the morph */
+    if (n >= WEB_SHARE_V2 && b[10] == 1u) {  /* the morph target and the morph */
         memcpy(morph_par, b + WEB_SHARE_V1, KIT_LEN);
         kit_sanitize(morph_par);
         kit_set_morph(b[9]);
@@ -484,6 +490,15 @@ EXPORT uint32_t web_share_put(uint32_t n)
         par[PAR_BPM] = b[8];
     pat_backup = *p;                             /* (as loaded: a pattern change doesn't drop it) */
     sq.gsync = (1u << NTRACK) - 1u;
+    if (n == sizeof web_share && b[WEB_SHARE_V2] == 1u) {   /* (0.25: WANDER with the sharer's knobs, set out) */
+        for (i = 0; i < NWV; i++) {
+            uint32_t v = b[WEB_SHARE_V2 + 1u + i];
+            wd.k[i] = (uint8_t)(v > vp_max(VP_WD + i) ? vp_max(VP_WD + i) : v);
+        }
+        if (!sq.running)
+            seq_start(1);
+        wd_set_out();
+    }
     ui.force = 1;
     return 0;
 }

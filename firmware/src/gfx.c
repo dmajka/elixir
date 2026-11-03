@@ -153,6 +153,10 @@ static void palette_set(uint32_t i)
     i %= NPALETTES;
     ux.mono = !cust && i == UI_GREY_INDEX;
     ux.bg = p->bg; ux.surf = ux.style ? p->bg : p->surf; ux.text = p->text; ux.theme = p->theme; ux.accent = p->accent;
+#ifdef WEB_SURF
+    if (web_surf)                                /* (the web emulator's phone page: its keys' grey) */
+        ux.surf = web_surf;
+#endif
     ux.mid = ux_mix(p->bg, p->text, UI_MID_PCT);
     ux.dim = ux_mix(p->bg, p->text, UI_DIM_PCT);
     ux.line = ux_mix(p->bg, p->text, UI_LINE_PCT);
