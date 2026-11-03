@@ -30,8 +30,8 @@
                                                      * stays: a kit with it plays P ADD. docs/parked/README.md) */
 #endif
 #define NMICRO 10                                    /* (Phase 24: MICRO's types, micro.c, on every voice) */
-enum { MD_LXR, MD_MODAL, MD_STRING, MD_FM, MD_PL0, MD_MC0 = MD_PL0 + 16, NMODEL = MD_MC0 + NMICRO };   /* (0.15:
-                                                     * Plaits' 16, plaits.c) */
+enum { MD_LXR, MD_MODAL, MD_STRING, MD_FM, MD_PL0, MD_MC0 = MD_PL0 + 16, MD_EN = MD_MC0 + NMICRO, NMODEL };   /* (0.15:
+                                                     * Plaits' 16, plaits.c; 0.25: ENSEMBLE, ensemble.c, last) */
 #define RG_MODES 32u
 #define RG_LINE 1024u                                /* the string (Rings: 2048 at 48 kHz; lower, it runs slower) */
 #define RG_STRETCH 512u                              /* .. its dispersion's all-pass */

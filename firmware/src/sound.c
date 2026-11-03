@@ -658,7 +658,8 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
     case PAR_MODEL1: case PAR_MODEL1 + 1: case PAR_MODEL1 + 2: case PAR_MODEL1 + 3: case PAR_MODEL1 + 4:
     case PAR_MODEL1 + 5: {                           /* (Rings' and Plaits': the DRUM voices only; 24: MICRO every voice) */
         uint32_t vi = p - PAR_MODEL1, md = model_pick(vi, pick(itg < NMODEL ? itg : 0u, (uint32_t)f, mod, NMODEL));
-        mi[vi].type = (uint8_t)(md >= MD_MC0 ? md - MD_MC0 + 1u : 0u);
+        mi[vi].type = (uint8_t)(md >= MD_MC0 && md < MD_EN ? md - MD_MC0 + 1u : 0u);
+        eno[vi].on = md == MD_EN;                     /* (0.25: ENSEMBLE, every voice, not counted either) */
         if (vi <= V_DRUM3) {
             mdl[vi].want = (uint8_t)(md < MD_MC0 ? md : 0u);   /* (MICRO isn't one of the models the limit counts) */
             model_limit();
@@ -705,6 +706,7 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
             uint32_t vi = (p - PAR_MDECAY1) % 6u;
             micro_t *u = &mi[vi];
             uint8_t v = (uint8_t)(mod ? (127u * (uint32_t)f) >> 16 : itg & 127u);
+            en_knob(vi, (p - PAR_MDECAY1) / 6u, v);   /* (0.25: ENSEMBLE's) */
             switch ((p - PAR_MDECAY1) / 6u) {
             case 0: u->len = v; break;
             case 1: u->col = v; break;

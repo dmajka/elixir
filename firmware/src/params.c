@@ -77,7 +77,8 @@ static const char *const L_MODEL[] = {"LXR", "MODAL", "STRING", "FM",   /* (0.9:
                                       "P SPEECH", "P SWARM", "P NOISE", "P PARTCL", "P STRING", "P MODAL", "P BD",
                                       "P SD", "P HH",   /* (0.15: Plaits' engines, plaits.c) */
                                       "CLICK", "TRAIN", "CRUNCH", "BITS", "BURST", "SNAP", "GRAIN", "DUST", "POP",
-                                      "CHIRP"};   /* (24: MICRO's, micro.c) */
+                                      "CHIRP",   /* (24: MICRO's, micro.c) */
+                                      "ENSEMBLE"};   /* (0.25: ensemble.c) */
 _Static_assert(sizeof L_MODEL / sizeof L_MODEL[0] == NMODEL, "rings.c: the MODEL list");
 static const char *const L_BITS[] = {"OFF", "15", "14", "13", "12", "11", "10", "9", "8", "7", "6", "5", "4", "3",
                                      "2", "1"};
@@ -188,6 +189,12 @@ static const char *pl_knob_name(uint32_t p, uint32_t which)
         return 0;
     if (mi[vi].type)
         return U[(p - PAR_MDECAY1) / 6u][which];
+    if (eno[vi].on) {                                 /* (0.25: ENSEMBLE's) */
+        static const char *const E[6][4] = {{"Spread", "Ensemble", "spr", "Spread"}, {"Warp", "Ensemble", "wrp", "Warp"},
+                                            {"Twist", "Ensemble", "tws", "Twist"}, {"Balance", "Ensemble", "bal", "Balance"},
+                                            {"Detune", "Ensemble", "det", "Detune"}, {"Scale", "Ensemble", "scl", "Scale"}};
+        return E[(p - PAR_MDECAY1) / 6u][which];
+    }
     if (vi >= 3u || mdl[vi].want < MD_PL0)
         return 0;
     if (mdl[vi].want == MD_PL0 + PE_CHORD && p < PAR_MPOS1) {   /* (P CHORD's: the chord, its inversion, the wave) */

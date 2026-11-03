@@ -245,13 +245,20 @@ static uint32_t sect_par(uint32_t t, uint32_t s, uint32_t h, uint32_t k)
         return LXR_PAGES[track_page(t)][s][8u + lxr_slot(s, h, k)];
     if (s == S_MODEL && mi[v].type && h == 1u)
         return k == 0u ? PAR_MEXC1 + v : k == 1u ? PAR_MTENS1 + v : 0u;
-    if (s == S_MODEL && (h || k) && !mi[v].type && (v > 2u || !par[PAR_MODEL1 + v]))
+    if (s == S_MODEL && (h || k) && !mi[v].type && !eno[v].on && (v > 2u || !par[PAR_MODEL1 + v]))
         return 0;
     q = K_PAGES[s - S_SHAPE][h * 4u + k];
     return q ? q + track_voice(t) : 0u;
 }
+/* 0.25: the amp EG shapes a model's own sound: ENSEMBLE's, and Plaits' engines that don't envelope themselves (all but
+ * STRING, MODAL and the drums, plaits.c PE_ENV; SPEECH's word mode does, but its other modes don't) */
+static int aeg_heard(uint32_t t)
+{
+    uint32_t v = track_voice(t), m = par[PAR_MODEL1 + v];
+    return m == MD_EN || (v <= 2u && m >= MD_PL0 && m < MD_MC0 && !PE_ENV[m - MD_PL0]);
+}
 /* 0.19: a model making its own sound on track t's voice (Plaits, MICRO, Rings not struck by the voice): its OSC page
- * (but COARSE, FINE: the model's pitch), FM, TRANSIENT and AMP EG unheard. 0: heard; 1: not now, but morphing would
+ * (but COARSE, FINE: the model's pitch), FM, TRANSIENT and AMP EG unheard (0.25: but aeg_heard's). 0: heard; 1: not now, but morphing would
  * strike Rings (the morph kit's EXCITER up): shown faint, locked; 2: never: those pages hidden */
 static uint32_t lxr_unheard(uint32_t t)
 {
@@ -273,7 +280,7 @@ static uint32_t par_unheard(uint32_t t, uint32_t p)  /* (one of those knobs: lxr
     for (i = 0; i < 4u; i++)
         for (k = 8; k < 16u; k++)
             if (LXR_PAGES[track_page(t)][S[i]][k] == p)
-                return S[i] == S_OSC && k <= 9u ? 0u : u;
+                return (S[i] == S_OSC && k <= 9u) || (S[i] == S_AEG && aeg_heard(t)) ? 0u : u;
     return 0;
 }
 /* the button that opens a section: the first section of its group */

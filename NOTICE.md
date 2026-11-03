@@ -19,6 +19,8 @@ It is derived from:
 
 - **GLITCH** (ttreu, github.com/ttreu/fm1-glitch), an FM-1 firmware on M-VAVE's FM1 Open sources, GPL-3.0-only (with a linking exception that Elixir doesn't need and doesn't use). The MICRO types (0.17, `firmware/src/micro.c`) follow the design of its microsound sources in `app/glitch_dsp.c`: their shapes, lengths, colours and relative levels. They are written for Elixir in fixed point.
 
+- **Ensemble Oscillator** (4ms Company, github.com/4ms/enosc), Copyright (c) 2020 Matthias Puech and Dan Green, BSD 2-clause licence (`LICENSES/BSD-2-Clause-enosc.txt`). The ENSEMBLE model (0.25, `firmware/src/ensemble.c`) is a fixed-point adaptation of its oscillators: the scale quantizer with crossfading pairs, detune, balance, its twist (feedback, pulsar, crush) and warp (fold, Chebyshev, segment) distortions and their antialiasing, and its folder's curve.
+
 - **The second core** (0.15): starting the FM-1's second core and guarding against units whose second core misreads (`firmware/hal/fm1_cpu1.h`, `fm1_cpu1.S`, from Felucca's hardware layer) come from **X0X** (Charles Vestal, github.com/charlesvestal/fm1-x0x), **Melodee** (keremimo, github.com/keremimo/melodee) and **Jangada** (zednaked, github.com/zednaked/jangada), all GPL-3.0.
 
 Other parts:

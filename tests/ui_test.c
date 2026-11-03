@@ -4535,6 +4535,84 @@ static void gen_step_edit_test(void)
 }
 
 /* ------------------------------------------------------- Phase 24 (0.17) --- */
+/* 0.25: ENSEMBLE on any voice (CY: core 0's) through the amp EG; its knob names and cards; SN's K1 past CHIRP to it;
+ * the AMP EG page heard on Plaits' engines that don't envelope themselves (P VA), not on P BD */
+static void phase25_ensemble(void)
+{
+    uint16_t pp[4];
+    char b[24];
+    uint32_t k;
+    printf("0.25: ENSEMBLE\n");
+    goto_mode(B_HOME, M_HOME);
+    ui.track = 4;
+    run_ms(60);
+    press(B_EDIT);
+    for (k = 0; k < 12u && ui.sect != S_MODEL; k++)
+        press(B_EDIT);
+    check(ui.mode == M_SOUND && ui.sect == S_MODEL, "CY: EDIT to its MODEL page");
+    par_set(PAR_MODEL1 + 4, MD_EN);
+    run_ms(20);
+    check(eno[4].on && !mi[4].type, "CY on ENSEMBLE");
+    page_params(pp);
+    check(!strcmp(par_name(pp[1]), "Spread") && !strcmp(par_name(pp[2]), "Warp") && !strcmp(par_name(pp[3]), "Twist") &&
+          sect_half_used(4, S_MODEL, 1) && !strcmp(par_name(PAR_MPOS1 + 4u), "Balance") &&
+          !strcmp(par_name(PAR_MTENS1 + 4u), "Scale"), "ENSEMBLE: its knob names, two pages");
+    par_set(PAR_MDECAY1 + 4, 42);
+    par_set(PAR_MDAMP1 + 4, 64);
+    par_set(PAR_MMAT1 + 4, 0);
+    par_set(PAR_MPOS1 + 4, 64);
+    par_set(PAR_MTENS1 + 4, 70);
+    card_value(b, sizeof b, PAR_MDAMP1 + 4u, 64);
+    check(!strcmp(b, "CHEBY"), "ENSEMBLE: WARP's card");
+    card_value(b, sizeof b, PAR_MTENS1 + 4u, 70);
+    check(!strcmp(b, "MINOR"), "ENSEMBLE: SCALE's card");
+    card_value(b, sizeof b, PAR_MDECAY1 + 4u, 42);
+    check(!strcmp(b, "4.0 ST"), "ENSEMBLE: SPREAD's card");
+    check(sect_half_used(4, S_AEG, 0), "ENSEMBLE: the AMP EG page shown");
+    par_set(sect_par(4, S_OSC, 0, 0), 30);           /* (CY's COARSE: its oscillator sits near 12 kHz; down) */
+    run_ms(20);
+    printf("  CY: COARSE 30: %u Hz\n", (unsigned)(((uint64_t)vc[4].osc.inc * 44100u) >> 32));
+    voice_trigger(4, 127, vc[4].osc.base_note);
+    run_ms(30);
+    check(venv[4] > 2000, "ENSEMBLE on CY sounds");
+    shot("ensemble-cy");
+    run_ms(3000);
+    check(venv[4] < 200, "ENSEMBLE on CY: its amp EG ends it");
+    /* SN: K1 from CHIRP up to ENSEMBLE */
+    par_set(PAR_MODEL1 + 3, MD_MC0 + 9u);
+    ui.track = 3;
+    run_ms(60);
+    sound_fix();
+    turn(EN_K1, 1);
+    check(par[PAR_MODEL1 + 3] == MD_EN && eno[3].on && !mi[3].type, "SN: K1 from CHIRP to ENSEMBLE");
+    par_set(PAR_MODEL1 + 3, MD_LXR);
+    par_set(PAR_MODEL1 + 4, MD_LXR);
+    run_ms(20);
+    check(!eno[3].on && !eno[4].on, "SN, CY: back to the LXR");
+    /* D1: ENSEMBLE isn't one of the models the limit counts */
+    ui.track = 0;
+    run_ms(60);
+    par_set(PAR_MODEL1, MD_EN);
+    run_ms(20);
+    check(eno[0].on && mdl[0].want == 0u && mdl[0].type == 0u, "D1 on ENSEMBLE: not a counted model");
+    sound_fix();
+    shot("ensemble-d1");
+    /* the AMP EG: heard on P VA, not on P BD */
+    par_set(PAR_MODEL1, MD_PL0 + PE_VA);
+    run_ms(20);
+    check(sect_half_used(0, S_AEG, 0), "P VA: the AMP EG page shown");
+    ui.sect = S_AEG;
+    ui.half = 0;
+    run_ms(60);
+    shot("plaits-va-aeg");
+    par_set(PAR_MODEL1, MD_PL0 + PE_BD);
+    run_ms(20);
+    check(!sect_half_used(0, S_AEG, 0), "P BD: no AMP EG page (it envelopes itself)");
+    par_set(PAR_MODEL1, MD_LXR);
+    run_ms(20);
+    goto_mode(B_HOME, M_HOME);
+}
+
 /* MICRO: the MODEL page on every track; on SN-HH the model alone until MICRO, K1 from LXR to CLICK past Rings' and
  * Plaits' (and back); MICRO's knob names, POSITION blank; a lock on the type; the kit keeps SN-HH off Rings' */
 static void phase24(void)
@@ -7987,6 +8065,7 @@ int main(int argc, char **argv)
     phase_016t2();
     phase_016t3();
     phase24();
+    phase25_ensemble();
     phase25a();
     phase25b();
     phase27a();

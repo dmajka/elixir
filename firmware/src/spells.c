@@ -693,7 +693,7 @@ static void sp_kick(const spell_t *S, const spc_t *c)
         sp_par(PAR_MPOS1, 30 + (int32_t)sp_rnd(30));
         sp_par(PAR_MEXC1, 0);
         sp_par(PAR_MTENS1, (int32_t)par[PAR_MODAMNT1] / 3);
-    } else if (md >= MD_MC0) {                       /* (MICRO: dark (a CHIRP down), its length the decay's) */
+    } else if (md >= MD_MC0 && md < MD_EN) {         /* (MICRO: dark (a CHIRP down), its length the decay's) */
         sp_par(PAR_MDECAY1, 24 + (int32_t)par[PAR_VELOD1] / 2);
         sp_par(PAR_MDAMP1, (int32_t)sp_rnd(24));
         sp_par(PAR_MEXC1, 0);

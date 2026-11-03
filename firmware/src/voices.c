@@ -91,6 +91,7 @@ static int16_t flt_line[NVOICE][FLT_LINE] RAMBUF;   /* 28: the COMB filter's lin
 #include "rings.c"
 #include "plaits.c"
 #include "micro.c"                                  /* (Phase 24: MICRO, on every voice) */
+#include "ensemble.c"                               /* (0.25: ENSEMBLE, on every voice) */
 
 static uint32_t decim_rate[NVOICE + 1];          /* [6]: ALL (the PERF page's global reducer). Q16 */
 static modnode_t velo_mod[NVOICE], lfo_mod[NVOICE], lfo2_mod[NVOICE];
@@ -290,6 +291,8 @@ static void voice_trigger(uint32_t track, uint32_t vel, uint32_t note)
     rp_scaled = 0;                                   /* (Q16 octaves) */
     if (mi[vi].type)                                 /* (24: a MICRO sound's, at the voice's next block) */
         mi_trigger(vi, vel);
+    else if (eno[vi].on)                              /* (0.25: ENSEMBLE's phases) */
+        en_trigger(vi);
     else if (vi <= V_DRUM3 && mdl[vi].type >= MD_PL0)    /* (0.15: a Plaits engine's) */
         pl_trigger(vi, vel);
     else if (vi <= V_DRUM3 && mdl[vi].type)              /* (0.6: a model's strike, at the hit's pitch) */
@@ -352,7 +355,7 @@ static void voice_async(uint32_t vi)
     if (vi <= V_DRUM3 || vi == V_SNARE) {
         int32_t pe = decay_calc(&v->peg);                /* Q24 */
         uint32_t pmod = 65536u + (uint32_t)(((int64_t)pe * v->peg_amt) >> 24);
-        if (v->tr.wave == TR_SNAP && !mi[vi].type)   /* (MICRO has no transient) */
+        if (v->tr.wave == TR_SNAP && !mi[vi].type && !eno[vi].on)   /* (MICRO, ENSEMBLE have no transient) */
             pmod += (uint32_t)(((int64_t)snap_calc(&v->snap, v->tr.inc) * v->tr.vol) >> 15);
         pmod = rp == 65536u ? pmod : (uint32_t)(((uint64_t)pmod * rp) >> 16);   /* (random pitch, tape) */
         v->pmod = pmod;
@@ -374,7 +377,7 @@ static void voice_async(uint32_t vi)
         }
     } else {
         v->gain = slope_calc(&v->aeg);
-        if (v->tr.wave == TR_SNAP && !mi[vi].type)
+        if (v->tr.wave == TR_SNAP && !mi[vi].type && !eno[vi].on)
             v->pmod = 65536u + (uint32_t)(((int64_t)snap_calc(&v->snap, v->tr.inc) * v->tr.vol) >> 15);
         osc_set_freq(&v->osc, rp == 65536u ? v->pmod : (uint32_t)(((uint64_t)v->pmod * rp) >> 16));
         osc_set_freq(&v->mod, rp);
@@ -503,6 +506,8 @@ static void drum_block(voice_t *v, int16_t *buf)     /* calcDrumVoiceSyncBlock *
     }
     if (mi[vi].type) {                               /* 24: MICRO (micro.c): its sound for the oscillators and transient */
         mi_block(vi, v, buf);
+    } else if (eno[vi].on) {                          /* 0.25: ENSEMBLE (ensemble.c): the same, through the amp EG */
+        en_block(vi, v, buf);
     } else {
         osc_block(&v->mod, mb, v->fm1, 0, 0, v->pwm);
         if (v->mix_oscs) {
@@ -548,6 +553,23 @@ static void micro_block(voice_t *v, int16_t *buf)
     int32_t c = v->vol_mod ? (v->vol * v->velo) >> 15 : v->vol;
     mi_block((uint32_t)(v - vc), v, buf);
     svf_block(&v->flt, v->ftype, buf);
+    for (i = 0; i < BLOCK; i++)
+        buf[i] = (int16_t)sat16((int32_t)(((int64_t)buf[i] * c) >> 15));
+    if (v->shape == SH_LXR)
+        dist_block(buf, v->dk);
+    else
+        shape_block(v, buf);
+}
+
+/* 0.25: SN, CY, HH on ENSEMBLE: its sound for the voice's own, then the filter, the amp EG with the volume (and
+ * velocity: VOL MOD) and the shape */
+static void ensemble_block(voice_t *v, int16_t *buf)
+{
+    uint32_t i;
+    int32_t c;
+    en_block((uint32_t)(v - vc), v, buf);
+    svf_block(&v->flt, v->ftype, buf);
+    c = combined_q15(v);
     for (i = 0; i < BLOCK; i++)
         buf[i] = (int16_t)sat16((int32_t)(((int64_t)buf[i] * c) >> 15));
     if (v->shape == SH_LXR)
@@ -927,6 +949,8 @@ static void voices_render(uint32_t lo, uint32_t hi)
             drum_block(v, b);
         else if (mi[vi].type)
             micro_block(v, b);
+        else if (eno[vi].on)
+            ensemble_block(v, b);
         else if (vi == V_SNARE)
             snare_block(v, b);
         else

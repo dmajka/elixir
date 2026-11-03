@@ -364,6 +364,23 @@ static void ic_bars(uint32_t b)                        /* P ADDTV: its harmonics
         cv_rect(IX + 2 + k * 5, IY1 - h, 3, h, k & 1 ? ux_mix(vz_bg(), T_THEME, 60) : T_THEME);
     }
 }
+/* 0.25: ENSEMBLE: its eight oscillators as they play, each a bar at its pitch above the voice's (left to right, the
+ * box two octaves at least, else to the highest) as tall as its level (BALANCE) */
+static void ic_ensemble(uint32_t v)
+{
+    const ensemble_t *e = &eno[v];
+    int32_t k, top = 1, span = 24 * 256;
+    for (k = 0; k < (int32_t)NEO; k++) {
+        top = e->lvl[k] > top ? e->lvl[k] : top;
+        span = e->pos[k] + 256 > span ? e->pos[k] + 256 : span;
+    }
+    cv_rect(IX, IY1, IW, 1, vz_faint());
+    for (k = (int32_t)NEO - 1; k >= 0; k--) {
+        int32_t x = IX + 1 + clamp32(e->pos[k], 0, span) * (IW - 5) / span, h = e->lvl[k] * 56 / top;
+        h = h < 2 ? 2 : h;
+        cv_rect(x, IY1 - h, 3, h, k ? T_THEME : ux_mix(vz_bg(), T_THEME, 60));
+    }
+}
 static void ic_swarm(uint32_t b)                       /* P SWARM: saws drifting apart, further with TIMBRE */
 {
     int32_t k, i;
@@ -402,6 +419,7 @@ static void ic_model(uint32_t m, uint32_t v, uint32_t a, uint32_t b, uint32_t c)
     case 17: ic_drum(0, a); return;
     case 18: ic_drum(1, a); return;
     case 19: ic_cymbal(1, a); return;
+    case MD_EN: ic_ensemble(v); return;
     default: break;
     }
     for (i = 0; i < IW; i++)                           /* (the rest: a wave) */
@@ -454,7 +472,8 @@ static const char *model_line(uint32_t m, uint32_t v)
         "A modal resonator: a bell or a bar", "An analog kick", "An analog snare", "An analog hat",
         "A square click, or a doublet", "A train of clicks", "Crunchy, held noise", "An LFSR's bits",
         "A burst of noise", "A snap: noise and a click", "A resonant grain", "A crackle of dust",
-        "A pop that slides back", "A sine swept four octaves"};
+        "A pop that slides back", "A sine swept four octaves",
+        "Eight sines stacked on a scale"};   /* (0.25: ENSEMBLE) */
     static const char *const LXR[4] = {"The LXR's drum: OSC, FM, a transient",
                                        "The LXR's snare: OSC, noise, a transient", "The LXR's cymbal: 3 OSCs in FM",
                                        "The LXR's hats: 3 OSCs in FM"};
@@ -593,12 +612,51 @@ static void viz_chordwave(uint32_t c)
     vz_trace(VX0, VN, 72, T_THEME, vz_fill());
     cv_text_r(VX1, 26, &AF_S, wform ? "THE TABLE'S WAVES" : "THE ORGAN", T_MID, vz_bg());
 }
+/* 0.25: ENSEMBLE's knobs: SPREAD in semitones, WARP and TWIST their type (the panel has the amount), BALANCE the end it favours,
+ * DETUNE its most in cents, SCALE by name */
+static int en_card(char *b, uint32_t n, uint32_t r, uint32_t v)
+{
+    static const char *const W[3] = {"FOLD", "CHEBY", "SEGMT"}, *const T[3] = {"FDBK", "PULSAR", "CRUSH"};
+    uint32_t a, z, d2 = v * v;
+    switch (r) {
+    case 0:                                          /* (0 .. 12 semitones, to a tenth) */
+        a = (v * 120u + 63u) / 127u;
+        b = put_int(b, (int32_t)(a / 10u));
+        *b++ = '.';
+        put_str(put_int(b, (int32_t)(a % 10u)), " ST", 4);
+        return 1;
+    case 1: case 2:
+        z = en_zone(v, &a);
+        if (!a) {
+            put_str(b, "OFF", n);
+            return 1;
+        }
+        put_str(b, (r == 1u ? W : T)[z], n);         /* (the type; its amount on the panel) */
+        return 1;
+    case 3:
+        if (v == 64u || v == 63u) {
+            put_str(b, "EVEN", n);
+            return 1;
+        }
+        put_str(b, v < 64u ? "LOWS " : "HIGHS ", n);
+        put_str(put_int(b + str_len(b), (int32_t)(v < 64u ? (64u - v) * 100u / 64u : (v - 64u) * 100u / 63u)), "%", 2);
+        return 1;
+    case 4:                                          /* (as ensemble.c: (d^4) 1.25 semitones) */
+        put_str(put_int(b, (int32_t)(((uint64_t)d2 * d2 * 2064u) >> 32)), " CT", 4);
+        return 1;
+    default:
+        put_str(b, EN_SC_NAME[en_scale_of(v)], n);
+        return 1;
+    }
+}
 /* the MODEL page's card: P WTABLE's knobs as the bank, the brightness and the family; P CHORD's chord by name, its WAVE (1: done) */
 static int pl_card(char *b, uint32_t n, uint32_t p, uint32_t v)
 {
     static const char *const CH[11] = {"OCTAVE", "FIFTH", "SUS4", "MINOR", "MINOR 7", "MINOR 9", "MINOR 11", "6/9",
                                        "MAJOR 9", "MAJOR 7", "MAJOR"};
     uint32_t vi = (p - PAR_MDECAY1) % 6u, r = (p - PAR_MDECAY1) / 6u;
+    if (p >= PAR_MDECAY1 && p < PAR_LFOMODE1 && eno[vi].on)   /* (0.25: ENSEMBLE's) */
+        return en_card(b, n, r, v);
     if (p < PAR_MDECAY1 || p >= PAR_MPOS1 || vi >= 3u || mi[vi].type)
         return 0;
 #if ELIXIR_WTABLE
@@ -643,7 +701,8 @@ static void viz_model(void)
     uint32_t v = track_voice(ui.track), m = sv(S_MODEL, 0, 0), a = 0, b = 0, c = 0;
     int over = v <= 2u && mdl[v].want && !mdl[v].type;   /* 0.15: over the models' limit (rings.c model_limit) */
     m = m < NMODEL ? m : 0u;
-    vz_panel(over ? "" : m ? (m <= 3u ? "RINGS RESONATOR" : m <= 19u ? "PLAITS ENGINE" : "MICROSOUND")
+    vz_panel(over ? "" : m ? (m <= 3u ? "RINGS RESONATOR" : m <= 19u ? "PLAITS ENGINE" : m == MD_EN ? "ENSEMBLE OSCILLATOR"
+                                                                                            : "MICROSOUND")
                            : "THE LXR-02'S VOICE");
     if (over)
         cv_text_fit(VX0, VZ_Y + 4, &AF_S, model_cap == 1u ? "1 MODEL ON ONE CORE: PLAYS AS LXR"
@@ -662,6 +721,28 @@ static void viz_model(void)
 #endif
     if (m == MD_PL0 + PE_CHORD) {
         viz_chordwave(c);
+        return;
+    }
+    if (m == MD_EN) {                                /* (0.25: ENSEMBLE: its WARP and TWIST in full) */
+        static const char *const W[3] = {"Fold", "Cheby", "Segment"}, *const T[3] = {"Feedback", "Pulsar", "Crush"};
+        int32_t y = 44 + 14 * vz_wrap(VX0, 44, IX - VX0 - 12, 14, 2u, model_line(m, v), T_TEXT) + 6;
+        uint32_t i, amt, z;
+        for (i = 0; i < 2u; i++, y += 14) {
+            char ln[32], *q = ln;
+            z = en_zone(i ? eno[v].twist : eno[v].warp, &amt);
+            put_str(q, i ? "Twist " : "Warp ", 8);
+            q += str_len(q);
+            if (amt) {
+                put_str(q, (i ? T : W)[z], 10);
+                q += str_len(q);
+                *q++ = ' ';
+                put_str(put_int(q, (int32_t)((amt * 100u + 32768u) >> 16)), "%", 2);
+            } else {
+                put_str(q, "off", 4);
+            }
+            cv_text(VX0, y, &AF_S, ln, T_MID);
+        }
+        ic_model(m, v, a, b, c);
         return;
     }
     vz_wrap(VX0, 44, IX - VX0 - 12, 14, 3u, model_line(m, v), T_TEXT);
