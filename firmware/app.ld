@@ -5,20 +5,23 @@
  * 0x01C00000..0x01C06000 holds .ram_text (code that must run while the flash
  * is busy: the flash driver), then .c1_text (the second core's waiting loop, hal/fm1_cpu1.h: an idle core 1 never
  * fetches from the flash), then .ram_buf (18a: zeroed buffers, as the pool's; the AC79 SDK's own apps use this RAM as
- * any other: nothing else needs it while the app runs, and the update loader runs only after a reset);
- * 0x01C06000..0x01C08000 stays for RAM-run debug (crt0 writes its status record at 0x01C07F00).
+ * any other: nothing else needs it while the app runs, and the update loader runs only after a reset). 1.0 Phase 1:
+ * RAMTEXT takes the old RAM-run debug gap too (0x01C06000.., painted idle on the unit, 0.25.3), up to crt0's status
+ * words at 0x01C07F20..0x01C07F34 (written at every start; 0x01C07F34..0x01C08000 left free).
  * RAM  : .data/.bss (72 KiB): what the audio and key-scan interrupts touch, small variables
  * POOL : big zero-initialised buffers (FX lines, canvases, the parts' engine memory, the main loop's work
  *        buffers), section .pool. The same SRAM: the RAM / POOL boundary only splits the budget (1.5: 96 / 336
  *        KiB -> 72 / 360 KiB); tools/build.py reads both lengths from here
- * STACKS with 256-byte guard bands; NOINIT survives resets and UBOOT entry.
+ * STACKS with 256-byte guard bands (1.0 Phase 1: user 12 KB, was 24; deepest seen 3.9 KB, static worst ~6.6 KB);
+ * NOINIT survives resets and UBOOT entry: its records (.noinit), then whole buffers zeroed at every start
+ * (.noinit_buf, main.c; painted idle on the unit, 0.25.3).
  * 0x01C7FD50.. is reserved: boot_info, boot-state mailbox, vector table. */
 MEMORY
 {
     XIP    (rx)  : ORIGIN = 0x02000120, LENGTH = 0x8DFBC
-    RAMTEXT (rwx): ORIGIN = 0x01C00000, LENGTH = 0x6000
+    RAMTEXT (rwx): ORIGIN = 0x01C00000, LENGTH = 0x7F20
     RAM    (rwx) : ORIGIN = 0x01C08000, LENGTH = 72K
-    POOL   (rw)  : ORIGIN = 0x01C1A000, LENGTH = 0x5A000
+    POOL   (rw)  : ORIGIN = 0x01C1A000, LENGTH = 0x5D000
     NOINIT (rw)  : ORIGIN = 0x01C7C000, LENGTH = 0x3D50
 }
 SECTIONS
@@ -33,8 +36,9 @@ SECTIONS
     _data_load = LOADADDR(.data);
     .bss (NOLOAD) : { _bss_start = .; *(.bss*) *(.sbss*) *(COMMON) . = ALIGN(4); _bss_end = .; } > RAM
     .pool (NOLOAD) : { _pool_start = .; *(.pool*) . = ALIGN(4); _pool_end = .; } > POOL
-    .noinit (NOLOAD) : { *(.noinit*) } > NOINIT
-    _guard0 = 0x01C74000; _ustack_lo = 0x01C74100; _ustack_top = 0x01C7A000;
+    .noinit (NOLOAD) : { *(.noinit) *(.noinit.*) . = ALIGN(4); _noinit_end = .; } > NOINIT
+    .noinit_buf (NOLOAD) : { . = ALIGN(4); _nb_start = .; *(.noinit_buf*) . = ALIGN(4); _nb_end = .; } > NOINIT
+    _guard0 = 0x01C77000; _ustack_lo = 0x01C77100; _ustack_top = 0x01C7A000;
     _guard1 = 0x01C7A000; _sstack_lo = 0x01C7A100; _sstack_top = 0x01C7C000;
     /DISCARD/ : { *(.comment) *(.note*) }
 }

@@ -298,6 +298,7 @@ static uint32_t pick(uint32_t itg, uint32_t q16, int mod, uint32_t n)
     return itg;
 }
 
+#define MOD_DEC_MAX 120u                             /* (an amp decay of 120: ~25 s) */
 /* midiParser_ccHandler: the parameter p at the value itg (0..127, its menu index, ..) / q16 (0..1, Q16);
  * mod: a modulator's value (the LXR's isFloatModulator) */
 static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
@@ -328,6 +329,12 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
         uint32_t k = p - PAR_VELOA1;
         voice_t *v = &vc[VI[k]];
         itg &= 127u;
+        if (mod && ((k & 1u) || k >= 11u) && itg > MOD_DEC_MAX) {   /* (0.25.3: a decay modulated never past the knob
+                                                      * or MOD_DEC_MAX: 127 is endless, and a held LFO kept a hit
+                                                      * ringing past STOP; CONCRETE DRIFT's white noise) */
+            uint32_t b = par_base(p);
+            itg = b > MOD_DEC_MAX ? (itg < b ? itg : b) : MOD_DEC_MAX;
+        }
         if (k == 11u)
             v->dec_closed = EG_DEC[itg];
         else if (k == 12u)

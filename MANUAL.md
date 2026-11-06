@@ -110,9 +110,9 @@ The FM-1's keyboard has 16 white keys and 11 black keys, numbered left to right 
 | **White keys 1–16** | The 16 steps of the bar on screen. On the pattern page: patterns. In PERF: rolls and effects. |
 | **Black keys 1–7** | Select a track: D1 D2 D3 SN CY CH OH. SHIFT (OCT−) + key: mute / unmute it. |
 | **Black keys 8–11** | Show bar 1–4. On pattern, song, save and load pages: the bank of 16. SHIFT (OCT−) + key: track length (16, 32, 48, 64). COPY (OCT+) + key: copy the shown bar into it. In PERF: the repeat length. |
-| **OCT−** | **SHIFT** (hold). While held, the screen shows what SHIFT (OCT−) + each key does. |
+| **OCT−** | **SHIFT** (hold). While held, the screen shows the menu: what SHIFT (OCT−) + each key does ([table](#shift-oct--white-keys-outside-perf)). On PERF's pages SHIFT keeps PERF's own jobs (latching, SPELLS, WANDER). **Held while turning a knob: fine adjust**, one step a detent with no acceleration; the page stays on screen so you can see the value (from 1.0). |
 | **OCT+** | **COPY** (hold). SHIFT (OCT−) + OCT+ = **CLEAR**. OK in the save, load and action dialogs. Held on a sound page, a knob turned is **Control All**. |
-| **EDIT** | Sound: model → oscillator → FM → transient (press again to step through; SELECT goes through every sound page). SHIFT (OCT−) + EDIT: **KEYS** (the keys play the track's voice, on every page until SHIFT (OCT−) + EDIT again) |
+| **EDIT** | Sound: model → oscillator → FM → transient (press again: the next section; SELECT goes through every sound page). SHIFT (OCT−) + EDIT: **KEYS** (the keys play the track's voice, on every page until SHIFT (OCT−) + EDIT again) |
 | **ENV** | Sound: amp envelope → gate → mod envelope / velocity |
 | **SCL** | Sound: filter → shape → insert FX |
 | **LFO** | Sound: LFO 1 → LFO 2 → random per hit → cross mod / choke |
@@ -120,7 +120,7 @@ The FM-1's keyboard has 16 white keys and 11 black keys, numbered left to right 
 | **FX** | FX bus → reverb (turn SELECT for the pages) |
 | **SEQ** | The track's pages (track, generator, action, groove, bounce, melody, scale) → step edit (press again: back; SELECT for the pages). SHIFT (OCT−) + SEQ: the links |
 | **ARP** | PERF: PERFORM → SPELLS → WANDER → GLOBAL MOD (the global LFOs, macros, links); press again for the next set, SELECT for its pages |
-| **HOME** | Grid → patterns → song |
+| **HOME** | Grid → patterns → [load](#loading-and-saving) → song |
 | **SAVE** | Save → load (SHIFT (OCT−) + SAVE: load) |
 | **PLAY** | Start / stop: the pattern or the song, as **Play** says (the pattern page). SHIFT (OCT−) + PLAY: play the song from its start. |
 | **REC** | Record on / off. SHIFT (OCT−) + REC: record options. |
@@ -184,7 +184,7 @@ On the grid, a step's height shows its velocity, an outline means a chance below
 
 - **SHIFT (OCT−) + bar key:** the selected track becomes 1, 2, 3 or 4 bars long.
 - **Length knob** on the grid (KNOB 3): any length from 1 to 64.
-- **LAST** (SHIFT (OCT−) + white key 14): tap the step that should be the track's last. Press SHIFT (OCT−) + 14 again to set all tracks at once.
+- **Every track at once** (from 1.0): hold **OCT+** and turn the length knob (on the grid or SEQ's TRACK page). Every track takes the selected track's length as you turn, so you can shorten and lengthen the whole pattern live. When you let go, **REVERT THE LENGTHS?**: **OCT+** puts each track's own length back, **OCT−** keeps the new one.
 
 The pattern lasts as long as its longest track (in time, counting [track clocks](#track-length-clock-direction)). Shorter tracks keep looping on their own across the pattern's end.
 
@@ -300,7 +300,7 @@ Press **REC** (it lights), then **PLAY**.
 
 **SHIFT (OCT−) + EDIT** turns the keyboard into an instrument for the selected track (ALGORITHM picks the track): the white and black keys play its voice chromatically, as on a piano, from F at the octave set (KNOB 1, **Octave**: F3 by default). Under REC each note is written into the nearest step with its note and velocity, as a MIDI note would be, and it goes out on USB MIDI too. PRESETS opens the [sound browser](#the-sound-browser).
 
-**KEYS stays on** (from 0.19) as you change pages, so you can play and turn knobs anywhere: the sound pages, FX, the mixer, SEQ's track pages, HOME. The header shows **KEYS** while the keys play notes. On the pages whose keys are their own (the patterns, the song, SAVE and LOAD, step edit, LAST and PERF) the keys do that page's job, and play again when you leave. **SHIFT (OCT−) + EDIT** on the KEYS page goes back to the grid; on any other page it turns KEYS off and stays there.
+**KEYS stays on** (from 0.19) as you change pages, so you can play and turn knobs anywhere: the sound pages, FX, the mixer, SEQ's track pages, HOME. The header shows **KEYS** while the keys play notes. On the pages whose keys are their own (the patterns, the song, SAVE and LOAD, step edit and PERF) the keys do that page's job, and play again when you leave. **SHIFT (OCT−) + EDIT** on the KEYS page goes back to the grid; on any other page it turns KEYS off and stays there.
 
 **In a scale:** when the pattern has a scale (SEQ → SCALE, [section 12](#scale)) and the track follows it, the white keys play the scale's degrees upwards from the root at or below F3, so every white key is in key; the black keys stay chromatic.
 
@@ -316,7 +316,7 @@ Elixir has **32 patterns** in two banks of 16, and **64 songs**.
 
 - **White key:** queue that pattern. While playing, it starts when the current pattern ends (the header shows >nn); while stopped, at once.
 - **Bar keys 8–9:** bank 1 (patterns 1–16) or bank 2 (17–32).
-- **Knobs:** **Voices** (FREE, LOCKED or KIT, below), shuffle, Edits (KEEP or DROP, below), **Play** (PATTERN or SONG: what PLAY plays, see [Songs](#songs-home-press-a-third-time)).
+- **Knobs:** **Voices** (FREE, LOCKED or KIT, below), shuffle, Edits (KEEP or DROP, below), **Play** (PATTERN or SONG: what PLAY plays, see [Songs](#songs-home-a-fourth-press)).
 - **Copy a pattern:** hold **COPY (OCT+)** and tap the pattern, then hold COPY again and tap the target. The page shows both steps (COPY, PASTE). A LOCKED pattern's voices go with it.
 
 **Voices** (from 0.20) sets where a pattern's sounds come from. The page shows a lock: open for FREE, shut for LOCKED and KIT.
@@ -333,7 +333,7 @@ Projects from before 0.20 that had CONFIG's Kit change on AUTO load with every p
 
 With **Edits** on DROP, the LXR's way, changes to the playing pattern that haven't been saved (SAVE → PATTERN) are lost when another pattern starts. Edits is a setting: it stays through power-off.
 
-### Songs (HOME, press a third time)
+### Songs (HOME, a fourth press)
 
 A song is up to 64 rows, each a pattern (or END / LOOP).
 
@@ -356,7 +356,7 @@ A ROADS song never stops at END or LOOP: the row after the last is the first. Th
 
 ## 9. Shaping the sound
 
-Select a track, then press a sound button. Pressing the same button again moves to the next section; turning SELECT steps through every page, in a synth's order: **model, oscillator, FM, transient, filter, shape, insert FX, amp EG, gate, mod EG / velocity**, then the modulation: **LFO 1, LFO 2, random per hit, cross mod / choke**. EDIT opens the first (MODEL), ENV the amp EG, SCL the filter and LFO the LFOs. Each page shows eight parameters (two rows of four); the lit row is on the knobs, and pressing the button again (or SELECT) gives the other row. A section with more than one page has its page in the title: MOD EG / VELO (1/2), (2/2).
+Select a track, then press a sound button. Pressing the same button again moves to the next section; turning SELECT steps through every page, in a synth's order: **model, oscillator, FM, transient, filter, shape, insert FX, amp EG, gate, mod EG / velocity**, then the modulation: **LFO 1, LFO 2, random per hit, cross mod / choke**. EDIT opens the first (MODEL), ENV the amp EG, SCL the filter and LFO the LFOs. Each page shows eight parameters (two rows of four); the lit row is on the knobs, and SELECT gives the other row. From 1.0 pressing a sound button again only moves to its next section, never to a section's second page (LFO 1's MODE page included: it is one of LFO 1's pages). A section with more than one page has its page in the title: MOD EG / VELO (1/2), (2/2).
 
 From 0.19 the top of each page is a picture of what its knobs do rather than a list of their values (the knob cards below already show those): the oscillator's wave, the envelope's curve with its times, the filter's response with its cutoff in Hz, an LFO over a bar at the tempo with the track's retriggers, a model's description with its knobs as vials, and so on. It changes as you turn a knob. The FX pages (the reverb's tail, the delay's echoes, the compressors' curves and gain reduction, DIRT) and the SEQ pages Groove, Bounce, Melody, Melody loop and Scale have pictures too; Track, Generator and Action keep the grid. The MODEL page names the model, says what it is and draws it. A Rings, Plaits, MICRO or ENSEMBLE model makes its own sound, so on that voice the FM and TRANSIENT pages are hidden and the OSC page keeps only Coarse and Fine (the model's pitch); its other knobs show -- and don't turn. The AMP EG page stays where the amp EG shapes the model (from 0.25: ENSEMBLE, and the Plaits engines that don't make their own envelope: all but P STRING, P MODAL, P BD, P SD and P HH); for Rings and MICRO it is hidden. Rings with Exciter turned up keeps every page, since the voice's own sound strikes it. If Exciter is down in the kit but up in the morph kit, those pages stay, greyed and locked, until you morph. The reverb page draws what makes its sound (from 0.20: ROOM a hut, HALL a castle, PLATE a steel shield, SPRING a bare spring), growing with Size, its echoes going out as arcs (Level, Damping); P SPEECH's MODEL page is a wizard whose lips move as you turn its knobs; the delay page spells out its mode (Tape ping pong and so on). Knobs read in their own units where those say more than 0–127: the filter's cutoff in Hz, its resonance as Q, the envelopes' times in ms, the LFOs' rates in Hz, the sample rate in kHz.
 
@@ -762,11 +762,16 @@ A kit is every sound parameter of all six voices (including the sends, the rever
   **Kits first** (CONFIG → BUTTONS & KITS, KNOB 2): **FACTORY** (the default) lists the factory kits first; **SLOTS** turns the list around (slots, library, factory), for working within a project's kits.
 - **Load / save:** SHIFT (OCT−) + white key 8 opens LOAD KIT; SAVE opens SAVE KIT (see [saving](#14-saving)).
 - **LXR-02 kits:** kits from an LXR-02 SD card (.SND files) come in through the [library page](#backing-up-restoring-and-lxr-02-kits). A voice the LXR routed to its FX bus comes in with FX SEND 127, which sounds the same. Elixir's own settings (sends, reverb, shaping, models) start at their defaults. A whole LXR project (kits, patterns, songs) comes in the same way.
-- **The kit library:** besides the 64 slots, the FM-1 keeps **128 kits and 128 single sounds** in its flash, apart from the projects: loading another project leaves them. SAVE → KIT with **To: LIBRARY** (KNOB 3) saves there; LOAD → KIT with **From: LIBRARY** loads one into the sound being edited (SAVE → KIT keeps it in a slot). SAVE / LOAD → SOUND does the same for one track's sound (KNOB 3: the track). The library page backs the library up.
+- **The kit library:** besides the 64 slots, the FM-1 keeps **128 kits and 128 single sounds** in its flash, apart from the projects: loading another project leaves them. SAVE → KIT with **To: LIBRARY** (KNOB 2, before the Slot) saves there; LOAD → KIT with **From: LIBRARY** loads one into the sound being edited (SAVE → KIT keeps it in a slot). SAVE / LOAD → SOUND does the same for one track's sound (KNOB 3: the track). The library page backs the library up.
 
   **Slots or library?** The slots are the project's kits, as on the LXR-02: patterns name their kit by slot number (a pattern whose Voices are KIT loads it), and loading another project brings its own 64. The library is a collection that stays whatever project is loaded: the place for kits you want everywhere, such as your favourites or Hrtl's kit packs. If you don't switch kits per pattern, you never need the slots: load kits from the factory list or the library and save the project. Browse it with PRESETS, use a kit from it as the morph target directly, or take single voices from it with the sound browser. To give a pattern a library kit, load it and save it into a slot (SAVE → KIT, To SLOTS).
 - **Morph:** load a second kit as the *morph target* (SHIFT (OCT−) + white key 9: LOAD MORPH; KNOB 3 picks the slots or the library), then turn **Morph** (PERF's first page, KNOB 3) from 0 to 100%. Every sound parameter crossfades towards the target (outputs, LFO 1's and the velocity's targets and the reverb model stay; switches such as Elixir's filter types, LFO 2's target and wave and the insert's type change at the halfway point). The header shows M while morph is above 0. SAVE → MORPH saves the mixture you hear as a new kit.
-- **Editing with morph on** (from 0.19): turning a sound knob while morph is above 0 moves the morph target's value by the same amount too, so the edit is heard at any morph amount (at 100% you hear only the target, so an edit to the kit alone would do nothing) and stays as you turn morph. Locks are not affected. CONFIG → MORPH → **Edits: KIT ONLY** changes the kit alone, the LXR's way; **BOTH KITS** is the default. The remote's knobs follow the same setting.
+- **Editing with morph on.** CONFIG → MORPH → **Edits** sets what a sound knob changes while morph is up:
+  - **SPLIT** (the default from 1.0): with the morph knob at **100%**, the knobs edit the **morph kit** (the cards show its values), so you hear every change; below 100% they edit the **kit**. To build a morph between two related kits: load kit 1 as the kit and as the morph target, turn morph to 100%, reshape it, then SAVE → MORPH (at 100% that saves the morph kit as you edited it) to a new slot or the library. Turn morph back down to edit the kit itself (SAVE → KIT keeps it).
+  - **BOTH KITS** (the default up to 0.25): an edit moves the kit and the morph target by the same amount, so it is heard at any morph amount and stays as you turn morph.
+  - **KIT ONLY**: the kit alone, the LXR's way (at 100% you hear nothing change).
+
+  Locks are not affected. The remote's knobs and Control All follow the same setting (Control All's own Ctrl all: KIT ONLY still keeps it to the kit).
 
 ---
 
@@ -789,7 +794,7 @@ The links, which belong to the pattern, are on ARP's GLOBAL MOD pages from 0.19 
 
 ### Generators
 
-KNOB 1 on the GENERATOR page picks how the track is made: **OFF**, **EUCLID**, **MUTATE**, **TURING**, **CELLULAR** or **GRIDS**. KNOBS 2–4 are that generator's settings, and change with it.
+KNOB 1 on the GENERATOR page picks how the track is made: **OFF**, **EUCLID**, **MUTATE**, **TURING**, **CELLULAR** or **GRIDS**. As you turn it, the generator's name and a line on what it does show over the page for 3 seconds (from 1.0). KNOBS 2–4 are that generator's settings, and change with it.
 
 | Generator | Settings | What it does |
 |---|---|---|
@@ -797,7 +802,7 @@ KNOB 1 on the GENERATOR page picks how the track is made: **OFF**, **EUCLID**, *
 | **MUTATE** | Amount, –, Freeze | Each time round, up to two changes at the Amount's chance: a step flipped, a step moved to a free neighbour, a lock's (or the velocity's) value drifted. Freeze stops it. |
 | **TURING** | Length, Lock, Density | A shift register (2–16 bits), as in a Turing Machine module. Lock 127: the loop repeats exactly; lower, its bits flip at random more often. Density: how many steps play. The velocity follows the register. |
 | **CELLULAR** | Rule, –, Freeze | Each time round the steps become the next row of a cellular automaton (rule 0–255, Wolfram's numbering: 30, 90, 110 …). An empty row starts again from the pattern. |
-| **GRIDS** | Part, Density, Accent | Emilie Gillet's Grids drum map: see below. |
+| **GRIDS** | Part, Density, Accent | Mutable Instruments' Grids drum sequencer's map: see below. |
 
 **EUCLID** is the LXR's Euclid: it rewrites the pattern's steps directly. It starts with no hits over the track's length and leaves the track alone until you turn **Hits**; from then on every turn of Length, Hits or Rotate rewrites the track at once (Hits back to 0 clears it). Its settings are saved with the pattern.
 
@@ -1162,7 +1167,7 @@ A spell changes the sound and the pattern of the tracks you pick, at random but 
 
    SHIFT (OCT−) + a white key leaves only that one in. The **Scope** knob sets them all at once (ALL, SOUND, PATTERN, VOICE, SHAPE, SPACE, RHYTHM, NOTES; CUSTOM when they match none). A part the spell never touches is grey; one left out is an outline.
 3. **Pick a spell** with KNOB 1 on GRIMOIRE. The first, **NONE**, is no spell: plain chance on whatever the white keys let in. Its **Sound** knob sets how far: low, a nudge of a step or two; around 70%, up to half of each knob's range; at 100%, anywhere at all (and waveforms, filter types, shapers and inserts switch more often as you turn it up). **Spread** (CHARACTER, KNOB 1) sets how many of the knobs move, **Motion** how far the random-per-hit amounts go, **Protect** how much the pitch, the decay and the beat are kept. It starts at moderate settings (bar key 4 brings them back). Nothing else needs setting: every spell starts with settings that work.
-4. **Cast** with **COPY (OCT+)**. It breathes when a cast is possible. A twelve-sided die rolls for a moment, and when it stops the spell is cast. Beside the die: how many sounds and steps it changed.
+4. **Cast** with **COPY (OCT+)**. It breathes when a cast is possible. A twelve-sided die rolls for a moment, and when it stops the spell is cast. Beside the die: how many sounds and steps it changed. After two seconds (or as soon as you turn the Spell knob) the die gives way to the spell's description again; the cast is still yours to keep or take back.
 5. **Listen.** Don't like it? **COPY (OCT+)** again rolls again, from where you were before the first roll (not on top of it). **SHIFT (OCT−)** alone takes the spell back: the pattern and the kit exactly as before. Bar key 2 **keeps** it, and so does leaving SPELLS or loading a pattern or a kit. Bar key 4 puts the spell's knobs back as they were at first.
 
 Only the targets' steps change. A spell changes the shared FX (the delay, the reverb, the FX bus) only when every track is a target.
@@ -1332,17 +1337,23 @@ The page draws the cottage, the home pattern and how far away you are.
 
 ## 14. Saving
 
-Press **SAVE** for the save page, SAVE again for the load page (SHIFT (OCT−) + SAVE opens load directly). KNOB 1 chooses the type, KNOB 2 (or SELECT, PRESETS, or a white key in the bank on screen) the slot.
+### Loading and saving
 
-| Type | Slots | Save | Load |
+**LOAD** is HOME's third page (grid → patterns → **load** → song; from 1.0), and SAVE's second: press **SAVE** for the save page, SAVE again for the load page (SHIFT (OCT−) + SAVE opens load directly). **KNOB 1 (Type)** chooses what, most used first; the knobs after it say where from and which **Slot** (or SELECT, PRESETS, or a white key in the bank on screen).
+
+- **LOAD's types:** KIT, MORPH, SOUND, PROJECT. Patterns and songs are picked on their own pages (the pattern page, the song's Song knob), so they aren't here.
+- **SAVE's types:** KIT, MORPH, SOUND, PROJECT, then PATTERN and SONG.
+- **Kits and morph kits** come **From** (KNOB 2): **SLOTS**, the 64 kits kept in this project; **LIBRARY**, the 128 kits you saved to the FM-1 for every project; or, for a kit, **FACTORY**, the 85 built-in factory kits. Saving goes **To** SLOTS or LIBRARY.
+- **Sounds** live in the library (128, shared by every project, not only this one). The knobs are Type, **Track** (which track's sound to save, or which track to load into), then the Slot.
+
+| Type | Where | Save | Load |
 |---|---|---|---|
-| KIT | 64 slots, or the library's 128 (KNOB 3: To / From SLOTS or LIBRARY) | OCT+, name it, OCT+ | OCT+ (from the library: into the sound being edited) |
-| PATTERN | 32 | a white key saves to that pattern at once | white key / OCT+: queue it |
-| SONG | 64 | OCT+ | OCT+ |
-| MORPH | 64, or the library's 128 (KNOB 3) | OCT+, name it, OCT+ (saves the morph mixture you hear) | OCT+: load as the morph target |
-| SOUND | the library's 128 (KNOB 3: the track) | OCT+, name it, OCT+: the track's sound | OCT+: into the track (a drum's sound into any drum track; the others into their own) |
+| KIT | From / To: 64 SLOTS, the LIBRARY's 128, or (load) the 85 FACTORY kits | OCT+, name it, OCT+ | OCT+ (from the library or factory: into the sound being edited). FACTORY's last entry, **ALL > SLOTS**, puts the first 64 into the slots |
+| MORPH | From / To: SLOTS or LIBRARY | OCT+, name it, OCT+ (saves the morph mixture you hear) | OCT+: load as the morph target |
+| SOUND | the library's 128; KNOB 2 the track | OCT+, name it, OCT+: the track's sound | OCT+: into the track (a drum's sound into any drum track; the others into their own) |
 | PROJECT | 4 | OCT+, name it, OCT+ | OCT+ |
-| FACTORY | the 85 factory kits | – | OCT+: into the sound being edited; ALL > SLOTS: the first 64 into the kit slots |
+| PATTERN (save only) | 32 | a white key saves to that pattern at once | (the pattern page) |
+| SONG (save only) | 64 | OCT+ | (the song page) |
 
 **Naming:** KNOB 1 the letter's position, KNOB 2 the letter, KNOB 3 upper / lower case. OCT+ saves, OCT− alone goes back.
 
@@ -1375,7 +1386,7 @@ While a restore is being written, the output is silent and saving is held off. I
 
 The emulator has the same functions under **Library**, below the panel, so you can try kits before they go on the FM-1: import them into the emulator's kit library, browse them with PRESETS, then download the kit library (`.ktlb`) and restore it onto the FM-1 from the library page. The emulator holds what the FM-1 holds (the factory kits, 64 slots, 128 library kits, with Hrtl's packs put into the library the first time it starts); to try more, import the next batch over them.
 
-**The factory kits** (from 0.19). The LXR-02's 85 factory kits (its factory SD image's, Init kits and repeats left out) are built into Elixir with Erica Synths' permission, so they take none of the library's space. Browse them with PRESETS, or LOAD → **FACTORY**: OCT+ loads the chosen kit into the sound you're editing (SAVE → KIT keeps it), and the last entry, **ALL > SLOTS**, puts the first 64 into the slots. (Up to 0.18 they were only in private builds, which also filled a new unit's slots with them; now the slots start as Init kits.) The originals: [LXR-02](https://www.ericasynths.lv/drum-synthesizer-lxr-02-1132/), [factory content](https://www.ericasynths.lv/service/file/download/product_id/754/file_id/418/), [Hrtl DLC](https://www.ericasynths.lv/service/file/download/product_id/754/file_id/462/), [Hrtl UNTZ](https://www.ericasynths.lv/service/file/download/product_id/754/file_id/625/).
+**The factory kits** (from 0.19). The LXR-02's 85 factory kits (its factory SD image's, Init kits and repeats left out) are built into Elixir with Erica Synths' permission, so they take none of the library's space. Browse them with PRESETS, or LOAD → KIT From **FACTORY**: OCT+ loads the chosen kit into the sound you're editing (SAVE → KIT keeps it), and the last entry, **ALL > SLOTS**, puts the first 64 into the slots. (Up to 0.18 they were only in private builds, which also filled a new unit's slots with them; now the slots start as Init kits.) The originals: [LXR-02](https://www.ericasynths.lv/drum-synthesizer-lxr-02-1132/), [factory content](https://www.ericasynths.lv/service/file/download/product_id/754/file_id/418/), [Hrtl DLC](https://www.ericasynths.lv/service/file/download/product_id/754/file_id/462/), [Hrtl UNTZ](https://www.ericasynths.lv/service/file/download/product_id/754/file_id/625/).
 
 ---
 
@@ -1421,7 +1432,7 @@ CC 102 and 103 are numbers the MIDI standard leaves undefined, so a keyboard doe
 - **Program change 0–31 on the global channel** (10 by default) queues pattern 1–32, as a white key on the pattern page does: while playing it starts when the current pattern ends (the header shows >nn), while stopped at once. Elixir sends a program change on the global channel whenever its pattern changes, so a controller or DAW can follow. From 0.24.2 the remote channels (15 and 16) take them the same way. Program changes on the track channels do nothing.
 - **Remote GLOBAL buttons 60 and 61** (CC or note): the previous and the next pattern, queued the same way.
 - **CC 102 on the global channel** loads slot kit 1–64 (values 0–63) at once (Global in KEYS or PAT+KIT).
-- **CC 103 on the global channel** loads factory kit 1–85 (values 0–84) at once, as LOAD → FACTORY does: into the sound; the slot shown as loaded stays.
+- **CC 103 on the global channel** loads factory kit 1–85 (values 0–84) at once, as LOAD → KIT From FACTORY does: into the sound; the slot shown as loaded stays.
 - **CC 126 and CC 127** (from 0.24.2) do the same as CC 102 and 103, on the global channel (KEYS, PAT+KIT) and on both remote channels, so one controller setup works on any of them.
 - **CC 0** loads slot kit 1–64 on a track's channel, as on the LXR, and on the global channel at ALL. At KEYS and PAT+KIT it is a keyboard's bank select there, and does nothing.
 - A pattern can bring its own kit (its Voices at KIT): send the kit after the program change, or it is replaced when the pattern starts.
@@ -1553,7 +1564,7 @@ GLO twice (past the mixer) opens CONFIG. Turn SELECT for its pages:
 | MIDI NOTES (2 pages) | Each track's note (ANY or a note) |
 | DEVICE | LEDs (OFF / LOW / HIGH glow), Autosave, Accel (fast knob turns move further), Colours (screen palette: GREY, GREEN, AMBER, ICE, VIOLET, ROSE, PAPER, HI-CON, NIGHT, MONO or HYRULE, forest green and Triforce gold) |
 | REMOTE | Tracks (the TRACKS channel: OFF, 1–16; 15 by default), Global (the GLOBAL channel; 16 by default; never the same as Tracks), Knobs (PICKUP / ABS / REL), Mute/solo (PRESS / TOGGLE): see [the remote map](#the-remote-map) |
-| MORPH | Edits, Ctrl all: BOTH KITS (the default: with morph on, a knob's edit or Control All moves the morph target too, so it is heard) or KIT ONLY (the kit alone, the LXR's way); see [Kits and morph](#11-kits-and-morph) and [Control All](#control-all-every-track-at-once) |
+| MORPH | Edits: SPLIT (the default from 1.0: at morph 100% the knobs edit the morph kit, below it the kit), BOTH KITS (a knob's edit moves the morph target too) or KIT ONLY (the kit alone, the LXR's way). Ctrl all: BOTH KITS (the default: Control All moves the morph target too) or KIT ONLY; see [Kits and morph](#11-kits-and-morph) and [Control All](#control-all-every-track-at-once) |
 | BUTTONS & KITS | **Kits first** (KNOB 2, from 0.19): FACTORY (the default) or SLOTS, the kit browser's order (see [Kits and morph](#11-kits-and-morph)). **Last page**: NO (the default) or YES. With YES, a button opens the page it showed when you left it: on CONFIG's BUTTONS & KITS page, press FX, then GLO, and you're back on BUTTONS & KITS. It works for SEQ (the track's pages or step edit, whichever you were on), FX, ARP (and each of its two sets), GLO (the mixer or CONFIG) and the sound buttons (the section and row). Pressed again, a button moves on as always. HOME still goes to the grid. |
 | LOAD | No knobs: where the processor's time goes, and the cores; see [the LOAD page](#the-load-page) |
 | ELIXIR | No knobs: the potion, the version, each core's load and the CPU line with the battery |
@@ -1579,7 +1590,7 @@ Below them, the cores. The FM-1's processor has two cores, and from 0.15 Elixir 
 
 The last page, **ELIXIR**, shows the version (the cores' line moved to LOAD in 0.20).
 
-From 0.16 the first core also runs the reverb and reads the delay's echoes while it waits for the second, on the last buffer's sends (one block, 1.45 ms, late: inaudible), so the effects no longer add to the slower core's time. Right of WAIT, **STACKS** shows the deepest use of the two main stacks since power-on (red past three quarters): worth a look after a busy session, and worth reporting if it is red.
+From 0.16 the first core also runs the reverb and reads the delay's echoes while it waits for the second, on the last buffer's sends (one block, 1.45 ms, late: inaudible), so the effects no longer add to the slower core's time. Under the cores, one reading a line: **CORE 0 WAITS** (with two cores), **CORE 1 STACK**, **USER STACK** and **SYS STACK**, the deepest use of each stack since power-on out of its size (red past three quarters). If one turns red after a busy session, please report it.
 
 ### The battery
 
@@ -1596,15 +1607,13 @@ At the right end of the CPU line: the battery's charge as three bars (as the sto
 | 1–7 | Play that track's voice |
 | 8 | KIT: load a kit |
 | 9 | MORPH: load the morph target |
-| 10 | SONG page |
-| 11 | PROJECT: load a project |
-| 12 | CONFIG |
+| 10 | RESET SOUND: the selected track's voice back to how the loaded kit has it (your edits to that one sound undone; CLEAR → SOUND is the init sound) |
+| 11 | RESET PERF: every performance effect off (as SHIFT (OCT−) + HOME) |
+| 12 | SOLO the selected track (again: not; as SHIFT (OCT−) + GLO) |
 | 13 | RELOAD the kit and pattern as saved |
-| 14 | LAST: set the track's last step (again: all tracks) |
-| 15 | FX |
-| 16 | PATTERN page |
+| 14–16 | (free) |
 
-In PERF, SHIFT (OCT−) + a white key latches it instead.
+In PERF, SHIFT (OCT−) + a white key latches it instead. From 1.0 that is on PERF's own pages only: a sound page you opened from PERF shows the menu. The song, project, CONFIG, FX and pattern pages that were on keys 10–16 before 1.0 are on their own buttons, and every load is on the [load page](#loading-and-saving) (HOME's third); LAST is the length knob (with OCT+ held, every track's).
 
 ### Other combinations
 
@@ -1618,6 +1627,8 @@ In PERF, SHIFT (OCT−) + a white key latches it instead.
 | COPY (OCT+) + pattern, pattern | Copy a pattern (pattern page) |
 | SHIFT (OCT−) + COPY (OCT+) | CLEAR (again to confirm) |
 | COPY (OCT+) held + knob (sound page) | Control All: the parameter on every track; let go, then OCT+ reverts or OCT− keeps |
+| SHIFT (OCT−) held + knob | Fine adjust: one step a detent, no acceleration (1.0) |
+| COPY (OCT+) held + length knob (grid, TRACK) | Every track's length; let go, then OCT+ reverts or OCT− keeps (1.0) |
 | SHIFT (OCT−) + PLAY | Play the song from the start |
 | SHIFT (OCT−) + REC | Record options |
 | SHIFT (OCT−) + SAVE | Load page |

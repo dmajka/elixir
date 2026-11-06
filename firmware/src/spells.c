@@ -25,6 +25,7 @@
                                                       * before LIMITS) */
 #define NRECIPE 8u
 #define SP_ROLL_MS 900u                              /* the die's roll, then the cast */
+#define SP_DIE_MS 2000u                              /* (0.25.3) .. the die shown after it, then the spell's words */
 enum { SPK_SOUND, SPK_PAT, SPK_DENS, SPK_CHAOS, SPK_C1, SPK_C2, SPK_C3, SPK_C4, NSPK };
 enum { SPL_RVS, SPL_FXS, SPL_RLEV, SPL_FXMIX, NSPL };
 enum { SPV_SPELL, SPV_VAR, SPV_SCOPE, SPV_MODE, SPV_LIM = SPV_MODE + 1 + NSPK, SPV_MOT = SPV_LIM + NSPL, SPV_MLEN,
@@ -727,19 +728,27 @@ static uint32_t sp_target_of(uint32_t v, uint32_t p)
             return i;
     return 0;
 }
+#define SP_LFO_DEC 100u                              /* (the most a spell's LFO takes a decay to: ~5 s) */
 static void sp_lfo(uint32_t v, const spc_t *c, int force)
 {
-    uint32_t a = c->sm * c->c[2] >> 7, tg;
+    uint32_t a = c->sm * c->c[2] >> 7, tg, dp = sp_role_par(R_DEC, v), amt = 8u + (c->c[2] * 40u >> 7), dec;
     if (!(c->cats & SC_MOD) || (par[PAR_L2AMT1 + v] && !force) || sp_rnd(128) >= a)
         return;
-    tg = sp_target_of(v, sp_rnd(3) ? PAR_FILTER_FREQ_1 + v : sp_role_par(R_DEC, v));
+    dec = sp_rnd(3) == 0u;
+    if (dec && par[dp] + 8u > SP_LFO_DEC)            /* (0.25.3: the decay's top kept under SP_LFO_DEC: past it a
+                                                      * hit HOLD took at the top rang on, STOP or not; too long
+                                                      * already: the filter) */
+        dec = 0;
+    if (dec && par[dp] + amt > SP_LFO_DEC)
+        amt = SP_LFO_DEC - par[dp];
+    tg = sp_target_of(v, dec ? dp : PAR_FILTER_FREQ_1 + v);
     if (!tg)
         return;
     sp_par(PAR_L2TGT1 + v, (int32_t)tg);
     sp_par(PAR_L2SYNC1 + v, (int32_t)(1u + sp_rnd(3)));   /* (4/1, 2/1 or 1/1) */
     sp_par(PAR_L2WAVE1 + v, (int32_t)(sp_rnd(3) == 0u ? 5u : sp_rnd(2)));   /* (SINE, TRI, RANDOM) */
     sp_par(PAR_L2MODE1 + v, LM_HOLD);
-    sp_par(PAR_L2AMT1 + v, (int32_t)(8u + (c->c[2] * 40u >> 7)));
+    sp_par(PAR_L2AMT1 + v, (int32_t)amt);
 }
 static void sp_xmod(uint32_t v, uint32_t tv, const spc_t *c)   /* voice v moved by voice tv (DUCK, FILTER, RING) */
 {
@@ -1468,6 +1477,8 @@ static void sp_vset(uint32_t i, uint32_t v)
             n += d;
         if (n < 0 || n >= (int32_t)(NSPELL + NRECIPE))
             return;
+        if (!sp.rolling)                             /* (0.25.3: the die gives way to the spell's words at once) */
+            sp.roll_ms = fm1_ms - (SP_ROLL_MS + SP_DIE_MS);
         sp.sel = (uint8_t)n;
         if (sp_is_rcp()) {
             sp.tracks = rcp[n - (int32_t)NSPELL].tracks;

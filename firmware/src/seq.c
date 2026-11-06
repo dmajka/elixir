@@ -199,7 +199,7 @@ static pattern_t gpat POOL;         /* the generators' live tracks: track t of i
 static pattern_t upat POOL;         /* UNDO: a track as it was before DICE, COMMIT, EUCLID (undo_t, undo_p) */
 /* 20: the melody's notes as they played, step by step (bit 7: played; COMMIT writes them in), their lengths */
 static uint8_t mel_n[NTRACK][NUM_STEPS] POOL, mel_l[NTRACK][NUM_STEPS] POOL;
-static uint8_t songs[NUM_SONGS][MAX_SONG_LENGTH] POOL;
+static uint8_t songs[NUM_SONGS][MAX_SONG_LENGTH] RAMBUF;   /* (1.0: in the old debug gap) */
 static uint8_t song_rd[NUM_SONGS] POOL;   /* 42: a song's ROADS: bit 7 on; bits 0-3 SURPRISE ^ 4 (0..15); bits 4-6 HOME
                                            * (SONG_HOME's) */
 

@@ -2,7 +2,8 @@
  * Elixir: SPELLS' screen (32; spells.c). The body: an 8-bit wizard top left (his orb lit when a spell can be cast);
  * beside him the spell's name, what it does (or what the knob last turned does) and the targets (the black keys);
  * under them the white keys: what the spell may change, sound over pattern. OCT+ rolls a d12 beside the wizard,
- * spinning for SP_ROLL_MS, slowing to its face; the die stays while the cast is on audition, with what it changed.
+ * spinning for SP_ROLL_MS, slowing to its face; the die stays SP_DIE_MS with what the cast changed (0.25.3: it stayed
+ * while the cast was on audition, hiding the spells' words; the spell knob turned ends it at once).
  * Nothing else moves. Included by ui_draw.c. */
 
 /* the knobs' cards */
@@ -205,6 +206,10 @@ static void draw_d12(int32_t cx, int32_t cy, int32_t rad, uint32_t a, int32_t ys
 }
 /* the roll: frame f of SP_ROLL_MS / 40, slowing to its face (the angle 0, flat) */
 static uint32_t sp_frame(void) { return sp.rolling ? (fm1_ms - sp.roll_ms) / 40u : 0u; }
+static int sp_die_shown(void)                        /* rolling, or SP_DIE_MS after the cast (the spell knob: not) */
+{
+    return sp.rolling || (sp_pending() && fm1_ms - sp.roll_ms < SP_ROLL_MS + SP_DIE_MS);
+}
 static void sp_die(int32_t cx, int32_t cy, int32_t rad)
 {
     uint32_t n = SP_ROLL_MS / 40u, f = sp_frame(), left = f < n ? n - f : 0u;
@@ -218,7 +223,7 @@ static void draw_spells(int32_t y0)
 {
     const spell_t *S = &SPELL[sp_spell() % NSPELL];
     uint32_t pg = ui.page % NPERF - PG_SPELL, t, k, hk = ui.hot ? ui.hot - 1u : 4u;
-    int pend = sp_pending(), roll = sp.rolling;
+    int die = sp_die_shown(), roll = sp.rolling;
     const int32_t X = 74, W = 164;                   /* (the column beside the wizard) */
     char b[40];
     (void)y0;
@@ -232,7 +237,7 @@ static void draw_spells(int32_t y0)
         put_str(b, S->name, sizeof b);
     }
     cv_text_fit(X, 2, &AF_M, b, T_THEME, T_BG, W);
-    if (roll || pend) {                              /* (the die; beside it what the cast changed) */
+    if (die) {                                       /* (the die; beside it what the cast changed) */
         sp_die(X + 22, 38, 21);
         if (roll) {
             cv_text(X + 50, 32, &AF_S, "ROLLING", T_ACCENT);
@@ -287,7 +292,7 @@ static uint32_t spells_sig(void)
 {
     uint32_t s = sig_add(16, sp.sel | (uint32_t)sp.tracks << 8 | (uint32_t)sp.mask << 16);
     s = sig_add(s, (uint32_t)sp.scope | (uint32_t)sp.mode << 8 | (uint32_t)sp.eng << 16);
-    s = sig_add(s, (uint32_t)sp_pending() | (uint32_t)sp.rolling << 1 | sp_frame() << 2 | (uint32_t)sp.face << 12 |
+    s = sig_add(s, (uint32_t)sp_die_shown() | (uint32_t)sp.rolling << 1 | sp_frame() << 2 | (uint32_t)sp.face << 12 |
                        ui.page << 16 | (uint32_t)ui.hot << 24);
     s = sig_add(s, sp.nsnd | (uint32_t)sp.nstep << 16);
     s = sig_add(s, sp_is_rcp() ? rcp[sp.sel - NSPELL].spell : 0u);

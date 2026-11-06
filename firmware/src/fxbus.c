@@ -434,7 +434,7 @@ enum { GL_NONE, GL_STUTTER, GL_REVERSE, GL_SKIP, GL_HALF };
 #define TP_MIN (220u << 16)                          /* 10 ms at half rate */
 #define TP_FADE 32u
 #define PS_LEN 2048u                                 /* the pitch shifter's window (mono; a side: half) */
-static int16_t ps_buf[PS_LEN] POOL;
+static int16_t ps_buf[PS_LEN] NOINITBUF;             /* (1.0: in NOINIT, zeroed at start) */
 static struct {
     uint32_t w;                                      /* the write head (half-rate samples) */
     int32_t cur, tgt;                                /* the delay now and where it glides, Q16 half-rate samples */

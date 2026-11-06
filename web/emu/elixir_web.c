@@ -37,6 +37,7 @@
 static uint16_t web_surf;                       /* (the phone page: the cards' and beat columns' grey, RGB565; 0 the palette's) */
 #define POOL
 #define RAMBUF
+#define NOINITBUF
 static volatile uint32_t fm1_ms;
 struct { uint32_t magic, failed, pending; } bootguard;
 #define BOOTGUARD_MAGIC 0x42475244u

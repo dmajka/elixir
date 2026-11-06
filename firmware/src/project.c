@@ -911,7 +911,8 @@ static void autosave_poll(void)
  * 0.13: pmem: a button opens the page it showed last (ui.c pmem_*; 0, the default: its first).
  * 0.16: remote is the TRACKS channel (0: 15), rglobal the GLOBAL one (1..16, 17 off, 0: 16); settings from before
  * (16 bytes) start both at their defaults, or both off if the remote was.
- * 31: medit: a knob's edit with morph on moves the morph target too (0, the default: both kits; 1 the kit only). In
+ * 31: medit: a knob's edit with morph on moves the morph target too (0 .. 0.25: the default, both kits; 1 the kit
+ * only). 1.0: 0 SPLIT (the default: at morph 100% the morph kit, below it the kit), 1 the kit only, 2 both kits. In
  * the struct's padding before: settings from 0.16 .. 0.19 hold 0 there.
  * 0.19 (33): kbslots: the kit browser lists the slots first (0, the default: the factory kits first); in the padding too.
  * 0.24: ccmap: the CC map (midi.c midi_cc; the library page's 0x50 / 0x51): settings from before (20 bytes) hold none:

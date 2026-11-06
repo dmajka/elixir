@@ -5,7 +5,7 @@
  * and the update entry. OCT- + OCT+ held 5 s: UBOOT (the FM-1's own update mode, as Felucca). */
 extern uint32_t _data_start[], _data_end[], _data_load[], _bss_start[], _bss_end[];
 extern uint32_t _pool_start[], _pool_end[], _rt_start[], _rt_end[], _rt_load[];
-extern uint32_t _c1_start[], _c1_end[], _c1_load[], _rb_start[], _rb_end[];
+extern uint32_t _c1_start[], _c1_end[], _c1_load[], _rb_start[], _rb_end[], _nb_start[], _nb_end[];
 
 void fm1_timer5_irq(void)
 {
@@ -274,6 +274,8 @@ void fm1_cstart(void)
         *d = 0;
     for (d = _rb_start; d < _rb_end; d++)
         *d = 0;
+    for (d = _nb_start; d < _nb_end; d++)
+        *d = 0;                                   /* (1.0: NOINIT's buffers; crt0 clears nothing) */
     for (s = _data_load, d = _data_start; d < _data_end; s++, d++)
         *d = *s;
     for (s = _rt_load, d = _rt_start; d < _rt_end; s++, d++)

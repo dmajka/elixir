@@ -22,6 +22,7 @@
 
 enum { R_HDR, R_TITLE, R_LABELS, R_BARS, R_BODY, R_STRIP, R_CARD0, R_COL0 = R_CARD0 + 4, NREG = R_COL0 + 16 };
 static uint32_t rsig[NREG];
+static uint8_t body_full;                            /* the body takes the cards' place too (CONFIG > LOAD) */
 static uint8_t body_is_grid;                        /* what the body showed last (a change redraws it all) */
 
 static const uint16_t TRACK_COL[NTRACK] = {RGB(255, 112, 56), RGB(255, 166, 44), RGB(244, 208, 74), RGB(124, 210, 92),
@@ -202,7 +203,6 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
     case M_CONFIG: put_str(b, CONFIG_TITLE[ui.page % NCONFIG], n); break;
     case M_SAVE: put_str(b, "SAVE ", n); put_str(b + 5, IO_NAME[ui.io_type], n - 5); break;
     case M_LOAD: put_str(b, "LOAD ", n); put_str(b + 5, IO_NAME[ui.io_type], n - 5); break;
-    case M_LAST: put_str(b, ui.last_all ? "LAST STEP (ALL)" : "LAST STEP", n); break;
     case M_RECOPT: put_str(b, "RECORD", n); break;
     case M_KEYS: put_str(b, "KEYS", n); break;
     default: b[0] = 0; break;
@@ -403,12 +403,13 @@ static const char *const SCALE_NAME[NSCALE] = {"CHROM", "MAJOR", "MINOR", "DORIA
 #include "wander_viz.c"                              /* (40: WANDER's road, compass, cottage) */
 
 /* ---------------------------------------------------- the other bodies --- */
-/* the body's top h rows in two strips (the canvas holds half of it): draw(y0) draws with the strip's origin at -y0 */
+/* the body's top h rows in strips of at most 64 rows (the canvas): draw(y0) draws with the strip's origin at -y0.
+ * h is split evenly (128: two of 64; 196, the body and the cards' place: four of 49) */
 static void body_strips_h(void (*draw)(int32_t), int32_t h)
 {
-    int32_t y;
-    for (y = 0; y < h; y += h / 2) {
-        cv_begin(240, (uint32_t)h / 2u, T_BG);
+    int32_t y, n = (h + 63) / 64, step = (h + n - 1) / n;
+    for (y = 0; y < h; y += step) {
+        cv_begin(240, (uint32_t)(h - y < step ? h - y : step), T_BG);
         cv_oy = -y;
         draw(y);
         cv_oy = 0;
@@ -526,7 +527,7 @@ static void draw_ca_ask(int32_t y0)
     (void)y0;
     cv_rrect(10, 20, 220, 88, 6, T_SURF, T_BG);
     cv_text_in(10, 30, 220, &AF_S, "CONTROL ALL", T_MID, T_SURF);
-    cv_text_in(10, 50, 220, &AF_M, "REVERT THE KIT?", T_ACCENT, T_SURF);
+    cv_text_in(10, 50, 220, &AF_M, ui.ca_len ? "REVERT THE LENGTHS?" : "REVERT THE KIT?", T_ACCENT, T_SURF);
     cv_text_in(10, 76, 220, &AF_S, "OCT+: revert   OCT-: keep", T_TEXT, T_SURF);
     cv_text_in(10, 90, 220, &AF_S, "the changes sound until then", T_MID, T_SURF);
 }
@@ -674,6 +675,37 @@ static void draw_dest_pop(void)
     put_int(b + str_len(b), (int32_t)NGD);
     cv_text_r(226, 10, &AF_S, b, T_DIM, T_SURF);
 }
+/* 1.0: the GENERATOR knob turned: the generator's name and what it does over the page a while (as DEST's), in
+ * GEN_ORDER's order (the knob's) */
+static int32_t help_text_m(int32_t x, int32_t y, const char *s, uint16_t c, int32_t left);
+static const char *const GEN_NAME[NGEN] = {"OFF", "EUCLID", "MUTATE", "TURING", "CELLULAR", "GRIDS"};
+static const char *const GEN_DESC[NGEN] = {
+    "No generator: the track plays its steps as they are.",
+    "Writes the steps: Hits spread as evenly as they go over Length, turned by Rotate.",
+    "Each time round, a step flipped or moved or a lock drifted, at Amount's chance. Freeze stops it.",
+    "A shift register loop: Lock 127 repeats it, lower flips its bits. Density: how many steps play.",
+    "Each time round, the steps become the next row of a cellular automaton (Rule 0-255).",
+    "Mutable Instruments' Grids: Part picks the drum, Density how busy, Accent the loud hits."};
+static int gen_pop(void)
+{
+    return ui.mode == M_EUCLID && ui.page % NEUCLID == PG_GEN && ui.dest_ms && fm1_ms - ui.dest_ms < DEST_POP_MS &&
+           ui.dest_p == VP_GMODE && !ui.kb_open && !ui.clear_open;
+}
+static void draw_gen_pop(int32_t y0)
+{
+    uint32_t g = vp_get(VP_GMODE) % NGEN;
+    char b[16];
+    (void)y0;
+    cv_rrect(4, 4, 232, 120, 6, T_THEME, T_BG);
+    cv_rrect(6, 6, 228, 116, 5, T_SURF, T_THEME);
+    cv_text(14, 10, &AF_S, "GENERATOR", T_MID);
+    cv_text_fit(14, 28, &AF_M, GEN_NAME[g], g ? T_THEME : T_DIM, T_SURF, 212);
+    help_text_m(14, 58, GEN_DESC[g], T_TEXT, 14);
+    put_int(b, (int32_t)g + 1);
+    put_str(b + str_len(b), "/", sizeof b - str_len(b));
+    put_int(b + str_len(b), (int32_t)NGEN);
+    cv_text_r(226, 10, &AF_S, b, T_DIM, T_SURF);
+}
 static void draw_perf_page(int32_t y0);
 static void draw_perf(int32_t y0)
 {
@@ -770,7 +802,10 @@ static void draw_perf_page(int32_t y0)
 #define HELP_LH 14
 #define HELP_GAP 8
 #define HELP_R 232
-static int32_t help_text(int32_t x, int32_t y, const char *s, uint16_t c)
+static int32_t help_text_m(int32_t x, int32_t y, const char *s, uint16_t c, int32_t left);
+static int32_t help_text(int32_t x, int32_t y, const char *s, uint16_t c) { return help_text_m(x, y, s, c, HELP_X); }
+/* .. its lines after the first from `left` (1.0: a block of text indented as a whole, the generator's words) */
+static int32_t help_text_m(int32_t x, int32_t y, const char *s, uint16_t c, int32_t left)
 {
     char line[48];
     while (*s == ' ')
@@ -795,7 +830,7 @@ static int32_t help_text(int32_t x, int32_t y, const char *s, uint16_t c)
         memcpy(line, s, cut);
         line[cut] = 0;
         cv_text(x, y, &AF_S, line, c);
-        x = HELP_X;
+        x = left;
         s += cut;
         while (*s == ' ')
             s++;
@@ -824,31 +859,30 @@ static void help_pairs(int32_t x, int32_t y, const char *const *kv, uint32_t n)
 
 static void draw_shift_legend(int32_t y0)
 {
-    static const char *const F[9] = {"KIT", "MORPH", "SONG", "PROJECT", "CONFIG", "RELOAD", "LAST", "FX",
-                                     "PATTERN"};
+    static const char *const F[6] = {"KIT", "MORPH", "RESET SOUND", "RESET PERF", "SOLO", "RELOAD"};
     uint32_t i;
     (void)y0;
     cv_text(8, 0, &AF_S, "SHIFT + WHITE KEY", T_THEME);
     for (i = 0; i < NTRACK; i++) {                   /* keys 1..7: play the voice */
         int32_t x = 4 + (int32_t)i * 33;
-        cv_rrect(x, 15, 31, 17, 3, T_RAISE, T_BG);
-        text_c(x, 15 + CAP_IN(S, 17), 31, &AF_S, VOICE_SHORT[i], T_TEXT, T_RAISE);
+        cv_rrect(x, 14, 31, 16, 3, T_RAISE, T_BG);
+        text_c(x, 14 + CAP_IN(S, 16), 31, &AF_S, VOICE_SHORT[i], T_TEXT, T_RAISE);
     }
-    for (i = 0; i < 9u; i++) {                       /* keys 8..16: the LXR's SHIFT functions */
-        int32_t x = 4 + (int32_t)(i % 3u) * 78, y = 35 + (int32_t)(i / 3u) * 19;
+    for (i = 0; i < 6u; i++) {                       /* 1.0: keys 8..13, the menu (two a row, in key order) */
+        int32_t x = 4 + (int32_t)(i % 2u) * 117, y = 33 + (int32_t)(i / 2u) * 18;
         char b[16];
         put_int(b, (int32_t)i + 8);
-        cv_rrect(x, y, 76, 17, 3, T_SEL, T_BG);
-        cv_text(x + 4, y + CAP_IN(S, 17), &AF_S, b, T_INK);
-        cv_text_fit(x + 22, y + CAP_IN(S, 17), &AF_S, F[i], T_INK, T_SEL, 52);
+        cv_rrect(x, y, 115, 16, 3, T_SEL, T_BG);
+        cv_text(x + 4, y + CAP_IN(S, 16), &AF_S, b, T_INK);
+        cv_text_fit(x + 22, y + CAP_IN(S, 16), &AF_S, F[i], T_INK, T_SEL, 90);
     }
     {
         static const char *const L1[6] = {"VOICE", "mute", "GLO", "solo", "BAR", "length"};
         static const char *const L2[6] = {"SEQ", "links", "EDIT", "keys", "PLAY", "song"};
-        static const char *const L3[4] = {"REC", "options", "HOME", "PERF reset"};
+        static const char *const L3[6] = {"REC", "options", "HOME", "perf reset", "KNOB", "fine"};
         help_pairs(8, 90, L1, 3);
         help_pairs(8, 103, L2, 3);
-        help_pairs(8, 116, L3, 2);
+        help_pairs(8, 116, L3, 3);
     }
 }
 
@@ -1263,6 +1297,20 @@ static void draw_links(int32_t y0)
 /* 17a-17c: CONFIG > LOAD. Each part's share of a half buffer (2.9 ms; audio.c): the average, the peak since CONFIG
  * opened, a bar with the peak's tick (with two cores D1-D3 is the second core's). Below, the cores: CORES 2 with core
  * 0's wait for the second and the second's stack, or CORES 1 and why */
+#define USTACK_B 12032u                              /* app.ld: _ustack_lo .. _guard1 */
+#define SSTACK_B 7936u                               /* app.ld: _sstack_lo .. _sstack_top */
+static void load_line(int32_t y, const char *name, const char *v, uint16_t c)
+{
+    cv_text(10, y, &AF_S, name, T_MID);
+    cv_text_r(232, y, &AF_S, v, c, T_BG);
+}
+static void stack_line(char *b, uint32_t used, uint32_t size)   /* "1234 OF 24320 B" (b: 40) */
+{
+    put_int(b, (int32_t)used);
+    cat(b, " OF ", 40);
+    put_int(b + str_len(b), (int32_t)size);
+    cat(b, " B", 40);
+}
 static void draw_load(void)
 {
     static const uint8_t ORDER[NLD - 1u] = {LD_D13, LD_SNHH, LD_MIX, LD_FX, LD_REV, LD_SEQ};
@@ -1299,26 +1347,24 @@ static void draw_load(void)
         cat(b, "OFF", sizeof b);
     }
     cv_text(122, 82, &AF_S, b, T_TEXT);
+    /* one reading a line, the name left and the value right (0.25.3: they overlapped on one line) */
+    cv_rect(10, 99, 222, 1, T_LINE);
     if (cores_why == CW_TWO) {
-        put_str(b, "WAIT ", sizeof b);
-        put_int(b + str_len(b), (int32_t)((ld_q8[LD_WAIT] * 100u + 128u) >> 8));
-        cat(b, "%  STACK ", sizeof b);
-        put_int(b + str_len(b), (int32_t)c1_stack());
-        cat(b, " B", sizeof b);
-        cv_text(10, 96, &AF_S, b, c1_stack() > 3584u ? T_REC : T_MID);
+        put_int(b, (int32_t)((ld_q8[LD_WAIT] * 100u + 128u) >> 8));
+        cat(b, "%", sizeof b);
+        load_line(104, "CORE 0 WAITS", b, T_TEXT);
+        stack_line(b, c1_stack(), 4096u);
+        load_line(118, "CORE 1 STACK", b, c1_stack() > 3584u ? T_REC : T_TEXT);
     } else {
-        put_str(b, "1 CORE: ", sizeof b);
-        cat(b, WHY[cores_why < sizeof WHY / sizeof WHY[0] ? cores_why : 0], sizeof b);
-        cv_text(10, 96, &AF_S, b, cores_why >= CW_BAD ? T_REC : T_MID);
+        load_line(104, "1 CORE", WHY[cores_why < sizeof WHY / sizeof WHY[0] ? cores_why : 0],
+                  cores_why >= CW_BAD ? T_REC : T_TEXT);
     }
-    {   /* 18a: the main stacks' deepest use (24 KB, 8 KB); red past three quarters */
+    {   /* 18a: the main stacks' deepest use since power-on, of their sizes (app.ld); red past three quarters */
         uint32_t u = ustack_used(), sv = sstack_used();
-        put_str(b, "STACKS ", sizeof b);
-        put_int(b + str_len(b), (int32_t)u);
-        cat(b, "+", sizeof b);
-        put_int(b + str_len(b), (int32_t)sv);
-        cat(b, " B", sizeof b);
-        cv_text_r(232, 96, &AF_S, b, u > 18432u || sv > 6144u ? T_REC : T_MID, T_BG);
+        stack_line(b, u, USTACK_B);
+        load_line(132, "USER STACK", b, u > USTACK_B / 4u * 3u ? T_REC : T_TEXT);
+        stack_line(b, sv, SSTACK_B);
+        load_line(146, "SYS STACK", b, sv > SSTACK_B / 4u * 3u ? T_REC : T_TEXT);
     }
 }
 
@@ -1329,7 +1375,7 @@ static void draw_config_help(int32_t y0)
     (void)y0;
     if (ui.page % NCONFIG == CF_LOAD) {
         draw_load();
-        draw_cpu(110);
+        draw_cpu(178);                               /* (the cards' place: LOAD has no knobs) */
         return;
     }
     if (ui.page % NCONFIG == CF_ABOUT) {
@@ -1460,19 +1506,20 @@ static void draw_body(void)
 {
     uint32_t s;
     void (*fn)(int32_t) = 0;
+    body_full = 0;
     if (ui.dx_ask) {                                 /* 0.24.1: another app's data */
         fn = draw_dx_ask;
         s = sig_add(97, ui.dx_ask | (uint32_t)fx_found << 4 | (uint32_t)fx_apps << 8);
     } else if (ui.ca_ask) {                          /* 0.11: Control All's dialog */
         fn = draw_ca_ask;
-        s = 41;
-    } else if (perf_spells() && !ui.clear_open && !ui.kb_open && !(ui.shift && ui.shift_used)) {   /* (32) */
+        s = 41u + ui.ca_len;
+    } else if (perf_spells() && !ui.clear_open && !ui.kb_open && !(ui.shift && ui.shift_used && !ui.fine)) {   /* (32) */
         fn = draw_spells;
         s = spells_sig();
-    } else if (perf_wander() && !ui.clear_open && !ui.kb_open && !(ui.shift && ui.shift_used)) {   /* (40) */
+    } else if (perf_wander() && !ui.clear_open && !ui.kb_open && !(ui.shift && ui.shift_used && !ui.fine)) {   /* (40) */
         fn = draw_wander;
         s = wander_sig();
-    } else if (perf_rush() && !ui.shift && !ui.clear_open && !ui.kb_open) {   /* (39: RUSH) */
+    } else if (perf_rush() && !ui.clear_open && !ui.kb_open) {   /* (39: RUSH; 1.0: SHIFT keeps it) */
         uint32_t t = ui.track < NTRACK ? ui.track : 0u, k;
         const pattern_t *vp = view_pat(t);
         fn = draw_rush;
@@ -1482,21 +1529,21 @@ static void draw_body(void)
         s = sig_add(s, sq.ru_filt | (uint32_t)(uint8_t)sq.idx[t] << 8);
         for (k = 0; k < 16u; k++)
             s = sig_add(s, rush_lock(vp, t, ui.bar * 16u + k) | (uint32_t)main_on(vp, t, ui.bar * 16u + k) << 8);
-    } else if (perf_trp() && !ui.shift && !ui.clear_open && !ui.kb_open) {   /* (0.23-t7: TRANSPOSE) */
+    } else if (perf_trp() && !ui.clear_open && !ui.kb_open) {   /* (0.23-t7: TRANSPOSE) */
         uint32_t k;
         fn = draw_trp;
         s = sig_add(43, sq.trmask | (uint32_t)sq.trdue << 8 | (uint32_t)sq.trwhen << 9 | ui.track << 12 |
                             (uint32_t)pat[sq.active].scale << 16);
         for (k = 0; k < NTRACK; k++)
             s = sig_add(s, (uint32_t)(uint8_t)sq.trp[k] | (uint32_t)(uint8_t)sq.trpend[k] << 8);
-    } else if (perf_links() && !ui.shift && !ui.clear_open && !ui.kb_open) {   /* (29: PERF's GLOBAL MOD) */
+    } else if (perf_links() && !ui.clear_open && !ui.kb_open) {   /* (29: PERF's GLOBAL MOD) */
         uint32_t l;
         const pattern_t *pt = shown_pat();
         fn = draw_links;
         s = sig_add(12, ui.link | (uint32_t)pt->cdepth << 8);
         for (l = 0; l < NLINK; l++)
             s = sig_add(s, (uint32_t)pt->link[l][0] | (uint32_t)pt->link[l][1] << 8 | (uint32_t)pt->link[l][2] << 16);
-    } else if ((ui.mode == M_PERF || (ui.perf && ui.shift)) && !ui.clear_open && !ui.kb_open) {   /* (SHIFT: latches) */
+    } else if (ui.mode == M_PERF && !ui.clear_open && !ui.kb_open) {   /* (SHIFT: latches; 1.0: PERF's pages only) */
         fn = draw_perf;
         s = sig_add(sig_add(11, pf.on), ui.pf_latch | (uint32_t)perf_bank2() << 31);
         s = sig_add(s, sq.drill | ui.drill_latch << 8);
@@ -1512,7 +1559,7 @@ static void draw_body(void)
                                (uint32_t)dundo << 18);
         if (perf_stut())                             /* (0.16: STUTTER: a burst, its repeat, held) */
             s = sig_add(s, pf.st_on | pf.st_rep << 2 | (uint32_t)pf.st_hold << 12 | 2u << 16);
-    } else if (ui.shift && !ui.clear_open) {
+    } else if (shift_menu() && !ui.fine && !ui.clear_open) {   /* (1.0: a knob turned: the page, fine adjust) */
         fn = draw_shift_legend;
         s = 1;
     } else if (ui.clear_open) {
@@ -1605,6 +1652,11 @@ static void draw_body(void)
             s = sig_add(10, sound_sig());
             break;
         case M_EUCLID:
+            if (gen_pop()) {                         /* (1.0: the generator's name, what it does) */
+                fn = draw_gen_pop;
+                s = sig_add(17, vp_get(VP_GMODE));
+                break;
+            }
             if (track_viz_page()) {                  /* (30: GROOVE, BOUNCE, MELODY, SCALE: their pictures) */
                 fn = draw_track_viz;
                 s = sig_add(15, track_viz_sig());
@@ -1629,9 +1681,13 @@ static void draw_body(void)
         draw_sound_strip();
         return;
     }
+    body_full = fn == draw_config_help && ui.page % NCONFIG == CF_LOAD;
     if (!region(R_BODY, s))
         return;
-    body_strips(fn);
+    if (body_full)                                   /* (CONFIG > LOAD: no knobs, so the cards' place too) */
+        body_strips_h(fn, 240 - BODY_Y);
+    else
+        body_strips(fn);
 }
 
 /* ------------------------------------------------------------- cards --- */
@@ -2064,14 +2120,14 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
         return;
     switch (p) {
     case VP_NONE: b[0] = 0; return;
-    case VP_IO_TYPE: put_str(b, IO_NAME[v % NIO], n); return;
+    case VP_IO_TYPE: put_str(b, IO_NAME[io_ord(v)], n); return;
     case VP_IO_SLOT:
         if (v >= 99u)
             put_int(b, (int32_t)v + 1);
         else
             two_digits(b, v + 1u);
         return;
-    case VP_IO_SRC: put_str(b, v ? "LIBRARY" : "SLOTS", n); return;
+    case VP_IO_SRC: put_str(b, v == 2u ? "FACTORY" : v ? "LIBRARY" : "SLOTS", n); return;
     case VP_IO_TRACK: put_str(b, VOICE_NAME[v % NTRACK], n); return;
     case VP_NAME_POS: put_int(b, (int32_t)v + 1); return;
     case VP_NAME_CHAR: b[0] = (char)(v >= 32u ? v : ' '); b[1] = 0; return;
@@ -2116,7 +2172,8 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
     case VP_RCH: case VP_RCH2: if (v) put_int(b, (int32_t)v); else put_str(b, "OFF", n); return;
     case VP_RKNOBS: put_str(b, v == RK_ABS ? "ABS" : v == RK_REL ? "REL" : "PICKUP", n); return;
     case VP_RMUTE: put_str(b, v ? "TOGGLE" : "PRESS", n); return;
-    case VP_CAKIT: case VP_MEDIT: put_str(b, v ? "KIT ONLY" : "BOTH KITS", n); return;
+    case VP_CAKIT: put_str(b, v ? "KIT ONLY" : "BOTH KITS", n); return;
+    case VP_MEDIT: put_str(b, v == 1u ? "KIT ONLY" : v ? "BOTH KITS" : "SPLIT", n); return;   /* (1.0: SPLIT) */
     case VP_PMEM: put_str(b, v ? "YES" : "NO", n); return;
     case VP_GL ... VP_GL_LAST:
         switch ((p - VP_GL) % NGLSET) {
@@ -2355,11 +2412,8 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
         put_str(b, A[v && v <= na ? a[v - 1u] : 0], n);
         return;
     }
-    case VP_GMODE: {                                  /* (v: GEN_ORDER's index) */
-        static const char *const G[NGEN] = {"OFF", "EUCLID", "MUTATE", "TURING", "CELLULAR", "GRIDS"};
-        put_str(b, G[v < NGEN ? v : 0], n);
-        return;
-    }
+    case VP_GMODE: put_str(b, v == 4u ? "CELL" : GEN_NAME[v < NGEN ? v : 0], n); return;   /* (GEN_ORDER's
+                                                      * index; 1.0: CELLULAR fits as CELL) */
     case VP_DIR: {
         static const char *const D[NDIR] = {"FWD", "REV", "PING", "PING2", "RAND", "WALK"};
         put_str(b, D[v < NDIR ? v : 0], n);
@@ -2518,6 +2572,11 @@ static void draw_cards(void)
 {
     uint16_t pp[4];
     uint32_t k;
+    if (body_full) {                                 /* (the body drew over the cards' place: draw them when it's back) */
+        for (k = 0; k < 4u; k++)
+            rsig[R_CARD0 + k] = 0;
+        return;
+    }
     page_params(pp);
     for (k = 0; k < 4u; k++)
         draw_card(k, pp[k]);

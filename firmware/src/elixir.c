@@ -36,6 +36,7 @@
 #define RING_PUBLISH() __asm__ volatile("" ::: "memory")
 #define POOL __attribute__((section(".pool")))
 #define RAMBUF __attribute__((section(".ram_buf")))   /* 18a: zeroed, in RAMTEXT after the RAM code (app.ld) */
+#define NOINITBUF __attribute__((section(".noinit_buf")))   /* 1.0: zeroed at every start, in NOINIT past its records */
 static volatile uint32_t fm1_ms;        /* milliseconds since boot (TIMER5) */
 #define BOOTGUARD_MAGIC 0x42475245u     /* (0.15: c2 added) */
 /* c2 (main.c cores_boot): 1 = two cores run, 2 = and then a crash: the next start is one core */

@@ -57,7 +57,7 @@ enum { PF_HALF = NPF, PF_JITTER, PF_CUTS, PF_SHORT, PF_PUMP, PF_COMB, PF_SPACE, 
 #define REC_LEN 5512u                                /* REVERSE's recorder: 0.25 s at 22.05 kHz */
 #define SHORT_DEC 2097152u                           /* SHORT: the amp EG's decay rate (an eighth a block) */
 static int16_t comb_buf[COMB_LEN] POOL;
-static int16_t rec_buf[REC_LEN] POOL;
+static int16_t rec_buf[REC_LEN] NOINITBUF;          /* (1.0: in NOINIT, zeroed at start) */
 #define NMACRO 4
 enum { SV_OFF, SV_SHRINK, SV_PDOWN, SV_PUP, SV_REV, SV_RAND, NSV };   /* (0.16: STUTTER's VARY) */
 #define NSTSIZE 7u                                   /* SIZE: 1/8 1/16 1/16T 1/32 1/32T 1/64, RANDOM (1/16 .. 1/64) */

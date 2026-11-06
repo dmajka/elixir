@@ -62,7 +62,7 @@ static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy 
     return 0xFC000u + copy * ST_SECTOR;
 }
 
-static uint8_t st_buf[ST_PAYLOAD_MAX] __attribute__((aligned(4))) POOL;   /* (main loop only) */
+static uint8_t st_buf[ST_PAYLOAD_MAX] __attribute__((aligned(4))) RAMBUF;   /* (main loop only) */
 
 static int st_head(uint32_t obj, uint32_t copy, st_hdr_t *h)   /* commit record valid: 0 */
 {

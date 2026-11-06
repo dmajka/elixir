@@ -7,21 +7,23 @@
  *   black keys 1..7    the 7 voice buttons (D1 D2 D3 SN CY CH OH): select; with SHIFT mute (PERF: mute)
  *   black keys 8..11   the 4 bar buttons: show bar 1..4 (patterns: the bank, 2 of 16; kits and songs: 4);
  *                      SHIFT: the track's length; COPY: copy
- *   OCT-               SHIFT (held; the screen shows what SHIFT + a key does: the LXR's SHIFT + step functions)
+ *   OCT-               SHIFT (held; the screen shows the menu, what SHIFT + a key does, on every page but PERF's;
+ *                      1.0: held while a knob turns, fine: a step a detent)
  *   OCT+               COPY (held, + a track, a bar, a pattern); SHIFT + COPY = CLEAR; OK in the dialogs;
- *                      held on a sound page, a knob: CONTROL ALL (let go: OCT+ reverts, OCT- keeps)
+ *                      held on a sound page, a knob: CONTROL ALL (let go: OCT+ reverts, OCT- keeps; 1.0: on the
+ *                      length, every track's)
  *   EDIT ENV SCL LFO GLO   the sound sections (SHIFT GLO: solo the track): OSC > FM > CLICK, AMP EG > MOD, FILTER > SHAPE, LFO > RANDOM >
  *                      CROSS MOD (Elixir's: their pages are K_PAGES), MIX > MIXER (volume,
  *                      pan, FX send, reverb send) > CONFIG (the CPU load at the bottom)
- *   FX  SEQ  ARP  HOME  SAVE   FX bus > reverb; step edit (again: its next page); PERF > GENERATOR; GRID >
- *                      PATTERNS > SONG; SAVE > LOAD
+ *   FX  SEQ  ARP  HOME  SAVE   FX bus > reverb; the track's pages > step edit; PERF's sets; GRID > PATTERNS >
+ *                      LOAD / SAVE (1.0: FILES) > SONG; SAVE > LOAD (a sound button again: its next section only)
  *   PLAY REC           transport (SHIFT PLAY: the song from its start); record (SHIFT REC: its options)
  *   ALGORITHM SELECT PRESETS   the track; the page; the kit browser (OCT+ loads)
  *   KNOB 1..4          the four parameters on the screen; with a step key held, that step's lock
  * The main loop calls ui_input (every ms), ui_leds and ui_draw (a frame). */
 
 enum { M_HOME, M_PATTERN, M_SONG, M_SOUND, M_STEP, M_PERF, M_EUCLID, M_FX, M_MIXER, M_CONFIG, M_SAVE, M_LOAD,
-       M_LAST, M_RECOPT, M_KEYS, NMODE };
+       M_RECOPT, M_KEYS, NMODE };
 enum { S_OSC, S_AEG, S_MOD, S_FM, S_CLICK, S_FILTER, S_LFO, S_MIX, S_SHAPE, S_RANDOM, S_XMOD, S_MODEL, S_LFOM,
        S_GATE, S_LFO2, S_INSERT, NSECT };
 #define NSPG 32                                      /* the sound pages a track can have (sections x halves) */
@@ -30,9 +32,11 @@ static const char *const SECT_NAME[NSECT] = {"OSCILLATOR", "AMP EG", "MOD EG / V
                                              "LFO 1", "MIX", "SHAPE", "RANDOM PER HIT", "CROSS MOD / CHOKE", "MODEL",
                                              "LFO 1", "GATE", "LFO 2", "INSERT FX"};
 enum { IO_KIT, IO_PATTERN, IO_SONG, IO_MORPH, IO_SOUND, IO_PROJECT, IO_FACTORY, NIO };   /* (FACTORY: LOAD, a kit bank) */
-static const char *const IO_NAME[NIO] = {"KIT", "PATTERN", "SONG", "MORPH", "SOUND", "PROJECT", "FACTORY"};
-#define IO_LOAD_LAST IO_FACTORY
-
+static const char *const IO_NAME[NIO] = {"KIT", "PATTERN", "SONG", "MORPH", "SOUND", "PROJECT", "KIT"};
+/* 1.0: the Type knob's order, most used first. LOAD: no PATTERN or SONG (their own pages pick them); FACTORY is a
+ * KIT From FACTORY (the From knob's third). SAVE: the same, then PATTERN, SONG */
+static const uint8_t IO_LOAD_ORD[] = {IO_KIT, IO_MORPH, IO_SOUND, IO_PROJECT};
+static const uint8_t IO_SAVE_ORD[] = {IO_KIT, IO_MORPH, IO_SOUND, IO_PROJECT, IO_PATTERN, IO_SONG};
 /* the keys: k = semitones above F3 (fm1_in.notes bit k) */
 static const uint8_t WHITE_KEY[16] = {0, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 24, 26};
 static const uint8_t BLACK_KEY[11] = {1, 3, 5, 8, 10, 13, 15, 17, 20, 22, 25};
@@ -93,7 +97,9 @@ static struct {
                                       * once, 3 erasing (dx_ms: when); dx_seen: asked this power-on */
     uint32_t dx_ms;
     uint8_t clear_open, clear_sel;
-    uint8_t last_all;
+    uint8_t ca_len;                  /* 1.0: Control All on the tracks' lengths (OCT+ held, the length knob): ca_lens */
+    uint8_t ca_lens[NTRACK];         /* .. the lengths as they were */
+    uint8_t fine;                    /* 1.0: a knob turned with OCT- held (fine: no acceleration; the page stays shown) */
     uint8_t kb_open;                 /* the kit browser (0.9; 0.19: one list, kb_has) */
     uint16_t kb_sel, kb_at;          /* .. its entry; 1 + where it was when it closed (0: not opened yet) */
     uint8_t sb_open, sb_voice, sb_on; /* 0.8: the sound browser (its voice; the voice as it was: sb_orig, sb_on values) */
@@ -127,6 +133,9 @@ static struct {
 
 
 static uint32_t ui_track(void) { return ui.track; }
+static uint32_t io_nord(void) { return ui.mode == M_SAVE ? sizeof IO_SAVE_ORD : sizeof IO_LOAD_ORD; }
+static uint32_t io_ord(uint32_t i) { return ui.mode == M_SAVE ? IO_SAVE_ORD[i % sizeof IO_SAVE_ORD] : IO_LOAD_ORD[i % sizeof IO_LOAD_ORD]; }
+
 static uint32_t sp_vget(uint32_t i);                 /* (32: spells.c) */
 static uint32_t sp_vmax(uint32_t i);
 static void sp_vset(uint32_t i, uint32_t v);
@@ -565,7 +574,6 @@ static const uint16_t P_SONG[NSONGPG][4] = {{VP_SONG_NUM, VP_SONG_ROW, VP_SONG_P
                                             {VP_SONG_NUM, VP_ROADS, VP_RSUR, VP_RHOME}};
 enum { SE_INSERT, SE_DELETE, NSE };
 static const uint16_t P_PATTERN[4] = {VP_VOICES, PAR_SHUFFLE, VP_PKEEP, VP_PLAY};   /* (37: Voices, Play) */
-static const uint16_t P_LAST[4] = {PAR_TRACK_LENGTH, VP_NONE, VP_NONE, VP_NONE};
 static const uint16_t P_RECOPT[4] = {PAR_AUTOM_TRACK, VP_NONE, VP_NONE, VP_NONE};
 static const uint16_t P_KEYS[4] = {VP_KOCT, VP_KVEL, VP_KACC, VP_NONE};
 
@@ -636,15 +644,25 @@ static void page_params(uint16_t out[4])
             p = P_NAME;
             break;
         }
-        out[0] = VP_IO_TYPE;                          /* (the third: the slots or the library, the sound's track) */
-        out[1] = VP_IO_SLOT;
-        out[2] = ui.io_type == IO_KIT || ui.io_type == IO_MORPH ? VP_IO_SRC
-               : ui.io_type == IO_SOUND ? VP_IO_TRACK : VP_NONE;
+        out[0] = VP_IO_TYPE;                          /* (KIT, MORPH: From / To before the Slot it lists, 0.25.3;
+                                                      * SOUND: the Slot, then its track) */
+        if (ui.io_type == IO_KIT || ui.io_type == IO_MORPH) {
+            out[1] = VP_IO_SRC;
+            out[2] = VP_IO_SLOT;
+        } else if (ui.io_type == IO_FACTORY) {       /* (1.0: a KIT From FACTORY) */
+            out[1] = VP_IO_SRC;
+            out[2] = VP_IO_SLOT;
+        } else if (ui.io_type == IO_SOUND) {         /* (1.0: the track, then the Slot) */
+            out[1] = VP_IO_TRACK;
+            out[2] = VP_IO_SLOT;
+        } else {
+            out[1] = VP_IO_SLOT;
+            out[2] = VP_NONE;
+        }
         out[3] = VP_NONE;
         return;
     case M_SONG: p = P_SONG[ui.page % NSONGPG]; break;
     case M_PATTERN: p = P_PATTERN; break;
-    case M_LAST: p = P_LAST; break;
     case M_RECOPT: p = P_RECOPT; break;
     case M_KEYS: p = P_KEYS; break;
     default: break;
@@ -1058,6 +1076,13 @@ static void glfo_macros(void)
     }
 }
 
+/* 1.0: CONFIG > MORPH, Edits SPLIT (the default): with the morph knob at 100% a sound knob edits the morph kit
+ * (what is heard; SAVE > MORPH keeps it), below it the kit alone. BOTH KITS: both move (morph_follow); KIT ONLY:
+ * the kit. (medit 0 SPLIT, 1 KIT ONLY, 2 BOTH KITS: settings from before hold 0, BOTH KITS's then) */
+static int morph_side(uint32_t p)
+{
+    return kset.medit == 0u && par[PAR_MORPH] >= 255u && p < NPAR && par_sound(p) && !morph_excluded(p);
+}
 static uint32_t vp_get(uint32_t p)
 {
     pattern_t *pt = shown_pat();
@@ -1084,9 +1109,14 @@ static uint32_t vp_get(uint32_t p)
     case VP_FX_SUB:
         return fx.type == FX_DRIVE ? par[PAR_FX_DIST_TYPE] : fx.type == FX_RING ? par[PAR_FX_WAVE]
              : fx.type == FX_COMP ? par[PAR_FX_RATIO] : par[PAR_FX_DELAY_TYPE];
-    case VP_IO_TYPE: return ui.io_type;
+    case VP_IO_TYPE: {                               /* (1.0: its place in IO_*_ORD; FACTORY is KIT's) */
+        uint32_t i, t = ui.io_type == IO_FACTORY ? IO_KIT : ui.io_type;
+        for (i = 0; i < io_nord() && io_ord(i) != t; i++)
+            ;
+        return i < io_nord() ? i : 0u;
+    }
     case VP_IO_SLOT: return ui.io_slot;
-    case VP_IO_SRC: return ui.io_src;
+    case VP_IO_SRC: return ui.io_type == IO_FACTORY ? 2u : ui.io_src;   /* (1.0: SLOTS, LIBRARY, FACTORY) */
     case VP_IO_TRACK: return ui.track;
     case VP_NAME_POS: return ui.io_pos;
     case VP_NAME_CHAR: return (uint8_t)ui.io_name[ui.io_pos & 7u];
@@ -1114,7 +1144,7 @@ static uint32_t vp_get(uint32_t p)
     case VP_RKNOBS: return kset.rknobs & RK_KNOBS;
     case VP_RMUTE: return (kset.rknobs & RK_TOGGLE) != 0;
     case VP_CAKIT: return kset.cakit;
-    case VP_MEDIT: return kset.medit == 1u;
+    case VP_MEDIT: return kset.medit < 3u ? kset.medit : 0u;
     case VP_PMEM: return kset.pmem;
     case VP_KBSLOTS: return kset.kbslots;
     case VP_GTAKES: return kset.gtakes;
@@ -1221,7 +1251,7 @@ static uint32_t vp_get(uint32_t p)
     case VP_LEFF: return (pt->link[ui.link & 7u][1] & 15u) % NLE;
     case VP_LWIN: return pt->link[ui.link & 7u][1] >> 4 & 3u;
     default:
-        return p < NPAR ? par[p] : 0u;
+        return p >= NPAR ? 0u : morph_side(p) ? morph_par[kit_idx(p)] : par[p];
     }
 }
 static uint32_t vp_min(uint32_t p)
@@ -1270,7 +1300,7 @@ static uint32_t vp_max(uint32_t p)
     case VP_FX_SUB:
         return fx.type == FX_DRIVE ? 2u : fx.type == FX_RING || fx.type == FX_COMP ? 5u
              : fx.type == FX_DELAY ? NDELAY - 1u : 0u;
-    case VP_IO_TYPE: return ui.mode == M_SAVE ? IO_PROJECT : IO_LOAD_LAST;
+    case VP_IO_TYPE: return io_nord() - 1u;
     case VP_IO_SLOT:
         return io_lib() ? (ui.io_type == IO_SOUND ? KL_SOUNDS : KL_KITS) - 1u
              : ui.io_type == IO_PROJECT ? PROJ_USER - 1u : ui.io_type == IO_PATTERN ? NUM_PATTERN - 1u
@@ -1289,14 +1319,16 @@ static uint32_t vp_max(uint32_t p)
     case VP_RHOME: return NSONGHOME - 1u;
     case VP_VOICES: return NPV - 1u;
     case VP_LEDS: return 2;
-    case VP_AUTOSAVE: case VP_ACCEL: case VP_IO_SRC: case VP_PKEEP: case VP_KBSLOTS: return 1;
+    case VP_IO_SRC: return ui.mode == M_LOAD && (ui.io_type == IO_KIT || ui.io_type == IO_FACTORY) ? 2u : 1u;
+    case VP_AUTOSAVE: case VP_ACCEL: case VP_PKEEP: case VP_KBSLOTS: return 1;
     case VP_KB_SRC: return 2;
     case VP_GTAKES: return NGTAKES - 1u;
     case VP_IO_TRACK: return NTRACK - 1u;
     case VP_PALETTE: return NPALETTES - 1u;
     case VP_RCH: case VP_RCH2: return 16;
     case VP_RKNOBS: return NRK - 1u;
-    case VP_CAKIT: case VP_PMEM: case VP_MEDIT: case VP_RMUTE: return 1;
+    case VP_MEDIT: return 2;
+    case VP_CAKIT: case VP_PMEM: case VP_RMUTE: return 1;
     case VP_GL ... VP_GL_LAST: {
         static const uint8_t MX[NGLSET] = {NGD - 1, 254, NGLEN - 1, NLFO - 1, NGM - 1, NGT - 1, 127};
         return MX[(p - VP_GL) % NGLSET];
@@ -1386,7 +1418,7 @@ static void vp_set(uint32_t p, uint32_t v)
     switch (p) {
     case PAR_TRACK_LENGTH:
         pt->len[ui.track] = (uint8_t)v;
-        if (ui.mode == M_LAST && ui.last_all) {
+        if (ui.ca_len) {                             /* (1.0: Control All: every track's) */
             uint32_t t;
             for (t = 0; t < NTRACK; t++)
                 pt->len[t] = (uint8_t)v;
@@ -1454,14 +1486,20 @@ static void vp_set(uint32_t p, uint32_t v)
                     : fx.type == FX_COMP ? PAR_FX_RATIO : PAR_FX_DELAY_TYPE, v);
         return;
     case VP_IO_TYPE:
-        ui.io_type = (uint8_t)v;
-        ui.io_slot = (uint8_t)(io_lib() ? io_slot_default(v) : 0u);
+        ui.io_type = (uint8_t)io_ord(v);
+        ui.io_slot = (uint8_t)(io_lib() ? io_slot_default(ui.io_type) : 0u);
         ui.bank = (uint8_t)(ui.io_slot / 16u);
         bank_fix();
         return;
     case VP_IO_SLOT: ui.io_slot = (uint8_t)v; return;
     case VP_IO_SRC:
-        ui.io_src = (uint8_t)v;
+        if (v == 2u) {                               /* (1.0: KIT From FACTORY: the factory kits' list) */
+            ui.io_type = IO_FACTORY;
+        } else {
+            if (ui.io_type == IO_FACTORY)
+                ui.io_type = IO_KIT;
+            ui.io_src = (uint8_t)v;
+        }
         ui.io_slot = io_slot_default(ui.io_type);
         ui.bank = (uint8_t)(ui.io_slot / 16u);
         return;
@@ -1734,6 +1772,11 @@ static void vp_set(uint32_t p, uint32_t v)
         return;
     }
     default:
+        if (morph_side(p)) {                         /* (1.0: SPLIT at 100%: the morph kit's) */
+            morph_par[kit_idx(p)] = (uint8_t)v;
+            snd_post(p);
+            return;
+        }
         if (p >= PAR_VOICE_LFO1 && p <= PAR_VOICE_LFO6) {     /* a new voice: its target moves along */
             uint32_t l = p - PAR_VOICE_LFO1, old = par[p], tp = PAR_TARGET_LFO1 + l, idx = par[tp];
             uint32_t ov = old >= 1u && old <= 6u ? old - 1u : 0u, nv = v >= 1u && v <= 6u ? v - 1u : 0u;
@@ -1818,6 +1861,16 @@ static void control_all(uint32_t k, int32_t step)
         if (!q || i < nd)
             continue;
         done[nd++] = (uint16_t)q;
+        if (morph_side(q)) {                         /* (1.0: SPLIT at 100%: the morph kit, as a knob; Control All's
+                                                      * KIT ONLY: the kit) */
+            if (kset.cakit)
+                par_set(q, model_step(q, par[q], (uint32_t)clamp32((int32_t)par[q] + step, (int32_t)vp_min(q),
+                                                                   (int32_t)vp_max(q))));
+            else
+                vp_set(q, model_step(q, vp_get(q), (uint32_t)clamp32((int32_t)vp_get(q) + step, (int32_t)vp_min(q),
+                                                                     (int32_t)vp_max(q))));
+            continue;
+        }
         if (morph_amt && !kset.cakit && par_sound(q) && !morph_excluded(q)) {   /* (the target first: vp_set sounds it) */
             uint8_t *m = &morph_par[kit_idx(q)];
             *m = (uint8_t)clamp32((int32_t)*m + step, (int32_t)vp_min(q), (int32_t)vp_max(q));
@@ -1829,6 +1882,14 @@ static void control_all(uint32_t k, int32_t step)
 static void control_all_undo(void)
 {
     uint32_t i;
+    if (ui.ca_len) {                                 /* 1.0: the lengths as they were */
+        pattern_t *pt = shown_pat();
+        for (i = 0; i < NTRACK; i++)
+            pt->len[i] = ui.ca_lens[i];
+        ui.ca = ui.ca_ask = ui.ca_len = 0;
+        ui_message("LENGTHS REVERTED");
+        return;
+    }
     for (i = 0; i < KIT_LEN; i++) {
         par[kit_par(i)] = ca_snap[i];
         morph_par[i] = ca_msnap[i];
@@ -1843,7 +1904,7 @@ static void control_all_undo(void)
  * at full morph, nothing heard) */
 static void morph_follow(uint32_t p, int32_t d)
 {
-    if (d && morph_amt && kset.medit != 1u && p < NPAR && par_sound(p) && !morph_excluded(p)) {
+    if (d && morph_amt && kset.medit == 2u && p < NPAR && par_sound(p) && !morph_excluded(p)) {
         uint8_t *m = &morph_par[kit_idx(p)];
         *m = (uint8_t)clamp32((int32_t)*m + d, (int32_t)vp_min(p), (int32_t)vp_max(p));
     }
@@ -1869,14 +1930,19 @@ static void knob_turn(uint32_t k, int32_t n)
         return;
     mn = vp_min(p);
     mx = vp_max(p);
-    if (kset.accel && mx - mn > 32u) {
+    if (ui.shift) {                                  /* 1.0: OCT- held: fine, a step a detent (no acceleration, RUSH's
+                                                      * speed too); the page stays shown, OCT-'s release does nothing */
+        ui.fine = 1;
+        ui.shift_used = 1;
+        ui.force = 1;
+    } else if (kset.accel && mx - mn > 32u) {
         uint32_t dt = fm1_ms - ui.knob_ms[k];
         if (dt < 18u)
             step = n * 4;
         else if (dt < 40u)
             step = n * 2;
     }
-    if (p == VP_RUSH) {                              /* 0.23-t7: RUSH by the turn's speed: 1% a detent slow, up to 10% fast */
+    if (p == VP_RUSH && !ui.fine) {                  /* 0.23-t7: RUSH by the turn's speed: 1% a detent slow, up to 10% fast */
         uint32_t dt = fm1_ms - ui.knob_ms[k], sp = (uint32_t)(n < 0 ? -n : n) * 1000u / (dt + 1u);
         step = n * (sp >= 80u ? 10 : sp >= 40u ? 5 : sp >= 20u ? 2 : 1);
     }
@@ -1886,6 +1952,16 @@ static void knob_turn(uint32_t k, int32_t n)
     if (ui.copy && ui.mode == M_SOUND && ui.held_step < 0 && !ui.sb_open && !ui.kb_open) {
         control_all(k, step);                        /* 0.11: OCT+ held: every voice */
         return;
+    }
+    if (ui.copy && p == PAR_TRACK_LENGTH && ui.held_step < 0 && !ui.kb_open && !ui.ca) {
+        uint32_t t;                                  /* 1.0: OCT+ held, the length (TRACK, the grid): every track */
+        const pattern_t *pt = shown_pat();           /* .. to the shown one's (let go: OCT+ reverts, OCT- keeps) */
+        for (t = 0; t < NTRACK; t++)
+            ui.ca_lens[t] = pt->len[t];
+        ui.ca = ui.ca_len = 1;
+        ui.copy_used = 1;
+        ui.copy_src = 0;
+        ui_message("CONTROL ALL: EVERY TRACK'S LENGTH");
     }
     if (ui.held_step >= 0 && p == VP_RUSH) {         /* 39: a step held on RUSH's page: its RUSH lock (0: gone) */
         pattern_t *pt = shown_pat();
@@ -1930,6 +2006,10 @@ static void knob_turn(uint32_t k, int32_t n)
         v = (int32_t)target_turn(p, vp_get(p), step);   /* .. group in EDIT's order) */
     if (is_gl_dest(p)) {                             /* (0.25.2: the same; its name shown over PERF's page) */
         v = (int32_t)gd_turn(vp_get(p), n);
+        ui.dest_ms = fm1_ms;
+        ui.dest_p = (uint16_t)p;
+    }
+    if (p == VP_GMODE) {                             /* (1.0: the generator's name and what it does, a while) */
         ui.dest_ms = fm1_ms;
         ui.dest_p = (uint16_t)p;
     }
@@ -2018,14 +2098,12 @@ static void sound_open(uint32_t s, int again)        /* a section button; again:
     if (ui.mode == M_SOUND && again) {
         if (sect_group(ui.sect) == s) {
             uint32_t i;
-            if (sect_half_used(ui.track, ui.sect, 1) && ui.half == 0) {   /* the section's second half first */
-                ui.half = 1;
-                ui.force = 1;
-                return;
-            }
-            ui.half = 0;
+            ui.half = 0;                             /* (1.0: the next section only, never its second page: SELECT
+                                                      * goes through the pages; LFO 1's MODE page is LFO 1's) */
             for (i = 0; i < NSORD; i++) {            /* (none on this track: its next one) */
                 ui.sect = (uint8_t)sect_next(ui.sect);
+                if (ui.sect == S_LFOM)
+                    continue;
                 if (sect_half_used(ui.track, ui.sect, 0) || sect_half_used(ui.track, ui.sect, 1))
                     break;
             }
@@ -2065,12 +2143,19 @@ static void io_open(uint32_t m, uint32_t type)
 {
     if (m == M_SAVE && type > IO_PROJECT)
         type = IO_KIT;                                /* (FACTORY: nothing to save to) */
+    if (m == M_LOAD && (type == IO_PATTERN || type == IO_SONG))
+        type = IO_KIT;                                /* (1.0: loaded on their own pages) */
     mode_set(m);
     ui.io_type = (uint8_t)type;
     ui.io_slot = (uint8_t)io_slot_default(type);
     ui.io_naming = 0;
     if (type != IO_PROJECT)
         ui.bank = (uint8_t)(ui.io_slot / 16u);
+}
+static void solo_key(void)                           /* 0.10: the track soloed (again: not): SHIFT GLO, the menu's 12 */
+{
+    sq.solo ^= (uint8_t)(1u << ui.track);
+    ui_message(sq.solo & (1u << ui.track) ? "SOLO ON" : sq.solo ? "SOLO OFF (OTHERS STILL SOLO)" : "SOLO OFF");
 }
 
 /* OK in SAVE / LOAD */
@@ -2229,10 +2314,15 @@ static const char *const CLEAR_NAME[NCLEAR] = {"CLEAR TRACK", "CLEAR PATTERN", "
                                                "CLEAR AUTOMATION 2", "CLEAR SOUND (INIT)", "CLEAR KIT (INIT)",
                                                "DELETE SONG ROW"};
 /* 0.10: CLEAR SOUND: the track's voice as the init kit has it (the rest of the kit as it is) */
-static void sound_init(uint32_t v)
+static void sound_init(uint32_t v, int saved)        /* (1.0: saved: as the kit loaded has it, RELOAD's one voice) */
 {
     uint8_t k[KIT_LEN], s[SOUND_MAX];
-    kit_init_values(k);
+    if (!saved)
+        kit_init_values(k);
+    else if (pat_voices(&pat[sq.active]) == PV_LOCKED)
+        kit_get_row(PV_SLOT(sq.active), k);          /* (37: a LOCKED pattern's: as last kept) */
+    else
+        kit_get(kit_loaded, k);
     voice_put_par(v, s, voice_get(k, v, s), v);
 }
 static void clear_do(void)
@@ -2243,7 +2333,7 @@ static void clear_do(void)
     case CL_PATTERN: seq_clear_pattern(pt); ui_message("PATTERN CLEARED"); break;
     case CL_AUTO1: seq_clear_automation(ui.track, pt, 0); ui_message("AUTOMATION 1 CLEARED"); break;
     case CL_AUTO2: seq_clear_automation(ui.track, pt, 1); ui_message("AUTOMATION 2 CLEARED"); break;
-    case CL_SOUND: sound_init(track_voice(ui.track)); ui_message("SOUND CLEARED (INIT)"); break;
+    case CL_SOUND: sound_init(track_voice(ui.track), 0); ui_message("SOUND CLEARED (INIT)"); break;
     case CL_KIT:
         kit_init_par();
         snd_post_all();
@@ -2326,12 +2416,15 @@ static void wd_side_end(void);
 #include "wander.c"                                  /* (40: WANDER) */
 /* ------------------------------------------------------------- keys --- */
 /* 31: KEYS (SHIFT + EDIT) stays on as the pages change, so the knobs can be turned while playing; the keys play notes
- * on every page but those whose keys are the page's own (patterns, song, save and load, step edit, LAST, PERF) */
+ * on every page but those whose keys are the page's own (patterns, song, save and load, step edit, PERF) */
 static int keys_live(void)
 {
     return ui.kplay && ui.mode != M_PATTERN && ui.mode != M_SONG && ui.mode != M_SAVE && ui.mode != M_LOAD &&
-           ui.mode != M_STEP && ui.mode != M_LAST && ui.mode != M_PERF;
+           ui.mode != M_STEP && ui.mode != M_PERF;
 }
+/* 1.0: SHIFT (OCT-) held: the menu (SHIFT + a white key), on every page but PERF's (its own: latches, SPELLS',
+ * WANDER's) and KEYS (an accent); a knob turned meanwhile hides it (fine adjust: the page's values) */
+static int shift_menu(void) { return ui.shift && ui.mode != M_PERF && !keys_live(); }
 /* PERF's keys: 1..7 roll their track, 8..16 the effects (perform.c PF_*); SHIFT + a key latches it (again: lets
  * go), a key on what is latched lets go of it. 0.6: on the PERFORM 2 pages, the second bank (1..7: DRILL); a key
  * lets go in the bank it went down in */
@@ -2442,18 +2535,21 @@ static void white_down(uint32_t w)
         ui.trkey = (uint8_t)(w + 1u);
         return;
     }
-    if (ui.perf && ui.shift) {                        /* PERF: SHIFT latches */
+    if (ui.mode == M_PERF && ui.shift) {              /* PERF: SHIFT latches (1.0: on PERF's pages only) */
         perf_key(w, 1);
         return;
     }
-    if (ui.shift) {                                   /* the LXR's SHIFT + step functions */
+    if (ui.shift) {                                   /* the menu (the LXR's SHIFT + step functions; 1.0: 8 .. 13) */
         ui.shift_used = 1;
         switch (w) {
         case 7: io_open(M_LOAD, IO_KIT); return;
         case 8: io_open(M_LOAD, IO_MORPH); return;
-        case 9: mode_set(M_SONG); return;
-        case 10: io_open(M_LOAD, IO_PROJECT); return;
-        case 11: mode_set(M_CONFIG); return;
+        case 9:                                       /* 1.0: RESET SOUND: the track's voice as the kit has it */
+            sound_init(track_voice(ui.track), 1);
+            ui_message("SOUND RESET (AS SAVED)");
+            return;
+        case 10: perf_reset(); return;                /* (SHIFT HOME's) */
+        case 11: solo_key(); return;                  /* (SHIFT GLO's) */
         case 12:                                      /* RELOAD: the kit and the pattern as saved */
             if (pat_voices(&pat[sq.active]) == PV_LOCKED)
                 kit_unstash(PV_SLOT(sq.active));     /* (37: a LOCKED pattern's: as last kept) */
@@ -2466,19 +2562,9 @@ static void white_down(uint32_t w)
                 seq_pattern_activate();
             ui_message("RELOADED");
             return;
-        case 13:
-            if (ui.mode == M_LAST)
-                ui.last_all ^= 1u;
-            else {
-                mode_set(M_LAST);
-                ui.last_all = 0;
-            }
-            ui.force = 1;
-            return;
-        case 14: mode_set(M_FX); return;
-        case 15: mode_set(M_PATTERN); return;
-        default:                                      /* 1..7: play the voice (at the keys' velocity) */
-            key_note_post(w, tb_note(w), key_vel, 0);
+        default:                                      /* 1..7: play the voice (at the keys' velocity); 14..16 free */
+            if (w < NTRACK)
+                key_note_post(w, tb_note(w), key_vel, 0);
             return;
         }
     }
@@ -2523,9 +2609,6 @@ static void white_down(uint32_t w)
             ui.io_slot = (uint8_t)(ui.bank * 16u + w);
             ui.force = 1;
         }
-        return;
-    case M_LAST:
-        vp_set(PAR_TRACK_LENGTH, s + 1u);
         return;
     case M_STEP:
         if (ui.step == s) {                           /* the selected step again: on / off */
@@ -2596,7 +2679,7 @@ static void black_down(uint32_t k)
         }
         if (ui.shift) {
             ui.shift_used = 1;
-            if (ui.perf) {                            /* PERF + SHIFT: unmute the tracks up to this one */
+            if (ui.mode == M_PERF) {                  /* PERF + SHIFT: unmute the tracks up to this one */
                 sq.muted &= (uint8_t)~((2u << t) - 1u);
             } else {
                 sq.muted ^= (uint8_t)(1u << t);
@@ -2743,9 +2826,9 @@ static void button_down(uint32_t b)
         if (b == B_OCTUP) {
             control_all_undo();
         } else if (b == B_OCTDN) {
-            ui.ca_ask = 0;
+            ui_message(ui.ca_len ? "LENGTHS KEPT" : "CONTROL ALL KEPT");
+            ui.ca_ask = ui.ca_len = 0;
             ui.shift_used = 1;                       /* (its release: nothing) */
-            ui_message("CONTROL ALL KEPT");
         }
         ui.force = 1;
         if (b != B_PLAY && b != B_REC)               /* (the transport still works; the rest waits) */
@@ -2806,6 +2889,7 @@ static void button_down(uint32_t b)
             ui.force = 1;
             return;
         }
+
         if (ui.mode == M_EUCLID && ui.page % NEUCLID == PG_ACTION && ui.action) {   /* OCT+ does the ACTION */
             static const char *const M[NACT] = {"", "DICED", "COMMITTED", "UNDONE", "RESET"};
             static const char *const NO[NACT] = {"", "", "NO GENERATOR ON", "NOTHING TO UNDO", ""};
@@ -2896,7 +2980,10 @@ static void button_down(uint32_t b)
             perf_reset();
             return;
         }
-        mode_set(ui.mode == M_HOME ? M_PATTERN : ui.mode == M_PATTERN ? M_SONG : M_HOME);
+        if (ui.mode == M_PATTERN)                    /* (1.0: LOAD third, before SONG) */
+            io_open(M_LOAD, ui.io_type);
+        else
+            mode_set(ui.mode == M_HOME ? M_PATTERN : ui.mode == M_LOAD ? M_SONG : M_HOME);
         return;
     case B_SEQ:
         if (ui.shift) {                               /* 0.6: SHIFT SEQ: the LINKS page (29: in PERF's GLOBAL MOD) */
@@ -2963,8 +3050,7 @@ static void button_down(uint32_t b)
     case B_GLO:
         if (ui.shift) {                               /* 0.10: SHIFT GLO: the track soloed (again: not) */
             ui.shift_used = 1;
-            sq.solo ^= (uint8_t)(1u << ui.track);
-            ui_message(sq.solo & (1u << ui.track) ? "SOLO ON" : sq.solo ? "SOLO OFF (OTHERS STILL SOLO)" : "SOLO OFF");
+            solo_key();
             return;
         }
         if (ui.mode == M_MIXER)                      /* (29: the mixer, then CONFIG; the track's MIX pages gone) */
@@ -2995,6 +3081,7 @@ static void button_up(uint32_t b)
 {
     if (b == B_OCTDN) {
         ui.shift = 0;
+        ui.fine = 0;
         if (ui.clear_open)                            /* SHIFT let go: CLEAR aborted (the LXR's way) */
             ui.clear_open = 0;
         sq.erase = 0;
@@ -3052,7 +3139,8 @@ static void ui_input(void)
         ui_message(rc ? "ERASE FAILED: SAVES NOTHING" : b);
         ui.msg_long = 1;
     }
-    if ((ui.ca || ui.ca_ask) && kit_loads != ui.ca_loads) {   /* 0.11: a kit loaded: Control All ends (kept) */
+    if ((ui.ca || ui.ca_ask) && !ui.ca_len && kit_loads != ui.ca_loads) {   /* 0.11: a kit loaded: Control All ends
+                                                      * (kept; 1.0: not the lengths') */
         ui.ca = ui.ca_ask = 0;
         ui.force = 1;
     }
@@ -3103,7 +3191,7 @@ static void ui_input(void)
             i = (uint32_t)clamp32((int32_t)i + n, 0, (int32_t)np - 1);
             ui.sect = l[i][0];
             ui.half = l[i][1];
-        } else if (ui.mode == M_HOME || ui.mode == M_LAST || ui.mode == M_RECOPT) {
+        } else if (ui.mode == M_HOME || ui.mode == M_RECOPT) {
             ui.bar = (uint8_t)clamp32((int32_t)ui.bar + n, 0, 3);
         } else if (ui.mode == M_PATTERN) {
             ui.bank = (uint8_t)clamp32((int32_t)ui.bank + n, 0, (int32_t)ui_banks() - 1);
@@ -3197,8 +3285,8 @@ static void ui_leds(void)
     }
     for (k = 0; k < 16u && !keys_live(); k++) {       /* the white keys */
         uint32_t id = 14u + WHITE_KEY[k], s = ui.bar * 16u + k;
-        if (ui.shift) {
-            led_put(k >= 7u ? nl : nd, id, 1);         /* (the SHIFT functions lit) */
+        if (shift_menu()) {
+            led_put(k >= 7u && k < 13u ? nl : k < NTRACK ? nd : nm, id, k < 13u);   /* (the menu's keys lit) */
             continue;
         }
         switch (ui.mode) {
@@ -3242,12 +3330,6 @@ static void ui_leds(void)
             }
             led_put(nd, id, 1);
             break;
-        case M_LAST: {
-            uint32_t len = track_len(pt, ui.track);
-            led_put(nl, id, s + 1u == len);
-            led_put(nd, id, s < len);
-            break;
-        }
         default: {
             int on = main_on(view_pat(ui.track), ui.track, s), at = sq.running && s == play_step;
             if (ui.mode == M_STEP && s == ui.step) {
