@@ -56,6 +56,8 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
                                     above the screen, half below) */
   .btns { margin-top: 10px; }                    /* (0.25: tight: the screen and the buttons one block, by the thumbs) */
   .blacks, .steps { margin-top: 2px; }
+  .standalone .steps { margin-bottom: auto; }   /* (from the home screen, no Safari bars: the room left over shared
+                                                    above and below, so the panel sits centred under the bar) */
 }
 /* 0.25: the stage at the top: PRESET, ALGO and SELECT as slim strips down the left of the screen (top to bottom: the
    most used lowest, by the thumb); the screen as large as the rest leaves. KNOB 1-4: drag a parameter on the screen up or down */
@@ -142,7 +144,7 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
 .sheet .file { display: inline-block; position: relative; overflow: hidden; }
 .sheet .file input { position: absolute; inset: 0; opacity: 0; }
 .sheet label.o { display: block; margin: 6px 0; color: var(--mid); }
-.sheet select, .sheet input[type=number] { font: inherit; font-size: 16px; background: var(--part); color: var(--ink); border: 1px solid var(--edge); border-radius: 6px; }   /* (16 px: iOS zooms into smaller fields) */
+.sheet select, .sheet input[type=number], .sheet input[type=text] { font: inherit; font-size: 16px; background: var(--part); color: var(--ink); border: 1px solid var(--edge); border-radius: 6px; }   /* (16 px: iOS zooms into smaller fields) */
 .sheet .fine { color: var(--dim); font-size: 11px; }
 .sheet textarea { width: 100%; min-height: 5.5em; font: 13px/1.35 ui-monospace, Menlo, monospace; color: var(--ink); background: #0f0f11;
                   border: 1px solid var(--edge); border-radius: 8px; padding: 8px; word-break: break-all; resize: vertical; }
@@ -201,6 +203,8 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
   <h2>Share a pattern</h2>
   <p>The playing pattern and the kit it plays, as it sounds now, with its morph target, the morph, the tempo and the global LFOs: a link to send, or a text to keep.
     Whoever opens the link hears your pattern when they switch on.</p>
+  <label class="o">Name <input id="sname" type="text" maxlength="8" size="9" spellcheck="false" autocapitalize="characters"
+    autocomplete="off" placeholder="KIT NAME" style="padding: 4px 8px; letter-spacing: .08em"> <span class="fine">(8 letters: the kit's name on the FM-1)</span></label>
   <div class="acts"><button id="smake" class="go" type="button">Share link…</button><button id="scopy" type="button">Copy link</button>
     <button id="scopyt" type="button">Copy text</button></div>
   <h3>Load one</h3>
@@ -213,6 +217,9 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
   <p class="fine">Only this page (Elixir mobile) makes and reads these; a link from another version of Elixir may not load. <a href="../">Return to Elixir</a></p>
 </div>
 
+<script>   /* (before the first paint: the home-screen app, launched from its icon) */
+if (navigator.standalone || matchMedia("(display-mode: standalone)").matches) document.documentElement.classList.add("standalone");
+</script>
 <script type="module">
 import { Library, sndFiles, KL_KIT, packKitLib, unpackKitLib, KIT_PACKS, fetchPack, addPacks } from "../try/library.js";
 const BASE = "../try/";
@@ -634,25 +641,46 @@ const pipe = async (bytes, stream) => new Uint8Array(await new Response(new Blob
 const b64u = (u8) => { let s = ""; for (let i = 0; i < u8.length; i += 4096) s += String.fromCharCode.apply(null, u8.subarray(i, i + 4096));
                        return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
 const unb64u = (t) => Uint8Array.from(atob(t.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+// the kit's name: 8 characters at byte 12 (elixir_web.c WEB_SHARE_HEAD, KIT_NAME_LEN), printable ASCII, space padded
+const NAME_AT = 12, NAME_LEN = 8;
+const nameOf = (b) => b.length >= NAME_AT + NAME_LEN && b[0] === 0x45 && b[1] === 0x50 && b[2] === 0x58 && b[3] === 0x31 ?
+  String.fromCharCode(...b.subarray(NAME_AT, NAME_AT + NAME_LEN)).trim() : "";
+const cleanName = (s) => s.normalize("NFKD").replace(/[^\x20-\x7e]/g, "").slice(0, NAME_LEN);
 async function shareText() {
   const r = await shareCall({ type: "shareGet" });
   if (!r.bytes) throw new Error("this page's Elixir can't share");
+  const name = cleanName($("sname").value).trim();
+  if (name) {                                              // (the name given: the kit's on whoever loads it)
+    const p = name.padEnd(NAME_LEN, " ");
+    for (let i = 0; i < NAME_LEN; i++) r.bytes[NAME_AT + i] = p.charCodeAt(i);
+  }
   return b64u(await pipe(r.bytes, new CompressionStream("deflate-raw")));
 }
-const shareLink = (t) => location.origin + location.pathname + "#p=" + t;
-async function shareLoad(text) {
+async function shareBytes(text) {                          // a link or a text -> the firmware's bytes
   const t = (text.match(/[#&?]p=([A-Za-z0-9_-]+)/)?.[1] ?? text).replace(/[^A-Za-z0-9_-]/g, "");
   if (!t) throw new Error("nothing to load there");
-  let bytes;
-  try { bytes = await pipe(unb64u(t), new DecompressionStream("deflate-raw")); }
+  try { return await pipe(unb64u(t), new DecompressionStream("deflate-raw")); }
   catch { throw new Error("that isn't a whole pattern text (cut short?)"); }
+}
+const shareLink = (t) => location.origin + location.pathname + "#p=" + t;
+async function shareLoad(text) {                           // -> the kit's name
+  const bytes = await shareBytes(text), name = nameOf(bytes);
   const r = await shareCall({ type: "sharePut", bytes });
   if (r.status === 1) throw new Error("that isn't an Elixir pattern");
   if (r.status === 2) throw new Error("that pattern was made with another version of Elixir");
+  return name;
 }
 const ssay = (s) => { $("sstatus").textContent = s; };
 const ssheet = $("ssheet");
-$("sharebtn").addEventListener("click", () => { ssay(node ? "" : "Switch Elixir on first."); ssheet.classList.add("open"); });
+$("sharebtn").addEventListener("click", async () => {
+  ssay(node ? "" : "Switch Elixir on first.");
+  ssheet.classList.add("open");
+  if (node) try { const r = await shareCall({ type: "shareGet" }); if (r.bytes) $("sname").value = nameOf(r.bytes); } catch {}   // (the playing kit's)
+});
+$("sname").addEventListener("input", () => {
+  const e = $("sname"), v = cleanName(e.value);
+  if (v !== e.value) e.value = v;
+});
 $("sclose").addEventListener("click", () => ssheet.classList.remove("open"));
 async function copy(s) {
   try { await navigator.clipboard.writeText(s); return true; }
@@ -677,12 +705,17 @@ $("spaste").addEventListener("click", async () => {
   try { $("stext").value = await navigator.clipboard.readText(); } catch { ssay("Paste into the box yourself (press and hold)."); }
 });
 $("sload").addEventListener("click", async () => {
-  try { await shareLoad($("stext").value); ssay("Loaded: the playing pattern and its kit."); $("stext").value = ""; }
+  try { const n = await shareLoad($("stext").value); ssay(`Loaded: the playing pattern and its kit${n ? ", " + n : ""}.`); $("stext").value = ""; }
   catch (err) { ssay("Couldn't load: " + err.message); }
 });
 // a link: loads once switched on
 const linked = /^#p=/.test(location.hash) ? location.hash : "";
-if (linked) $("status").textContent = "Someone shared a pattern with you: switch on to hear it. " + $("status").textContent;
+if (linked) {
+  const intro = $("status").textContent;
+  $("status").textContent = "Someone shared a pattern with you: switch on to hear it. " + intro;
+  shareBytes(linked).then((b) => { const n = nameOf(b);
+    if (n) $("status").textContent = `Someone shared ${n} with you: switch on to hear it. ` + intro; }).catch(() => {});
+}
 async function loadLinked() {
   if (!linked) return;
   try { history.replaceState(null, "", location.pathname + location.search); } catch {}
