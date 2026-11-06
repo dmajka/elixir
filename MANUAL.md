@@ -649,6 +649,16 @@ As on Elektron's boxes: hold **OCT+** on a sound page and turn a knob, and that 
 
 ## 10. Mixer, sends, FX bus and reverb
 
+### Signal flow
+
+Each voice runs through the same chain, in this order. The page button that holds each stage is on its right; the modulation (LFOs, envelopes, velocity, locks, morph) moves the knobs of any stage. At the end the voice splits three ways: dry, the FX send and the reverb send.
+
+![Signal flow of one track](docs/img/flow-track.svg)
+
+The six voices meet in the mix: their dry sound, the FX bus (which the FX sends feed in place of dry) and the reverb's return. The whole mix then goes through the master's chain to the outputs.
+
+![Signal flow of the whole mix](docs/img/flow-master.svg)
+
 ### The mixer (GLO)
 
 Turn SELECT for eight pages:

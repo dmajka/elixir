@@ -10,7 +10,8 @@
 #   mobile/                     the emulator laid out for phones (web/emu/mobile.html, on try/'s files; 0.16):
 #                               not linked from anywhere and noindex while it's tried out
 #   library/                    backup, restore and LXR-02 kit import over Web MIDI (web/library.html, library.js)
-#   manual/index.html           MANUAL.md as a page
+#   manual/index.html           MANUAL.md as a page, with docs/img (its signal-flow diagrams: tools/flow_svg.py) in
+#                               manual/img, and elixir-manual-VER.pdf, the page printed (headless Chrome)
 #   cheatsheet.pdf              four pages of keys and knobs (web/cheatsheet.pdf: tools/cheatsheet.sh); fmhub.json
 #                               links to it
 #   firmware/                   elixir-VER.fwsc, elixir-VER-src.tar.gz (the source, as the GPL asks), MANUAL.md,
@@ -19,10 +20,13 @@
 #   web/make_site.py [PACKAGE.fwsc] [OUT_DIR]      (default: build/elixir.fwsc build/site)
 import html
 import json
+import os
 import re
 import shutil
+import subprocess
 import sys
 import tarfile
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -153,6 +157,12 @@ def slug(text):
     return re.sub(r"[^\w\- ]", "", text.lower()).replace(" ", "-")
 
 
+# the link mark after each heading (the manual: a click copies the section's address)
+LINK_SVG = ('<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" '
+            'stroke-width="1.6" stroke-linecap="round" d="M6.8 9.2a3 3 0 0 0 4.2 0l2.2-2.2a3 3 0 0 0-4.2-4.2l-1 1M9.2 '
+            '6.8a3 3 0 0 0-4.2 0L2.8 9a3 3 0 0 0 4.2 4.2l1-1"/></svg>')
+
+
 def inline(s):
     out, parts = [], re.split(r"(`[^`]*`)", s)
     for p in parts:
@@ -195,7 +205,13 @@ def markdown(md):
                 title = text
             elif n <= 3:
                 heads.append((n, slug(text), text))
-            out.append(f'<h{n} id="{slug(text)}">{inline(text)}</h{n}>')
+            mark = f' <a class="hl" href="#{slug(text)}" aria-label="Copy a link to this section">{LINK_SVG}</a>' if n > 1 else ""
+            out.append(f'<h{n} id="{slug(text)}">{inline(text)}{mark}</h{n}>')
+            i += 1
+        elif m := re.fullmatch(r"!\[([^\]]*)\]\(([^)\s]+)\)", ln.strip()):   # an image alone on its line: a figure
+            src = re.sub(r"^docs/img/", "img/", m[2])  # (docs/img: copied to manual/img)
+            out.append(f'<figure class="flow"><img src="{html.escape(src)}" alt="{html.escape(m[1])}" loading="lazy">'
+                       f"<figcaption>{inline(m[1])}</figcaption></figure>")
             i += 1
         elif ln.strip() == "---":
             out.append("<hr>")
@@ -224,7 +240,7 @@ def markdown(md):
             i += 1
         else:
             para = []
-            while i < len(lines) and lines[i].strip() and not re.match(r"(#|```|\||---$|\d+\. |[-*] )", lines[i]):
+            while i < len(lines) and lines[i].strip() and not re.match(r"(#|```|\||---$|\d+\. |[-*] |!\[)", lines[i]):
                 para.append(lines[i].strip())
                 i += 1
             out.append("<p>" + inline(" ".join(para)) + "</p>")
@@ -520,6 +536,29 @@ PAGE = """<!doctype html>
   .fm1-key summary {{ cursor: pointer; color: var(--gild); font-weight: 600; margin-bottom: 8px; }}
   .fm1-key th {{ white-space: nowrap; }}
 
+  /* a heading's link mark: shown on hover (always, faintly, on touch); a click copies the section's address */
+  .hl {{ display: inline-flex; vertical-align: middle; margin-left: .3em; padding: 2px; border-radius: 4px; color: var(--dim);
+         opacity: 0; transition: opacity .15s; text-decoration: none; position: relative; }}
+  .hl svg {{ width: .62em; height: .62em; min-width: 13px; min-height: 13px; }}
+  h2:hover .hl, h3:hover .hl, h4:hover .hl, .hl:focus-visible {{ opacity: 1; }}
+  .hl:hover {{ color: var(--gild); }}
+  @media (hover: none) {{ .hl {{ opacity: .45; }} }}
+  .hl.ok {{ opacity: 1; color: var(--gild); }}
+  .hl.ok::after {{ content: "Link copied"; position: absolute; left: 100%; top: 50%; transform: translateY(-50%);
+                   margin-left: 6px; padding: 2px 8px; border-radius: 4px; background: var(--ink); color: var(--leaf);
+                   font: 600 12px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; white-space: nowrap; }}
+
+  /* the signal-flow diagrams (docs/img, tools/flow_svg.py) */
+  figure.flow {{ margin: 22px 0 26px; text-align: center; }}
+  figure.flow img {{ display: block; width: 100%; max-width: 480px; height: auto; margin: 0 auto; }}
+  figure.flow figcaption {{ font-size: 14px; color: var(--dim); font-style: italic; margin-top: 8px; }}
+
+  /* the PDF's link (under the title, and atop the side bar) */
+  .pdf {{ text-align: center; margin: 18px 0 0; font: 600 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Arial,
+          sans-serif; }}
+  aside .pdf {{ text-align: left; margin: 0 0 14px 8px; }}
+  aside .pdf a {{ display: inline; padding: 0; border: 0; color: var(--gild); }}
+
   /* the side bar: the book's contents */
   aside {{ position: sticky; top: 0; align-self: start; max-height: 100vh; overflow-y: auto; padding: 32px 0;
            font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif; }}
@@ -550,6 +589,21 @@ PAGE = """<!doctype html>
     .chapter {{ margin: 64px -16px 8px; padding: 32px 16px 22px; }}
     .chapter .ctitle {{ font-size: 30px; }}
     h2, h3, h4, .chapter {{ scroll-margin-top: 56px; }}
+    aside .pdf {{ display: none; }}
+  }}
+  /* printed (and the PDF, make_site's print_pdf): the page alone, light, each chapter from a new page */
+  @media print {{
+    :root:not([data-theme]), :root[data-theme] {{ --paper: #fff; --leaf: #fff; --ink: #1d1b18; --rule: #d9ccb2;
+      --gild: #8a4e00; --well2: #f3ecdf; --bg: #fff; --fg: #1d1b18; --dim: #5e5649; color-scheme: light; }}
+    @page {{ margin: 16mm 15mm; }}
+    header.site, aside, .hl, .pdf, .fm1-key {{ display: none !important; }}
+    .book {{ display: block; padding: 0; max-width: none; }}
+    main {{ margin: 0; padding: 0; border: 0; box-shadow: none; font-size: 11pt; line-height: 1.55; }}
+    .chapter {{ break-before: page; margin: 0 0 8px; padding: 24px 0 18px; background: none; border: 0; }}
+    h2, h3, h4 {{ break-after: avoid; }}
+    figure, tr, pre {{ break-inside: avoid; }}
+    a {{ color: inherit; text-decoration: none; }}
+    tbody tr:nth-child(even) {{ background: var(--well2); -webkit-print-color-adjust: exact; print-color-adjust: exact; }}
   }}
 </style>
 </head>
@@ -557,7 +611,7 @@ PAGE = """<!doctype html>
 {nav}
 <div class="book">
 <aside><details id="toc" open><summary>Contents</summary>
-<p class="title">Contents</p>
+{pdf_side}<p class="title">Contents</p>
 {toc}
 </details></aside>
 <main>
@@ -586,6 +640,18 @@ PAGE = """<!doctype html>
     if (a && !narrow.matches) a.scrollIntoView({{ block: "nearest" }});
   }}
   addEventListener("scroll", mark, {{ passive: true }});
+  // a heading's link mark: copies the section's address (and puts it in the address bar)
+  document.querySelector("main").addEventListener("click", async (e) => {{
+    const a = e.target.closest("a.hl");
+    if (!a) return;
+    e.preventDefault();
+    const url = location.origin + location.pathname + a.hash;
+    try {{ history.replaceState(null, "", a.hash); }} catch {{}}
+    try {{ await navigator.clipboard.writeText(url); }} catch {{ location.hash = a.hash; return; }}
+    a.classList.add("ok");
+    clearTimeout(a.okt);
+    a.okt = setTimeout(() => a.classList.remove("ok"), 1500);
+  }});
   addEventListener("hashchange", mark);
   mark();
 }})();
@@ -593,6 +659,34 @@ PAGE = """<!doctype html>
 </body>
 </html>
 """
+
+
+# the manual's PDF: the manual page printed by headless Chrome or Chromium (its print styles: the page alone,
+# light, a chapter a page), with an outline from its headings. No browser: no PDF and no link, with a warning
+def chrome():
+    for c in (os.environ.get("CHROME"), "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+              "/Applications/Chromium.app/Contents/MacOS/Chromium", shutil.which("google-chrome"),
+              shutil.which("google-chrome-stable"), shutil.which("chromium"), shutil.which("chromium-browser")):
+        if c and Path(c).exists():
+            return c
+    return None
+
+
+def print_pdf(page, pdf):
+    exe = chrome()
+    if not exe:
+        print("site: no Chrome or Chromium (CHROME=...): the manual has no PDF", file=sys.stderr)
+        return False
+    with tempfile.TemporaryDirectory() as prof:
+        subprocess.run([exe, "--headless", "--disable-gpu", "--no-pdf-header-footer", "--generate-pdf-document-outline",
+                        f"--user-data-dir={prof}", "--allow-file-access-from-files", "--virtual-time-budget=10000",
+                        f"--print-to-pdf={pdf.resolve()}", page.resolve().as_uri()],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=180)
+    if not pdf.exists() or pdf.stat().st_size < 10000:
+        print(f"site: printing the manual to {pdf.name} failed: no PDF", file=sys.stderr)
+        pdf.unlink(missing_ok=True)
+        return False
+    return True
 
 
 def files_page(entries):
@@ -673,8 +767,19 @@ def main(pkg, out):
     if body.count("<!--PANEL-->") > 1:
         raise SystemExit("MANUAL.md: <!-- panel --> more than once")
     body = chapters(body.replace("<!--PANEL-->", panel_svg(heads)), heads)
-    (man / "index.html").write_text(PAGE.format(title=html.escape(title), body=body, toc=toc(heads),
-                                                nav=nav(1, "manual/")), encoding="utf-8")
+    shutil.copytree(ROOT / "docs/img", man / "img")   # (the signal-flow diagrams MANUAL.md shows)
+
+    def manual_page(pdf):                            # pdf: the PDF's name, or None (no link)
+        side = f'<p class="pdf"><a href="{pdf}">The manual as a PDF</a></p>' if pdf else ""
+        b = body.replace("<hr>", f'<p class="pdf"><a href="{pdf}">Download the manual as a PDF</a></p>\n<hr>', 1) \
+            if pdf else body                         # (after the opening paragraphs)
+        (man / "index.html").write_text(PAGE.format(title=html.escape(title), body=b, toc=toc(heads), pdf_side=side,
+                                                    nav=nav(1, "manual/")), encoding="utf-8")
+
+    manual_page(None)                                # (printed without the link: the print styles hide it anyway)
+    pdf = f"elixir-manual-{ver}.pdf"
+    if print_pdf(man / "index.html", man / pdf):
+        manual_page(pdf)
 
     for f in ("LICENSE", "NOTICE.md", "MANUAL.md"):
         shutil.copy(ROOT / f, fw / f)

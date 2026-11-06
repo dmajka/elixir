@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 796" width="480" height="796" role="img" aria-label="Signal flow of the whole mix: the tracks&#x27; dry sound, the FX bus and the reverb into the mix, then the master compressor, master dirt, DJ filter, perform effects and the MASTER knob">
+<title>Signal flow of the whole mix: the tracks&#x27; dry sound, the FX bus and the reverb into the mix, then the master compressor, master dirt, DJ filter, perform effects and the MASTER knob</title>
+<style>
+.bx { fill: #fcf8ef; stroke: #cdbb98; stroke-width: 1.2; }
+.bx.k { fill: #f3e6cb; }
+.md { fill: #f6f0e3; stroke: #cdbb98; stroke-width: 1.2; stroke-dasharray: 4 3; }
+.t { font: 700 13px -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif; fill: #2a241b; letter-spacing: .04em; }
+.d { font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif; fill: #5e5649; }
+.p { font: 700 10px -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif; fill: #a85f00; letter-spacing: .06em; text-anchor: end; }
+.c { text-anchor: middle; }
+.a { stroke: #a85f00; stroke-width: 1.6; fill: none; }
+.a.m { stroke-dasharray: 3 3; stroke-width: 1.2; }
+.h { fill: #a85f00; }
+@media (prefers-color-scheme: dark) {
+  .bx { fill: #1a1713; stroke: #4a4135; } .bx.k { fill: #2a2318; } .md { fill: #15130f; stroke: #4a4135; }
+  .t { fill: #ece4d3; } .d { fill: #b3aa99; } .p { fill: #f5b04f; } .a { stroke: #f5b04f; } .h { fill: #f5b04f; }
+}
+</style>
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="h" d="M0 0L10 5L0 10z"/></marker></defs>
+<rect class="bx k" x="20" y="16" width="440" height="44" rx="7"/><text class="t c" x="240.0" y="36">SIX VOICES</text><text class="d c" x="240.0" y="53">D1 D2 D3 SN CY HH, each as one track above</text>
+<text class="d" x="96" y="176">dry</text>
+<path class="a" d="M88 60 V289" marker-end="url(#ah)"/>
+<path class="a" d="M240 60 V83" marker-end="url(#ah)"/>
+<rect class="bx" x="172" y="84" width="136" height="58" rx="7"/><text class="t" x="184" y="104">BUS DIRT</text><text class="d" x="184" y="121">a drive before</text><text class="d" x="184" y="136">the effect</text><text class="p" x="298" y="104">FX</text>
+<path class="a" d="M240 142 V163" marker-end="url(#ah)"/>
+<rect class="bx" x="172" y="164" width="136" height="92" rx="7"/><text class="t" x="184" y="184">FX BUS</text><text class="d" x="184" y="201">one type at a time:</text><text class="d" x="184" y="216">DRIVE, RING, COMP,</text><text class="d" x="184" y="231">DELAY, PHASER,</text><text class="d" x="184" y="246">FLANGER</text><text class="p" x="298" y="184">FX</text>
+<path class="a" d="M240 256 V289" marker-end="url(#ah)"/>
+<path class="a" d="M392 60 V83" marker-end="url(#ah)"/>
+<rect class="bx" x="324" y="84" width="136" height="92" rx="7"/><text class="t" x="336" y="104">REVERB</text><text class="d" x="336" y="121">ROOM, SPRING,</text><text class="d" x="336" y="136">HALL or PLATE;</text><text class="d" x="336" y="151">Size, Damping,</text><text class="d" x="336" y="166">Level</text><text class="p" x="450" y="104">FX</text>
+<path class="a m" d="M308 226 H360 V177" marker-end="url(#ah)"/>
+<text class="d" x="330" y="244">echoes:</text><text class="d" x="330" y="259">ECHO&gt;REV</text>
+<path class="a" d="M430 176 V289" marker-end="url(#ah)"/>
+<rect class="bx k" x="20" y="290" width="440" height="44" rx="7"/><text class="t c" x="240.0" y="310">MIX</text><text class="d c" x="240.0" y="327">the dry voices, the bus and the reverb&#x27;s return</text>
+<path class="a" d="M240.0 334 V355" marker-end="url(#ah)"/>
+<rect class="bx" x="74" y="356" width="332" height="58" rx="7"/><text class="t" x="86" y="376">MASTER COMP</text><text class="d" x="86" y="393">Thresh, Ratio, Attack, Release; sidechain:</text><text class="d" x="86" y="408">the mix, or one track to duck the rest</text><text class="p" x="396" y="376">FX</text>
+<path class="a" d="M240.0 414 V431" marker-end="url(#ah)"/>
+<rect class="bx" x="74" y="432" width="332" height="58" rx="7"/><text class="t" x="86" y="452">MASTER DIRT</text><text class="d" x="86" y="469">TAPE, TUBE, FUZZ, DIODE or FOLD; Amount</text><text class="p" x="396" y="452">FX</text>
+<path class="a" d="M240.0 490 V507" marker-end="url(#ah)"/>
+<rect class="bx" x="74" y="508" width="332" height="58" rx="7"/><text class="t" x="86" y="528">DJ FILTER</text><text class="d" x="86" y="545">Low-pass one way, high-pass the other;</text><text class="d" x="86" y="560">DJ reso</text><text class="p" x="396" y="528">PERF</text>
+<path class="a" d="M240.0 566 V583" marker-end="url(#ah)"/>
+<rect class="bx" x="74" y="584" width="332" height="58" rx="7"/><text class="t" x="86" y="604">PERFORM FX</text><text class="d" x="86" y="621">COMB, CUTS, CRUSH, REVERSE, STUTTER,</text><text class="d" x="86" y="636">then TAPE STOP</text><text class="p" x="396" y="604">PERF</text>
+<path class="a" d="M240.0 642 V659" marker-end="url(#ah)"/>
+<rect class="bx" x="74" y="660" width="332" height="58" rx="7"/><text class="t" x="86" y="680">MASTER</text><text class="d" x="86" y="697">The MASTER knob: the volume</text>
+<path class="a" d="M240.0 718 V735" marker-end="url(#ah)"/>
+<rect class="bx k" x="74" y="736" width="332" height="44" rx="7"/><text class="t c" x="240.0" y="756">OUTPUT</text><text class="d c" x="240.0" y="773">the headphone and line outs</text>
+</svg>
