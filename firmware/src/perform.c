@@ -579,11 +579,39 @@ static void stutter(int16_t *l, int16_t *r)
 
 #define RG_LIM (1 << 26)
 #define RG_GAIN 45875                                /* (the bands' input, x their damping^0.4: 0.7) */
+#define RG_SUB 16u
+/* (1.0 Phase 10d: a band at a time over 16 samples, its coefficients and states held, its pan its own loop: the same
+ * sums to the bit, ~40% fewer instructions than a sample at a time through every band) */
+static inline __attribute__((always_inline)) void rg_band(int32_t *st, const int32_t *xm, int32_t *yl, int32_t *yr,
+                                                          int32_t c, int32_t q, int32_t g, const uint32_t pan)
+{
+    int32_t s0 = st[0], s1 = st[1];
+    uint32_t i;
+    for (i = 0; i < RG_SUB; i++) {
+        int32_t xin = mulr16(xm[i], g), lp, bp;
+        lp = s0 + mulr16(c, s1);
+        bp = s1 + mulr16(c, xin - lp - mulr16(q, s1));
+        s0 = clamp_hl(lp, -RG_LIM, RG_LIM);
+        s1 = bp = clamp_hl(bp, -RG_LIM, RG_LIM);
+        if (pan == 0u) {                             /* (the middle) */
+            int32_t m = bp - (bp >> 2);
+            yl[i] += m;
+            yr[i] += m;
+        } else if (pan == 1u) {                      /* (left) */
+            yl[i] += bp;
+            yr[i] += bp >> 2;
+        } else {
+            yl[i] += bp >> 2;
+            yr[i] += bp;
+        }
+    }
+    st[0] = s0;
+    st[1] = s1;
+}
 static void ring_block(int16_t *l, int16_t *r, int32_t d, int32_t w)
 {
     int32_t c[NRB], q[NRB], g[NRB], ts;
-    uint8_t pan[NRB];
-    uint32_t root = ring_root(d), nb = 0, k, i;
+    uint32_t root = ring_root(d), nb = 0, k, i, b;
     const int8_t *sh = RING_SH[pfs.dj_tune < NRTUNE ? pfs.dj_tune : 0u];
     ts = (int32_t)(((int64_t)3528 * exp2_q16((int32_t)((int64_t)pf.dj_rs * 5 * 65536 / 32512))) >> 16);   /* T60 */
     for (k = 0; k < NRB && sh[k] >= 0; k++) {
@@ -599,32 +627,30 @@ static void ring_block(int16_t *l, int16_t *r, int32_t d, int32_t w)
         c[nb] = cq;
         g[nb] = mulq16(exp2_q16((log2_q16((uint32_t)q[nb]) - (16 << 16)) * 2 / 5), RG_GAIN);   /* (q^0.4: a
                                                       * long ring about as loud as a short one) */
-        pan[nb] = (uint8_t)(k == 0u ? 0u : 1u + (k & 1u));   /* (0 the middle, 1 left, 2 right) */
-        nb++;
+        nb++;                                        /* (the bands' pan: 0 the middle, odd right, even left) */
     }
-    for (i = 0; i < BLOCK; i++) {
-        int32_t x = (l[i] + r[i]) << 3, yl = 0, yr = 0, o;   /* (the mono sum, Q4) */
-        for (k = 0; k < nb; k++) {
-            int32_t *st = pf.rg_s[k], xin = mulr16(x, g[k]), lp, bp;
-            lp = st[0] + mulr16(c[k], st[1]);
-            bp = st[1] + mulr16(c[k], xin - lp - mulr16(q[k], st[1]));
-            st[0] = clamp32(lp, -RG_LIM, RG_LIM);
-            st[1] = bp = clamp32(bp, -RG_LIM, RG_LIM);
-            if (pan[k] == 0u) {
-                yl += bp - (bp >> 2);
-                yr += bp - (bp >> 2);
-            } else if (pan[k] == 1u) {
-                yl += bp;
-                yr += bp >> 2;
-            } else {
-                yl += bp >> 2;
-                yr += bp;
-            }
+    for (b = 0; b < BLOCK; b += RG_SUB) {
+        int32_t xm[RG_SUB], yl[RG_SUB], yr[RG_SUB];
+        int16_t *lb = l + b, *rb = r + b;
+        for (i = 0; i < RG_SUB; i++) {
+            xm[i] = (lb[i] + rb[i]) << 3;            /* (the mono sum, Q4) */
+            yl[i] = yr[i] = 0;
         }
-        o = (l[i] >> 1) + (int32_t)(((int64_t)fast_tanh(yl >> 3) * 24575) >> 16);   /* (0.75: room for the dry) */
-        l[i] = (int16_t)sat16(l[i] + (((o - l[i]) * w) >> 15));
-        o = (r[i] >> 1) + (int32_t)(((int64_t)fast_tanh(yr >> 3) * 24575) >> 16);
-        r[i] = (int16_t)sat16(r[i] + (((o - r[i]) * w) >> 15));
+        for (k = 0; k < nb; k++) {
+            if (k == 0u)
+                rg_band(pf.rg_s[k], xm, yl, yr, c[k], q[k], g[k], 0u);
+            else if (k & 1u)
+                rg_band(pf.rg_s[k], xm, yl, yr, c[k], q[k], g[k], 2u);
+            else
+                rg_band(pf.rg_s[k], xm, yl, yr, c[k], q[k], g[k], 1u);
+        }
+        for (i = 0; i < RG_SUB; i++) {
+            int32_t o = (lb[i] >> 1) + (int32_t)(((int64_t)fast_tanh(yl[i] >> 3) * 24575) >> 16);   /* (0.75: room
+                                                      * for the dry) */
+            lb[i] = (int16_t)sat16(lb[i] + (((o - lb[i]) * w) >> 15));
+            o = (rb[i] >> 1) + (int32_t)(((int64_t)fast_tanh(yr[i] >> 3) * 24575) >> 16);
+            rb[i] = (int16_t)sat16(rb[i] + (((o - rb[i]) * w) >> 15));
+        }
     }
 }
 
@@ -633,7 +659,6 @@ static void perf_master(int16_t *l, int16_t *r)
 {
     int32_t d = clamp32(((int32_t)pf.dj - 64) * 1040 + pf.sweep + gl.dj + sq.ru_hp, -65536, 65536), a = iabs(d), w;
     uint32_t i, c, type;
-    int16_t f[BLOCK];
     pf.dj_d = d;
     {                                                /* 0.24.3: Reso: the damping R from 0.6 (as before) to 0.03, */
         int32_t t = (int32_t)(pfs.dj_reso & 127u) << 8, e = t - pf.dj_rs;   /* on a square law (most of the knob
@@ -668,18 +693,14 @@ static void perf_master(int16_t *l, int16_t *r)
             pf.dj_type = (uint8_t)type;
         }
         for (c = 0; c < 2u; c++) {
-            int16_t *x = c ? r : l;
             svf_t *s = &pf.dj_f[c];
             uint32_t fv = dj_fval(d);
             if (s->fval != fv) {
                 s->fval = fv;
                 s->dirty = 1;
             }
-            memcpy(f, x, sizeof f);
-            svf_block(s, type, f);
-            for (i = 0; i < BLOCK; i++)
-                x[i] = (int16_t)sat16(x[i] + (((f[i] - x[i]) * w) >> 15));
         }
+        dj_block(pf.dj_f, type, l, r, w);            /* (1.0 Phase 10d: both sides, mixed in: dsp.c) */
     }
     perf2_master(l, r);
     if (tape_q16 < 16384u) {                         /* the tape's last quarter of speed: fades to silence */

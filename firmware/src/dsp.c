@@ -38,6 +38,8 @@ static uint32_t dg_t, dg_acc[NDG];
 
 static inline int32_t sat16(int32_t v){ return v > 32767 ? 32767 : v < -32768 ? -32768 : v; }
 static inline int32_t clamp32(int32_t v, int32_t lo, int32_t hi) { return v < lo ? lo : v > hi ? hi : v; }
+/* 1.0 (Phase 10d): clamp32 for lo <= hi, the top first: two conditional moves, where clamp32's order costs a third */
+static inline int32_t clamp_hl(int32_t v, int32_t lo, int32_t hi) { v = v > hi ? hi : v; return v < lo ? lo : v; }
 static inline int32_t iabs(int32_t v) { return v < 0 ? -v : v; }
 static inline int32_t mulq16(int32_t a, int32_t b) { return (int32_t)(((int64_t)a * b) >> 16); }
 
@@ -363,7 +365,7 @@ typedef struct {
     /* 1.0: the character types (ACID ..). eg: the voice's amp EG this block (voices.c), Q16; xamt: FILTER X (ENV AMT,
      * LADDER's BASS COMP), Q16; rk: RESONANCE as turned (0..1, Q16); fe: the cutoff ck is for (-1: none yet) */
     int32_t eg, xamt, rk, fe;
-    int32_t ck[16];
+    int32_t ck[18];
 } svf_t;
 
 #define SC_MAX (32 << 16)
@@ -378,25 +380,39 @@ static inline int32_t softclip(int32_t x)            /* softClipTwo, x Q16 */
     }
     return x < 0 ? -r : r;
 }
+/* (1.0 Phase 10d: fast_tanh and tanh20 clamp the table's index where they branched past 2: the same to the bit, the
+ * table 1 from 1.95 (FASTTANH[500 ..]), and a loop with one in it stays one block, where the compiler keeps its
+ * registers: ACID's loop -15%) */
 static inline int32_t fast_tanh(int32_t x)           /* ResonantFilter.c fastTanh, Q16 */
 {
     int32_t a = x < 0 ? -x : x, r;
-    if (a >= (2 << 16)) {
-        r = 65536;
-    } else {
-        uint32_t i = (uint32_t)a >> 8, f = (uint32_t)a & 255u;
-        r = FASTTANH[i] + (((FASTTANH[i + 1u] - FASTTANH[i]) * (int32_t)f) >> 8);
-    }
+    uint32_t i, f;
+    a = a > (2 << 16) - 1 ? (2 << 16) - 1 : a;       /* (FASTTANH[511 ..]: 1) */
+    i = (uint32_t)a >> 8;
+    f = (uint32_t)a & 255u;
+    r = FASTTANH[i] + (((FASTTANH[i + 1u] - FASTTANH[i]) * (int32_t)f) >> 8);
     return x < 0 ? -r : r;
 }
 static inline int32_t q16_to_s16(int32_t v)          /* x 0x7FFF, saturated (FILTER_GAIN, __SSAT) */
 {
-    if (v >= 65537)
-        return 32767;
-    if (v <= -65537)
-        return -32768;
-    return sat16((v * 32767) >> 16);
+    v = clamp_hl(v, -65537, 65537);                  /* (1.0 Phase 10d: no branches, the same to the bit: +-65537
+                                                      * give 32767 and -32768) */
+    return (v * 32767) >> 16;
 }
+/* 1.0 (Phase 10d): q16_to_s16(fast_tanh(x)), the same to the bit: the tanh is within +-1, no saturation to test */
+static inline int32_t tanh_s16(int32_t x) { return (fast_tanh(x) * 32767) >> 16; }
+/* .. and the DJ filter's input (perform.c): softclip((v * 2 * drive) >> 12) at svf_init's drive, which the DJ filter
+ * keeps. Its |x| < 0.32 there, where softClipTwo (2 tanh(x / 2)) is x - x^3 / 12 within 2 LSB (the table's own
+ * error: 2.4): no table, no branches */
+#define DJ_DRIVE2 2580                               /* (2 x (int)(0.315 x 4096)) */
+static inline int32_t dj_in(int32_t v)
+{
+    int32_t x = (v * DJ_DRIVE2) >> 12, t = (x * x) >> 16;
+    t = (t * 5461) >> 16;                            /* (x^2 / 12) */
+    return x - ((t * x) >> 16);
+}
+static inline int32_t dj_mix(int32_t x, int32_t o, int32_t w) { return sat16(x + (((o - x) * w) >> 15)); }   /* (the
+                                                      * DJ filter's fade in over the knob's first eighth) */
 
 #define S_LIM (128 << 16)                        /* the states' rail (+-64 would read 0xFFC00000: build.py's ROM guard) */
 
@@ -420,12 +436,11 @@ static inline int32_t mulr16(int32_t a, int32_t b) { return (int32_t)(((int64_t)
 static inline int32_t tanh20(int32_t x)              /* fast_tanh in Q20, in and out */
 {
     int32_t a = x < 0 ? -x : x, r;
-    if (a >= (2 << 20)) {
-        r = 1 << 20;
-    } else {
-        uint32_t i = (uint32_t)a >> 12, f = (uint32_t)a & 4095u;
-        r = (FASTTANH[i] << 4) + (((FASTTANH[i + 1u] - FASTTANH[i]) * (int32_t)f) >> 8);
-    }
+    uint32_t i, f;
+    a = a > (2 << 20) - 1 ? (2 << 20) - 1 : a;
+    i = (uint32_t)a >> 12;
+    f = (uint32_t)a & 4095u;
+    r = (FASTTANH[i] << 4) + (((FASTTANH[i + 1u] - FASTTANH[i]) * (int32_t)f) >> 8);
     return x < 0 ? -r : r;
 }
 static const int16_t VOWEL_F[5][2] = {{800, 1150}, {400, 1700}, {300, 2250}, {450, 800}, {330, 650}};   /* A E I O U */
@@ -523,31 +538,53 @@ static inline int32_t cham_bp(int32_t *st, int32_t x, int32_t c, int32_t d)   /*
 #define A_LIM (16 << 24)                             /* (ACID's states, Q24: at low cutoffs Q20's rounding held a DC) */
 static inline int32_t ch_reso(const svf_t *s) { int32_t a = 65536 - s->rk; return 65536 - mulq16(a, a); }
 static inline int32_t mulr20(int32_t a, int32_t b) { return (int32_t)(((int64_t)a * b + (1 << 19)) >> 20); }
+#define ACID_P(m, j) ((m) * 4 - (m) * ((m) - 1) / 2 + (j) - (m))   /* (P's upper triangle, m <= j: 0..9) */
+enum { ACID_A = 10, ACID_LINV = 14, ACID_KL, ACID_MK };
 static void ch_coef(svf_t *s, uint32_t type, uint32_t fe)
 {
     int32_t g = lut1024(FILT_G, fe), r = ch_reso(s), *c = s->ck;
     switch (type) {
-    case F_ACID: {                                   /* ck: g, inv[4] (1..4), e[3] (5..7), A[4] (8..11), kk, linv, mk */
-        int32_t k = r * 18 + (r >> 1), j, den;       /* (k to 18.5: just under the whistle; the high-pass keeps
-                                                      * it further under at low cutoffs) */
+    case F_ACID: {                                   /* ck: P (0..9), A (10..13), linv, kk linv, mk (ACID_*) */
+        int32_t k = r * 18 + (r >> 1), j, m, den, inv[4], ee[3], a[4], kk;   /* (k to 18.5: just under the whistle;
+                                                      * the high-pass keeps it further under at low cutoffs) */
+        int64_t y[4];
         g *= 4;                                      /* (two octaves up: at RESONANCE 0 the ladder is down 3 dB at an
                                                       * eighth of its g's; this way at half the cutoff, open at the top,
                                                       * the peak ~2 octaves above) */
-        c[0] = g;
-        for (j = 0; j < 4; j++) {                    /* (I - g M): 1 + 2g (1 + g the last), -g beside */
-            den = (j < 3 ? 65536 + 2 * g : 65536 + g) - (j ? mulq16(g, c[4 + j]) : 0);
-            c[1 + j] = (int32_t)(((uint64_t)1 << 32) / (uint32_t)den);
+        for (j = 0; j < 4; j++) {                    /* (I - g M): 1 + 2g (1 + g the last), -g beside: Thomas' */
+            den = (j < 3 ? 65536 + 2 * g : 65536 + g) - (j ? mulq16(g, ee[j - 1]) : 0);
+            inv[j] = (int32_t)(((uint64_t)1 << 32) / (uint32_t)den);
             if (j < 3)
-                c[5 + j] = mulq16(g, c[1 + j]);
+                ee[j] = mulq16(g, inv[j]);
         }
-        c[8] = mulq16(g, c[1]);                      /* (A: the stages' share of u, its forward pass then back) */
+        a[0] = mulq16(g, inv[0]);                    /* (A: the stages' share of u, its forward pass then back, Q16:
+                                                      * the loop's gain, linv, as 0.23 had it) */
         for (j = 1; j < 4; j++)
-            c[8 + j] = mulq16(mulq16(g, c[7 + j]), c[1 + j]);
+            a[j] = mulq16(mulq16(g, a[j - 1]), inv[j]);
         for (j = 2; j >= 0; j--)
-            c[8 + j] += mulq16(c[5 + j], c[9 + j]);
-        c[12] = k - mulq16(k, 280);                  /* (k (1 - Gh), Gh = 280: ~60 Hz) */
-        c[13] = (int32_t)(((uint64_t)1 << 32) / (uint32_t)(65536 + mulq16(c[12], c[11])));
-        c[14] = 65536 + k / 2;                       /* (the makeup, as LP4's: the peak drives the tanh) */
+            a[j] += mulq16(ee[j], a[j + 1]);
+        /* 1.0 (Phase 10d): the stages solved as sums, y = P e + A u, Q28: P's columns are the forward and back
+         * passes on each state alone (the same coefficients), P symmetric as I - g M is.
+         * The loop then is one multiply-add a term, one rounding a stage, where the passes were 14 rounded
+         * products in a chain (-40% a sample on the device) */
+        for (m = 0; m < 4; m++) {
+            for (j = 0; j < 4; j++) {
+                int64_t t = j == m ? (int64_t)1 << 28 : 0;
+                if (j)
+                    t += (y[j - 1] * g + 32768) >> 16;
+                y[j] = (t * inv[j] + 32768) >> 16;
+            }
+            for (j = 2; j >= 0; j--)
+                y[j] += (y[j + 1] * ee[j] + 32768) >> 16;
+            for (j = m; j < 4; j++)
+                c[ACID_P(m, j)] = (int32_t)y[j];
+        }
+        for (j = 0; j < 4; j++)                      /* (A as 0.23's Q16, its rounding kept: the same sound) */
+            c[ACID_A + j] = a[j] << 12;
+        kk = k - mulq16(k, 280);                     /* (k (1 - Gh), Gh = 280: ~60 Hz) */
+        c[ACID_LINV] = (int32_t)(((uint64_t)1 << 32) / (uint32_t)(65536 + mulq16(kk, a[3])));
+        c[ACID_KL] = mulr16(kk, c[ACID_LINV]);
+        c[ACID_MK] = 65536 + k / 2;                  /* (the makeup, as LP4's: the peak drives the tanh) */
         break;
     }
     case F_MS20L:
@@ -581,63 +618,83 @@ static inline int32_t ms20_clip(int32_t x)           /* Q20: the knees +0.6, -0.
         return -471859 + ((x + 471859) >> 2);
     return x;
 }
+/* (Phase 10d: the loops below are inlined for the voices, dj 0: the input through DRIVE's softclip, the output
+ * stored; and for the DJ filter, dj 1: dj_in, the output faded in by w) */
+#define FLT_IN(s, v, dj) ((dj) ? dj_in(v) : softclip(((v) * 2 * (s)->drive) >> 12))
+#define FLT_OUT(x, o, dj, w) ((int16_t)((dj) ? dj_mix(x, o, w) : (o)))
+static inline __attribute__((always_inline)) void ch_acid(svf_t *s, int16_t *buf, uint32_t n, const int dj, int32_t w)
+{
+    const int32_t *c = s->ck, linv = c[ACID_LINV], kl = c[ACID_KL], mk = c[ACID_MK];
+    int32_t *e = s->e, e0 = e[0], e1 = e[1], e2 = e[2], e3 = e[3], e4 = e[4], e5 = e[5];
+    uint32_t i;
+    for (i = 0; i < n; i++) {
+        int32_t x = FLT_IN(s, buf[i], dj) << 8, d3, u, y0, y1, y2, y3, v;
+        int64_t a3 = (int64_t)c[ACID_P(0, 3)] * e0 + (int64_t)c[ACID_P(1, 3)] * e1 + (int64_t)c[ACID_P(2, 3)] * e2 +
+                     (int64_t)c[ACID_P(3, 3)] * e3 + (1 << 27);   /* (the 4th stage from the states alone, Q52) */
+        d3 = (int32_t)(a3 >> 28);
+        u = tanh20((int32_t)(((int64_t)x * linv + (int64_t)(e4 - d3) * kl + (1 << 19)) >> 20)) << 4;
+        y0 = (int32_t)(((int64_t)c[ACID_P(0, 0)] * e0 + (int64_t)c[ACID_P(0, 1)] * e1 + (int64_t)c[ACID_P(0, 2)] * e2 +
+                        (int64_t)c[ACID_P(0, 3)] * e3 + (int64_t)c[ACID_A] * u + (1 << 27)) >> 28);
+        y1 = (int32_t)(((int64_t)c[ACID_P(0, 1)] * e0 + (int64_t)c[ACID_P(1, 1)] * e1 + (int64_t)c[ACID_P(1, 2)] * e2 +
+                        (int64_t)c[ACID_P(1, 3)] * e3 + (int64_t)c[ACID_A + 1] * u + (1 << 27)) >> 28);
+        y2 = (int32_t)(((int64_t)c[ACID_P(0, 2)] * e0 + (int64_t)c[ACID_P(1, 2)] * e1 + (int64_t)c[ACID_P(2, 2)] * e2 +
+                        (int64_t)c[ACID_P(2, 3)] * e3 + (int64_t)c[ACID_A + 2] * u + (1 << 27)) >> 28);
+        y3 = (int32_t)((a3 + (int64_t)c[ACID_A + 3] * u) >> 28);
+        e0 = clamp_hl(2 * y0 - e0, -A_LIM, A_LIM);
+        e1 = clamp_hl(2 * y1 - e1, -A_LIM, A_LIM);
+        e2 = clamp_hl(2 * y2 - e2, -A_LIM, A_LIM);
+        e3 = clamp_hl(2 * y3 - e3, -A_LIM, A_LIM);
+        {                                            /* (the loop's high-pass: its low-pass state, the rounding's
+                                                      * remainder carried in e5: no dead zone for k to ring on) */
+            int64_t a = (int64_t)(y3 - e4) * 280 + e5;
+            v = (int32_t)(a >> 16);
+            e5 = (int32_t)(a - ((int64_t)v << 16));
+        }
+        e4 += 2 * v;
+        buf[i] = FLT_OUT(buf[i], tanh_s16(mulr16((y3 + 128) >> 8, mk)), dj, w);
+    }
+    e[0] = e0;
+    e[1] = e1;
+    e[2] = e2;
+    e[3] = e3;
+    e[4] = e4;
+    e[5] = e5;
+}
+static inline __attribute__((always_inline)) void ch_ms20(svf_t *s, int16_t *buf, uint32_t n, const int hp,
+                                                          const int dj, int32_t w)
+{
+    const int32_t *c = s->ck, G = c[0], H = c[1], k = c[2], linv = c[3];
+    int32_t e0 = s->e[0], e1 = s->e[1];
+    uint32_t i;
+    for (i = 0; i < n; i++) {
+        int32_t x = FLT_IN(s, buf[i], dj) << 4, be, u, v, y1, y2;
+        be = mulr16(H, mulr16(H, e0) - e1);          /* (the band fed back: alpha u + be, alpha = G (1 - G)) */
+        u = mulr16(x + mulr16(k, be), linv);
+        u = x + ms20_clip(u - x);
+        v = mulr16(u - e0, G);
+        y1 = v + e0;
+        e0 = clamp_hl(y1 + v, -S_LIM, S_LIM);
+        v = mulr16(y1 - e1, G);
+        y2 = v + e1;
+        e1 = clamp_hl(y2 + v, -S_LIM, S_LIM);
+        buf[i] = FLT_OUT(buf[i], tanh_s16(((hp ? u - 2 * y1 + y2 : y2) + 8) >> 4), dj, w);
+    }
+    s->e[0] = e0;
+    s->e[1] = e1;
+}
 static void ch_run(svf_t *s, uint32_t type, int16_t *buf, uint32_t n)
 {
     const int32_t *c = s->ck;
     int32_t *e = s->e;
     uint32_t i;
     switch (type) {
-    case F_ACID: {
-        const int32_t g = c[0], kk = c[12], linv = c[13], mk = c[14];
-        for (i = 0; i < n; i++) {
-            int32_t x = softclip((buf[i] * 2 * s->drive) >> 12) << 8, d0, d1, d2, d3, b0, b1, b2, u, y, v, lp;
-            d0 = mulr16(e[0], c[1]);                 /* (the states' part: Thomas, forward then back) */
-            d1 = mulr16(e[1] + mulr16(g, d0), c[2]);
-            d2 = mulr16(e[2] + mulr16(g, d1), c[3]);
-            d3 = mulr16(e[3] + mulr16(g, d2), c[4]);
-            b2 = d2 + mulr16(c[7], d3);
-            b1 = d1 + mulr16(c[6], b2);
-            b0 = d0 + mulr16(c[5], b1);
-            u = tanh20(mulr16(x - mulr16(kk, d3 - e[4]), linv) >> 4) << 4;
-            y = b0 + mulr16(c[8], u);
-            e[0] = clamp32(2 * y - e[0], -A_LIM, A_LIM);
-            y = b1 + mulr16(c[9], u);
-            e[1] = clamp32(2 * y - e[1], -A_LIM, A_LIM);
-            y = b2 + mulr16(c[10], u);
-            e[2] = clamp32(2 * y - e[2], -A_LIM, A_LIM);
-            y = d3 + mulr16(c[11], u);
-            e[3] = clamp32(2 * y - e[3], -A_LIM, A_LIM);
-            {                                        /* (the loop's high-pass: its low-pass state, the rounding's
-                                                      * remainder carried in e[5]: no dead zone for k to ring on) */
-                int64_t a = (int64_t)(y - e[4]) * 280 + e[5];
-                v = (int32_t)(a >> 16);
-                e[5] = (int32_t)(a - ((int64_t)v << 16));
-            }
-            lp = v + e[4];
-            e[4] = lp + v;
-            buf[i] = (int16_t)q16_to_s16(fast_tanh(mulr16((y + 128) >> 8, mk)));
-        }
+    case F_ACID:
+        ch_acid(s, buf, n, 0, 0);
         break;
-    }
     case F_MS20L:
-    case F_MS20H: {
-        const int32_t G = c[0], H = c[1], k = c[2], linv = c[3];
-        const int hp = type == F_MS20H;
-        for (i = 0; i < n; i++) {
-            int32_t x = softclip((buf[i] * 2 * s->drive) >> 12) << 4, be, u, v, y1, y2;
-            be = mulr16(H, mulr16(H, e[0]) - e[1]);  /* (the band fed back: alpha u + be, alpha = G (1 - G)) */
-            u = mulr16(x + mulr16(k, be), linv);
-            u = x + ms20_clip(u - x);
-            v = mulr16(u - e[0], G);
-            y1 = v + e[0];
-            e[0] = clamp32(y1 + v, -S_LIM, S_LIM);
-            v = mulr16(y1 - e[1], G);
-            y2 = v + e[1];
-            e[1] = clamp32(y2 + v, -S_LIM, S_LIM);
-            buf[i] = (int16_t)q16_to_s16(fast_tanh(((hp ? u - 2 * y1 + y2 : y2) + 8) >> 4));
-        }
+    case F_MS20H:
+        ch_ms20(s, buf, n, type == F_MS20H, 0, 0);
         break;
-    }
     default: {                                       /* LADDER */
         const int32_t G = c[0], B = c[1], k = c[2], g4 = c[3], inv = c[4], cb = c[5], mk = c[6];
         for (i = 0; i < n; i++) {
@@ -654,7 +711,7 @@ static void ch_run(svf_t *s, uint32_t type, int16_t *buf, uint32_t n)
                 u = v + e[j];
                 e[j] = u + v;
             }
-            buf[i] = (int16_t)q16_to_s16(fast_tanh(mulr16((u + 8) >> 4, mk)));
+            buf[i] = (int16_t)tanh_s16(mulr16((u + 8) >> 4, mk));
         }
         break;
     }
@@ -717,7 +774,7 @@ static void svf_block28(svf_t *s, uint32_t type, int16_t *buf)
                 u = v + e[j];
                 e[j] = u + v;
             }
-            buf[i] = (int16_t)q16_to_s16(fast_tanh(mulr16((u + 8) >> 4, mk)));
+            buf[i] = (int16_t)tanh_s16(mulr16((u + 8) >> 4, mk));
         }
         break;
     }
@@ -754,7 +811,7 @@ static void svf_block28(svf_t *s, uint32_t type, int16_t *buf)
             w = clamp32(x + mulr16(fbk, lp), -(4 << 16) + 8, (4 << 16) - 8);
             ln[wp] = (int16_t)(w >> 3);
             wp = (wp + 1u) & (FLT_LINE - 1u);
-            buf[i] = (int16_t)q16_to_s16(fast_tanh(mulr16(w, og)));
+            buf[i] = (int16_t)tanh_s16(mulr16(w, og));
         }
         s->wp = (uint16_t)wp;
         s->e[0] = lp;
@@ -765,7 +822,7 @@ static void svf_block28(svf_t *s, uint32_t type, int16_t *buf)
         for (i = 0; i < BLOCK; i++) {
             int32_t x = softclip((buf[i] * 2 * s->drive) >> 12);
             int32_t y = cham_bp(&s->e[0], x, c1, d) + mulr16(cham_bp(&s->e[2], x, c2, d), 39322);   /* (F2 x 0.6) */
-            buf[i] = (int16_t)q16_to_s16(fast_tanh(mulr16(y, og)));
+            buf[i] = (int16_t)tanh_s16(mulr16(y, og));
         }
         break;
     }
@@ -775,7 +832,7 @@ static void svf_block28(svf_t *s, uint32_t type, int16_t *buf)
             int32_t x = softclip((buf[i] * 2 * s->drive) >> 12);
             int32_t y = cham_bp(&s->e[0], x, c1, d) + mulr16(cham_bp(&s->e[2], x, c2, d), 45875) +
                         mulr16(cham_bp(&s->e[4], x, c3, d), 39322);   /* (the root, the fifth x 0.7, the octave x 0.6) */
-            buf[i] = (int16_t)q16_to_s16(fast_tanh(mulr16(y, og)));
+            buf[i] = (int16_t)tanh_s16(mulr16(y, og));
         }
         break;
     }
@@ -868,8 +925,8 @@ static void svf_block(svf_t *s, uint32_t type, int16_t *buf)   /* SVF_calcBlockZ
             int32_t ugb = mulr16(r2, y0), o;
             s1 = sc + (int32_t)(((int64_t)g2 * (xx - ugb)) >> 16);
             s2 = s2 + (int32_t)(((int64_t)g2 * y0) >> 16);
-            s1 = clamp32(s1, -S_LIM, S_LIM);
-            s2 = clamp32(s2, -S_LIM, S_LIM);
+            s1 = clamp_hl(s1, -S_LIM, S_LIM);
+            s2 = clamp_hl(s2, -S_LIM, S_LIM);
             switch (type) {
             case F_LP:
                 o = fast_tanh(y1);
@@ -898,6 +955,98 @@ static void svf_block(svf_t *s, uint32_t type, int16_t *buf)   /* SVF_calcBlockZ
         }
         s->s1 = s1;
         s->s2 = s2;
+    }
+}
+
+/* -------------------------------------------- 1.0: the DJ filter (10d) --- */
+/* perform.c's DJ filter: the master, both sides, through the LXR's LP or HP, ACID or MS20 (svf_block's and ch_run's
+ * sound), faded in by w (Q15). Cheaper than svf_block on each side then a pass to mix: the input's softclip without
+ * its table (dj_in), the loops made per type (no switch a sample), the mix in the loop, the tanh's output as is
+ * (tanh_s16), the coefficients worked out once for both sides */
+static inline __attribute__((always_inline)) void dj_svf(svf_t *s, int16_t *buf, int32_t w, const int hp)
+{
+    int32_t s1 = s->s1, s2 = s->s2;
+    const int32_t cx = s->cx, cs1 = s->cs1, cs2 = s->cs2, g0 = s->g0, gg0 = s->gg0, g2 = s->g2, r2 = s->r2;
+    uint32_t i;
+    for (i = 0; i < BLOCK; i++) {                    /* (svf_block's F_LP, F_HP) */
+        int32_t x = dj_in(buf[i]);
+        int32_t y1 = (int32_t)(((int64_t)cx * x + (int64_t)cs2 * s2 + (int64_t)cs1 * s1) >> 16);
+        int32_t xx = x - y1, sc = softclip(s1);
+        int32_t y0 = (int32_t)(((int64_t)g0 * sc + (int64_t)gg0 * xx) >> 16);
+        int32_t ugb = mulr16(r2, y0);
+        s1 = sc + (int32_t)(((int64_t)g2 * (xx - ugb)) >> 16);
+        s2 = s2 + (int32_t)(((int64_t)g2 * y0) >> 16);
+        s1 = clamp_hl(s1, -S_LIM, S_LIM);
+        s2 = clamp_hl(s2, -S_LIM, S_LIM);
+        buf[i] = (int16_t)dj_mix(buf[i], hp ? q16_to_s16(x - ugb - y1) : tanh_s16(y1), w);
+    }
+    s->s1 = s1;
+    s->s2 = s2;
+}
+static void dj_side(svf_t *s, uint32_t type, int16_t *buf, uint32_t n, int32_t w)
+{
+    switch (type) {
+    case F_LP:
+        dj_svf(s, buf, w, 0);
+        break;
+    case F_HP:
+        dj_svf(s, buf, w, 1);
+        break;
+    case F_ACID:
+        ch_acid(s, buf, n, 1, w);
+        break;
+    default:                                         /* F_MS20L, F_MS20H */
+        ch_ms20(s, buf, n, type == F_MS20H, 1, w);
+        break;
+    }
+}
+static void dj_block(svf_t *s, uint32_t type, int16_t *l, int16_t *r, int32_t w)   /* s: the two sides' */
+{
+    svf_t *t = s + 1;
+    uint32_t c, n;
+    for (c = 0; c < 2u; c++) {                       /* (from rest, as svf_block's and svf_block28's) */
+        svf_t *u = s + c;
+        if (type == F_LP || type == F_HP) {
+            u->was = 0;
+            u->clr = 0;
+        } else if (type != u->was || u->clr) {
+            memset(u->e, 0, sizeof u->e);
+            u->fe = -1;
+            u->clr = 0;
+            u->was = (uint8_t)type;
+            u->dirty = 1;
+        }
+    }
+    if (s->dirty || t->dirty) {                      /* (the two sides have the same settings: perform.c) */
+        svf_coef(s);
+        memcpy(&t->f, &s->f, (uint32_t)((char *)&s->e[0] - (char *)&s->f));   /* (f .. lp2q) */
+        t->cdirty = s->cdirty;
+        t->dirty = 0;
+    }
+    if (type == F_LP || type == F_HP) {
+        dj_side(s, type, l, BLOCK, w);
+        dj_side(t, type, r, BLOCK, w);
+        return;
+    }
+    {                                                /* (ch_block's, both sides: its cutoff ramped while it moves) */
+        int32_t fe = (int32_t)s->fval, f0 = s->fe;
+        if (f0 < 0 || fe == f0) {
+            if (f0 < 0 || s->cdirty) {
+                ch_coef(s, type, (uint32_t)fe);
+                memcpy(t->ck, s->ck, sizeof t->ck);
+            }
+            dj_side(s, type, l, BLOCK, w);
+            dj_side(t, type, r, BLOCK, w);
+        } else {
+            for (n = 0; n < BLOCK / CH_SUB; n++) {
+                ch_coef(s, type, (uint32_t)(f0 + (fe - f0) * (int32_t)(n + 1u) / (int32_t)(BLOCK / CH_SUB)));
+                memcpy(t->ck, s->ck, sizeof t->ck);
+                dj_side(s, type, l + n * CH_SUB, CH_SUB, w);
+                dj_side(t, type, r + n * CH_SUB, CH_SUB, w);
+            }
+        }
+        s->fe = t->fe = fe;
+        s->cdirty = t->cdirty = 0;
     }
 }
 
