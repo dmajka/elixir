@@ -18,7 +18,7 @@
 </style>
 <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="h" d="M0 0L10 5L0 10z"/></marker></defs>
 <rect class="bx" x="20" y="16" width="332" height="58" rx="7"/><text class="t" x="32" y="36">SOURCE</text><text class="d" x="32" y="53">Oscillator, FM and transient, or a model:</text><text class="d" x="32" y="68">Rings, Plaits, MICRO or ENSEMBLE</text><text class="p" x="342" y="36">EDIT</text>
-<rect class="bx" x="20" y="92" width="332" height="58" rx="7"/><text class="t" x="32" y="112">FILTER</text><text class="d" x="32" y="129">Frequency, Resonance, Overdrive: the LXR&#x27;s</text><text class="d" x="32" y="144">types, then LP4, combs, vowel, chord …</text><text class="p" x="342" y="112">SCL</text>
+<rect class="bx" x="20" y="92" width="332" height="58" rx="7"/><text class="t" x="32" y="112">FILTER</text><text class="d" x="32" y="129">the LXR&#x27;s types, LP4, combs, vowel, chord …;</text><text class="d" x="32" y="144">ACID, MS20, LADDER (FILTER X: env amt)</text><text class="p" x="342" y="112">SCL</text>
 <path class="a" d="M186.0 74 V91" marker-end="url(#ah)"/>
 <rect class="bx" x="20" y="168" width="332" height="58" rx="7"/><text class="t" x="32" y="188">AMP EG</text><text class="d" x="32" y="205">Attack, decay, slope; GATE holds it for</text><text class="d" x="32" y="220">the note&#x27;s length</text><text class="p" x="342" y="188">ENV</text>
 <path class="a" d="M186.0 150 V167" marker-end="url(#ah)"/>

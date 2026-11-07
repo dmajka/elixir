@@ -40,7 +40,8 @@ static void params_init(void)
 /* -------------------------------------------------------- the lists --- */
 static const char *const L_WAVE[] = {"SINE", "TRI", "SAW", "SQUARE", "NOISE", "PWM"};
 static const char *const L_FILTER[] = {"LP", "HP", "BP", "UNITY BP", "NOTCH", "PEAK", "LP2", "OFF",
-                                       "LP4", "COMB+", "COMB-", "ALLPASS", "VOWEL", "DUB BP", "CHORD"};   /* (28) */
+                                       "LP4", "COMB+", "COMB-", "ALLPASS", "VOWEL", "DUB BP", "CHORD",   /* (28) */
+                                       "ACID", "MS20 LP", "MS20 HP", "LADDER"};   /* (1.0) */
 _Static_assert(sizeof L_FILTER / sizeof L_FILTER[0] == F_LAST, "dsp.c: the filter types");
 static const char *const L_OUT[] = {"STEREO", "STEREO 2", "LEFT", "RIGHT", "LEFT 2", "RIGHT 2"};   /* (the LXR's 7th,
                                                   * FX BUS, is FX SEND 127: kit.c out_migrate) */
@@ -160,6 +161,7 @@ static const struct { uint16_t first; uint8_t n; uint16_t dtype; const char *nm[
     {PAR_INSA1, 6, DTYPE_0B127, {"Amount", "Insert", "ina", "Ins amt"}},
     {PAR_INSB1, 6, DTYPE_0B127, {"Rate", "Insert", "inb", "Ins rate"}},
     {PAR_INSC1, 6, DTYPE_0B127, {"Feedback", "Insert", "inc", "Ins fdbk"}},
+    {PAR_FLTX1, 6, DTYPE_0B127, {"Env amt", "Filter", "fen", "F envamt"}},   /* (1.0: LADDER's: flt_x_name) */
 };
 static uint32_t par_k(uint32_t p)                    /* its row in K_PARS (p >= NUM_PARAMS) */
 {
@@ -221,18 +223,27 @@ static const char *ins_knob_name(uint32_t p, uint32_t which)
     static const char *const C[4][4] = {{"Feedback", "Insert", "inc", "Ins fdbk"}, {"Depth", "Insert", "inc", "InsDepth"},
                                         {"Shape", "Insert", "inc", "InsShape"}, {"AM", "Insert", "inc", "Ins AM"}};
     uint32_t t;
-    if (p < PAR_INSB1 || p >= NPAR)
+    if (p < PAR_INSB1 || p >= PAR_FLTX1)
         return 0;
     t = ins[(p - PAR_INS1) % 6u].type;
     if (p < PAR_INSC1)
         return B[t == INS_SHIFT ? 1 : t == INS_RING ? 2 : 0][which];
     return C[t == INS_CHORUS ? 1 : t == INS_TREMOLO || t == INS_AUTOPAN ? 2 : t == INS_RING ? 3 : 0][which];
 }
+static const char *flt_x_name(uint32_t p, uint32_t which)   /* 1.0: FILTER X on LADDER: BASS COMP */
+{
+    static const char *const L[4] = {"Bass comp", "Filter", "fbc", "F bascmp"};
+    if (p < PAR_FLTX1 || p >= PAR_FLTX1 + 6u || par[PAR_FILTER_TYPE_1 + p - PAR_FLTX1] + 1u != F_LADDER)
+        return 0;
+    return L[which];
+}
 static const char *par_name_k(uint32_t p, uint32_t which)
 {
     const char *n = pl_knob_name(p, which);
     if (!n)
         n = ins_knob_name(p, which);
+    if (!n)
+        n = flt_x_name(p, which);
     return n ? n : K_PARS[par_k(p)].nm[which];
 }
 
@@ -309,8 +320,8 @@ static const char *lfo1_name(uint32_t p, int lock)
 /* 1.0: the always-on delay's (sound.c PAR_DLY_*): long, category, short */
 static const char *dly_name(uint32_t p, uint32_t which)
 {
-    static const char *const N[5][3] = {{"Time", "Delay", "dtm"}, {"Feedback", "Delay", "dfb"}, {"Tone", "Delay", "dtn"},
-                                        {"Level", "Delay", "dlv"}, {"Wow", "Delay", "dwo"}};
+    static const char *const N[6][3] = {{"Time", "Delay", "dtm"}, {"Feedback", "Delay", "dfb"}, {"Tone", "Delay", "dtn"},
+                                        {"Level", "Delay", "dlv"}, {"Wow", "Delay", "dwo"}, {"Band", "Delay", "dbd"}};
     return N[p - PAR_DLY_TIME][which];
 }
 /* the names: long (the cards), short (3 letters, the LXR's) */
@@ -452,7 +463,7 @@ static void par_hz(char *b, uint32_t max)           /* (27a: "Hz" after the numb
 static void par_format(char *b, uint32_t p, uint32_t v, uint32_t max)
 {
     uint32_t m;
-    if (p >= PAR_INSB1 && p < NPAR) {               /* 27a: the shift and the pitch in Hz; the feedbacks from 64 */
+    if (p >= PAR_INSB1 && p < PAR_FLTX1) {          /* 27a: the shift and the pitch in Hz; the feedbacks from 64 */
         uint32_t t = ins[(p - PAR_INS1) % 6u].type;
         int32_t d = (int32_t)v - 64;
         if (p < PAR_INSC1 && t == INS_SHIFT) {

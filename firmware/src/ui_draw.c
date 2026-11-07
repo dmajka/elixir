@@ -179,7 +179,7 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
         break;
     case M_FX: {
         static const char *const T[NFXPG] = {"REVERB", "FX BUS", "", "DELAY", "DELAY: MODE", "DELAY: TAPE", "DIRT",
-                                             "MASTER COMP", "COMP: SIDECHAIN", "FX SEND (1/2)", "FX SEND (2/2)",
+                                             "DJ FILTER", "MASTER COMP", "COMP: SIDECHAIN", "FX SEND (1/2)", "FX SEND (2/2)",
                                              "REVERB SEND (1/2)", "REVERB SEND (2/2)"};
         uint32_t g = fx_page();
         if (g == FXPG_PARS) {                        /* (the type's knobs: named after it) */
@@ -1159,6 +1159,7 @@ static void draw_fx(int32_t y0)
     case FXPG_DLY2: viz_echoes(0, 1); break;
     case FXPG_DUB: viz_echoes(1, 0); break;
     case FXPG_DIRT: viz_dirt(); break;
+    case FXPG_DJ: viz_djf(); break;
     case FXPG_COMP: viz_mcomp(0); break;
     case FXPG_COMP2: viz_mcomp(1); break;
     default: draw_mixer(y0); break;                  /* (31: the sends, as the mixer shows them) */
@@ -1626,7 +1627,10 @@ static void draw_body(void)
                                (uint32_t)par[PAR_FX_TYPE] << 24);
             s = sig_add(s, (uint32_t)par[PAR_DLY_TIME] | (uint32_t)par[PAR_DLY_FB] << 8 | (uint32_t)par[PAR_DLY_TONE] << 16 |
                                (uint32_t)par[PAR_DLY_LEVEL] << 24);   /* (1.0: the delay's) */
-            s = sig_add(s, (uint32_t)par[PAR_DLY_WOW] | (uint32_t)par[PAR_DSAT] << 8 | fx_bpm_x10 << 16);
+            s = sig_add(s, (uint32_t)par[PAR_DLY_WOW] | (uint32_t)par[PAR_DSAT] << 8 | fx_bpm_x10 << 16 |
+                               (uint32_t)par[PAR_DLY_BAND] << 24);
+            if (fx_page() == FXPG_DJ)                    /* (1.0: the DJ filter as it moves, its type and Reso) */
+                s = sig_add(s, (uint32_t)(pf.dj_d + 65536) >> 9 | (uint32_t)pfs.dj_ftype << 20 | (uint32_t)pfs.dj_reso << 24);
             if (fx_page() == FXPG_COMP2 && mc.src && mc.src <= NVOICE)
                 s = sig_add(s, shown_pat()->main[mc.src - 1u][ui.bar & 3u] | ui.bar << 16);
             if (fx_page() == FXPG_COMP || fx_page() == FXPG_COMP2)   /* (0.16: the compressor's gain reduction) */
@@ -1825,6 +1829,7 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_REPEAT: put_str(b, "Repeat", n); return;
     case VP_TAPE: put_str(b, "Tape time", n); return;
     case VP_DJRESO: put_str(b, "DJ reso", n); return;
+    case VP_DJTYPE: put_str(b, "DJ type", n); return;
     case VP_MVOL: put_str(b, "Volume", n); return;   /* (1.0) */
     case VP_STRETCH: put_str(b, "Stretch", n); return;
     case VP_REALIGN: put_str(b, "Realign", n); return;
@@ -2047,6 +2052,16 @@ static int card_unit(char *b, uint32_t n, uint32_t p, uint32_t v)
         put_hz(b, n, (uint32_t)((5u * (uint32_t)exp2_q16((int32_t)((v & 127u) * 8u * 65536u / 127u))) >> 16));
         return 1;
     }
+    if (p == PAR_DLY_BAND) {                         /* (1.0: OFF, or its centre; TAPE's half-rate loop stops at ~3.3 kHz) */
+        uint32_t h;
+        if (!v) {
+            put_str(b, "OFF", n);
+            return 1;
+        }
+        h = (uint32_t)((15000u * (uint64_t)(uint32_t)exp2_q16((int32_t)((v - 1u) * 331612u / 126u))) >> 16);
+        put_hz(b, n, is_tape() && h > 332000u ? 332000u : h);
+        return 1;
+    }
     if (p == PAR_DLY_TIME && !fx.d_sync) {           /* (1.0: the delay's; TAPE's: tape_target, at half rate) */
         if (is_tape()) {
             uint32_t mx = tape_max() << 16;
@@ -2190,7 +2205,7 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
             static const char *const D[NGD] = {"OFF", "MORPH", "FILTER", "LP", "HP", "FB PUSH", "COMB", "CRUSH",
                                                "JITTER", "CUTS", "PUMP", "DENSITY", "TRANSPOSE", "MEL CHANGE",
                                                "MEL SPREAD", "DELAY FB", "DELAY TIME", "REV SEND", "MACRO 1",
-                                               "MACRO 2", "MACRO 3", "MACRO 4", "STUTTER", "DIRT"};
+                                               "MACRO 2", "MACRO 3", "MACRO 4", "STUTTER", "DIRT", "DELAY BAND"};
             put_str(b, D[v < NGD ? v : 0], n);
             return;
         }
@@ -2259,6 +2274,11 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
         return;
     }
     case VP_REALIGN: put_str(b, v ? "PATTERN" : "STOP", n); return;
+    case VP_DJTYPE: {
+        static const char *const T[NDJT] = {"LXR", "ACID", "MS20"};
+        put_str(b, T[v < NDJT ? v : 0u], n);
+        return;
+    }
     case VP_MOUT ... VP_MOUT_LAST: put_str(b, v ? "ON" : "OFF", n); return;
     case VP_DENS: case VP_TD ... VP_TD_LAST: {       /* (-64..63 as -100 .. +100%) */
         int32_t d = (int32_t)v - 64, pc = d < 0 ? d * 100 / 64 : d * 100 / 63;

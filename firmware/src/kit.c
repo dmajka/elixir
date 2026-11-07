@@ -54,7 +54,7 @@ static uint32_t init_kit_k(uint32_t p)
         static const uint8_t C[6] = {96, 40, 64, 0, 0, 127};
         return C[p - PAR_MC_THR];
     }
-    if ((p >= PAR_INSA1 && p < NPAR) || (p >= PAR_L2RATE1 && p < PAR_L2RATE1 + 6u))
+    if ((p >= PAR_INSA1 && p < PAR_FLTX1) || (p >= PAR_L2RATE1 && p < PAR_L2RATE1 + 6u))
         return 64;                                   /* (27a: the insert's knobs, its type OFF; 25b: LFO 2's rate) */
     return p == PAR_REV_SIZE ? 64u : p == PAR_REV_DAMP ? 48u : p == PAR_REV_LEVEL ? 100u : 0u;
 }

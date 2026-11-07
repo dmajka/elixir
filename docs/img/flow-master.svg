@@ -38,7 +38,7 @@
 <path class="a" d="M240.0 414 V431" marker-end="url(#ah)"/>
 <rect class="bx" x="74" y="432" width="332" height="58" rx="7"/><text class="t" x="86" y="452">MASTER DIRT</text><text class="d" x="86" y="469">TAPE, TUBE, FUZZ, DIODE or FOLD; Amount</text><text class="p" x="396" y="452">FX</text>
 <path class="a" d="M240.0 490 V507" marker-end="url(#ah)"/>
-<rect class="bx" x="74" y="508" width="332" height="58" rx="7"/><text class="t" x="86" y="528">DJ FILTER</text><text class="d" x="86" y="545">Low-pass one way, high-pass the other;</text><text class="d" x="86" y="560">DJ reso</text><text class="p" x="396" y="528">PERF</text>
+<rect class="bx" x="74" y="508" width="332" height="58" rx="7"/><text class="t" x="86" y="528">DJ FILTER</text><text class="d" x="86" y="545">Low-pass one way, high-pass the other;</text><text class="d" x="86" y="560">DJ reso; DJ type: LXR, ACID or MS20</text><text class="p" x="396" y="528">FX</text>
 <path class="a" d="M240.0 566 V583" marker-end="url(#ah)"/>
 <rect class="bx" x="74" y="584" width="332" height="58" rx="7"/><text class="t" x="86" y="604">PERFORM FX</text><text class="d" x="86" y="621">COMB, CUTS, CRUSH, REVERSE, STUTTER,</text><text class="d" x="86" y="636">then TAPE STOP</text><text class="p" x="396" y="604">PERF</text>
 <path class="a" d="M240.0 642 V659" marker-end="url(#ah)"/>

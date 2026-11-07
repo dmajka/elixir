@@ -115,19 +115,33 @@ static struct {
     uint8_t st_chance, st_size, st_len, st_vary;
     uint8_t dvary;                                   /* 31: DENSITY's VARY, 0..127 (KSC1) */
     uint8_t dj_reso;                                 /* 0.24.3: the DJ filter's resonance, 0..127 (0: 0.6's) (KSC1) */
+    uint8_t dj_ftype;                                /* 1.0: the DJ filter's type, DJT_* (KSC1) */
 } pfs;
+/* 1.0: the DJ filter's type, the global character filter: the LXR's SVF (LP, HP), ACID (its LP; the LXR's HP) or MS20
+ * (its LP, HP) */
+enum { DJT_LXR, DJT_ACID, DJT_MS20, NDJT };
+static uint32_t dj_kind(int32_t d)                   /* the filter type at the DJ filter's position d (0: none) */
+{
+    static const uint8_t T[NDJT][2] = {{F_LP, F_HP}, {F_ACID, F_HP}, {F_MS20L, F_MS20H}};
+    return d ? T[pfs.dj_ftype < NDJT ? pfs.dj_ftype : 0u][d > 0] : 0u;
+}
+static uint32_t dj_fval(int32_t d)                   /* .. its cutoff, Q16 (from the top, down to the left; up to the right) */
+{
+    uint32_t a = (uint32_t)iabs(d);
+    return d < 0 ? 65536u - ((a * 58982u) >> 16) : (a * 45875u) >> 16;   /* (unsigned: a * 58982 passes 2^31) */
+}
 #define NPF2SET 8u                                   /* (KPF2: the bytes from drill) */
 static const uint8_t REPEAT_TICKS[4] = {96, 48, 24, 12};
 
 /* 0.13: the global LFOs */
 enum { GD_OFF, GD_MORPH, GD_FILTER, GD_LP, GD_HP, GD_PUSH, GD_COMB, GD_CRUSH, GD_JITTER, GD_CUTS, GD_PUMP,
        GD_DENSITY, GD_TRANSPOSE, GD_MCHANGE, GD_MSPREAD, GD_DFB, GD_DTIME, GD_RSEND, GD_MACRO1,
-       GD_STUT = GD_MACRO1 + NMACRO, GD_DIRT, NGD };   /* (0.16: STUTTER's chance, from 0 as the effects; 1.0: the
-                                                      * master DIRT's amount, either way) */
-#define NGBI (GD_STUT - GD_DENSITY + 1)              /* (19c: the ones moved either way, gl.bi; GD_DIRT's the last) */
+       GD_STUT = GD_MACRO1 + NMACRO, GD_DIRT, GD_DBAND, NGD };   /* (0.16: STUTTER's chance, from 0 as the effects;
+                                                      * 1.0: the master DIRT's amount, the delay's BAND, either way) */
+#define NGBI (GD_STUT - GD_DENSITY + 2)              /* (19c: the ones moved either way, gl.bi; GD_DIRT's, GD_DBAND's last) */
 static uint32_t gd_bi(uint32_t g)                    /* (its place in gl.bi, NGBI none) */
 {
-    return g >= GD_DENSITY && g < GD_STUT ? g - GD_DENSITY : g == GD_DIRT ? NGBI - 1u : NGBI;
+    return g >= GD_DENSITY && g < GD_STUT ? g - GD_DENSITY : g == GD_DIRT ? NGBI - 2u : g == GD_DBAND ? NGBI - 1u : NGBI;
 }
 enum { GM_FREE, GM_TRIG, GM_HOLD, GM_ONE, GM_HALF, NGM };
 enum { GT_PLAY, GT_PATTERN, GT_BAR, NGT };
@@ -287,7 +301,8 @@ static void perf_block(void)
         fx.lfo_fb = gl.bi[GD_DFB - GD_DENSITY];
         fx.lfo_time = gl.bi[GD_DTIME - GD_DENSITY];
         rev_g = (uint32_t)(65536 + gl.bi[GD_RSEND - GD_DENSITY]);
-        dirt.lfo = gl.bi[NGBI - 1];                  /* (1.0: the master DIRT's amount) */
+        dirt.lfo = gl.bi[NGBI - 2];                  /* (1.0: the master DIRT's amount) */
+        fx.lfo_band = gl.bi[NGBI - 1];               /* (1.0: the delay's BAND, +-2 octaves; OFF stays off) */
     }
     sq.fill = (on >> PF_FILL) & 1u;
     sq.half = (on >> PF_HALF) & 1u;
@@ -549,13 +564,14 @@ static void perf_master(int16_t *l, int16_t *r)
         uint32_t k = 127u - (pfs.dj_reso & 127u);    /* on a square law (most of the knob where it bites) */
         int32_t q = 1966 + (int32_t)(37356u * k * k / 16129u);
         for (c = 0; c < 2u; c++)
-            if (pf.dj_f[c].q != q) {
+            if (pf.dj_f[c].q != q || pf.dj_f[c].rk != (int32_t)pfs.dj_reso * 516) {
                 pf.dj_f[c].q = q;
+                pf.dj_f[c].rk = (int32_t)pfs.dj_reso * 516;   /* (1.0: ACID's, MS20's: their own curve, 0 .. 1) */
                 pf.dj_f[c].dirty = 1;
             }
     }
     if (a > 0) {
-        type = d < 0 ? F_LP : F_HP;
+        type = dj_kind(d);
         w = a >= 8192 ? 32768 : a * 4;               /* (faded in over the first eighth: no click at the middle) */
         if (type != pf.dj_type) {
             svf_reset(&pf.dj_f[0]);
@@ -565,7 +581,7 @@ static void perf_master(int16_t *l, int16_t *r)
         for (c = 0; c < 2u; c++) {
             int16_t *x = c ? r : l;
             svf_t *s = &pf.dj_f[c];
-            uint32_t fv = d < 0 ? 65536u - (((uint32_t)a * 58982u) >> 16) : ((uint32_t)a * 45875u) >> 16;   /* (unsigned: a * 58982 passes 2^31) */
+            uint32_t fv = dj_fval(d);
             if (s->fval != fv) {
                 s->fval = fv;
                 s->dirty = 1;

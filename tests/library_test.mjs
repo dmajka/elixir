@@ -38,7 +38,7 @@ const expectStatus = async (p, st, what) => {
 // 1. info
 let info = await lib.info();
 console.log(`  info: proto ${info.proto}, ${info.version}, ${info.nlog} projects, ${info.nkits} kits of ${info.kitLen}`);
-check(info.proto === 1 && info.nlog === 5 && info.nkits === 64 && info.kitLen === 470, "info");   // (0.16: 377 + 21 bytes; 25b, 27a: + 72)
+check(info.proto === 1 && info.nlog === 5 && info.nkits === 64 && info.kitLen === 476, "info");   // (0.16: 377 + 21 bytes; 25b, 27a: + 72; 1.0: FILTER X + 6)
 
 // 2. LXR kits in
 let kits = [];
@@ -62,8 +62,14 @@ if (existsSync(kitDir)) {
     for (let j = 0; j < orig.length; j++, total++) {
       const out = j >= 215 && j <= 220 && orig[j] >= 6;
       const tw = j >= 203 && j <= 208 && orig[j] >= 14;   // (25-0: a transient wave past the table: 0, as it plays)
+      // 1.0: the always-on delay: its settings in the LXR's unused 221..225, a bus on DELAY (4) now OFF with the delay
+      // on, and an LFO / velocity target on D2's FX P1..P4 (74..77) moved to D1's (36..39)
+      const dly = j >= 221 && j <= 225, bus = j === 234 && orig[j] === 4;
+      const tg = ((j >= 149 && j <= 154) || (j >= 167 && j <= 172)) && orig[j] >= 74 && orig[j] <= 77;
+      const want = out || tw || bus ? 0 : tg ? orig[j] - 38 : orig[j];
       fxbus += out;
-      same += back[j] === (out || tw ? 0 : orig[j]);
+      same += dly || back[j] === want;
+      if (process.env.LIBDIFF && !dly && back[j] !== want) console.log(`    kit ${i} byte ${j}: ${orig[j]} -> ${back[j]}`);
     }
   }
   console.log(`  kits read back: ${same} of ${total} bytes as in the files (${fxbus} Out = FX BUS as sends)`);
@@ -257,7 +263,7 @@ check((await transport.request(message(0x01, 1, [5]).map((b, i, a) => (i === a.l
   await lib.ccMapPut(9, [CCMAP_OFF]);
   const m1 = await lib.ccMapGet();
   check(m1[1] === 9 && m1[9] === CCMAP_OFF && m1.filter((c) => c).length === 2, "CC map: two entries put");
-  await expectStatus(lib.ccMapPut(5, [526]), 2, "CC map: a code past the parameters");
+  await expectStatus(lib.ccMapPut(5, [532]), 2, "CC map: a code past the parameters");   // (1.0: NPAR 531)
   await expectStatus(lib.ccMapPut(127, [9, 9]), 2, "CC map: past CC 127");
   const { map, errors } = ccMapParseCsv(ccMapCsv(m1) + "20,NRPN 174,D1 FX send\n");
   check(!errors.length && map[1] === 9 && map[9] === CCMAP_OFF && map[20] === ccParseTarget("NRPN 174") && map[20] === 303,

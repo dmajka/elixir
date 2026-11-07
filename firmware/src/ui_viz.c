@@ -1057,17 +1057,22 @@ static int32_t svf_mag(uint32_t type, int32_t lr, int32_t d)
     }
     return (log2_64(num + 1u) - log2_64(den)) / 2;
 }
-static void viz_filter(void)
+/* a filter's response: type ty at cutoff fv (Q16), resonance rs (0..127), its name in the panel's title */
+static void viz_flt(uint32_t ty, uint32_t fv, uint32_t rs, const char *name)
 {
-    uint32_t fv = sv(S_FILTER, 0, 0), rs = sv(S_FILTER, 0, 1), ty = sv(S_FILTER, 0, 2) + 1u, i;
+    uint32_t i;
     int32_t fc_hz, lfc, d, peak = 0, px = 0;
     char b[40];
-    fc_hz = (int32_t)(((int64_t)lut1024(FILT_F, fv * 65536u / 127u) * FS) >> 16);   /* (f = fc / FS) */
+    fc_hz = (int32_t)(((int64_t)lut1024(FILT_F, fv) * FS) >> 16);   /* (f = fc / FS) */
     fc_hz = fc_hz < 20 ? 20 : fc_hz > 20000 ? 20000 : fc_hz;
     lfc = log2_q16((uint32_t)fc_hz * 64u) - log2_q16(20u * 64u);   /* (octaves over 20 Hz, Q16) */
     d = 65536 - (int32_t)(rs * 65536u / 127u);       /* (sound.c's R, 1 .. 0.02; 1 / Q = 2R) */
     d = (d < 6554 ? 1311 : d) * 2;
-    put_str(b, ty - 1u < F_LAST ? L_FILTER[ty - 1u] : "", sizeof b);
+    if (flt_char(ty)) {                              /* (1.0: their resonance curve, dsp.c ch_reso) */
+        int32_t a = 65536 - (int32_t)(rs * 65536u / 127u);
+        d = (65536 - mulq16(65536 - mulq16(a, a), 63000)) * 2;
+    }
+    put_str(b, name, sizeof b);
     if (ty != F_OFF) {
         put_str(b + str_len(b), "   ", sizeof b - str_len(b));
         if (fc_hz >= 1000) {
@@ -1090,7 +1095,11 @@ static void viz_filter(void)
         switch (ty) {
         case F_OFF: m = 0; break;
         case F_LP: case F_LP2: m = svf_mag(F_LP, lr, d); break;
-        case F_LP4: m = 2 * svf_mag(F_LP, lr, d < 32768 ? d * 2 : 65536); break;
+        case F_LP4: case F_LADDER: m = 2 * svf_mag(F_LP, lr, d < 32768 ? d * 2 : 65536); break;
+        case F_ACID: m = 3 * svf_mag(F_LP, lr - 2 * 65536, d < 43690 ? d * 3 / 2 : 65536) / 2; break;   /* (~18 dB an
+                                                      * octave, the peak 2 octaves up: dsp.c ch_coef) */
+        case F_MS20L: m = svf_mag(F_LP, lr, d); break;
+        case F_MS20H: m = svf_mag(F_HP, lr, d); break;
         case F_COMBP: case F_COMBN: {                /* (peaks at the multiples of fc, dips between; -: the odd ones) */
             uint32_t ph = (uint32_t)((uint64_t)(uint32_t)exp2_q16(clamp32(lr, -14 * 65536, 6 * 65536)) << 16);
             int32_t c = vz_sin(ph + 0x40000000u + (ty == F_COMBN ? 0x80000000u : 0u));
@@ -1129,6 +1138,27 @@ static void viz_filter(void)
         if (peak > 65536 / 2)
             vz_sparkle(VX0 + px, (vz_y[px] >> 4) - 4, 3);
     }
+}
+
+static void viz_filter(void)
+{
+    uint32_t ty = sv(S_FILTER, 0, 2) + 1u;
+    viz_flt(ty, sv(S_FILTER, 0, 0) * 65536u / 127u, sv(S_FILTER, 0, 1), ty - 1u < F_LAST ? L_FILTER[ty - 1u] : "");
+}
+/* 1.0: FX's DJ FILTER page: the master's filter where the DJ knob (and what moves it) has it */
+static void viz_djf(void)
+{
+    static const char *const T[NDJT] = {"LXR", "ACID", "MS20"};
+    int32_t d = pf.dj_d;
+    uint32_t ty = dj_kind(d), rs = pfs.dj_reso;
+    char b[24];
+    put_str(b, T[pfs.dj_ftype < NDJT ? pfs.dj_ftype : 0u], sizeof b);
+    put_str(b + str_len(b), !d ? " OFF" : d < 0 ? " LP" : " HP", sizeof b - str_len(b));
+    if (!flt_char(ty)) {                             /* (the LXR's: its damping from Reso, perform.c, as a knob's) */
+        uint32_t k = 127u - rs;
+        rs = (uint32_t)(65536 - (1966 + (int32_t)(37356u * k * k / 16129u))) * 127u / 65536u;
+    }
+    viz_flt(d ? ty : F_OFF, d ? dj_fval(d) : 65536u, rs, b);
 }
 
 /* SHAPE: a sine through the waveshaper at its drive, the sample rate's steps and the bits' (the clean sine faint);

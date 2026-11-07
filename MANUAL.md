@@ -386,7 +386,7 @@ The LXR's waveforms are SINE, TRI, SAW, SQUARE, NOISE and PWM; its transients SN
 
 ### Elixir's filter types
 
-After the LXR's eight (OFF stays where it was), the filter's **Type** goes on to seven of Elixir's (from 0.18). They use the same knobs: **Frequency**, **Resonance** and **Overdrive** (the drive into the filter, as on the LXR's types). The LFO, velocity, locks and the random cutoff move them as they move the others.
+After the LXR's eight (OFF stays where it was), the filter's **Type** goes on to seven of Elixir's (from 0.18) and four character filters (from 1.0). They use the same knobs: **Frequency**, **Resonance** and **Overdrive** (the drive into the filter, as on the LXR's types). The LFO, velocity, locks and the random cutoff move them as they move the others.
 
 | Type | Sound | Frequency | Resonance |
 |---|---|---|---|
@@ -397,6 +397,17 @@ After the LXR's eight (OFF stays where it was), the filter's **Type** goes on to
 | **VOWEL** | Two band-passes at a voice's formants: talking toms and snares | the vowel, from A through E, I, O to U | how sharp the formants are |
 | **DUB BP** | The LXR's BP into a saturator: the ringing band of a dub chord stab | the band | as the BP's; Overdrive drives the saturator as well (2× to 15×) |
 | **CHORD** | Three band-passes at a root, its fifth and its octave: a chord out of a hat, a noise burst or a click | the root, as the combs' pitch (and the note moves it) | how long they ring (high values ring like a bell) |
+| **ACID** (1.0) | A TB-303-style diode ladder: four stages that load each other, so the slope is softer (about 18 dB an octave) and the resonance is glassy. As on the 303 the resonance thins out the bass and fades at low cutoffs | the cutoff (the peak sits about two octaves over it; at 0 resonance it is open at the top) | up to just under a whistle; it squelches through the output's saturation |
+| **MS20 LP** (1.0) | A Korg MS-20-style two-pole low-pass: the resonance goes through a lopsided diode clip in the loop, so it gets rougher, not louder, as you turn it up | the cutoff | up to a scream that stays bounded |
+| **MS20 HP** (1.0) | The same filter's two-pole high-pass (12 dB an octave) | the cutoff | the same |
+| **LADDER** (1.0) | A Moog-style transistor ladder: LP4 with the first stage saturating too, and **Bass comp** to bring back the bass the resonance takes away | the cutoff | as LP4's |
+
+**FILTER X** (from 1.0): the four character types have a second FILTER page (SELECT, or SCL again) with one knob:
+
+- **Env amt** (ACID, MS20 LP, MS20 HP): opens the cutoff with the voice's amp envelope, up to the whole range at 127: a hit starts bright and closes as it decays. This is the 303's squelch on any voice, the accent of an acid line on a kick or a tom. At 0 the cutoff stays where Frequency puts it. The envelope is followed smoothly, so a fast decay doesn't step.
+- **Bass comp** (LADDER): 0 is LP4's balance; up, the bass the resonance takes away comes back (about +10 dB of low end at full resonance), so a resonant ladder keeps its body.
+
+The Resonance knob of the four character types is curved: more of it sits where the filter starts to sing (halfway is three quarters of the way to the top). FILTER X is part of the kit, morphs and can be locked per step. The character types cost about as much as LP4 (ACID, LADDER) or a little more than LP (the MS20s); see CONFIG → LOAD.
 
 - The combs and CHORD follow the note a step, KEYS or the melody generator plays (a scale, SEQ → SCALE, keeps them in key); at the track's default note they stay where Frequency puts them. The voice's own tuning and random pitch don't move them.
 - A drum voice (D1–D3) starts its filter from rest at each hit, as on the LXR: a comb's ringing doesn't carry over to the next hit. On the snare, cymbal and hats it carries on.
@@ -689,7 +700,7 @@ The bars show the current page's values, with each voice's level on the volume p
 
 ### The FX bus (FX)
 
-One effect at a time, then **the delay, always there after it** (from 1.0). The pages come in order: the reverb first, then the bus and the selected effect's page, then the delay's pages, then DIRT, then the master compressor's two pages, then the voices' FX and reverb sends, the mixer's four send pages, so you can set them while you shape the effects. Only the pages that apply are shown: with the bus OFF there are no effect parameters, and DELAY: TAPE is there only in the TAPE modes.
+One effect at a time, then **the delay, always there after it** (from 1.0). The pages come in order: the reverb first, then the bus and the selected effect's page, then the delay's pages, then DIRT, then the DJ FILTER (from 1.0), then the master compressor's two pages, then the voices' FX and reverb sends, the mixer's four send pages, so you can set them while you shape the effects. Only the pages that apply are shown: with the bus OFF there are no effect parameters, and DELAY: TAPE is there only in the TAPE modes.
 
 | Page | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
@@ -697,9 +708,10 @@ One effect at a time, then **the delay, always there after it** (from 1.0). The 
 | FX BUS | Type | Dry/Wet | the type's mode | – |
 | FX BUS: *type* | P1 | P2 | P3 | P4 |
 | DELAY | Time | Feedback | Tone | Level |
-| DELAY: MODE | Mode | Sync | Echo>Rev | – |
+| DELAY: MODE | Mode | Sync | Echo>Rev | Band |
 | DELAY: TAPE (TAPE modes) | Wow | Saturate | Glitch | Pitch |
-| DIRT | Bus dirt | DJ reso | Master | Amount |
+| DIRT | Bus dirt | – | Master | Amount |
+| DJ FILTER (1.0) | DJ filter | DJ reso | DJ type | – |
 | MASTER COMP | Thresh | Ratio | Attack | Release |
 | COMP: SIDECHAIN | Sidechain | Makeup | Mix | – |
 | FX SEND (1/2) | D1 fx | D2 fx | D3 fx | SN fx |
@@ -728,6 +740,8 @@ The FX sends feed the bus, and the delay hears what comes out of it: **BUS DIRT 
 
 **DELAY: MODE:** **Mode** is MONO, PING PONG, TAPE or TAPE PP (changing it clears the echoes: the line starts again from silence). **Sync** ON turns Time into note values at the tempo: 1/32, 1/16T, 1/16, 1/8T, 1/16., 1/8, 1/4T, 1/8., 1/4, 1/2T, 1/4., 1/2 (each detent of Time the next one; a value too long for the line plays at half, the card shows /2 or /4; a tempo change follows). **Echo>Rev** feeds the echoes into the reverb, the classic dub chain (echo, then spring or plate). PERF's **THROW REV** key also throws the echoes into the reverb while held.
 
+**Band** (from 1.0) puts a resonant peak in the delay's loop, the dub engineer's mid boost on the echo return: OFF (the default), or a frequency from 150 Hz to 5 kHz (TAPE and TAPE PP to about 3.3 kHz). That band goes round a little louder than the rest of the echo on every pass, so it colours the repeats halfway up **Feedback** and, pushed near the top, builds into a self-oscillating howl at its pitch while the rest of the echo dies away. TAPE howls from about Feedback 80, PING PONG and TAPE PP from about 100, MONO builds slowly at the very top. Turn Band while it howls to sweep the scream; FB PUSH (held) gets there at once. The howl is held by a soft clip in the loop (TAPE's saturation, which MONO and PING PONG use too while Band is on), so it saturates rather than running away; it can still be loud, so keep Level in mind. It is part of the kit; a morph turns it on or off halfway. A global LFO's **DELAY BAND** sweeps it up to two octaves either way (OFF stays off), and the remote's GLOBAL **CC 3** turns it. Off, it costs nothing; on, a little CPU (well under 1%).
+
 Its Time, Feedback, Tone and Level are **LFO and velocity destinations** (a track's DEST list ends with Delay time, Delay feedback, Delay tone, Delay level), so a kick can open the echoes or an LFO can sweep their time.
 
 **Older kits:** a kit whose bus was DELAY loads with the delay on at its old dry/wet, the same time, tone and feedback, and the bus OFF. A kit without the delay loads with Level 0. MIDI's LXR FX type DELAY turns the delay on the same way. The delay's RANGE knob is gone: its time is one curve now, and older kits' times are converted. (An LFO that was on D2's FX P1–P4 moves to D1's: those slots are the delay's now.)
@@ -754,7 +768,17 @@ The **DIRT** page (the FX bus's last) has two drives, both off at 0:
 
 They are part of the kit; the amounts morph and can be locked per step, the Master type doesn't morph. The per-voice shapes (SCL → Shape) are the third kind of dirt.
 
-**DJ reso** (from 0.24.3, KNOB 2) is the [DJ filter](#perf-pages-arp-select)'s resonance. At 0 it is the gentle bump it always had; turned up, the filter whistles at its cutoff and rings on every hit, and near 127 it screams as you sweep it (the knob, the LP~ / HP~ keys, a global LFO). It gets louder as it rises, and with Master dirt in front of it, nastier. It costs no extra CPU: the filter is the same, only its damping changes. Unlike the drives it belongs to the project, not the kit (as the tape time does), so loading a kit doesn't change it. At the very top of the low-pass's range (the knob just left of the middle) the filter keeps its resonance low, so the bump comes in as you sweep down. The remote's GLOBAL CC 47 turns it too.
+### The DJ filter and the global character filter (from 1.0)
+
+The **DJ FILTER** page (after DIRT) holds the [DJ filter](#perf-pages-arp-select) on the whole mix: **DJ filter** (the same knob as PERFORM: MORE's: left a low-pass, right a high-pass, off in the middle), **DJ reso** (its resonance; it was on the DIRT page before 1.0) and **DJ type**, which filter it is:
+
+- **LXR** (the default): the LXR's SVF, as it always was.
+- **ACID**: the ACID diode ladder on the low-pass side, for a 303 sweep over the whole beat; the high-pass side stays the LXR's.
+- **MS20**: the MS20 low-pass on the left, its high-pass on the right.
+
+Everything that moves the DJ filter moves the character filter the same way: the knob, the LP~ and HP~ sweeps, a global LFO on FILTER, LP or HP, RUSH's high-pass. DJ type is saved with the project (as DJ reso), not the kit. ACID and MS20 run on the first core only while the DJ filter is off the middle (ACID: a few % of the CPU, MS20 about what the LXR's costs). The page draws the filter's curve where it is.
+
+**DJ reso** (from 0.24.3, on the DJ FILTER page from 1.0) is the DJ filter's resonance. At 0 it is the gentle bump it always had; turned up, the filter whistles at its cutoff and rings on every hit, and near 127 it screams as you sweep it (the knob, the LP~ / HP~ keys, a global LFO). It gets louder as it rises, and with Master dirt in front of it, nastier. It costs no extra CPU: the filter is the same, only its damping changes. Unlike the drives it belongs to the project, not the kit (as the tape time does), so loading a kit doesn't change it. At the very top of the low-pass's range (the knob just left of the middle) the filter keeps its resonance low, so the bump comes in as you sweep down. The remote's GLOBAL CC 47 turns it too.
 
 ### Master compressor and sidechain (from 0.16)
 
@@ -1046,7 +1070,7 @@ The pages are in four sets. ARP opens **PERFORM** (the performance pages, PERFOR
 - **PERFORM** is the LXR's own PERFORMANCE page: tempo, roll rate, morph and the global sample-rate reducer.
 - **SRate:** the LXR's global sample rate: every voice's own rate (SHAPE page) times this one, before the mix. Lower is grittier. It is part of the kit, so a kit can bring its own crush; it can be a macro's target and is recorded as locks under REC.
 - The voices' levels (the LXR's faders) are on the mixer (GLO); before 0.19 PERF had them too.
-- **DJ filter:** off in the middle; left a low-pass on the whole output, right a high-pass. Its resonance is **DJ reso** on the FX bus's DIRT page (from 0.24.3).
+- **DJ filter:** off in the middle; left a low-pass on the whole output, right a high-pass. Its resonance (**DJ reso**) and its type (**DJ type**: the LXR's, ACID or MS20) are on FX's DJ FILTER page (from 1.0).
 - **Macros:** each macro knob moves one parameter between its Min and Max (Max below Min turns it the other way). Set them up on MACRO SETUP: pick the macro, its target (any lockable parameter), Min and Max. Turning a macro while recording writes locks, as any knob does.
 - **Tape time:** 0.2 to 4 seconds.
 - **Roll sweep:** while a roll key is held (or latched) on the PERFORM page, KNOB 2 turns from the roll rate into a smooth sweep from 1/4 to 1/192, off the grid. Turn it up while holding a kick for a drum-and-bass build, or down for a stutter that slows to a stop. SHIFT (OCT−) + KNOB 2 sets the gridded roll rate instead, which puts rolls back on the grid. The swept rate is not saved.
@@ -1134,7 +1158,7 @@ Three LFOs (the third from 0.16) that move the whole kit's performance controls,
 | **Mode** | **FREE** (runs on its own; the default), **TRIG** (starts again at each trigger), **HOLD** (runs, its value held at each trigger), **ONE** (one cycle from a trigger, then still at its end), **HALF** (half a cycle) |
 | **Trig** | What triggers it: **PLAY** (the sequencer starting), **PATTERN** (PLAY and each pattern change), **BAR** (PLAY and each bar) |
 
-Dest turns through them in groups, in the signal's order and each group by name: OFF; SEQUENCER (DENSITY, JITTER, MEL CHANGE, MEL SPREAD, STUTTER, TRANSPOSE); KIT (MORPH); DELAY (DELAY FB, DELAY TIME, FB PUSH); REVERB (REV SEND); MASTER FX (COMB, CRUSH, CUTS, DIRT, PUMP); DJ FILTER (FILTER, HP, LP); MACROS (MACRO 1–4; the popup names the macro's parameter).
+Dest turns through them in groups, in the signal's order and each group by name: OFF; SEQUENCER (DENSITY, JITTER, MEL CHANGE, MEL SPREAD, STUTTER, TRANSPOSE); KIT (MORPH); DELAY (DELAY BAND, DELAY FB, DELAY TIME, FB PUSH); REVERB (REV SEND); MASTER FX (COMB, CRUSH, CUTS, DIRT, PUMP); DJ FILTER (FILTER, HP, LP); MACROS (MACRO 1–4; the popup names the macro's parameter).
 
 | Dest | Moves |
 |---|---|
@@ -1146,6 +1170,7 @@ Dest turns through them in groups, in the signal's order and each group by name:
 | **TRANSPOSE** | The tracks that follow the scale, up to 7 degrees either way |
 | **MEL CHANGE**, **MEL SPREAD** | The melodies' Deja vu (down: more new notes) and Spread, either way |
 | **DELAY FB**, **DELAY TIME** | The delay's feedback, and its time by up to a quarter of its range |
+| **DELAY BAND** | The delay's Band frequency, up to two octaves either way (from 1.0; with Band OFF it does nothing) |
 | **REV SEND** | Every voice's reverb send, either way |
 | **DIRT** | The master DIRT's amount (FX → DIRT), either way from its knob (from 1.0). From 0 it fades the dirt in with the wave: a set that roughens over 16 bars and cleans up again |
 | **MACRO 1–4** | A macro, so an LFO reaches any parameter a step can lock |
@@ -1563,6 +1588,8 @@ Knobs and faders are CCs. Every number is used once on its channel, so a knob an
 | 32–39 | **32** Macro 1 | **33** Macro 2 | **34** Macro 3 | **35** Macro 4 | **36** DRILL | **37** JITTER | **38** CUTS | **39** PUMP |
 | 40–47 | **40** COMB note | **41** COMB fb | **42** CRUSH | **43** REV length | **44** LFO 1 depth | **45** LFO 2 depth | **46** LFO 3 depth | **47** DJ reso |
 
+One more GLOBAL knob sits off the grid (1.0): **CC 3**, the delay's **Band** (0 OFF). Map a spare knob or fader to it.
+
 **GLOBAL (channel 16): buttons, CC or note 48–111**
 
 <!-- grid -->
@@ -1765,6 +1792,7 @@ Six numbers per voice-based setting, in the order D1 D2 D3 SN CY HH.
 
 | NRPN | Parameter |
 |---|---|
+| 93–98 | The delay (1.0): Time, Feedback, Tone, Level, Wow, Band (0 off) |
 | 174–179 | FX send |
 | 180–185 | Reverb send |
 | 186, 187, 188, 189 | Reverb size, damping, level, model (0 room, 1 spring, 2 hall, 3 plate) |

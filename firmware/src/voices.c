@@ -395,6 +395,7 @@ static void voice_async(uint32_t vi)
         osc_set_freq(&v->mod, rp);
         osc_set_freq(&v->mod2, rp);
     }
+    v->flt.eg = v->gain >> 8;                        /* (1.0: ENV AMT's envelope, dsp.c ch_block) */
 }
 
 /* ------------------------------------------------------- the block, sync --- */

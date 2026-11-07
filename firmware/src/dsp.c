@@ -326,7 +326,8 @@ static int32_t decay_calc(decay_eg_t *e)            /* DecayEg_calc */
 /* ---------------------------------------------------------- filter --- */
 /* 28: Elixir's types after the LXR's OFF (a kit's value: the type - 1; the LXR's 0..7 keep their meaning) */
 enum { F_LP = 1, F_HP, F_BP, F_UBP, F_NOTCH, F_PEAK, F_LP2, F_OFF, F_LP4, F_COMBP, F_COMBN, F_APF, F_VOWEL, F_DUB,
-       F_RESO, F_LAST = F_RESO };
+       F_RESO, F_ACID, F_MS20L, F_MS20H, F_LADDER, F_LAST = F_LADDER };   /* (1.0: the character filters, ACID ..) */
+static inline int flt_char(uint32_t t) { return t >= F_ACID && t <= F_LADDER; }
 #define FLT_LINE 512u            /* 28: COMB's line per voice (voices.c flt_line, .ram_buf): down to FS / 512, 86 Hz */
 typedef struct {
     int32_t s1, s2, a, b;        /* states, Q16 */
@@ -343,6 +344,11 @@ typedef struct {
     int8_t key;                  /* the played note - 60: COMB and RESONATOR follow it */
     uint8_t was, clr;            /* the type the states are for; clear them at the next block (a hit, a switch) */
     uint8_t dirty;
+    uint8_t cdirty;              /* 1.0: the character types' coefficients are old (ch_block) */
+    /* 1.0: the character types (ACID ..). eg: the voice's amp EG this block (voices.c), Q16; xamt: FILTER X (ENV AMT,
+     * LADDER's BASS COMP), Q16; rk: RESONANCE as turned (0..1, Q16); fe: the cutoff ck is for (-1: none yet) */
+    int32_t eg, xamt, rk, fe;
+    int32_t ck[16];
 } svf_t;
 
 #define SC_MAX (32 << 16)
@@ -456,6 +462,12 @@ static void svf_coef28(svf_t *s)
         s->k3 = 65536 - mulq16(r, 60293);            /* the damping: 1 .. 0.1 (Q 1 .. 10) */
         break;
     }
+    case F_ACID:
+    case F_MS20L:
+    case F_MS20H:
+    case F_LADDER:
+        s->cdirty = 1;                               /* (ch_block: at the cutoff the envelope gives) */
+        break;
     case F_RESO: {
         int32_t w = (int32_t)(((int64_t)exp2_q16(flt_octaves(s)) * 804) >> 16);   /* 2 pi 86.13 / FS = 804 Q16 */
         s->k1 = cham_coef(w);
@@ -477,12 +489,189 @@ static inline int32_t cham_bp(int32_t *st, int32_t x, int32_t c, int32_t d)   /*
     st[1] = clamp32(bp, -S_LIM, S_LIM);
     return st[1];
 }
+/* ------------------------------------------ 1.0: the character filters --- */
+/* After CHORD, on the same knobs (CUTOFF, RESONANCE, DRIVE: the input's soft clip) and FILTER X:
+ *   ACID     the 303's diode ladder: four stages each coupled to the next (y' = wc (y[j-1] - 2 y[j] + y[j+1]), the
+ *            last y' = wc (y3 - y4)), the loop solved at once (the stages by Thomas' algorithm, zero-delay: stable at
+ *            any cutoff), the 4th fed back through a ~60 Hz high-pass (the resonance thins at low cutoffs, as the
+ *            303's does) into a tanh. ~17 dB an octave; it whistles near k = 18.4 (never past: it rings out). Its g
+ *            is the cutoff's x 4: down 3 dB at half the cutoff at RESONANCE 0, the peak ~2 octaves over it.
+ *            FILTER X: ENV AMT
+ *   MS20 LP  two one-poles, the band between them fed back (k to 2) through an asymmetric hard-knee clip (knees +0.6,
+ *   MS20 HP  -0.45, a quarter's slope past them): rougher, not louder, as RESONANCE rises. HP: the loop's input through
+ *            two high-passes, (1 - a)^2 = u - 2 y1 + y2 (12 dB an octave). FILTER X: ENV AMT
+ *   LADDER   LP4's loop with the 1st stage saturated too (y - y^3 / 3) and BASS COMP (FILTER X): u = tanh(x - k (y4 - c x))
+ * RESONANCE on a curve (1 - (1 - r)^2: more of the knob up where it sings). ENV AMT opens the cutoff by the voice's amp
+ * EG (cutoff + amount x EG, up to the whole range); while it moves, the coefficients are new every 16 samples, the
+ * cutoff ramped across the block (no steps on a fast decay). States Q20, as LP4's (ACID's Q24) */
+#define CH_SUB 16u
+#define A_LIM (16 << 24)                             /* (ACID's states, Q24: at low cutoffs Q20's rounding held a DC) */
+static inline int32_t ch_reso(const svf_t *s) { int32_t a = 65536 - s->rk; return 65536 - mulq16(a, a); }
+static inline int32_t mulr20(int32_t a, int32_t b) { return (int32_t)(((int64_t)a * b + (1 << 19)) >> 20); }
+static void ch_coef(svf_t *s, uint32_t type, uint32_t fe)
+{
+    int32_t g = lut1024(FILT_G, fe), r = ch_reso(s), *c = s->ck;
+    switch (type) {
+    case F_ACID: {                                   /* ck: g, inv[4] (1..4), e[3] (5..7), A[4] (8..11), kk, linv, mk */
+        int32_t k = r * 18 + (r >> 1), j, den;       /* (k to 18.5: just under the whistle; the high-pass keeps
+                                                      * it further under at low cutoffs) */
+        g *= 4;                                      /* (two octaves up: at RESONANCE 0 the ladder is down 3 dB at an
+                                                      * eighth of its g's; this way at half the cutoff, open at the top,
+                                                      * the peak ~2 octaves above) */
+        c[0] = g;
+        for (j = 0; j < 4; j++) {                    /* (I - g M): 1 + 2g (1 + g the last), -g beside */
+            den = (j < 3 ? 65536 + 2 * g : 65536 + g) - (j ? mulq16(g, c[4 + j]) : 0);
+            c[1 + j] = (int32_t)(((uint64_t)1 << 32) / (uint32_t)den);
+            if (j < 3)
+                c[5 + j] = mulq16(g, c[1 + j]);
+        }
+        c[8] = mulq16(g, c[1]);                      /* (A: the stages' share of u, its forward pass then back) */
+        for (j = 1; j < 4; j++)
+            c[8 + j] = mulq16(mulq16(g, c[7 + j]), c[1 + j]);
+        for (j = 2; j >= 0; j--)
+            c[8 + j] += mulq16(c[5 + j], c[9 + j]);
+        c[12] = k - mulq16(k, 280);                  /* (k (1 - Gh), Gh = 280: ~60 Hz) */
+        c[13] = (int32_t)(((uint64_t)1 << 32) / (uint32_t)(65536 + mulq16(c[12], c[11])));
+        c[14] = 65536 + k / 2;                       /* (the makeup, as LP4's: the peak drives the tanh) */
+        break;
+    }
+    case F_MS20L:
+    case F_MS20H: {                                  /* ck: G, 1 - G, k, linv */
+        int32_t G = (int32_t)(((uint64_t)(uint32_t)g << 16) / (uint32_t)(65536 + g)), k = mulq16(r, 128450);   /* (k to 1.96) */
+        c[0] = G;
+        c[1] = 65536 - G;
+        c[2] = k;
+        c[3] = (int32_t)(((uint64_t)1 << 32) / (uint32_t)(65536 - mulq16(k, mulq16(G, c[1]))));
+        break;
+    }
+    default: {                                       /* LADDER. ck: G, 1 - G, k, G^4, inv, 1 + k c, mk */
+        int32_t G = (int32_t)(((uint64_t)(uint32_t)g << 16) / (uint32_t)(65536 + g)), k = r * 4 - (r >> 4), g4;
+        g4 = mulq16(mulq16(G, G), mulq16(G, G));
+        c[0] = G;
+        c[1] = 65536 - G;
+        c[2] = k;
+        c[3] = g4;
+        c[4] = (int32_t)(((uint64_t)1 << 32) / (uint32_t)(65536 + mulq16(k, g4)));
+        c[5] = 65536 + mulq16(k, s->xamt);
+        c[6] = 65536 + mulq16(k >> 1, 65536 - (s->xamt >> 1));   /* (the makeup: LP4's, half of it gone at full comp) */
+        break;
+    }
+    }
+}
+static inline int32_t ms20_clip(int32_t x)           /* Q20: the knees +0.6, -0.45, a quarter's slope past them */
+{
+    if (x > 629146)
+        return 629146 + ((x - 629146) >> 2);
+    if (x < -471859)
+        return -471859 + ((x + 471859) >> 2);
+    return x;
+}
+static void ch_run(svf_t *s, uint32_t type, int16_t *buf, uint32_t n)
+{
+    const int32_t *c = s->ck;
+    int32_t *e = s->e;
+    uint32_t i;
+    switch (type) {
+    case F_ACID: {
+        const int32_t g = c[0], kk = c[12], linv = c[13], mk = c[14];
+        for (i = 0; i < n; i++) {
+            int32_t x = softclip((buf[i] * 2 * s->drive) >> 12) << 8, d0, d1, d2, d3, b0, b1, b2, u, y, v, lp;
+            d0 = mulr16(e[0], c[1]);                 /* (the states' part: Thomas, forward then back) */
+            d1 = mulr16(e[1] + mulr16(g, d0), c[2]);
+            d2 = mulr16(e[2] + mulr16(g, d1), c[3]);
+            d3 = mulr16(e[3] + mulr16(g, d2), c[4]);
+            b2 = d2 + mulr16(c[7], d3);
+            b1 = d1 + mulr16(c[6], b2);
+            b0 = d0 + mulr16(c[5], b1);
+            u = tanh20(mulr16(x - mulr16(kk, d3 - e[4]), linv) >> 4) << 4;
+            y = b0 + mulr16(c[8], u);
+            e[0] = clamp32(2 * y - e[0], -A_LIM, A_LIM);
+            y = b1 + mulr16(c[9], u);
+            e[1] = clamp32(2 * y - e[1], -A_LIM, A_LIM);
+            y = b2 + mulr16(c[10], u);
+            e[2] = clamp32(2 * y - e[2], -A_LIM, A_LIM);
+            y = d3 + mulr16(c[11], u);
+            e[3] = clamp32(2 * y - e[3], -A_LIM, A_LIM);
+            {                                        /* (the loop's high-pass: its low-pass state, the rounding's
+                                                      * remainder carried in e[5]: no dead zone for k to ring on) */
+                int64_t a = (int64_t)(y - e[4]) * 280 + e[5];
+                v = (int32_t)(a >> 16);
+                e[5] = (int32_t)(a - ((int64_t)v << 16));
+            }
+            lp = v + e[4];
+            e[4] = lp + v;
+            buf[i] = (int16_t)q16_to_s16(fast_tanh(mulr16((y + 128) >> 8, mk)));
+        }
+        break;
+    }
+    case F_MS20L:
+    case F_MS20H: {
+        const int32_t G = c[0], H = c[1], k = c[2], linv = c[3];
+        const int hp = type == F_MS20H;
+        for (i = 0; i < n; i++) {
+            int32_t x = softclip((buf[i] * 2 * s->drive) >> 12) << 4, be, u, v, y1, y2;
+            be = mulr16(H, mulr16(H, e[0]) - e[1]);  /* (the band fed back: alpha u + be, alpha = G (1 - G)) */
+            u = mulr16(x + mulr16(k, be), linv);
+            u = x + ms20_clip(u - x);
+            v = mulr16(u - e[0], G);
+            y1 = v + e[0];
+            e[0] = clamp32(y1 + v, -S_LIM, S_LIM);
+            v = mulr16(y1 - e[1], G);
+            y2 = v + e[1];
+            e[1] = clamp32(y2 + v, -S_LIM, S_LIM);
+            buf[i] = (int16_t)q16_to_s16(fast_tanh(((hp ? u - 2 * y1 + y2 : y2) + 8) >> 4));
+        }
+        break;
+    }
+    default: {                                       /* LADDER */
+        const int32_t G = c[0], B = c[1], k = c[2], g4 = c[3], inv = c[4], cb = c[5], mk = c[6];
+        for (i = 0; i < n; i++) {
+            int32_t x = mulr16(softclip((buf[i] * 2 * s->drive) >> 12) << 4, cb), u, j, v, y;
+            int32_t S = mulr16(B, mulr16(G, mulr16(G, mulr16(G, e[0]) + e[1]) + e[2]) + e[3]);
+            u = tanh20(x - mulr16(k, mulr16(mulr16(g4, x) + S, inv)));
+            v = mulr16(u - e[0], G);                 /* (the 1st stage, saturated: y - y^3 / 3) */
+            y = v + e[0];
+            e[0] = y + v;
+            y = clamp32(y, -(1 << 20), 1 << 20);
+            u = y - mulr16(mulr20(mulr20(y, y), y), 21845);
+            for (j = 1; j < 4; j++) {
+                v = mulr16(u - e[j], G);
+                u = v + e[j];
+                e[j] = u + v;
+            }
+            buf[i] = (int16_t)q16_to_s16(fast_tanh(mulr16((u + 8) >> 4, mk)));
+        }
+        break;
+    }
+    }
+}
+static void ch_block(svf_t *s, uint32_t type, int16_t *buf)
+{
+    int32_t fe = (int32_t)s->fval, f0 = s->fe;
+    uint32_t n;
+    if (type != F_LADDER && s->xamt)
+        fe = clamp32(fe + mulq16(s->xamt, s->eg), 0, 65536);
+    if (f0 < 0 || fe == f0) {
+        if (f0 < 0 || s->cdirty)
+            ch_coef(s, type, (uint32_t)fe);
+        ch_run(s, type, buf, BLOCK);
+    } else {
+        for (n = 0; n < BLOCK / CH_SUB; n++) {
+            ch_coef(s, type, (uint32_t)(f0 + (fe - f0) * (int32_t)(n + 1u) / (int32_t)(BLOCK / CH_SUB)));
+            ch_run(s, type, buf + n * CH_SUB, CH_SUB);
+        }
+    }
+    s->fe = fe;
+    s->cdirty = 0;
+}
+
 static void svf_block28(svf_t *s, uint32_t type, int16_t *buf)
 {
     uint32_t i;
     if (type != s->was || s->clr) {                  /* (a switch or a hit: from rest, the line silent) */
         memset(s->e, 0, sizeof s->e);
         s->fb = 0;
+        s->fe = -1;
         if (s->line && (type == F_COMBP || type == F_COMBN))
             memset(s->line, 0, FLT_LINE * sizeof s->line[0]);
         s->clr = 0;
@@ -493,6 +682,10 @@ static void svf_block28(svf_t *s, uint32_t type, int16_t *buf)
     }
     if (s->dirty)
         svf_coef(s);
+    if (flt_char(type)) {
+        ch_block(s, type, buf);
+        return;
+    }
     switch (type) {
     case F_LP4: {
         /* (Zavalishin's: each stage y = G u + (1 - G) s, so the 4th is G^4 u + S, S from the states alone; u = x - k y4
@@ -582,6 +775,8 @@ static void svf_init(svf_t *s)                       /* SVF_init */
     s->q = (int32_t)(0.9 * 65536);
     s->drive = (int32_t)(0.315 * 4096);
     s->fval = 0x4000;                                /* SVF_directSetFilterValue(0.25) */
+    s->rk = 6554;                                    /* (1.0: as q) */
+    s->fe = -1;
     s->dirty = 1;
 }
 /* (28: Elixir's states and COMB's line at the voice's next block, on the core that renders it) */

@@ -270,6 +270,87 @@
   <section class="band" id="updates">
     <div class="intro"><h2>Updates</h2><p>What each release added and fixed.</p></div>
     <div class="updates">
+      <div class="card"><h3>1.0 (in testing)<span>6 November 2026</span></h3>
+        <h4>Filters</h4>
+        <ul>
+          <li>Four character filters on every track: ACID (a TB-303-style diode ladder: a softer slope, glassy
+            resonance that thins the bass), MS20 LP and MS20 HP (a diode clip in the resonance loop: rougher, not
+            louder, as it rises) and LADDER (a Moog-style ladder with Bass comp to bring the low end back).</li>
+          <li>FILTER X, a second FILTER page for them: Env amt opens the cutoff with the voice's amp envelope (the
+            303's squelch on a kick, a tom or a snare), or Bass comp on LADDER. Their Resonance is curved so more of
+            the knob is where they sing.</li>
+          <li>A global character filter: FX → DJ FILTER chooses the DJ filter's type (the LXR's, ACID or MS20), with
+            its knob and DJ reso on the same page. The LP~ / HP~ sweeps, global LFOs and RUSH move it. Saved with the
+            project.</li>
+        </ul>
+        <h4>Delay and effects</h4>
+        <ul>
+          <li>The delay is always on, after the FX bus's effect: a phaser and echoes, a flanged ring and a dub
+            delay together. It has its own pages (DELAY, DELAY: MODE, DELAY: TAPE) and kit settings, and its time,
+            feedback, tone and level are LFO and velocity destinations. Older kits with the bus on DELAY load with the
+            delay on and the bus off.</li>
+          <li>Band: a resonant peak in the delay's loop (DELAY: MODE, knob 4; off by default) for the dub howl. It
+            colours the echoes halfway up Feedback and, pushed near the top, self-oscillates at its pitch, held by a
+            soft clip. A global LFO can sweep it, and the remote's GLOBAL CC 3 turns it.</li>
+          <li>The flanger has its own delay line, so it no longer shares the delay's.</li>
+          <li>A master volume after everything (CONFIG → MIDI OUT, the last send page, CC 124), saved in the settings.</li>
+        </ul>
+        <h4>Sequencer and time</h4>
+        <ul>
+          <li>Per-track time stretch, 50–200% of the tempo (0.01% steps with OCT− held): a track at 99.9% drifts
+            against the rest and phases back. SEQ → TIME STRETCH; the tracks realign at STOP or at each pattern
+            change.</li>
+          <li>Control All on track length: hold OCT+ and turn the length knob to set every track at once; when you
+            let go, OCT+ puts each track's own length back and OCT− keeps the new one.</li>
+        </ul>
+        <h4>LFOs</h4>
+        <ul>
+          <li>Every LFO has the same knobs in the same places: Dest, Depth, Sync, Rate, then Wave, Phase, Mode,
+            Retrigger. LFO 1's Dest reaches every voice's parameters.</li>
+          <li>The global LFOs can run free in Hz (0.01–20 Hz) as well as synced, and every LFO gains 3/8, 5/16,
+            triplet and dotted values. Master DIRT's amount is a new global destination.</li>
+          <li>A global LFO on MORPH costs much less CPU.</li>
+        </ul>
+        <h4>MIDI and performance</h4>
+        <ul>
+          <li>The morph kit by CC 125 (slot 1–64), the master volume by CC 124.</li>
+          <li>Per-track density on CC 96–103 (channel 15), centred by default, in place of random pitch.</li>
+          <li>Per-track rolls by CC (channel 16, CC 112–119): the CC's value is the rate, several tracks at once.</li>
+          <li>MIDI out per track (CONFIG → MIDI OUT), off by default.</li>
+        </ul>
+        <h4>Wander</h4>
+        <ul>
+          <li>Journeys up to 1024 bars.</li>
+          <li>BOILING FROG: the tempo creeps up, down or both until it is somewhere else, with tracks drifting
+            apart and back by time stretch.</li>
+          <li>THE CANYON: delay and reverb building on each other, the voices panning and sending apart, lost in the
+            echoes, then finding the way out together.</li>
+        </ul>
+        <h4>Menus and buttons</h4>
+        <ul>
+          <li>Pressing a section's button again goes to the next section, never a page of the same one (SELECT turns
+            the pages).</li>
+          <li>OCT− held while turning is fine adjust on any knob, and it no longer opens PERFORM off the PERF
+            pages.</li>
+          <li>The menu page is simpler: KIT, MORPH, RESET SOUND, RESET PERF, SOLO and RELOAD.</li>
+          <li>HOME's third press is LOAD: kit, morph, sound and project in one place.</li>
+          <li>The generator knob shows the generator's name and description for a moment.</li>
+          <li>Morph edits SPLIT (the new default): at 100% morph a sound knob edits the morph kit.</li>
+        </ul>
+        <h4>Fixed</h4>
+        <ul>
+          <li>A spell (CONCRETE DRIFT, sometimes others) could leave a cymbal's decay endless: white noise that came
+            and went, and kept playing after STOP.</li>
+          <li>After a spell was cast, its dice stayed over the descriptions: they go back after 2 seconds, or at once
+            when the spell knob turns.</li>
+          <li>Switching the delay from MONO to PING PONG could smear the echoes and write past the delay's memory.</li>
+          <li>Loading a morph lists Type, From, Slot in that order.</li>
+        </ul>
+        <h4>Under the hood</h4>
+        <ul>
+          <li>35 KB more RAM, from memory that sat unused, for what comes next.</li>
+        </ul>
+      </div>
       <div class="card"><h3>0.25.2<span>3 November 2026</span></h3>
         <h4>New</h4>
         <ul>

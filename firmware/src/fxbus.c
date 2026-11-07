@@ -53,6 +53,10 @@ static struct {
      * (Q16); it runs in a block with LEVEL, and DL_HOLD blocks after (an LFO through 0 doesn't stop it), then its
      * line is drained to silence, a block a block (dl_drain: the blocks left) */
     int32_t dl_t, dl_lvl, d_wow;
+    /* 1.0: BAND (0 off, 1..127: 150 Hz .. 5 kHz), the global LFOs on it (-65536 .. 65536: +-2 octaves), the block's
+     * coefficient (band_coef) and each side's peak's states (lp, bp; Q4) */
+    uint8_t band;
+    int32_t lfo_band, bd_c, bd[2][2];
     uint32_t dl_hold, dl_drain;
 } fx;
 #define DL_HOLD (FXBUF_SIZE / BLOCK)                 /* (~0.74 s: the line once round) */
@@ -512,6 +516,28 @@ static void tape_glitch(void)                        /* a repeat starts: changed
         (tp.gmode == GL_SKIP && (tp.gskip + 1u) * len + 64u > tape_max()) || (tp.gmode == GL_HALF && 2u * len > tape_max()))
         tp.gmode = GL_NONE;                          /* (no room in the line for it) */
 }
+/* 1.0: BAND, a resonant peak in the delay's loop (after TONE): the dub engineer's mid boost on the return, so that band
+ * goes round louder than the rest: a colour halfway up FEEDBACK, a howl at that pitch near the top (TAPE from ~80,
+ * PING PONG and TAPE PP ~100, MONO building at the top: render_test). A Chamberlin band-pass (Q ~2.9) added to the
+ * echo, +3.5 dB at its centre: x + 0.175 bp. 150 Hz .. 5 kHz over the knob (TAPE's half-
+ * rate loop: to ~3.3 kHz, where the Chamberlin is still stable), +-2 octaves by the global LFOs. MONO and PING PONG,
+ * which clip hard, go through TAPE's soft clip while it is on */
+#define BD_D 22938                                   /* (the damping, 0.35) */
+static void band_coef(int half)                      /* the block's coefficient, at the loop's rate */
+{
+    int32_t oc = (int32_t)(((uint32_t)fx.band - 1u) * 331612u / 126u) + fx.lfo_band * 2;   /* (5.06 octaves) */
+    int32_t w = (int32_t)(((int64_t)1400 * exp2_q16(clamp32(oc, -3 << 16, 7 << 16))) >> 16);   /* (2 pi 150 / FS) */
+    fx.bd_c = cham_coef(half ? 2 * w : w);
+}
+static inline int32_t band_peak(uint32_t c, int32_t x)   /* the echo x (a sample) with BAND's peak */
+{
+    int32_t *s = fx.bd[c], hp;
+    s[0] += mulr16(fx.bd_c, s[1]);
+    hp = (x << 4) - s[0] - mulr16(BD_D, s[1]);
+    s[1] = clamp32(s[1] + mulr16(fx.bd_c, hp), -(1 << 24), 1 << 24);
+    s[0] = clamp32(s[0], -(1 << 24), 1 << 24);
+    return x + (mulr16(s[1], 11469) >> 4);           /* (0.175 = 0.5 x the damping: a peak of 1.5) */
+}
 static void fx_tape(void)
 {
     uint32_t h, c, mask = fx.delay_type == DELAY_TAPE ? FXBUF_MASK : FXBUF_MASK >> 1, half = FXBUF_SIZE >> 1;
@@ -524,6 +550,8 @@ static void fx_tape(void)
     fb += (int32_t)(((int64_t)(75366 - fb) * fx.push) >> 16);
     if (fx.lfo_fb)
         fb = clamp32(fb + fx.lfo_fb, 0, 75366);
+    if (fx.band)
+        band_coef(1);
     tp.w &= mask;                                    /* (TAPE -> TAPE PP: the head was past the half line) */
     tp.tgt = tape_target();
     if (!tp.cur)
@@ -576,6 +604,8 @@ static void fx_tape(void)
                 x -= lo;
                 tp.lp[c] += (int32_t)(((int64_t)fx.d_tone * ((x << 8) - tp.lp[c])) >> 16);
                 x = tp.lp[c] >> 8;
+                if (fx.band)                         /* (1.0: BAND) */
+                    x = band_peak(c, x);
                 if (fx.d_pitch)
                     x = tape_shift(x, c);
                 y = tape_sat((pp ? in[c] : in[0]) + (int32_t)(((int64_t)x * fb) >> 16), g, gi);
@@ -618,6 +648,8 @@ static void fx_delay(void)                           /* Delay_process / Delay_pr
     int32_t *side = fx_side(), fb = fx.d_fb + (int32_t)(((int64_t)(62259 - fx.d_fb) * fx.push) >> 16);   /* (FB PUSH) */
     if (fx.lfo_fb)                                   /* (19c: the global LFOs, either way) */
         fb = clamp32(fb + fx.lfo_fb, 0, 65536);
+    if (fx.band)
+        band_coef(0);
     for (i = 0; i < BLOCK; i++) {
         int32_t ol, orr;
         if (d_read) {
@@ -635,14 +667,29 @@ static void fx_delay(void)                           /* Delay_process / Delay_pr
                 fxbuf[fx.d_write] = (int16_t)sat16(ol);
             }
         } else if (pp) {
+            int32_t a, b;
             ol = tone(&fx.d_lp[0], ol);
             orr = tone(&fx.d_lp[1], orr);
-            fxbuf[half + fx.d_write] = (int16_t)sat16(fx_l[i] + (int32_t)(((int64_t)ol * fb) >> 16));
-            fxbuf[fx.d_write] = (int16_t)sat16(fx_r[i] + (int32_t)(((int64_t)orr * fb) >> 16));
+            if (fx.band) {
+                ol = band_peak(0, ol);
+                orr = band_peak(1, orr);
+            }
+            a = fx_l[i] + (int32_t)(((int64_t)ol * fb) >> 16);
+            b = fx_r[i] + (int32_t)(((int64_t)orr * fb) >> 16);
+            if (fx.band) {                           /* (1.0: the howl held by a soft clip, not a hard one) */
+                a = tape_sat(a, 65536, 65536u);
+                b = tape_sat(b, 65536, 65536u);
+            }
+            fxbuf[half + fx.d_write] = (int16_t)sat16(a);
+            fxbuf[fx.d_write] = (int16_t)sat16(b);
         } else {
+            int32_t a;
             ol = tone(&fx.d_lp[0], ol);
+            if (fx.band)
+                ol = band_peak(0, ol);
             orr = ol;
-            fxbuf[fx.d_write] = (int16_t)sat16(sat16(fx_l[i] + fx_r[i]) + (int32_t)(((int64_t)ol * fb) >> 16));
+            a = sat16(fx_l[i] + fx_r[i]) + (int32_t)(((int64_t)ol * fb) >> 16);
+            fxbuf[fx.d_write] = (int16_t)sat16(fx.band ? tape_sat(a, 65536, 65536u) : a);
         }
         fx.d_write = (fx.d_write + 1u) & mask;
         if (st) {                                    /* (1.0: the echoes at LEVEL, added to the bus) */

@@ -3114,7 +3114,7 @@ static void phase12_remote(void)
     vp_set(VP_RCH, 16);
     check(remote_ch == 14u, "REMOTE: TRACKS can't take GLOBAL's channel (turned past it)");
     vp_set(VP_RCH, 15);
-    /* no number twice on a channel: TRACKS' knobs 8..103, buttons 104..119; GLOBAL's 8..47, 48..111 */
+    /* no number twice on a channel: TRACKS' knobs 8..103, buttons 104..119; GLOBAL's 8..47 and 3, 48..111 */
     for (i = 0; i < RM_NTK; i++)
         seen[RM_CC0 + i]++;
     for (i = 0; i < RM_NTB; i++)
@@ -3123,12 +3123,12 @@ static void phase12_remote(void)
         ok |= seen[i] > 1u || (seen[i] && (i < 8u || i >= 120u));
     memset(seen, 0, sizeof seen);
     for (i = 0; i < RM_NGK; i++)
-        seen[RM_CC0 + i]++;
+        seen[RM_GCC(i)]++;
     for (i = 0; i < RM_NGB; i++)
         seen[RM_GB0 + i]++;
     for (i = 0; i < 128u; i++)
-        ok |= seen[i] > 1u || (seen[i] && (i < 8u || i >= 120u));
-    check(!ok, "the remote map: each number once a channel, within 8..119");
+        ok |= seen[i] > 1u || (seen[i] && ((i < 8u && i != RM_XCC) || i >= 120u));
+    check(!ok, "the remote map: each number once a channel, within 8..119 (and GLOBAL's CC 3)");
     vp_set(VP_RKNOBS, RK_ABS);
     goto_mode(B_GLO, M_CONFIG);
     while (ui.page != CF_REMOTE)
@@ -3994,7 +3994,8 @@ static void phase21(void)
     {
         uint16_t pp[4];
         page_params(pp);
-        check(pp[0] == PAR_FX_DELAY_TYPE && pp[1] == PAR_DSYNC && pp[2] == PAR_ECHOREV, "FX: DELAY: MODE, SYNC, ECHO > REVERB");
+        check(pp[0] == PAR_FX_DELAY_TYPE && pp[1] == PAR_DSYNC && pp[2] == PAR_ECHOREV && pp[3] == PAR_DLY_BAND,
+              "FX: DELAY: MODE, SYNC, ECHO > REVERB, BAND");
     }
     shot("fx-delay-send");
     par_set(PAR_FX_DELAY_TYPE, DELAY_NORMAL);
@@ -4089,13 +4090,13 @@ static double p23_h3(const int32_t *x, uint32_t n)   /* the 3rd harmonic's share
 static void phase_016t2(void)                        /* 0.16-test2: FX's page order; the HYRULE palette */
 {
 #define FXSENDS FXPG_FSEND, FXPG_FSEND2, FXPG_RSEND, FXPG_RSEND2   /* (31: the sends last) */
-    static const uint8_t OFF[] = {FXPG_REV, FXPG_BUS, FXPG_DLY, FXPG_DLY2, FXPG_DIRT, FXPG_COMP, FXPG_COMP2, FXSENDS};
-    static const uint8_t PH[] = {FXPG_REV, FXPG_BUS, FXPG_PARS, FXPG_DLY, FXPG_DLY2, FXPG_DIRT, FXPG_COMP, FXPG_COMP2,
+    static const uint8_t OFF[] = {FXPG_REV, FXPG_BUS, FXPG_DLY, FXPG_DLY2, FXPG_DIRT, FXPG_DJ, FXPG_COMP, FXPG_COMP2, FXSENDS};
+    static const uint8_t PH[] = {FXPG_REV, FXPG_BUS, FXPG_PARS, FXPG_DLY, FXPG_DLY2, FXPG_DIRT, FXPG_DJ, FXPG_COMP, FXPG_COMP2,
                                  FXSENDS};
-    static const uint8_t DL[] = {FXPG_REV, FXPG_BUS, FXPG_DLY, FXPG_DLY2, FXPG_DUB, FXPG_DIRT, FXPG_COMP, FXPG_COMP2,
+    static const uint8_t DL[] = {FXPG_REV, FXPG_BUS, FXPG_DLY, FXPG_DLY2, FXPG_DUB, FXPG_DIRT, FXPG_DJ, FXPG_COMP, FXPG_COMP2,
                                  FXSENDS};   /* (1.0: the always-on delay's; TAPE's page with TAPE) */
     static const struct { uint32_t type, dtype; const uint8_t *pg; uint32_t n; } C[3] = {
-        {FX_OFF, DELAY_NORMAL, OFF, 11}, {FX_PHASER, DELAY_NORMAL, PH, 12}, {FX_OFF, DELAY_TAPE, DL, 12}};
+        {FX_OFF, DELAY_NORMAL, OFF, 12}, {FX_PHASER, DELAY_NORMAL, PH, 13}, {FX_OFF, DELAY_TAPE, DL, 13}};
     uint32_t k, i, ok;
     uint8_t l[NFXPG];
     press(B_HOME);
@@ -5528,9 +5529,44 @@ static void phase28(void)
     turn(EN_K1 + kk, 2);
     check(par[PAR_FILTER_TYPE_1] == F_APF - 1u, "K to ALLPASS");
     shot("filter-allpass");
+    turn(EN_K1 + kk, 3);
+    check(par[PAR_FILTER_TYPE_1] == F_RESO - 1u && vc[0].ftype == F_RESO, "K up to CHORD");
     turn(EN_K1 + kk, 10);
-    check(par[PAR_FILTER_TYPE_1] == F_LAST - 1u && vc[0].ftype == F_RESO, "K up to CHORD, no further");
-    shot("filter-chord");
+    check(par[PAR_FILTER_TYPE_1] == F_LAST - 1u && vc[0].ftype == F_LADDER, "K up to LADDER, no further");
+    shot("filter-ladder");
+    /* 1.0: FILTER X: the character types' second page, named by type (ENV AMT, LADDER's BASS COMP); none on the others */
+    check(sect_half_used(0, S_FILTER, 1) && sect_par(0, S_FILTER, 1, 0) == PAR_FLTX1 && !strcmp(par_name(PAR_FLTX1), "Bass comp"),
+          "1.0: LADDER: BASS COMP on FILTER's second page");
+    par_set(PAR_FILTER_TYPE_1, F_ACID - 1u);
+    run_ms(20);
+    check(sect_par(0, S_FILTER, 1, 0) == PAR_FLTX1 && !strcmp(par_name(PAR_FLTX1), "Env amt"), "ACID: ENV AMT there");
+    ui.half = 1;
+    ui.force = 1;
+    run_ms(60);
+    page_params(pp);
+    turn(EN_K1, 40);
+    check(pp[0] == PAR_FLTX1 && par[PAR_FLTX1] == 40 && vc[0].flt.xamt == 40 * 65536 / 127, "ENV AMT turned: the voice's");
+    shot("filter-acid-env");
+    ui.half = 0;
+    ui.force = 1;
+    run_ms(60);
+    shot("filter-acid");
+    par_set(PAR_FILTER_TYPE_1, F_LP4 - 1u);
+    run_ms(20);
+    check(!sect_half_used(0, S_FILTER, 1), "LP4: no second page");
+    {                                                /* (the kit keeps it: a slot and back) */
+        uint8_t k1[KIT_LEN];
+        uint32_t i;
+        for (i = 0; i < KIT_LEN; i++)
+            k1[i] = par[kit_par(i)];
+        kit_put(5, k1);
+        par[PAR_FLTX1] = 0;
+        kit_get(5, k1);
+        check(k1[kit_idx(PAR_FLTX1)] == 40, "a kit slot keeps FILTER X");
+    }
+    par_set(PAR_FLTX1, 0);
+    par_set(PAR_FILTER_TYPE_1, F_LAST - 1u);
+    run_ms(20);
     /* playing D1 on each: the comb's line is D1's own, the note moves its pitch */
     for (k = F_LP4; k <= F_LAST; k++) {
         par_set(PAR_FILTER_TYPE_1, k - 1u);
@@ -8282,6 +8318,87 @@ static uint32_t p5_pos(uint32_t t)                    /* track t's steps since t
 {
     return sq.loops[t] * track_len(&pat[sq.active], t) + (uint32_t)(sq.idx[t] < 0 ? 0 : sq.idx[t]);
 }
+/* 1.0 Phase 6: the character filters' UI (the rest: render_test); the global filter (the DJ filter's type) */
+/* 1.0: the delay's BAND: its knob, a global LFO's destination, GLOBAL's CC 3; a morph turns it on or off halfway */
+static void phase_100_6b(void)
+{
+    uint32_t i, ok;
+    printf("1.0: the delay's BAND\n");
+    p4_reset();
+    goto_mode(B_HOME, M_HOME);
+    press(B_FX);
+    fx_goto(FXPG_DLY2);
+    run_ms(40);
+    check(par[PAR_DLY_BAND] == 0 && fx.band == 0, "BAND: OFF in a new kit");
+    turn(EN_K4, 64);
+    run_ms(40);
+    check(par[PAR_DLY_BAND] == 64 && fx.band == 64, "BAND: K4 turns it on");
+    shot("fx-delay-band");
+    gls[0].dest = GD_DBAND;
+    gls[0].depth = 127;
+    gls[0].len = 0;
+    gls[0].wave = LFO_TRI;
+    for (ok = 0, i = 0; i < 200u; i++) {
+        run_ms(1);
+        ok |= fx.lfo_band > 30000 || fx.lfo_band < -30000;
+    }
+    check(ok && gd_turn(GD_MORPH, 1) == GD_DBAND, "GLOBAL LFO DELAY BAND: moved either way (DELAY's first, by name)");
+    memset(gls, 0, sizeof gls);
+    run_ms(20);
+    check(fx.lfo_band == 0, "BAND: back with the LFO off");
+    gcc(3, 127);
+    check(par[PAR_DLY_BAND] == 127, "GLOBAL CC 3: BAND");
+    gcc(3, 0);
+    check(par[PAR_DLY_BAND] == 0 && fx.band == 0, "GLOBAL CC 3 at 0: BAND OFF");
+    check(morph_mix(PAR_DLY_BAND, 0, 90, 100) == 0 && morph_mix(PAR_DLY_BAND, 0, 90, 140) == 90 &&
+              morph_mix(PAR_DLY_BAND, 30, 90, 128) > 30u && morph_mix(PAR_DLY_BAND, 30, 90, 128) < 90u,
+          "morph: BAND on or off halfway, between two settings smoothly");
+    goto_mode(B_HOME, M_HOME);
+}
+static void phase_100_6(void)
+{
+    uint16_t pp[4];
+    uint32_t i;
+    int16_t l[BLOCK], r[BLOCK];
+    printf("1.0 Phase 6: the character filters, the global filter\n");
+    p4_reset();
+    goto_mode(B_HOME, M_HOME);
+    press(B_FX);
+    fx_goto(FXPG_DJ);
+    run_ms(40);
+    page_params(pp);
+    check(fx_page() == FXPG_DJ && pp[0] == VP_DJ && pp[1] == VP_DJRESO && pp[2] == VP_DJTYPE, "FX: DJ FILTER: the knob, Reso, Type");
+    turn(EN_K3, 1);
+    check(pfs.dj_ftype == DJT_ACID, "Type: ACID");
+    vp_set(VP_DJRESO, 110);
+    pf.dj = 20;                                      /* (left: the low-pass) */
+    for (i = 0; i < BLOCK; i++)
+        l[i] = r[i] = (int16_t)(i & 8u ? 9000 : -9000);
+    perf_master(l, r);
+    check(pf.dj_f[0].was == F_ACID && pf.dj_f[1].was == F_ACID && pf.dj_f[0].rk == 110 * 516, "the master through ACID, at its Reso");
+    run_ms(40);
+    shot("fx-dj-acid");
+    turn(EN_K3, 1);
+    pf.dj = 110;                                     /* (right: MS20's high-pass) */
+    perf_master(l, r);
+    check(pfs.dj_ftype == DJT_MS20 && pf.dj_f[0].was == F_MS20H, "MS20: its high-pass right of the middle");
+    run_ms(40);
+    shot("fx-dj-ms20");
+    turn(EN_K3, 5);
+    check(pfs.dj_ftype == DJT_MS20, "Type: MS20 the last");
+    {                                                /* (the project keeps it) */
+        int rc = proj_save(2, "DJTYPE  ");
+        pfs.dj_ftype = DJT_LXR;
+        rc |= proj_load(2);
+        check(rc == 0 && pfs.dj_ftype == DJT_MS20 && pfs.dj_reso == 110, "a project keeps the DJ filter's type");
+    }
+    pf.dj = 64;
+    pfs.dj_ftype = DJT_LXR;
+    pfs.dj_reso = 0;
+    perf_master(l, r);
+    goto_mode(B_HOME, M_HOME);
+}
+
 static void phase_100_5(void)
 {
     uint8_t k[KIT_LEN];
@@ -9008,6 +9125,8 @@ int main(int argc, char **argv)
     phase_100_3();
     phase_100_4();
     phase_100_5();
+    phase_100_6();
+    phase_100_6b();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;
 }

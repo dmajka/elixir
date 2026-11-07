@@ -66,7 +66,8 @@ enum { VP_BASE = 0x400, VP_NONE = VP_BASE, VP_IO_TYPE, VP_IO_SLOT, VP_NAME_POS, 
        VP_DJRESO, VP_RMUTE,                          /* (0.24.3: the DJ filter's resonance; the remote's mute, solo) */
        VP_MVOL, VP_MOUT, VP_MOUT_LAST = VP_MOUT + NTRACK - 1,   /* (1.0: the master volume; a track's MIDI out) */
        VP_TD, VP_TD_LAST = VP_TD + NTRACK - 1,       /* (1.0: the remote's DENSITY a track: seq.c sq.tdens) */
-       VP_STRETCH, VP_REALIGN };                     /* (1.0: TIME STRETCH, a track's; when the tracks realign) */
+       VP_STRETCH, VP_REALIGN,                       /* (1.0: TIME STRETCH, a track's; when the tracks realign) */
+       VP_DJTYPE };                                  /* (1.0: the DJ filter's type, perform.c DJT_*) */
 _Static_assert(NPAR <= VP_BASE, "the virtual parameters after the parameters (25b + 27a: NPAR 525, past 0x200)");
 /* the ACTION page's action (OCT+ does it); 0.10: those of the track's generator (gen_acts) */
 enum { ACT_NONE, ACT_DICE, ACT_COMMIT, ACT_UNDO, ACT_RESET, NACT };
@@ -264,6 +265,8 @@ static uint32_t sect_par_raw(uint32_t t, uint32_t s, uint32_t h, uint32_t k)
     uint32_t q;
     if (s == S_LFO || s == S_LFO2)
         return lfo_par(t, s == S_LFO2, h * 4u + k);
+    if (s == S_FILTER && h == 1u)                    /* 1.0: FILTER X, the second page's first knob */
+        return k == 0u ? PAR_FLTX1 + track_voice(t) : 0u;
     if (s < S_SHAPE)
         return LXR_PAGES[track_page(t)][s][8u + h * 4u + k];
     q = K_PAGES[s - S_SHAPE][h * 4u + k];
@@ -274,6 +277,8 @@ static uint32_t sect_par_raw(uint32_t t, uint32_t s, uint32_t h, uint32_t k)
 static uint32_t sect_par(uint32_t t, uint32_t s, uint32_t h, uint32_t k)
 {
     uint32_t v = track_voice(t);
+    if (s == S_FILTER && h == 1u && !flt_char(par[PAR_FILTER_TYPE_1 + v] + 1u))
+        return 0;                                    /* (1.0: FILTER X: the character types' alone) */
     if (s == S_MODEL && mi[v].type && h == 1u)
         return k == 0u ? PAR_MEXC1 + v : k == 1u ? PAR_MTENS1 + v : 0u;
     if (s == S_MODEL && (h || k) && !mi[v].type && !eno[v].on && (v > 2u || !par[PAR_MODEL1 + v]))
@@ -512,16 +517,17 @@ static uint32_t gen_acts(const pattern_t *p, uint32_t t, uint8_t out[NGACT])
  * always-on DELAY after the bus (TIME, FEEDBACK, TONE, LEVEL; its MODE, SYNC, ECHO > REVERB; with TAPE, its WOW,
  * SATURATE, GLITCH, PITCH); 23: DIRT, the bus's and the master's; the master's COMPRESSOR and its SIDECHAIN; 31: the
  * voices' FX and reverb sends, the mixer's pages. ui.page counts the pages shown (fx_page: which one it is) */
-#define NFXPG 13u
-enum { FXPG_REV, FXPG_BUS, FXPG_PARS, FXPG_DLY, FXPG_DLY2, FXPG_DUB, FXPG_DIRT, FXPG_COMP, FXPG_COMP2, FXPG_FSEND,
-       FXPG_FSEND2, FXPG_RSEND, FXPG_RSEND2 };
+#define NFXPG 14u
+enum { FXPG_REV, FXPG_BUS, FXPG_PARS, FXPG_DLY, FXPG_DLY2, FXPG_DUB, FXPG_DIRT, FXPG_DJ, FXPG_COMP, FXPG_COMP2,
+       FXPG_FSEND, FXPG_FSEND2, FXPG_RSEND, FXPG_RSEND2 };
 static const uint16_t P_FX[NFXPG][4] = {{PAR_REV_TYPE, PAR_REV_SIZE, PAR_REV_DAMP, PAR_REV_LEVEL},
                                         {PAR_FX_TYPE, PAR_FX_DRY_WET, VP_FX_SUB, VP_NONE},
                                         {PAR_FX_P1, PAR_FX_P2, PAR_FX_P3, PAR_FX_P4},
                                         {PAR_DLY_TIME, PAR_DLY_FB, PAR_DLY_TONE, PAR_DLY_LEVEL},
-                                        {PAR_FX_DELAY_TYPE, PAR_DSYNC, PAR_ECHOREV, VP_NONE},
+                                        {PAR_FX_DELAY_TYPE, PAR_DSYNC, PAR_ECHOREV, PAR_DLY_BAND},   /* (1.0: BAND) */
                                         {PAR_DLY_WOW, PAR_DSAT, PAR_GLITCH, PAR_DPITCH},
-                                        {PAR_FXDIRT, VP_DJRESO, PAR_MDIRT, PAR_MDIRT_AMT},
+                                        {PAR_FXDIRT, VP_NONE, PAR_MDIRT, PAR_MDIRT_AMT},
+                                        {VP_DJ, VP_DJRESO, VP_DJTYPE, VP_NONE},   /* (1.0: the global filter) */
                                         {PAR_MC_THR, PAR_MC_RATIO, PAR_MC_ATK, PAR_MC_REL},
                                         {PAR_MC_SRC, PAR_MC_GAIN, PAR_MC_MIX, VP_NONE},
                                         {PAR_FX_SEND1, PAR_FX_SEND1 + 1, PAR_FX_SEND1 + 2, PAR_FX_SEND1 + 3},
@@ -540,6 +546,7 @@ static uint32_t fx_shown(uint8_t out[NFXPG])        /* the pages shown, in order
     if (par[PAR_FX_DELAY_TYPE] == DELAY_TAPE || par[PAR_FX_DELAY_TYPE] == DELAY_TAPEPP)
         out[n++] = FXPG_DUB;
     out[n++] = FXPG_DIRT;
+    out[n++] = FXPG_DJ;
     out[n++] = FXPG_COMP;
     out[n++] = FXPG_COMP2;
     out[n++] = FXPG_FSEND;
@@ -946,8 +953,9 @@ static uint32_t tgt_full(char *b, uint32_t n, uint32_t v, uint32_t idx)
         return g;
     }
     if (par_dly(p)) {                                /* (1.0: the always-on delay's) */
-        static const char *const D[4] = {"Delay time", "Delay feedback", "Delay tone", "Delay level"};
-        put_str(b, D[(p - PAR_DLY_TIME) & 3u], n);
+        static const char *const D[6] = {"Delay time", "Delay feedback", "Delay tone", "Delay level", "Delay wow",
+                                         "Delay band"};
+        put_str(b, D[p - PAR_DLY_TIME < 6u ? p - PAR_DLY_TIME : 0u], n);
         return g;
     }
     card_name(t, sizeof t, p);
@@ -1067,7 +1075,7 @@ static void lfo1_dest_turn(uint32_t l, int32_t n)
 }
 /* 0.25.2: the global LFOs' destinations the same way: by group in the signal's order, each group by name */
 static const uint8_t GD_ORDER[NGD] = {GD_OFF, GD_DENSITY, GD_JITTER, GD_MCHANGE, GD_MSPREAD, GD_STUT, GD_TRANSPOSE,
-                                      GD_MORPH, GD_DFB, GD_DTIME, GD_PUSH, GD_RSEND, GD_COMB, GD_CRUSH, GD_CUTS,
+                                      GD_MORPH, GD_DBAND, GD_DFB, GD_DTIME, GD_PUSH, GD_RSEND, GD_COMB, GD_CRUSH, GD_CUTS,
                                       GD_DIRT, GD_PUMP, GD_FILTER, GD_HP, GD_LP, GD_MACRO1, GD_MACRO1 + 1,
                                       GD_MACRO1 + 2, GD_MACRO1 + 3};
 static const char *const GD_FULL[NGD][2] = {
@@ -1077,8 +1085,8 @@ static const char *const GD_FULL[NGD][2] = {
     {"SEQUENCER", "Transpose"}, {"SEQUENCER", "Melody change"}, {"SEQUENCER", "Melody spread"},
     {"DELAY", "Delay feedback"}, {"DELAY", "Delay time"}, {"REVERB", "Reverb sends"}, {"MACROS", "Macro 1"},
     {"MACROS", "Macro 2"}, {"MACROS", "Macro 3"}, {"MACROS", "Macro 4"}, {"SEQUENCER", "Stutter chance"},
-    {"MASTER FX", "Dirt amount"}};
-_Static_assert(NMACRO == 4u && NGD == 24u, "GD_ORDER, GD_FULL: every destination");
+    {"MASTER FX", "Dirt amount"}, {"DELAY", "Delay band"}};
+_Static_assert(NMACRO == 4u && NGD == 25u, "GD_ORDER, GD_FULL: every destination");
 static int is_gl_dest(uint32_t p) { return p >= VP_GL && p <= VP_GL_LAST && (p - VP_GL) % NGLSET == 0u; }
 static uint32_t order_turn(const uint8_t *o, uint32_t c, uint32_t v, int32_t n)   /* (v n places on in order o) */
 {
@@ -1236,6 +1244,7 @@ static uint32_t vp_get(uint32_t p)
     case VP_REPEAT: return pfs.repeat;
     case VP_TAPE: return pfs.tape;
     case VP_DJRESO: return pfs.dj_reso;
+    case VP_DJTYPE: return pfs.dj_ftype;
     case VP_M1: case VP_M1 + 1: case VP_M1 + 2: case VP_M1 + 3: return pfs.m[p - VP_M1].val;
     case VP_MSEL: return ui.msel;
     case VP_MTARGET: return lock_idx_of(pfs.m[ui.msel].par);
@@ -1408,6 +1417,7 @@ static uint32_t vp_max(uint32_t p)
     case VP_MVOL: case VP_TD ... VP_TD_LAST: return 127;
     case VP_STRETCH: return TSTR_MAX;
     case VP_REALIGN: return 1;
+    case VP_DJTYPE: return NDJT - 1u;
     case VP_GL ... VP_GL_LAST: {
         static const uint8_t MX[NGLSET] = {NGD - 1, 254, GL_FREE, NLFO - 1, NGM - 1, NGT - 1, 127, 127};
         return MX[(p - VP_GL) % NGLSET];
@@ -1680,6 +1690,7 @@ static void vp_set(uint32_t p, uint32_t v)
     case VP_REPEAT: pfs.repeat = (uint8_t)v; return;
     case VP_TAPE: pfs.tape = (uint8_t)v; return;
     case VP_DJRESO: pfs.dj_reso = (uint8_t)v; return;
+    case VP_DJTYPE: pfs.dj_ftype = (uint8_t)(v < NDJT ? v : 0u); return;
     case VP_M1: case VP_M1 + 1: case VP_M1 + 2: case VP_M1 + 3: macro_set(p - VP_M1, v); return;
     case VP_MSEL: ui.msel = (uint8_t)v; return;
     case VP_MTARGET: {
@@ -1910,7 +1921,8 @@ static uint32_t ca_par(uint32_t u, uint32_t k)
 {
     const uint16_t *a = LXR_PAGES[track_page(ui.track)][ui.sect], *b;
     uint32_t j = ui.half * 4u + k, i, t, n = 0;
-    if (ui.sect >= S_SHAPE || ui.sect == S_LFO)      /* (Elixir's: blocks of six, the voice's own; the LFOs too) */
+    if (ui.sect >= S_SHAPE || ui.sect == S_LFO || (ui.sect == S_FILTER && ui.half))   /* (Elixir's: blocks of six, the
+                                                                                         * voice's own; the LFOs too) */
         return sect_par(u, ui.sect, ui.half, k);
     if (!(t = ca_name(a[j])))
         return 0;

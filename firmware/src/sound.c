@@ -77,15 +77,18 @@ enum {
     PAR_INSA1 = PAR_INS1 + 6,                    /* .. AMOUNT (0: dry, whatever the type), and two knobs the type */
     PAR_INSB1 = PAR_INSA1 + 6,                   /* .. names (RATE / SHIFT / PITCH, FEEDBACK / DEPTH / SHAPE) */
     PAR_INSC1 = PAR_INSB1 + 6,
-    NPAR = PAR_INSC1 + 6
+    PAR_FLTX1 = PAR_INSC1 + 6,                   /* 1.0: FILTER X (dsp.c ch_block): the character filters' ENV AMT, LADDER's
+                                                  * BASS COMP */
+    NPAR = PAR_FLTX1 + 6
 };
 /* 1.0: the always-on delay's own settings (fxbus.c), in five of the seven bytes the LXR's kit leaves unused (221 ..:
  * 0 in every LXR and factory kit; only Elixir 0.2 used them, project.c clears a version-2 project's), so a kit stays
  * 470 bytes and an LXR still reads it. TIME, FEEDBACK, TONE, LEVEL (0: the delay off), TAPE's WOW. Not lockable (as
  * the bytes were), but LFO targets (XT_PAR) */
-enum { PAR_DLY_TIME = PAR_UNUSED_1, PAR_DLY_FB, PAR_DLY_TONE, PAR_DLY_LEVEL, PAR_DLY_WOW };
-_Static_assert(PAR_DLY_WOW <= PAR_UNUSED_7, "the delay: in the LXR's unused bytes");
-static inline int par_dly(uint32_t p) { return p >= PAR_DLY_TIME && p <= PAR_DLY_WOW; }
+enum { PAR_DLY_TIME = PAR_UNUSED_1, PAR_DLY_FB, PAR_DLY_TONE, PAR_DLY_LEVEL, PAR_DLY_WOW,
+       PAR_DLY_BAND };                           /* (1.0: BAND, the loop's resonant peak: 0 off, then its frequency) */
+_Static_assert(PAR_DLY_BAND <= PAR_UNUSED_7, "the delay: in the LXR's unused bytes");
+static inline int par_dly(uint32_t p) { return p >= PAR_DLY_TIME && p <= PAR_DLY_BAND; }
 #define KIT_LEN (END_OF_SOUND_PARAMETERS + NPAR - NUM_PARAMS)
 #define KIT_GAP (NUM_PARAMS - END_OF_SOUND_PARAMETERS)
 static inline int par_sound(uint32_t p) { return p < END_OF_SOUND_PARAMETERS || (p >= NUM_PARAMS && p < NPAR); }
@@ -267,8 +270,8 @@ static uint32_t morph_mix(uint32_t p, uint32_t a, uint32_t b, uint32_t x)
         return x < 128u ? a : b;
     if (p >= PAR_SYNC_LFO1 && p <= PAR_SYNC_LFO6 && a != b && (a >= 12u || b >= 12u))   /* (1.0: a sync value past */
         return x < 128u ? a : b;                     /* .. the LXR's: by length they are between, not in a row) */
-    if (p >= PAR_INS1 && p < PAR_INS1 + 6u)
-        return x < 128u ? a : b;
+    if ((p >= PAR_INS1 && p < PAR_INS1 + 6u) || (p == PAR_DLY_BAND && (!a || !b)))   /* (1.0: BAND on or OFF, */
+        return x < 128u ? a : b;                     /* .. halfway) */
     if ((p >= PAR_L2AMT1 && p < PAR_L2AMT1 + 6u && morph_l2_differs(p - PAR_L2AMT1)) ||
         (p >= PAR_INSA1 && p < PAR_INSA1 + 6u && par[PAR_INS1 + p - PAR_INSA1] != morph_par[kit_idx(PAR_INS1 + p - PAR_INSA1)]))
         return x < 128u ? (a * (128u - x) + 64u) / 128u : (b * (x - 128u) + 63u) / 127u;
@@ -342,6 +345,7 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
     if (p >= PAR_RESO_1 && p <= PAR_RESO_6) {                        /* SVF_setReso: q = 1 - r (0.02 below 0.1) */
         int32_t q = 65536 - f;
         vc[p - PAR_RESO_1].flt.q = q < 6554 ? 1311 : q;
+        vc[p - PAR_RESO_1].flt.rk = f;               /* (1.0: the character types' own curve) */
         vc[p - PAR_RESO_1].flt.dirty = 1;
         return;
     }
@@ -605,6 +609,11 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
     case PAR_DLY_WOW:
         fx.d_wow = f;
         break;
+    case PAR_DLY_BAND:                               /* (1.0: off -> on: from rest) */
+        if (!fx.band && itg)
+            memset(fx.bd, 0, sizeof fx.bd);
+        fx.band = (uint8_t)(itg & 127u);
+        break;
     case PAR_FX_ROUTING:
         fx.route = R_ST1;                            /* (0.19: always stereo, the FM-1's one output; a kit's */
         (void)itg;                                   /* .. side-only bus from the LXR plays in stereo) */
@@ -735,7 +744,12 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
             }
             break;
         }
-        if (p >= PAR_INS1 && p < NPAR) {             /* 27a: the insert (voices.c ins_block) */
+        if (p >= PAR_FLTX1 && p < NPAR) {            /* 1.0: FILTER X */
+            vc[p - PAR_FLTX1].flt.xamt = f;
+            vc[p - PAR_FLTX1].flt.dirty = 1;
+            break;
+        }
+        if (p >= PAR_INS1 && p < PAR_FLTX1) {        /* 27a: the insert (voices.c ins_block) */
             ins_t *n = &ins[(p - PAR_INS1) % 6u];
             uint8_t v = (uint8_t)(mod ? (127u * (uint32_t)f) >> 16 : itg & 127u);
             switch ((p - PAR_INS1) / 6u) {

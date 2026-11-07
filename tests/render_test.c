@@ -129,6 +129,7 @@ static void f28_setup(svf_t *f, uint32_t fval, uint32_t reso, int key)
     f->line = f28_line;
     f->fval = fval;
     f->q = q < 6554 ? 1311 : q;
+    f->rk = (int32_t)(reso * 65536u / 127u);
     f->key = (int8_t)key;
     f->dirty = 1;
 }
@@ -193,6 +194,59 @@ static void i27_sine(int16_t *x, uint32_t n, double hz, double amp)
     uint32_t i;
     for (i = 0; i < n; i++)
         x[i] = (int16_t)(amp * sin(2 * M_PI * hz * i / FS));
+}
+
+/* 1.0: the delay's BAND, the delay alone: a noise burst in, FEEDBACK as given; the echoes' peak over the run and their
+ * rms over its last second, and the tail's level at the band's centre against an octave either side */
+static void band_run(uint32_t ty, uint32_t band, uint32_t fb, int32_t *pk, double *tail, double *focus)
+{
+    static int16_t t[FS];
+    uint32_t b, i, nb = FS * 4u / BLOCK, rng = 1u, tn = 0;
+    double acc = 0;
+    par_set(PAR_FX_DELAY_TYPE, ty);
+    par_set(PAR_DLY_TIME, 30);
+    par_set(PAR_DLY_FB, fb);
+    par_set(PAR_DLY_TONE, 127);
+    par_set(PAR_DLY_LEVEL, 127);
+    par_set(PAR_DLY_BAND, band);
+    snd_service();                                   /* (the posted settings, as at a block start) */
+    memset(fxbuf, 0, sizeof fxbuf);
+    memset(&tp, 0, sizeof tp);
+    memset(fx.bd, 0, sizeof fx.bd);
+    fx.d_lp[0] = fx.d_lp[1] = 0;
+    *pk = 0;
+    for (b = 0; b < nb; b++) {
+        for (i = 0; i < BLOCK; i++) {
+            rng = rng * 1664525u + 1013904223u;
+            fx_l[i] = fx_r[i] = (int16_t)(b < 40u ? (int32_t)(rng >> 16) - 32768 >> 2 : 0);
+        }
+        memset(mix_l, 0, sizeof mix_l);
+        memset(mix_r, 0, sizeof mix_r);
+        memset(rev_in, 0, sizeof rev_in);
+        d_read = 0;
+        fx_delay();
+        for (i = 0; i < BLOCK; i++) {
+            int32_t a = abs(mix_l[i]) > abs(mix_r[i]) ? abs(mix_l[i]) : abs(mix_r[i]);
+            *pk = a > *pk ? a : *pk;
+            if (b >= nb - FS / BLOCK) {
+                acc += (double)mix_l[i] * mix_l[i];
+                if (tn < FS)
+                    t[tn++] = (int16_t)(mix_l[i] > 32767 ? 32767 : mix_l[i] < -32768 ? -32768 : mix_l[i]);
+            }
+        }
+    }
+    *tail = sqrt(acc / tn);
+    if (focus) {                                     /* (the centre: 150 Hz x 2^(5.06 (band - 1) / 126)) */
+        double hz = 150.0 * pow(2.0, 5.06 * (band - 1.0) / 126.0), c = 0, o = 0, f;
+        for (f = hz * 0.97; f <= hz * 1.03; f += hz * 0.005)
+            c = fmax(c, f28_mag(t, tn, f));
+        for (f = hz * 0.4; f <= hz * 0.6; f += hz * 0.01)
+            o = fmax(o, f28_mag(t, tn, f));
+        for (f = hz * 1.7; f <= hz * 2.3; f += hz * 0.02)
+            o = fmax(o, f28_mag(t, tn, f));
+        *focus = 20 * log10((c + 1) / (o + 1));
+    }
+    par_set(PAR_DLY_BAND, 0);
 }
 
 int main(int argc, char **argv)
@@ -390,7 +444,9 @@ int main(int argc, char **argv)
     {   /* 28: Elixir's filter types. On each voice, struck at RESONANCE 0 and 127: it sounds, ends; alone: COMB's
          * echoes at the pitch (and the note), COMB-'s negative; LP4's slope against LP's; VOWEL's formants; ALLPASS's
          * notch; RESONATOR's three pitches; a switch clears the line; morph switches at 50% */
-        static const char *const FT_NAMES[] = {"LP4", "COMB+", "COMB-", "ALLPASS", "VOWEL", "DUB BP", "RESONATOR"};
+        static const char *const FT_NAMES[] = {"LP4", "COMB+", "COMB-", "ALLPASS", "VOWEL", "DUB BP", "RESONATOR",
+                                               "ACID", "MS20LP", "MS20HP", "LADDER"};
+        _Static_assert(sizeof FT_NAMES / sizeof FT_NAMES[0] == F_LAST - F_LP4 + 1, "a name each");
         static int16_t in[16384], o[16384];
         uint32_t v, ty, r, i;
         svf_t f;
@@ -413,6 +469,8 @@ int main(int argc, char **argv)
                     par_set(PAR_FILTER_TYPE_1 + v, ty - 1u);
                     par_set(PAR_RESO_1 + v, r ? 127 : 0);
                     par_set(PAR_FILTER_DRIVE_1 + v, r ? 127 : 20);
+                    par_set(PAR_FILTER_FREQ_1 + v, ty == F_MS20H ? 12u : INIT_KIT[8u + PAR_FILTER_FREQ_1 + v]);   /* (1.0:
+                                                      * a 12 dB high-pass at the kick's cutoff leaves nothing of it) */
                     render(FS / 8);
                     voice_trigger(v, 127, SEQ_DEFAULT_NOTE);
                     frames = render(FS);
@@ -436,6 +494,7 @@ int main(int argc, char **argv)
             par_set(PAR_FILTER_TYPE_1 + v, INIT_KIT[8u + PAR_FILTER_TYPE_1 + v]);
             par_set(PAR_RESO_1 + v, INIT_KIT[8u + PAR_RESO_1 + v]);
             par_set(PAR_FILTER_DRIVE_1 + v, INIT_KIT[8u + PAR_FILTER_DRIVE_1 + v]);
+            par_set(PAR_FILTER_FREQ_1 + v, INIT_KIT[8u + PAR_FILTER_FREQ_1 + v]);
         }
         memset(in, 0, sizeof in);
         in[0] = 20000;
@@ -506,6 +565,114 @@ int main(int argc, char **argv)
                 fails++;
             }
         }
+        {   /* 1.0: the character filters. ACID's slope softer than LP4's, steeper than LP's; LADDER's as LP4's; MS20 HP's
+             * low cut; LADDER's BASS COMP brings the bass back at full resonance; the resonance peaks (curved knob) */
+            double lp4 = f28_sine_gain(F_LP4, 16384, 0, 1500), acid = f28_sine_gain(F_ACID, 16384, 0, 1500);
+            double lp = f28_sine_gain(F_LP, 16384, 0, 1500), lad = f28_sine_gain(F_LADDER, 16384, 0, 1500);
+            double a_lo = f28_sine_gain(F_ACID, 16384, 0, 30), h_lo = f28_sine_gain(F_MS20H, 32768, 0, 60);
+            double h_hi = f28_sine_gain(F_MS20H, 32768, 0, 8000), m_lo = f28_sine_gain(F_MS20L, 32768, 0, 60);
+            double m_hi = f28_sine_gain(F_MS20L, 32768, 0, 8000), b0, b1, pk = 0, hz;
+            printf("  ACID 1.5 kHz %.1f dB (30 Hz %.1f); LADDER %.1f, LP4 %.1f, LP %.1f dB\n", 20 * log10(acid),
+                   20 * log10(a_lo), 20 * log10(lad), 20 * log10(lp4), 20 * log10(lp));
+            printf("  MS20 HP 60 Hz %.1f, 8 kHz %.1f dB; MS20 LP 60 Hz %.1f, 8 kHz %.1f dB\n", 20 * log10(h_lo),
+                   20 * log10(h_hi), 20 * log10(m_lo), 20 * log10(m_hi));
+            double sa = 20 * log10(f28_sine_gain(F_ACID, 8000, 0, 1000) / f28_sine_gain(F_ACID, 8000, 0, 2000));
+            double s4 = 20 * log10(f28_sine_gain(F_LP4, 8000, 0, 250) / f28_sine_gain(F_LP4, 8000, 0, 500));
+            printf("  slopes an octave: ACID %.1f dB, LP4 %.1f dB\n", sa, s4);
+            if (sa < 12 || sa > 22 || s4 < 20 || fabs(20 * log10(lad / lp4)) > 1.0 || h_lo > h_hi * 0.05 ||
+                m_hi > m_lo * 0.05 || a_lo < 0.2) {
+                printf("FAIL: the character filters' slopes\n");
+                fails++;
+            }
+            {
+                svf_t g;
+                static int16_t a[4096];
+                double lo0 = 0, lo1 = 0;
+                for (i = 0; i < 4096u; i++)
+                    a[i] = (int16_t)(4000 * sin(2 * M_PI * 50 * i / FS));
+                f28_setup(&g, 32768, 127, 0);
+                f28_run(&g, F_LADDER, a, o, 4096);
+                for (i = 2048; i < 4096u; i++)
+                    lo0 += (double)o[i] * o[i];
+                f28_setup(&g, 32768, 127, 0);
+                g.xamt = 65536;
+                f28_run(&g, F_LADDER, a, o, 4096);
+                for (i = 2048; i < 4096u; i++)
+                    lo1 += (double)o[i] * o[i];
+                b0 = 10 * log10(lo0 + 1);
+                b1 = 10 * log10(lo1 + 1);
+            }
+            {
+                double pf = 0, tr;
+                for (hz = 300; hz < 12000; hz *= 1.03) {
+                    double gg = f28_sine_gain(F_ACID, 32768, 127, hz);
+                    if (gg > pk) {
+                        pk = gg;
+                        pf = hz;
+                    }
+                }
+                tr = f28_sine_gain(F_ACID, 32768, 127, pf / 4);
+                printf("  LADDER at full resonance, 50 Hz: BASS COMP 0 -> 127 %+.1f dB; ACID's peak (%.0f Hz) %+.1f dB "
+                       "over 2 octaves below\n", b1 - b0, pf, 20 * log10(pk / tr));
+                if (b1 - b0 < 6 || pk < tr * 2.5) {
+                    printf("FAIL: BASS COMP / ACID's resonance\n");
+                    fails++;
+                }
+            }
+        }
+        {   /* 1.0: ENV AMT. At 0 the amp EG changes nothing; up, it opens the cutoff (the hit's start brighter); a
+             * switch away and back starts from rest */
+            svf_t a, b;
+            static int16_t sq[4096], oa[4096], ob[4096];
+            uint32_t ty2, same = 1;
+            double e0 = 0, e1 = 0;
+            for (i = 0; i < 4096u; i++)
+                sq[i] = (int16_t)(i & 64u ? 8000 : -8000);
+            for (ty2 = F_ACID; ty2 <= F_MS20H; ty2++) {
+                f28_setup(&a, 16384, 90, 0);
+                f28_setup(&b, 16384, 90, 0);
+                for (i = 0; i + BLOCK <= 4096u; i += BLOCK) {
+                    memcpy(oa + i, sq + i, BLOCK * 2);
+                    memcpy(ob + i, sq + i, BLOCK * 2);
+                    a.eg = 65536 - (int32_t)(i * 16);    /* (a decay) */
+                    b.eg = 0;
+                    svf_block(&a, ty2, oa + i);
+                    svf_block(&b, ty2, ob + i);
+                }
+                same &= !memcmp(oa, ob, sizeof oa);
+            }
+            f28_setup(&a, 16384, 90, 0);
+            a.xamt = 40000;
+            for (i = 0; i + BLOCK <= 4096u; i += BLOCK) {
+                memcpy(oa + i, sq + i, BLOCK * 2);
+                a.eg = i < 2048u ? 65536 - (int32_t)(i * 32) : 0;
+                svf_block(&a, F_ACID, oa + i);
+            }
+            for (i = 0; i < 1024u; i++) {                /* (its first and last quarter's change sample to sample) */
+                e0 += fabs((double)oa[i + 1] - oa[i]);
+                e1 += fabs((double)oa[3072 + i + 1] - oa[3072 + i]);
+            }
+            printf("  ENV AMT: at 0 the EG %s; up, the hit %.1f x brighter than its tail\n", same ? "changes nothing" : "CHANGES IT",
+                   e0 / (e1 + 1));
+            if (!same || e0 < e1 * 1.5) {
+                printf("FAIL: ENV AMT\n");
+                fails++;
+            }
+            for (ty2 = F_ACID; ty2 <= F_LADDER; ty2++) { /* (loud, to LP a block, back, silent: from rest) */
+                int32_t pk = 0;
+                f28_setup(&a, 50000, 127, 0);
+                f28_run(&a, ty2, sq, oa, 1024);
+                memset(ob, 0, sizeof ob);
+                f28_run(&a, F_LP, ob, oa, 64);
+                f28_run(&a, ty2, ob, oa, 1024);
+                for (i = 0; i < 1024u; i++)
+                    pk = abs(oa[i]) > pk ? abs(oa[i]) : pk;
+                if (pk > 2) {
+                    printf("FAIL: %s rings on after a switch (%d)\n", FT_NAMES[ty2 - F_LP4], pk);
+                    fails++;
+                }
+            }
+        }
         {                                                /* a switch: COMB's line cleared, nothing left ringing */
             int32_t pk = 0;
             for (i = 0; i < 1024u; i++)
@@ -531,6 +698,11 @@ int main(int argc, char **argv)
                 f28_setup(&f, 60000, 127, 0);
                 f.drive = 1638 + 6 * 4096;
                 f28_run(&f, ty, in, o, 8192 + 8192);
+                if (flt_char(ty)) {                      /* (1.0: theirs a slow, low tail (-60 dB at 0.2 s): at ~0.9 s) */
+                    static int16_t z[16384];
+                    f28_run(&f, ty, z, o, 16384);
+                    f28_run(&f, ty, z, o, 16384);
+                }
                 for (i = 16384 - 2048; i < 16384u; i++)
                     pk = abs(o[i]) > pk ? abs(o[i]) : pk;
                 if (pk > 8) {
@@ -813,6 +985,51 @@ int main(int argc, char **argv)
             par_set(PAR_VOL1 + v, vol[v]);
         }
         master_q12 = 4096;
+    }
+    {   /* 1.0: the delay's BAND: OFF as before; on, a howl at its frequency that holds (the soft clip), in each type */
+        static const char *const TN[4] = {"MONO", "PING PONG", "TAPE", "TAPE PP"};
+        uint32_t ty, lv = par[PAR_DLY_LEVEL], tm = par[PAR_DLY_TIME], f = par[PAR_DLY_FB], tn = par[PAR_DLY_TONE];
+        if (getenv("BANDSWEEP"))
+            for (ty = 0; ty < 4u; ty++) {
+                uint32_t fbv;
+                for (fbv = 20; fbv <= 127; fbv += 10) {
+                    int32_t pk;
+                    double t0, t1;
+                    band_run(ty, 0, fbv, &pk, &t0, 0);
+                    band_run(ty, 64, fbv, &pk, &t1, 0);
+                    printf("  sweep %s FB %3u: off %8.1f on %8.1f\n", TN[ty], fbv, t0, t1);
+                }
+            }
+        for (ty = 0; ty < 4u; ty++) {
+            int32_t pk0, pk1;
+            double t0, t1, fo;
+            band_run(ty, 0, 127, &pk0, &t0, 0);
+            band_run(ty, 64, 127, &pk1, &t1, &fo);
+            printf("  delay band %-9s FB 127: tail rms %7.1f off, %7.1f on (peak %d), the centre %+.1f dB\n", TN[ty],
+                   t0, t1, pk1, fo);
+            if (t1 < 2000 || (ty < 2u && t1 < 2 * t0) || pk1 > 65536 || fo < 10) {   /* (TAPE: howls anyway, at 115%) */
+                printf("FAIL: the delay's BAND doesn't howl at its frequency at the top of FEEDBACK (%s)\n", TN[ty]);
+                fails++;
+            }
+            band_run(ty, 0, 60, &pk0, &t0, 0);       /* (halfway: a colour, no howl) */
+            band_run(ty, 64, 60, &pk1, &t1, 0);
+            if (t1 > 4 * t0 + 50) {
+                printf("FAIL: the delay's BAND howls at FEEDBACK 60 (%s: %.1f, %.1f off)\n", TN[ty], t1, t0);
+                fails++;
+            }
+            band_run(ty, 127, 127, &pk1, &t1, 0);
+            if (pk1 > 65536) {
+                printf("FAIL: the delay's BAND at the top, FEEDBACK full: not held (%s, peak %d)\n", TN[ty], pk1);
+                fails++;
+            }
+        }
+        par_set(PAR_FX_DELAY_TYPE, 0);
+        par_set(PAR_DLY_LEVEL, lv);
+        par_set(PAR_DLY_TIME, tm);
+        par_set(PAR_DLY_FB, f);
+        par_set(PAR_DLY_TONE, tn);
+        memset(fxbuf, 0, sizeof fxbuf);
+        memset(&tp, 0, sizeof tp);
     }
     printf(fails ? "render_test: %u FAILED\n" : "render_test: ok\n", fails);
     return fails != 0;

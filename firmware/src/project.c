@@ -347,8 +347,8 @@ static void proj_write_payload(void)
     pw_bytes("KSC1", 4);                            /* 19: the scale last chosen, DENSITY, STUTTER (0.16), VARY (31),
                                                       * 39: RUSH: a byte unused (0.23-test1's GHOST), FLAM, PITCH,
                                                       * START, FREE, TOP, FILTER, GLIDE (older firmware: the 11 read,
-                                                      * these skipped), 0.24.3: the DJ filter's resonance */
-    pw_byte(20);
+                                                      * these skipped), 0.24.3: the DJ filter's resonance; 1.0: its type */
+    pw_byte(21);
     pw_byte(scl_last.root);
     pw_byte(scl_last.scale);
     pw_byte((uint8_t)pfs.dens);
@@ -369,6 +369,7 @@ static void proj_write_payload(void)
     pw_byte(sq.ru_filt);
     pw_byte(sq.ru_glide);
     pw_byte(pfs.dj_reso);
+    pw_byte(pfs.dj_ftype);                           /* (1.0: older firmware skips it) */
     pw_bytes("KSP2", 4);                            /* 32: SPELLS: the knobs, the targets, the GRIMOIRE's recipes */
     sp_write();
     pw_bytes("KWND", 4);                            /* 40: WANDER: the knobs, the tracks, the parts (not the road) */
@@ -676,10 +677,10 @@ static int proj_read_payload(uint32_t ver)
     if (!pr.err && pr.pos + 4u <= pr.end) {
         pr_bytes(tag, 4);
         if (!memcmp(tag, "KSC1", 4)) {               /* 19: the scale last chosen, DENSITY; STUTTER */
-            uint8_t b[20] = {0, 0, 0, 40, DB_GHOSTS, 0, 0, 1, 2, SV_OFF, 0, 0, 0, 12, 75, 80, RT_256, 60, 8, 0};
+            uint8_t b[21] = {0, 0, 0, 40, DB_GHOSTS, 0, 0, 1, 2, SV_OFF, 0, 0, 0, 12, 75, 80, RT_256, 60, 8, 0, DJT_LXR};
             n = pr_byte();                           /* (31: VARY 0 before; 39: RUSH's; 0.24.3: Reso 0) */
-            pr_bytes(b, n < 20u ? n : 20u);
-            pr_skip(n > 20u ? n - 20u : 0u);
+            pr_bytes(b, n < 21u ? n : 21u);
+            pr_skip(n > 21u ? n - 21u : 0u);
             scl_last.root = (uint8_t)(b[0] % 12u);
             scl_last.scale = (uint8_t)(b[1] < NSCALE ? b[1] : SC_CHROM);
             pfs.dens = (int8_t)clamp32((int8_t)b[2], -64, 63);
@@ -699,6 +700,7 @@ static int proj_read_payload(uint32_t ver)
             sq.ru_filt = (uint8_t)(b[17] <= RUSH_MAX ? b[17] : 60u);
             sq.ru_glide = (uint8_t)(b[18] <= RUSH_MAX ? b[18] : 8u);
             pfs.dj_reso = (uint8_t)(b[19] & 127u);
+            pfs.dj_ftype = (uint8_t)(b[20] < NDJT ? b[20] : DJT_LXR);   /* (1.0) */
         }
     }
     if (!pr.err && pr.pos + 4u <= pr.end) {

@@ -16,9 +16,10 @@
  *   knobs, CC 8 + 8 x row + column:
  *     8   tempo, shuffle, morph, SRate, DJ filter, roll rate, repeat length, tape time
  *     16  FX dry/wet, P1, P2, P3, P4, bus dirt, echo > reverb, saturate
- *     24  reverb level, size, damping, master dirt, density, ghost velocity, build, -
+ *     24  reverb level, size, damping, master dirt, density, ghost velocity, build, density vary
  *     32  macros 1..4, DRILL, JITTER, CUTS, PUMP (PERFORM 2's settings)
  *     40  COMB note, COMB feedback, CRUSH, REVERSE length, global LFO 1, 2, 3 depth, DJ filter resonance (0.24.3)
+ *   1.0: CC 3 (undefined in MIDI, off the grid) the delay's BAND
  *   buttons, 48 + 8 x row + column:
  *     48  PLAY / STOP, REC, FILL, REPEAT, FREEZE, THROW REV, THROW FX, FB PUSH (held)
  *     56  TAPE STOP, LP sweep, HP sweep, REVERSE (held), the previous pattern, the next, -, -
@@ -39,7 +40,9 @@
 #define RM_NTK 96u                                   /* TRACKS' knobs: CC 8 .. 103 */
 #define RM_TB0 104u                                  /* .. its buttons: 104 .. 119 */
 #define RM_NTB 16u
-#define RM_NGK 40u                                   /* GLOBAL's knobs: CC 8 .. 47 */
+#define RM_NGK 41u                                   /* GLOBAL's knobs: CC 8 .. 47, then CC 3 */
+#define RM_XCC 3u                                    /* 1.0: GLOBAL's 41st knob, off the grid: the delay's band */
+#define RM_GCC(i) ((i) < 40u ? RM_CC0 + (i) : RM_XCC)  /* GLOBAL's knob i as its CC */
 #define RM_GB0 48u                                   /* .. its buttons: 48 .. 111 */
 #define RM_NGB 64u
 #define RM_ROLL0 112u                                /* 1.0: GLOBAL's rolls a track: 112 .. 119 */
@@ -53,7 +56,8 @@ static const uint16_t RM_GK[RM_NGK] = {
     PAR_FX_DRY_WET, PAR_FX_P1, PAR_FX_P2, PAR_FX_P3, PAR_FX_P4, PAR_FXDIRT, PAR_ECHOREV, PAR_DSAT,
     PAR_REV_LEVEL, PAR_REV_SIZE, PAR_REV_DAMP, PAR_MDIRT_AMT, VP_DENS, VP_GHOST, VP_BUILD, VP_DVARY,
     VP_M1, VP_M1 + 1, VP_M1 + 2, VP_M1 + 3, VP_P2, VP_P2 + 1, VP_P2 + 2, VP_P2 + 3,
-    VP_P2 + 4, VP_P2 + 5, VP_P2 + 6, VP_P2 + 7, GLV(0, 1), GLV(1, 1), GLV(2, 1), VP_DJRESO};
+    VP_P2 + 4, VP_P2 + 5, VP_P2 + 6, VP_P2 + 7, GLV(0, 1), GLV(1, 1), GLV(2, 1), VP_DJRESO,
+    PAR_DLY_BAND};
 #define RM_PLAY 0xFEu
 #define RM_REC 0xFDu
 #define RM_PREV 0xFCu
@@ -253,7 +257,9 @@ static void rm_in(uint32_t ch, uint32_t st, uint32_t d1, uint32_t d2)
 {
     int glob = ch == remote_gch, cc = st == 0xB0u;
     uint32_t nk = glob ? RM_NGK : RM_NTK, b0 = glob ? RM_GB0 : RM_TB0, nb = glob ? RM_NGB : RM_NTB, j;
-    if (cc && d1 >= RM_CC0 && d1 < RM_CC0 + nk) {
+    if (glob && cc && d1 == RM_XCC) {
+        rm_knob(RM_NTK + 40u, d2);
+    } else if (cc && d1 >= RM_CC0 && d1 < RM_CC0 + (glob ? 40u : nk)) {
         rm_knob(d1 - RM_CC0 + (glob ? RM_NTK : 0u), d2);
     } else if (glob && cc && d1 >= RM_ROLL0 && d1 < RM_ROLL0 + 8u) {   /* 1.0: a track's roll, by the CC's value */
         uint32_t t = d1 - RM_ROLL0;
@@ -304,7 +310,7 @@ static void remote_service(void)
             uint32_t p = rm_par(k), ch = k < RM_NTK ? remote_ch : remote_gch, v;
             if (ch > 15u || p == VP_NONE || (v = rm_to_cc(p)) == rm.sent[k])
                 continue;
-            if (!remote_out_post(0xB0u | ch, RM_CC0 + (k < RM_NTK ? k : k - RM_NTK), v))
+            if (!remote_out_post(0xB0u | ch, k < RM_NTK ? RM_CC0 + k : RM_GCC(k - RM_NTK), v))
                 break;
             if (rm.sent[k] != 0xFFu)                 /* (changed elsewhere: PICKUP waits for the pot again) */
                 rm_put(rm.picked, k, 0);

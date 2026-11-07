@@ -58,7 +58,7 @@ def line(d):
 def track():
     stages = [
         ("SOURCE", ["Oscillator, FM and transient, or a model:", "Rings, Plaits, MICRO or ENSEMBLE"], "EDIT"),
-        ("FILTER", ["Frequency, Resonance, Overdrive: the LXR's", "types, then LP4, combs, vowel, chord …"], "SCL"),
+        ("FILTER", ["the LXR's types, LP4, combs, vowel, chord …;", "ACID, MS20, LADDER (FILTER X: env amt)"], "SCL"),
         ("AMP EG", ["Attack, decay, slope; GATE holds it for", "the note's length"], "ENV"),
         ("SHAPE", ["The waveshaper Drive goes into: LXR,", "FOLD, CLIP, FUZZ, TAPE, BITE …"], "SCL"),
         ("SAMPLE RATE · BITS · TILT", ["The rate reducer, the bitcrusher and", "a one-knob EQ"], "SCL"),
@@ -120,7 +120,7 @@ def master():
     chain = [("MASTER COMP", ["Thresh, Ratio, Attack, Release; sidechain:", "the mix, or one track to duck the rest"],
               "FX"),
              ("MASTER DIRT", ["TAPE, TUBE, FUZZ, DIODE or FOLD; Amount"], "FX"),
-             ("DJ FILTER", ["Low-pass one way, high-pass the other;", "DJ reso"], "PERF"),
+             ("DJ FILTER", ["Low-pass one way, high-pass the other;", "DJ reso; DJ type: LXR, ACID or MS20"], "FX"),
              ("PERFORM FX", ["COMB, CUTS, CRUSH, REVERSE, STUTTER,", "then TAPE STOP"], "PERF"),
              ("MASTER", ["The MASTER knob: the volume"], "")]
     X, BW, H, PITCH, y = 74, 332, 58, 76, 356
