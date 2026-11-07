@@ -4744,7 +4744,9 @@ static void phase25_ensemble(void)
     run_ms(60);
     sound_fix();
     turn(EN_K1, 1);
-    check(par[PAR_MODEL1 + 3] == MD_EN && eno[3].on && !mi[3].type, "SN: K1 from CHIRP to ENSEMBLE");
+    check(par[PAR_MODEL1 + 3] == MD_NOISE && nzo[3].on && !eno[3].on && !mi[3].type, "SN: K1 from CHIRP to NOISE");
+    turn(EN_K1, 1);
+    check(par[PAR_MODEL1 + 3] == MD_EN && eno[3].on && !nzo[3].on && !mi[3].type, "SN: K1 from NOISE to ENSEMBLE");
     par_set(PAR_MODEL1 + 3, MD_LXR);
     par_set(PAR_MODEL1 + 4, MD_LXR);
     run_ms(20);
@@ -4815,7 +4817,8 @@ static void phase24(void)
     sound_fix();
     turn(EN_K1, 1);
     check(par[PAR_MODEL1] == MD_MODAL, "D1: K1 from LXR to MODAL");
-    turn(EN_K1, (int32_t)(MD_MC0 - MD_MODAL) - (ELIXIR_WTABLE ? 0 : 1));   /* (0.24: past P WTABLE) */
+    turn(EN_K1, 15 + (ELIXIR_WTABLE ? 1 : 0));       /* (STRING, FM, Plaits' 12 (1.0: past P GRAIN, NOISE, P MODAL;
+                                                      * 0.24: P WTABLE), CLICK) */
     check(par[PAR_MODEL1] == MD_MC0 && mi[0].type == 1u && mdl[0].want == 0u && mdl[0].type == 0u,
           "D1 on CLICK: MICRO, not a model the limit counts");
     page_params(pp);
@@ -6022,7 +6025,7 @@ static void phase32(void)
         white(8);
         sp_roll();
         for (w = 1; w < NVOICE; w++)
-            eng &= par[PAR_MODEL1 + w] >= MD_MC0;
+            eng &= par[PAR_MODEL1 + w] >= MD_MC0 || par[PAR_MODEL1 + w] == MD_NOISE;   /* (1.0: NOISE with them) */
         eng &= par[PAR_MODEL1] == MD_MC0 + MC_POP || par[PAR_MODEL1] == MD_MC0 + MC_CHIRP;
         check(eng, "MICRO only: every voice MICRO, D1 a POP or a CHIRP");
         hold(B_OCTDN);
@@ -8499,6 +8502,187 @@ static double ph10_resp(uint32_t ph, double hz, int side)   /* the response at h
     }
     return sqrt(e / m) / (10000.0 / sqrt(2.0));
 }
+/* 1.0 Phase 10c: NOISE (noise.c) on its own: voice vi's NOISE at col, rate, env, the amp EG at gain (Q24) and the
+ * voice's increment inc, N blocks: its RMS and the slope (dB an octave) over 125 Hz .. 8 kHz (Goertzel, averaged over
+ * blocks of 4096); holds: how often the held white changed */
+static void nz10c_measure(uint32_t vi, uint32_t col, uint32_t rate, uint32_t env, int32_t gain, uint32_t inc,
+                          uint32_t nb, double *rms, double *slope, uint32_t *holds)
+{
+    static const double F[7] = {125, 250, 500, 1000, 2000, 4000, 8000};
+    double band[7] = {0}, s1[7] = {0}, s2[7] = {0}, e = 0, cs[7];
+    voice_t v = vc[vi];
+    int16_t b[BLOCK];
+    uint32_t k, i, j, n = 0, ch = 0;
+    int32_t lw;
+    memset(&nzo[vi], 0, sizeof nzo[vi]);
+    nzo[vi].on = 1;
+    nz_knob(vi, 0, (uint8_t)col);
+    nz_knob(vi, 1, (uint8_t)rate);
+    nz_knob(vi, 2, (uint8_t)env);
+    v.gain = gain;
+    v.osc.inc = inc;
+    for (j = 0; j < 7u; j++)
+        cs[j] = 2.0 * cos(2.0 * 3.14159265358979 * F[j] / FS);
+    for (k = 0; k < 64u; k++)                        /* (the colours' filters settle) */
+        nz_block(vi, &v, b);
+    lw = nzo[vi].w;
+    for (k = 0; k < nb; k++) {
+        nz_block(vi, &v, b);
+        ch += nzo[vi].w != lw;
+        lw = nzo[vi].w;
+        for (i = 0; i < BLOCK; i++, n++) {
+            double x = b[i];
+            e += x * x;
+            for (j = 0; j < 7u; j++) {
+                double s0 = x + cs[j] * s1[j] - s2[j];
+                s2[j] = s1[j];
+                s1[j] = s0;
+            }
+            if ((n & 4095u) == 4095u)
+                for (j = 0; j < 7u; j++) {
+                    band[j] += s1[j] * s1[j] + s2[j] * s2[j] - cs[j] * s1[j] * s2[j];
+                    s1[j] = s2[j] = 0;
+                }
+        }
+    }
+    *rms = sqrt(e / n);
+    *slope = 10.0 * log10(band[6] / band[0]) / 6.0;
+    if (holds)
+        *holds = ch;
+    memset(&nzo[vi], 0, sizeof nzo[vi]);
+}
+static void phase_100_10c(void)
+{
+    static const uint32_t COL[4] = {0, 42, 85, 127};
+    static const double WANT[4] = {-6, -3, 0, 3};
+    static const char *const NM[4] = {"brown", "pink", "white", "blue"};
+    double r, sl, r2, sl2;
+    uint32_t c, h, inc = (uint32_t)(261.63 * 4294967296.0 / FS);
+    uint16_t pp[4];
+    char b[24];
+    int ok = 1;
+    printf("1.0 Phase 10c: NOISE; P GRAIN, P NOISE, P MODAL dropped\n");
+    eng_reset(0);
+    for (c = 0; c < 4u; c++) {                       /* each colour: its slope, the same level */
+        nz10c_measure(0, COL[c], 127, 0, 1 << 24, inc, 2048, &r, &sl, 0);
+        printf("  %-5s (COLOUR %3u): RMS %5.0f (%+.2f dB of 8192), %+.2f dB an octave\n", NM[c], (unsigned)COL[c], r,
+               20.0 * log10(r / 8192.0), sl);
+        ok &= fabs(20.0 * log10(r / 8192.0)) < 1.0 && fabs(sl - WANT[c]) < 0.8;
+    }
+    check(ok, "NOISE: brown, pink, white, blue: -6, -3, 0, +3 dB an octave, each RMS 0.25 (+-1 dB)");
+    nz10c_measure(0, 64, 127, 0, 1 << 24, inc, 512, &r, &sl, 0);
+    check(fabs(20.0 * log10(r / 8192.0)) < 2.0 && sl > -3.0 && sl < 0.0, "NOISE: between pink and white, between");
+    /* RATE: held at the pitch x 2^(8 r - 2): x1 at 32 (C4: 262 a second), x1/4 at 0 */
+    {
+        double want = 261.63 * 1000.0 * BLOCK / FS;  /* (the holds in 1000 blocks at C4; a block's: at most one) */
+        nz10c_measure(0, 85, 32, 0, 1 << 24, inc, 1000, &r, &sl, &h);
+        printf("  RATE 32 at C4: %u holds in 1000 blocks (%.0f); ", (unsigned)h, want);
+        ok = fabs(h - want) < want * 0.1;
+        nz10c_measure(0, 85, 0, 0, 1 << 24, inc, 1000, &r2, &sl2, &h);
+        printf("RATE 0: %u (%.0f)\n", (unsigned)h, want / 4.0);
+        check(ok && fabs(h - want / 4.0) < want * 0.04, "NOISE: RATE holds the noise at the voice's pitch x 1 (32), "
+                                                         "x 1/4 (0)");
+    }
+    check(sl < -2.0, "NOISE: held, the noise darker (its steps)");
+    /* ENV: the amp EG moves COLOUR up */
+    nz10c_measure(0, 0, 127, 127, 1 << 24, inc, 256, &r, &sl, 0);
+    nz10c_measure(0, 0, 127, 127, 0, inc, 256, &r2, &sl2, 0);
+    printf("  ENV 127 on brown: amp EG full %+.2f dB an octave, closed %+.2f\n", sl, sl2);
+    check(sl > 2.0 && sl2 < -5.0, "NOISE: ENV: brown at the EG's top is blue, brown at its end");
+    /* on the MODEL page: knobs, cards; every voice; not counted */
+    goto_mode(B_HOME, M_HOME);
+    ui.track = 3;
+    run_ms(60);
+    press(B_EDIT);
+    for (c = 0; c < 12u && ui.sect != S_MODEL; c++)
+        press(B_EDIT);
+    par_set(PAR_MODEL1 + 3, MD_NOISE);
+    run_ms(20);
+    check(nzo[3].on && !mi[3].type && !eno[3].on, "SN on NOISE");
+    page_params(pp);
+    check(!strcmp(par_name(pp[1]), "Colour") && !strcmp(par_name(pp[2]), "Rate") && !strcmp(par_name(pp[3]), "Env") &&
+          !sect_half_used(3, S_MODEL, 1) && sect_half_used(3, S_AEG, 0), "NOISE: COLOUR, RATE, ENV; one page; AMP EG");
+    card_value(b, sizeof b, PAR_MDECAY1 + 3u, 0);
+    ok = !strcmp(b, "BROWN");
+    card_value(b, sizeof b, PAR_MDECAY1 + 3u, 64);
+    ok &= !strcmp(b, "PNK-WHT");
+    card_value(b, sizeof b, PAR_MDECAY1 + 3u, 127);
+    ok &= !strcmp(b, "BLUE");
+    card_value(b, sizeof b, PAR_MDAMP1 + 3u, 127);
+    ok &= !strcmp(b, "OFF");
+    card_value(b, sizeof b, PAR_MDAMP1 + 3u, 32);
+    ok &= !strcmp(b, "x1.0");
+    card_value(b, sizeof b, PAR_MDAMP1 + 3u, 0);
+    ok &= !strcmp(b, "x0.25");
+    card_value(b, sizeof b, PAR_MDAMP1 + 3u, 126);
+    printf("  RATE's cards: 0 x0.25, 32 x1.0, 126 %s, 127 OFF\n", b);
+    check(ok, "NOISE: COLOUR's and RATE's cards");
+    par_set(PAR_MDECAY1 + 3, 64);
+    par_set(PAR_MDAMP1 + 3, 127);
+    par_set(PAR_MMAT1 + 3, 0);
+    voice_trigger(3, 127, vc[3].osc.base_note);
+    run_ms(30);
+    check(venv[3] > 2000, "NOISE on SN sounds");
+    shot("noise-sn");
+    run_ms(3000);
+    check(venv[3] < 200, "NOISE on SN: its amp EG ends it");
+    par_set(PAR_MODEL1 + 3, MD_LXR);
+    ui.track = 0;
+    run_ms(60);
+    par_set(PAR_MODEL1, MD_NOISE);
+    run_ms(20);
+    check(nzo[0].on && mdl[0].want == 0u && mdl[0].type == 0u, "D1 on NOISE: not a counted model");
+    shot("noise-d1");
+    /* the knob: past the dropped engines; NOISE after CHIRP */
+    par_set(PAR_MODEL1, MD_PL0 + PE_FM);
+    run_ms(20);
+    turn(EN_K1, 1);
+    ok = par[PAR_MODEL1] == MD_PL0 + PE_ADD;
+    par_set(PAR_MODEL1, MD_PL0 + PE_SWARM);
+    run_ms(20);
+    turn(EN_K1, 1);
+    ok &= par[PAR_MODEL1] == MD_PL0 + PE_PART;
+    turn(EN_K1, 1);
+    turn(EN_K1, 1);
+    ok &= par[PAR_MODEL1] == MD_PL0 + PE_BD;
+    par_set(PAR_MODEL1, MD_MC0 + 9u);
+    run_ms(20);
+    turn(EN_K1, 1);
+    ok &= par[PAR_MODEL1] == MD_NOISE;
+    turn(EN_K1, 1);
+    ok &= par[PAR_MODEL1] == MD_EN;
+    turn(EN_K1, -2);
+    ok &= par[PAR_MODEL1] == MD_MC0 + 9u;
+    check(ok, "MODEL knob: past P GRAIN, P MODAL; NOISE after CHIRP, before ENSEMBLE");
+    par_set(PAR_MODEL1, MD_LXR);
+    run_ms(20);
+    /* kits and locks: P MODAL plays MODAL (D1-D3), P GRAIN the LXR, P NOISE's number NOISE (every voice) */
+    {
+        static uint8_t kb[KIT_LEN];
+        kit_init_values(kb);
+        kb[kit_idx(PAR_MODEL1 + 0)] = MD_PMODAL;
+        kb[kit_idx(PAR_MODEL1 + 1)] = MD_PGRAIN;
+        kb[kit_idx(PAR_MODEL1 + 2)] = MD_NOISE;
+        kb[kit_idx(PAR_MODEL1 + 3)] = MD_PMODAL;
+        kb[kit_idx(PAR_MODEL1 + 4)] = MD_NOISE;
+        kit_sanitize(kb);
+        check(kb[kit_idx(PAR_MODEL1)] == MD_MODAL && kb[kit_idx(PAR_MODEL1 + 1)] == MD_LXR &&
+              kb[kit_idx(PAR_MODEL1 + 2)] == MD_NOISE && kb[kit_idx(PAR_MODEL1 + 3)] == MD_LXR &&
+              kb[kit_idx(PAR_MODEL1 + 4)] == MD_NOISE,
+              "kit: P MODAL loads MODAL (SN: the LXR), P GRAIN the LXR, NOISE stays (on CY too)");
+    }
+    par_set(PAR_MODEL1, MD_PMODAL);                  /* (as a lock or a morph sets it) */
+    run_ms(20);
+    ok = mdl[0].want == MD_MODAL;
+    par_set(PAR_MODEL1, MD_PGRAIN);
+    run_ms(20);
+    ok &= mdl[0].want == 0u && !nzo[0].on;
+    check(ok, "a lock on P MODAL plays MODAL, on P GRAIN the LXR");
+    par_set(PAR_MODEL1, MD_LXR);
+    run_ms(20);
+    goto_mode(B_HOME, M_HOME);
+}
+
 static void phase_100_10(void)
 {
     uint32_t e, k, i, n = 0;
@@ -9428,6 +9612,7 @@ int main(int argc, char **argv)
     phase_100_fx2();
     phase_100_6b();
     phase_100_10();
+    phase_100_10c();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;
 }

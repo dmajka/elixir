@@ -585,14 +585,16 @@ int main(int argc, char **argv)
     }
     {   /* 0.15: each Plaits engine on DRUM 1, struck (the knobs at their middle, the amp EG as the kit's) */
         static const char *const PE_NAMES[16] = {"P VA", "P WSHAPE", "P FM", "P GRAIN", "P ADDTV", "P WTABLE",
-                                                 "P CHORD", "P SPEECH", "P SWARM", "P NOISE", "P PARTCL", "P STRING",
-                                                 "P MODAL", "P BD", "P SD", "P HH"};
+                                                 "P CHORD", "P SPEECH", "P SWARM", "NOISE", "P PARTCL", "P STRING",
+                                                 "P MODAL", "P BD", "P SD", "P HH"};   /* (1.0: NOISE, noise.c, in
+                                                      * P NOISE's number) */
         uint32_t e;
         par_set(PAR_MDECAY1, 64);
         par_set(PAR_MDAMP1, 64);
         par_set(PAR_MMAT1, 64);
         for (e = 0; e < 16u; e++) {
-            if (e == 5u && !ELIXIR_WTABLE)           /* (0.24: P WTABLE parked, rings.c) */
+            if ((e == 5u && !ELIXIR_WTABLE) || e == 3u || e == 12u)   /* (0.24: P WTABLE parked, rings.c; 1.0: P GRAIN,
+                                                      * P MODAL dropped) */
                 continue;
             par_set(PAR_MODEL1, MD_PL0 + e);
             render(FS / 4);
@@ -1120,14 +1122,16 @@ int main(int argc, char **argv)
     }
     {   /* 0.15 (17c): D1-D3 render on the second core while core 0 renders SN-HH. A voice must touch only its own
          * state, so the output is the same, bit for bit, whichever group renders first: the beat with MODAL on D1,
-         * P NOISE on D2 and D3 on the noise wave (the generators that were shared), in two processes */
+         * P PARTCL on D2 (1.0: was P NOISE) and D3 on the noise wave (the generators that were shared), NOISE on CY
+         * (1.0: its own noise), in two processes */
         int fd[2];
         pid_t pid;
         uint64_t h[2] = {1469598103934665603ull, 1469598103934665603ull};
         uint32_t side, i;
         par_set(PAR_MODEL1, MD_MODAL);
-        par_set(PAR_MODEL1 + 1, MD_PL0 + 9);
+        par_set(PAR_MODEL1 + 1, MD_PL0 + 10);
         par_set(PAR_OSC_WAVE_DRUM3, W_NOISE);
+        par_set(PAR_MODEL1 + 4, MD_NOISE);
         par_set(PAR_MODEL1 + 3, MD_MC0 + 2);             /* (24: MICRO on SN (CRUNCH) and the hats (DUST), with */
         par_set(PAR_MODEL1 + 5, MD_MC0 + 7);             /* .. JITTER and REVERSE: their noise their own too) */
         par_set(PAR_MMAT1 + 3, 90);
@@ -1172,7 +1176,7 @@ int main(int argc, char **argv)
         /* the models' limit: two play; a third plays as an LXR voice; on one core, one */
         par_set(PAR_MODEL1 + 2, MD_PL0);
         render(BLOCK);
-        if (mdl[0].type != MD_MODAL || mdl[1].type != MD_PL0 + 9 || mdl[2].type != 0 || mdl[2].want != MD_PL0) {
+        if (mdl[0].type != MD_MODAL || mdl[1].type != MD_PL0 + 10 || mdl[2].type != 0 || mdl[2].want != MD_PL0) {
             printf("FAIL: the third model plays\n");
             fails++;
         }
@@ -1184,7 +1188,7 @@ int main(int argc, char **argv)
         }
         model_cap = 1;
         render(BLOCK);
-        if (mdl[1].type != MD_PL0 + 9 || mdl[2].type != 0) {
+        if (mdl[1].type != MD_PL0 + 10 || mdl[2].type != 0) {
             printf("FAIL: one core: more than one model plays\n");
             fails++;
         }
@@ -1192,6 +1196,7 @@ int main(int argc, char **argv)
         par_set(PAR_MODEL1 + 1, 0);
         par_set(PAR_MODEL1 + 2, 0);
         par_set(PAR_MODEL1 + 3, 0);
+        par_set(PAR_MODEL1 + 4, 0);
         par_set(PAR_MODEL1 + 5, 0);
         par_set(PAR_MEXC1 + 5, 0);
         par_set(PAR_INS1 + 1, INS_OFF);

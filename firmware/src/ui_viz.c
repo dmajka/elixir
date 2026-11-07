@@ -172,15 +172,12 @@ static int32_t ic_wave(uint32_t m, uint32_t i, uint32_t a, uint32_t b, uint32_t 
         int32_t mod = vz_sin(ph * 2u * (1u + a / 43u)) * (int32_t)b / 160;
         return vz_sin(ph * 2u + (uint32_t)(mod << 15));
     }
-    case 7: {                                          /* P GRAIN: formant bursts */
-        uint32_t seg = i * 3u / IW, j = i - seg * IW / 3u;
-        int32_t w = vz_sin(j * (0x7FFFFFFFu / (IW / 3u)));
-        return (int32_t)(((int64_t)vz_sin(j * (0xFFFFFFFFu / (IW / 3u)) * (2u + b / 24u)) * w) >> 15);
-    }
-    case 13: {                                         /* P NOISE: smoother the lower TIMBRE */
-        int32_t s = 0, k, n = 1 + (127 - (int32_t)b) / 24;
+    case MD_NOISE: {                                   /* 1.0 NOISE: smoother the darker its COLOUR, in steps the
+                                                      * lower its RATE */
+        uint32_t st = b >= 127u ? 1u : 2u + (126u - b) / 12u, j = i / st;
+        int32_t s = 0, k, n = 1 + (127 - (int32_t)a) / 24;
         for (k = 0; k < n; k++)
-            s += ic_noise((i + (uint32_t)k) / (uint32_t)n * 7u + (uint32_t)k);
+            s += ic_noise((j + (uint32_t)k) / (uint32_t)n * 7u + (uint32_t)k);
         return s / n * 3 / 4;
     }
     case 20: {                                         /* MICRO CLICK: one pulse, wider with LENGTH */
@@ -410,7 +407,7 @@ static void ic_model(uint32_t m, uint32_t v, uint32_t a, uint32_t b, uint32_t c)
         else
             ic_cymbal(v == 5u, 0);
         return;
-    case 1: case 16: ic_bell(a); return;
+    case 1: ic_bell(a); return;
     case 2: case 15: ic_string(a, b); return;
     case 8: ic_bars(b); return;
     case 11: ic_wizard(a, b, c); return;
@@ -466,10 +463,10 @@ static const char *model_line(uint32_t m, uint32_t v)
 {
     static const char *const D[NMODEL] = {
         "", "A struck resonator: bells, bars and plates", "A plucked or struck string", "Glassy, metallic FM",
-        "Two analog oscillators", "A wave folded and shaped", "Two-operator FM", "Granular formants",
+        "Two analog oscillators", "A wave folded and shaped", "Two-operator FM", "",
         "Additive: a sum of harmonics", "Wavetables, row by column", "A four-note chord", "A speaking voice",
-        "A swarm of eight saws", "Filtered noise", "Dust ringing through resonators", "An inharmonic string",
-        "A modal resonator: a bell or a bar", "An analog kick", "An analog snare", "An analog hat",
+        "A swarm of eight saws", "Brown, pink, white or blue noise", "Dust ringing through resonators",
+        "An inharmonic string", "", "An analog kick", "An analog snare", "An analog hat",
         "A square click, or a doublet", "A train of clicks", "Crunchy, held noise", "An LFSR's bits",
         "A burst of noise", "A snap: noise and a click", "A resonant grain", "A crackle of dust",
         "A pop that slides back", "A sine swept four octaves",
@@ -649,6 +646,34 @@ static int en_card(char *b, uint32_t n, uint32_t r, uint32_t v)
         return 1;
     }
 }
+/* 1.0: NOISE's cards: COLOUR by name (the two, short, while it blends), RATE as the pitch's multiple (OFF at the top) */
+static int nz_card(char *b, uint32_t n, uint32_t r, uint32_t v)
+{
+    static const char *const C[7] = {"BROWN", "BRN-PNK", "PINK", "PNK-WHT", "WHITE", "WHT-BLU", "BLUE"};
+    if (r == 0u) {                                   /* (sixths of brown .. blue: on one, or between two, short to fit) */
+        put_str(b, C[v * 6u / 127u], n);
+        return 1;
+    }
+    if (r == 1u) {                                   /* (2^(8 r - 2): x1/4 .. x64, as noise.c) */
+        int32_t e = (int32_t)(v * 8u * 100u / 127u) - 200, m;   /* (the exponent x 100) */
+        if (v >= 127u) {
+            put_str(b, "OFF", n);
+            return 1;
+        }
+        m = (int32_t)((exp2_q16(e * 65536 / 100) * 100u + 32768u) >> 16);   /* (the multiple x 100) */
+        *b++ = 'x';
+        b = put_int(b, m / 100);
+        if (m < 1000) {                              /* (x0.25 .. x9.9) */
+            *b++ = '.';
+            *b++ = (char)('0' + m / 10 % 10);
+            if (m < 100)
+                *b++ = (char)('0' + m % 10);
+            *b = 0;
+        }
+        return 1;
+    }
+    return 0;
+}
 /* the MODEL page's card: P WTABLE's knobs as the bank, the brightness and the family; P CHORD's chord by name, its WAVE (1: done) */
 static int pl_card(char *b, uint32_t n, uint32_t p, uint32_t v)
 {
@@ -657,6 +682,8 @@ static int pl_card(char *b, uint32_t n, uint32_t p, uint32_t v)
     uint32_t vi = (p - PAR_MDECAY1) % 6u, r = (p - PAR_MDECAY1) / 6u;
     if (p >= PAR_MDECAY1 && p < PAR_LFOMODE1 && eno[vi].on)   /* (0.25: ENSEMBLE's) */
         return en_card(b, n, r, v);
+    if (p >= PAR_MDECAY1 && p < PAR_LFOMODE1 && nzo[vi].on)   /* (1.0: NOISE's) */
+        return nz_card(b, n, r, v);
     if (p < PAR_MDECAY1 || p >= PAR_MPOS1 || vi >= 3u || mi[vi].type)
         return 0;
 #if ELIXIR_WTABLE
@@ -701,8 +728,8 @@ static void viz_model(void)
     uint32_t v = track_voice(ui.track), m = sv(S_MODEL, 0, 0), a = 0, b = 0, c = 0;
     int over = v <= 2u && mdl[v].want && !mdl[v].type;   /* 0.15: over the models' limit (rings.c model_limit) */
     m = m < NMODEL ? m : 0u;
-    vz_panel(over ? "" : m ? (m <= 3u ? "RINGS RESONATOR" : m <= 19u ? "PLAITS ENGINE" : m == MD_EN ? "ENSEMBLE OSCILLATOR"
-                                                                                            : "MICROSOUND")
+    vz_panel(over ? "" : m ? (m <= 3u ? "RINGS RESONATOR" : m == MD_NOISE ? "NOISE SOURCE" : m <= 19u ? "PLAITS ENGINE"
+                              : m == MD_EN ? "ENSEMBLE OSCILLATOR" : "MICROSOUND")
                            : "THE LXR-02'S VOICE");
     if (over)
         cv_text_fit(VX0, VZ_Y + 4, &AF_S, model_cap == 1u ? "1 MODEL ON ONE CORE: PLAYS AS LXR"

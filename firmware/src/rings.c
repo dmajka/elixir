@@ -32,6 +32,10 @@
 #define NMICRO 10                                    /* (Phase 24: MICRO's types, micro.c, on every voice) */
 enum { MD_LXR, MD_MODAL, MD_STRING, MD_FM, MD_PL0, MD_MC0 = MD_PL0 + 16, MD_EN = MD_MC0 + NMICRO, NMODEL };   /* (0.15:
                                                      * Plaits' 16, plaits.c; 0.25: ENSEMBLE, ensemble.c, last) */
+#define MD_PGRAIN (MD_PL0 + 3)                       /* (1.0, 10c: P GRAIN, P NOISE, P MODAL dropped; their numbers */
+#define MD_NOISE (MD_PL0 + 9)                        /* stay: NOISE, Elixir's own (noise.c, every voice), in P NOISE's; */
+#define MD_PMODAL (MD_PL0 + 12)                      /* a kit's P MODAL plays MODAL, P GRAIN the LXR (its number kept */
+                                                     /* for a granular model of Elixir's own). sound.c model_map) */
 #define RG_MODES 32u
 #define RG_LINE 1024u                                /* the string (Rings: 2048 at 48 kHz; lower, it runs slower) */
 #define RG_STRETCH 512u                              /* .. its dispersion's all-pass */

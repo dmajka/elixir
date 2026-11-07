@@ -125,6 +125,7 @@ int main(int argc, char **argv)
   const double knobs[][3] = {{0.5, 0.5, 0.5}, {0.0, 0.2, 0.8}, {0.9, 0.8, 0.2}, {0.3, 1.0, 1.0}, {0.7, 0.0, 0.0}};
   for (int e = 0; e < 16; e++) {
     if (!only.empty() && only != NAMES[e]) continue;
+    if (e == PE_GRAIN || e == PE_NOISE || e == PE_MODAL) continue;   // (1.0, 10c: dropped from plaits.c)
     for (double note : notes)
       for (auto &k : knobs)
         run(e, note, k[0], k[1], k[2], 0.8, 0.98, -20.0);

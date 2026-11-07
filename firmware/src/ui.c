@@ -290,7 +290,9 @@ static uint32_t sect_par(uint32_t t, uint32_t s, uint32_t h, uint32_t k)
         return 0;                                    /* (1.0: FILTER X: the character types' alone) */
     if (s == S_MODEL && mi[v].type && h == 1u)
         return k == 0u ? PAR_MEXC1 + v : k == 1u ? PAR_MTENS1 + v : 0u;
-    if (s == S_MODEL && (h || k) && !mi[v].type && !eno[v].on && (v > 2u || !par[PAR_MODEL1 + v]))
+    if (s == S_MODEL && nzo[v].on && h == 1u)       /* (1.0: NOISE: COLOUR, RATE, ENV on the first page alone) */
+        return 0;
+    if (s == S_MODEL && (h || k) && !mi[v].type && !eno[v].on && !nzo[v].on && (v > 2u || !par[PAR_MODEL1 + v]))
         return 0;
     return sect_par_raw(t, s, h, k);
 }
@@ -299,7 +301,7 @@ static uint32_t sect_par(uint32_t t, uint32_t s, uint32_t h, uint32_t k)
 static int aeg_heard(uint32_t t)
 {
     uint32_t v = track_voice(t), m = par[PAR_MODEL1 + v];
-    return m == MD_EN || (v <= 2u && m >= MD_PL0 && m < MD_MC0 && !PE_ENV[m - MD_PL0]);
+    return m == MD_EN || m == MD_NOISE || (v <= 2u && m >= MD_PL0 && m < MD_MC0 && !PE_ENV[m - MD_PL0]);
 }
 /* 0.19: a model making its own sound on track t's voice (Plaits, MICRO, Rings not struck by the voice): its OSC page
  * (but COARSE, FINE: the model's pitch), FM, TRANSIENT and AMP EG unheard (0.25: but aeg_heard's). 0: heard; 1: not now, but morphing would
@@ -1967,16 +1969,40 @@ static uint32_t ca_par(uint32_t u, uint32_t k)
             return b[8u + i] != PAR_NONE ? b[8u + i] : 0u;
     return 0;
 }
-/* 24: a MODEL knob on SN-HH steps from the LXR's engine to MICRO's types and back, past Rings' and Plaits' */
+/* 1.0 (10c): the MODEL knob's order: the LXR's, Rings', Plaits', MICRO's, then Elixir's own (NOISE, in P NOISE's
+ * number, and ENSEMBLE). The ones a voice hasn't (model_ok: Rings' and Plaits' on SN-HH, the dropped ones) passed */
+static const uint8_t MODEL_ORDER[NMODEL] = {
+    MD_LXR, MD_MODAL, MD_STRING, MD_FM, MD_PL0, MD_PL0 + 1, MD_PL0 + 2, MD_PGRAIN, MD_PL0 + 4, MD_PL0 + 5, MD_PL0 + 6,
+    MD_PL0 + 7, MD_PL0 + 8, MD_PL0 + 10, MD_PL0 + 11, MD_PMODAL, MD_PL0 + 13, MD_PL0 + 14, MD_PL0 + 15, MD_MC0,
+    MD_MC0 + 1, MD_MC0 + 2, MD_MC0 + 3, MD_MC0 + 4, MD_MC0 + 5, MD_MC0 + 6, MD_MC0 + 7, MD_MC0 + 8, MD_MC0 + 9,
+    MD_NOISE, MD_EN};
+/* voice vi's model n of its models on from md, in MODEL_ORDER (at an end: there) */
+static uint32_t model_turn(uint32_t vi, uint32_t md, int32_t n)
+{
+    int32_t i, j;
+    for (i = 0; i < (int32_t)NMODEL && MODEL_ORDER[i] != md; i++)
+        ;
+    if (i >= (int32_t)NMODEL)
+        i = 0;
+    while (n) {
+        int32_t d = n > 0 ? 1 : -1;
+        for (j = i + d; j >= 0 && j < (int32_t)NMODEL && !model_ok(vi, MODEL_ORDER[j]); j += d)
+            ;
+        if (j < 0 || j >= (int32_t)NMODEL)
+            break;
+        i = j;
+        n -= d;
+    }
+    return MODEL_ORDER[i];
+}
+/* a knob from from to to: past the values it hasn't (24: a MODEL knob in MODEL_ORDER, the voice's models alone) */
 static uint32_t model_step(uint32_t p, uint32_t from, uint32_t to)
 {
     if (p == PAR_FX_TYPE && to == FX_DELAY)          /* (1.0: the delay is always there, not a type: past it) */
         return to > from ? FX_DELAY + 1u : FX_DELAY - 1u;
-    if (p < PAR_MODEL1 || p >= PAR_MODEL1 + 6u || model_ok(p - PAR_MODEL1, to))
+    if (p < PAR_MODEL1 || p >= PAR_MODEL1 + 6u)
         return to;
-    if (p < PAR_MODEL1 + 3u)                         /* (0.24: D1-D3 past P WTABLE, when it isn't built in) */
-        return to > from ? to + 1u : to - 1u;
-    return to > from ? MD_MC0 : 0u;
+    return model_turn(p - PAR_MODEL1, from, (int32_t)to - (int32_t)from);
 }
 /* 1.0: a knob's value step places on from v, as the knob turns it (the syncs by length, the targets by group) */
 static uint32_t knob_next(uint32_t q, uint32_t v, int32_t step)

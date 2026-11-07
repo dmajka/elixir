@@ -235,12 +235,30 @@ static uint32_t par_max_k(uint32_t p)
 }
 
 /* 24: the models a voice has: D1-D3 all, SN-HH the LXR's engine and MICRO's (one of Rings' or Plaits': the LXR's).
- * 0.24: P WTABLE none, unless built in (ELIXIR_WTABLE, rings.c) */
+ * 0.24: P WTABLE none, unless built in (ELIXIR_WTABLE, rings.c). 1.0 (10c): P GRAIN, P MODAL none; NOISE every voice */
 static inline int model_ok(uint32_t vi, uint32_t md)
 {
-    return (ELIXIR_WTABLE || md != MD_PL0 + PE_WTBL) && (vi <= 2u || md == 0u || (md >= MD_MC0 && md < NMODEL));
+    return (ELIXIR_WTABLE || md != MD_PL0 + PE_WTBL) && md != MD_PGRAIN && md != MD_PMODAL &&
+           (vi <= 2u || md == 0u || md == MD_NOISE || (md >= MD_MC0 && md < NMODEL));
 }
-static inline uint32_t model_pick(uint32_t vi, uint32_t md) { return model_ok(vi, md) ? md : 0u; }
+/* a Rings or Plaits model, the ones the models' limit counts (not MICRO, ENSEMBLE, NOISE: core 1's light ones) */
+static inline int model_counted(uint32_t md) { return md && md < MD_MC0 && md != MD_NOISE; }
+/* 1.0 (10c): Plaits' engines as they are (P GRAIN, P NOISE, P MODAL dropped; P WTABLE parked): the spells' and
+ * WANDER's random picks */
+static const uint8_t PL_LIVE[] = {0, 1, 2, 4, 6, 7, 8, 10, 11, 13, 14, 15};
+#define NPL_LIVE (sizeof PL_LIVE / sizeof PL_LIVE[0])
+/* the model a voice plays for md (a kit's, a lock's, a modulation's): md if it has it, else the nearest it has
+ * (10c: P MODAL as Rings' MODAL; 0.24: P WTABLE, not built in, as P ADD), else the LXR's */
+static uint32_t model_pick(uint32_t vi, uint32_t md)
+{
+    if (model_ok(vi, md))
+        return md;
+    if (vi <= 2u && md == MD_PMODAL)
+        return MD_MODAL;
+    if (vi <= 2u && md == MD_PL0 + PE_WTBL)
+        return MD_PL0 + PE_ADD;
+    return 0u;
+}
 
 /* LXR presetManager.c interpolate: a + (b - a) x / 256, rounded */
 static uint32_t morph_lerp(uint32_t a, uint32_t b, uint32_t x)
@@ -713,8 +731,10 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
         uint32_t vi = p - PAR_MODEL1, md = model_pick(vi, pick(itg < NMODEL ? itg : 0u, (uint32_t)f, mod, NMODEL));
         mi[vi].type = (uint8_t)(md >= MD_MC0 && md < MD_EN ? md - MD_MC0 + 1u : 0u);
         eno[vi].on = md == MD_EN;                     /* (0.25: ENSEMBLE, every voice, not counted either) */
+        nzo[vi].on = md == MD_NOISE;                  /* (1.0: NOISE, the same) */
         if (vi <= V_DRUM3) {
-            mdl[vi].want = (uint8_t)(md < MD_MC0 ? md : 0u);   /* (MICRO isn't one of the models the limit counts) */
+            mdl[vi].want = (uint8_t)(model_counted(md) ? md : 0u);   /* (MICRO isn't one of the models the limit
+                                                      * counts) */
             model_limit();
         }
         break;
@@ -765,6 +785,7 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
             micro_t *u = &mi[vi];
             uint8_t v = (uint8_t)(mod ? (127u * (uint32_t)f) >> 16 : itg & 127u);
             en_knob(vi, (p - PAR_MDECAY1) / 6u, v);   /* (0.25: ENSEMBLE's) */
+            nz_knob(vi, (p - PAR_MDECAY1) / 6u, v);   /* (1.0: NOISE's) */
             switch ((p - PAR_MDECAY1) / 6u) {
             case 0: u->len = v; break;
             case 1: u->col = v; break;

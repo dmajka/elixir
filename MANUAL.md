@@ -517,7 +517,7 @@ Each hit varies by up to the amount set: pitch up to an octave either way at 127
 
 **Experimental.** The models are not part of the LXR-02: they are Elixir's own addition, ported from two Mutable Instruments Eurorack modules, **Rings** (from 0.9) and **Plaits** (from 0.15). They are still being tested on the FM-1, they use far more of the processor than the LXR's voices, and their sound and settings may change in later versions, so a kit that uses them may sound different after an update. Everything else in Elixir works without them.
 
-The three DRUM voices have more engines than the LXR's own. They are set in the **MODEL** section (EDIT's first page). Model **LXR** is the LXR's engine (the default); **MODAL**, **STRING** and **FM** are Rings' resonators, struck by the voice; the sixteen **P …** models are Plaits' engines (below). After them come the **MICRO** types, which every track has ([MICRO](#micro-microsound-voices-every-track)).
+The three DRUM voices have more engines than the LXR's own. They are set in the **MODEL** section (EDIT's first page). Model **LXR** is the LXR's engine (the default); **MODAL**, **STRING** and **FM** are Rings' resonators, struck by the voice; the **P …** models are Plaits' engines (below). After them come the **MICRO** types, **NOISE** and **ENSEMBLE**, which every track has ([MICRO](#micro-microsound-voices-every-track), [NOISE](#noise-brown-to-blue-every-track), [ENSEMBLE](#ensemble-eight-stacked-sines-every-track)).
 
 #### Rings
 
@@ -543,7 +543,7 @@ The modes a MODAL voice runs drop as more drums use MODAL: 32 with one, 24 with 
 
 #### Plaits
 
-A port of the original engines of Mutable Instruments' **Plaits** (its first two banks; the six engines Plaits added in its 1.2 firmware aren't ported): fifteen of its sixteen. Its wavetable engine (P WTABLE, in 0.23) was taken out in 0.24 to free 48 KB of flash for new features; a kit that used it loads on P ADDTV. The voice strikes the engine at each hit, as Plaits plays with its TRIGGER patched; velocity is the hit's accent. On a P model the MODEL section's knobs become Plaits':
+A port of the original engines of Mutable Instruments' **Plaits** (its first two banks; the six engines Plaits added in its 1.2 firmware aren't ported): twelve of its sixteen. Its wavetable engine (P WTABLE, in 0.23) was taken out in 0.24 to free 48 KB of flash for new features; a kit that used it loads on P ADDTV. From 1.0, three more are gone: **P MODAL** (Rings' MODAL is the same idea and plays better; a kit or a lock with P MODAL plays MODAL), **P NOISE** (replaced by Elixir's own [NOISE](#noise-brown-to-blue-every-track), at a small part of its CPU; a kit with P NOISE loads NOISE, its knobs now NOISE's, so it sounds different) and **P GRAIN** (it plays its LXR voice; a granular model of Elixir's own may take its place). The voice strikes the engine at each hit, as Plaits plays with its TRIGGER patched; velocity is the hit's accent. On a P model the MODEL section's knobs become Plaits':
 
 | | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
@@ -561,28 +561,25 @@ A port of the original engines of Mutable Instruments' **Plaits** (its first two
 | P VA | Two virtual-analog oscillators | detune between them | pulse width, then sync | saw shape | the two, synced |
 | P WSHAPE | Waveshaper and wavefolder | shaper curve | fold amount | asymmetry | another folder |
 | P FM | Two-operator FM | ratio | FM index | feedback | sub-oscillator |
-| P GRAIN | Formant / grains | formant ratio | formant frequency | formant width | windowed sines |
 | P ADDTV | Additive (harmonics) | bumps in the spectrum | most prominent harmonic | bump shape | organ harmonics only |
 | P CHORD | Chords | chord type (the knob is named **Chord** and shows it: OCTAVE, FIFTH, SUS4, MINOR, MINOR 7, MINOR 9, MINOR 11, 6/9, MAJOR 9, MAJOR 7, MAJOR) | inversion (**Invert**) | waveform (**Wave**: ORGAN up to half, then WAVE 1–15 from the wavetable) | the chord's root |
 | P SPEECH | Speech | vowels, then word banks | species (formant shift) | phoneme or word | raw vocal cords |
 | P SWARM | Eight sawtooth swarm | pitch spread | grain density | grain length | sine swarm |
-| P NOISE | Clocked filtered noise | filter LP → BP → HP | clock rate | resonance | two band-passes |
 | P PARTCL | Particle noise | frequency spread | density | filter: diffuse, then resonant | raw dust |
 | P STRING | Inharmonic string | inharmonicity, material | brightness | decay | raw exciter |
-| P MODAL | Modal resonator | material | brightness | decay | raw exciter |
 | P BD | Analog bass drum | attack, drive | brightness | decay | a synthetic kick |
 | P SD | Analog snare | tone against noise | the head's modes | decay | a synthetic snare |
 | P HH | Analog hi-hat | metal against noise | high-pass | decay | a synthetic hat |
 
 **The wave on the MODEL page** (from 0.23-test7). On P CHORD the picture shows the Wave knob's waveform: up to half, the organ (octave-apart saws, as its registration), past half, the wavetable's 15 waves. The pictures follow the knobs, not ENV's movement.
 
-Where the port differs from Plaits: P STRING plays one string a voice (Plaits overlaps three); P PARTCL's diffuser (its reverb-like smear) belongs to the first drum voice on P PARTCL, and the others play it dry; P SPEECH has no prosody or speed control; Plaits' sustain modes (with nothing patched to TRIGGER) and its user wavetables aren't ported. In the first measurements on an FM-1, P NOISE, P ADDTV and P PARTCL cost the most (each about three LXR voices), P VA a little less; Rings' MODAL is heavier than any of them, STRING and FM lighter.
+Where the port differs from Plaits: P STRING plays one string a voice (Plaits overlaps three); P PARTCL's diffuser (its reverb-like smear) belongs to the first drum voice on P PARTCL, and the others play it dry; P SPEECH has no prosody or speed control; Plaits' sustain modes (with nothing patched to TRIGGER) and its user wavetables aren't ported. On an FM-1 (the LOAD page's D1-D3 line, 1.0) P SD, P ADDTV and P PARTCL cost the most of Plaits' engines (each about a quarter of the second core), P BD and P VA a little less, P SPEECH and P STRING the least; Rings' MODAL is heavier than any of them, STRING and FM lighter. Two heavy models together can be more than the second core has: see [the LOAD page](#the-load-page).
 
 #### Both
 
 **Two models at once.** The models are much heavier than the LXR's voices, so at most two of D1–D3 play a model at a time (from 0.15). They play on the FM-1's second core. A third, counted in D1, D2, D3 order, plays as an LXR voice, and its MODEL page says **OVER 2 MODELS: PLAYS AS LXR** in red. It keeps its setting and plays its model again as soon as another drum goes back to LXR. On an FM-1 running on one core (see [the LOAD page](#the-load-page)), only one model plays.
 
-The model replaces the oscillators, transient and amp EG in the output: the model's own Decay sets how long the voice sounds. Plaits' engines that don't envelope themselves are the exception: the voice's amp EG (Attack, Decay, Slope, Gate) shapes them, and from 0.25 its page is shown for them (P VA, P WSHAPE, P FM, P GRAIN, P ADDTV, P CHORD, P SPEECH, P SWARM, P NOISE, P PARTCL); Colour turns it into Plaits' low-pass gate and Env sends it to Timbre and Morph. Everything after the oscillator still applies: the filter, drive and shape, bits, tilt, sends, LFO, random per hit and cross modulation. The model's settings are part of the kit and can be locked per step; Model itself doesn't morph: the voice keeps its own kit's engine while the other knobs morph.
+The model replaces the oscillators, transient and amp EG in the output: the model's own Decay sets how long the voice sounds. Plaits' engines that don't envelope themselves are the exception: the voice's amp EG (Attack, Decay, Slope, Gate) shapes them, and from 0.25 its page is shown for them (P VA, P WSHAPE, P FM, P ADDTV, P CHORD, P SPEECH, P SWARM, P PARTCL); Colour turns it into Plaits' low-pass gate and Env sends it to Timbre and Morph. Everything after the oscillator still applies: the filter, drive and shape, bits, tilt, sends, LFO, random per hit and cross modulation. The model's settings are part of the kit and can be locked per step; Model itself doesn't morph: the voice keeps its own kit's engine while the other knobs morph.
 
 **From 0.8 and earlier:** the old models (SKIN, BAR, BELL, PLATE, TUBE) are gone. A project or kit that used them loads with MODAL in place of SKIN, BAR, BELL and PLATE, and STRING in place of TUBE; the knobs keep their values, so they sound different. Check those sounds after updating.
 
@@ -630,9 +627,23 @@ Each type's level is matched to the others, so changing the type doesn't jump in
 
 **Compatibility:** MICRO uses the MODEL parameters a kit already stores for every voice, so kits and projects keep their format. An earlier Elixir plays a MICRO voice as LXR.
 
+### NOISE: brown to blue (every track)
+
+From 1.0, any track can play **NOISE**: noise in four colours, through the voice's filter and amp EG. With a short decay it is a hat, a shaker or a snare's rattle; with a long one, a wash, wind or a riser. It comes after the MICRO types in Model (before ENSEMBLE), and replaces Plaits' P NOISE, at a small part of its CPU.
+
+| | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
+|---|---|---|---|---|
+| Row 1 | Model | Colour | Rate | Env |
+
+- **Colour:** the noise's tilt, from **BROWN** (dark, −6 dB an octave: rumble, surf) through **PINK** (−3 dB: rain, an even wash) and **WHITE** (flat: hiss, hats) to **BLUE** (+3 dB: thin and sizzling). It blends smoothly between neighbours; the card shows the colour, or the two it is between (PNK-WHT). Every colour plays at the same level, so turning it doesn't jump in volume.
+- **Rate:** at 127 (**OFF**) the noise is fresh every sample. Below, it is held in steps clocked at the voice's pitch, from ×64 down to ×1/4 (the card shows the multiple): grainy, then pitched, 8-bit-style noise that follows the note, the pitch EG, KEYS and the melody generator. The steps go through Colour after, so brown softens them and blue sharpens them.
+- **Env:** how far the amp EG moves Colour up: bright at the hit, darker as it dies away, as a struck cymbal or a snare's wires do.
+
+**The amp EG** shapes NOISE on every voice (its page stays), and everything after it applies: the filter (its resonance gives a pitched band of noise), drive and shape, bits, tilt, sends, choke, cross modulation, LFO and random per hit. On the hats, CH and OH share one NOISE as they share the voice. Like MICRO and ENSEMBLE, NOISE isn't one of the [two models at once](#both), and it costs about as much as an LXR voice's oscillators. Colour, Rate and Env lock and morph like any knob.
+
 ### ENSEMBLE: eight stacked sines (every track)
 
-From 0.25, any track can play **ENSEMBLE**, after 4ms' Ensemble Oscillator (Matthias Puech and Dan Green): eight sine oscillators stacked up from the voice's pitch, quantized to a scale, each one twisted and warped. Through the voice's amp EG it gives gongs, chimes, organ stabs, clusters and drones. It is the last entry of Model (after CHIRP); on the snare, cymbal and hats Model steps from LXR to the MICRO types and then ENSEMBLE.
+From 0.25, any track can play **ENSEMBLE**, after 4ms' Ensemble Oscillator (Matthias Puech and Dan Green): eight sine oscillators stacked up from the voice's pitch, quantized to a scale, each one twisted and warped. Through the voice's amp EG it gives gongs, chimes, organ stabs, clusters and drones. It is the last entry of Model (after NOISE); on the snare, cymbal and hats Model steps from LXR to the MICRO types, NOISE and then ENSEMBLE.
 
 | | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
@@ -1285,7 +1296,7 @@ Only the targets' steps change. A spell changes the shared FX (the delay, the re
 | 1 LXR | the LXR's own voices |
 | 2 RNG | Rings' models (D1–D3) |
 | 3 PLT | Plaits' engines (D1–D3) |
-| 4 MIC | MICRO's types (any voice) |
+| 4 MIC | MICRO's types and NOISE (any voice) |
 | 5 KCK | (on: D1 always the LXR's kick) |
 
 All four lit (the default): each spell picks engines its own way. Some lit: a cast gives the targets only those, moving a voice on an engine left out to one let in, and now and then switching between them (NONE: more often with Sound and Spread up). None lit: every voice keeps its engine. SHIFT (OCT−) + a key leaves only that engine. Rings and Plaits play on D1–D3 only, two models at most, so a voice they can't go on keeps what it has. Some examples: **LXR + MIC** a mix of the two, the kick the LXR's; **MIC + KCK** the LXR's kick and MICRO on everything else; **MIC** alone MICRO everywhere, the kick a POP or a CHIRP; **PLT + KCK** the LXR's kick, Plaits on the toms. The OSC white key must be in (on the other pages) for engines to change at all.

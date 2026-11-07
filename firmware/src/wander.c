@@ -1338,9 +1338,9 @@ static void wd_swap_start(void)
     if ((ok & SE_RINGS) && v <= 2u && sp_models(v) < model_cap)
         m[n++] = (uint8_t)(MD_MODAL + wd_rnd(3));
     if ((ok & SE_PLAITS) && v <= 2u && sp_models(v) < model_cap)
-        m[n++] = (uint8_t)(MD_PL0 + wd_rnd(16));
+        m[n++] = (uint8_t)(MD_PL0 + PL_LIVE[wd_rnd(NPL_LIVE)]);
     if (ok & SE_MICRO)
-        m[n++] = (uint8_t)(MD_MC0 + wd_rnd(NMICRO));
+        m[n++] = (uint8_t)(wd_rnd(NMICRO + 1u) < NMICRO ? MD_MC0 + wd_rnd(NMICRO) : MD_NOISE);   /* (1.0: or NOISE) */
     if (!n || (md = m[wd_rnd(n)]) == par[PAR_MODEL1 + v] || !model_ok(v, md))
         return;
     wd.ms_t = (uint8_t)(t + 1u);

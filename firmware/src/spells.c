@@ -504,26 +504,36 @@ static void sp_safe(uint32_t v, const spc_t *c)
 }
 /* the models: Rings' and Plaits' (D1-D3, as many as play: model_cap) or MICRO's, each with its knobs set; only
  * the engines VOICES lets in (sp_eng_ok) */
-static uint32_t sp_eng_of(uint32_t md) { return !md ? SE_LXR : md < MD_PL0 ? SE_RINGS : md < MD_MC0 ? SE_PLAITS : SE_MICRO; }
+static uint32_t sp_eng_of(uint32_t md)   /* (1.0: NOISE with MICRO: every voice, light) */
+{
+    return !md ? SE_LXR : md < MD_PL0 ? SE_RINGS : md < MD_MC0 && md != MD_NOISE ? SE_PLAITS : SE_MICRO;
+}
 static uint32_t sp_eng_ok(uint32_t v) { return v == 0u && (sp.eng & SE_KICK) ? SE_LXR : sp.eng & SE_ALL; }
 static uint32_t sp_models(uint32_t skip)             /* the Rings or Plaits models on D1-D3 (but voice skip's) */
 {
     uint32_t v, n = 0;
     for (v = 0; v < 3u; v++)
-        n += v != skip && par[PAR_MODEL1 + v] && par[PAR_MODEL1 + v] < MD_MC0;
+        n += v != skip && model_counted(par[PAR_MODEL1 + v]);
     return n;
 }
+/* a MICRO type or (1.0) NOISE, at random */
+static uint32_t sp_micro_rnd(void) { uint32_t i = sp_rnd(NMICRO + 1u); return i < NMICRO ? MD_MC0 + i : MD_NOISE; }
 static void sp_model(uint32_t v, uint32_t md)
 {
     static const uint8_t D[6] = {64, 64, 32, 40, 0, 0};
     uint32_t i;
-    if (!model_ok(v, md) || (md && md < MD_MC0 && (v > 2u || sp_models(v) >= model_cap)) || par[PAR_MODEL1 + v] == md ||
+    if (!model_ok(v, md) || (model_counted(md) && (v > 2u || sp_models(v) >= model_cap)) || par[PAR_MODEL1 + v] == md ||
         !(sp_eng_ok(v) & sp_eng_of(md)))
         return;
     sp_par(PAR_MODEL1 + v, (int32_t)md);
     if (md >= MD_MC0 || md <= MD_FM)                 /* (a fresh model's knobs: as the init kit has them) */
         for (i = 0; i < 6u; i++)
             par[PAR_MDECAY1 + 6u * i + v] = md >= MD_MC0 && i == 0u ? 20u : D[i];
+    if (md == MD_NOISE) {                            /* (1.0: NOISE: a colour, RATE off, a little ENV) */
+        par[PAR_MDECAY1 + v] = (uint8_t)(32u + sp_rnd(80));
+        par[PAR_MDAMP1 + v] = 127;
+        par[PAR_MMAT1 + v] = (uint8_t)sp_rnd(48);
+    }
 }
 static void sp_models_cast(const spell_t *S, uint32_t v, const spc_t *c)
 {
@@ -549,14 +559,14 @@ static void sp_models_cast(const spell_t *S, uint32_t v, const spc_t *c)
         sp_model(v, MD_MC0 + l[sp_rnd(4)]);
         return;
     }
-    if (v > 2u || (md && md < MD_MC0 && sp_rnd(2)))  /* (a model on already: often kept, its knobs moved) */
+    if (v > 2u || (model_counted(md) && sp_rnd(2)))  /* (a model on already: often kept, its knobs moved) */
         return;
     if ((S->fl & SF_RINGS) && (c->chaos > 48u || S == &SPELL[SP_GLASS])) {
         static const uint8_t RG[3] = {MD_MODAL, MD_STRING, MD_FM};
         sp_model(v, S == &SPELL[SP_GLASS] ? RG[sp_rnd(2)] : S == &SPELL[SP_POLTER] ? (sp_rnd(2) ? MD_FM : MD_MODAL)
                                                                                  : RG[sp_rnd(3)]);
     } else if ((S->fl & SF_PLAITS) && c->chaos > 80u) {
-        sp_model(v, MD_PL0 + sp_rnd(16));
+        sp_model(v, MD_PL0 + PL_LIVE[sp_rnd(NPL_LIVE)]);
     }
 }
 /* VOICES: a voice on an engine left out moved to one let in (D1, a kick: sp_kick's); NONE now and then another,
@@ -577,9 +587,9 @@ static void sp_engines(const spell_t *S, uint32_t v, const spc_t *c)
     if ((ok & SE_RINGS) && v <= 2u && sp_models(v) < model_cap)
         m[n++] = (uint8_t)(MD_MODAL + sp_rnd(3));    /* (MODAL, STRING, FM) */
     if ((ok & SE_PLAITS) && v <= 2u && sp_models(v) < model_cap)
-        m[n++] = (uint8_t)(MD_PL0 + sp_rnd(16));
+        m[n++] = (uint8_t)(MD_PL0 + PL_LIVE[sp_rnd(NPL_LIVE)]);
     if (ok & SE_MICRO)
-        m[n++] = (uint8_t)(MD_MC0 + sp_rnd(NMICRO));
+        m[n++] = (uint8_t)sp_micro_rnd();
     if (n)                                           /* (none for this voice, Rings or Plaits only on the hats: kept) */
         sp_model(v, m[sp_rnd(n)]);
 }

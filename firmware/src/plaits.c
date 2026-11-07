@@ -16,7 +16,9 @@
  * (tests/plaits_compare.cc) holds each engine to Plaits' own float code sample by sample. Left out: Plaits' sustain
  * modes (no TRIGGER patched: the voice is always struck), its user data, its 1.2 engines. The string engine plays one
  * string a voice (Plaits: three, overlapping), in the memory a voice's Rings string has; the particle engine's diffuser
- * (16 KB) is one, for the first voice on PARTICLE; the others play it dry. */
+ * (16 KB) is one, for the first voice on PARTICLE; the others play it dry. 1.0 (10c): GRAIN, NOISE and MODAL dropped
+ * (MODAL: Rings' plays better; NOISE: Elixir's own, noise.c, in its number; GRAIN's number kept for a granular model):
+ * their PE_ numbers stay, as the kits store them (rings.c MD_PGRAIN, MD_NOISE, MD_PMODAL; sound.c model_pick). */
 
 #include "plaits_tables.h"
 
@@ -671,92 +673,6 @@ static void hh_render(pl_hh_t *d, const pl_par_t *p, int32_t *out, int32_t *aux,
     hh_render1(&d->h[1], 1, d, p, aux, n);
 }
 
-/* -------------------------------------------------- filtered noise --- */
-typedef struct { int32_t ph, smp, next, f; } pl_cn_t;   /* ClockedNoise: phase and frequency Q24 (up to 1) */
-typedef struct {
-    pl_cn_t cn[2];
-    pl_svf_t lphp, bp[2];
-    int32_t pf0, pf1, pq, pmode;                     /* Q24; q Q16 */
-} pl_nz_t;
-static void nz_init(pl_nz_t *d)
-{
-    memset(d, 0, sizeof *d);
-    d->cn[0].f = d->cn[1].f = 16777;                 /* 0.001 */
-}
-static void cn_render(pl_cn_t *c, int sync, int32_t f, int32_t *out, uint32_t n)
-{
-    int32_t ns = c->next, step;
-    uint32_t i;
-    f = pclamp(f, 0, PL1);
-    step = (f - c->f) / (int32_t)n;
-    if (sync)
-        c->ph = PL1;
-    for (i = 0; i < n; i++) {
-        int32_t ts = ns, raw, ramt;
-        ns = 0;
-        c->f += step;
-        raw = 2 * pl_randf() - PL1;
-        ramt = pclamp(4 * (c->f - (PL1 >> 2)), 0, PL1);
-        c->ph += c->f;
-        if (c->ph >= PL1) {
-            int32_t t, dis;
-            c->ph -= PL1;
-            t = pclamp(pl_div(c->ph, c->f), 0, PL1);
-            dis = raw - c->smp;
-            ts += pm(dis, blep_this(t));
-            ns += pm(dis, blep_next(t));
-            c->smp = raw;
-        }
-        ns += c->smp;
-        out[i] = ts + pm(ramt, raw - ts);
-    }
-    c->f = f;
-    c->next = ns;
-}
-static void nz_render(pl_nz_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
-{
-    int32_t tmp[PLSUB], f0, f1, cf, q, s0, s1, sq, sm;
-    uint32_t i, f0q = p->f0, f1q = pl_note_f(p->note + (int32_t)(((int64_t)p->harm * 48) >> 8) - (24 << 16));
-    uint32_t cfq = pl_note_f((int32_t)(((int64_t)p->timbre * 152) >> 8) - (24 << 16));
-    f0 = (int32_t)(f0q >> 8);
-    f1 = (int32_t)(f1q >> 8);
-    cf = (int32_t)(cfq >> 8);
-    q = (int32_t)(pl_semi(pm(p->morph, 120 << 16), 16) >> 1);   /* 0.5 2^(morph 10), Q16 */
-    cn_render(&d->cn[0], p->trig, cf, aux, n);
-    cn_render(&d->cn[1], p->trig, (int32_t)(((int64_t)pl_div(f1, f0) * cf) >> 24), tmp, n);
-    s0 = (f0 - d->pf0) / (int32_t)n;
-    s1 = (f1 - d->pf1) / (int32_t)n;
-    sq = (q - d->pq) / (int32_t)n;
-    sm = (p->harm - d->pmode) / (int32_t)n;
-    for (i = 0; i < n; i++) {
-        int32_t g, in1, in2, lp, bp, hp, mode, hg, bg, lg;
-        uint32_t q8;
-        d->pf0 += s0;
-        d->pf1 += s1;
-        d->pq += sq;
-        d->pmode += sm;
-        q8 = (uint32_t)d->pq >> 8;
-        if (i == 0 || s0 || s1 || sq) {             /* (the filters' coefficients: when they move) */
-            pl_svf_fq(&d->lphp, pl_fq(d->pf0), q8, TAN_ACCURATE);
-            d->bp[0] = (pl_svf_t){d->lphp.g, d->lphp.r, d->lphp.rg, d->lphp.h, d->bp[0].s1, d->bp[0].s2};
-            pl_svf_fq(&d->bp[1], pl_fq(d->pf1), q8, TAN_ACCURATE);
-        }
-        {   /* 1 / sqrt((0.5 + q) 40 f0) */
-            int64_t a = ((int64_t)(d->pq + 32768) * 40 * d->pf0) >> 16;   /* Q24 */
-            g = pl_div(PL1, (int32_t)pl_isqrt64((uint64_t)(a < 1 ? 1 : a) << 24));
-        }
-        in1 = pm(aux[i], g);
-        in2 = pm(tmp[i], g);
-        pl_svf_run(&d->lphp, in1, &lp, &bp, &hp);
-        mode = d->pmode;
-        hg = pmin(-2 * mode + PL1, 0);
-        bg = PL1 - 2 * pabs(mode - (PL1 >> 1));
-        lg = pmax(PL1 - 2 * mode, 0);
-        out[i] = pm(hg, hp) + pm(bg, bp) + pm(lg, lp);
-        aux[i] = pl_svf_bp(&d->bp[0], in1) + pl_svf_bp(&d->bp[1], in2);
-    }
-}
-
 /* -------------------------------------------------- particle noise --- */
 /* the diffuser (fx/diffuser.h on fx_engine.h, 12-bit samples): one, for the first voice on PARTICLE */
 #define DIF_LEN 8192u
@@ -1045,158 +961,6 @@ static void st_render(pl_st_t *d, uint32_t vi, const pl_par_t *p, int32_t *out, 
     st_string(d, vi, f0, nl, b, dmp, tmp, out, n);
 }
 
-/* -------------------------------------------------- modal resonator --- */
-/* ModalVoice + Resonator (24 modes): the modes in rings.c's direct form (modal_run), in mdl[vi]'s */
-#define PL_MODES 24u
-typedef struct {
-    pl_svf_t exf;
-    int32_t hlp;
-} pl_md_t;
-static int16_t pl_mamp[PL_MODES];                    /* the modes' levels: CosineOscillator(0.015) x 0.25, Q15 */
-static void md_amps(void)
-{
-    int64_t f = 16106127 - (1 << 28), sign = 16, k, y0, y1, t;   /* 0.015 - 0.25, Q30 */
-    uint32_t i;
-    if (pl_mamp[0])
-        return;
-    if (f < 0)
-        f = -f;
-    else if (f > (1 << 29))
-        f -= 1 << 29;
-    else
-        sign = -16;
-    k = (sign * f * ((1 << 30) - 2 * f)) >> 30;
-    y1 = k >> 2;
-    y0 = 1 << 29;
-    for (i = 0; i < PL_MODES; i++) {
-        t = y0;
-        y0 = ((k * y0) >> 30) - y1;
-        y1 = t;
-        pl_mamp[i] = (int16_t)(((t + (1 << 29)) * 8192) >> 30);   /* (value + 0.5) x 0.25 */
-    }
-}
-static void md_init(pl_md_t *d, uint32_t vi)
-{
-    memset(d, 0, sizeof *d);
-    memset(mdl[vi].y1, 0, sizeof mdl[vi].y1);
-    memset(mdl[vi].y2, 0, sizeof mdl[vi].y2);
-    memset(mdl[vi].e1, 0, sizeof mdl[vi].e1);
-    memset(mdl[vi].e2, 0, sizeof mdl[vi].e2);
-    mdl[vi].x1 = mdl[vi].x2 = 0;
-    md_amps();
-}
-/* Resonator::Process's coefficients (f Q32; s b d Q24), into m (b scaled by 8: modal_run takes in / 8) */
-static void md_coefs(model_t *m, uint32_t f, int32_t s, int32_t b, int32_t d)
-{
-    int32_t idx = s >> 18, fr = s & 0x3FFFF, sh, st, qloss;
-    uint64_t harmonic, q;
-    int32_t stretch = PL1, k;
-    st = PL_STIFF[idx] + (int32_t)(((int64_t)(PL_STIFF[idx < 64 ? idx + 1 : 64] - PL_STIFF[idx]) * fr) >> 18);
-    {   /* f0 x NthHarmonicCompensation(3) */
-        int32_t s1 = st, str = PL1 + s1;
-        s1 = pm(s1, s1 < 0 ? 15602811 : 16441672);    /* 0.93, 0.98 */
-        str += s1;
-        f = (uint32_t)(((uint64_t)f * (uint32_t)pl_div(PL1, str)) >> 24);
-    }
-    harmonic = f;
-    {   /* q = 500 q_sqrt^2, q_sqrt = 2^(damping 79.7 / 12); Q8 */
-        uint64_t qs = pl_semi((int32_t)(((int64_t)d * 5223219) >> 24), 16);
-        q = ((qs * qs) >> 24) * 500u;
-    }
-    b = pm(b, PL1 - pm(s, 5033165));
-    b = pm(b, PL1 - pm(d, 5033165));
-    qloss = pm(pm(b, 2 * PL1 - b), 14260634) + 2516582;   /* x 0.85 + 0.15 */
-    for (k = 0; k < (int32_t)PL_MODES; k++) {
-        uint64_t pf64 = (harmonic * (uint32_t)stretch) >> 24;
-        uint32_t pf = pf64 >= 2143188436u ? 2143188436u : (uint32_t)pf64, rc, rcd;
-        int32_t g, rg, shd, amp;
-        int64_t g2, t1, t2;
-        g = rg_tan(pf, TAN_FAST);
-        {   /* r g = g / (1 + pf q) */
-            uint64_t den = (((uint64_t)pf * q) >> 32) + 256u;   /* Q8 */
-            rc = rg_rcp64(den, &sh);
-            rg = (int32_t)(((uint64_t)(uint32_t)g * rc) >> (80 - sh));   /* Q30 */
-        }
-        g2 = ((int64_t)g * g) >> 18;
-        rcd = rg_rcp64((1ull << 30) + (uint32_t)rg + (uint64_t)g2, &shd);
-        t1 = (int64_t)rg_mulsh((uint64_t)rg + 2 * (uint64_t)g2, rcd, 63 - shd);
-        t2 = (int64_t)(((uint64_t)(uint32_t)rg * rcd) >> (63 - shd));
-        amp = (int32_t)(((int64_t)pl_mamp[k] * (int32_t)(PL1 - (int32_t)(pf >> 7))) >> 24);   /* x (1 - 2 f), Q15 */
-        m->b[k] = (int32_t)(((int64_t)(((uint64_t)(uint32_t)g * rcd) >> (55 - shd)) * amp) >> 15);
-        m->a1[k] = (int32_t)(t1 >= (1ll << 32) ? -(1ll << 31) + 1 : (1ll << 31) - (t1 < 1 ? 1 : t1));
-        m->a2[k] = (int32_t)((1 << 30) - t2);
-        stretch += st;
-        st = pm(st, st < 0 ? 15602811 : 16441672);
-        harmonic += f;
-        q = (q * (uint32_t)qloss) >> 24;
-    }
-}
-/* rings.c's modal_run, n samples */
-static void md_run(model_t *m, const int32_t *in, int32_t *out, uint32_t n)
-{
-    int32_t xd[PLSUB], x1 = m->x1, x2 = m->x2;
-    uint32_t i, k;
-    for (i = 0; i < n; i++) {
-        int32_t x = in[i] >> 3;
-        xd[i] = x - x2;
-        x2 = x1;
-        x1 = x;
-    }
-    m->x1 = x1;
-    m->x2 = x2;
-    for (k = 0; k < PL_MODES; k++) {
-        int32_t a1 = m->a1[k], a2 = m->a2[k], b = m->b[k], y1 = m->y1[k], y2 = m->y2[k];
-        int32_t e1 = m->e1[k], e2 = m->e2[k], c = a1 < 0 ? -2 : 2;
-        for (i = 0; i < n; i++) {
-            int64_t acc = (int64_t)b * xd[i] + (int64_t)a1 * y1 - (int64_t)a2 * y2 + (int64_t)c * e1 - e2;
-            int32_t y = (int32_t)(acc >> 30);
-            e2 = e1;
-            e1 = (int32_t)(acc & 0x3FFFFFFF);
-            y = y > (1 << 29) ? 1 << 29 : y < -(1 << 29) ? -(1 << 29) : y;
-            y2 = y1;
-            y1 = y;
-            out[i] += y;
-        }
-        m->y1[k] = y1;
-        m->y2[k] = y2;
-        m->e1[k] = e1;
-        m->e2[k] = e2;
-    }
-}
-static void md_render(pl_md_t *d, uint32_t vi, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
-{
-    model_t *m = &mdl[vi];
-    int32_t tmp[PLSUB], b = p->timbre, dmp = p->morph, cut, bb;
-    uint32_t i, f0 = p->f0, cq;
-    uint64_t c;
-    PL_ONE_POLE(d->hlp, p->harm, 167772);            /* 0.01 */
-    b += pm(p->accent >> 2, PL1 - b);
-    dmp += pm(p->accent >> 2, PL1 - dmp);
-    bb = pm(b, 2 * PL1 - b) - (PL1 >> 1);
-    c = ((uint64_t)pl_semi((int32_t)(((int64_t)bb * 60) >> 8), 16) * f0) >> 15;   /* 2 f0 2^(.. 60) */
-    cq = c > 2143188436u ? 2143188436u : (uint32_t)c;
-    cut = (int32_t)(cq >> 8);
-    pl_svf_fq(&d->exf, cq, 384u, TAN_FAST);           /* (ResonatorSvf<1>: q 1.5) */
-    tmp[0] = pl_svf_lp(&d->exf, 0);
-    if (p->trig) {   /* the pulse A = amp 2^(2 cut^2) / cut: g A (bounded) = amp 2^(2 cut^2) (pi + cut^2 (a + b cut^2)) */
-        int32_t amp = pm(2013266 + pm(1342177, p->accent), PL1 - (dmp >> 1)), c2 = pm(cut, cut), ga, h;
-        int64_t gr = 52707179 + ((((int64_t)c2 << 6) * (169584874 + (((int64_t)935957068 * ((int64_t)c2 << 6)) >> 30))) >> 30);   /* g / cut, Q24 */
-        ga = pm(pm(amp, (int32_t)pl_exp2(2 * c2, 24)), (int32_t)gr);
-        h = (int32_t)((((int64_t)ga * d->exf.h) + (1 << 29)) >> 30);   /* g h A */
-        tmp[0] += pm(d->exf.g, h);
-        d->exf.s1 += 2 * h;
-        d->exf.s2 += 2 * pm(d->exf.g, h);
-    }
-    for (i = 1; i < n; i++)
-        tmp[i] = pl_svf_lp(&d->exf, 0);
-    for (i = 0; i < n; i++) {
-        aux[i] = tmp[i];
-        out[i] = 0;
-    }
-    md_coefs(m, f0, d->hlp, b, dmp);
-    md_run(m, tmp, out, n);
-}
-
 /* -------------------------------------------------- swarm --- */
 #define NSWARM 8
 typedef struct {
@@ -1342,15 +1106,12 @@ typedef struct {
         pl_bd_t bd;
         pl_sd_t sd;
         pl_hh_t hh;
-        pl_nz_t nz;
         pl_pt_t pt;
         pl_st_t st;
-        pl_md_t md;
         pl_sw_t sw;
         pl_va_t va;
         pl_ws_t ws;
         pl_fm_t fm;
-        pl_gr_t gr;
         pl_add_t add;
 #if ELIXIR_WTABLE
         pl_wt_t wt;
@@ -1372,15 +1133,12 @@ static void pl_engine_init(pl_t *v, uint32_t vi, uint32_t e)
     case PE_BD: bd_init(&v->u.bd); break;
     case PE_SD: sd_init(&v->u.sd); break;
     case PE_HH: hh_init(&v->u.hh); break;
-    case PE_NOISE: nz_init(&v->u.nz); break;
     case PE_PART: pt_init(&v->u.pt); break;
     case PE_STRING: st_init(&v->u.st, vi); break;
-    case PE_MODAL: md_init(&v->u.md, vi); break;
     case PE_SWARM: sw_init(&v->u.sw); break;
     case PE_VA: va_init(&v->u.va); break;
     case PE_WSHP: ws_init(&v->u.ws); break;
     case PE_FM: fm_init(&v->u.fm); break;
-    case PE_GRAIN: gr_init(&v->u.gr); break;
     case PE_ADD: add_init(&v->u.add); break;
 #if ELIXIR_WTABLE
     case PE_WTBL: wt_init(&v->u.wt); break;
@@ -1396,15 +1154,12 @@ static void pl_engine_render(pl_t *v, uint32_t vi, const pl_par_t *p, int32_t *o
     case PE_BD: bd_render(&v->u.bd, p, out, aux, n); break;
     case PE_SD: sd_render(&v->u.sd, p, out, aux, n); break;
     case PE_HH: hh_render(&v->u.hh, p, out, aux, n); break;
-    case PE_NOISE: nz_render(&v->u.nz, p, out, aux, n); break;
     case PE_PART: pt_render(&v->u.pt, vi, p, out, aux, n); break;
     case PE_STRING: st_render(&v->u.st, vi, p, out, aux, n); break;
-    case PE_MODAL: md_render(&v->u.md, vi, p, out, aux, n); break;
     case PE_SWARM: sw_render(&v->u.sw, p, out, aux, n); break;
     case PE_VA: va_render(&v->u.va, p, out, aux, n); break;
     case PE_WSHP: ws_render(&v->u.ws, p, out, aux, n); break;
     case PE_FM: fm_render(&v->u.fm, p, out, aux, n); break;
-    case PE_GRAIN: gr_render(&v->u.gr, p, out, aux, n); break;
     case PE_ADD: add_render(&v->u.add, p, out, aux, n); break;
 #if ELIXIR_WTABLE
     case PE_WTBL: wt_render(&v->u.wt, p, out, aux, n); break;

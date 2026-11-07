@@ -292,8 +292,8 @@ static void kit_sanitize(uint8_t *p)
     out_migrate(&p[PAR_AUDIO_OUT1], &p[kit_idx(PAR_FX_SEND1)]);
     dly_migrate(p, p[kit_idx(PAR_DSYNC)], &p[kit_idx(PAR_L2TGT1)]);
     for (i = 0; i < 6u; i++)                         /* (24: SN-HH have the LXR's engine and MICRO's types. 0.24: */
-        if (!model_ok(i, p[kit_idx(PAR_MODEL1 + i)]))   /* P WTABLE, not built in, plays as P ADD) */
-            p[kit_idx(PAR_MODEL1 + i)] = i <= 2u ? MD_PL0 + PE_ADD : 0u;
+        p[kit_idx(PAR_MODEL1 + i)] = (uint8_t)model_pick(i, p[kit_idx(PAR_MODEL1 + i)]);   /* P WTABLE, not built in,
+                                                      * plays as P ADD; 1.0: P MODAL as MODAL, P GRAIN the LXR) */
     for (i = END_OF_SOUND_PARAMETERS; i < KIT_LEN; i++)
         if (p[i] > par_max_k(kit_par(i)))
             p[i] = (uint8_t)init_kit_k(kit_par(i));

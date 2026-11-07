@@ -77,8 +77,9 @@ static const char *const L_XMODE[] = {"DUCK", "FILTER", "RING"};
 static const char *const L_CHOKE[] = {"OFF", "1", "2", "3", "4"};
 static const char *const L_MODEL[] = {"LXR", "MODAL", "STRING", "FM",   /* (0.9: Rings' models, rings.c) */
                                       "P VA", "P WSHAPE", "P FM", "P GRAIN", "P ADDTV", "P WTABLE", "P CHORD",
-                                      "P SPEECH", "P SWARM", "P NOISE", "P PARTCL", "P STRING", "P MODAL", "P BD",
-                                      "P SD", "P HH",   /* (0.15: Plaits' engines, plaits.c) */
+                                      "P SPEECH", "P SWARM", "NOISE", "P PARTCL", "P STRING", "P MODAL", "P BD",
+                                      "P SD", "P HH",   /* (0.15: Plaits' engines, plaits.c; 1.0: P GRAIN, P MODAL
+                                                      * dropped, never shown; NOISE, noise.c, in P NOISE's number) */
                                       "CLICK", "TRAIN", "CRUNCH", "BITS", "BURST", "SNAP", "GRAIN", "DUST", "POP",
                                       "CHIRP",   /* (24: MICRO's, micro.c) */
                                       "ENSEMBLE"};   /* (0.25: ensemble.c) */
@@ -198,6 +199,12 @@ static const char *pl_knob_name(uint32_t p, uint32_t which)
                                             {"Twist", "Ensemble", "tws", "Twist"}, {"Balance", "Ensemble", "bal", "Balance"},
                                             {"Detune", "Ensemble", "det", "Detune"}, {"Scale", "Ensemble", "scl", "Scale"}};
         return E[(p - PAR_MDECAY1) / 6u][which];
+    }
+    if (nzo[vi].on) {                                 /* (1.0: NOISE's) */
+        static const char *const Z[4][4] = {{"Colour", "Noise", "col", "Colour"}, {"Rate", "Noise", "rat", "Rate"},
+                                            {"Env", "Noise", "env", "EnvAmt"}, {"-", "Noise", "-", "-"}};
+        uint32_t r = (p - PAR_MDECAY1) / 6u;
+        return Z[r < 3u ? r : 3u][which];
     }
     if (vi >= 3u || mdl[vi].want < MD_PL0)
         return 0;
