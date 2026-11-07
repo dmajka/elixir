@@ -16,6 +16,9 @@ static volatile uint32_t t5_nested_ticks;          /* TIMER4 ticks TIMER5 spent 
 static volatile uint8_t in_audio;
 static uint32_t cpu_q8, audio_cpu_rem;              /* the audio ISR's load, 1/256 */
 #define HALF_TICKS (HALF_FRAMES * 1000000u / FS * FM1_TICKS_PER_US)
+#if defined(LOAD_CLOCK) && ELIXIR_LDDIAG
+static uint16_t dg_q8[NDG], dg_rem[NDG], dg_pk[NDG];   /* (the diagnostic's parts, as ld_*) */
+#endif
 static uint16_t ld_q8[NLD], ld_rem[NLD], ld_pk[NLD]; /* 17a: each part's load, 1/256 of a half: the average (as cpu_q8),
                                                      * the peak since CONFIG opened (ui.c clears it with audio_max_us) */
 
@@ -78,6 +81,10 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
         ld_t = t0;
         for (i = 0; i < NLD; i++)
             ld_acc[i] = 0;
+#if ELIXIR_LDDIAG
+        for (i = 0; i < NDG; i++)
+            dg_acc[i] = 0;
+#endif
 #endif
 #if UAC_STEMS
         uac_render_start();                    /* 1.0: the USB audio's ring takes this half (engine.c, voices.c write it) */
@@ -95,6 +102,15 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
             if (q > ld_pk[i])
                 ld_pk[i] = (uint16_t)(q > 0xFFFFu ? 0xFFFFu : q);
         }
+#if ELIXIR_LDDIAG
+        for (i = 0; i < NDG; i++) {
+            uint32_t q = (dg_acc[i] < 4u * HALF_TICKS ? dg_acc[i] : 4u * HALF_TICKS) * 256u / HALF_TICKS, l = dg_q8[i] * (CPU_AVG - 1u) + q + dg_rem[i];
+            dg_q8[i] = (uint16_t)(l / CPU_AVG);
+            dg_rem[i] = (uint16_t)(l % CPU_AVG);
+            if (q > dg_pk[i])
+                dg_pk[i] = (uint16_t)(q > 0xFFFFu ? 0xFFFFu : q);
+        }
+#endif
 #endif
         fm1_audio_ack_half();
         audio_halves++;

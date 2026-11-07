@@ -78,16 +78,20 @@ static void engine_block(int32_t *out)
     static uint8_t last_bpm;
     static int16_t ml[BLOCK], mr[BLOCK];
     uint32_t i;
+    DG_START();
     sq.sync_ext = par[PAR_BPM] <= 1u;
     if (par[PAR_BPM] != last_bpm) {                 /* (the tempo from the UI, a project) */
         last_bpm = par[PAR_BPM];
         seq_tempo_changed();
     }
     snd_service();
+    DG_MARK(DG_SND);
     midi_service();
     key_service();                                  /* (0.8: the notes the keys played) */
     perf_block();
+    DG_MARK(DG_IN);
     seq_block();
+    DG_MARK(DG_SEQ);
     voices_block();
     comp_master(mix_l, mix_r);                      /* (0.16: the master's COMPRESSOR, off at RATIO OFF) */
     dirt_master(mix_l, mix_r);                      /* (23c: the master's DIRT, off at 0) */

@@ -208,6 +208,10 @@ def build_app():
         flags.append(f'-DELIXIR_VERSION="{version}"')
     if os.environ.get("ELIXIR_WTABLE") == "1":       # (0.24: P WTABLE, parked; ~48 KB: docs/parked/README.md)
         flags.append("-DELIXIR_WTABLE=1")
+    if os.environ.get("ELIXIR_LDDIAG") == "1":           # (1.0: SEQ, MOD split on the LOAD page: a test build)
+        flags.append("-DELIXIR_LDDIAG=1")
+    if os.environ.get("ELIXIR_PH_MONO") in ("0", "1"):     # (1.0 Phase 10: 0, the phaser's two chains, to A/B)
+        flags.append(f'-DPH_MONO={os.environ["ELIXIR_PH_MONO"]}')
     if os.environ.get("ELIXIR_USB_AUDIO") in ("0", "8"):   # (1.0: 8, the default, the mix and six stems; 0 MIDI only)
         flags.append(f'-DELIXIR_USB_AUDIO={os.environ["ELIXIR_USB_AUDIO"]}')
     cmain = ("cc", *flags, "-c", FW / "src" / "elixir.c", "-o", OUT / "elixir.o")
@@ -220,13 +224,14 @@ def build_app():
     elf = OUT / "elixir.elf"
     tc("pi32v2/bin/ld", "-T", FW / "app.ld", OUT / "crt0.o", OUT / "fm1_vec.o", OUT / "fm1_isr.o",
        *([OUT / "fm1_cpu1.o"] if CPU2 else []), OUT / "elixir.o", "-o", elf)
-    for sect in ("text.bin", "data.bin", "ramtext.bin", "c1text.bin"):
+    for sect in ("text.bin", "data.bin", "ramtext.bin", "c1text.bin", "ramhot.bin"):
         (OUT / sect).unlink(missing_ok=True)
     *_, syms, dis, rt = tc_all(("common/bin/objcopy", "-O", "binary", "-j", ".text", elf, OUT / "text.bin"),
                                ("common/bin/objcopy", "-O", "binary", "-j", ".data", elf, OUT / "data.bin"),
                                ("common/bin/objcopy", "-O", "binary", "-j", ".ram_text", elf, OUT / "ramtext.bin"),
                                *([("common/bin/objcopy", "-O", "binary", "-j", ".c1_text", elf, OUT / "c1text.bin")]
                                  if CPU2 else []),
+                               ("common/bin/objcopy", "-O", "binary", "-j", ".ram_hot", elf, OUT / "ramhot.bin"),
                                ("common/bin/objdump", "-t", elf),
                                ("common/bin/objdump", "-d", elf),
                                ("common/bin/objdump", "-d", "-j", ".ram_text", *(("-j", ".c1_text") if CPU2 else ()),
@@ -237,7 +242,8 @@ def build_app():
         return int(re.search(r"^([0-9a-f]+) .*\s" + name + r"$", syms, re.M).group(1), 16)
     img = bytearray((OUT / "text.bin").read_bytes())
     # .ram_text, .c1_text and .data follow .text at their load addresses; crt0 / main copy them by words
-    for sect, lname in (("ramtext.bin", "_rt_load"), ("c1text.bin", "_c1_load"), ("data.bin", "_data_load")):
+    for sect, lname in (("ramtext.bin", "_rt_load"), ("c1text.bin", "_c1_load"), ("ramhot.bin", "_rh_load"),
+                        ("data.bin", "_data_load")):
         load = symv(lname)
         if load % 4:
             raise SystemExit(f"{lname} {load:#x} is not word aligned")

@@ -46,6 +46,7 @@
 #include "fm1_lcd_hw.h"
 #define RING_PUBLISH() __asm__ volatile("" ::: "memory")
 #define POOL __attribute__((section(".pool")))
+#define RAMHOT __attribute__((section(".ram_hot"), noinline))   /* 1.0: control code run from RAM (app.ld) */
 #define RAMBUF __attribute__((section(".ram_buf")))   /* 18a: zeroed, in RAMTEXT after the RAM code (app.ld) */
 #define NOINITBUF __attribute__((section(".noinit_buf")))   /* 1.0: zeroed at every start, in NOINIT past its records */
 static volatile uint32_t fm1_ms;        /* milliseconds since boot (TIMER5) */

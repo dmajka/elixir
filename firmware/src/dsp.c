@@ -20,6 +20,21 @@ static uint32_t ld_t, ld_acc[NLD];
 #else
 #define LOAD_MARK(p) ((void)0)
 #endif
+/* 1.0 (diagnostic, ELIXIR_LDDIAG=1 builds): SEQ, MOD split into its parts on the LOAD page, in place of the stacks:
+ * snd_service, MIDI + keys + PERF, the sequencer, the voices' modulation before core 1 starts */
+#ifndef ELIXIR_LDDIAG
+#define ELIXIR_LDDIAG 0
+#endif
+#if defined(LOAD_CLOCK) && ELIXIR_LDDIAG
+enum { DG_SND, DG_IN, DG_SEQ, DG_PRE, NDG };
+static uint32_t dg_t, dg_acc[NDG];
+#define DG_START() (dg_t = LOAD_CLOCK())
+#define DG_MARK(p) do { uint32_t n_ = LOAD_CLOCK(); \
+                        dg_acc[p] += (int32_t)(n_ - dg_t) > 0 ? n_ - dg_t : 0u; dg_t = n_; } while (0)
+#else
+#define DG_START() ((void)0)
+#define DG_MARK(p) ((void)0)
+#endif
 
 static inline int32_t sat16(int32_t v){ return v > 32767 ? 32767 : v < -32768 ? -32768 : v; }
 static inline int32_t clamp32(int32_t v, int32_t lo, int32_t hi) { return v < lo ? lo : v > hi ? hi : v; }

@@ -6,6 +6,7 @@
 extern uint32_t _data_start[], _data_end[], _data_load[], _bss_start[], _bss_end[];
 extern uint32_t _pool_start[], _pool_end[], _rt_start[], _rt_end[], _rt_load[];
 extern uint32_t _c1_start[], _c1_end[], _c1_load[], _rb_start[], _rb_end[], _nb_start[], _nb_end[];
+extern uint32_t _rh_start[], _rh_end[], _rh_load[];
 
 void fm1_timer5_irq(void)
 {
@@ -292,6 +293,8 @@ void fm1_cstart(void)
         *d = *s;                                  /* the flash driver's code that runs from RAM */
     for (s = _c1_load, d = _c1_start; d < _c1_end; s++, d++)
         *d = *s;                                  /* the second core's waiting loop (hal/fm1_cpu1.h) */
+    for (s = _rh_load, d = _rh_start; d < _rh_end; s++, d++)
+        *d = *s;                                  /* 1.0: the audio interrupt's control code (app.ld .ram_hot) */
     fm1_mailbox_clear();
     stacks_paint();
     fm1_guard_enable(FM1_GUARD_STACK | FM1_GUARD_WRITE | FM1_GUARD_BUS | FM1_GUARD_PC);

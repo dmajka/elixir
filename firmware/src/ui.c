@@ -2238,6 +2238,10 @@ static void mode_set(uint32_t m)
         audio_max_us = 0;                            /* (the CPU meter's peaks: from now) */
         for (i = 0; i < NLD; i++)
             ld_pk[i] = 0;
+#if defined(LOAD_CLOCK) && ELIXIR_LDDIAG
+        for (i = 0; i < NDG; i++)
+            dg_pk[i] = 0;
+#endif
     }
     if (m != ui.mode) {
         ui.action = 0;

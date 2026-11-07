@@ -31,6 +31,10 @@ SECTIONS
     _rt_load = LOADADDR(.ram_text);
     .c1_text : { _c1_start = .; KEEP(*(.c1_text*)) . = ALIGN(4); _c1_end = .; } > RAMTEXT AT > XIP
     _c1_load = LOADADDR(.c1_text);
+    /* 1.0: .ram_hot, the audio interrupt's control code (the sequencer's steps ..) out of the flash's cache misses:
+     * it runs only with the flash on (the flash driver turns it off with interrupts off), so it may call XIP code */
+    .ram_hot : { _rh_start = .; KEEP(*(.ram_hot*)) . = ALIGN(4); _rh_end = .; } > RAMTEXT AT > XIP
+    _rh_load = LOADADDR(.ram_hot);
     .ram_buf (NOLOAD) : { . = ALIGN(4); _rb_start = .; *(.ram_buf*) . = ALIGN(4); _rb_end = .; } > RAMTEXT
     .data : { . = ALIGN(4); _data_start = .; *(.data*) *(.sdata*) . = ALIGN(4); _data_end = .; } > RAM AT > XIP
     _data_load = LOADADDR(.data);

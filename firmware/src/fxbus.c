@@ -39,7 +39,8 @@ static struct {
     /* phaser, flanger */
     uint8_t last_type;                               /* the type the bus ran last block (a change clears) */
     uint32_t m_ph;                                   /* their LFO's phase */
-    int32_t ph_s[2][6], ph_fb[2];                    /* the allpasses' states, the chains' last outputs */
+    int32_t ph_s[2][5], ph_a[2];                     /* the allpasses' states (the last inputs, then the last output),
+                                                      * the corners as the last block ended (Q16; 0: none yet) */
     int32_t fl_d[2];                                 /* the flanger's delay at the block's end, samples Q16 */
     uint32_t fl_w;                                   /* .. its write index */
     int32_t ch_d[2][2], ch_lp[2];                    /* 1.0: CHORUS: its taps' delays (Q16 samples), LO CUT's states */
@@ -821,33 +822,78 @@ static void fx_out(uint32_t c, uint32_t i, int32_t y)   /* a channel's sample of
     else
         mix_l[i] += y;
 }
-/* PHASER: 4 first-order allpasses a channel (1.0: 6 before; the classic four, two notches, a third less CPU), their corner swept by the LFO (the right a quarter turn on) round a
- * CENTRE (P4: 100 Hz .. 3.2 kHz) over DEPTH (P2: up to +-3 octaves), FEEDBACK (P3: 0 .. 0.9) from the chain's end
- * to its start. DRY/WET 50%: the dry and the shifted halves, the notches deepest */
-static void fx_phaser(void)
+/* PHASER: 4 first-order allpasses, their corner swept by the LFO round a CENTRE (P4: 100 Hz .. 3.2 kHz) over DEPTH
+ * (P2: up to +-3 octaves), FEEDBACK (P3: 0 .. 0.9) from the chain's end to its start. DRY/WET 50%: the dry and the
+ * shifted halves, the notches deepest. 1.0 Phase 10 (about half the CPU): one chain on the sides' sum, the left
+ * dry + wet, the right dry - wet (its notches between the left's: the classic stereo phaser; PH_MONO 0: a chain a
+ * side, the right's LFO a quarter turn on, as before); each allpass one multiply (y = a (y' - x) + x'; pi32v2's
+ * 32 x 32 -> 64 multiply costs no more than a 32-bit one, and never overflows), X * no DC), only the feedback clamped (the allpasses keep the level); the corner every 8 samples, ramped from the last
+ * block's; the output written straight into the mix, DRY/WET ramped without drywet_i's divide */
+#ifndef PH_MONO
+#define PH_MONO 1
+#endif
+static int32_t ph_coef(uint32_t ph)                  /* the corner at LFO phase ph: a = (1 - w) / (1 + w), Q16 */
 {
-    uint32_t i, c, k, nc = fx_stereo() ? 2u : 1u;
-    int32_t fb = (int32_t)(((int64_t)fx.p[2] * 58982) >> 16);   /* Q16, 0 .. 0.9 */
-    fb += (int32_t)(((int64_t)(58982 - fb) * fx.push) >> 16);   /* (FB PUSH: to the most) */
-    mod_lfo_step();
-    for (c = 0; c < nc; c++) {
-        /* the corner: 100 Hz x 2^(centre x 5 + depth x 3 x sin); w = 2 pi f / FS (Q16), a = (1 - w) / (1 + w) */
-        int32_t oct = fx.p[3] * 5 + (int32_t)(((int64_t)sine_at(fx.m_ph + c * 0x40000000u) * fx.p[1] * 3) >> 15);
-        int32_t f = (int32_t)(((int64_t)100 * exp2_q16(clamp32(oct, -65536, 6 * 65536))) >> 16);
-        uint32_t w = (uint32_t)clamp32(f, 30, 6000) * 9u;
-        int32_t a = (int32_t)((((65536u - w) << 15) / (65536u + w)) << 1);   /* Q16 */
-        const int16_t *in = c ? fx_r : fx_l;
-        for (i = 0; i < BLOCK; i++) {
-            int32_t x = in[i] + (int32_t)(((int64_t)fx.ph_fb[c] * fb) >> 16), y = 0;
-            for (k = 0; k < 4u; k++) {               /* y = -a x + s, s = x + a y */
-                y = fx.ph_s[c][k] - (int32_t)(((int64_t)a * x) >> 16);
-                fx.ph_s[c][k] = clamp32(x + (int32_t)(((int64_t)a * y) >> 16), -(1 << 20), 1 << 20);
-                x = y;
+    /* 100 Hz x 2^(centre x 5 + depth x 3 x sin); w = 2 pi f / FS (Q16) */
+    int32_t oct = fx.p[3] * 5 + (int32_t)(((int64_t)sine_at(ph) * fx.p[1] * 3) >> 15);
+    int32_t f = (int32_t)(((int64_t)100 * exp2_q16(clamp32(oct, -65536, 6 * 65536))) >> 16);
+    uint32_t w = (uint32_t)clamp32(f, 30, 6000) * 9u;
+    return (int32_t)((((65536u - w) << 15) / (65536u + w)) << 1);
+}
+#define PH_AP(a, d) ((int32_t)(((int64_t)(a) * (d) + 32768) >> 16))   /* (rounded: pi32v2 multiply-adds) */
+_Static_assert(BLOCK == 64u, "fx_phaser: 8 steps of 8, DRY/WET >> 6");
+/* a chain over the block: c the side (its LFO phase, its states), two: on the sides' sum into both (L + wet,
+ * R - wet), else on side c's input into out; fb15 the feedback, Q15 (inlined: no route test a sample,
+ * ~20 instructions a sample less for ~0.25 KB) */
+static inline __attribute__((always_inline)) void ph_chain(uint32_t c, int two, int32_t fb15, int32_t *out)
+{
+    uint32_t i, j;
+    int32_t *z = fx.ph_s[c], z0 = z[0], z1 = z[1], z2 = z[2], z3 = z[3], z4 = z[4];
+    int32_t a1 = ph_coef(fx.m_ph + c * 0x40000000u), a = fx.ph_a[c] ? fx.ph_a[c] : a1;
+    int32_t da = (a1 - a) >> 3, dw = 0, ddw = fx.dw - fx.dw_last, g0 = fx.dw_last;   /* (8 steps of 8, BLOCK 64) */
+    const int16_t *in = c ? fx_r : fx_l;
+    for (j = 0; j < BLOCK; j += 8u) {
+        a = j + 8u < BLOCK ? a + da : a1;
+        for (i = j; i < j + 8u; i++) {
+            int32_t x = two ? fx_l[i] + fx_r[i] : in[i] * 2, y, g;
+            /* (Q8; the feedback from +-2 full scale, its 8 fraction bits rounded off: 32 bits) */
+            x = (x << 7) + ((((clamp32(z4, -(1 << 24), 1 << 24) + 128) >> 8) * fb15 + 64) >> 7);
+            y = PH_AP(a, z1 - x) + z0;
+            z0 = x;
+            x = PH_AP(a, z2 - y) + z1;
+            z1 = y;
+            y = PH_AP(a, z3 - x) + z2;
+            z2 = x;
+            x = PH_AP(a, z4 - y) + z3;
+            z3 = y;
+            z4 = x;
+            y = clamp32((x + 128) >> 8, -32767, 32767);   /* (-y fits the DRY/WET sum too) */
+            dw += ddw;
+            g = g0 + (dw >> 6);                      /* (DRY/WET at sample i: last block's to this one's; dry and wet
+                                                      * 16-bit, g 0 .. 1: between them, no clip needed) */
+            if (two) {
+                mix_l[i] += fx_l[i] + (((y - fx_l[i]) * g) >> 15);
+                mix_r[i] += fx_r[i] + (((-y - fx_r[i]) * g) >> 15);
+            } else {
+                out[i] += in[i] + (((y - in[i]) * g) >> 15);
             }
-            fx.ph_fb[c] = clamp32(y, -65536, 65536);
-            fx_out(c, i, drywet_i(i, in[i], sat16(y)));
         }
     }
+    fx.ph_a[c] = a1;
+    z[0] = z0, z[1] = z1, z[2] = z2, z[3] = z3, z[4] = z4;
+}
+static void fx_phaser(void)
+{
+    uint32_t c, st = fx_stereo();
+    int32_t fb = (int32_t)(((int64_t)fx.p[2] * 58982) >> 16);   /* Q16, 0 .. 0.9 */
+    fb += (int32_t)(((int64_t)(58982 - fb) * fx.push) >> 16);   /* (FB PUSH: to the most) */
+    fb >>= 1;
+    mod_lfo_step();
+    if (PH_MONO && st)
+        ph_chain(0, 1, fb, mix_l);
+    else
+        for (c = 0; c < (st ? 2u : 1u); c++)
+            ph_chain(c, 0, fb, !st ? fx_side() : c ? mix_r : mix_l);
 }
 /* FLANGER: a short delay in the FX buffer (FL_LEN samples a channel), swept by the LFO between DELAY (P4: 0.2 ..
  * 10 ms) and DELAY x (1 - DEPTH) (P2), FEEDBACK (P3: -0.9 at 0, none at the middle, +0.9 at the top); the delay
@@ -1098,7 +1144,7 @@ static void fxbus_process(void)                      /* FxBus_process */
         memset(fx.ph_s, 0, sizeof fx.ph_s);
         fx.c_env = 0;                                /* (COMP: from rest, at its makeup) */
         fx.c_g = fx.c_gain;
-        fx.ph_fb[0] = fx.ph_fb[1] = fx.fl_d[0] = fx.fl_d[1] = 0;
+        fx.ph_a[0] = fx.ph_a[1] = fx.fl_d[0] = fx.fl_d[1] = 0;
         fx.last_type = fx.type;
     }
     dirt_bus();

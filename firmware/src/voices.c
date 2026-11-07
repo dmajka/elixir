@@ -999,15 +999,21 @@ static void voices_render(uint32_t lo, uint32_t hi)
     }
 }
 #if FELUCCA_CPU2
-static uint32_t c1_ticks;                            /* the second core's last job, TIMER4 (written there, read after
-                                                      * the wait) */
+static uint32_t c1_ticks, c1_vt;                     /* the second core's last job, and its voices alone, TIMER4 (written
+                                                      * there, read after the wait) */
+/* 1.0 (after Phase 10, the user's two models + reverb breaking up): the reverb (on the last block's send: either core
+ * can run it while the other renders) goes to the core whose other work was the lighter last block. Core 1 with two
+ * models is the long side, and what core 0 does after the wait (the mixer, the FX bus, the master) follows it: the
+ * reverb there made the block late. With plain kits core 0's SN-HH is the heavier, and it stays on core 1 */
+static uint8_t rev_c1 = 1;                           /* (this block: on core 1) */
 static void reverb_process(void);
-static void c1_drums(uint32_t arg)                   /* (runs on the second core) */
+static void c1_drums(uint32_t arg)                   /* (runs on the second core; arg: the reverb too) */
 {
     uint32_t t0 = fm1_ticks();
-    (void)arg;
     voices_render(V_DRUM1, V_SNARE);
-    reverb_process();                                /* (1.0: the reverb too: core 0 has the FX and the master) */
+    c1_vt = fm1_ticks() - t0;
+    if (arg)
+        reverb_process();
     c1_ticks = fm1_ticks() - t0;
 }
 #endif
@@ -1055,21 +1061,31 @@ static void voices_block(void)
     for (i = 0; i < BLOCK; i++)
         mix_l[i] = mix_r[i] = mc_kl[i] = mc_kr[i] = 0;
     voice_active = 0;
+    DG_MARK(DG_PRE);
     LOAD_MARK(LD_SEQ);
 #if FELUCCA_CPU2
-    if (fm1_cpu1_run(c1_drums, 0)) {                 /* D1-D3 and (1.0) the reverb on the second core, SN-HH and
+    uint32_t c0_t = fm1_ticks(), rc1 = rev_c1;
+    if (fm1_cpu1_run(c1_drums, rc1)) {               /* D1-D3 (and the reverb, rev_c1) on the second core, SN-HH and
                                                       * the delay's early reads here */
         voices_render(V_SNARE, NVOICE);
         LOAD_MARK(LD_SNHH);
         fxbus_early();
         LOAD_MARK(LD_FX);
+        c0_t = fm1_ticks() - c0_t;                   /* (core 0's own work beside core 1, the reverb not counted) */
+        if (!rc1) {
+            reverb_process();
+            LOAD_MARK(LD_REV);
+        }
         if (fm1_cpu1_wait() == 0) {
             LOAD_MARK(LD_WAIT);
             ld_acc[LD_D13] += c1_ticks;
+            if (rev_c1 ? c1_vt > c0_t + (c0_t >> 3) : c1_vt + (c1_vt >> 3) < c0_t)
+                rev_c1 ^= 1u;                        /* (next block: the reverb beside the lighter; 1/8 hysteresis) */
         } else {                                     /* it misread or didn't answer: held from now on, D1-D3 here */
             LOAD_MARK(LD_WAIT);
             voices_render(V_DRUM1, V_SNARE);
-            reverb_process();
+            if (rc1)
+                reverb_process();
             LOAD_MARK(LD_D13);
         }
         fx_sends_clear();                            /* (the reverb has read the last block's send: now the new) */

@@ -10,6 +10,7 @@
 #define RING_PUBLISH() __asm__ volatile("" ::: "memory")
 #define POOL                             /* (the firmware: .pool, the big zeroed RAM) */
 #define RAMBUF                           /* (the firmware: .ram_buf, zeroed RAM in RAMTEXT) */
+#define RAMHOT                           /* (the firmware: .ram_hot, code run from RAM) */
 #define NOINITBUF                        /* (the firmware: .noinit_buf, zeroed RAM in NOINIT) */
 
 /* usb.c's MIDI rings, as the firmware has them */

@@ -8476,6 +8476,110 @@ static void phase_100_fx2(void)
     eng_reset(0);
 }
 
+/* 1.0 Phase 10: the phaser's one chain (L = dry + wet, R = dry - wet), one multiply an allpass, the feedback clamped */
+static double ph10_resp(uint32_t ph, double hz, int side)   /* the response at hz, the LFO held at phase ph */
+{
+    uint32_t k, i, n = 0;
+    double e = 0, m = 0;
+    memset(fx.ph_s, 0, sizeof fx.ph_s);
+    fx.ph_a[0] = fx.ph_a[1] = 0;
+    for (k = 0; k < 400u; k++) {
+        for (i = 0; i < BLOCK; i++) {
+            fx_l[i] = fx_r[i] = (int16_t)(10000.0 * sin(2.0 * 3.14159265358979 * hz * (n + i) / FS));
+            mix_l[i] = mix_r[i] = 0;
+        }
+        fx.m_ph = ph;
+        fx_phaser();
+        for (i = 0; i < BLOCK; i++, n++)
+            if (k >= 100u) {
+                double x = side ? mix_r[i] : mix_l[i];
+                e += x * x;
+                m++;
+            }
+    }
+    return sqrt(e / m) / (10000.0 / sqrt(2.0));
+}
+static void phase_100_10(void)
+{
+    uint32_t e, k, i, n = 0;
+    int32_t pk = 0;
+    int ok = 1;
+    printf("1.0 Phase 10: the phaser\n");
+    eng_reset(0);
+    fx.route = R_ST1;
+    fx.dw = fx.dw_last = 16384;                      /* (50%: the notches deepest) */
+    fx.type = fx.last_type = FX_PHASER;
+    fx.p[0] = 0;                                     /* (the slowest LFO: it stands still over a measurement) */
+    fx.p[1] = 50000;
+    fx.p[2] = 0;
+    fx.p[3] = 30000;
+    fx.push = 0;
+    for (e = 0; e < 2u; e++) {                       /* the LFO's extremes (sine_at: -cos) */
+        uint32_t ph = e ? 0x80000000u : 0u;
+        double a = ph_coef(ph) / 65536.0, nf[2], lo, hi;
+        uint32_t j;
+        /* where the 4 allpasses turn the phase 180 and 540 degrees: each stage pi/4 or 3 pi/4 behind; a first-order
+         * allpass (-a + z^-1) / (1 - a z^-1) lags 2 atan(tan(w / 2) (1 + a) / (1 - a)) */
+        for (j = 0; j < 2u; j++)
+            nf[j] = 2.0 * atan(tan((j ? 3.0 : 1.0) * 3.14159265358979 / 8.0) * (1.0 - a) / (1.0 + a)) * FS /
+                    (2.0 * 3.14159265358979);
+        lo = ph10_resp(ph, nf[0], 0);
+        hi = ph10_resp(ph, nf[1], 0);
+        printf("  LFO at %s: notches %.0f Hz (%.3f), %.0f Hz (%.3f); the right there %.2f, %.2f\n", e ? "top" : "bottom",
+               nf[0], lo, nf[1], hi, ph10_resp(ph, nf[0], 1), ph10_resp(ph, nf[1], 1));
+        ok &= lo < 0.03 && hi < 0.03 && ph10_resp(ph, sqrt(nf[0] * nf[1]), 0) > 0.9;
+        ok &= ph10_resp(ph, nf[0], 1) > 0.9 && ph10_resp(ph, nf[1], 1) > 0.9;   /* (R: its notches between) */
+    }
+    check(ok, "PHASER: the notches where the four allpasses put them (as before), the right's between (wide)");
+    /* bounded: full-scale squares, the most feedback and FB PUSH, the corner low and high */
+    fx.dw = fx.dw_last = 32768;
+    for (e = 0; e < 2u; e++) {
+        double hz;
+        for (hz = 15.0; hz < 3000.0; hz *= 1.5) {
+            memset(fx.ph_s, 0, sizeof fx.ph_s);
+            fx.p[0] = fx.p[1] = fx.p[2] = 65536;
+            fx.p[3] = e ? 65536 : 0;
+            fx.push = 65536;
+            for (k = 0; k < 400u; k++) {
+                for (i = 0; i < BLOCK; i++, n++) {
+                    int16_t v = fmod(n * hz / FS, 1.0) < 0.5 ? 32767 : -32768;
+                    fx_l[i] = v;
+                    fx_r[i] = (k & 64u) ? v : (int16_t)-v;
+                    mix_l[i] = mix_r[i] = 0;
+                }
+                fx_phaser();
+                for (i = 0; i < 5u; i++)
+                    pk = iabs(fx.ph_s[0][i] >> 8) > pk ? iabs(fx.ph_s[0][i] >> 8) : pk;
+                for (i = 0; i < BLOCK; i++)
+                    ok &= mix_l[i] >= -65536 && mix_l[i] <= 65536 && mix_r[i] >= -65536 && mix_r[i] <= 65536;
+            }
+        }
+    }
+    printf("  full-scale squares at the most feedback: the states' peak %d (x %.1f full scale)\n", pk, pk / 32768.0);
+    check(ok && pk < (1 << 26), "PHASER: bounded at full feedback and FB PUSH, no overflow");
+    /* silence after it: the chain settles to 0 (the products' rounding leaves no DC) */
+    fx.push = 0;
+    fx.p[2] = 50000;
+    fx.p[3] = 0;
+    for (k = 0; k < 2000u; k++) {
+        for (i = 0; i < BLOCK; i++)
+            fx_l[i] = fx_r[i] = 0, mix_l[i] = mix_r[i] = 0;
+        fx_phaser();
+    }
+    pk = 0;
+    for (i = 0; i < BLOCK; i++)
+        pk = iabs(mix_l[i]) > pk ? iabs(mix_l[i]) : iabs(mix_r[i]) > pk ? iabs(mix_r[i]) : pk;
+    printf("  after silence: %d left, the states %d %d %d %d %d\n", pk, fx.ph_s[0][0], fx.ph_s[0][1], fx.ph_s[0][2], fx.ph_s[0][3], fx.ph_s[0][4]);
+    check(pk <= 1, "PHASER: silent after silence (no DC left in the chain)");
+    /* another type and back: the states from silence */
+    fx.ph_s[0][2] = 12345;
+    fx.ph_a[0] = 777;
+    fx.type = FX_FLANGER;
+    fxbus_process();
+    check(fx.ph_s[0][2] == 0 && fx.ph_a[0] == 0, "PHASER: a type change clears its states");
+    fx.type = fx.last_type = FX_OFF;
+    eng_reset(0);
+}
 static void phase_100_6b(void)
 {
     uint32_t i, ok;
@@ -9323,6 +9427,7 @@ int main(int argc, char **argv)
     phase_100_6();
     phase_100_fx2();
     phase_100_6b();
+    phase_100_10();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;
 }

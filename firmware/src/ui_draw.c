@@ -1328,7 +1328,12 @@ static void draw_load(void)
 {
     static const uint8_t ORDER[NLD - 1u] = {LD_D13, LD_SNHH, LD_MIX, LD_FX, LD_REV, LD_SEQ};
     static const char *const PART[NLD] = {"SEQ, MOD", "D1-D3", "SN-HH", "MIXER", "FX BUS", "REVERB", "WAIT"};
-    const char *d13 = cores_why == CW_TWO ? "D1-D3, REV" : "D1-D3";   /* (1.0: core 1 runs the reverb too) */
+#if FELUCCA_CPU2
+    /* (1.0: core 1 runs the reverb too while core 0 is the heavier: voices.c rev_c1) */
+    const char *d13 = cores_why == CW_TWO && rev_c1 ? "D1-D3, REV" : "D1-D3";
+#else
+    const char *d13 = "D1-D3";
+#endif
     static const char *const WHY[] = {"", "ONE-CORE BUILD", "REC HELD AT POWER-ON", "BAD READ", "NO ANSWER",
                                       "FAULT", "SINCE A CRASH", "NO START"};
     char b[40];
@@ -1367,12 +1372,28 @@ static void draw_load(void)
         put_int(b, (int32_t)((ld_q8[LD_WAIT] * 100u + 128u) >> 8));
         cat(b, "%", sizeof b);
         load_line(104, "CORE 0 WAITS", b, T_TEXT);
+#if !(defined(LOAD_CLOCK) && ELIXIR_LDDIAG)
         stack_line(b, c1_stack(), 4096u);
         load_line(118, "CORE 1 STACK", b, c1_stack() > 3584u ? T_REC : T_TEXT);
+#endif
     } else {
         load_line(104, "1 CORE", WHY[cores_why < sizeof WHY / sizeof WHY[0] ? cores_why : 0],
                   cores_why >= CW_BAD ? T_REC : T_TEXT);
     }
+#if defined(LOAD_CLOCK) && ELIXIR_LDDIAG
+    {   /* (the diagnostic: SEQ, MOD's parts, average and peak) */
+        static const char *const DGN[NDG] = {"PARAMS", "MIDI, KEYS, PERF", "SEQUENCER", "VOICE MOD"};
+        uint32_t k;
+        for (k = 0; k < NDG; k++) {
+            put_int(b, (int32_t)((dg_q8[k] * 100u + 128u) >> 8));
+            cat(b, "%  ", sizeof b);
+            put_int(b + str_len(b), (int32_t)((dg_pk[k] * 100u + 128u) >> 8));
+            cat(b, "%", sizeof b);
+            load_line(118 + 14 * (int32_t)k, DGN[k], b, T_TEXT);
+        }
+    }
+    if (0)
+#endif
     {   /* 18a: the main stacks' deepest use since power-on, of their sizes (app.ld); red past three quarters */
         uint32_t u = ustack_used(), sv = sstack_used();
         stack_line(b, u, USTACK_B);
@@ -1380,7 +1401,7 @@ static void draw_load(void)
         stack_line(b, sv, SSTACK_B);
         load_line(146, "SYS STACK", b, sv > SSTACK_B / 4u * 3u ? T_REC : T_TEXT);
     }
-#if UAC_STEMS
+#if UAC_STEMS && !(defined(LOAD_CLOCK) && ELIXIR_LDDIAG)
     {   /* 1.0, Phase 8: the USB audio's service (TIMER5, outside the parts above) and its glitches since power-on */
         uint32_t g, pm = uac_load_pm(&g);
         if (stems_live()) {
