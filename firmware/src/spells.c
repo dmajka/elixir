@@ -764,16 +764,15 @@ static void sp_fx(const spell_t *S, const spc_t *c)
 {
     if (!(c->cats & SC_FX) || !c->sm)
         return;
-    if ((S->fl & SF_DUB) && (c->all || par[PAR_FX_TYPE] == FX_DELAY)) {
+    if ((S->fl & SF_DUB) && (c->all || par[PAR_DLY_LEVEL])) {   /* (1.0: the always-on delay, the bus as it is) */
         if (c->all) {
-            sp_par(PAR_FX_TYPE, FX_DELAY);
             sp_par(PAR_FX_DELAY_TYPE, (int32_t)(DELAY_TAPE + sp_rnd(2)));
-            sp_par(PAR_FX_DRY_WET, (int32_t)((44u + sp_rnd(30)) * sp.lim[SPL_FXMIX] / 127u));
+            sp_par(PAR_DLY_LEVEL, (int32_t)((56u + sp_rnd(38)) * sp.lim[SPL_FXMIX] / 127u));
         }
         sp_par(PAR_DSYNC, 1);
-        sp_par(PAR_FX_P1, (int32_t)((2u * (6u + sp_rnd(3)) + 1u) * 127u / 24u));   /* (1/8 .. 1/4: dotted 8th) */
-        sp_par(PAR_FX_P4, (int32_t)(60u + (c->c[1] * 34u >> 7)));                   /* (the feedback, < 95) */
-        sp_par(PAR_FX_P3, (int32_t)(80u - (c->c[0] * 50u >> 7)));
+        sp_par(PAR_DLY_TIME, (int32_t)((2u * (6u + sp_rnd(3)) + 1u) * 127u / 24u));   /* (1/8 .. 1/4: dotted 8th) */
+        sp_par(PAR_DLY_FB, (int32_t)(60u + (c->c[1] * 34u >> 7)));                   /* (the feedback, < 95) */
+        sp_par(PAR_DLY_TONE, (int32_t)(80u - (c->c[0] * 50u >> 7)));
         sp_par(PAR_DSAT, (int32_t)(30u + sp_rnd(50)));
         sp_par(PAR_ECHOREV, (int32_t)(20u + sp_rnd(40)));
         sp_par(PAR_GLITCH, 0);
@@ -790,13 +789,19 @@ static void sp_fx(const spell_t *S, const spc_t *c)
         sp_par(PAR_REV_DAMP, (int32_t)(50u - (c->c[0] * 40u >> 7)));
     }
     if ((S->fl & SF_FXALL) && c->all && sp_rnd(128) < c->sm) {
-        static const uint8_t T[5] = {FX_DELAY, FX_PHASER, FX_FLANGER, FX_RING, FX_DRIVE};
-        sp_par(PAR_FX_TYPE, T[sp_rnd(5)]);
+        static const uint8_t T[4] = {FX_PHASER, FX_FLANGER, FX_RING, FX_DRIVE};
+        sp_par(PAR_FX_TYPE, T[sp_rnd(4)]);
         sp_par(PAR_FX_DRY_WET, (int32_t)((30u + sp_rnd(60)) * sp.lim[SPL_FXMIX] / 127u));
         sp_par(PAR_FX_P1, (int32_t)sp_rnd(128));
         sp_par(PAR_FX_P2, (int32_t)sp_rnd(128));
         sp_par(PAR_FX_P3, (int32_t)sp_rnd(128));
         sp_par(PAR_FX_P4, (int32_t)sp_rnd(96));      /* (feedback in each type but the drive's volume: bounded) */
+        if (sp_rnd(5) == 0u) {                       /* (1.0: the delay, a fifth of the time, as DELAY was a type) */
+            sp_par(PAR_DLY_LEVEL, (int32_t)((38u + sp_rnd(76)) * sp.lim[SPL_FXMIX] / 127u));
+            sp_par(PAR_DLY_TIME, (int32_t)sp_rnd(128));
+            sp_par(PAR_DLY_FB, (int32_t)sp_rnd(96));
+            sp_par(PAR_DLY_TONE, (int32_t)(40u + sp_rnd(88)));
+        }
         sp_par(PAR_MDIRT_AMT, (int32_t)sp_rnd(c->chaos > 80u ? 60u : 20u));
     }
 }
@@ -1220,6 +1225,8 @@ static void sp_cast(uint32_t seed)                   /* the spell on the targets
             sp_par(PAR_REV_LEVEL, sp.lim[SPL_RLEV]);
         if (c.all && par[PAR_FX_DRY_WET] > sp.lim[SPL_FXMIX])
             sp_par(PAR_FX_DRY_WET, sp.lim[SPL_FXMIX]);
+        if (c.all && par[PAR_DLY_LEVEL] > sp.lim[SPL_FXMIX] * 127u / 100u)   /* (DRY/WET's %, as LEVEL) */
+            sp_par(PAR_DLY_LEVEL, (int32_t)(sp.lim[SPL_FXMIX] * 127u / 100u > 127u ? 127u : sp.lim[SPL_FXMIX] * 127u / 100u));
     }
     sp_motion(S, p, &c);
     for (t = 0; t < NTRACK; t++)                     /* the steps */

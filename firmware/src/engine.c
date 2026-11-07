@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Elixir: the engine's block, in the audio ISR: the parameters the main loop posted, MIDI in, the sequencer's
  * clock, the six voices, the FX bus and the reverb, then the outputs summed, clipped as the LXR's 16-bit DAC clips
- * them, PERF's DJ filter (perform.c) and scaled by MASTER (the FM-1's volume pot: after the DAC, as the LXR's). */
+ * them, PERF's DJ filter (perform.c) and scaled by MASTER (the FM-1's volume pot: after the DAC, as the LXR's) and the master volume (1.0). */
 
 static int32_t master_q12 = 2048;                   /* MASTER, Q12 (master.c sets it from the pot) */
 static int16_t scope[256];                          /* the last output, for the screen */
@@ -12,7 +12,10 @@ static uint32_t scope_w;
  * (before MASTER) was last above ~-60 dBFS (autosave waits for half a second of it: project.c) */
 #define QUIET_LEVEL 32
 static volatile uint8_t out_hush;
-static volatile int32_t out_gain = 4096;            /* Q12: towards 0 (hushed) or 4096, 16 a sample */
+static volatile int32_t out_gain = 4096;            /* Q12: towards 0 (hushed) or the volume, 16 a sample */
+/* 1.0: the master volume (midi.c out_vol), after the output stage and MASTER: x^2 as the pot, out_gain gliding to
+ * it (no zipper from a CC) */
+static inline int32_t out_vol_q12(void) { return (int32_t)((uint32_t)out_vol * out_vol * 4096u / 16129u); }
 static volatile uint32_t quiet_blocks;
 
 static void engine_globals_default(void)            /* the LXR's settings as a new project has them */
@@ -94,14 +97,14 @@ static void engine_block(int32_t *out)
     }
     perf_master(ml, mr);                            /* the DJ filter, TAPE STOP's fade */
     {
-        int32_t g = out_gain, gt = out_hush ? 0 : 4096, pk = 0;
+        int32_t g = out_gain, gt = out_hush ? 0 : out_vol_q12(), pk = 0;
         for (i = 0; i < BLOCK; i++) {
             int32_t l = ml[i], r = mr[i];
             if (iabs(l) > pk)
                 pk = iabs(l);
             if (iabs(r) > pk)
                 pk = iabs(r);
-            g += g < gt ? 16 : g > gt ? -16 : 0;
+            g += g < gt - 16 ? 16 : g > gt + 16 ? -16 : gt - g;
             out[2u * i] = (((l * master_q12) >> 12) * g) >> 12;
             out[2u * i + 1u] = (((r * master_q12) >> 12) * g) >> 12;
             if ((i & 3u) == 0u)

@@ -22,15 +22,17 @@
 <path class="a" d="M88 60 V289" marker-end="url(#ah)"/>
 <path class="a" d="M240 60 V83" marker-end="url(#ah)"/>
 <rect class="bx" x="172" y="84" width="136" height="58" rx="7"/><text class="t" x="184" y="104">BUS DIRT</text><text class="d" x="184" y="121">a drive before</text><text class="d" x="184" y="136">the effect</text><text class="p" x="298" y="104">FX</text>
-<path class="a" d="M240 142 V163" marker-end="url(#ah)"/>
-<rect class="bx" x="172" y="164" width="136" height="92" rx="7"/><text class="t" x="184" y="184">FX BUS</text><text class="d" x="184" y="201">one type at a time:</text><text class="d" x="184" y="216">DRIVE, RING, COMP,</text><text class="d" x="184" y="231">DELAY, PHASER,</text><text class="d" x="184" y="246">FLANGER</text><text class="p" x="298" y="184">FX</text>
-<path class="a" d="M240 256 V289" marker-end="url(#ah)"/>
+<path class="a" d="M240 142 V151" marker-end="url(#ah)"/>
+<rect class="bx" x="172" y="152" width="136" height="58" rx="7"/><text class="t" x="184" y="172">FX BUS</text><text class="d" x="184" y="189">DRIVE, RING, COMP,</text><text class="d" x="184" y="204">PHASER or FLANGER</text><text class="p" x="298" y="172">FX</text>
+<path class="a" d="M240 210 V219" marker-end="url(#ah)"/>
+<rect class="bx" x="172" y="220" width="136" height="58" rx="7"/><text class="t" x="184" y="240">DELAY</text><text class="d" x="184" y="257">always on, after</text><text class="d" x="184" y="272">the bus: Level</text><text class="p" x="298" y="240">FX</text>
+<path class="a" d="M240 278 V289" marker-end="url(#ah)"/>
 <path class="a" d="M392 60 V83" marker-end="url(#ah)"/>
 <rect class="bx" x="324" y="84" width="136" height="92" rx="7"/><text class="t" x="336" y="104">REVERB</text><text class="d" x="336" y="121">ROOM, SPRING,</text><text class="d" x="336" y="136">HALL or PLATE;</text><text class="d" x="336" y="151">Size, Damping,</text><text class="d" x="336" y="166">Level</text><text class="p" x="450" y="104">FX</text>
-<path class="a m" d="M308 226 H360 V177" marker-end="url(#ah)"/>
-<text class="d" x="330" y="244">echoes:</text><text class="d" x="330" y="259">ECHO&gt;REV</text>
+<path class="a m" d="M308 249 H360 V177" marker-end="url(#ah)"/>
+<text class="d" x="366" y="214">ECHO</text><text class="d" x="366" y="229">&gt;REV</text>
 <path class="a" d="M430 176 V289" marker-end="url(#ah)"/>
-<rect class="bx k" x="20" y="290" width="440" height="44" rx="7"/><text class="t c" x="240.0" y="310">MIX</text><text class="d c" x="240.0" y="327">the dry voices, the bus and the reverb&#x27;s return</text>
+<rect class="bx k" x="20" y="290" width="440" height="44" rx="7"/><text class="t c" x="240.0" y="310">MIX</text><text class="d c" x="240.0" y="327">the dry voices, the bus and its echoes, the reverb&#x27;s return</text>
 <path class="a" d="M240.0 334 V355" marker-end="url(#ah)"/>
 <rect class="bx" x="74" y="356" width="332" height="58" rx="7"/><text class="t" x="86" y="376">MASTER COMP</text><text class="d" x="86" y="393">Thresh, Ratio, Attack, Release; sidechain:</text><text class="d" x="86" y="408">the mix, or one track to duck the rest</text><text class="p" x="396" y="376">FX</text>
 <path class="a" d="M240.0 414 V431" marker-end="url(#ah)"/>

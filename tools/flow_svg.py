@@ -106,16 +106,17 @@ def master():
     b.append(arrow("M88 60 V289"))
     b.append(arrow("M240 60 V83"))
     b.append(box(172, 84, 136, 58, "BUS DIRT", ["a drive before", "the effect"], "FX"))
-    b.append(arrow("M240 142 V163"))
-    b.append(box(172, 164, 136, 92, "FX BUS", ["one type at a time:", "DRIVE, RING, COMP,", "DELAY, PHASER,",
-                                               "FLANGER"], "FX"))
-    b.append(arrow("M240 256 V289"))
+    b.append(arrow("M240 142 V151"))
+    b.append(box(172, 152, 136, 58, "FX BUS", ["DRIVE, RING, COMP,", "PHASER or FLANGER"], "FX"))
+    b.append(arrow("M240 210 V219"))
+    b.append(box(172, 220, 136, 58, "DELAY", ["always on, after", "the bus: Level"], "FX"))
+    b.append(arrow("M240 278 V289"))
     b.append(arrow("M392 60 V83"))
     b.append(box(324, 84, 136, 92, "REVERB", ["ROOM, SPRING,", "HALL or PLATE;", "Size, Damping,", "Level"], "FX"))
-    b.append(arrow("M308 226 H360 V177", mod=True))
-    b.append('<text class="d" x="330" y="244">echoes:</text><text class="d" x="330" y="259">ECHO&gt;REV</text>')
+    b.append(arrow("M308 249 H360 V177", mod=True))
+    b.append('<text class="d" x="366" y="214">ECHO</text><text class="d" x="366" y="229">&gt;REV</text>')
     b.append(arrow("M430 176 V289"))
-    b.append(box(20, 290, 440, 44, "MIX", ["the dry voices, the bus and the reverb's return"], cls="bx k", centre=True))
+    b.append(box(20, 290, 440, 44, "MIX", ["the dry voices, the bus and its echoes, the reverb's return"], cls="bx k", centre=True))
     chain = [("MASTER COMP", ["Thresh, Ratio, Attack, Release; sidechain:", "the mix, or one track to duck the rest"],
               "FX"),
              ("MASTER DIRT", ["TAPE, TUBE, FUZZ, DIODE or FOLD; Amount"], "FX"),

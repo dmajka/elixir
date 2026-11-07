@@ -21,12 +21,16 @@ static void wd_card_name(char *b, uint32_t n, uint32_t i)
 }
 static void wd_bars_text(char *b, uint32_t n, uint32_t bars)
 {
+    if (bars >= 1024u && !(bars % 1024u)) {         /* (1.0: "1024 BARS" is too wide for a card) */
+        put_str(put_int(b, (int32_t)(bars / 1024u)), "K BARS", n - 4u);
+        return;
+    }
     put_str(put_int(b, (int32_t)bars), bars == 1u ? " BAR" : " BARS", n - 4u);
 }
 static void wd_card_value(char *b, uint32_t n, uint32_t i, uint32_t v)
 {
     static const char *const QC[NQUEST] = {"ROAD", "ROUND", "SPIRE", "HOLLOW", "TIDE", "DETOUR", "ASTRAY", "MAZE",
-                                           "ROSARY", "POND", "WHEEL"};
+                                           "ROSARY", "POND", "WHEEL", "FROG", "CANYON"};
     switch (i) {
     case WV_QUEST: put_str(b, QC[v % NQUEST], n); return;
     case WV_JOURNEY:
@@ -201,7 +205,9 @@ static const uint8_t WD_ROAD[NQUEST][WD_NPT][2] = {
     {{0, 92}, {20, 92}, {20, 64}, {44, 64}, {44, 88}, {66, 88}, {66, 42}, {86, 42}, {86, 68}, {100, 68}},   /* corridors */
     {{0, 72}, {8, 90}, {22, 102}, {40, 104}, {58, 100}, {72, 90}, {82, 76}, {88, 62}, {92, 48}, {100, 40}},   /* beads */
     {{0, 92}, {18, 100}, {40, 104}, {62, 102}, {82, 94}, {96, 78}, {100, 60}, {94, 44}, {80, 34}, {62, 30}},   /* the pond */
-    {{0, 60}, {8, 28}, {30, 6}, {58, 4}, {82, 20}, {94, 50}, {84, 82}, {58, 100}, {28, 98}, {4, 78}}};     /* a wheel */
+    {{0, 60}, {8, 28}, {30, 6}, {58, 4}, {82, 20}, {94, 50}, {84, 82}, {58, 100}, {28, 98}, {4, 78}},      /* a wheel */
+    {{0, 92}, {12, 91}, {24, 89}, {36, 86}, {48, 82}, {60, 77}, {70, 71}, {80, 64}, {90, 56}, {100, 47}},   /* a slow rise */
+    {{0, 92}, {16, 70}, {30, 86}, {44, 58}, {56, 78}, {66, 50}, {76, 68}, {84, 40}, {92, 52}, {100, 26}}};   /* a gorge */
 #define WD_X0 40
 #define WD_W 160
 #define WD_Y0 44
@@ -263,6 +269,17 @@ static void wd_scenery(uint32_t q)                   /* behind the road: the mou
             while (w * w * 121 + y * y * 1600 > 1600 * 121)
                 w--;
             cv_rect(WD_X0 + WD_W / 2 - w, WD_Y0 + 42 + y, 2 * w, 1, ux_mix(T_BG, RGB(60, 120, 200), 45));
+        }
+    } else if (q == Q_FROG) {                        /* (1.0: the thermometer, its heat; the pot's water) */
+        int32_t h = 22 + wd.fh * 18 / 100;
+        cv_rect(WD_X0 - 4, WD_Y0 + WD_H + 2, WD_W + 8, 6, ux_mix(T_BG, RGB(60, 120, 200), 30));
+        cv_rrect(WD_X0 + 2, WD_Y0 - 6, 8, 44, 4, hill, T_BG);
+        cv_rect(WD_X0 + 4, WD_Y0 + 36 - h, 4, h, wd.fh < 0 ? RGB(90, 150, 230) : RGB(220, 90, 60));
+    } else if (q == Q_CANYON) {                      /* (1.0: the walls) */
+        for (y = 0; y < 60; y++) {
+            int32_t w = 10 + y / 3;
+            cv_rect(WD_X0 - 4, WD_Y0 - 4 + y, w, 1, hill);
+            cv_rect(WD_X0 + WD_W + 4 - w, WD_Y0 - 4 + y, w, 1, hill);
         }
     } else if (q == Q_WHEEL) {                       /* (the spokes) */
         for (y = 1; y < (int32_t)WD_NPT; y += 2)
@@ -516,5 +533,6 @@ static uint32_t wander_sig(void)
     s = sig_add(s, wd.goal | (uint32_t)wd.arrived << 6 | (uint32_t)wd.gdash << 7 | (uint32_t)wd.gl << 8 |
                        (uint32_t)wd.rsteps << 20 | (uint32_t)(uint8_t)wd.rmove[0] << 24);
     s = sig_add(s, wd.sdest | (uint32_t)wd.sleg << 8 | (uint32_t)sq.song << 24);
+    s = sig_add(s, (uint32_t)(uint16_t)wd.fh);         /* (1.0: BOILING FROG's thermometer) */
     return sig_add(s, seq_bpm() | (uint32_t)wd.home_p << 9 | (uint32_t)wd_home_loads_ok() << 15);
 }

@@ -520,6 +520,8 @@
       <tr><td>CC 102, value 0–63</td><td><b>Channel 10: slot kit 1–64</b>, at once</td></tr>
       <tr><td>CC 103, value 0–84</td><td><b>Channel 10: factory kit 1–85</b>, at once</td></tr>
       <tr><td>CC 126 · CC 127</td><td><b>Channel 10, 15, 16: slot · factory kit</b>, as 102 · 103</td></tr>
+      <tr><td>CC 125, value 0–63</td><td><b>Channel 10, 15, 16: the morph kit</b> (slot 1–64), as LOAD → MORPH</td></tr>
+      <tr><td>CC 124</td><td><b>Channel 10, 15, 16: master volume</b> (127 full), saved in the settings</td></tr>
       <tr><td>CC 0, value 0–63</td><td>A track's channel (10 at ALL): slot kit, as the LXR</td></tr>
       <tr><td>GLOBAL 60 / 61</td><td>Remote channel 16, CC or note: the previous / next pattern</td></tr>
     </table>
@@ -527,6 +529,7 @@
     <h2>The rest</h2>
     <table>
       <tr><td>One channel</td><td>Every track on one channel (MIDI CHANNELS) + a note each (MIDI NOTES): as a TR-8S</td></tr>
+      <tr><td>Notes out</td><td>CONFIG → MIDI OUT: a track's hits out on its channel (all OFF by default; TX N too)</td></tr>
       <tr><td>Clock</td><td>Out always (24 PPQ, start, stop). In: turn the tempo down to MIDI</td></tr>
       <tr><td>Filters</td><td>CONFIG → MIDI: N notes, R clock, C CC + NRPN, P program change</td></tr>
       <tr><td>Route</td><td>TRS&gt;USB: the jack's input on to USB</td></tr>
@@ -579,6 +582,7 @@
       <tr><th>Message on 10</th><th>KEYS (default)</th><th>PAT+KIT</th><th>ALL</th></tr>
       <tr><td>Program change 0–31</td><td>pattern</td><td>pattern</td><td>pattern</td></tr>
       <tr><td>CC 102 / 126 · 103 / 127</td><td>slot · factory kit</td><td>slot · factory kit</td><td>the sound</td></tr>
+      <tr><td>CC 125 · 124</td><td>morph kit · volume</td><td>morph kit · volume</td><td>the sound</td></tr>
       <tr><td>Notes</td><td>selected track</td><td>–</td><td>selected track</td></tr>
       <tr><td>CC 1 mod wheel</td><td>MACRO 1</td><td>–</td><td>–</td></tr>
       <tr><td>CC 0 / 32 bank</td><td>–</td><td>–</td><td>CC 0: slot kit</td></tr>
@@ -601,7 +605,7 @@
       <tr><td>16: SRate (11)</td><td>115</td></tr>
       <tr><td>16: 60 / 61</td><td>program change (any pattern)</td></tr>
     </table>
-    <p class="note">Whichever arrives last wins. The remote's sends, random pitch, shuffle, morph, roll, FX and
+    <p class="note">Whichever arrives last wins. The remote's sends, shuffle, morph, roll, FX and
       reverb knobs match NRPNs on 10. Remote 16's transport, mutes, solo, select, rolls and effects have no
       channel 10 twin.</p>
 
@@ -630,12 +634,12 @@
       <tr><td>Reverb send</td><td>72</td><td>73</td><td>74</td><td>75</td><td>76</td><td>77</td><td>78</td><td>79</td></tr>
       <tr><td>Sample rate</td><td>80</td><td>81</td><td>82</td><td>83</td><td>84</td><td>85</td><td>86</td><td>87</td></tr>
       <tr><td>LFO amount</td><td>88</td><td>89</td><td>90</td><td>91</td><td>92</td><td>93</td><td>94</td><td>95</td></tr>
-      <tr><td>Random pitch</td><td>96</td><td>97</td><td>98</td><td>99</td><td>100</td><td>101</td><td>102</td><td>103</td></tr>
+      <tr><td>DENSITY</td><td>96</td><td>97</td><td>98</td><td>99</td><td>100</td><td>101</td><td>102</td><td>103</td></tr>
       <tr><td>Mute ⇄</td><td>104</td><td>105</td><td>106</td><td>107</td><td>108</td><td>109</td><td>110</td><td>111</td></tr>
       <tr><td>Solo ⇄</td><td>112</td><td>113</td><td>114</td><td>115</td><td>116</td><td>117</td><td>118</td><td>119</td></tr>
     </table>
     <p class="note">Knobs are CCs (8–103); buttons (104–119) a CC or a note. Column 8: the selected track. CH and OH
-      share the hat voice, but for their decays.</p>
+      share the hat voice, but for their decays. DENSITY: the track's own, centred at 64, on top of 16's CC 28.</p>
 
     <h2>How it behaves</h2>
     <table>
@@ -669,9 +673,11 @@
       <tr><td>Effects, held</td><td><b>88</b>HALF</td><td><b>89</b>JITTER</td><td><b>90</b>CUTS</td><td><b>91</b>SHORT</td><td><b>92</b>PUMP</td><td><b>93</b>COMB</td><td><b>94</b>SPACE</td><td><b>95</b>CRUSH</td></tr>
       <tr><td>Effects ⇄</td><td><b>96</b>HALF</td><td><b>97</b>JITTER</td><td><b>98</b>CUTS</td><td><b>99</b>SHORT</td><td><b>100</b>PUMP</td><td><b>101</b>COMB</td><td><b>102</b>SPACE</td><td><b>103</b>CRUSH</td></tr>
       <tr><td>DENSITY out ⇄</td><td><b>104</b>D1</td><td><b>105</b>D2</td><td><b>106</b>D3</td><td><b>107</b>SN</td><td><b>108</b>CY</td><td><b>109</b>CH</td><td><b>110</b>OH</td><td><b>111</b>all in</td></tr>
+      <tr><td>Roll (fader)</td><td><b>112</b>D1</td><td><b>113</b>D2</td><td><b>114</b>D3</td><td><b>115</b>SN</td><td><b>116</b>CY</td><td><b>117</b>CH</td><td><b>118</b>OH</td><td><b>119</b>sel</td></tr>
     </table>
     <p class="note">The effects are PERF's and work from any page. DENSITY out: 104–110 leave a track out of DENSITY
-      (again: back in), 111 puts them all back.</p>
+      (again: back in), 111 puts them all back. Roll faders: the value is the rate, 1–32 on the grid (1/4 … 1/32),
+      33–127 free (1/32 … 1/256), 0 off; several at once, while playing.</p>
   </div>
 </section>
 

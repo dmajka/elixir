@@ -78,9 +78,9 @@ static void render_child(uint32_t now, uint32_t lv, int16_t *dst, uint32_t frame
         seq_start(1);
         for (k = c = 0; k < frames; k += n, c++) {   /* (frames: whole blocks) */
             if (c == 2u) {                           /* (a time change: the crossfade, then a time waiting for it) */
-                par_set(PAR_FX_P1, 70);
+                par_set(PAR_DLY_TIME, 70);
                 n = render(BLOCK);
-                par_set(PAR_FX_P1, 40);
+                par_set(PAR_DLY_TIME, 40);
             } else {
                 n = render(frames - k < 690u * BLOCK ? frames - k : 690u * BLOCK);
             }
@@ -765,11 +765,9 @@ int main(int argc, char **argv)
             par_set(PAR_FX_SEND1 + v, 127);
             par_set(PAR_REV_SEND1 + v, 0);
         }
-        par_set(PAR_FX_TYPE, FX_DELAY);
-        par_set(PAR_FX_DRY_WET, 50);
-        par_set(PAR_FX_P1, 100);
-        par_set(PAR_FX_P2, 60);
-        par_set(PAR_FX_P4, 90);
+        par_set(PAR_DLY_LEVEL, 64);                  /* (1.0: the always-on delay) */
+        par_set(PAR_DLY_TIME, 100);
+        par_set(PAR_DLY_FB, 90);
         master_q12 = 1024;
         render_child(1, 100, a, n);
         render_child(0, 100, b, n);
@@ -783,6 +781,7 @@ int main(int argc, char **argv)
             fails++;
         }
         par_set(PAR_FX_TYPE, FX_OFF);
+        par_set(PAR_DLY_LEVEL, 0);
         master_q12 = 4096;                           /* (unity: the output is the mix, so the dry run subtracts) */
         for (v = 0; v < NVOICE; v++) {
             par_set(PAR_FX_SEND1 + v, 0);

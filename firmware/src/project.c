@@ -330,10 +330,11 @@ static void proj_write_payload(void)
     pw_bytes("KPF2", 4);                            /* PERFORM 2's settings (0.6) */
     pw_byte(NPF2SET);
     pw_bytes(&pfs.drill, NPF2SET);
-    pw_bytes("KGL1", 4);                            /* the global LFOs (0.13) */
+    pw_bytes("KGL1", 4);                            /* the global LFOs (0.13; 1.0: 8 bytes each, RATE: older firmware
+                                                      * reads 7, its SYNC OFF as 4 bars) */
     pw_byte(NGLFO);
     for (i = 0; i < NGLFO; i++) {
-        pw_byte(NGLSET);
+        pw_byte(NGLKGL + 1u);
         pw_byte(gls[i].dest);
         pw_byte((uint8_t)gls[i].depth);
         pw_byte(gls[i].len);
@@ -341,6 +342,7 @@ static void proj_write_payload(void)
         pw_byte(gls[i].mode);
         pw_byte(gls[i].trig);
         pw_byte(gls[i].phase);
+        pw_byte(gls[i].rate);
     }
     pw_bytes("KSC1", 4);                            /* 19: the scale last chosen, DENSITY, STUTTER (0.16), VARY (31),
                                                       * 39: RUSH: a byte unused (0.23-test1's GHOST), FLAM, PITCH,
@@ -374,6 +376,10 @@ static void proj_write_payload(void)
     pw_bytes("KRDS", 4);                            /* 42: each song's ROADS */
     pw_byte(NUM_SONGS);
     pw_bytes(song_rd, NUM_SONGS);
+    pw_bytes("KTS1", 4);                            /* 1.0: each track's TIME STRETCH (0.01%) */
+    pw_byte(NTRACK);
+    for (i = 0; i < NTRACK; i++)
+        pw_u16(sq.tstr[i]);
 }
 
 /* a version-2 lock code: Elixir's parameters were at the numbers the LXR leaves free (247..254: PAR_FX_SEND1 ..,
@@ -485,6 +491,8 @@ static int proj_read_payload(uint32_t ver)
             memcpy(kit_names[k], nm, KIT_NAME_LEN);
             if (ver < 7u)
                 proj_models_08(kp);
+            if (ver <= 2u)
+                memset(&kp[PAR_UNUSED_1], 0, PAR_UNUSED_7 - PAR_UNUSED_1 + 1u);
             kit_sanitize(kp);
             kit_put(k, kp);
         }
@@ -496,8 +504,13 @@ static int proj_read_payload(uint32_t ver)
             par[PAR_MODEL1 + i2] = par[PAR_MODEL1 + i2] >= 1u && par[PAR_MODEL1 + i2] <= 4u ? 1u
                                  : par[PAR_MODEL1 + i2] == 5u ? 2u : par[PAR_MODEL1 + i2];
     }
+    if (ver <= 2u) {                                /* (1.0: 0.2 kept its own in the LXR's unused bytes: the delay's now) */
+        memset(&par[PAR_UNUSED_1], 0, PAR_UNUSED_7 - PAR_UNUSED_1 + 1u);
+        memset(&morph_par[PAR_UNUSED_1], 0, PAR_UNUSED_7 - PAR_UNUSED_1 + 1u);
+    }
     kit_sanitize(morph_par);
     out_migrate(&par[PAR_AUDIO_OUT1], &par[PAR_FX_SEND1]);
+    dly_migrate(par, par[PAR_DSYNC], &par[PAR_L2TGT1]);
     scl_last.root = scl_last.scale = 0;             /* (a pattern without a scale: CHROMATIC; KSC1 sets the last) */
     rush_defaults();                                /* (39: RUSH's, KSC1 sets them) */
     npat = ver < 2u ? 64u : pr_byte();
@@ -642,15 +655,17 @@ static int proj_read_payload(uint32_t ver)
         if (!memcmp(tag, "KGL1", 4)) {               /* 0.13: the global LFOs */
             n = pr_byte();
             for (i = 0; i < n; i++) {
-                uint8_t b[NGLSET] = {0};
+                uint8_t b[NGLKGL + 1u] = {0};
                 uint32_t c = pr_byte();
-                pr_bytes(b, c < NGLSET ? c : NGLSET);
-                pr_skip(c > NGLSET ? c - NGLSET : 0u);
-                if (i >= NGLFO || c < NGLSET)
+                pr_bytes(b, c < sizeof b ? c : sizeof b);
+                pr_skip(c > sizeof b ? c - sizeof b : 0u);
+                if (i >= NGLFO || c < NGLKGL)       /* (0.13's 7 bytes: RATE as the defaults have it) */
                     continue;
                 gls[i].dest = (uint8_t)(b[0] < NGD ? b[0] : GD_OFF);
                 gls[i].depth = (int8_t)clamp32((int8_t)b[1], -127, 127);
-                gls[i].len = (uint8_t)(b[2] < NGLEN ? b[2] : 7u);
+                gls[i].len = (uint8_t)(b[2] < NGLEN || b[2] == GL_FREE ? b[2] : 7u);
+                if (c > NGLKGL)
+                    gls[i].rate = (uint8_t)(b[7] & 127u);
                 gls[i].wave = (uint8_t)(b[3] % NLFO);
                 gls[i].mode = (uint8_t)(b[4] < NGM ? b[4] : GM_FREE);
                 gls[i].trig = (uint8_t)(b[5] < NGT ? b[5] : GT_PLAY);
@@ -702,6 +717,19 @@ static int proj_read_payload(uint32_t ver)
             n = pr_byte();
             pr_bytes(song_rd, n < NUM_SONGS ? n : NUM_SONGS);
             pr_skip(n > NUM_SONGS ? n - NUM_SONGS : 0u);
+        }
+    }
+    for (i = 0; i < NTRACK; i++)                    /* (1.0: KTS1; 100%, as written) */
+        seq_stretch_set(i, TSTR_ONE);
+    if (!pr.err && pr.pos + 4u <= pr.end) {
+        pr_bytes(tag, 4);
+        if (!memcmp(tag, "KTS1", 4)) {               /* 1.0: TIME STRETCH */
+            n = pr_byte();
+            for (i = 0; i < n; i++) {
+                uint32_t v = pr_u16();
+                if (i < NTRACK)
+                    seq_stretch_set(i, v);
+            }
         }
     }
     return pr.err;
@@ -918,16 +946,22 @@ static void autosave_poll(void)
  * 0.24: ccmap: the CC map (midi.c midi_cc; the library page's 0x50 / 0x51): settings from before (20 bytes) hold none:
  * all 0, the LXR's. (An Elixir before 0.24 doesn't take these longer settings: it starts from its defaults.)
  * 0.24: gtakes: what the global channel takes (midi.c GT_*: 0, the default and what older settings hold, KEYS);
- * in the padding before the map */
+ * in the padding before the map.
+ * 1.0: mvol: the master volume (engine.c out_vol; 127, the default, in settings from before: they are shorter);
+ * mout: the tracks whose notes go out over MIDI (bit t; 0, the default: none; CONFIG: MIDI OUT). An Elixir before 1.0
+ * doesn't take these longer settings: it starts from its defaults */
 #define SET_LEN_015 16u
 #define SET_LEN_016 20u
 typedef struct {
     uint32_t magic;
     uint8_t palette, leds, autosave, accel, project, kvel, kacc, pdrop, remote, rknobs, cakit, pmem, rglobal, medit, kbslots, gtakes;
     uint16_t ccmap[128];
+    uint8_t mvol, mout;
+    uint8_t realign;                                 /* (1.0: TIME STRETCH's tracks realign at each pattern change too;
+                                                      * the struct's padding before: 0, at STOP only) */
 } elixir_settings_t;
 _Static_assert(__builtin_offsetof(elixir_settings_t, ccmap) == SET_LEN_016, "settings: the map after 0.16's 20 bytes");
-static elixir_settings_t kset = {SET_MAGIC, 2, 1, 1, 1, 0xFF, 100, 127, 0, 0, 0, 0, 0, 0, 0, 0};   /* (palette 2: AMBER) */
+static elixir_settings_t kset = {SET_MAGIC, 2, 1, 1, 1, 0xFF, 100, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, {0}, 127, 0};   /* (palette 2: AMBER) */
 static uint32_t cc_map_at(uint32_t cc) { return kset.ccmap[cc & 127u]; }
 static uint8_t remote_of(uint32_t v, uint32_t dflt) { return (uint8_t)(v > 16u ? 0xFFu : v ? v - 1u : dflt - 1u); }
 static uint8_t settings_dirty;
@@ -1091,6 +1125,11 @@ static void persist_boot(void)                      /* power-on: the flash, the 
     remote_ch = remote_of(kset.remote, 15u);
     remote_gch = remote_of(kset.rglobal, 16u);
     midi_gtakes = kset.gtakes;
+    if (kset.mvol > 127u)
+        kset.mvol = 127;
+    out_vol = kset.mvol;
+    midi_mout = kset.mout;
+    sq.realign_pat = kset.realign != 0;
     data_locked = fx_scan() != 0;                    /* (0.24.1: before kl_scan, which may erase a sector) */
     proj_scan();
     kl_scan();

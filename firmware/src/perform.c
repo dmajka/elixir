@@ -122,19 +122,38 @@ static const uint8_t REPEAT_TICKS[4] = {96, 48, 24, 12};
 /* 0.13: the global LFOs */
 enum { GD_OFF, GD_MORPH, GD_FILTER, GD_LP, GD_HP, GD_PUSH, GD_COMB, GD_CRUSH, GD_JITTER, GD_CUTS, GD_PUMP,
        GD_DENSITY, GD_TRANSPOSE, GD_MCHANGE, GD_MSPREAD, GD_DFB, GD_DTIME, GD_RSEND, GD_MACRO1,
-       GD_STUT = GD_MACRO1 + NMACRO, NGD };          /* (0.16: STUTTER's chance, from 0 as the effects) */
-#define NGBI (GD_STUT - GD_DENSITY)                  /* (19c: the ones moved either way, gl.bi) */
+       GD_STUT = GD_MACRO1 + NMACRO, GD_DIRT, NGD };   /* (0.16: STUTTER's chance, from 0 as the effects; 1.0: the
+                                                      * master DIRT's amount, either way) */
+#define NGBI (GD_STUT - GD_DENSITY + 1)              /* (19c: the ones moved either way, gl.bi; GD_DIRT's the last) */
+static uint32_t gd_bi(uint32_t g)                    /* (its place in gl.bi, NGBI none) */
+{
+    return g >= GD_DENSITY && g < GD_STUT ? g - GD_DENSITY : g == GD_DIRT ? NGBI - 1u : NGBI;
+}
 enum { GM_FREE, GM_TRIG, GM_HOLD, GM_ONE, GM_HALF, NGM };
 enum { GT_PLAY, GT_PATTERN, GT_BAR, NGT };
 #define NGLFO 3u
-#define NGLEN 19u
-static const uint16_t GL_LEN[NGLEN] = {1, 2, 4, 8, 16, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048,
-                                       4096};       /* SPEED: a cycle, in 16ths (1/16 .. 256 bars) */
+/* SYNC: a cycle, in sixths of a 16th (4 ticks): 0.13's 1/16 .. 256 bars, then (1.0) 1/32 and the triplets and dotted
+ * ones, 3/8 and 5/16 (GL_ORDER: the knob's, OFF then slow .. fast as the track LFOs'). GL_FREE: SYNC OFF, RATE in Hz */
+#define NGLEN 28u
+#define GL_FREE 0x7Fu
+static const uint16_t GL_LEN[NGLEN] = {6, 12, 24, 48, 96, 192, 288, 384, 576, 768, 1152, 1536, 2304, 3072, 4608, 6144,
+                                       9216, 12288, 24576,
+                                       3, 4, 8, 18, 16, 30, 36, 32, 72};   /* (1/32 1/16T 1/8T 3/16 1/4T 5/16 3/8
+                                                                            * 1/2T 3/4) */
+static const uint8_t GL_ORDER[NGLEN + 1u] = {GL_FREE, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 27, 3, 25,
+                                             26, 24, 2, 22, 23, 1, 21, 0, 20, 19};
 static struct {                                      /* the project's (KGL1) */
-    uint8_t dest, len, wave, mode, trig, phase;      /* GD_*, GL_LEN's index, LFO_*, GM_*, GT_*, 0..127 */
+    uint8_t dest, len, wave, mode, trig, phase;      /* GD_*, GL_LEN's index (GL_FREE), LFO_*, GM_*, GT_*, 0..127 */
     int8_t depth;                                    /* -127 .. 127 */
+    uint8_t rate;                                    /* 1.0: SYNC OFF's rate, 0..127: 0.01 .. 20 Hz (KGL1's 8th) */
 } gls[NGLFO];
-#define NGLSET 7u                                    /* (KGL1: the bytes of each) */
+#define NGLKGL 7u                                    /* (KGL1: 0.13's bytes of each, then 1.0's RATE) */
+#define NGLSET 8u                                    /* (the settings of each: the pages' knobs) */
+#define GL_RATE_INC 62333u                           /* (0.01 Hz: 2^32 x BLOCK / FS / 100) */
+static uint32_t gl_rate_inc(uint32_t r)              /* RATE's step a block: 0.01 Hz x 2^(11 r / 127) */
+{
+    return (uint32_t)(((uint64_t)GL_RATE_INC * (uint32_t)exp2_q16((int32_t)((r & 127u) * 11u * 65536u / 127u))) >> 16);
+}
 static struct {
     lfo_t l[NGLFO];
     uint32_t tick[NGLFO];                            /* the tick length and SPEED l[n].inc was worked out for */
@@ -168,6 +187,7 @@ static void perf_defaults(void)
         memset(&gls[c], 0, sizeof gls[c]);
         gls[c].len = 7;
         gls[c].wave = LFO_TRI;
+        gls[c].rate = 64;                            /* (1.0: ~0.33 Hz, when SYNC is OFF) */
         gl.tick[c] = 0;
     }
 }
@@ -199,11 +219,14 @@ static void glfo_block(void)
         const uint32_t g = gls[n].dest < NGD ? gls[n].dest : GD_OFF, m = gls[n].mode < NGM ? gls[n].mode : GM_FREE;
         uint32_t t = sq.tick_q16 ? sq.tick_q16 : 1u;
         int32_t d = gls[n].depth, x;
-        if (gl.tick[n] != t || gl.len[n] != gls[n].len) {   /* a cycle: GL_LEN 16ths of 24 ticks; 2^32 x BLOCK / its
-                                                      * samples */
+        if (gls[n].len >= NGLEN) {                   /* 1.0: SYNC OFF: RATE */
+            gl.len[n] = GL_FREE;
+            l->inc = gl_rate_inc(gls[n].rate);
+        } else if (gl.tick[n] != t || gl.len[n] != gls[n].len) {   /* a cycle: GL_LEN units of 4 ticks; 2^32 x BLOCK
+                                                      * / its samples */
             gl.tick[n] = t;
             gl.len[n] = gls[n].len;
-            l->inc = (uint32_t)((((uint64_t)BLOCK << 48) / 24u / t) / GL_LEN[gls[n].len % NGLEN]);
+            l->inc = (uint32_t)((((uint64_t)BLOCK << 48) / 4u / t) / GL_LEN[gls[n].len]);
         }
         l->wave = (uint8_t)(gls[n].wave % NLFO);
         l->offset = gls[n].phase >= 127u ? 0xFFFFFFFFu : (uint32_t)gls[n].phase << 25;
@@ -211,8 +234,8 @@ static void glfo_block(void)
         if (m != GM_FREE && (ev & (TRIG_EV[gls[n].trig % NGT] | GLE_KEY << n)))
             lfo_hit(l);
         {
-            uint32_t inc = l->inc;                   /* (the clock's speed: TAPE STOP, HALF) */
-            l->inc = (uint32_t)(((uint64_t)inc * tape_q16) >> (16u + (sq.half && sq.running)));
+            uint32_t inc = l->inc;                   /* (the clock's speed: TAPE STOP, HALF; free: TAPE STOP's) */
+            l->inc = (uint32_t)(((uint64_t)inc * tape_q16) >> (16u + (sq.half && sq.running && gls[n].len < NGLEN)));
             gl.out[n] = lfo_calc(l);
             l->inc = inc;
         }
@@ -223,9 +246,8 @@ static void glfo_block(void)
             morph += d * x / 32768;                  /* (127 x 65536 / 32768: about 255) */
         } else if (g == GD_FILTER) {
             gl.dj += (int32_t)(((int64_t)d * (2 * x - 65536)) / 127);
-        } else if (g >= GD_DENSITY && g < GD_STUT) {                /* (19c: either way from where it is) */
-            bi[g - GD_DENSITY] = clamp32(bi[g - GD_DENSITY] + (int32_t)(((int64_t)d * (2 * x - 65536)) / 127), -65536,
-                                         65536);
+        } else if (gd_bi(g) < NGBI) {                /* (19c: either way from where it is) */
+            bi[gd_bi(g)] = clamp32(bi[gd_bi(g)] + (int32_t)(((int64_t)d * (2 * x - 65536)) / 127), -65536, 65536);
         } else {                                     /* the rest from 0 by |depth|; a negative one upside down */
             int32_t a = (d > 0 ? x : 65536 - x) * (d > 0 ? d : -d) / 127;
             if (g == GD_LP)
@@ -265,6 +287,7 @@ static void perf_block(void)
         fx.lfo_fb = gl.bi[GD_DFB - GD_DENSITY];
         fx.lfo_time = gl.bi[GD_DTIME - GD_DENSITY];
         rev_g = (uint32_t)(65536 + gl.bi[GD_RSEND - GD_DENSITY]);
+        dirt.lfo = gl.bi[NGBI - 1];                  /* (1.0: the master DIRT's amount) */
     }
     sq.fill = (on >> PF_FILL) & 1u;
     sq.half = (on >> PF_HALF) & 1u;

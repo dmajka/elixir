@@ -122,16 +122,28 @@ enum { LFO_SINE, LFO_TRI, LFO_SAW_UP, LFO_SAW_DOWN, LFO_REC, LFO_NOISE, LFO_EXP_
  *   ONE   a hit starts it from the offset, it runs one cycle and stops at its end (still until the first hit)
  *   HALF  the same, half a cycle */
 enum { LM_TRIG, LM_HOLD, LM_ONE, LM_HALF, NLFOMODE };
-static const uint8_t SYNC_SCALE_X4[12] = {0, 1, 2, 4, 8, 12, 16, 24, 32, 48, 64, 128};   /* lfo_calcPhaseInc's scaler x 4 */
+/* lfo_calcPhaseInc's scaler (cycles in 4 bars) x 15: the LXR's 11 (4/1 .. 1/32, 1/3 1/6 1/12 shown as the triplets
+ * 1/2T 1/4T 1/8T), then (1.0) 3/4, 3/8, 5/16, 3/16 (in the packed slot's 4 bits: the kits as they were). The knob turns
+ * through them by length (ui.c SYNC_ORDER) */
+#define NSYNC 16u
+static const uint16_t SYNC_SCALE_X60[NSYNC] = {0, 15, 30, 60, 120, 180, 240, 360, 480, 720, 960, 1920, 80, 160, 192, 320};
+static const uint8_t SYNC_ORDER[NSYNC] = {0, 1, 2, 3, 12, 4, 13, 5, 14, 6, 15, 7, 8, 9, 10, 11};   /* (OFF, then slow ..
+                                                                                         * fast: the knob's, a CC's) */
+static int is_lfo_sync(uint32_t p);                  /* (sound.c) */
 
 static void lfo_update_inc(lfo_t *l)                 /* lfo_setFreq / lfo_setSync */
 {
-    if (!l->sync || l->sync > 11u) {
+    if (!l->sync || l->sync >= NSYNC) {
         l->inc = lut1024u(LFO_INC, l->rate);
     } else {
-        /* bpm / 60 / 4 x scaler cycles a second, / (FS / BLOCK) a block */
-        uint64_t num = ((uint64_t)seq_bpm_x10 * SYNC_SCALE_X4[l->sync] * BLOCK) << 32;
-        l->inc = (uint32_t)(num / (uint32_t)(10u * 60u * 4u * 4u * FS));
+        /* bpm / 60 / 4 x scaler cycles a second, / (FS / BLOCK) a block. The LXR's (a whole scaler) as it divides;
+         * 1.0's thirds and fifths times 2^64 / (15 x the divisor) (a constant: no 64-bit divide on the target) */
+        uint32_t s = SYNC_SCALE_X60[l->sync];
+        if (s % 15u == 0u)
+            l->inc = (uint32_t)((((uint64_t)seq_bpm_x10 * (s / 15u) * BLOCK) << 32) / (uint32_t)(10u * 60u * 4u * 4u * FS));
+        else
+            l->inc = (uint32_t)(((uint64_t)(seq_bpm_x10 * s * BLOCK) *
+                                 (uint32_t)(0xFFFFFFFFFFFFFFFFull / (15ull * 10u * 60u * 4u * 4u * FS))) >> 32);
     }
 }
 static void lfo_recalc_sync(void)

@@ -27,11 +27,16 @@
  *     The track channels and the remote's are as before (CC 0 a slot kit there, as the LXR's).
  *   - 0.24.2: the basics on the remote's two channels too (TRACKS' and GLOBAL's, 15 and 16 by default), so one
  *     channel does it all: program change 0..31 the pattern, CC 126 a slot kit (0..63), CC 127 a factory kit (the
- *     remote map leaves 120..127 free). Global in KEYS and PAT+KIT take CC 126 / 127 as CC 102 / 103. */
+ *     remote map leaves 120..127 free). Global in KEYS and PAT+KIT take CC 126 / 127 as CC 102 / 103.
+ *   - 1.0: on the same channels, CC 125 a slot kit (0..63) as the morph target (LOAD > MORPH) and CC 124 the master
+ *     volume (CONFIG's settings, out_vol: 127 the most); a track's notes go out only if CONFIG: MIDI OUT has it on
+ *     (midi_mout, all off by default) and TX has N. */
 
 enum { MF_NOTE = 1, MF_RT = 2, MF_CC = 4, MF_PC = 8 };
 enum { MR_OFF, MR_U2M, MR_M2M, MR_A2M, MR_M2U, MR_M2A };
 
+static uint8_t midi_mout;                           /* 1.0: the tracks whose notes go out (project.c: kset.mout) */
+static volatile uint8_t out_vol = 127;              /* 1.0: the master volume 0..127 (engine.c; kset.mvol) */
 static uint8_t midi_note_on_of[NTRACK];             /* the note a track's MIDI out is holding, 0 = none */
 static uint8_t midi_note_mask;
 static uint16_t nrpn_num;
@@ -80,7 +85,7 @@ static int midi_tx(uint32_t f) { return (par[PAR_MIDI_FILT_TX] & f) != 0u; }
 static void midi_out_note(uint32_t t, uint32_t note, uint32_t vel)   /* seq_sendMidiNoteOn */
 {
     uint32_t n = par[PAR_MIDI_NOTE1 + t] ? par[PAR_MIDI_NOTE1 + t] : note;
-    if (!midi_tx(MF_NOTE) || t >= NTRACK || !vel)
+    if (!midi_tx(MF_NOTE) || t >= NTRACK || !vel || !((midi_mout >> t) & 1u))
         return;
     midi_send(0x90u | midi_track_ch(t), n, vel);
     midi_note_on_of[t] = (uint8_t)n;
@@ -121,9 +126,18 @@ enum { GT_KEYS, GT_PATKIT, GT_ALL, GT_OFF, NGTAKES };
 #define GT_CC_FACTORY 103u
 #define AK_CC_SLOT 126u                              /* 0.24.2: the same on every channel (the remote's free CCs) */
 #define AK_CC_FACTORY 127u
-static void midi_kit_cc(uint32_t cc, uint32_t v)     /* a slot kit (CC 102 / 126) or a factory one (CC 103 / 127) */
+#define AK_CC_VOL 124u                               /* 1.0: the master volume */
+#define AK_CC_MORPH 125u                             /* 1.0: a slot kit as the morph target */
+static int midi_ak_cc(uint32_t cc) { return cc >= AK_CC_VOL; }   /* (124 .. 127: on every channel that takes them) */
+/* a slot kit (CC 102 / 126) or a factory one (CC 103 / 127); 1.0: the morph target (CC 125), the volume (CC 124) */
+static void midi_kit_cc(uint32_t cc, uint32_t v)
 {
-    if (cc == GT_CC_SLOT || cc == AK_CC_SLOT) {
+    if (cc == AK_CC_VOL) {
+        out_vol = (uint8_t)v;
+    } else if (cc == AK_CC_MORPH) {
+        if (v < NUM_KITS)
+            kit_load_morph(v);
+    } else if (cc == GT_CC_SLOT || cc == AK_CC_SLOT) {
         if (v < NUM_KITS)
             kit_load_ram(v);
     } else {
@@ -196,6 +210,12 @@ static void midi_param(uint32_t p, uint32_t v)
         out_migrate(&par[PAR_AUDIO_OUT1], &par[PAR_FX_SEND1]);
         snd_refresh(PAR_FX_SEND1 + p - PAR_AUDIO_OUT1);
     }
+    if (p == PAR_FX_TYPE && v == FX_DELAY) {         /* (1.0: the LXR's FX type DELAY: the always-on delay, on) */
+        uint32_t q;
+        dly_migrate(par, par[PAR_DSYNC], &par[PAR_L2TGT1]);
+        for (q = PAR_DLY_TIME; q <= PAR_DLY_WOW; q++)
+            snd_refresh(q);
+    }
     if (par_sound(p)) {
         snd_refresh(p);
         if (par_lockable(p))
@@ -211,7 +231,7 @@ static void midi_cc(uint32_t ch, uint32_t cc, uint32_t v)
     if (!(par[PAR_MIDI_FILT_RX] & MF_CC) || m == CCMAP_OFF)
         return;
     if (!m && midi_glob(ch, GTM_PC & ~GTM_ALL)) {    /* 0.24: KEYS, PAT+KIT: the global channel's own CCs */
-        if (cc == GT_CC_SLOT || cc == GT_CC_FACTORY || cc == AK_CC_SLOT || cc == AK_CC_FACTORY) {
+        if (cc == GT_CC_SLOT || cc == GT_CC_FACTORY || midi_ak_cc(cc)) {
             midi_kit_cc(cc, v);
             return;
         }
@@ -232,7 +252,8 @@ static void midi_cc(uint32_t ch, uint32_t cc, uint32_t v)
         return;
     if (m) {                                         /* 0.24: mapped */
         uint32_t lo = par_min(p), r = par_max(p) - lo;
-        midi_param(p, r < 127u ? lo + (v * r + 63u) / 127u : v);
+        v = r < 127u ? lo + (v * r + 63u) / 127u : v;
+        midi_param(p, is_lfo_sync(p) ? SYNC_ORDER[v % NSYNC] : v);   /* (1.0: the syncs by length, as the knob) */
         return;
     }
     switch (cc) {
@@ -265,8 +286,8 @@ static void midi_message(uint32_t pkt, uint32_t src)   /* midiParser_parseMidiMe
     if (src == 2u && (route == MR_M2U || route == MR_M2A))   /* soft thru: the TRS input to USB */
         midi_out_event(pkt);
     if (st < 0xF0u && ((st & 15u) == remote_ch || (st & 15u) == remote_gch)) {
-        if ((st & 0xF0u) == 0xB0u && (d1 == AK_CC_SLOT || d1 == AK_CC_FACTORY)) {
-            midi_kit_cc(d1, d2);                     /* 0.24.2: the kit, on the remote's channels too */
+        if ((st & 0xF0u) == 0xB0u && midi_ak_cc(d1)) {
+            midi_kit_cc(d1, d2);                     /* 0.24.2: the kit, on the remote's channels too (1.0: 124 ..) */
             return;
         }
         if ((st & 0xF0u) == 0xC0u) {                 /* 0.24.2: .. and the pattern */

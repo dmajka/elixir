@@ -7,7 +7,8 @@
  * but for their decays), column 8 the selected track.
  *   knobs, CC 8 + 8 x row + column:
  *     8 volume    16 pan    24 filter    32 resonance    40 decay    48 pitch    56 drive    64 FX send
- *     72 reverb send    80 sample rate    88 LFO amount    96 random pitch
+ *     72 reverb send    80 sample rate    88 LFO amount    96 DENSITY (1.0, was random pitch: the track's own,
+ *     centred at 64, on top of PERF's; not committed)
  *   buttons, 104 + 8 x row + column: 104 mute    112 solo
  *   (0.24.3: CONFIG: REMOTE's Mute/solo: PRESS, a press flips the mute (solo); TOGGLE, the button's state is the
  *   mute's (solo's): on mutes, off unmutes, for a controller's toggle buttons)
@@ -24,6 +25,10 @@
  *     64  select D1 .. OH    72 roll D1 .. OH, the selected track    80 DRILL, the same
  *     88  HALF JITTER CUTS SHORT PUMP COMB SPACE CRUSH, held    96 the same, latched
  *     104 DENSITY: D1 .. OH left out (again: back in), all back in
+ *   1.0: CC 112 + column: roll D1 .. OH, the selected track (as it was when the CC left 0), held by the CC's value
+ *   (0 off; seq.c croll_grid: a small turn 1/4 .. 1/16 on the grid, the rest 1/32 .. 1/256 off it), several at once
+ *   from a controller's faders.
+ * Both channels (midi.c): CC 124 the master volume, 125 the morph target, 126 a slot kit, 127 a factory kit.
  * Knobs (CONFIG): PICKUP (a pot acts once it passes the value: nothing jumps), ABS, REL (encoders: 64 +/- n, or
  * two's complement). Under REC a track's knob records a lock on its own track, as a panel knob on the selected one.
  * Feedback: a value changed from anywhere (the panel, a kit, MIDI) goes back as its CC, a button's state (127 on, 0
@@ -37,6 +42,7 @@
 #define RM_NGK 40u                                   /* GLOBAL's knobs: CC 8 .. 47 */
 #define RM_GB0 48u                                   /* .. its buttons: 48 .. 111 */
 #define RM_NGB 64u
+#define RM_ROLL0 112u                                /* 1.0: GLOBAL's rolls a track: 112 .. 119 */
 #define RM_NK (RM_NTK + RM_NGK)                      /* the knobs: TRACKS' then GLOBAL's */
 #define RM_NB (RM_NTB + RM_NGB)                      /* the buttons: the same */
 enum { RR_VOL, RR_PAN, RR_FILTER, RR_RESO, RR_DECAY, RR_PITCH, RR_DRIVE, RR_FXS, RR_REVS, RR_SRATE, RR_LFO, RR_RNDP };
@@ -66,6 +72,7 @@ static struct {
     uint32_t heard[(RM_NB + 31u) / 32u];             /* .. have sent something (as_cc: a CC) */
     uint32_t as_cc[(RM_NB + 31u) / 32u];
     uint8_t roll_t[8];                               /* the track a roll button rolls (the selected one, at the press) */
+    uint8_t croll_t;                                 /* 1.0: the track CC 119 rolls (the selected one as it left 0) */
     uint8_t cur;                                     /* feedback: where the scan goes on */
     uint8_t init, usb_on;                            /* (USB configured again: everything sent again) */
     uint32_t ms;
@@ -95,7 +102,7 @@ static uint32_t rm_par(uint32_t i)
     case RR_REVS: return PAR_REV_SEND1 + v;
     case RR_SRATE: return PAR_VOICE_DECIMATION1 + v;
     case RR_LFO: return PAR_AMOUNT_LFO1 + v;
-    default: return PAR_RND_PITCH1 + v;
+    default: return VP_TD + t;                       /* (1.0: DENSITY, in place of random pitch) */
     }
 }
 /* the range a knob's 0..127 spans (the tempo: 60..187 BPM, a step a BPM; never down to MIDI sync) */
@@ -163,8 +170,8 @@ static void rm_held(uint32_t pf_bit, int down)       /* a PERF effect held from 
 {
     uint32_t b = 1u << pf_bit;
     ui.rm_held = down ? ui.rm_held | b : ui.rm_held & ~b;
-    if (down && pf_bit == PF_FREEZE && fx.type != FX_DELAY)
-        ui_message("FREEZE: THE FX BUS IS NOT A DELAY");
+    if (down && pf_bit == PF_FREEZE && !par[PAR_DLY_LEVEL])
+        ui_message("FREEZE: THE DELAY'S LEVEL IS 0");
     perf_apply();
 }
 static void rm_button(uint32_t j, int down)          /* button j (TRACKS' 0 .., then GLOBAL's) */
@@ -248,6 +255,14 @@ static void rm_in(uint32_t ch, uint32_t st, uint32_t d1, uint32_t d2)
     uint32_t nk = glob ? RM_NGK : RM_NTK, b0 = glob ? RM_GB0 : RM_TB0, nb = glob ? RM_NGB : RM_NTB, j;
     if (cc && d1 >= RM_CC0 && d1 < RM_CC0 + nk) {
         rm_knob(d1 - RM_CC0 + (glob ? RM_NTK : 0u), d2);
+    } else if (glob && cc && d1 >= RM_ROLL0 && d1 < RM_ROLL0 + 8u) {   /* 1.0: a track's roll, by the CC's value */
+        uint32_t t = d1 - RM_ROLL0;
+        if (t == 7u) {
+            if (!sq.croll[rm.croll_t % NTRACK])
+                rm.croll_t = ui.track;
+            t = rm.croll_t % NTRACK;
+        }
+        sq.croll[t] = (uint8_t)d2;
     } else if (d1 >= b0 && d1 < b0 + nb) {
         j = d1 - b0 + (glob ? RM_NTB : 0u);
         rm_put(rm.heard, j, 1);
@@ -264,6 +279,10 @@ static void remote_service(void)
         n = midi_modw;
         midi_modw = 0xFF;
         macro_set(0, n);
+    }
+    if (out_vol != kset.mvol) {                      /* 1.0: the master volume from its CC, kept in the settings */
+        kset.mvol = out_vol;
+        settings_later();
     }
     if (!rm.init || rm.usb_on != (usb.config != 0)) {
         remote_reset();

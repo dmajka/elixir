@@ -59,12 +59,14 @@ static uint32_t init_kit_k(uint32_t p)
     return p == PAR_REV_SIZE ? 64u : p == PAR_REV_DAMP ? 48u : p == PAR_REV_LEVEL ? 100u : 0u;
 }
 
+static void dly_migrate(uint8_t *k, uint32_t sync, uint8_t *l2t);
 static void kit_init_values(uint8_t *p)              /* the init kit (CLEAR KIT), kit layout */
 {
     uint32_t i;
     for (i = 0; i < KIT_LEN; i++)
         p[i] = (uint8_t)(i >= END_OF_SOUND_PARAMETERS ? init_kit_k(kit_par(i))
                          : i + 8u < sizeof INIT_KIT ? INIT_KIT[i + 8u] : 0u);
+    dly_migrate(p, 0, 0);                            /* (1.0: the delay's medium settings, off) */
 }
 static void kit_init_par(void)                       /* the init kit into the edit buffer */
 {
@@ -231,6 +233,46 @@ static void out_migrate(uint8_t *out, uint8_t *send)
             send[i] = 127;
         }
 }
+/* 1.0: the always-on delay (fxbus.c). An older kit with the FX bus on DELAY: the delay on, at the type's settings
+ * (TIME through the LXR's RANGE, as calcDelayTime read the two, onto the one curve now; DRY/WET as LEVEL: the echoes
+ * as loud, the dry now all there), the bus OFF. A delay whose bytes are all 0 (an LXR or factory kit, the init kit):
+ * a medium one, off. k: a kit's bytes or par[] (the delay's and the bus's are the LXR's numbers, in both at p);
+ * sync: its delay's SYNC; l2t: its six LFO 2 targets (0: none) */
+static void dly_migrate(uint8_t *k, uint32_t sync, uint8_t *l2t)
+{
+    uint32_t i;
+    if (!(k[PAR_DLY_TIME] | k[PAR_DLY_FB] | k[PAR_DLY_TONE] | k[PAR_DLY_LEVEL] | k[PAR_DLY_WOW]))   /* (from before */
+        for (i = 0; i < 6u; i++) {                   /* .. 1.0: D2's FX P targets, D1's; sound.c TGT_DLY) */
+            uint8_t *t[3] = {&k[PAR_VEL_DEST_1 + i], &k[PAR_TARGET_LFO1 + i], l2t ? &l2t[i] : 0}, j;
+            for (j = 0; j < 3u; j++)
+                if (t[j] && tgt_dly(*t[j]))
+                    *t[j] = (uint8_t)(*t[j] - TGT_DLY + MOD_TARGET_VOICE[0][1] - 3u);
+        }
+    if (k[PAR_FX_TYPE] == FX_DELAY) {
+        uint32_t ty = k[PAR_FX_DELAY_TYPE] < NDELAY ? k[PAR_FX_DELAY_TYPE] : DELAY_NORMAL, t = k[PAR_FX_P1];
+        if (ty < DELAY_TAPE && !sync) {   /* (TAPE's and SYNC's TIME read as they did) */
+            uint64_t r = q16_of(k[PAR_FX_P2]), cv = ((uint64_t)q16_of(t) * r) >> 16, hi = delay_hi(ty);
+            uint64_t mn = D_LOW_MIN + (((uint64_t)(D_LOW_MAX - D_LOW_MIN) * r) >> 16);
+            uint64_t mx = D_LOW_MAX + (((hi - D_LOW_MAX) * r) >> 16), sm = mn + (((mx - mn) * cv) >> 16);
+            uint32_t nu = (uint32_t)((sm - D_LOW_MIN) >> 16), de = (uint32_t)((hi - D_LOW_MIN) >> 16);
+            uint64_t u = sm <= D_LOW_MIN ? 0u : (uint64_t)((nu << 15) / de) << 15;   /* (t^2, Q30; a whole sample:
+                                                      * 32-bit division, the firmware's) */
+            t = (uint32_t)((pl_isqrt64(u) * 127u + 16384u) >> 15);
+            t = t > 127u ? 127u : t;
+        }
+        k[PAR_DLY_TIME] = (uint8_t)t;
+        k[PAR_DLY_WOW] = ty >= DELAY_TAPE ? k[PAR_FX_P2] : 0u;
+        k[PAR_DLY_TONE] = k[PAR_FX_P3];
+        k[PAR_DLY_FB] = k[PAR_FX_P4];
+        k[PAR_DLY_LEVEL] = (uint8_t)((k[PAR_FX_DRY_WET] > 100u ? 100u : k[PAR_FX_DRY_WET]) * 127u / 100u);
+        k[PAR_FX_TYPE] = FX_OFF;
+    }
+    if (!(k[PAR_DLY_TIME] | k[PAR_DLY_FB] | k[PAR_DLY_TONE] | k[PAR_DLY_LEVEL] | k[PAR_DLY_WOW])) {
+        k[PAR_DLY_TIME] = 64;                        /* (~180 ms) */
+        k[PAR_DLY_FB] = 50;
+        k[PAR_DLY_TONE] = 100;
+    }
+}
 /* a kit (kit layout) as Elixir reads it: the modulation targets indexes of MOD_TARGETS (preset_readDrumsetData's
  * check), no Out = FX BUS, Elixir's values in range */
 static void kit_sanitize(uint8_t *p)
@@ -246,6 +288,7 @@ static void kit_sanitize(uint8_t *p)
         if (p[PAR_TRANS1_WAVE + i] >= LXR_TRANS_N + 2u)  /* packed slot. Some LXR kits have 24) */
             p[PAR_TRANS1_WAVE + i] = 0;
     out_migrate(&p[PAR_AUDIO_OUT1], &p[kit_idx(PAR_FX_SEND1)]);
+    dly_migrate(p, p[kit_idx(PAR_DSYNC)], &p[kit_idx(PAR_L2TGT1)]);
     for (i = 0; i < 6u; i++)                         /* (24: SN-HH have the LXR's engine and MICRO's types. 0.24: */
         if (!model_ok(i, p[kit_idx(PAR_MODEL1 + i)]))   /* P WTABLE, not built in, plays as P ADD) */
             p[kit_idx(PAR_MODEL1 + i)] = i <= 2u ? MD_PL0 + PE_ADD : 0u;

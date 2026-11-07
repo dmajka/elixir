@@ -46,8 +46,9 @@ static const char *const L_OUT[] = {"STEREO", "STEREO 2", "LEFT", "RIGHT", "LEFT
                                                   * FX BUS, is FX SEND 127: kit.c out_migrate) */
 static const char *const L_ROLL[] = {"ONE", "1/1", "1/2", "1/4", "1/8", "1/16", "1/24", "1/32", "1/48", "1/64",
                                      "1/128", "1/3", "1/6", "1/12"};
-static const char *const L_SYNC[] = {"OFF", "4/1", "2/1", "1/1", "1/2", "1/3", "1/4", "1/6", "1/8", "1/12",
-                                     "1/16", "1/32"};
+static const char *const L_SYNC[] = {"OFF", "4/1", "2/1", "1/1", "1/2", "1/2T", "1/4", "1/4T", "1/8", "1/8T",
+                                     "1/16", "1/32", "3/4", "3/8", "5/16", "3/16"};   /* (voices.c SYNC_SCALE_X60) */
+_Static_assert(sizeof L_SYNC / sizeof L_SYNC[0] == NSYNC, "voices.c: the sync values");
 static const char *const L_LFOW[] = {"SINE", "TRI", "SAW UP", "SAW DN", "SQUARE", "RANDOM", "EXP UP", "EXP DN"};
 static const char *const L_RETRIG[] = {"OFF", "DRUM 1", "DRUM 2", "DRUM 3", "SNARE", "CYMBAL", "HIHAT"};
 static const char *const L_QUANT[] = {"OFF", "1/8", "1/16", "1/32", "1/64"};
@@ -148,13 +149,13 @@ static const struct { uint16_t first; uint8_t n; uint16_t dtype; const char *nm[
     {PAR_MC_GAIN, 1, DTYPE_0B127, {"Makeup", "Comp", "cmk", "C makeup"}},
     {PAR_MC_MIX, 1, DTYPE_0B127, {"Mix", "Comp", "cmx", "C mix"}},
     {PAR_L2RATE1, 6, DTYPE_0B127, {"Rate", "LFO 2", "l2r", "L2 rate"}},           /* (25b) */
-    {PAR_L2AMT1, 6, DTYPE_0B127, {"Amount", "LFO 2", "l2a", "L2 amt"}},
+    {PAR_L2AMT1, 6, DTYPE_0B127, {"Depth", "LFO 2", "l2a", "L2 depth"}},   /* (1.0: every LFO's names) */
     {PAR_L2TGT1, 6, DTYPE_TARGET_SELECTION_LFO, {"Dest", "LFO 2", "l2t", "L2 dest"}},
     {PAR_L2WAVE1, 6, DTYPE_MENU | MENU_LFO_WAVES << 8, {"Wave", "LFO 2", "l2w", "L2 wave"}},
     {PAR_L2MODE1, 6, DTYPE_MENU | MENU_LFOMODE << 8, {"Mode", "LFO 2", "l2m", "L2 mode"}},
     {PAR_L2SYNC1, 6, DTYPE_MENU | MENU_SYNC_RATES << 8, {"Sync", "LFO 2", "l2s", "L2 sync"}},
-    {PAR_L2RTRG1, 6, DTYPE_MENU | MENU_RETRIGGER << 8, {"Retrig", "LFO 2", "l2g", "L2 retrg"}},
-    {PAR_L2OFS1, 6, DTYPE_0B127, {"Offset", "LFO 2", "l2o", "L2 offst"}},
+    {PAR_L2RTRG1, 6, DTYPE_MENU | MENU_RETRIGGER << 8, {"Retrigger", "LFO 2", "l2g", "L2 retrg"}},
+    {PAR_L2OFS1, 6, DTYPE_0B127, {"Phase", "LFO 2", "l2o", "L2 phase"}},
     {PAR_INS1, 6, DTYPE_MENU | MENU_INS << 8, {"Type", "Insert", "ins", "Ins type"}},   /* (27a) */
     {PAR_INSA1, 6, DTYPE_0B127, {"Amount", "Insert", "ina", "Ins amt"}},
     {PAR_INSB1, 6, DTYPE_0B127, {"Rate", "Insert", "inb", "Ins rate"}},
@@ -237,10 +238,14 @@ static const char *par_name_k(uint32_t p, uint32_t which)
 
 static uint32_t par_dtype(uint32_t p)
 {
+    if (par_dly(p))                                  /* (1.0: the delay's, in the LXR's unused bytes) */
+        return DTYPE_0B127;
     return p < NUM_PARAMS ? PAR_DTYPE[p] & 0xFFu : p < NPAR ? K_PARS[par_k(p)].dtype & 0xFFu : DTYPE_0B127;
 }
 static uint32_t par_menu(uint32_t p)
 {
+    if (par_dly(p))
+        return 0;
     return p < NUM_PARAMS ? PAR_DTYPE[p] >> 8 : p < NPAR ? K_PARS[par_k(p)].dtype >> 8 : 0u;
 }
 
@@ -286,12 +291,38 @@ static uint32_t par_max(uint32_t p)
     }
 }
 
+/* 1.0: LFO 1's names as every LFO's (Depth, Rate, Wave, Phase, Retrigger; the LXR's Amount, Frequncy, Waveform,
+ * Offset, Retriggr), on its cards (lock 0) and in a lock's name (lock 1: "L1 rate", as LFO 2's "L2 rate"); 0 another */
+static const char *lfo1_name(uint32_t p, int lock)
+{
+    static const char *const N[8][2] = {{"Rate", "L1 rate"}, {"Depth", "L1 depth"}, {"Wave", "L1 wave"},
+                                        {"Voice", "L1 voice"}, {"Dest", "L1 dest"}, {"Retrigger", "L1 retrg"},
+                                        {"Sync", "L1 sync"}, {"Phase", "L1 phase"}};
+    static const uint16_t P0[8] = {PAR_FREQ_LFO1, PAR_AMOUNT_LFO1, PAR_WAVE_LFO1, PAR_VOICE_LFO1, PAR_TARGET_LFO1,
+                                   PAR_RETRIGGER_LFO1, PAR_SYNC_LFO1, PAR_OFFSET_LFO1};
+    uint32_t i;
+    for (i = 0; i < 8u; i++)
+        if (p >= P0[i] && p < P0[i] + 6u)
+            return N[i][lock != 0];
+    return 0;
+}
+/* 1.0: the always-on delay's (sound.c PAR_DLY_*): long, category, short */
+static const char *dly_name(uint32_t p, uint32_t which)
+{
+    static const char *const N[5][3] = {{"Time", "Delay", "dtm"}, {"Feedback", "Delay", "dfb"}, {"Tone", "Delay", "dtn"},
+                                        {"Level", "Delay", "dlv"}, {"Wow", "Delay", "dwo"}};
+    return N[p - PAR_DLY_TIME][which];
+}
 /* the names: long (the cards), short (3 letters, the LXR's) */
 static const char *par_name(uint32_t p)
 {
     uint32_t t = p < NUM_PARAMS ? par_text_of[p] : 0u;
+    if (par_dly(p))
+        return dly_name(p, 0);
     if (p >= NUM_PARAMS && p < NPAR)
         return par_name_k(p, 0);
+    if (lfo1_name(p, 0))
+        return lfo1_name(p, 0);
     switch (p) {                                     /* (the step and global ones the pages name otherwise) */
     case PAR_BPM: return "Tempo";
     case PAR_SHUFFLE: return "Shuffle";
@@ -305,6 +336,8 @@ static const char *par_name(uint32_t p)
 static const char *par_cat(uint32_t p)
 {
     uint32_t t = p < NUM_PARAMS ? par_text_of[p] : 0u;
+    if (par_dly(p))
+        return dly_name(p, 1);
     if (p >= NUM_PARAMS && p < NPAR)
         return par_name_k(p, 1);
     return t ? CAT_NAMES[TEXT_NAMES[t][1]] : "";
@@ -312,6 +345,8 @@ static const char *par_cat(uint32_t p)
 static const char *par_short(uint32_t p)
 {
     uint32_t t = p < NUM_PARAMS ? par_text_of[p] : 0u;
+    if (par_dly(p))
+        return dly_name(p, 2);
     if (p >= NUM_PARAMS && p < NPAR)
         return par_name_k(p, 2);
     return t ? SHORT_NAMES[TEXT_NAMES[t][0]] : "";
@@ -374,6 +409,17 @@ static void mod_target_name(char *b, uint32_t idx, int with_voice, uint32_t max)
     p = MOD_TARGETS[idx][1];
     if (p == PAR_VOICE_DECIMATION_ALL) {
         put_str(b, "ALL SRate", max);
+        return;
+    }
+    if (lfo1_name(p, 1)) {                           /* (1.0: LFO 1's, as LFO 2's: "D1 L1 rate") */
+        b[0] = 0;
+        if (with_voice && par_voice(p) < 6u && max > 4u) {
+            put_str(b, VOICE_SHORT[par_voice(p)], max);
+            b[2] = ' ';
+            put_str(b + 3, lfo1_name(p, 1), max - 3u);
+        } else {
+            put_str(b, lfo1_name(p, 1), max);
+        }
         return;
     }
     b[0] = 0;
@@ -501,16 +547,30 @@ static void par_format(char *b, uint32_t p, uint32_t v, uint32_t max)
             note_name(b, v);
         return;
     case DTYPE_TARGET_SELECTION_LFO:
-    case DTYPE_TARGET_SELECTION_VELO:
+    case DTYPE_TARGET_SELECTION_VELO: {
+        /* (1.0: LFO 1's on another voice: that voice first, its Dest turning through every voice's) */
+        int other = p >= PAR_TARGET_LFO1 && p <= PAR_TARGET_LFO6 && v && lfo_voice(p - PAR_TARGET_LFO1) !=
+                    p - PAR_TARGET_LFO1;
         if (v >= NUM_MOD_TARGETS) {                  /* (25a: Elixir's, for the LFO's voice or the velocity's own) */
             uint32_t vi = p >= PAR_TARGET_LFO1 && p <= PAR_TARGET_LFO6 ? lfo_voice(p - PAR_TARGET_LFO1)
                         : p >= PAR_VEL_DEST_1 && p <= PAR_VEL_DEST_6 ? p - PAR_VEL_DEST_1
-                        : p >= PAR_L2TGT1 && p < PAR_L2TGT1 + 6u ? p - PAR_L2TGT1 : 0u, q = xt_par(v, vi);
-            put_str(b, q ? par_name_k(q, 3) : "OFF", max);
+                        : p >= PAR_L2TGT1 && p < PAR_L2TGT1 + 6u ? p - PAR_L2TGT1 : 0u, q = xt_par(v, vi), n = 0;
+            if (q && other && max > 4u) {
+                put_str(b, VOICE_SHORT[vi], max);
+                b[2] = ' ';
+                n = 3;
+            }
+            put_str(b + n, q ? par_name_k(q, 3) : "OFF", max - n);
             return;
         }
-        mod_target_name(b, v, 0, max);
+        if (tgt_dly(v)) {                            /* (1.0: the delay's, sound.c TGT_DLY) */
+            static const char *const D[4] = {"D time", "D feedbk", "D tone", "D level"};
+            put_str(b, D[v - TGT_DLY], max);
+            return;
+        }
+        mod_target_name(b, v, other, max);
         return;
+    }
     case DTYPE_AUTOM_TARGET:
         mod_target_name(b, v, 1, max);
         return;

@@ -79,6 +79,13 @@ enum {
     PAR_INSC1 = PAR_INSB1 + 6,
     NPAR = PAR_INSC1 + 6
 };
+/* 1.0: the always-on delay's own settings (fxbus.c), in five of the seven bytes the LXR's kit leaves unused (221 ..:
+ * 0 in every LXR and factory kit; only Elixir 0.2 used them, project.c clears a version-2 project's), so a kit stays
+ * 470 bytes and an LXR still reads it. TIME, FEEDBACK, TONE, LEVEL (0: the delay off), TAPE's WOW. Not lockable (as
+ * the bytes were), but LFO targets (XT_PAR) */
+enum { PAR_DLY_TIME = PAR_UNUSED_1, PAR_DLY_FB, PAR_DLY_TONE, PAR_DLY_LEVEL, PAR_DLY_WOW };
+_Static_assert(PAR_DLY_WOW <= PAR_UNUSED_7, "the delay: in the LXR's unused bytes");
+static inline int par_dly(uint32_t p) { return p >= PAR_DLY_TIME && p <= PAR_DLY_WOW; }
 #define KIT_LEN (END_OF_SOUND_PARAMETERS + NPAR - NUM_PARAMS)
 #define KIT_GAP (NUM_PARAMS - END_OF_SOUND_PARAMETERS)
 static inline int par_sound(uint32_t p) { return p < END_OF_SOUND_PARAMETERS || (p >= NUM_PARAMS && p < NPAR); }
@@ -163,11 +170,23 @@ static uint32_t lfo_voice(uint32_t l)                /* LFO l's destination voic
     uint32_t v = par[PAR_VOICE_LFO1 + l];
     return v >= 1u && v <= 6u ? v - 1u : 0u;
 }
+/* 1.0: the always-on delay's TIME, FEEDBACK, TONE, LEVEL as LFO and velocity targets. The byte's 256 are taken, but
+ * the LXR's list has the FX bus's P1..P4 once in each voice's part (the same four parameters six times): D2's four
+ * (TGT_DLY ..) are the delay's now, D2's list shows D1's four for the bus (they reach any voice's), and an older kit's
+ * D2 FX P targets become D1's as it loads (kit.c dly_migrate) */
+#define TGT_DLY (MOD_TARGET_VOICE[1][1] - 3u)         /* (74) */
+static inline int tgt_dly(uint32_t idx) { return idx >= TGT_DLY && idx < TGT_DLY + 4u; }
 static uint32_t mod_dest(uint32_t idx, uint32_t vi)  /* a target byte -> the parameter (0: none) */
 {
+    if (tgt_dly(idx))
+        return PAR_DLY_TIME + idx - TGT_DLY;
     return idx < NUM_MOD_TARGETS ? MOD_TARGETS[idx][1] : xt_par(idx, vi);
 }
 
+static int is_lfo_sync(uint32_t p)                  /* 1.0: LFO 1's and LFO 2's SYNC (SYNC_ORDER) */
+{
+    return (p >= PAR_SYNC_LFO1 && p <= PAR_SYNC_LFO6) || (p >= PAR_L2SYNC1 && p < PAR_L2SYNC1 + 6u);
+}
 /* the largest value of Elixir's parameters */
 static uint32_t par_max_k(uint32_t p)
 {
@@ -192,7 +211,7 @@ static uint32_t par_max_k(uint32_t p)
     if (p >= PAR_L2WAVE1 && p < PAR_L2WAVE1 + 6u)
         return NLFO - 1u;
     if (p >= PAR_L2SYNC1 && p < PAR_L2SYNC1 + 6u)
-        return 11;
+        return NSYNC - 1u;
     if (p >= PAR_L2RTRG1 && p < PAR_L2RTRG1 + 6u)
         return 6;
     if (p >= PAR_INS1 && p < PAR_INS1 + 6u)
@@ -246,6 +265,8 @@ static uint32_t morph_mix(uint32_t p, uint32_t a, uint32_t b, uint32_t x)
         return x < 128u ? a : b;
     if (p >= PAR_L2TGT1 && p < PAR_L2OFS1)          /* (target, wave, mode, sync, retrigger: in a row) */
         return x < 128u ? a : b;
+    if (p >= PAR_SYNC_LFO1 && p <= PAR_SYNC_LFO6 && a != b && (a >= 12u || b >= 12u))   /* (1.0: a sync value past */
+        return x < 128u ? a : b;                     /* .. the LXR's: by length they are between, not in a row) */
     if (p >= PAR_INS1 && p < PAR_INS1 + 6u)
         return x < 128u ? a : b;
     if ((p >= PAR_L2AMT1 && p < PAR_L2AMT1 + 6u && morph_l2_differs(p - PAR_L2AMT1)) ||
@@ -565,9 +586,24 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
     case PAR_PAN6:
         vc[p - PAR_PAN4 + 3u].pan = (uint8_t)itg;
         break;
-    case PAR_FX_TYPE:
-        fx.type = (uint8_t)(itg < NFX ? itg : FX_OFF);
+    case PAR_FX_TYPE:                                /* (1.0: DELAY isn't a type now: an older kit's plays as OFF) */
+        fx.type = (uint8_t)(itg < NFX && itg != FX_DELAY ? itg : FX_OFF);
         fxbus_update();
+        break;
+    case PAR_DLY_TIME:                               /* (1.0: fxbus_early moves the delay there) */
+        fx.dl_t = f;
+        break;
+    case PAR_DLY_FB:
+        fx.d_fb = f;
+        break;
+    case PAR_DLY_TONE:                               /* (Delay_setFilter's f^2, from ~0.02: never shut) */
+        fx.d_tone = 1311 + (int32_t)(((int64_t)f * f * 64225) >> 32);
+        break;
+    case PAR_DLY_LEVEL:
+        fx.dl_lvl = f >> 1;
+        break;
+    case PAR_DLY_WOW:
+        fx.d_wow = f;
         break;
     case PAR_FX_ROUTING:
         fx.route = R_ST1;                            /* (0.19: always stereo, the FM-1's one output; a kit's */
@@ -588,18 +624,19 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
         break;
     case PAR_FX_DELAY_TYPE:
         if (fx.delay_type != itg) {
-            int was = is_tape();
             fx.delay_type = (uint8_t)(itg < NDELAY ? itg : DELAY_NORMAL);
-            if (was != is_tape()) {                  /* (21: the line at another rate: from silence) */
-                memset(fxbuf, 0, sizeof fxbuf);
-                memset(&tp, 0, sizeof tp);
-            }
-            fxbus_update();
+            memset(fxbuf, 0, sizeof fxbuf);          /* (21: the line at another rate: from silence; 1.0: any mode:
+                                                      * a mono line read as ping-pong's two halves smeared) */
+            memset(&tp, 0, sizeof tp);
+            fx.d_write &= delay_mask();              /* (1.0: MONO -> PING PONG: the heads inside the half line; */
+            fx.d_old &= delay_mask();                /* .. they wrote past it for a block) */
+            fx.d_new &= delay_mask();
+            delay_set_time(fx.d_time);
         }
         break;
     case PAR_DSYNC:
         fx.d_sync = (uint8_t)(itg != 0u);
-        fxbus_update();
+        delay_set_time(fx.d_time);
         break;
     case PAR_DSAT:
         fx.d_sat = (int32_t)(itg & 127u);
@@ -739,10 +776,15 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
 }
 
 static inline uint32_t q16_of(uint32_t v) { return v >= 127u ? 65536u : v * 65536u / 127u; }
+/* 1.0: each kit parameter's value as snd_refresh last applied it (0xFF: not known), so morph's sweep skips the ones
+ * whose mixture didn't change (a global LFO on MORPH moves it every 8 ms: most values stay where they were) */
+static uint8_t snd_mv[KIT_LEN] POOL;
 static void snd_refresh(uint32_t p)                 /* apply a parameter's value as it stands */
 {
     uint32_t v = par_base(p);
     snd_apply(p, v, q16_of(v), 0);
+    if (par_sound(p))
+        snd_mv[kit_idx(p)] = (uint8_t)(v < 0xFFu ? v : 0xFFu);
 }
 
 /* ------------------------------------------------- modulation nodes --- */
@@ -843,6 +885,7 @@ static void auto_set(uint32_t track, uint32_t lane, uint32_t dest, uint32_t val)
         auto_val[track][lane] = (uint8_t)val;
         auto_lk_update();
         snd_apply(p, val, q16_of(val), 0);
+        snd_mv[kit_idx(p)] = 0xFFu;                  /* (not snd_refresh's: the sweep applies it next time) */
     }
 }
 static void auto_clear_all(void)
@@ -887,7 +930,7 @@ static void snd_morph_sweep(void)
     }
     for (n = 0; n < SND_MSTEP && snd_mi < KIT_LEN; n++, snd_mi++) {
         uint32_t p = kit_par(snd_mi);
-        if (par[p] != morph_par[snd_mi] && !morph_excluded(p))
+        if (par[p] != morph_par[snd_mi] && !morph_excluded(p) && par_base(p) != snd_mv[snd_mi])
             snd_refresh(p);
     }
     if (snd_mi >= KIT_LEN)

@@ -428,7 +428,9 @@ EXPORT void web_set_surf(uint32_t c) { web_surf = (uint16_t)c; palette_apply(); 
 #define WEB_SHARE_V1 (WEB_SHARE_HEAD + KIT_NAME_LEN + KIT_LEN + sizeof(pattern_t))   /* (before the morph) */
 #define WEB_SHARE_V2 (WEB_SHARE_V1 + KIT_LEN)   /* .. then the morph target (byte 9: the morph, 10: 1 with it) */
 #define WEB_SHARE_V3 (WEB_SHARE_V2 + 1u + NWV)  /* .. then (0.25) 1 if WANDER was on, and its knobs: it sets out on load */
-static uint8_t web_share[WEB_SHARE_V3 + NGLFO * NGLSET];   /* .. then (0.25.1) the global LFOs, as a project's KGL1 */
+#define WEB_SHARE_V4 (WEB_SHARE_V3 + NGLFO * NGLKGL)   /* .. then (0.25.1) the global LFOs, as a project's KGL1 */
+#define WEB_SHARE_V5 (WEB_SHARE_V4 + NGLFO)    /* .. then (1.0) their RATEs */
+static uint8_t web_share[WEB_SHARE_V5 + 1u];    /* .. then (1.0) 1: WANDER's JOURNEY has 1024 BARS (ENDLESS 7) */
 EXPORT uint8_t *web_share_buf(void) { return web_share; }
 EXPORT uint32_t web_share_size(void) { return sizeof web_share; }
 EXPORT uint32_t web_share_get(void)
@@ -451,10 +453,12 @@ EXPORT uint32_t web_share_get(void)
     b[WEB_SHARE_V2] = wd.state != WS_IDLE;
     memcpy(b + WEB_SHARE_V2 + 1u, wd.k, NWV);
     for (i = 0; i < NGLFO; i++) {
-        uint8_t *g = b + WEB_SHARE_V3 + i * NGLSET;
+        uint8_t *g = b + WEB_SHARE_V3 + i * NGLKGL;
         g[0] = gls[i].dest; g[1] = (uint8_t)gls[i].depth; g[2] = gls[i].len; g[3] = gls[i].wave;
         g[4] = gls[i].mode; g[5] = gls[i].trig; g[6] = gls[i].phase;
+        b[WEB_SHARE_V4 + i] = gls[i].rate;
     }
+    b[WEB_SHARE_V5] = 1;
     return sizeof web_share;
 }
 /* web_share_buf's n bytes into the playing pattern and the slot its kit came from (which loads); 0 done, 1 not a
@@ -467,7 +471,7 @@ EXPORT uint32_t web_share_put(uint32_t n)
     uint32_t i, slot = kit_loaded < 32u ? kit_loaded : 0u;
     if (n < WEB_SHARE_HEAD || (b[0] | b[1] << 8 | (uint32_t)b[2] << 16 | (uint32_t)b[3] << 24) != WEB_SHARE_MAGIC)
         return 1;
-    if ((n != sizeof web_share && n != WEB_SHARE_V3 && n != WEB_SHARE_V2 && n != WEB_SHARE_V1) || (b[4] | b[5] << 8) != KIT_LEN || (b[6] | b[7] << 8) != sizeof(pattern_t))
+    if ((n != sizeof web_share && n != WEB_SHARE_V5 && n != WEB_SHARE_V4 && n != WEB_SHARE_V3 && n != WEB_SHARE_V2 && n != WEB_SHARE_V1) || (b[4] | b[5] << 8) != KIT_LEN || (b[6] | b[7] << 8) != sizeof(pattern_t))
         return 2;
     memcpy(kit, k, KIT_LEN);
     kit_sanitize(kit);
@@ -497,12 +501,14 @@ EXPORT uint32_t web_share_put(uint32_t n)
         par[PAR_BPM] = b[8];
     pat_backup = *p;                             /* (as loaded: a pattern change doesn't drop it) */
     sq.gsync = (1u << NTRACK) - 1u;
-    if (n == sizeof web_share)                   /* (0.25.1: the global LFOs; older links leave them as they are) */
+    if (n >= WEB_SHARE_V4)                       /* (0.25.1: the global LFOs; older links leave them as they are) */
         for (i = 0; i < NGLFO; i++) {
-            const uint8_t *g = b + WEB_SHARE_V3 + i * NGLSET;
+            const uint8_t *g = b + WEB_SHARE_V3 + i * NGLKGL;
             gls[i].dest = (uint8_t)(g[0] < NGD ? g[0] : GD_OFF);
             gls[i].depth = (int8_t)clamp32((int8_t)g[1], -127, 127);
-            gls[i].len = (uint8_t)(g[2] < NGLEN ? g[2] : 7u);
+            gls[i].len = (uint8_t)(g[2] < NGLEN || g[2] == GL_FREE ? g[2] : 7u);
+            if (n >= WEB_SHARE_V5)               /* (1.0: RATE) */
+                gls[i].rate = (uint8_t)(b[WEB_SHARE_V4 + i] & 127u);
             gls[i].wave = (uint8_t)(g[3] % NLFO);
             gls[i].mode = (uint8_t)(g[4] < NGM ? g[4] : GM_FREE);
             gls[i].trig = (uint8_t)(g[5] < NGT ? g[5] : GT_PLAY);
@@ -511,6 +517,8 @@ EXPORT uint32_t web_share_put(uint32_t n)
     if (n >= WEB_SHARE_V3 && b[WEB_SHARE_V2] == 1u) {   /* (0.25: WANDER with the sharer's knobs, set out) */
         for (i = 0; i < NWV; i++) {
             uint32_t v = b[WEB_SHARE_V2 + 1u + i];
+            if (i == WV_JOURNEY && v == 6u && (n < sizeof web_share || b[WEB_SHARE_V5] != 1u))
+                v = WJ_ENDLESS;                  /* (before 1.0: ENDLESS was 6) */
             wd.k[i] = (uint8_t)(v > vp_max(VP_WD + i) ? vp_max(VP_WD + i) : v);
         }
         if (!sq.running)

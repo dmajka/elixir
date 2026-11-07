@@ -39,9 +39,9 @@
  * spell reversed; coming home, the voices go home from the copy anyway (a cast still to reverse: its pattern back
  * too). Included by ui.c after spells.c. */
 
-#define NQUEST 11u
-#define NWJ 7u                                      /* JOURNEY: 16 .. 512 bars, ENDLESS */
-#define WJ_ENDLESS 6u
+#define NQUEST 13u
+#define NWJ 8u                                      /* JOURNEY: 16 .. 1024 bars, ENDLESS (1.0: 1024) */
+#define WJ_ENDLESS 7u
 #define NWP 7u                                       /* SOUND, RHYTHM: OFF, 1 .. 16 bars, PHRASE */
 #define WP_PHRASE 6u
 #define NWR 10u                                      /* RETURN: INSTANT, 1 .. 256 bars */
@@ -57,7 +57,8 @@ enum { WF_HOME, WF_TREASURE, WF_WOUND, WF_LOST, WF_DICE, NWF };
 enum { WS_IDLE, WS_ROAD, WS_RETURN };
 enum { WV_QUEST, WV_JOURNEY, WV_FATE, WV_GOAL, WV_SOUND, WV_RHYTHM, WV_RANGE, WV_STRIDE, WV_RETURN, WV_MEMORY,
        WV_ORDER, WV_SWAY, NWV };                     /* the cards (VP_WD + n) */
-enum { Q_LONG, Q_HOMECOMING, Q_SPIRE, Q_HOLLOW, Q_TIDE, Q_SIDE, Q_LOST, Q_MAZE, Q_ROSARY, Q_POND, Q_WHEEL };
+enum { Q_LONG, Q_HOMECOMING, Q_SPIRE, Q_HOLLOW, Q_TIDE, Q_SIDE, Q_LOST, Q_MAZE, Q_ROSARY, Q_POND, Q_WHEEL, Q_FROG,
+       Q_CANYON };
 #define QF_SHORT 1u                                  /* (a quest's ways: legs of 2-4 notches) */
 #define QF_ANY 2u                                    /* (any gesture, whatever the land) */
 #define QF_ONE 4u                                    /* (one thread, long legs, the smallest notches) */
@@ -67,7 +68,7 @@ enum { Q_LONG, Q_HOMECOMING, Q_SPIRE, Q_HOLLOW, Q_TIDE, Q_SIDE, Q_LOST, Q_MAZE, 
 #define QF_FREE 32u                                  /* (the kick's and the snare's rhythm travels too) */
 #define QF_WHEEL 64u                                 /* (rhythm only, MEMORY up; the kick's and snare's rhythm too,
                                                       * their anchors kept) */
-static const uint16_t WD_BARS[NWJ] = {16, 32, 64, 128, 256, 512, 0};
+static const uint16_t WD_BARS[NWJ] = {16, 32, 64, 128, 256, 512, 1024, 0};
 static const uint8_t WD_PACE[NWP] = {0, 1, 2, 4, 8, 16, 0};
 static const uint16_t WD_RET[NWR] = {0, 1, 2, 4, 8, 16, 32, 64, 128, 256};
 #define WG_SONG (NUM_PATTERN + 1u)                   /* (42) GOAL SONG */
@@ -146,6 +147,34 @@ static const chap_t CH_POND[2] = {{"STILL WATER", {0, -15, 25, 0}, 4, {1, 1}, 12
                                   {"A RIPPLE", {5, 5, 35, 5}, 2, {0, 0}, 128}};
 static const chap_t CH_WHEEL[2] = {{"THE WHEEL", {10, 0, 0, 0}, 4, {1, 1}, 128},
                                    {"THE WHEEL TURNS", {-10, 0, 10, 0}, 4, {0, 0}, 128}};
+/* 1.0: BOILING FROG: the heat a chapter ends at (the tempo: RANGE's share of it; WARMING, THE BOIL faster, THE CHILL,
+ * THE FROST slower: up, down or both by the path) */
+static const chap_t CH_FROG[5] = {{"COLD WATER", {0, 0, 0, 0}, 2, {1, 2}, 64},
+                                  {"WARMING", {20, 15, -5, 10}, 3, {3, 2}, 96},
+                                  {"THE CHILL", {-20, -15, 25, 0}, 3, {4, 1}, 96},
+                                  {"THE BOIL", {50, 30, -15, 30}, 3, {CH_END, CH_END}, 128},
+                                  {"THE FROST", {-45, -30, 45, 0}, 3, {CH_END, CH_END}, 128}};
+static const int8_t FROG_HEAT[5] = {0, 50, -50, 100, -100};
+/* .. THE CANYON: the voices lost in it, then out together. The delay's level, feedback and echoes into the reverb (at
+ * least these), the reverb's level and size (home's and these more); each voice's FX SEND its own (when, how far, how
+ * fast), its pan drawn in towards the middle at the mouth, then wandering wider each chapter; the delay MONO in the
+ * narrows, PING PONG from the echo chamber; lost in echoes, the feedback swells to 126-127 (it rings) and falls back.
+ * THE WAY OUT: all of it home's, the voices together. ENDLESS: never out (the narrows .. lost again). The echo's
+ * note values (SYNC) */
+static const chap_t CH_CANYON[5] = {{"THE MOUTH", {0, -10, 30, 0}, 3, {1, 1}, 128},
+                                    {"THE NARROWS", {-10, -20, 55, 10}, 3, {2, 3}, 80},
+                                    {"ECHO CHAMBER", {-20, -30, 85, 15}, 3, {3, 1}, 90},
+                                    {"LOST IN ECHOES", {-30, -40, 100, 20}, 3, {4, 4}, 128},
+                                    {"THE WAY OUT", {10, 25, 0, 0}, 3, {CH_END, CH_END}, 128}};
+#define NCY 5u
+static const uint16_t CY_P[NCY] = {PAR_DLY_LEVEL, PAR_DLY_FB, PAR_ECHOREV, PAR_REV_LEVEL, PAR_REV_SIZE};
+static const uint8_t CY_T[5][NCY] = {{48, 45, 10, 0, 0}, {64, 62, 30, 10, 15}, {72, 78, 55, 20, 30}, {84, 94, 80, 28, 45},
+                                    {0, 0, 0, 0, 0}};
+static const uint8_t CY_SPREAD[5] = {0, 20, 40, 60, 0};   /* (how far a pan wanders, either way) */
+static const uint8_t CY_SEND[5][2] = {{16, 32}, {24, 64}, {30, 90}, {20, 105}, {0, 0}};   /* (a voice's FX SEND: from,
+                                                      * to (at least home's)) */
+static const uint16_t CY_PAN[NVOICE] = {PAR_PAN1, PAR_PAN2, PAR_PAN3, PAR_PAN4, PAR_PAN5, PAR_PAN6};
+static const uint8_t CY_TIME[5][4] = {{8, 8, 8, 8}, {7, 8, 7, 5}, {4, 5, 6, 7}, {3, 4, 6, 7}, {8, 8, 8, 8}};
 #define QCH(a) sizeof a / sizeof a[0], a
 static const quest_t QUEST[NQUEST] = {
     {"THE LONG ROAD", "A steady walk, one way", WF_LOST, 3, 0, QCH(CH_LONG)},
@@ -158,7 +187,9 @@ static const quest_t QUEST[NQUEST] = {
     {"CLOCKWORK MAZE", "By rule, not chance", WF_HOME, 3, QF_MAZE, QCH(CH_MAZE)},
     {"THE ROSARY", "Hit by hit away, and back", WF_HOME, 3, QF_ROSARY | QF_FREE, QCH(CH_ROSARY)},
     {"THE STILL POND", "Barely moving, for a long time", WF_LOST, 5, QF_ONE, QCH(CH_POND)},
-    {"TURNING WHEEL", "An endless beat, turning", WF_LOST, WJ_ENDLESS, QF_WHEEL, QCH(CH_WHEEL)}};
+    {"TURNING WHEEL", "An endless beat, turning", WF_LOST, WJ_ENDLESS, QF_WHEEL, QCH(CH_WHEEL)},
+    {"BOILING FROG", "So slowly you never notice", WF_LOST, 5, 0, QCH(CH_FROG)},
+    {"THE CANYON", "Echoes on echoes, then out", WF_HOME, 4, 0, QCH(CH_CANYON)}};
 /* THE LONG ROAD's ways (one is picked as it sets out) */
 #define WAY(n, e, l, s, g) {n, {e, l, s, g}, 4, {CH_END, CH_END}, 128}
 static const chap_t WD_WAY[6] = {WAY("TO DUSK", -30, -60, 40, 0), WAY("TO DAWN", 30, 60, -20, 0),
@@ -221,6 +252,19 @@ static struct {
     uint8_t srow, sprv, sdest;
     uint16_t sleg;
     uint32_t lbar0;
+    /* 1.0: the chapter's first bar; BOILING FROG: the tempo at home, the one last set (0: let go), the heat now and
+     * at the chapter's start (-100..100); the tracks drifting (TIME STRETCH), those slower, how far (0.01%), the
+     * stretch each was last set to; THE CANYON: bars since its last step */
+    uint32_t fcs;
+    uint8_t fb0, fbpm;
+    int16_t fh, fh0;
+    uint8_t dmask, dneg;
+    uint16_t dpk, dlast[NTRACK];
+    uint8_t cyb;
+    uint8_t cy_pan[NVOICE], cy_snd[NVOICE], cy_wait[NVOICE], cy_rate[NVOICE];   /* (each voice's pan and send aims,
+                                                      * the bars before its send moves, how fast) */
+    uint8_t cy_ms, cy_mtg, cy_lvl;                   /* (the delay's mode changing: 1 its level going, 2 a bar of
+                                                      * quiet; the mode; the level to come back to) */
 } wd POOL;
 static glide_t wgl[NGLIDE] POOL;
 static uint8_t wd_home[KIT_LEN] POOL, wd_mhome[KIT_LEN] POOL;   /* the voices at home (the kit, the morph target) */
@@ -1330,6 +1374,7 @@ static void wd_swap_bar(void)
 }
 
 /* ----------------------------------------------------------- the road --- */
+static void wd_quest_chapter(void);
 static void wd_chapter(void)                         /* a chapter begins: its mood, never quite the same */
 {
     const chap_t *C = wd_chap();
@@ -1337,11 +1382,17 @@ static void wd_chapter(void)                         /* a chapter begins: its mo
     for (k = 0; k < NWM; k++)
         wd.aim[k] = (int8_t)clamp32(C->aim[k] + (int32_t)wd_rnd(21) - 10, -100, 100);
     wd_swap_start();
+    wd.fcs = wd.bars;
+    wd_quest_chapter();
+}
+static uint32_t wd_cy_in(uint32_t c)                 /* (1.0: THE CANYON, ENDLESS: never out; the narrows .. lost) */
+{
+    return wd.quest == Q_CANYON && c == 4u && !wd_journey() && !wd.goal ? 1u + wd_rnd(3) : c;
 }
 static void wd_plan(uint32_t from)                   /* the path's chapters, from chapter from */
 {
     const quest_t *Q = &QUEST[wd.quest % NQUEST];
-    uint32_t c = from % Q->nch;
+    uint32_t c = wd_cy_in(from % Q->nch);
     wd.npath = 0;
     while (wd.npath < NCHAP) {
         const chap_t *C = &Q->ch[c];
@@ -1351,6 +1402,7 @@ static void wd_plan(uint32_t from)                   /* the path's chapters, fro
             break;
         if (wd.npath == NCHAP - 1u && Q->ch[Q->nch - 1u].nx[0] == CH_END)   /* (room for the last: it ends there) */
             c = Q->nch - 1u;
+        c = wd_cy_in(c);
     }
     wd.chap = 0;
 }
@@ -1379,6 +1431,250 @@ static uint32_t wd_progress(void)                    /* how far along the road, 
     return e > a ? (b - a) * 256u / (e - a) : 0u;
 }
 
+/* ------------------------------------- 1.0: BOILING FROG, THE CANYON --- */
+static uint32_t wd_chap_f(void)                      /* how far through the chapter, 0..256 */
+{
+    uint32_t e = wd_chap_end(wd.chap), l = e > wd.fcs ? e - wd.fcs : 1u, b = wd.bars - wd.fcs;
+    return b >= l ? 256u : b * 256u / l;
+}
+static uint32_t wd_cht(void) { return wd.path[wd.chap % NCHAP] % QUEST[wd.quest % NQUEST].nch; }   /* (its table's) */
+static void wd_frog_tempo(void)                      /* a bar: the tempo with the heat (turned by hand: it lets go) */
+{
+    int32_t hc = FROG_HEAT[wd_cht() % 5u], amt, b;
+    wd.fh = (int16_t)(wd.fh0 + (hc - wd.fh0) * (int32_t)wd_chap_f() / 256);
+    if (sq.sync_ext || !wd.fbpm || par[PAR_BPM] != wd.fbpm) {
+        wd.fbpm = 0;
+        return;
+    }
+    amt = 5 + (int32_t)wd.k[WV_RANGE] * 20 / 127;   /* (the tempo at full heat: 5% .. 25% from home's) */
+    b = (int32_t)wd.fb0 + ((int32_t)wd.fb0 * amt * wd.fh + (wd.fh < 0 ? -5000 : 5000)) / 10000;
+    b = clamp32(b, 20, (int32_t)par_max(PAR_BPM));
+    if (b != par[PAR_BPM])
+        par_set(PAR_BPM, (uint32_t)b);
+    wd.fbpm = par[PAR_BPM];
+}
+static void wd_drift_home(void)                      /* the drifting tracks back into time (seq.c) */
+{
+    uint32_t t;
+    for (t = 0; t < NTRACK; t++)
+        if ((wd.dmask >> t & 1u) && sq.tstr[t] == wd.dlast[t])
+            seq_stretch_home(t);
+    wd.dmask = 0;
+}
+static void wd_drift_start(void)                     /* a chapter: 1-2 of the colour's tracks drift out and back */
+{
+    uint32_t e = wd_chap_end(wd.chap), l = e > wd.fcs ? e - wd.fcs : 1u, i, k = 0, n, pk;
+    uint8_t c[NTRACK];
+    wd_drift_home();
+    if (!wd.k[WV_STRIDE])
+        return;
+    for (i = 0; i < NTRACK; i++) {
+        uint32_t t = WD_ORDER[i];
+        if ((wd.tracks >> t & 1u) && !wd_backbone(t) && sq.tstr[t] == TSTR_ONE && !(sq.thome >> t & 1u))
+            c[k++] = (uint8_t)t;
+    }
+    pk = 24u + wd.k[WV_STRIDE] * 168u / 127u;       /* (the most it drifts: a 16th .. 2 beats, at the middle) */
+    wd.dpk = (uint16_t)clamp32((int32_t)(pk * 10417u / (l * 100u)), 1, 400);
+    wd.dneg = 0;
+    for (n = 1u + (wd.k[WV_STRIDE] > 80u); n && k; n--) {
+        uint32_t j = wd_rnd(k), t = c[j];
+        c[j] = c[--k];
+        wd.dmask |= (uint8_t)(1u << t);
+        wd.dneg |= (uint8_t)(wd_rnd(2) << t);
+        wd.dlast[t] = TSTR_ONE;
+    }
+}
+static void wd_drift_bar(void)                       /* a bar: slower (faster) to the chapter's quarter, faster
+                                                      * (slower) to its three quarters, back: in time again at its end */
+{
+    int32_t f = (int32_t)wd_chap_f(), tri = f < 64 ? -f * 4 : f < 192 ? -256 + (f - 64) * 4 : 256 - (f - 192) * 4;
+    uint32_t t;
+    for (t = 0; t < NTRACK; t++) {
+        int32_t d;
+        if (!(wd.dmask >> t & 1u))
+            continue;
+        if (sq.tstr[t] != wd.dlast[t] || (sq.thome >> t & 1u)) {   /* (turned by hand: it lets go) */
+            wd.dmask &= (uint8_t)~(1u << t);
+            continue;
+        }
+        d = (int32_t)wd.dpk * tri / 256;
+        seq_stretch_set(t, (uint32_t)((int32_t)TSTR_ONE + ((wd.dneg >> t & 1u) ? -d : d)));
+        wd.dlast[t] = sq.tstr[t];
+    }
+}
+static void wd_cy_time(void)                         /* THE CANYON: the echo another note value (SYNC) */
+{
+    uint32_t i = CY_TIME[wd_cht() % 5u][wd_rnd(4)], v = (2u * i + 1u) * 127u / 24u;
+    if (wd_cht() == 4u) {                            /* (THE WAY OUT: home's) */
+        v = wd_home[kit_idx(PAR_DLY_TIME)];
+        if (par[PAR_DSYNC] != wd_home[kit_idx(PAR_DSYNC)])
+            par_set(PAR_DSYNC, wd_home[kit_idx(PAR_DSYNC)]);
+    } else if (!par[PAR_DSYNC]) {
+        par_set(PAR_DSYNC, 1);
+    }
+    if (v != par[PAR_DLY_TIME]) {
+        morph_follow(PAR_DLY_TIME, (int32_t)v - (int32_t)par[PAR_DLY_TIME]);
+        par_set(PAR_DLY_TIME, v);
+    }
+}
+static uint32_t wd_cy_voices(void)                   /* the voices of the tracks that travel (bit v) */
+{
+    uint32_t t, m = 0;
+    for (t = 0; t < NTRACK; t++)
+        if (wd.tracks >> t & 1u)
+            m |= 1u << track_voice(t);
+    return m & ((1u << NVOICE) - 1u);
+}
+static uint32_t wd_cy_base(uint32_t v)               /* a voice's pan drawn a third of the way in (from where it is) */
+{
+    int32_t h = wd_home[kit_idx(CY_PAN[v])];
+    return (uint32_t)(h + (64 - h) / 3);
+}
+static void wd_cy_aim(uint32_t v, int pan)           /* a voice's next aim: its pan, or its FX SEND (and when) */
+{
+    uint32_t c = wd_cht() % 5u;
+    if (pan) {
+        int32_t sp = CY_SPREAD[c], b = (int32_t)wd_cy_base(v);
+        wd.cy_pan[v] = (uint8_t)(c == 4u ? wd_home[kit_idx(CY_PAN[v])]
+                                         : clamp32(b + (sp ? (int32_t)wd_rnd(2u * (uint32_t)sp + 1u) - sp : 0), 0, 127));
+        return;
+    }
+    {
+        uint32_t h = wd_home[kit_idx(PAR_FX_SEND1 + v)], lo = CY_SEND[c][0], hi = CY_SEND[c][1];
+        uint32_t x = lo + wd_rnd(hi - lo + 1u);
+        wd.cy_snd[v] = (uint8_t)(c == 4u ? h : x > h ? x : h);
+        wd.cy_wait[v] = (uint8_t)(c == 4u ? 0u : wd_rnd(c ? 8u : 4u));   /* (each in its own time) */
+        wd.cy_rate[v] = (uint8_t)(c == 4u ? 2u : 1u + wd_rnd(3));
+    }
+}
+static int wd_cy_near(uint32_t p, uint32_t tg, uint32_t r)   /* p a step towards tg (r at most), at once */
+{
+    int32_t d = clamp32((int32_t)tg - (int32_t)par[p], -(int32_t)r, (int32_t)r);
+    if (d) {
+        morph_follow(p, d);
+        par_set(p, (uint32_t)((int32_t)par[p] + d));
+    }
+    return par[p] == tg;
+}
+static void wd_cy_voices_bar(void)                   /* a bar: each voice's pan and FX SEND a little on its way */
+{
+    uint32_t v, m = wd_cy_voices(), c = wd_cht() % 5u, r = 1u + wd.k[WV_STRIDE] / 64u;
+    for (v = 0; v < NVOICE; v++) {
+        if (!(m >> v & 1u))
+            continue;
+        if (wd_cy_near(CY_PAN[v], wd.cy_pan[v], c == 4u ? 2u : r) && c && c < 4u)
+            wd_cy_aim(v, 1);                         /* (there: somewhere else) */
+        if (wd.cy_wait[v]) {
+            wd.cy_wait[v]--;
+            continue;
+        }
+        if (wd_cy_near(PAR_FX_SEND1 + v, wd.cy_snd[v], wd.cy_rate[v]) && c >= 2u && c < 4u)
+            wd_cy_aim(v, 0);                         /* (a voice calling out, then quieter, then again) */
+    }
+}
+static uint32_t wd_cy_mono(uint32_t pp)              /* the delay's mode: home's kind (TAPE or not), mono or PING PONG */
+{
+    uint32_t h = wd_home[kit_idx(PAR_FX_DELAY_TYPE)], tape = h >= DELAY_TAPE;
+    return tape ? (pp ? DELAY_TAPEPP : DELAY_TAPE) : (pp ? DELAY_PINGPONG : DELAY_NORMAL);
+}
+static int wd_glide_on(uint32_t p)                   /* p gliding now */
+{
+    uint32_t i;
+    for (i = 0; i < NGLIDE; i++)
+        if (wgl[i].p == p)
+            return 1;
+    return 0;
+}
+static void wd_cy_mode(uint32_t m)                   /* .. to mode m: its echoes fade out over a bar, the mode (the line
+                                                      * from silence: sound.c), a bar, they come back */
+{
+    if (par[PAR_FX_DELAY_TYPE] == m || wd.cy_ms)
+        return;
+    if (!par[PAR_DLY_LEVEL]) {
+        par_set(PAR_FX_DELAY_TYPE, m);
+        return;
+    }
+    wd.cy_mtg = (uint8_t)m;
+    wd.cy_lvl = par[PAR_DLY_LEVEL];
+    wd.cy_ms = 1;
+    wd_glide(PAR_DLY_LEVEL, 0, 0);
+}
+static void wd_cy_mode_bar(void)
+{
+    if (wd.cy_ms == 1u && (!par[PAR_DLY_LEVEL] || !wd_glide_on(PAR_DLY_LEVEL))) {   /* (quiet, or the knob turned
+                                                      * by hand: the mode now) */
+        par_set(PAR_FX_DELAY_TYPE, wd.cy_mtg);
+        wd.cy_ms = par[PAR_DLY_LEVEL] ? 0u : 2u;
+    } else if (wd.cy_ms == 2u) {
+        wd_glide(PAR_DLY_LEVEL, wd.cy_lvl, 0);
+        wd.cy_ms = 0;
+    }
+}
+static void wd_cy_step(void)                         /* .. every 2 bars: the delay and the reverb a step towards the
+                                                      * chapter's */
+{
+    uint32_t c = wd_cht() % 5u, i, st = 4u + wd.k[WV_STRIDE] / 16u, f = wd_chap_f();
+    for (i = 0; i < NCY; i++) {
+        uint32_t p = CY_P[i], h = wd_home[kit_idx(p)], tg, s = st;
+        int32_t d;
+        if (p == PAR_DLY_LEVEL && wd.cy_ms)
+            continue;
+        tg = c == 4u ? h : i < 3u ? (h > CY_T[c][i] ? h : CY_T[c][i]) : (h + CY_T[c][i] < 127u ? h + CY_T[c][i] : 127u);
+        if (p == PAR_DLY_FB && c == 3u && f >= 80u && f < 176u) {   /* (lost: it rings, then falls back) */
+            tg = f < 128u ? 126u : 127u;
+            s = 2u * st;
+        }
+        d = clamp32((int32_t)tg - (int32_t)par[p], -(int32_t)s, (int32_t)s);
+        if (d)
+            wd_glide(p, (int32_t)par[p] + d, 0);
+    }
+}
+static void wd_quest_chapter(void)                   /* a chapter begins (BOILING FROG, THE CANYON) */
+{
+    if (wd.quest == Q_FROG) {
+        wd.fh0 = wd.fh;
+        if (wd.state == WS_ROAD)
+            wd_drift_start();
+    } else if (wd.quest == Q_CANYON && wd.state == WS_ROAD) {
+        uint32_t v, c = wd_cht() % 5u;
+        wd.cyb = 0;
+        wd_cy_time();
+        for (v = 0; v < NVOICE; v++) {
+            wd_cy_aim(v, 1);
+            wd_cy_aim(v, 0);
+        }
+        wd_cy_mode(c == 4u ? wd_home[kit_idx(PAR_FX_DELAY_TYPE)] : wd_cy_mono(c >= 2u));
+    }
+}
+static void wd_quest_bar(void)                       /* .. a bar of it */
+{
+    if (wd.quest == Q_FROG) {
+        wd_frog_tempo();
+        wd_drift_bar();
+    } else if (wd.quest == Q_CANYON) {
+        wd_cy_mode_bar();
+        wd_cy_voices_bar();
+        if (!(++wd.cyb & 1u))
+            wd_cy_step();
+        if (wd_cht() == 3u && !(wd.cyb & 3u))       /* (LOST IN ECHOES: the echo moves every 4 bars) */
+            wd_cy_time();
+    }
+}
+static void wd_frog_home_bar(uint32_t bl)            /* coming home: the tempo a share back (bl bars to go) */
+{
+    int32_t d;
+    if (!wd.fbpm || par[PAR_BPM] != wd.fbpm || sq.sync_ext) {
+        wd.fbpm = 0;
+        return;
+    }
+    d = (int32_t)wd.fb0 - (int32_t)par[PAR_BPM];
+    if (d) {
+        bl = bl ? bl : 1u;
+        par_set(PAR_BPM, (uint32_t)((int32_t)par[PAR_BPM] + (d + (d > 0 ? (int32_t)bl - 1 : 1 - (int32_t)bl)) / (int32_t)bl));
+    }
+    wd.fbpm = par[PAR_BPM];
+}
+
 static void wd_message(const char *a, const char *b)
 {
     put_str(wd.said, a, sizeof wd.said);
@@ -1399,10 +1695,16 @@ static void wd_set_out(void)                         /* COPY (OCT+): from here (
         wd.nfoot = wd.nwm = 0;
         memset(wd.recent, 0, sizeof wd.recent);
         memset(wd.mv, 0, sizeof wd.mv);
+        wd.fb0 = (uint8_t)seq_bpm();                 /* (1.0: BOILING FROG's home tempo) */
+        wd.fh = wd.fh0 = 0;
+        wd.dmask = 0;
     }
     wd_x ^= fm1_ms * 2654435761u ^ sq.ticks;
     wd_rnd(2);
     wd.quest = (uint8_t)(wd.k[WV_QUEST] % NQUEST);
+    if (wd.quest != Q_FROG)                          /* (1.0: another course: the drift back in time) */
+        wd_drift_home();
+    wd.fbpm = (uint8_t)(wd.quest == Q_FROG && par[PAR_BPM] >= 20u ? par[PAR_BPM] : 0u);
     if (wd_qfl() & QF_MAZE) {                        /* (by rule: the same seed each time; two opposite gestures) */
         wd_x = 0x2545F491u;
         wd.mz[0] = (uint8_t)wd_rnd(NGEST);
@@ -1494,6 +1796,9 @@ static void wd_home_go(uint32_t fate, int instant)
         fate = WF_HOME;
     }
     wd.fate = (uint8_t)fate;
+    wd_drift_home();                                 /* (1.0: BOILING FROG: in time again; the tempo with the voices) */
+    if (!bars)
+        wd_frog_home_bar(1);
     if (sp_pending() && sp.pend_p == sq.active) {    /* (a spell's side journey still to reverse: its pattern back) */
         pat[sq.active] = upat;
         sp.pend = 0;
@@ -1533,6 +1838,11 @@ static void wd_keep(void)                            /* here is home: the voices
     wd.lvl = 0;
     memset(wd.dt, 0, sizeof wd.dt);
     wd.wantmute = 0;
+    wd.fb0 = (uint8_t)seq_bpm();                     /* (1.0: BOILING FROG: this tempo home, the heat from here) */
+    wd.fh = wd.fh0 = 0;
+    wd.fcs = wd.bars;
+    if (wd.quest == Q_FROG && wd.state == WS_ROAD)
+        wd_drift_start();
 }
 static void wd_end(void)                             /* the JOURNEY's end: its FATE */
 {
@@ -1540,7 +1850,10 @@ static void wd_end(void)                             /* the JOURNEY's end: its F
     if (f == WF_DICE)
         f = wd_rnd(4);
     if (f == WF_LOST) {
+        wd_drift_home();
+        wd.fbpm = 0;
         wd_keep();
+        wd.dmask = 0;
         wd_glides_off();
         wd.state = WS_IDLE;
         wd_message("LOST: ", "HERE IS HOME NOW");
@@ -1597,6 +1910,7 @@ static void wd_bar(void)                             /* a bar of the road */
     if (rp && ++wd.rbars >= rp)                      /* (Energy: at the next phrase's start) */
         wd.rdue = 1;
     wd_dens_bar(2u + wd_stride() / 40u);
+    wd_quest_bar();
 }
 static void wd_return_step(void)                     /* each ms while coming home: a slice of the voices' sweep */
 {
@@ -1640,6 +1954,8 @@ static void wd_home_done(void)                       /* the voices home: the rhy
         return;
     }
     memset(sq.wdens, 0, sizeof sq.wdens);
+    wd_frog_home_bar(1);                             /* (1.0: BOILING FROG: the tempo home) */
+    wd.fbpm = 0;
     wd.state = WS_IDLE;
     sq.mre = (1u << NTRACK) - 1u;                    /* (0.23-t11: the melodies from their top at each loop's start) */
     ui_message(wd.fate == WF_HOME ? "HOME AGAIN" : wd.said);
@@ -1671,6 +1987,7 @@ static void wd_service(void)                         /* each ms: the bars, the g
                 wd_dens_bar(most ? most : 1u);
                 if (wd.ret_left) {                   /* (the rhythm home, a share a bar) */
                     uint32_t g = wd_hg(), bl = (wd.ret_left + 15u) / 16u, left = wd_gleft(g);
+                    wd_frog_home_bar(bl);
                     if (left && !wd.going)
                         wd_toward(g, (left + bl - 1u) / bl);
                 }
@@ -1913,23 +2230,27 @@ static void wd_vset(uint32_t i, uint32_t v)
 /* ------------------------------------------------------------ project --- */
 static void wd_write(void)                           /* KWND (project.c) */
 {
-    pw_byte(NWV + 3u);
+    pw_byte(NWV + 4u);
     pw_bytes(wd.k, NWV);
     pw_byte(wd.tracks);
     pw_byte(wd.mask & 0xFFu);
     pw_byte(wd.mask >> 8);
+    pw_byte(1u);                                     /* (1.0: the knobs' format; 1: JOURNEY has 1024 BARS) */
 }
 static void wd_read(void)
 {
-    uint8_t b[NWV + 3u];
+    uint8_t b[NWV + 4u];
     uint32_t n = pr_byte(), i;
     wd_defaults();
     memcpy(b, wd.k, NWV);
     b[NWV] = wd.tracks;
     b[NWV + 1u] = wd.mask & 0xFFu;
     b[NWV + 2u] = wd.mask >> 8;
+    b[NWV + 3u] = 0;
     pr_bytes(b, n < sizeof b ? n : sizeof b);
     pr_skip(n > sizeof b ? n - sizeof b : 0u);
+    if (n < NWV + 4u && b[WV_JOURNEY] == 6u)        /* (before 1.0: ENDLESS was 6, where 1024 BARS is now) */
+        b[WV_JOURNEY] = WJ_ENDLESS;
     for (i = 0; i < NWV; i++)
         wd.k[i] = (uint8_t)(wd_vdead(i) ? 0u : b[i] <= wd_vmax(i) ? b[i] : WD_K0[i]);
     wd.tracks = (uint8_t)(b[NWV] & ((1u << NTRACK) - 1u));

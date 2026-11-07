@@ -341,10 +341,10 @@ static void phase2(void)
     run_ms(40);
     check(autodest_to_par(lock_get(&pat[sq.active], 0, 6, 0)) == PAR_TILT1 ||
           autodest_to_par(lock_get(&pat[sq.active], 0, 6, 1)) == PAR_TILT1, "a step locks the tilt");
-    press(B_LFO);                                     /* LFO (1.0: SELECT its pages, LFO MODE 0.13), then LFO 2 */
+    press(B_LFO);                                     /* LFO (1.0: SELECT its pages, its MODE on the second), then LFO 2 */
     check(ui.sect == S_LFO && ui.half == 0, "LFO: LFO 1");
-    turn(EN_SELECT, 2);
-    check(ui.sect == S_LFOM, "LFO, SELECT twice: LFO MODE");
+    turn(EN_SELECT, 1);
+    check(ui.sect == S_LFO && ui.half == 1, "LFO, SELECT: LFO 1's second page");
     press(B_LFO);
     check(ui.sect == S_LFO2 && ui.half == 0, "LFO again: TRK LFO 2 (25b)");
     shot("lfo2");
@@ -374,7 +374,7 @@ static void phase2(void)
     press(B_FX);
     fx_goto(FXPG_BUS);
     turn(EN_K1, -10);
-    turn(EN_K1, 5);
+    turn(EN_K1, 4);                                  /* (1.0: past DELAY) */
     check(par[PAR_FX_TYPE] == FX_PHASER, "FX: PHASER");
     shot("fx-phaser");
     {
@@ -563,8 +563,7 @@ static void phase3(void)
         double fr, nf;
         eng_reset(0);
         kit_init_par();
-        par_set(PAR_FX_TYPE, FX_DELAY);
-        par_set(PAR_FX_DRY_WET, 60);
+        par_set(PAR_DLY_LEVEL, 76);                  /* (1.0: the always-on delay) */
         par_set(PAR_FX_SEND1, 127);
         run_ms(50);
         voice_trigger(0, 127, SEQ_DEFAULT_NOTE);
@@ -1870,8 +1869,9 @@ static void phase14(void)
     check(l->hold == lfo_wave(l, l->phase) && l->hold != lo, "HOLD: a hit takes its value then");
     goto_mode(B_LFO, M_SOUND);
     check(ui.sect == S_LFO && ui.half == 0, "LFO: LFO 1's first page");
-    turn(EN_SELECT, 2);
-    check(ui.sect == S_LFOM, "LFO MODE: LFO 1's third page, by SELECT");
+    turn(EN_SELECT, 1);
+    page_params(pp);
+    check(ui.sect == S_LFO && ui.half == 1 && pp[2] == PAR_LFOMODE1, "1.0: LFO 1's MODE: its second page, K3, by SELECT");
     press(B_LFO);
     check(ui.sect == S_LFO2 && ui.half == 0, "1.0: LFO again, from LFO 1's pages: LFO 2 (the next section, no paging)");
     press(B_LFO);
@@ -1882,15 +1882,15 @@ static void phase14(void)
     goto_mode(B_LFO, M_SOUND);
     while (ui.sect != S_LFO)
         press(B_LFO);
-    turn(EN_SELECT, 2);
-    check(ui.sect == S_LFOM, "LFO MODE: back on it by SELECT");
-    turn(EN_K1, -3);
+    turn(EN_SELECT, 1);
+    check(ui.sect == S_LFO && ui.half == 1, "LFO MODE: back on its page by SELECT");
+    turn(EN_K3, -3);
     check(par[PAR_LFOMODE1] == LM_TRIG, "LFO MODE: back to TRIG by its knob");
     shot("lfo-mode");
-    turn(EN_SELECT, -1);                             /* 0.14: SELECT's order too: the LFO's pages, LFO MODE */
-    check(ui.sect == S_LFO && ui.half == 1, "SELECT: before LFO MODE, the LFO's second page");
+    turn(EN_SELECT, -1);                             /* 0.14: SELECT's order too: the LFO's two pages */
+    check(ui.sect == S_LFO && ui.half == 0, "SELECT: before LFO 1's second page, its first");
     turn(EN_SELECT, 2);
-    check(ui.sect == S_LFO2 && ui.half == 0, "SELECT: after LFO MODE, TRK LFO 2 (25b)");
+    check(ui.sect == S_LFO2 && ui.half == 0, "SELECT: after LFO 1's pages, TRK LFO 2 (25b)");
     turn(EN_SELECT, 2);
     check(ui.sect == S_RANDOM && ui.half == 0, "SELECT: after LFO 2, RANDOM PER HIT (29)");
 
@@ -1931,7 +1931,7 @@ static void phase14(void)
     run_ms(1000);
     ph = gl.l[0].phase - ph;
     check(ph > 0x7A000000u && ph < 0x86000000u, "GLOBAL LFO: a 1-bar cycle in 2 s at 120 BPM");
-    gls[0].len = NGLEN - 1u;                         /* (256 bars: about 8.5 minutes) */
+    gls[0].len = 18u;                                /* (256 bars: about 8.5 minutes) */
     run_ms(10);
     ph = gl.l[0].phase;
     run_ms(1000);
@@ -1978,8 +1978,9 @@ static void phase14(void)
     perf_goto(PG_GLFO);
     page_params(pp);
     title_text(b, sizeof b, &pg, &np);
-    check(pp[0] == GLV(0, 0) && pp[3] == GLV(0, 3) && !strcmp(b, "GLOBAL LFO 1 (1/2)") && !perf_bank2(),
-          "PERF: GLOBAL LFO 1's page (DEST DEPTH SPEED WAVE), the first bank's keys");
+    check(pp[0] == GLV(0, 0) && pp[1] == GLV(0, 1) && pp[2] == GLV(0, 2) && pp[3] == GLV(0, 7) &&
+          !strcmp(b, "GLOBAL LFO 1 (1/2)") && !perf_bank2(),
+          "PERF: GLOBAL LFO 1's page (1.0: DEST DEPTH SYNC RATE), the first bank's keys");
     turn(EN_K1, -20);
     check(gls[0].dest == GD_OFF && dest_pop(), "GLOBAL LFO: DEST down to OFF, its name over the page (0.25.2)");
     turn(EN_K1, 1);
@@ -2000,8 +2001,11 @@ static void phase14(void)
     turn(EN_K2, -10);
     check(gls[0].depth == 117, "GLOBAL LFO: DEPTH down");
     turn(EN_SELECT, 1);
-    turn(EN_K1, -10);
-    turn(EN_K1, 3);
+    page_params(pp);
+    check(pp[0] == GLV(0, 3) && pp[1] == GLV(0, 6) && pp[2] == GLV(0, 4) && pp[3] == GLV(0, 5),
+          "1.0: GLOBAL LFO 1 (2/2): WAVE PHASE MODE TRIG, as every LFO");
+    turn(EN_K3, -10);
+    turn(EN_K3, 3);
     check(gls[0].mode == GM_ONE, "GLOBAL LFO 1: MODE ONE");
     gl.l[0].gone = 0xFFFFFFFFu;
     gl.l[0].run = 0;
@@ -2016,12 +2020,14 @@ static void phase14(void)
         gls[1].depth = -40;
         gls[1].len = 9;
         gls[1].phase = 33;
+        gls[2].len = GL_FREE;                        /* (1.0: SYNC OFF, its RATE) */
+        gls[2].rate = 99;
         rc = proj_save(1, "GLFO    ");
         memset(gls, 0, sizeof gls);
         rc |= proj_load(1);
         check(!rc && gls[0].dest == GD_MORPH && gls[0].mode == GM_ONE && gls[0].depth == 117 &&
-              gls[1].dest == GD_JITTER && gls[1].depth == -40 && gls[1].len == 9 && gls[1].phase == 33,
-              "GLOBAL LFOs: saved with the project");
+              gls[1].dest == GD_JITTER && gls[1].depth == -40 && gls[1].len == 9 && gls[1].phase == 33 &&
+              gls[2].len == GL_FREE && gls[2].rate == 99, "GLOBAL LFOs: saved with the project (1.0: SYNC OFF, RATE)");
     }
     memset(gls, 0, sizeof gls);
     run_ms(20);
@@ -2088,10 +2094,10 @@ static void phase14(void)
     goto_mode(B_LFO, M_SOUND);
     for (i = 0; i < NSPG && ui.sect != S_LFO; i++)
         press(B_LFO);
-    turn(EN_SELECT, 2);
+    turn(EN_SELECT, 1);
     press(B_FX);
     press(B_LFO);
-    check(ui.mode == M_SOUND && ui.sect == S_LFOM, "LFO: back to LFO MODE");
+    check(ui.mode == M_SOUND && ui.sect == S_LFO && ui.half == 1, "LFO: back to LFO 1's second page (its MODE)");
     press(B_LFO);
     check(ui.sect == S_LFO2, "LFO again: on as before");
     seq_goto(PG_SCALE);
@@ -3125,7 +3131,7 @@ static void phase12_remote(void)
     check(!ok, "the remote map: each number once a channel, within 8..119");
     vp_set(VP_RKNOBS, RK_ABS);
     goto_mode(B_GLO, M_CONFIG);
-    while (ui.page != 7u)
+    while (ui.page != CF_REMOTE)
         turn(EN_SELECT, 1);
     run_ms(50);
     shot("remote-config");
@@ -3206,7 +3212,7 @@ static void phase12_remote(void)
     /* 0.24.3: Mute/solo TOGGLE: the button's state is the mute's (a controller's toggle buttons) */
     vp_set(VP_RMUTE, 1);
     goto_mode(B_GLO, M_CONFIG);
-    while (ui.page != 7u)
+    while (ui.page != CF_REMOTE)
         turn(EN_SELECT, 1);
     run_ms(50);
     shot("remote-toggle");
@@ -3481,6 +3487,7 @@ static void phase19(void)
     step_len_set(p, 0, 0, LEN_4);
     par_set(PAR_GATE1, 1);
     par_set(PAR_MIDI_FILT_TX, par[PAR_MIDI_FILT_TX] | MF_NOTE);
+    vp_set(VP_MOUT, 1);                              /* (1.0: D1's MIDI OUT on; all off by default) */
     run_ms(20);
     midi_offs(0, 0);
     play_from_start();
@@ -3509,6 +3516,7 @@ static void phase19(void)
     i = midi_offs(midi_track_ch(0), &ons);
     check(ons == 2u && i == 1u, "TIE in MIDI: the new note on, then the old off");
     press(B_PLAY);
+    vp_set(VP_MOUT, 0);
     shot("step-tie");
     seq_clear_track(0, p);
 
@@ -3830,16 +3838,16 @@ static uint32_t first_peak(const int16_t *s, uint32_t from, uint32_t to, int32_t
         }
     return best;
 }
-static void fx_fresh(uint32_t dtype)
+static void fx_fresh(uint32_t dtype)                 /* (1.0: the always-on delay at LEVEL 127, the bus OFF) */
 {
     par_set(PAR_FX_TYPE, FX_OFF);
-    run_ms(5);
-    par_set(PAR_FX_TYPE, FX_DELAY);
     par_set(PAR_FX_DELAY_TYPE, dtype);
-    par_set(PAR_FX_DRY_WET, 100);
+    par_set(PAR_DLY_LEVEL, 127);
     par_set(PAR_FX_ROUTING, R_ST1);
     run_ms(10);
-    fxbus_process();                                 /* (the type's change: the line from silence) */
+    memset(fxbuf, 0, sizeof fxbuf);                  /* (the line from silence) */
+    memset(&tp, 0, sizeof tp);
+    fx.d_lp[0] = fx.d_lp[1] = 0;
 }
 static void phase21(void)
 {
@@ -3850,9 +3858,9 @@ static void phase21(void)
     /* 21b: SYNC on NORMAL: 1/8 at 120 BPM, 11025 samples */
     fx_fresh(DELAY_NORMAL);
     par_set(PAR_DSYNC, 1);
-    par_set(PAR_FX_P1, 58);                          /* (TIME 58: 1/8) */
-    par_set(PAR_FX_P4, 40);
-    par_set(PAR_FX_P3, 100);
+    par_set(PAR_DLY_TIME, 58);                          /* (TIME 58: 1/8) */
+    par_set(PAR_DLY_FB, 40);
+    par_set(PAR_DLY_TONE, 100);
     run_ms(10);
     fx_fresh(DELAY_NORMAL);
     fx_alone(400, 20000, 20000, 0);
@@ -3886,9 +3894,9 @@ static void phase21(void)
     check(tp.w <= (FXBUF_MASK >> 1), "TAPE -> TAPE PP: the write head inside the PP half");
     /* feedback past 100%, SATURATE: a roar that stays bounded */
     fx_fresh(DELAY_TAPE);
-    par_set(PAR_FX_P4, 127);
+    par_set(PAR_DLY_FB, 127);
     par_set(PAR_DSAT, 127);
-    par_set(PAR_FX_P3, 100);
+    par_set(PAR_DLY_TONE, 100);
     run_ms(10);
     fx_alone(2700, 0, 0, 4410);                      /* (100 ms of noise, then 4 s) */
     for (pk = 0, i = FS * 3u; i < FS * 4u; i++)
@@ -3896,7 +3904,7 @@ static void phase21(void)
     printf("  TAPE FEEDBACK 115%%, SATURATE 127: the last second's peak %d\n", pk);
     check(pk > 1000 && pk < 12000, "TAPE past 100%: it grows into a bounded roar");
     /* GLITCH, PITCH: they run, bounded */
-    par_set(PAR_FX_P4, 90);
+    par_set(PAR_DLY_FB, 90);
     par_set(PAR_DSAT, 20);
     par_set(PAR_GLITCH, 127);
     par_set(PAR_DPITCH, DP_UP12);
@@ -3910,9 +3918,9 @@ static void phase21(void)
     {   /* PITCH +12: the second repeat an octave up (441 Hz in, 882 Hz back) */
         uint32_t zc = 0;
         par_set(PAR_GLITCH, 0);
-        par_set(PAR_FX_P4, 100);
-        par_set(PAR_FX_P3, 127);
-        par_set(PAR_FX_P2, 0);
+        par_set(PAR_DLY_FB, 100);
+        par_set(PAR_DLY_TONE, 127);
+        par_set(PAR_DLY_WOW, 0);
         run_ms(10);
         fx_fresh(DELAY_TAPE);
         p21_sine = 441;
@@ -3957,7 +3965,7 @@ static void phase21(void)
     /* the cost: TAPE PP with everything on, a block on the host */
     par_set(PAR_GLITCH, 127);
     par_set(PAR_DPITCH, DP_UP7);
-    par_set(PAR_FX_P2, 127);
+    par_set(PAR_DLY_WOW, 127);
     run_ms(10);
     fx_fresh(DELAY_TAPEPP);
     {
@@ -3969,28 +3977,34 @@ static void phase21(void)
         us = ((b.tv_sec - a.tv_sec) * 1e9 + (b.tv_nsec - a.tv_nsec)) / 1e3 / 4000.0;
         printf("  TAPE PP, everything on: %.2f us a block on the host (with the test's own fill)\n", us);
     }
-    par_set(PAR_FX_P1, 127);                         /* (the screens: 1/2 at 120 is 1 s, NORMAL's 0.74 s: /2) */
+    par_set(PAR_DLY_TIME, 127);                         /* (the screens: 1/2 at 120 is 1 s, NORMAL's 0.74 s: /2) */
     par_set(PAR_BPM, 60);
     run_ms(20);
     goto_mode(B_FX, M_FX);
-    fx_goto(FXPG_PARS);
+    fx_goto(FXPG_DLY);
     shot("fx-tape");
     fx_goto(FXPG_DUB);
     {
         uint16_t pp[4];
         page_params(pp);
-        check(pp[0] == PAR_DSYNC && pp[3] == PAR_DPITCH, "FX: DELAY: DUB, SYNC .. PITCH");
+        check(pp[0] == PAR_DLY_WOW && pp[3] == PAR_DPITCH, "FX: DELAY: TAPE, WOW .. PITCH");
     }
     shot("fx-delay-dub");
-    turn(EN_SELECT, 1);
+    fx_goto(FXPG_DLY2);
+    {
+        uint16_t pp[4];
+        page_params(pp);
+        check(pp[0] == PAR_FX_DELAY_TYPE && pp[1] == PAR_DSYNC && pp[2] == PAR_ECHOREV, "FX: DELAY: MODE, SYNC, ECHO > REVERB");
+    }
     shot("fx-delay-send");
     par_set(PAR_FX_DELAY_TYPE, DELAY_NORMAL);
     run_ms(20);
-    fx_goto(FXPG_PARS);
+    fx_goto(FXPG_DLY);
     shot("fx-normal-sync-half");
     press(B_HOME);
     par_set(PAR_BPM, 120);
     par_set(PAR_FX_TYPE, FX_OFF);
+    par_set(PAR_DLY_LEVEL, 0);
     par_set(PAR_DSYNC, 0);
     par_set(PAR_DSAT, 0);
     par_set(PAR_ECHOREV, 0);
@@ -4075,18 +4089,20 @@ static double p23_h3(const int32_t *x, uint32_t n)   /* the 3rd harmonic's share
 static void phase_016t2(void)                        /* 0.16-test2: FX's page order; the HYRULE palette */
 {
 #define FXSENDS FXPG_FSEND, FXPG_FSEND2, FXPG_RSEND, FXPG_RSEND2   /* (31: the sends last) */
-    static const uint8_t OFF[] = {FXPG_REV, FXPG_BUS, FXPG_DIRT, FXPG_COMP, FXPG_COMP2, FXSENDS};
-    static const uint8_t PH[] = {FXPG_REV, FXPG_BUS, FXPG_PARS, FXPG_DIRT, FXPG_COMP, FXPG_COMP2, FXSENDS};
-    static const uint8_t DL[] = {FXPG_REV, FXPG_BUS, FXPG_PARS, FXPG_DUB, FXPG_SEND, FXPG_DIRT, FXPG_COMP, FXPG_COMP2,
+    static const uint8_t OFF[] = {FXPG_REV, FXPG_BUS, FXPG_DLY, FXPG_DLY2, FXPG_DIRT, FXPG_COMP, FXPG_COMP2, FXSENDS};
+    static const uint8_t PH[] = {FXPG_REV, FXPG_BUS, FXPG_PARS, FXPG_DLY, FXPG_DLY2, FXPG_DIRT, FXPG_COMP, FXPG_COMP2,
                                  FXSENDS};
-    static const struct { uint32_t type; const uint8_t *pg; uint32_t n; } C[3] = {
-        {FX_OFF, OFF, 9}, {FX_PHASER, PH, 10}, {FX_DELAY, DL, 12}};
+    static const uint8_t DL[] = {FXPG_REV, FXPG_BUS, FXPG_DLY, FXPG_DLY2, FXPG_DUB, FXPG_DIRT, FXPG_COMP, FXPG_COMP2,
+                                 FXSENDS};   /* (1.0: the always-on delay's; TAPE's page with TAPE) */
+    static const struct { uint32_t type, dtype; const uint8_t *pg; uint32_t n; } C[3] = {
+        {FX_OFF, DELAY_NORMAL, OFF, 11}, {FX_PHASER, DELAY_NORMAL, PH, 12}, {FX_OFF, DELAY_TAPE, DL, 12}};
     uint32_t k, i, ok;
     uint8_t l[NFXPG];
     press(B_HOME);
     press(B_FX);
     for (k = 0; k < 3u; k++) {
         par_set(PAR_FX_TYPE, C[k].type);
+        par_set(PAR_FX_DELAY_TYPE, C[k].dtype);
         ok = fx_shown(l) == C[k].n && mode_pages() == C[k].n;
         for (i = 0; ok && i < C[k].n; i++)
             ok = l[i] == C[k].pg[i];
@@ -4099,11 +4115,12 @@ static void phase_016t2(void)                        /* 0.16-test2: FX's page or
         }
         check(ok, "FX: SELECT walks the pages in order");
     }
-    fx_goto(FXPG_PARS);
+    fx_goto(FXPG_DLY);
     ui.force = 1;
     run_ms(100);
     shot("fx-order-delay");
     par_set(PAR_FX_TYPE, FX_OFF);
+    par_set(PAR_FX_DELAY_TYPE, DELAY_NORMAL);
     for (k = 0; k < NPALETTES && strcmp(UI_PALETTES[k].name, "HYRULE"); k++)
         ;
     check(k == NPALETTES - 1u, "HYRULE: the last palette (saved ids stay)");
@@ -4248,22 +4265,23 @@ static void phase_016t3(void)
     p4_reset();
     fx_fresh(DELAY_TAPE);
     par_set(PAR_DSYNC, 1);
-    par_set(PAR_FX_P1, 0);
+    par_set(PAR_DLY_TIME, 0);
     run_ms(20);
     press(B_HOME);
     press(B_FX);
-    fx_goto(FXPG_PARS);
+    fx_goto(FXPG_DLY);
     for (ok = 1, i = 0; i < NSYNCV - 1u; i++) {
-        uint32_t a = (par[PAR_FX_P1] * 65536u / 127u * NSYNCV) >> 16, b;
+        uint32_t a = (par[PAR_DLY_TIME] * 65536u / 127u * NSYNCV) >> 16, b;
         turn(EN_K1, 1);
-        b = (par[PAR_FX_P1] * 65536u / 127u * NSYNCV) >> 16;
+        b = (par[PAR_DLY_TIME] * 65536u / 127u * NSYNCV) >> 16;
         ok &= b == a + 1u;
     }
     check(ok, "SYNC: TIME a note value a detent, up to 1/2");
     turn(EN_K1, -3);
-    check(((par[PAR_FX_P1] * 65536u / 127u * NSYNCV) >> 16) == NSYNCV - 4u, "SYNC: .. and back down");
+    check(((par[PAR_DLY_TIME] * 65536u / 127u * NSYNCV) >> 16) == NSYNCV - 4u, "SYNC: .. and back down");
     par_set(PAR_DSYNC, 0);
     par_set(PAR_FX_TYPE, FX_OFF);
+    par_set(PAR_DLY_LEVEL, 0);
     run_ms(20);
     /* the COMPRESSOR: OFF leaves the mix alone; 4:1 at -24 dB takes ~3/4 of the excess; a key ducks the rest, not
      * itself */
@@ -4878,8 +4896,8 @@ static void phase25a(void)
         char na[32], nb[32];
         uint32_t n = tgt_list(PAR_TARGET_LFO1, l), i, ok = l[0] == 0u, ga, gb;
         for (i = 0; i < n; i++)
-            ok &= !seen[l[i]]++ && (!l[i] || (l[i] >= lo && l[i] <= hi) || (l[i] >= NUM_MOD_TARGETS && l[i] < NUM_TARGETS_X));
-        check(ok && n == 1u + (hi - lo + 1u) + NXT, "D1's DEST list: OFF, then each of D1's targets once");
+            ok &= !seen[l[i]]++ && (!l[i] || (l[i] >= lo && l[i] <= hi) || tgt_dly(l[i]) || (l[i] >= NUM_MOD_TARGETS && l[i] < NUM_TARGETS_X));
+        check(ok && n == 1u + (hi - lo + 1u) + 4u + NXT, "D1's DEST list: OFF, then each of D1's targets once");
         for (ok = 1, i = 2; i < n; i++) {
             ga = tgt_full(na, sizeof na, 0, l[i - 1u]);
             gb = tgt_full(nb, sizeof nb, 0, l[i]);
@@ -4908,10 +4926,26 @@ static void phase25a(void)
         check(par[PAR_TARGET_LFO1] == l[1], "K up from OFF: the list's first");
         turn(EN_K1 + kk, 3);
         check(par[PAR_TARGET_LFO1] == l[4], "K: the list in its order");
-        turn(EN_K1 + kk, 100);
-        check(par[PAR_TARGET_LFO1] == l[n - 1u], "K to the last, no further");
-        turn(EN_K1 + kk, -1);
-        check(par[PAR_TARGET_LFO1] == l[n - 2u], "K back one");
+        {                                            /* 1.0: on past D1's into the other voices' (Voice set) */
+            uint8_t l2[NTGT_LIST];
+            uint32_t n6, j;
+            tgt_list_v(1, l2);
+            par_set(PAR_TARGET_LFO1, l[n - 1u]);
+            run_ms(20);
+            turn(EN_K1 + kk, 1);
+            check(par[PAR_TARGET_LFO1] == l2[1] && par[PAR_VOICE_LFO1] == 2u, "1.0: K on past D1's last: D2's first");
+            par_format(b, PAR_TARGET_LFO1, par[PAR_TARGET_LFO1], sizeof b);
+            check(!strncmp(b, "D2 ", 3), "1.0: another voice's Dest: its voice first");
+            turn(EN_K1 + kk, -1);
+            check(par[PAR_TARGET_LFO1] == l[n - 1u] && par[PAR_VOICE_LFO1] == 1u, "1.0: K back: D1's last");
+            for (j = 0; j < 30u; j++)
+                turn(EN_K1 + kk, 100);
+            n6 = tgt_list_v(5, l2);
+            check(par[PAR_TARGET_LFO1] == l2[n6 - 1u] && par[PAR_VOICE_LFO1] == 6u, "1.0: K to HH's last, no further");
+            for (j = 0; j < 30u; j++)
+                turn(EN_K1 + kk, -100);
+            check(par[PAR_TARGET_LFO1] == 0u && par[PAR_VOICE_LFO1] == 1u, "1.0: K all the way back: OFF, its own voice");
+        }
         par_set(PAR_TARGET_LFO1, 22);
         run_ms(20);
         shot("lfo-dest-filter");
@@ -4997,14 +5031,14 @@ static void phase25b(void)
     run_ms(40);
     page_params(pp);
     title_text(b, sizeof b, &pg, &np);
-    check(ui.sect == S_LFO2 && pp[0] == PAR_L2RATE1 + 1u && pp[1] == PAR_L2AMT1 + 1u && pp[2] == PAR_L2WAVE1 + 1u &&
-          pp[3] == PAR_L2TGT1 + 1u && !strcmp(b, "LFO 2 (1/2)"), "LFO 2: D2's rate, amount, wave, target (29)");
+    check(ui.sect == S_LFO2 && pp[0] == PAR_L2TGT1 + 1u && pp[1] == PAR_L2AMT1 + 1u && pp[2] == PAR_L2SYNC1 + 1u &&
+          pp[3] == PAR_L2RATE1 + 1u && !strcmp(b, "LFO 2 (1/2)"), "LFO 2: D2's dest, depth, sync, rate (1.0)");
     ui.half = 1;
     ui.force = 1;
     run_ms(40);
     page_params(pp);
-    check(pp[0] == PAR_L2MODE1 + 1u && pp[1] == PAR_L2SYNC1 + 1u && pp[2] == PAR_L2RTRG1 + 1u && pp[3] == PAR_L2OFS1 + 1u,
-          "its second page: mode, sync, retrigger, offset");
+    check(pp[0] == PAR_L2WAVE1 + 1u && pp[1] == PAR_L2OFS1 + 1u && pp[2] == PAR_L2MODE1 + 1u && pp[3] == PAR_L2RTRG1 + 1u,
+          "its second page: wave, phase, mode, retrigger (1.0)");
     ui.half = 0;
     ui.force = 1;
     run_ms(40);
@@ -5018,15 +5052,15 @@ static void phase25b(void)
         tgt_list(PAR_L2TGT1 + 1, l);
         par_set(PAR_L2TGT1 + 1, 0);
         run_ms(20);
-        turn(EN_K4, 1);
-        check(par[PAR_L2TGT1 + 1] == l[1], "K4 up from OFF: D2's first target");
+        turn(EN_K1, 1);
+        check(par[PAR_L2TGT1 + 1] == l[1], "K1 up from OFF: D2's first target (1.0: Dest on K1)");
         par_set(PAR_L2TGT1 + 1, NUM_MOD_TARGETS);
         run_ms(20);
         check(lfo2_mod[1].dest == PAR_FX_SEND1 + 1u, "D2's FX send");
-        turn(EN_K4, 1);
+        turn(EN_K1, 1);
         run_ms(20);
         tgt_full(nm, sizeof nm, 1, par[PAR_L2TGT1 + 1]);
-        check(!strcmp(nm, "Pan"), "K4 on from D2's FX send: Pan (MIX & SENDS by name)");
+        check(!strcmp(nm, "Pan"), "K1 on from D2's FX send: Pan (MIX & SENDS by name)");
     }
     par_format(b, PAR_L2TGT1 + 1, NUM_MOD_TARGETS + 2u, sizeof b);
     check(!strcmp(b, "Tilt"), "its name: Tilt");
@@ -5412,17 +5446,33 @@ static void phase29(void)
     run_ms(20);
     page_params(pp);
     title_text(b, sizeof b, &pg, &np);
-    check(pp[0] == PAR_FREQ_LFO1 && pp[1] == PAR_AMOUNT_LFO1 && pp[2] == PAR_WAVE_LFO1 && pp[3] == PAR_TARGET_LFO1 &&
-          !strcmp(b, "LFO 1 (1/3)"), "LFO 1 (1/3): rate, amount, wave, target");
+    check(pp[0] == PAR_TARGET_LFO1 && pp[1] == PAR_AMOUNT_LFO1 && pp[2] == PAR_SYNC_LFO1 && pp[3] == PAR_FREQ_LFO1 &&
+          !strcmp(b, "LFO 1 (1/2)"), "1.0: LFO 1 (1/2): dest, depth, sync, rate");
+    {
+        static const char *const NM[4] = {"Dest", "Depth", "Sync", "Rate"};
+        uint32_t k, ok = 1;
+        for (k = 0; k < 4u; k++) {
+            card_name(b, sizeof b, pp[k]);
+            ok &= !strcmp(b, NM[k]);
+        }
+        check(ok, "1.0: LFO 1's names: Dest, Depth, Sync, Rate");
+    }
     turn(EN_SELECT, 1);
     page_params(pp);
     title_text(b, sizeof b, &pg, &np);
-    check(pp[0] == PAR_VOICE_LFO1 && pp[1] == PAR_SYNC_LFO1 && pp[2] == PAR_RETRIGGER_LFO1 &&
-          pp[3] == PAR_OFFSET_LFO1 && !strcmp(b, "LFO 1 (2/3)"), "LFO 1 (2/3): voice, sync, retrigger, offset");
+    check(pp[0] == PAR_WAVE_LFO1 && pp[1] == PAR_OFFSET_LFO1 && pp[2] == PAR_LFOMODE1 && pp[3] == PAR_RETRIGGER_LFO1 &&
+          !strcmp(b, "LFO 1 (2/2)"), "1.0: LFO 1 (2/2): wave, phase, mode, retrigger");
+    {
+        static const char *const NM[4] = {"Wave", "Phase", "Mode", "Retrigger"};
+        uint32_t k, ok = 1;
+        for (k = 0; k < 4u; k++) {
+            card_name(b, sizeof b, pp[k]);
+            ok &= !strcmp(b, NM[k]);
+        }
+        check(ok, "1.0: LFO 1's names: Wave, Phase, Mode, Retrigger");
+    }
     turn(EN_SELECT, 1);
-    page_params(pp);
-    title_text(b, sizeof b, &pg, &np);
-    check(ui.sect == S_LFOM && pp[0] == PAR_LFOMODE1 && !strcmp(b, "LFO 1 (3/3)"), "LFO 1 (3/3): the mode");
+    check(ui.sect == S_LFO2 && ui.half == 0, "1.0: after LFO 1's two pages, LFO 2 (no MODE page)");
     sound_open(S_MOD, 0);
     run_ms(20);
     title_text(b, sizeof b, &pg, &np);
@@ -6453,23 +6503,24 @@ static void phase30(void)
     vp_set(PAR_REV_SIZE, 70);
     run_ms(40);
     shot("viz-reverb-plate");
-    fx_goto(FXPG_BUS);
-    vp_set(PAR_FX_TYPE, FX_DELAY);
-    vp_set(VP_FX_SUB, 1);
-    vp_set(PAR_FX_P1, 40);
-    vp_set(PAR_FX_P4, 90);
+    fx_goto(FXPG_DLY2);                              /* (1.0: the always-on delay's pages) */
+    vp_set(PAR_FX_DELAY_TYPE, 1);
+    fx_goto(FXPG_DLY);
+    vp_set(PAR_DLY_TIME, 40);
+    vp_set(PAR_DLY_FB, 90);
+    vp_set(PAR_DLY_LEVEL, 100);
     run_ms(40);
     shot("viz-fx-delay-pp");
-    vp_set(VP_FX_SUB, 3);
+    vp_set(PAR_FX_DELAY_TYPE, 3);
     run_ms(40);
     shot("viz-fx-delay-tapepp");
-    vp_set(VP_FX_SUB, 1);
     fx_goto(FXPG_DUB);
     vp_set(PAR_DPITCH, 1);
     vp_set(PAR_GLITCH, 80);
     run_ms(40);
     shot("viz-fx-dub");
-    fx_goto(FXPG_SEND);
+    vp_set(PAR_FX_DELAY_TYPE, 1);
+    fx_goto(FXPG_DLY2);
     vp_set(PAR_ECHOREV, 90);
     run_ms(40);
     shot("viz-fx-send");
@@ -6765,11 +6816,15 @@ static void phase40(void)
     press(B_OCTUP);
     check(wd.state == WS_ROAD && wd.home_p == 0u && wd_kit_diff() == 0u && wd.quest == Q_SPIRE,
           "COPY (OCT+): setting out, home the pattern and the voices");
-    wd_bars(6);
     {
-        uint32_t th = 0, gl = 0, dn = 0;
-        for (i = 0; i < NTHREAD; i++)
-            th += wd.th[i].on;
+        uint32_t th = 0, gl = 0, dn = 0, b6;
+        for (b6 = 0; b6 < 6u; b6++) {                /* (1.0: threads seen at any bar: the seed is the clock's) */
+            uint32_t n6 = 0;
+            wd_bars(1);
+            for (i = 0; i < NTHREAD; i++)
+                n6 += wd.th[i].on;
+            th = n6 > th ? n6 : th;
+        }
         for (i = 0; i < NGLIDE; i++)
             gl += wgl[i].p != 0;
         for (t = 0; t < NTRACK; t++)
@@ -7571,8 +7626,14 @@ static void phase_024g(void)
     check(q > 50.0, "KEYS: a note plays the selected track");
     /* PAT+KIT */
     vp_set(VP_GTAKES, GT_PATKIT);
-    q = note_rms(g);
-    check(q < 1.0, "PAT+KIT: a note on the global channel plays nothing");
+    {
+        double q0;                                   /* (1.0: against the quiet as it is: a state left by WANDER's
+                                                      * road can leave an LSB of DC) */
+        run_ms(1500);
+        q0 = out_rms(150);
+        q = note_rms(g);
+        check(q < q0 + 1.0, "PAT+KIT: a note on the global channel plays nothing");
+    }
     web_midi(0xB0 | g, 1, 20);
     run_ms(20);
     check(pfs.m[0].val == 100, "PAT+KIT: the wheel moves nothing");
@@ -7954,6 +8015,493 @@ static void phase_0241(void)
     check(fx_found == 0u && ui.dx_ask == 0u && proj_exists(2) && kl_exists(KLK_KIT, 11), "the next power-on: nothing asked");
 }
 
+/* 1.0 Phase 3: the LFOs made consistent: one order and names, the syncs by length (3/8, 5/16, dotted), the global
+ * LFOs free or synced, DIRT as a global destination, morph's sweep skipping what didn't change */
+static void phase_100_3(void)
+{
+    uint16_t pp[4];
+    uint32_t i, ok, ph, d;
+    char b[32];
+    printf("1.0 Phase 3: LFOs\n");
+    p4_reset();
+    if (sq.running)
+        press(B_PLAY);
+    for (ok = 1, i = 1; i + 1u < NSYNC; i++)          /* (the knob's order: by length, slow .. fast) */
+        ok &= SYNC_SCALE_X60[SYNC_ORDER[i]] < SYNC_SCALE_X60[SYNC_ORDER[i + 1u]];
+    check(ok && SYNC_ORDER[0] == 0u && par_max(PAR_SYNC_LFO1) == 15u && par_max_k(PAR_L2SYNC1) == 15u,
+          "SYNC: OFF, then 15 by length (4 bits: the kits as they were)");
+    for (ok = 1, i = 1; i < NGLEN; i++)
+        ok &= GL_LEN[GL_ORDER[i]] > GL_LEN[GL_ORDER[i + 1u]];
+    check(ok && GL_ORDER[0] == GL_FREE, "the global LFOs' SYNC: OFF, then slow .. fast");
+    /* LFO 1 on the second page, its sync knob by length: 1/4 on to 3/16, 3/8 a dotted quarter */
+    goto_mode(B_HOME, M_HOME);
+    ui.track = 0;
+    run_ms(20);
+    sound_open(S_LFO, 0);
+    run_ms(20);
+    page_params(pp);
+    check(pp[2] == PAR_SYNC_LFO1, "LFO 1: SYNC on K3");
+    par_set(PAR_SYNC_LFO1, 6);                        /* (1/4) */
+    run_ms(20);
+    turn(EN_K3, 1);
+    check(par[PAR_SYNC_LFO1] == 15u, "SYNC K3 on from 1/4: 3/16 (by length)");
+    par_format(b, PAR_SYNC_LFO1, 15, sizeof b);
+    check(!strcmp(b, "3/16"), "its name: 3/16");
+    turn(EN_K3, -2);
+    check(par[PAR_SYNC_LFO1] == 14u, "SYNC back two: 5/16");
+    par_format(b, PAR_SYNC_LFO1, 5, sizeof b);
+    check(!strcmp(b, "1/2T"), "the LXR's 1/3: a half-note triplet, 1/2T");
+    par_set(PAR_SYNC_LFO1, 13);                       /* (3/8 at 120 BPM: 0.75 s a cycle) */
+    run_ms(20);
+    d = (uint32_t)(4294967296.0 * BLOCK / FS / 0.75);
+    check(vc[0].lfo.inc > d - d / 200u && vc[0].lfo.inc < d + d / 200u, "SYNC 3/8: a cycle in 0.75 s at 120 BPM");
+    check(morph_mix(PAR_SYNC_LFO1, 6, 13, 100) == 6u && morph_mix(PAR_SYNC_LFO1, 6, 13, 200) == 13u &&
+          morph_mix(PAR_SYNC_LFO1, 6, 8, 128) == morph_lerp(6, 8, 128), "morph: a new sync switches at 50%, the LXR's as before");
+    par_set(PAR_SYNC_LFO1, 0);
+    /* the names: LFO 2 as LFO 1 */
+    sound_open(S_LFO2, 0);
+    run_ms(20);
+    card_name(b, sizeof b, PAR_L2AMT1);
+    ok = !strcmp(b, "Depth");
+    card_name(b, sizeof b, PAR_L2OFS1);
+    ok &= !strcmp(b, "Phase");
+    card_name(b, sizeof b, PAR_L2RTRG1);
+    check(ok && !strcmp(b, "Retrigger"), "LFO 2: Depth, Phase, Retrigger");
+    mod_target_name(b, lock_idx_of(PAR_FREQ_LFO1 + 1), 1, sizeof b);
+    check(!strcmp(b, "D2 L1 rate"), "a lock on LFO 1's rate: D2 L1 rate");
+    /* the global LFOs: SYNC OFF and RATE in Hz; a triplet */
+    memset(gls, 0, sizeof gls);
+    gls[0].len = GL_FREE;
+    gls[0].rate = 127;                               /* (~20.5 Hz) */
+    gls[0].wave = LFO_SAW_UP;
+    run_ms(10);
+    ph = gl.l[0].inc;
+    d = (uint32_t)(4294967296.0 * BLOCK / FS * 20.48);
+    check(ph > d - d / 50u && ph < d + d / 50u, "GLOBAL LFO SYNC OFF: RATE 127, 20.5 Hz");
+    gls[0].rate = 0;
+    run_ms(10);
+    d = (uint32_t)(4294967296.0 * BLOCK / FS * 0.01);
+    check(gl.l[0].inc > d - d / 50u && gl.l[0].inc < d + d / 50u, "RATE 0: 0.01 Hz");
+    card_value(b, sizeof b, GLV(0, 7), 0);
+    check(!strcmp(b, "100 s"), "RATE 0 shown as its cycle: 100 s");
+    card_value(b, sizeof b, GLV(0, 7), 127);
+    check(!strncmp(b, "20", 2), "RATE 127: 20 Hz");
+    gls[0].len = 20;                                 /* (1/16T at 120 BPM: 1/12 s) */
+    run_ms(10);
+    d = (uint32_t)(4294967296.0 * BLOCK / FS * 12.0);
+    check(gl.l[0].inc > d - d / 100u && gl.l[0].inc < d + d / 100u, "GLOBAL LFO SYNC 1/16T: 12 cycles a second");
+    card_value(b, sizeof b, GLV(0, 7), 64);
+    check(!strcmp(b, "SYNC"), "RATE while synced: SYNC");
+    card_value(b, sizeof b, GLV(0, 2), 20);
+    check(!strcmp(b, "1/16T"), "its SYNC: 1/16T");
+    perf_goto(PG_GLFO);
+    gls[0].len = GL_FREE;
+    turn(EN_K3, 1);
+    check(gls[0].len == 18u, "SYNC K3 on from OFF: 256 bars");
+    turn(EN_K3, -1);
+    check(gls[0].len == GL_FREE, "SYNC back: OFF");
+    turn(EN_K4, 5);
+    check(gls[0].rate == 5u, "RATE on K4");
+    shot("global-lfo-free");
+    /* DIRT: the master's amount either way from its knob */
+    par_set(PAR_MDIRT_AMT, 0);
+    gls[0].dest = GD_DIRT;
+    gls[0].depth = 127;
+    gls[0].len = 0;
+    gls[0].wave = LFO_TRI;
+    for (ok = 0, i = 0; i < 200u; i++) {
+        run_ms(1);
+        ok |= dirt.lfo > 30000;
+    }
+    check(ok && gd_turn(GD_CUTS, 1) == GD_DIRT, "GLOBAL LFO DIRT: the master's dirt moved (MASTER FX, by name)");
+    memset(gls, 0, sizeof gls);
+    run_ms(20);
+    check(dirt.lfo == 0, "DIRT: back with the LFO off");
+    /* morph's sweep: a mixture that moved is heard, one that didn't isn't applied again */
+    for (i = 0; i < KIT_LEN; i++)
+        morph_par[i] = par[kit_par(i)];
+    morph_par[kit_idx(PAR_FILTER_FREQ_1)] = (uint8_t)(par[PAR_FILTER_FREQ_1] > 60u ? 10u : 120u);
+    kit_set_morph(255);
+    run_ms(30);
+    check(snd_mv[kit_idx(PAR_FILTER_FREQ_1)] == morph_par[kit_idx(PAR_FILTER_FREQ_1)],
+          "morph: the sweep applies the moved mixture");
+    vc[0].flt.fval = 12345;                          /* (the sweep again, the mixture the same: not applied) */
+    snd_post_morph();
+    run_ms(30);
+    check(vc[0].flt.fval == 12345u, "morph: an unchanged mixture isn't applied again");
+    kit_set_morph(0);
+    run_ms(30);
+    check(vc[0].flt.fval != 12345u && snd_mv[kit_idx(PAR_FILTER_FREQ_1)] == par[PAR_FILTER_FREQ_1],
+          "morph back: the kit's value again");
+    goto_mode(B_HOME, M_HOME);
+}
+
+/* 1.0 Phase 4: MIDI and performance: the master volume (settings, CC 124), the morph target by CC 125, the remote's
+ * DENSITY a track (TRACKS' CC 96..103), its rolls a track (GLOBAL's CC 112..119), a track's MIDI out (CONFIG) */
+static void phase_100_4(void)
+{
+    uint16_t pp[4];
+    uint32_t i, c, ons, ok;
+    char b[32];
+    uint8_t k[KIT_LEN], m[KIT_LEN];
+    printf("1.0 Phase 4: MIDI and performance\n");
+    p4_reset();
+    vp_set(VP_RCH, 15);
+    vp_set(VP_RCH2, 16);
+    vp_set(VP_RKNOBS, RK_ABS);
+    /* the master volume: 127 by default, in the settings; CC 124 on either remote channel and the global one */
+    check(sizeof kset >= SET_LEN_016 + 258u && __builtin_offsetof(elixir_settings_t, mvol) == SET_LEN_016 + 256u,
+          "settings: the volume and MIDI OUT after the CC map");
+    check(out_vol == 127u && vp_get(VP_MVOL) == 127u && out_gain == 4096, "VOLUME: 127 by default, full level");
+    gcc(124, 64);
+    run_ms(20);
+    check(out_vol == 64u && kset.mvol == 64u && out_gain == out_vol_q12() && out_gain == 64 * 64 * 4096 / 16129,
+          "VOLUME: CC 124 on GLOBAL, x^2, kept in the settings");
+    rcc(124, 100);
+    run_ms(20);
+    check(out_vol == 100u && out_gain == out_vol_q12(), "VOLUME: CC 124 on TRACKS");
+    {
+        uint32_t gt = kset.gtakes;
+        vp_set(VP_GTAKES, GT_KEYS);
+        web_midi(0xB0 | midi_global_ch(), 124, 30);
+        run_ms(20);
+        check(out_vol == 30u && kset.mvol == 30u, "VOLUME: CC 124 on the global channel (KEYS)");
+        vp_set(VP_GTAKES, gt);
+    }
+    {   /* (gliding: a step of 16 a sample at most, no zipper) */
+        int32_t g0 = out_gain;
+        web_midi(0xB0 | remote_gch, 124, 127);
+        web_render(2u * BLOCK);                       /* (the CC at the first block's start) */
+        check(out_gain > g0 && out_gain - g0 <= 2 * 16 * (int32_t)BLOCK, "VOLUME: glides to a new value");
+        run_ms(30);
+        check(out_gain == 4096, "VOLUME: back to full");
+    }
+    /* the morph target: CC 125 a slot kit, as LOAD > MORPH */
+    kit_init_values(k);
+    k[kit_idx(PAR_FILTER_FREQ_1)] = 33;
+    kit_get(7, m);
+    kit_put(7, k);
+    gcc(125, 7);
+    check(kit_morph_loaded == 7u && morph_par[kit_idx(PAR_FILTER_FREQ_1)] == 33u, "MORPH: CC 125 loads slot 8 as the target");
+    rcc(125, 3);
+    check(kit_morph_loaded == 3u, "MORPH: CC 125 on TRACKS too");
+    gcc(125, 100);
+    check(kit_morph_loaded == 3u, "MORPH: past the slots, nothing");
+    kit_put(7, m);
+    /* the remote's DENSITY a track, centred, on top of PERF's, not in a COMMIT */
+    check(rm_par(RR_RNDP * 8u + 2u) == VP_TD + 2u && vp_get(VP_TD + 2u) == 64u, "TRACKS' row 12: DENSITY, centred");
+    sq.dens = 0;
+    sq.dex = 0;
+    rcc(96 + 2, 0);
+    rcc(96 + 4, 127);
+    check(sq.tdens[2] == -64 && sq.tdens[4] == 63 && dens_at(2) == -64 && dens_at(4) == 63 && dens_at(0) == 0,
+          "DENSITY: D3 thinned, CY filled, D1 as it was");
+    sq.wonly = 2;
+    check(dens_at(2) == 0, "DENSITY: a COMMIT takes the knob's alone");
+    sq.wonly = 0;
+    card_name(b, sizeof b, VP_TD + 2u);
+    check(strcmp(b, "D3 dens") == 0, "DENSITY: the card's name");
+    perf_reset();
+    check(sq.tdens[2] == 0 && sq.tdens[4] == 0, "RESET PERF: the tracks' DENSITY centred");
+    /* the rolls a track: the CC's value its rate */
+    play_from_start();
+    c = trig_count[3];
+    gcc(112 + 3, 10);                                /* (1/16 on the grid) */
+    run_ms(1000);                                    /* (half a bar at 120) */
+    i = trig_count[3] - c;
+    printf("  SN's roll at CC 10: %u hits in half a bar\n", i);
+    check(i >= 7u && i <= 9u, "ROLL: CC 10 on SN's: 1/16");
+    c = trig_count[3];
+    gcc(112 + 3, 127);                               /* (1/256 free) */
+    run_ms(500);
+    i = trig_count[3] - c;
+    printf("  SN's roll at CC 127: %u hits in a beat\n", i);
+    check(i >= 60u && i <= 66u, "ROLL: CC 127: 1/256, off the grid");
+    c = trig_count[3];
+    ok = trig_count[1];
+    gcc(112 + 1, 3);                                 /* (D2 at 1/4 alongside) */
+    run_ms(1000);
+    check(trig_count[3] - c > 100u && trig_count[1] - ok >= 1u && trig_count[1] - ok <= 3u,
+          "ROLL: two tracks at once, each at its own rate");
+    gcc(112 + 3, 0);
+    gcc(112 + 1, 0);
+    c = trig_count[3];
+    run_ms(500);
+    check(trig_count[3] == c, "ROLL: CC 0, the roll stops");
+    ui.track = 5;
+    gcc(119, 20);
+    ui.track = 1;
+    gcc(119, 30);
+    check(sq.croll[5] == 30u && sq.croll[1] == 0u, "ROLL: CC 119, the track selected as it started, held");
+    gcc(119, 0);
+    gcc(119, 40);
+    check(sq.croll[1] == 40u && sq.croll[5] == 0u, "ROLL: CC 119 again: the track selected now");
+    gcc(119, 0);
+    press(B_PLAY);
+    /* a track's MIDI out: all off by default; CONFIG: MIDI OUT */
+    check(kset.mout == 0u && vp_get(VP_MOUT + 3u) == 0u, "MIDI OUT: every track off by default");
+    par_set(PAR_MIDI_FILT_TX, par[PAR_MIDI_FILT_TX] | MF_NOTE);
+    midi_offs(0, 0);
+    midi_out_note(3, 60, 100);
+    midi_out_note_off(3);
+    midi_offs(midi_track_ch(3), &ons);
+    check(ons == 0u, "MIDI OUT off: no note");
+    vp_set(VP_MOUT + 3u, 1);
+    midi_out_note(3, 60, 100);
+    midi_out_note_off(3);
+    i = midi_offs(midi_track_ch(3), &ons);
+    check(ons == 1u && i == 1u && kset.mout == 8u && midi_mout == 8u, "MIDI OUT on: SN's note out");
+    vp_set(VP_MOUT + 3u, 0);
+    goto_mode(B_GLO, M_CONFIG);
+    turn(EN_SELECT, (int32_t)CF_MOUT - (int32_t)ui.page);
+    page_params(pp);
+    check(ui.page == CF_MOUT && pp[0] == VP_MOUT && pp[3] == VP_MOUT + 3u, "CONFIG: MIDI OUT, D1 .. SN");
+    run_ms(50);
+    shot("config-midi-out");
+    turn(EN_SELECT, 1);
+    page_params(pp);
+    check(pp[0] == VP_MOUT + 4u && pp[2] == VP_MOUT + 6u && pp[3] == VP_MVOL, "CONFIG: MIDI OUT, CY .. OH, Volume");
+    run_ms(50);
+    shot("config-midi-out-2");
+    turn(EN_SELECT, 1);
+    page_params(pp);
+    check(pp[0] == VP_LEDS, "CONFIG: DEVICE after MIDI OUT");
+    turn(EN_SELECT, (int32_t)CF_REMOTE - (int32_t)ui.page);
+    page_params(pp);
+    check(pp[0] == VP_RCH, "CONFIG: REMOTE at CF_REMOTE");
+    goto_mode(B_HOME, M_HOME);
+    check(P_FX[FXPG_RSEND2][3] == VP_MVOL && P_MIXER[NMIXER - 1u][3] == VP_MVOL, "FX, MIXER: Volume after the reverb's");
+    vp_set(VP_MVOL, 127);
+    run_ms(30);
+}
+
+/* 1.0 Phase 5: time, the delay, WANDER: the delay always on (old DELAY kits; its targets; drained), TIME STRETCH (the
+ * steps at 50% / 200% / 99%; back into time; at STOP, at a pattern change with REALIGN; in a project), JOURNEY 1024,
+ * BOILING FROG, THE CANYON */
+static uint32_t p5_pos(uint32_t t)                    /* track t's steps since the start */
+{
+    return sq.loops[t] * track_len(&pat[sq.active], t) + (uint32_t)(sq.idx[t] < 0 ? 0 : sq.idx[t]);
+}
+static void phase_100_5(void)
+{
+    uint8_t k[KIT_LEN];
+    uint32_t i, t, a, b, ok, lo, hi, moved;
+    char c[32];
+    printf("1.0 Phase 5: time, the delay, WANDER\n");
+    p4_reset();
+    /* an old kit: bus DELAY -> the delay on, the bus OFF; D2's FX P target -> D1's */
+    kit_init_values(k);
+    memset(&k[kit_idx(PAR_DLY_TIME)], 0, 5);
+    k[kit_idx(PAR_FX_TYPE)] = FX_DELAY;
+    k[kit_idx(PAR_FX_DELAY_TYPE)] = DELAY_TAPE;
+    k[kit_idx(PAR_FX_P1)] = 70;
+    k[kit_idx(PAR_FX_P2)] = 30;
+    k[kit_idx(PAR_FX_P3)] = 90;
+    k[kit_idx(PAR_FX_P4)] = 80;
+    k[kit_idx(PAR_FX_DRY_WET)] = 50;
+    k[PAR_TARGET_LFO1] = (uint8_t)(TGT_DLY + 1u);
+    kit_sanitize(k);
+    check(k[kit_idx(PAR_FX_TYPE)] == FX_OFF && k[kit_idx(PAR_DLY_LEVEL)] == 50u * 127u / 100u && k[kit_idx(PAR_DLY_FB)] == 80u &&
+              k[kit_idx(PAR_DLY_TONE)] == 90u && k[kit_idx(PAR_DLY_TIME)] == 70u && k[kit_idx(PAR_DLY_WOW)] == 30u,
+          "an old DELAY kit: the delay on (its level, feedback, tone, TAPE's time and wow), the bus OFF");
+    check(k[PAR_TARGET_LFO1] == MOD_TARGET_VOICE[0][1] - 2u, "an old kit's D2 FX P2 target: D1's");
+    check(mod_dest(TGT_DLY, 0) == PAR_DLY_TIME && mod_dest(TGT_DLY + 3u, 2) == PAR_DLY_LEVEL, "LFO targets: the delay's time .. level");
+    /* MONO -> PING PONG: the write head in the smaller line */
+    par_set(PAR_FX_DELAY_TYPE, DELAY_NORMAL);
+    run_ms(5);
+    fx.d_write = FXBUF_MASK - 3u;
+    par_set(PAR_FX_DELAY_TYPE, DELAY_PINGPONG);
+    run_ms(5);
+    check(fx.d_write <= delay_mask(), "MONO -> PING PONG: the write head inside the line");
+    /* the delay beside the bus's PHASER; LEVEL 0: it drains, then sleeps */
+    par_set(PAR_FX_TYPE, FX_PHASER);
+    par_set(PAR_DLY_LEVEL, 90);
+    run_ms(50);
+    check(fx.type == FX_PHASER && fx.dl_lvl > 0 && dly_active(), "the delay on beside the PHASER");
+    par_set(PAR_DLY_LEVEL, 0);
+    run_ms(1500);
+    check(!dly_active() && !fx.dl_drain, "LEVEL 0: the echoes drained, the delay asleep");
+    par_set(PAR_FX_TYPE, FX_OFF);
+    /* TIME STRETCH */
+    for (i = 0; i < 16u; i++)
+        main_set(&pat[0], 0, i, 1), main_set(&pat[0], 1, i, 1), main_set(&pat[0], 2, i, 1);
+    pat_backup = pat[0];
+    seq_stretch_set(1, 5000);
+    seq_stretch_set(2, 20000);
+    play_from_start();
+    run_ms(4000);                                    /* (2 bars at 120) */
+    a = p5_pos(0);
+    check(a >= 30u && p5_pos(1) * 2u + 1u >= a && p5_pos(1) * 2u <= a + 1u && p5_pos(2) + 1u >= 2u * a && p5_pos(2) <= 2u * a + 1u,
+          "STRETCH 50% / 200%: half the steps, twice the steps");
+    printf("  2 bars: %u steps at 100%%, %u at 50%%, %u at 200%%\n", (unsigned)a, (unsigned)p5_pos(1), (unsigned)p5_pos(2));
+    press(B_PLAY);
+    run_ms(20);
+    check(sq.tacc[1] == 0u && sq.idx[1] < 0 && (sq.tfree & 6u) == 6u, "STOP: the tracks realigned (the speeds kept)");
+    seq_stretch_set(1, TSTR_ONE);
+    seq_stretch_set(2, TSTR_ONE);
+    seq_stretch_set(1, 9900);
+    play_from_start();
+    b = sq.ticks;
+    run_ms(4000);
+    b = sq.ticks - b + 1u;
+    check(-sq.toff[1] >= (int32_t)b * 655 && -sq.toff[1] <= (int32_t)(b + 24u) * 655 && p5_pos(1) <= p5_pos(0),
+          "99%: falling behind the clock, a tick at a time");
+    printf("  99%%: %d ticks behind after %u (toff %d, rate %u, pos %u %u)\n", (int)(-sq.toff[1] / 65536), (unsigned)b, (int)sq.toff[1], (unsigned)sq.trate[1], (unsigned)p5_pos(1), (unsigned)p5_pos(0));
+    seq_stretch_home(1);
+    for (i = 0; i < 400u && (sq.thome & 2u); i++)
+        run_ms(100);
+    run_ms(500);
+    check(!(sq.thome & 2u) && sq.tstr[1] == TSTR_ONE && sq.tacc[1] == 0u && sq.toff[1] == 0 && sq.idx[1] == sq.idx[0] &&
+              sq.tph[1] == sq.tph[0], "back into time: gliding, then 100% on the clock's steps");
+    /* a pattern change: kept (the default), REALIGN: in time again */
+    seq_stretch_set(1, 9900);
+    run_ms(2000);
+    pat[1] = pat[0];
+    seq_set_next_pattern(1);
+    a = sq.toff[1];
+    for (i = 0; i < 100u && sq.active != 1u; i++)
+        run_ms(50);
+    check(sq.active == 1u && sq.toff[1] != 0 && (sq.tfree & 2u), "a pattern change: the stretched track keeps its place");
+    vp_set(VP_REALIGN, 1);
+    seq_set_next_pattern(0);
+    for (i = 0; i < 100u && sq.active != 0u; i++)
+        run_ms(50);
+    check(sq.active == 0u && kset.realign && sq.toff[1] > -(int32_t)(4u * 65536u * 3u), "REALIGN: in time again at a pattern change");
+    vp_set(VP_REALIGN, 0);
+    press(B_PLAY);
+    (void)a;
+    /* in a project (KTS1) */
+    seq_stretch_set(3, 12345);
+    {
+        int rc = proj_save(1, "STRETCH ");
+        seq_stretch_set(3, TSTR_ONE);
+        rc |= proj_load(1);
+        check(rc == 0 && sq.tstr[3] == 12345u && sq.tstr[1] == 9900u, "a project: each track's stretch");
+    }
+    for (t = 0; t < NTRACK; t++)
+        seq_stretch_set(t, TSTR_ONE);
+    seq_reset_tracks();
+    goto_mode(B_HOME, M_HOME);
+    /* JOURNEY: 1024 BARS, then ENDLESS; an old link's ENDLESS (6) is still ENDLESS */
+    wd_card_value(c, sizeof c, WV_JOURNEY, 6);
+    ok = !strcmp(c, "1K BARS") && WD_BARS[6] == 1024u;
+    wd_card_value(c, sizeof c, WV_JOURNEY, 7);
+    check(ok && !strcmp(c, "ENDLESS") && wd_vmax(WV_JOURNEY) == WJ_ENDLESS, "JOURNEY: .. 512, 1024 BARS, ENDLESS");
+    wd_defaults();
+    a = web_share_get();
+    web_share[WEB_SHARE_V2] = 1;
+    web_share[WEB_SHARE_V2 + 1u + WV_JOURNEY] = 6;
+    b = web_share_put(WEB_SHARE_V5);
+    check(a == WEB_SHARE_V5 + 1u && b == 0u && wd.k[WV_JOURNEY] == WJ_ENDLESS, "an older phone link's ENDLESS: ENDLESS");
+    web_share[WEB_SHARE_V2 + 1u + WV_JOURNEY] = 6;
+    b = web_share_put(a);
+    check(b == 0u && wd.k[WV_JOURNEY] == 6u, "a new one's 1024 BARS: 1024 BARS");
+    if (sq.running)
+        press(B_PLAY);
+    wd_defaults();
+    p4_reset();
+    /* BOILING FROG: the tempo with the heat, a track drifting out of time and back */
+    for (i = 0; i < 16u; i++)
+        main_set(&pat[0], 0, i & ~3u, 1), main_set(&pat[0], 5, i, 1), main_set(&pat[0], 6, i, 1);
+    pat_backup = pat[0];
+    perf_goto(PG_WANDER);
+    wd_vset(WV_QUEST, Q_FROG);
+    check(wd.k[WV_FATE] == WF_LOST && wd.k[WV_JOURNEY] == 5u, "BOILING FROG: LOST, 512 bars at first");
+    wd.k[WV_JOURNEY] = 0;                            /* (16 bars) */
+    wd.k[WV_RANGE] = 127;
+    wd.k[WV_STRIDE] = 127;
+    press(B_PLAY);
+    press(B_OCTUP);
+    lo = hi = 120;
+    moved = 0;
+    for (i = 0; i < 15u; i++) {
+        wd_bars(1);
+        lo = seq_bpm() < lo ? seq_bpm() : lo;
+        hi = seq_bpm() > hi ? seq_bpm() : hi;
+        for (t = 0; t < NTRACK; t++)
+            moved |= (sq.tstr[t] != TSTR_ONE) << t;
+    }
+    printf("  BOILING FROG: %u .. %u BPM, drifting 0x%02x, the heat %d\n", (unsigned)lo, (unsigned)hi, (unsigned)moved, wd.fh);
+    shot("p5-frog");
+    check(hi - lo >= 6u && moved && !(moved & 9u), "BOILING FROG: the tempo creeps; the colour drifts (not the kick, the snare)");
+    wd_bars(2);
+    for (i = 0; i < 300u && sq.thome; i++)
+        run_ms(100);
+    for (t = 0, ok = 1; t < NTRACK; t++)
+        ok &= sq.tstr[t] == TSTR_ONE && sq.toff[t] == 0;
+    check(wd.state == WS_IDLE && ok && seq_bpm() != 120u, "its end (LOST): the drift in time again; the tempo stays");
+    press(B_PLAY);
+    p4_reset();
+    /* THE CANYON: the voices in from the edges, each its own send, then apart; MONO -> PING PONG with the echoes
+     * faded out first; the feedback rings at 126-127; THE WAY OUT: all of it home */
+    for (i = 0; i < 16u; i += 2u)
+        main_set(&pat[0], 1, i, 1), main_set(&pat[0], 4, i + 1u, 1);
+    pat_backup = pat[0];
+    par_set(PAR_DLY_LEVEL, 0);
+    par_set(PAR_DSYNC, 0);
+    par_set(PAR_FX_DELAY_TYPE, DELAY_NORMAL);
+    par_set(PAR_PAN1, 10);
+    par_set(PAR_PAN4, 118);
+    for (t = 0; t < NVOICE; t++)
+        par_set(PAR_FX_SEND1 + t, 0);
+    a = par[PAR_REV_SIZE];
+    perf_goto(PG_WANDER);
+    wd_vset(WV_QUEST, Q_CANYON);
+    wd.k[WV_JOURNEY] = 2;                            /* (64 bars) */
+    wd.k[WV_RETURN] = 0;
+    wd.k[WV_STRIDE] = 127;
+    press(B_PLAY);
+    press(B_OCTUP);
+    {
+        uint32_t fbmax = 0, pp = 0, cleanpp = 1, mode = par[PAR_FX_DELAY_TYPE], lvl = par[PAR_DLY_LEVEL], inward = 0;
+        uint32_t diff = 0, panmin = 127, panmax = 0, sz = 0, lv = 0;
+        for (i = 0; i < 70u && wd.state == WS_ROAD; i++) {
+            run_ms(240000u / seq_bpm());
+            if (par[PAR_FX_DELAY_TYPE] != mode) {
+                pp |= par[PAR_FX_DELAY_TYPE] == DELAY_PINGPONG;
+                cleanpp &= lvl == 0u || par[PAR_DLY_LEVEL] == 0u;   /* (the echoes gone before the mode changed) */
+                mode = par[PAR_FX_DELAY_TYPE];
+            }
+            lvl = par[PAR_DLY_LEVEL];
+            fbmax = par[PAR_DLY_FB] > fbmax ? par[PAR_DLY_FB] : fbmax;
+            sz = par[PAR_REV_SIZE] > sz ? par[PAR_REV_SIZE] : sz;
+            lv = par[PAR_DLY_LEVEL] > lv ? par[PAR_DLY_LEVEL] : lv;
+            if (wd_cht() == 0u && i == 6u)
+                inward = par[PAR_PAN1] > 10u && par[PAR_PAN4] < 118u && par[PAR_PAN1] < 40u && par[PAR_PAN4] > 88u;
+            if (par[PAR_FX_SEND1 + 1u] != par[PAR_FX_SEND1 + 4u])
+                diff++;
+            if (wd_cht() >= 2u && wd_cht() < 4u) {
+                panmin = par[PAR_PAN2] < panmin ? par[PAR_PAN2] : panmin;
+                panmax = par[PAR_PAN2] > panmax ? par[PAR_PAN2] : panmax;
+            }
+            if (i == 30u)
+                shot("p5-canyon");
+        }
+        printf("  THE CANYON, %u bars: level to %u, feedback to %u, size %u -> %u; D2's pan %u..%u, sends apart %u bars\n",
+               (unsigned)i, (unsigned)lv, (unsigned)fbmax, (unsigned)a, (unsigned)sz, (unsigned)panmin, (unsigned)panmax,
+               (unsigned)diff);
+        check(inward, "THE CANYON: at the mouth, the voices drawn in a little from where they were");
+        check(diff >= 8u && panmax >= panmin + 10u, ".. each voice its own send, then the voices wander apart");
+        check(pp && cleanpp, "MONO -> PING PONG, the echoes faded out first");
+        check(lv >= 60u && sz > a && fbmax >= 126u, ".. the echoes build, the reverb grows, the feedback rings at 126+");
+        run_ms(500);
+        check(wd.state == WS_IDLE && par[PAR_DLY_LEVEL] == 0u && !par[PAR_DSYNC] && par[PAR_REV_SIZE] == a &&
+                  par[PAR_FX_DELAY_TYPE] == DELAY_NORMAL && par[PAR_PAN1] == 10u && par[PAR_PAN4] == 118u &&
+                  par[PAR_FX_SEND1 + 1u] == 0u, "out of the canyon (HOME): the delay, the reverb, the pans, the sends home");
+    }
+    wd.k[WV_JOURNEY] = WJ_ENDLESS;                   /* (ENDLESS: never out) */
+    wd.quest = Q_CANYON;
+    for (i = 0, ok = 1; i < 50u; i++) {
+        wd_plan(wd_rnd(5));
+        for (t = 0; t < wd.npath; t++)
+            ok &= wd.path[t] != 4u;
+    }
+    check(ok, "THE CANYON, ENDLESS: the way out never comes");
+    press(B_PLAY);
+    wd_defaults();
+    p4_reset();
+}
+
 int main(int argc, char **argv)
 {
     uint32_t t;
@@ -8012,8 +8560,8 @@ int main(int argc, char **argv)
     shot("config");
     press(B_FX);
     fx_goto(FXPG_BUS);
-    turn(EN_K1, 4);                                   /* DELAY */
-    check(par[PAR_FX_TYPE] == FX_DELAY, "FX type to DELAY");
+    turn(EN_K1, 4);                                   /* (1.0: past DELAY, not a type now: PHASER) */
+    check(par[PAR_FX_TYPE] == FX_PHASER, "FX type: 4 detents from OFF to PHASER, past DELAY");
     shot("fx");
     turn(EN_SELECT, 1);
     shot("fx-2");
@@ -8457,6 +9005,9 @@ int main(int argc, char **argv)
     phase_024g();
     phase_0241();
     phase_100_2();
+    phase_100_3();
+    phase_100_4();
+    phase_100_5();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;
 }

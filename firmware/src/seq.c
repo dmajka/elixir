@@ -248,6 +248,8 @@ static struct {
         uint16_t ptick, loops[NTRACK];
         uint8_t dpos[NTRACK], dback[NTRACK];
         int8_t dnext[NTRACK], dprev[NTRACK];
+        uint16_t tacc[NTRACK];
+        int32_t toff[NTRACK];
     } stut;                                      /* the position the loop goes back to */
     /* 0.5: the tracks' clocks, conditions, ratchets, generators */
     uint8_t tph[NTRACK];                         /* ticks into the track's step (its clock: CLK_TICKS) */
@@ -324,6 +326,12 @@ static struct {
      * wonly: 1 its part alone (its KEEP writes it into the pattern), 2 the knob's alone (DENSITY's COMMIT) */
     int8_t wdens[NTRACK];
     uint8_t wmute, wonly;
+    /* 1.0: the remote's DENSITY a track (TRACKS' CC 96..103, remote.c), -64..63 on top of the knob's (not committed) */
+    int8_t tdens[NTRACK];
+    /* 1.0: the remote's roll a track (GLOBAL's CC 112..119, remote.c): its CC 0..127 (0 off; seq_croll_*), the
+     * free ones' samples to the next hit (Q8) */
+    uint8_t croll[NTRACK];
+    int32_t cr_cnt[NTRACK];
     uint8_t dvary;                               /* 31: VARY, 0..127: the order shuffled each time round */
     /* 20: the melody: DEJA VU's loop (semitones above the root, lengths), where it is, the notes played (MOTIF's
      * phrase), the last note (WALK), MOTIF's four, the occurrence a note was chosen for; CHANGE and SPREAD from
@@ -337,7 +345,63 @@ static struct {
     int8_t mlast[NTRACK], mmot[NTRACK][4];
     uint32_t mocc[NTRACK];
     int8_t mchg, mspr;
+    /* 1.0: TIME STRETCH, a track's speed against the clock (as the Hapax's): 50 .. 200% in 0.01% (5000 .. 20000;
+     * the project's, KTS1), its ticks a tick of the clock (Q16) and the part of one it has (seq_advance); bit t: off
+     * the clock's grid since it last realigned (at STOP; with CONFIG's REALIGN, at each pattern change too) */
+    uint16_t tstr[NTRACK];
+    uint32_t trate[NTRACK];
+    uint16_t tacc[NTRACK];
+    int32_t toff[NTRACK];                            /* (each track's ticks ahead of the clock, x65536) */
+    uint8_t tfree, realign_pat, thome;               /* (thome: tracks gliding back into time, then 100%) */
 } sq;
+#define TSTR_MIN 5000u
+#define TSTR_MAX 20000u
+#define TSTR_ONE 10000u
+static void seq_stretch_set(uint32_t t, uint32_t v)  /* (the panel, a quest: track t's speed, 0.01%) */
+{
+    if (t >= NTRACK)
+        return;
+    v = v < TSTR_MIN ? TSTR_MIN : v > TSTR_MAX ? TSTR_MAX : v;
+    sq.tstr[t] = (uint16_t)v;
+    sq.trate[t] = (v * 65536u + TSTR_ONE / 2u) / TSTR_ONE;   /* (one word: the ISR reads it as it is) */
+    if (v != TSTR_ONE)
+        sq.tfree |= (uint8_t)(1u << t);
+}
+static uint32_t trk_ticks(uint32_t t);
+static uint32_t track_len(const pattern_t *p, uint32_t t);
+static pattern_t *tpat(uint32_t t);
+/* track t back into time (a quest's drift ending): its offset from the clock taken round its loop to the nearest,
+ * then run up to 2% slow or fast till it is 0 (seq_advance), then 100% */
+static void seq_stretch_home(uint32_t t)
+{
+    int32_t loop, w, c;                              /* (32-bit: the whole ticks round the loop, the part kept) */
+    if (t >= NTRACK)
+        return;
+    loop = (int32_t)(track_len(tpat(t), t) * trk_ticks(t));
+    w = sq.toff[t] >> 16;
+    if (loop > 0 && loop < 32768) {
+        w %= loop;
+        if (w >= loop / 2)
+            w -= loop;
+        else if (w < -loop / 2)
+            w += loop;
+    }
+    c = (int32_t)((uint32_t)w << 16 | ((uint32_t)sq.toff[t] & 0xFFFFu));
+    sq.toff[t] = c;
+    if (!c) {
+        seq_stretch_set(t, TSTR_ONE);
+        return;
+    }
+    sq.thome |= (uint8_t)(1u << t);
+}
+static uint32_t trk_scale(uint32_t t, uint32_t ticks)   /* ticks of track t's, in the clock's (its speed) */
+{
+    uint32_t r = sq.trate[t];
+    if (r == 65536u || !ticks)
+        return ticks;
+    ticks = (uint32_t)(((uint64_t)ticks * 65536u + r / 2u) / r);
+    return ticks ? ticks : 1u;
+}
 /* 37: a pattern's voices, in its kit byte's bits 6-7 (bits 0-5: the kit slot, KIT's). FREE (0, the default): the
  * shared voices, which an edit on any FREE pattern changes; LOCKED: its own, kept in kit slot PV_SLOT(n) (named
  * "P01 LOCK") while another pattern plays; KIT: the saved kit slot it points at, loaded as it starts (the LXR's KIT
@@ -663,7 +727,9 @@ static void gate_start(uint32_t t, uint32_t l)
         sq.glen[t] = 0;
         return;
     }
-    sq.glen[t] = (uint16_t)(l >= LEN_LONG ? LEN_STEPS[l - LEN_LONG] * 24u : l ? LEN_TICKS[l] : trk_ticks(t));
+    l = l >= LEN_LONG ? LEN_STEPS[l - LEN_LONG] * 24u : l ? LEN_TICKS[l] : trk_ticks(t);
+    l = trk_scale(t, l);                             /* (1.0: as long as the track's stretched steps) */
+    sq.glen[t] = (uint16_t)(l > 0xFFFFu ? 0xFFFFu : l);
 }
 static void gate_end(uint32_t t)
 {
@@ -769,7 +835,7 @@ static int32_t dens_at(uint32_t t)                   /* track t's DENSITY: the k
                                                       * WANDER's */
 {
     int32_t d = sq.wonly == 1u || ((sq.dex >> t) & 1u) ? 0 : sq.dens;
-    return clamp32(d + (sq.wonly == 2u ? 0 : sq.wdens[t]), -64, 63);
+    return clamp32(d + (sq.wonly == 2u ? 0 : sq.wdens[t]) + (sq.wonly ? 0 : sq.tdens[t]), -64, 63);
 }
 static int dens_on(uint32_t t)                       /* DENSITY moves track t's steps (GRIDS, TURING: their density) */
 {
@@ -1130,7 +1196,10 @@ static void step_hit(uint32_t t, const pattern_t *p, uint32_t s, uint32_t loop, 
         sq.rocc[t] = occ;
         sq.rleft[t] = (uint8_t)(n - 1u);
         sq.rn[t] = (uint8_t)n;
-        sq.rcnt[t] = sq.rper[t] = RAT_TICKS[(r >> 3) & 3u];
+        {
+            uint32_t rp = trk_scale(t, RAT_TICKS[(r >> 3) & 3u]);   /* (1.0: at the track's speed) */
+            sq.rcnt[t] = sq.rper[t] = (uint8_t)(rp > 255u ? 255u : rp);
+        }
         sq.rfade[t] = (uint8_t)((r >> 5) & 3u);
         sq.rnote[t] = (uint8_t)note;
         sq.rdrill = (uint8_t)(sq.drill & (1u << t) ? sq.rdrill | 1u << t : sq.rdrill & ~(1u << t));
@@ -1256,6 +1325,50 @@ static void seq_roll_sweep(void)                     /* the block's swept rolls 
             seq_trigger(t, 0, 0, key_vel, note);
             seq_add_note(t, key_vel, note);
         }
+}
+
+/* 1.0: the remote's roll a track (remote.c: GLOBAL's CC 112..119), each track rolling its own hits at its own rate,
+ * a steep curve: a small turn the grid's 1/4 (CC 1..4), 1/8 (5..8), 1/16 (9..16), 1/32 (17..32); the rest free, off the
+ * grid, 1/32 at 33 to 1/256 at 127 on a log scale (as RUSH's end). Only while playing; recorded under REC */
+#define CROLL_FREE 33u
+static uint32_t croll_grid(uint32_t v)                /* a grid roll's ticks (0: off or free) */
+{
+    return !v || v >= CROLL_FREE ? 0u : v <= 4u ? 96u : v <= 8u ? 48u : v <= 16u ? 24u : 12u;
+}
+static void croll_hit(uint32_t t)
+{
+    uint32_t i = sq.idx[t] < 0 ? 0u : (uint32_t)sq.idx[t], note = snote(tpat(t), t, i);
+    seq_trigger(t, 0, 0, key_vel, note);
+    seq_add_note(t, key_vel, note);
+}
+static void seq_croll_grid(void)                     /* (a tick) */
+{
+    uint32_t t, e;
+    for (t = 0; t < NTRACK; t++)
+        if ((e = croll_grid(sq.croll[t])) != 0u && sq.ticks % e == 0u)
+            croll_hit(t);
+}
+static void seq_croll_free(void)                     /* (a block) */
+{
+    uint32_t t, adv = (uint32_t)(((uint64_t)(BLOCK << 8) * tape_q16) >> 16);
+    for (t = 0; t < NTRACK; t++) {
+        uint32_t v = sq.croll[t], per;
+        if (v < CROLL_FREE) {
+            sq.cr_cnt[t] = 0;                        /* (free again: the first hit at once) */
+            continue;
+        }
+        per = (uint32_t)(((uint64_t)12u * sq.tick_q16 >> 8) *
+                         (uint32_t)exp2_q16(-(int32_t)((v - CROLL_FREE) * 2092u)) >> 16);   /* (3 octaves / 94) */
+        if (sq.cr_cnt[t] > (int32_t)per)             /* (faster: at once) */
+            sq.cr_cnt[t] = (int32_t)per;
+        sq.cr_cnt[t] -= (int32_t)adv;
+        if (sq.cr_cnt[t] > 0)
+            continue;
+        sq.cr_cnt[t] += (int32_t)per;
+        if (sq.cr_cnt[t] <= 0)
+            sq.cr_cnt[t] = (int32_t)per;
+        croll_hit(t);
+    }
 }
 
 /* 39: RUSH, after Elixir Desktop's snare rush (GPL-3.0, github.com/johnnyhawk02/elixir-desktop, app/player.js): one
@@ -1682,7 +1795,7 @@ static uint32_t dir_after(uint32_t t, uint32_t cur, uint32_t len, uint8_t *back)
 /* what plays on this tick: each track at its clock's position in its step (tph: the 24 positions of a step that
  * this tick covers, slower clocks covering one now and then, faster several). 0.6: the hits found first, then
  * the links (with any set and a depth), then they play */
-static void seq_flam(void)
+static void seq_flam(uint32_t mk)                   /* (1.0: mk, the tracks this pass moves: seq_advance) */
 {
     uint32_t t, hm = 0, sil = 0, live = pat[sq.active].cdepth && links_set(&pat[sq.active]);
     uint8_t hs[NTRACK];
@@ -1692,6 +1805,8 @@ static void seq_flam(void)
         const pattern_t *p = tpat(t);
         uint32_t len, cur, nxt, prv, nlp, plp, L = trk_ticks(t), lo, hi, bits, lp = sq.loops[t];
         int has_prv = 1;
+        if (!(mk >> t & 1u))
+            continue;
         lo = sq.tph[t] * 24u / L;
         hi = (sq.tph[t] + 1u) * 24u / L;
         bits = hi > lo ? ((1u << (hi - lo)) - 1u) << (24u - hi) : 0u;
@@ -1760,6 +1875,7 @@ static void seq_flam(void)
             }
             d += sq.jd[t];
         }
+        d = trk_scale(t, d);                         /* (1.0: in the track's stretched ticks) */
         if (d)
             dq_push(t, d, hs[t], hl[t], m);
         else
@@ -1812,23 +1928,32 @@ static void trk_copy(pattern_t *d, const pattern_t *s, uint32_t t)
     d->tbase[t] = s->tbase[t];
 }
 static void seq_gen_sync(uint32_t t);
-static void seq_reset_tracks(void)                   /* every track before its first step, its counts from 0 */
+/* every track before its first step, its counts from 0; 1.0: but the tracks in keep (TIME STRETCH's, off the clock's
+ * grid: a pattern change) where they are. The rest realigned: on the clock's grid again */
+static void seq_reset_tracks_keep(uint32_t keep)
 {
     uint32_t t;
     for (t = 0; t < NTRACK; t++) {
-        sq.idx[t] = -1;
-        sq.tph[t] = 0;
-        sq.loops[t] = 0;
         sq.rleft[t] = 0;
         sq.rocc[t] = 0;
         sq.bleft[t] = 0;
         sq.bocc[t] = 0;
-        sq.nst[t] = 0;
         sq.locc[t] = 0;
         sq.jocc[t] = 0;
+        if (keep >> t & 1u)
+            continue;
+        sq.idx[t] = -1;
+        sq.tph[t] = 0;
+        sq.tacc[t] = 0;
+        sq.toff[t] = 0;
+        sq.thome &= (uint8_t)~(1u << t);
+        sq.loops[t] = 0;
+        sq.nst[t] = 0;
         sq.dpos[t] = sq.dback[t] = 0;
         sq.dnext[t] = sq.dprev[t] = -1;
         mel_reset(t);                                /* (20: the melody from its start) */
+        if (sq.tstr[t] == TSTR_ONE || !sq.tstr[t])
+            sq.tfree &= (uint8_t)~(1u << t);
     }
     memset(sq.dq, 0, sizeof sq.dq);
     sq.lk_on = sq.lk_trig = 0;
@@ -1836,12 +1961,14 @@ static void seq_reset_tracks(void)                   /* every track before its f
     sq.pre = 0;
     sq.ptick = 0;
 }
+static void seq_reset_tracks(void) { seq_reset_tracks_keep(0); }
 static void seq_pattern_activate(void)               /* seq_setPendingPatternActive */
 {
     uint32_t t;
     if (sq.active != sq.pending || sq.load_pending) {
         uint32_t was = pat_voices(&pat[sq.active]), from = sq.active;
-        seq_reset_tracks();
+        seq_reset_tracks_keep(sq.running && !sq.realign_pat ? sq.tfree : 0u);   /* (1.0: TIME STRETCH's tracks
+                                                      * realign at STOP, or with REALIGN at a pattern change) */
         sq.gsync = (1u << NTRACK) - 1u;              /* (the generators' live tracks from the new pattern) */
         sq.load_pending = 0;
         if (!pat_keep || pat_revert)
@@ -2088,9 +2215,11 @@ static void seq_track_step(uint32_t t)
     }
 }
 /* the position a tick on: the pattern's end, the steps that start; play: what sounds on it */
+/* 1.0: TIME STRETCH: a tick of the clock moves each track by its speed (sq.trate): 0, 1 or 2 of its own ticks, a
+ * pass each (at 100%, the one as before) */
 static void seq_advance(int play)
 {
-    uint32_t t, pt = pat_ticks();
+    uint32_t t, k, pt = pat_ticks(), mk[2] = {0, 0};
     if (sq.ptick >= pt)
         sq.ptick = 0;
     if (sq.ptick == 0u && !sq.stut_on) {
@@ -2102,18 +2231,39 @@ static void seq_advance(int play)
         sq.master_cnt++;
         sq.beat = (sq.ptick / 24u & 3u) == 0u;
     }
-    for (t = 0; t < NTRACK; t++)
-        if (sq.tph[t] == 0u)
-            seq_track_step(t);
-    if (play) {
-        seq_flam();
-        seq_delayed();
-        seq_ratchets();
+    for (t = 0; t < NTRACK; t++) {
+        uint32_t r = sq.trate[t], a;
+        if (sq.thome >> t & 1u) {                    /* (back into time: up to 2% slower or faster, then 100%) */
+            int32_t c = sq.toff[t] > 1310 ? 1310 : sq.toff[t] < -1310 ? -1310 : sq.toff[t];
+            r = (uint32_t)(65536 - c);
+            if (!c) {
+                sq.thome &= (uint8_t)~(1u << t);
+                seq_stretch_set(t, TSTR_ONE);
+            }
+        }
+        sq.toff[t] += (int32_t)r - 65536;
+        a = sq.tacc[t] + r;
+        sq.tacc[t] = (uint16_t)a;
+        mk[0] |= (a >> 16 ? 1u : 0u) << t;
+        mk[1] |= (a >> 17 ? 1u : 0u) << t;
     }
-    sq.ptick++;
-    for (t = 0; t < NTRACK; t++)
-        if (++sq.tph[t] >= trk_ticks(t))
-            sq.tph[t] = 0;
+    for (k = 0; k < 2u && (!k || mk[k]); k++) {
+        for (t = 0; t < NTRACK; t++)
+            if ((mk[k] >> t & 1u) && sq.tph[t] == 0u)
+                seq_track_step(t);
+        if (play) {
+            seq_flam(mk[k]);
+            if (!k) {
+                seq_delayed();
+                seq_ratchets();
+            }
+        }
+        if (!k)
+            sq.ptick++;
+        for (t = 0; t < NTRACK; t++)
+            if ((mk[k] >> t & 1u) && ++sq.tph[t] >= trk_ticks(t))
+                sq.tph[t] = 0;
+    }
 }
 
 /* PERF's STUTTER: the position saved (stut_save) and back to it (stut_load) */
@@ -2127,6 +2277,8 @@ static void stut_save(void)
     memcpy(sq.stut.dback, sq.dback, sizeof sq.dback);
     memcpy(sq.stut.dnext, sq.dnext, sizeof sq.dnext);
     memcpy(sq.stut.dprev, sq.dprev, sizeof sq.dprev);
+    memcpy(sq.stut.tacc, sq.tacc, sizeof sq.tacc);
+    memcpy(sq.stut.toff, sq.toff, sizeof sq.toff);
     sq.stut.prescale = sq.prescale;
     sq.stut.master_cnt = sq.master_cnt;
     sq.stut.beat = sq.beat;
@@ -2142,6 +2294,8 @@ static void stut_load(void)
     memcpy(sq.dback, sq.stut.dback, sizeof sq.dback);
     memcpy(sq.dnext, sq.stut.dnext, sizeof sq.dnext);
     memcpy(sq.dprev, sq.stut.dprev, sizeof sq.dprev);
+    memcpy(sq.tacc, sq.stut.tacc, sizeof sq.tacc);
+    memcpy(sq.toff, sq.stut.toff, sizeof sq.toff);
     sq.prescale = sq.stut.prescale;
     sq.master_cnt = sq.stut.master_cnt;
     sq.beat = sq.stut.beat;
@@ -2203,6 +2357,7 @@ static void seq_tick_one(void)
                     seq_add_note(t, key_vel, note);
                 }
     }
+    seq_croll_grid();                                /* (1.0: the remote's rolls a track) */
     sq.ticks++;
     if (sq.stut_on) {
         sq.stut_n++;
@@ -2315,6 +2470,7 @@ static void seq_block(void)
         seq_play_due(BLOCK);
         seq_bounces();
         seq_roll_sweep();
+        seq_croll_free();
         seq_rush();
     } else {
         sq.ru_R = sq.ru_free = 0;
@@ -2833,6 +2989,8 @@ static void seq_init(void)                           /* seq_init */
     memset(sq.ru_rk, -1, sizeof sq.ru_rk);
     memset(sq.lnote, SEQ_DEFAULT_NOTE, sizeof sq.lnote);
     sq.dghost = 40;
+    for (t = 0; t < NTRACK; t++)                     /* (1.0: TIME STRETCH, as the clock) */
+        seq_stretch_set(t, TSTR_ONE);
     seq_reset_tracks();
     sq.gsync = (1u << NTRACK) - 1u;
     seq_tempo_changed();

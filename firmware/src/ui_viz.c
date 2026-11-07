@@ -1303,29 +1303,23 @@ static void viz_lfo(int two)
     uint32_t ph = 0, gone = 0, run;
     const pattern_t *pt = shown_pat();
     char b[48], nm[32], rt[24];
-    if (two) {
-        rate = sv(S_LFO2, 0, 0); amt = sv(S_LFO2, 0, 1); wave = sv(S_LFO2, 0, 2);
-        tgt = sect_par(ui.track, S_LFO2, 0, 3);
-        mode = sv(S_LFO2, 1, 0); sync = sv(S_LFO2, 1, 1); rtrg = sv(S_LFO2, 1, 2); ofs = sv(S_LFO2, 1, 3);
-    } else {
-        rate = sv(S_LFO, 0, 0); amt = sv(S_LFO, 0, 1); wave = sv(S_LFO, 0, 2);
-        tgt = sect_par(ui.track, S_LFO, 0, 3);
-        sync = sv(S_LFO, 1, 1); rtrg = sv(S_LFO, 1, 2); ofs = sv(S_LFO, 1, 3);
-        mode = sv(S_LFOM, 0, 0);
-    }
-    if (sync && sync <= 11u)
-        cyc_q16 = (uint64_t)SYNC_SCALE_X4[sync] << 14;
+    rate = vp_get(lfo_par(ui.track, two, LP_RATE)); amt = vp_get(lfo_par(ui.track, two, LP_DEPTH));
+    wave = vp_get(lfo_par(ui.track, two, LP_WAVE)); tgt = lfo_par(ui.track, two, LP_DEST);
+    mode = vp_get(lfo_par(ui.track, two, LP_MODE)); sync = vp_get(lfo_par(ui.track, two, LP_SYNC));
+    rtrg = vp_get(lfo_par(ui.track, two, LP_RETRIG)); ofs = vp_get(lfo_par(ui.track, two, LP_PHASE));
+    if (sync && sync < NSYNC)
+        cyc_q16 = ((uint64_t)SYNC_SCALE_X60[sync] << 14) / 15u;
     else {                                           /* (the free rate a bar at the tempo) */
         uint64_t inc = lut1024u(LFO_INC, rate * 65536u / 127u), bpm = seq_bpm() ? seq_bpm() : 120u;
         cyc_q16 = (inc * (FS / BLOCK) * 240u) >> 16;
         cyc_q16 = (uint32_t)(cyc_q16 > 0xffffffffu ? 0xffffffffu : cyc_q16) / (uint32_t)bpm;   /* (no 64-bit divide here) */
     }
     cyc_q16 = cyc_q16 < 1u ? 1u : cyc_q16 > (24u << 16) ? 24u << 16 : cyc_q16;
-    if (sync && sync <= 11u) {                       /* (its rate, as its card shows it: drawn last) */
+    if (sync && sync < NSYNC) {                      /* (its rate, as its card shows it: drawn last) */
         put_str(rt, "SYNC ", sizeof rt);
         put_str(rt + 5, L_SYNC[sync], sizeof rt - 5u);
     } else {
-        card_value(rt, sizeof rt, sect_par(ui.track, two ? S_LFO2 : S_LFO, 0, 0), rate);
+        card_value(rt, sizeof rt, lfo_par(ui.track, two, LP_RATE), rate);
     }
     {                                                /* 0.25.2: DEST: its group (another voice's: that voice), */
         uint32_t tv = tgt && tgt != PAR_NONE ? target_voice(tgt) : 0u;   /* .. its full name as MODEL's */
@@ -1511,7 +1505,7 @@ static void draw_sound_viz(void)
     case S_AEG: viz_env(0); break;
     case S_GATE: viz_env(1); break;
     case S_MOD: viz_mod(); break;
-    case S_LFO: case S_LFOM: viz_lfo(0); break;
+    case S_LFO: viz_lfo(0); break;
     case S_LFO2: viz_lfo(1); break;
     case S_RANDOM: viz_random(); break;
     case S_XMOD: viz_xmod(); break;
@@ -1877,17 +1871,18 @@ static void viz_reverb(void)
 static void viz_echoes(int dub, int send)
 {
     uint32_t ty = fx.delay_type < NDELAY ? fx.delay_type : 0u, n;
-    int32_t gap = 12 + (int32_t)par[PAR_FX_P1] * 44 / 127, lvl = 30 * 65536 / 34, fb = (int32_t)par[PAR_FX_P4];
-    int32_t tone = (int32_t)par[PAR_FX_P3], x = VX0 + 4, pp = ty == DELAY_PINGPONG || ty == DELAY_TAPEPP, tape = ty >= DELAY_TAPE;
+    int32_t gap = 12 + (int32_t)par[PAR_DLY_TIME] * 44 / 127, fb = (int32_t)par[PAR_DLY_FB];
+    int32_t lvl = (8 + (int32_t)par[PAR_DLY_LEVEL] * 22 / 127) * 65536 / 34;   /* (1.0: LEVEL the first's height) */
+    int32_t tone = (int32_t)par[PAR_DLY_TONE], x = VX0 + 4, pp = ty == DELAY_PINGPONG || ty == DELAY_TAPEPP, tape = ty >= DELAY_TAPE;
     uint32_t h = 0x9E3779B9u;
     static const char *const NM[NDELAY] = {"MONO DELAY", "PING PONG", "TAPE DELAY", "TAPE PING PONG"};
     char b[24];
-    vz_panel(dub ? "DELAY: DUB" : send ? "DELAY: ECHOES INTO THE REVERB" : "");
+    vz_panel(dub ? "DELAY: TAPE" : send ? "DELAY: ECHOES INTO THE REVERB" : par[PAR_DLY_LEVEL] ? "" : "DELAY: OFF (LEVEL 0)");
     if (!dub && !send) {                             /* (its type spelled out, big; SYNC's division beside it) */
         b[0] = 0;
         if (fx.d_sync) {
             put_str(b, "SYNC ", sizeof b);
-            card_value(b + str_len(b), sizeof b - str_len(b), PAR_FX_P1, par[PAR_FX_P1]);
+            card_value(b + str_len(b), sizeof b - str_len(b), PAR_DLY_TIME, par[PAR_DLY_TIME]);
         }
         cv_text(VX0, VZ_Y + 3, &AF_M, NM[ty], T_THEME);
         if (b[0])
@@ -2000,7 +1995,6 @@ static void viz_fxbus(void)
         vz_comp_curve(-(int32_t)(127u - par[PAR_FX_P3]) * 48 / 127, R10[fx.ratio % 6u], 0, 0);
         break;
     }
-    case FX_DELAY: viz_echoes(0, 0); break;
     case FX_PHASER: case FX_FLANGER: {
         uint32_t k, nn = ty == FX_PHASER ? 2u : 9u;
         vz_panel(ty == FX_PHASER ? "PHASER: NOTCHES SWEEPING" : "FLANGER: A COMB SWEEPING");
