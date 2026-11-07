@@ -67,7 +67,9 @@ enum { VP_BASE = 0x400, VP_NONE = VP_BASE, VP_IO_TYPE, VP_IO_SLOT, VP_NAME_POS, 
        VP_MVOL, VP_MOUT, VP_MOUT_LAST = VP_MOUT + NTRACK - 1,   /* (1.0: the master volume; a track's MIDI out) */
        VP_TD, VP_TD_LAST = VP_TD + NTRACK - 1,       /* (1.0: the remote's DENSITY a track: seq.c sq.tdens) */
        VP_STRETCH, VP_REALIGN,                       /* (1.0: TIME STRETCH, a track's; when the tracks realign) */
-       VP_DJTYPE };                                  /* (1.0: the DJ filter's type, perform.c DJT_*) */
+       VP_DJTYPE,                                    /* (1.0: the DJ filter's type, perform.c DJT_*) */
+       VP_DJTUNE,                                    /* (1.0: RING's chord, perform.c RC_*) */
+       VP_UMIX, VP_UMIX_LAST = VP_UMIX + NVOICE - 1 };   /* (1.0: a voice IN / OUT of the stereo mix while USB records) */
 _Static_assert(NPAR <= VP_BASE, "the virtual parameters after the parameters (25b + 27a: NPAR 525, past 0x200)");
 /* the ACTION page's action (OCT+ does it); 0.10: those of the track's generator (gen_acts) */
 enum { ACT_NONE, ACT_DICE, ACT_COMMIT, ACT_UNDO, ACT_RESET, NACT };
@@ -259,6 +261,13 @@ static uint32_t lfo_par(uint32_t t, int two, uint32_t i)   /* track t's LFO 1 (t
                                         PAR_L2MODE1, PAR_L2RTRG1}};
     return i < NLP ? P[two != 0][i] + track_voice(t) : 0u;
 }
+/* 1.0: where knob k of section s's half h is in the LXR's page (LXR_PAGES' 0..7): FILTER's first page Type, Freq,
+ * Reso, Drive (the LXR's: Freq, Reso, Type, Drive) */
+static uint32_t lxr_knob(uint32_t s, uint32_t h, uint32_t k)
+{
+    static const uint8_t FK[4] = {2, 0, 1, 3};
+    return s == S_FILTER && h == 0u && k < 4u ? FK[k] : h * 4u + k;
+}
 /* the parameter on knob k of section s's half h for track t as the pages hold it (sect_par: but those a model hides) */
 static uint32_t sect_par_raw(uint32_t t, uint32_t s, uint32_t h, uint32_t k)
 {
@@ -268,7 +277,7 @@ static uint32_t sect_par_raw(uint32_t t, uint32_t s, uint32_t h, uint32_t k)
     if (s == S_FILTER && h == 1u)                    /* 1.0: FILTER X, the second page's first knob */
         return k == 0u ? PAR_FLTX1 + track_voice(t) : 0u;
     if (s < S_SHAPE)
-        return LXR_PAGES[track_page(t)][s][8u + h * 4u + k];
+        return LXR_PAGES[track_page(t)][s][8u + lxr_knob(s, h, k)];
     q = K_PAGES[s - S_SHAPE][h * 4u + k];
     return q ? q + track_voice(t) : 0u;
 }
@@ -523,11 +532,12 @@ enum { FXPG_REV, FXPG_BUS, FXPG_PARS, FXPG_DLY, FXPG_DLY2, FXPG_DUB, FXPG_DIRT, 
 static const uint16_t P_FX[NFXPG][4] = {{PAR_REV_TYPE, PAR_REV_SIZE, PAR_REV_DAMP, PAR_REV_LEVEL},
                                         {PAR_FX_TYPE, PAR_FX_DRY_WET, VP_FX_SUB, VP_NONE},
                                         {PAR_FX_P1, PAR_FX_P2, PAR_FX_P3, PAR_FX_P4},
-                                        {PAR_DLY_TIME, PAR_DLY_FB, PAR_DLY_TONE, PAR_DLY_LEVEL},
-                                        {PAR_FX_DELAY_TYPE, PAR_DSYNC, PAR_ECHOREV, PAR_DLY_BAND},   /* (1.0: BAND) */
+                                        {PAR_FX_DELAY_TYPE, PAR_DSYNC, PAR_DLY_TIME, PAR_DLY_LEVEL},   /* (1.0: the user's */
+                                        {PAR_DLY_TONE, PAR_ECHOREV, PAR_DLY_FB, PAR_DLY_BAND},   /* .. order: FEEDBACK
+                                                      * and BAND side by side, as they work together) */
                                         {PAR_DLY_WOW, PAR_DSAT, PAR_GLITCH, PAR_DPITCH},
                                         {PAR_FXDIRT, VP_NONE, PAR_MDIRT, PAR_MDIRT_AMT},
-                                        {VP_DJ, VP_DJRESO, VP_DJTYPE, VP_NONE},   /* (1.0: the global filter) */
+                                        {VP_DJTYPE, VP_DJ, VP_DJRESO, VP_DJTUNE},   /* (1.0: the global filter: Type, Filt, Reso; RING: Tune) */
                                         {PAR_MC_THR, PAR_MC_RATIO, PAR_MC_ATK, PAR_MC_REL},
                                         {PAR_MC_SRC, PAR_MC_GAIN, PAR_MC_MIX, VP_NONE},
                                         {PAR_FX_SEND1, PAR_FX_SEND1 + 1, PAR_FX_SEND1 + 2, PAR_FX_SEND1 + 3},
@@ -572,7 +582,7 @@ static const uint16_t P_MIXER[NMIXER][4] = {{PAR_VOL1, PAR_VOL2, PAR_VOL3, PAR_V
                                             {PAR_REV_SEND1 + 4, PAR_REV_SEND1 + 5, PAR_REV_LEVEL, VP_MVOL}};
 static const char *const MIXER_TITLE[NMIXER / 2u] = {"MIXER: VOLUME", "MIXER: PAN", "MIXER: FX SEND",
                                                      "MIXER: REVERB SEND"};
-#define NCONFIG 14u
+#define NCONFIG 16u
 static const uint16_t P_CONFIG[NCONFIG][4] = {
     {PAR_BPM, PAR_SHUFFLE, PAR_FOLLOW, VP_PLAY},     /* (37: Play in place of Kit chg) */
     {PAR_MIDI_CHAN_GLOBAL, PAR_MIDI_FILT_TX, PAR_MIDI_FILT_RX, PAR_MIDI_ROUTING},
@@ -582,6 +592,8 @@ static const uint16_t P_CONFIG[NCONFIG][4] = {
     {PAR_MIDI_NOTE5, PAR_MIDI_NOTE6, PAR_MIDI_NOTE7, VP_NONE},
     {VP_MOUT, VP_MOUT + 1, VP_MOUT + 2, VP_MOUT + 3},   /* (1.0: MIDI OUT; the master volume) */
     {VP_MOUT + 4, VP_MOUT + 5, VP_MOUT + 6, VP_MVOL},
+    {VP_UMIX, VP_UMIX + 1, VP_UMIX + 2, VP_UMIX + 3},   /* (1.0, Phase 8: USB MIX, the voices in the stereo mix) */
+    {VP_UMIX + 4, VP_UMIX + 5, VP_NONE, VP_NONE},
     {VP_LEDS, VP_AUTOSAVE, VP_ACCEL, VP_PALETTE},
     {VP_RCH, VP_RCH2, VP_RKNOBS, VP_RMUTE},
     {VP_MEDIT, VP_CAKIT, VP_NONE, VP_NONE},
@@ -589,13 +601,15 @@ static const uint16_t P_CONFIG[NCONFIG][4] = {
     {VP_NONE, VP_NONE, VP_NONE, VP_NONE},
     {VP_NONE, VP_NONE, VP_NONE, VP_NONE}};
 static const char *const CONFIG_TITLE[NCONFIG] = {"SEQUENCER", "MIDI", "MIDI CHANNELS", "MIDI CHANNELS", "MIDI NOTES",
-                                                  "MIDI NOTES", "MIDI OUT", "MIDI OUT, VOLUME", "DEVICE",
+                                                  "MIDI NOTES", "MIDI OUT", "MIDI OUT, VOLUME", "USB MIX",
+                                                  "USB MIX", "DEVICE",
                                                   "REMOTE", "MORPH",
                                                   "BUTTONS & KITS", "LOAD", "ELIXIR"};
 #define CF_MOUT 6u                                    /* 1.0: MIDI OUT (2 pages) */
-#define CF_REMOTE 9u
-#define CF_LOAD 12u                                   /* 17a, 17b: the load by part, the cores (ui_draw.c draw_load) */
-#define CF_ABOUT 13u                                  /* 29: the potion, the version, the load of each core */
+#define CF_UMIX 8u                                    /* 1.0: USB MIX (2 pages) */
+#define CF_REMOTE 11u
+#define CF_LOAD 14u                                   /* 17a, 17b: the load by part, the cores (ui_draw.c draw_load) */
+#define CF_ABOUT 15u                                  /* 29: the potion, the version, the load of each core */
 static const uint16_t P_NAME[4] = {VP_NAME_POS, VP_NAME_CHAR, VP_NAME_CASE, VP_NONE};
 /* 37: the song: KNOB 2 the row (SELECT pages); ROWS: insert or delete one (OCT+), the play mode; 42: ROADS: the
  * song played as written or by its chances, how surprising, back to its first row every so many bars */
@@ -700,6 +714,8 @@ static void page_params(uint16_t out[4])
     }
     for (k = 0; k < 4u; k++)
         out[k] = p[k];
+    if (out[3] == VP_DJTUNE && pfs.dj_ftype != DJT_RING)
+        out[3] = VP_NONE;                            /* (1.0: Tune: RING's alone) */
     if (ui.mode == M_PERF && ui.page % NPERF == 0u && (sq.roll & ~ui.roll_latch))
         out[1] = ui.shift ? PAR_ROLL : VP_ROLL;      /* 0.6: a roll held: the roll knob sweeps its rate (SHIFT: the grid's) */
 }
@@ -863,7 +879,8 @@ static uint32_t vp_max(uint32_t p);
 static const char *const FX_P_NAME[NFX][4] = {
     {"-", "-", "-", "-"}, {"Drive", "Color", "Tone", "Volume"}, {"Freq", "-", "-", "-"},
     {"Attack", "Release", "Threshld", "Gain"}, {"Time", "Range", "Tone", "Feedback"},
-    {"Rate", "Depth", "Feedback", "Centre"}, {"Rate", "Depth", "Feedback", "Delay"}};
+    {"Rate", "Depth", "Feedback", "Centre"}, {"Rate", "Depth", "Feedback", "Delay"},
+    {"Rate", "Depth", "Delay", "Lo cut"}};
 
 /* a mod target's voice range (VEL DEST: its own; LFO TARGET: the voice PAR_VOICE_LFO picks) */
 static void target_range(uint32_t p, uint32_t *lo, uint32_t *hi)
@@ -958,7 +975,10 @@ static uint32_t tgt_full(char *b, uint32_t n, uint32_t v, uint32_t idx)
         put_str(b, D[p - PAR_DLY_TIME < 6u ? p - PAR_DLY_TIME : 0u], n);
         return g;
     }
-    card_name(t, sizeof t, p);
+    if ((p >= PAR_FILTER_FREQ_1 && p <= PAR_RESO_6) || (p >= PAR_FILTER_DRIVE_1 && p <= PAR_FILTER_DRIVE_6))
+        put_str(t, par_name(p), sizeof t);           /* (1.0: the cards' Freq, Reso, Drive: here in full, as X has) */
+    else
+        card_name(t, sizeof t, p);
     if (p >= PAR_FX_P1 && p <= PAR_FX_P4 && t[0] == '-') {   /* (no FX bus effect: its knob's number) */
         put_str(t, "Param ", sizeof t);
         put_int(t + 6, (int32_t)(p - PAR_FX_P1) + 1);
@@ -1096,6 +1116,8 @@ static uint32_t order_turn(const uint8_t *o, uint32_t c, uint32_t v, int32_t n) 
     return o[clamp32((int32_t)(i < c ? i : 0u) + n, 0, (int32_t)c - 1)];
 }
 static uint32_t gd_turn(uint32_t d, int32_t n) { return order_turn(GD_ORDER, NGD, d, n); }
+static const uint8_t DLY_ORDER[NDELAY + 1u] = {DELAY_OFF, DELAY_NORMAL, DELAY_PINGPONG, DELAY_TAPE, DELAY_TAPEPP};   /* (1.0:
+                                                      * the delay's MODE knob, OFF first) */
 
 /* a parameter's index in the lock targets (lock_target_par; 0: none) */
 static uint32_t lock_idx_of(uint32_t d)
@@ -1229,6 +1251,7 @@ static uint32_t vp_get(uint32_t p)
     case VP_GTAKES: return kset.gtakes;
     case VP_MVOL: return out_vol;
     case VP_MOUT ... VP_MOUT_LAST: return (kset.mout >> (p - VP_MOUT)) & 1u;
+    case VP_UMIX ... VP_UMIX_LAST: return (kset.mixout >> (p - VP_UMIX)) & 1u;
     case VP_TD ... VP_TD_LAST: return (uint32_t)(sq.tdens[p - VP_TD] + 64);
     case VP_STRETCH: return sq.tstr[ui.track];
     case VP_REALIGN: return kset.realign != 0;
@@ -1245,6 +1268,7 @@ static uint32_t vp_get(uint32_t p)
     case VP_TAPE: return pfs.tape;
     case VP_DJRESO: return pfs.dj_reso;
     case VP_DJTYPE: return pfs.dj_ftype;
+    case VP_DJTUNE: return pfs.dj_tune;
     case VP_M1: case VP_M1 + 1: case VP_M1 + 2: case VP_M1 + 3: return pfs.m[p - VP_M1].val;
     case VP_MSEL: return ui.msel;
     case VP_MTARGET: return lock_idx_of(pfs.m[ui.msel].par);
@@ -1413,11 +1437,12 @@ static uint32_t vp_max(uint32_t p)
     case VP_RCH: case VP_RCH2: return 16;
     case VP_RKNOBS: return NRK - 1u;
     case VP_MEDIT: return 2;
-    case VP_CAKIT: case VP_PMEM: case VP_RMUTE: case VP_MOUT ... VP_MOUT_LAST: return 1;
+    case VP_CAKIT: case VP_PMEM: case VP_RMUTE: case VP_MOUT ... VP_MOUT_LAST: case VP_UMIX ... VP_UMIX_LAST: return 1;
     case VP_MVOL: case VP_TD ... VP_TD_LAST: return 127;
     case VP_STRETCH: return TSTR_MAX;
     case VP_REALIGN: return 1;
     case VP_DJTYPE: return NDJT - 1u;
+    case VP_DJTUNE: return NRTUNE - 1u;
     case VP_GL ... VP_GL_LAST: {
         static const uint8_t MX[NGLSET] = {NGD - 1, 254, GL_FREE, NLFO - 1, NGM - 1, NGT - 1, 127, 127};
         return MX[(p - VP_GL) % NGLSET];
@@ -1665,6 +1690,12 @@ static void vp_set(uint32_t p, uint32_t v)
         settings_later();
         return;
     }
+    case VP_UMIX ... VP_UMIX_LAST: {
+        uint32_t b = 1u << (p - VP_UMIX);
+        kset.mixout = mix_out = (uint8_t)(v ? kset.mixout | b : kset.mixout & ~b);
+        settings_later();
+        return;
+    }
     case VP_TD ... VP_TD_LAST: sq.tdens[p - VP_TD] = (int8_t)((int32_t)v - 64); return;
     case VP_STRETCH:                                 /* (by hand: a quest's way back into time lets go) */
         sq.thome &= (uint8_t)~(1u << ui.track);
@@ -1691,6 +1722,7 @@ static void vp_set(uint32_t p, uint32_t v)
     case VP_TAPE: pfs.tape = (uint8_t)v; return;
     case VP_DJRESO: pfs.dj_reso = (uint8_t)v; return;
     case VP_DJTYPE: pfs.dj_ftype = (uint8_t)(v < NDJT ? v : 0u); return;
+    case VP_DJTUNE: pfs.dj_tune = (uint8_t)(v < NRTUNE ? v : 0u); return;
     case VP_M1: case VP_M1 + 1: case VP_M1 + 2: case VP_M1 + 3: macro_set(p - VP_M1, v); return;
     case VP_MSEL: ui.msel = (uint8_t)v; return;
     case VP_MTARGET: {
@@ -1920,7 +1952,7 @@ static uint32_t ca_name(uint32_t t) { return t == 31u || t == 32u ? 4u : t; }   
 static uint32_t ca_par(uint32_t u, uint32_t k)
 {
     const uint16_t *a = LXR_PAGES[track_page(ui.track)][ui.sect], *b;
-    uint32_t j = ui.half * 4u + k, i, t, n = 0;
+    uint32_t j = lxr_knob(ui.sect, ui.half, k), i, t, n = 0;
     if (ui.sect >= S_SHAPE || ui.sect == S_LFO || (ui.sect == S_FILTER && ui.half))   /* (Elixir's: blocks of six, the
                                                                                          * voice's own; the LFOs too) */
         return sect_par(u, ui.sect, ui.half, k);
@@ -1953,6 +1985,8 @@ static uint32_t knob_next(uint32_t q, uint32_t v, int32_t step)
         return order_turn(SYNC_ORDER, NSYNC, v, step);
     if (is_target(q))
         return target_turn(q, v, step);
+    if (q == PAR_FX_DELAY_TYPE)
+        return order_turn(DLY_ORDER, NDELAY + 1u, v, step);
     return model_step(q, v, (uint32_t)clamp32((int32_t)v + step, (int32_t)vp_min(q), (int32_t)vp_max(q)));
 }
 static void control_all(uint32_t k, int32_t step)
@@ -2141,6 +2175,8 @@ static void knob_turn(uint32_t k, int32_t n)
         ui.dest_ms = fm1_ms;
         ui.dest_p = (uint16_t)p;
     }
+    if (p == PAR_FX_DELAY_TYPE)                      /* (1.0: OFF, then the modes) */
+        v = (int32_t)order_turn(DLY_ORDER, NDELAY + 1u, vp_get(p), n);
     if (p == VP_GMODE) {                             /* (1.0: the generator's name and what it does, a while) */
         ui.dest_ms = fm1_ms;
         ui.dest_p = (uint16_t)p;
@@ -2605,8 +2641,8 @@ static void perf_key(uint32_t w, int down)
         }
         if (down && (e == PF_THROW_R || e == PF_THROW_F))
             pf.throw_v = (uint8_t)track_voice(ui.track);
-        if (down && e == PF_FREEZE && !par[PAR_DLY_LEVEL])
-            ui_message("FREEZE: THE DELAY'S LEVEL IS 0");
+        if (down && e == PF_FREEZE && (!par[PAR_DLY_LEVEL] || par[PAR_FX_DELAY_TYPE] == DELAY_OFF))
+            ui_message(par[PAR_FX_DELAY_TYPE] == DELAY_OFF ? "FREEZE: THE DELAY IS OFF" : "FREEZE: THE DELAY'S LEVEL IS 0");
         perf_apply();
     }
     ui.force = 1;

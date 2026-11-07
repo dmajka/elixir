@@ -348,7 +348,7 @@ static void proj_write_payload(void)
                                                       * 39: RUSH: a byte unused (0.23-test1's GHOST), FLAM, PITCH,
                                                       * START, FREE, TOP, FILTER, GLIDE (older firmware: the 11 read,
                                                       * these skipped), 0.24.3: the DJ filter's resonance; 1.0: its type */
-    pw_byte(21);
+    pw_byte(22);
     pw_byte(scl_last.root);
     pw_byte(scl_last.scale);
     pw_byte((uint8_t)pfs.dens);
@@ -370,6 +370,7 @@ static void proj_write_payload(void)
     pw_byte(sq.ru_glide);
     pw_byte(pfs.dj_reso);
     pw_byte(pfs.dj_ftype);                           /* (1.0: older firmware skips it) */
+    pw_byte(pfs.dj_tune);                            /* (1.0: RING's chord) */
     pw_bytes("KSP2", 4);                            /* 32: SPELLS: the knobs, the targets, the GRIMOIRE's recipes */
     sp_write();
     pw_bytes("KWND", 4);                            /* 40: WANDER: the knobs, the tracks, the parts (not the road) */
@@ -677,10 +678,10 @@ static int proj_read_payload(uint32_t ver)
     if (!pr.err && pr.pos + 4u <= pr.end) {
         pr_bytes(tag, 4);
         if (!memcmp(tag, "KSC1", 4)) {               /* 19: the scale last chosen, DENSITY; STUTTER */
-            uint8_t b[21] = {0, 0, 0, 40, DB_GHOSTS, 0, 0, 1, 2, SV_OFF, 0, 0, 0, 12, 75, 80, RT_256, 60, 8, 0, DJT_LXR};
+            uint8_t b[22] = {0, 0, 0, 40, DB_GHOSTS, 0, 0, 1, 2, SV_OFF, 0, 0, 0, 12, 75, 80, RT_256, 60, 8, 0, DJT_LXR, RC_MAJ};
             n = pr_byte();                           /* (31: VARY 0 before; 39: RUSH's; 0.24.3: Reso 0) */
-            pr_bytes(b, n < 21u ? n : 21u);
-            pr_skip(n > 21u ? n - 21u : 0u);
+            pr_bytes(b, n < 22u ? n : 22u);
+            pr_skip(n > 22u ? n - 22u : 0u);
             scl_last.root = (uint8_t)(b[0] % 12u);
             scl_last.scale = (uint8_t)(b[1] < NSCALE ? b[1] : SC_CHROM);
             pfs.dens = (int8_t)clamp32((int8_t)b[2], -64, 63);
@@ -701,6 +702,7 @@ static int proj_read_payload(uint32_t ver)
             sq.ru_glide = (uint8_t)(b[18] <= RUSH_MAX ? b[18] : 8u);
             pfs.dj_reso = (uint8_t)(b[19] & 127u);
             pfs.dj_ftype = (uint8_t)(b[20] < NDJT ? b[20] : DJT_LXR);   /* (1.0) */
+            pfs.dj_tune = (uint8_t)(b[21] < NRTUNE ? b[21] : RC_MAJ);
         }
     }
     if (!pr.err && pr.pos + 4u <= pr.end) {
@@ -961,7 +963,11 @@ typedef struct {
     uint8_t mvol, mout;
     uint8_t realign;                                 /* (1.0: TIME STRETCH's tracks realign at each pattern change too;
                                                       * the struct's padding before: 0, at STOP only) */
+    uint8_t mixout;                                  /* (1.0, Phase 8: CONFIG: USB MIX, voices.c mix_out: bit v, voice v
+                                                      * out of the stereo mix while a computer records; the padding
+                                                      * before: 0, all in) */
 } elixir_settings_t;
+_Static_assert(sizeof(elixir_settings_t) == 280u, "settings: mixout in the padding (the length unchanged)");
 _Static_assert(__builtin_offsetof(elixir_settings_t, ccmap) == SET_LEN_016, "settings: the map after 0.16's 20 bytes");
 static elixir_settings_t kset = {SET_MAGIC, 2, 1, 1, 1, 0xFF, 100, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, {0}, 127, 0};   /* (palette 2: AMBER) */
 static uint32_t cc_map_at(uint32_t cc) { return kset.ccmap[cc & 127u]; }
@@ -1107,7 +1113,7 @@ static void persist_boot(void)                      /* power-on: the flash, the 
     uint32_t f = irq_save();
     elixir_settings_t s = kset;
     int n;
-    flash_ok = FL_FAR(fl_jedec_ram)() == 0x856014u;  /* the expected 1 MiB part, else RAM only */
+    flash_ok = FL_JEDEC_OK(FL_FAR(fl_jedec_ram)());  /* a known 1 MiB part, else RAM only */
     irq_restore(f);
     pj.loaded = 0xFF;
     if (!flash_ok)
@@ -1132,6 +1138,8 @@ static void persist_boot(void)                      /* power-on: the flash, the 
     out_vol = kset.mvol;
     midi_mout = kset.mout;
     sq.realign_pat = kset.realign != 0;
+    kset.mixout &= 63u;
+    mix_out = kset.mixout;
     data_locked = fx_scan() != 0;                    /* (0.24.1: before kl_scan, which may erase a sector) */
     proj_scan();
     kl_scan();

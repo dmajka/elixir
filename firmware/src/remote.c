@@ -174,8 +174,8 @@ static void rm_held(uint32_t pf_bit, int down)       /* a PERF effect held from 
 {
     uint32_t b = 1u << pf_bit;
     ui.rm_held = down ? ui.rm_held | b : ui.rm_held & ~b;
-    if (down && pf_bit == PF_FREEZE && !par[PAR_DLY_LEVEL])
-        ui_message("FREEZE: THE DELAY'S LEVEL IS 0");
+    if (down && pf_bit == PF_FREEZE && (!par[PAR_DLY_LEVEL] || par[PAR_FX_DELAY_TYPE] == DELAY_OFF))
+        ui_message(par[PAR_FX_DELAY_TYPE] == DELAY_OFF ? "FREEZE: THE DELAY IS OFF" : "FREEZE: THE DELAY'S LEVEL IS 0");
     perf_apply();
 }
 static void rm_button(uint32_t j, int down)          /* button j (TRACKS' 0 .., then GLOBAL's) */

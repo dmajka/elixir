@@ -208,6 +208,8 @@ def build_app():
         flags.append(f'-DELIXIR_VERSION="{version}"')
     if os.environ.get("ELIXIR_WTABLE") == "1":       # (0.24: P WTABLE, parked; ~48 KB: docs/parked/README.md)
         flags.append("-DELIXIR_WTABLE=1")
+    if os.environ.get("ELIXIR_USB_AUDIO") in ("0", "8"):   # (1.0: 8, the default, the mix and six stems; 0 MIDI only)
+        flags.append(f'-DELIXIR_USB_AUDIO={os.environ["ELIXIR_USB_AUDIO"]}')
     cmain = ("cc", *flags, "-c", FW / "src" / "elixir.c", "-o", OUT / "elixir.o")
     (OUT / "fm1_cpu1.o").unlink(missing_ok=True)
     tc_all(("cc", "-c", FW / "crt0.S", "-o", OUT / "crt0.o"),

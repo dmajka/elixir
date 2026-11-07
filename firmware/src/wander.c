@@ -1574,7 +1574,7 @@ static void wd_cy_voices_bar(void)                   /* a bar: each voice's pan 
 }
 static uint32_t wd_cy_mono(uint32_t pp)              /* the delay's mode: home's kind (TAPE or not), mono or PING PONG */
 {
-    uint32_t h = wd_home[kit_idx(PAR_FX_DELAY_TYPE)], tape = h >= DELAY_TAPE;
+    uint32_t h = wd_home[kit_idx(PAR_FX_DELAY_TYPE)], tape = h == DELAY_TAPE || h == DELAY_TAPEPP;
     return tape ? (pp ? DELAY_TAPEPP : DELAY_TAPE) : (pp ? DELAY_PINGPONG : DELAY_NORMAL);
 }
 static int wd_glide_on(uint32_t p)                   /* p gliding now */
@@ -1643,7 +1643,8 @@ static void wd_quest_chapter(void)                   /* a chapter begins (BOILIN
             wd_cy_aim(v, 1);
             wd_cy_aim(v, 0);
         }
-        wd_cy_mode(c == 4u ? wd_home[kit_idx(PAR_FX_DELAY_TYPE)] : wd_cy_mono(c >= 2u));
+        wd_cy_mode(c == 4u && wd_home[kit_idx(PAR_FX_DELAY_TYPE)] != DELAY_OFF ? wd_home[kit_idx(PAR_FX_DELAY_TYPE)]
+                                                                                   : wd_cy_mono(c >= 2u));
     }
 }
 static void wd_quest_bar(void)                       /* .. a bar of it */

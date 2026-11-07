@@ -370,7 +370,7 @@ From 0.19 the top of each page is a picture of what its knobs do rather than a l
 | **Transient** (EDIT) | Waveform, Volume, Frequency | same | same |
 | **Amp EG** (ENV; then Elixir's GATE page) | Attack, Decay, Slope | Attack, Decay, Repeat count (claps), Slope | Attack, Decay (CH: closed; OH: open), Repeat (cymbal), Slope |
 | **Mod EG / velocity** (ENV) | Pitch EG: Decay, Slope, Amount / Velocity: destination, amount, volume mod | same | Velocity: destination, amount, volume mod |
-| **Filter** (SCL) | Frequency, Resonance, Type (LP HP BP UNITY BP NOTCH PEAK LP2 OFF; then Elixir's, below), Overdrive | same | same |
+| **Filter** (SCL) | Type (LP HP BP UNITY BP NOTCH PEAK LP2 OFF; then Elixir's, below), Freq, Reso, Drive (from 1.0 in this order; the LXR's: Frequency, Resonance, Type, Overdrive) | same | same |
 | **LFO 1** (LFO, 2 pages) | Dest, Depth, Sync, Rate / Wave, Phase, Mode, Retrigger ([the LFO pages](#the-lfo-pages-from-10)) | same | same |
 | **LFO 2** (LFO, Elixir's) | the same knobs as LFO 1 | same | same |
 
@@ -707,11 +707,11 @@ One effect at a time, then **the delay, always there after it** (from 1.0). The 
 | REVERB | Model | Size | Damping | Level |
 | FX BUS | Type | Dry/Wet | the type's mode | – |
 | FX BUS: *type* | P1 | P2 | P3 | P4 |
-| DELAY | Time | Feedback | Tone | Level |
-| DELAY: MODE | Mode | Sync | Echo>Rev | Band |
+| DELAY (1/2) | Mode | Sync | Time | Level |
+| DELAY (2/2) | Tone | Echo>Rev | Feedback | Band |
 | DELAY: TAPE (TAPE modes) | Wow | Saturate | Glitch | Pitch |
 | DIRT | Bus dirt | – | Master | Amount |
-| DJ FILTER (1.0) | DJ filter | DJ reso | DJ type | – |
+| DJ FILTER (1.0) | Type | Filt | Reso | – |
 | MASTER COMP | Thresh | Ratio | Attack | Release |
 | COMP: SIDECHAIN | Sidechain | Makeup | Mix | – |
 | FX SEND (1/2) | D1 fx | D2 fx | D3 fx | SN fx |
@@ -726,25 +726,33 @@ One effect at a time, then **the delay, always there after it** (from 1.0). The 
 | COMP | ratio 1:1 … 8:1 | Attack | Release | Threshold | Gain |
 | PHASER | – | Rate | Depth | Feedback | Centre |
 | FLANGER | – | Rate | Depth | Feedback (below the middle: negative) | Delay |
+| CHORUS (1.0) | – | Rate | Depth (up to 4 ms) | Delay (5–18 ms) | Lo cut (20–800 Hz) |
 
-The phaser and flanger sound strongest at DRY/WET 50%. The bus always plays in stereo (the FM-1 has one stereo output).
+The phaser and flanger sound strongest at DRY/WET 50%. **CHORUS** (from 1.0) is made for drums: two voices a side drifting around the dry sound (the sides a quarter turn apart, so it spreads wide), no feedback (no metallic ring on a snare), and **Lo cut** on the voices it adds, so a kick sent to it keeps its low end solid and in the middle. Try Lo cut around 200 Hz on a full kit, a short Delay for a thick doubling, a longer one with slow Rate for a wide wash on hats and claps. It costs a little more than the flanger, a fraction of the phaser. From 1.0 the **PHASER** has four stages (two notches, the classic sound) rather than six: about a quarter cheaper. **COMP** (the LXR's bus compressor) now works out its gain every 8 samples, as the master compressor does, for less than half the CPU; kits that use it sound as before. The bus always plays in stereo (the FM-1 has one stereo output).
 
 ### The delay (from 1.0: always on)
 
-The FX sends feed the bus, and the delay hears what comes out of it: **BUS DIRT → the bus's effect → the delay → the mix**. So you can have a phaser *and* echoes, a flanged ring *and* a dub delay. The delay adds its echoes on top of the bus's sound at **Level**; at Level 0 it is off (the echoes already in the air die out, then it sleeps and costs nothing). With the bus type OFF and Level up, it is the plain delay of before.
+The FX sends feed the bus, and the delay hears what comes out of it: **BUS DIRT → the bus's effect → the delay → the mix**. So you can have a phaser *and* echoes, a flanged ring *and* a dub delay. The delay adds its echoes on top of the bus's sound at **Level**; with Mode OFF or at Level 0 it is off (the echoes fade out in a few milliseconds, then it sleeps and costs nothing). With the bus type OFF and Level up, it is the plain delay of before.
 
+**DELAY (1/2):**
+
+- **Mode:** OFF (the first, and a new kit's), MONO, PING PONG, TAPE or TAPE PP. Changing it fades the echoes out over a few milliseconds, clears the line and fades its input back in, so the switch doesn't click; the new mode's first echoes come about 20 ms after the turn. OFF keeps every other setting: pick a mode again and the delay is as it was. A saved kit keeps its mode; the init kit, and an LXR or factory kit without a delay, load with OFF.
+- **Sync** ON turns Time into note values at the tempo: 1/32, 1/16T, 1/16, 1/8T, 1/16., 1/8, 1/4T, 1/8., 1/4, 1/2T, 1/4., 1/2 (each detent of Time the next one; a value too long for the line plays at half, the card shows /2 or /4; a tempo change follows).
 - **Time:** from 0.6 ms to the line's most (0.74 s; half a side in PING PONG; twice in the TAPE modes), finer at the short end. The card shows milliseconds, or the note value with Sync on.
-- **Feedback:** how long the echoes go on (TAPE modes: up to 115%, a roar that stays bounded).
-- **Tone:** darkens the repeats.
 - **Level:** how loud the echoes are. 0: the delay is off.
 
-**DELAY: MODE:** **Mode** is MONO, PING PONG, TAPE or TAPE PP (changing it clears the echoes: the line starts again from silence). **Sync** ON turns Time into note values at the tempo: 1/32, 1/16T, 1/16, 1/8T, 1/16., 1/8, 1/4T, 1/8., 1/4, 1/2T, 1/4., 1/2 (each detent of Time the next one; a value too long for the line plays at half, the card shows /2 or /4; a tempo change follows). **Echo>Rev** feeds the echoes into the reverb, the classic dub chain (echo, then spring or plate). PERF's **THROW REV** key also throws the echoes into the reverb while held.
+**DELAY (2/2):**
+
+- **Tone:** darkens the repeats.
+- **Echo>Rev** feeds the echoes into the reverb, the classic dub chain (echo, then spring or plate). PERF's **THROW REV** key also throws the echoes into the reverb while held.
+- **Feedback:** how long the echoes go on (TAPE modes: up to 115%, a roar that stays bounded). It sits beside Band, which works with it.
+- **Band:** below.
 
 **Band** (from 1.0) puts a resonant peak in the delay's loop, the dub engineer's mid boost on the echo return: OFF (the default), or a frequency from 150 Hz to 5 kHz (TAPE and TAPE PP to about 3.3 kHz). That band goes round a little louder than the rest of the echo on every pass, so it colours the repeats halfway up **Feedback** and, pushed near the top, builds into a self-oscillating howl at its pitch while the rest of the echo dies away. TAPE howls from about Feedback 80, PING PONG and TAPE PP from about 100, MONO builds slowly at the very top. Turn Band while it howls to sweep the scream; FB PUSH (held) gets there at once. The howl is held by a soft clip in the loop (TAPE's saturation, which MONO and PING PONG use too while Band is on), so it saturates rather than running away; it can still be loud, so keep Level in mind. It is part of the kit; a morph turns it on or off halfway. A global LFO's **DELAY BAND** sweeps it up to two octaves either way (OFF stays off), and the remote's GLOBAL **CC 3** turns it. Off, it costs nothing; on, a little CPU (well under 1%).
 
 Its Time, Feedback, Tone and Level are **LFO and velocity destinations** (a track's DEST list ends with Delay time, Delay feedback, Delay tone, Delay level), so a kick can open the echoes or an LFO can sweep their time.
 
-**Older kits:** a kit whose bus was DELAY loads with the delay on at its old dry/wet, the same time, tone and feedback, and the bus OFF. A kit without the delay loads with Level 0. MIDI's LXR FX type DELAY turns the delay on the same way. The delay's RANGE knob is gone: its time is one curve now, and older kits' times are converted. (An LFO that was on D2's FX P1–P4 moves to D1's: those slots are the delay's now.)
+**Older kits:** a kit whose bus was DELAY loads with the delay on at its old dry/wet, the same time, tone and feedback, and the bus OFF. A kit without the delay loads with Level 0 and Mode OFF. MIDI's LXR FX type DELAY turns the delay on the same way. The delay's RANGE knob is gone: its time is one curve now, and older kits' times are converted. (An LFO that was on D2's FX P1–P4 moves to D1's: those slots are the delay's now.)
 
 ### The tape delay (from 0.16)
 
@@ -770,15 +778,16 @@ They are part of the kit; the amounts morph and can be locked per step, the Mast
 
 ### The DJ filter and the global character filter (from 1.0)
 
-The **DJ FILTER** page (after DIRT) holds the [DJ filter](#perf-pages-arp-select) on the whole mix: **DJ filter** (the same knob as PERFORM: MORE's: left a low-pass, right a high-pass, off in the middle), **DJ reso** (its resonance; it was on the DIRT page before 1.0) and **DJ type**, which filter it is:
+The **DJ FILTER** page (after DIRT) holds the [DJ filter](#perf-pages-arp-select) on the whole mix (its cards: Type, Filt, Reso, and Tune for RING): **DJ filter** (the same knob as PERFORM: MORE's: left a low-pass, right a high-pass, off in the middle), **DJ reso** (its resonance; it was on the DIRT page before 1.0) and **DJ type**, which filter it is:
 
 - **LXR** (the default): the LXR's SVF, as it always was.
 - **ACID**: the ACID diode ladder on the low-pass side, for a 303 sweep over the whole beat; the high-pass side stays the LXR's.
 - **MS20**: the MS20 low-pass on the left, its high-pass on the right.
+- **RING** (from 1.0): a tuned resonator, after the Torso S-4's RING: eight band-pass filters tuned to a chord, so the whole beat rings in key. **Filt** sets the chord's root, in semitones (the card names it): C3 just off the middle, down to C1 at the left end, up to C6 at the right; off in the middle as always. **Decay** (Reso's place) is how long the bands ring, from a short knock (0.08 s) to a long shimmer (2.6 s). **Tune** picks the chord: **NOTE** (one pitch and its harmonics, like a struck string), **OCTAVES**, **FIFTHS**, **MAJOR** (the default), **MINOR**, **SUS4**, **MIN7** and **PENTA** (minor pentatonic). The bands are spread across the stereo field, the root in the middle; half the dry mix stays under them so the drums keep their hit. Sweep Filt (or a global LFO on FILTER) for stepped, in-tune glides; set Decay long and the hats become a drone. It costs about what the LXR's filter does (OCTAVES, four bands, less); bands above about 6 kHz are left out. Tune is saved with the project.
 
-Everything that moves the DJ filter moves the character filter the same way: the knob, the LP~ and HP~ sweeps, a global LFO on FILTER, LP or HP, RUSH's high-pass. DJ type is saved with the project (as DJ reso), not the kit. ACID and MS20 run on the first core only while the DJ filter is off the middle (ACID: a few % of the CPU, MS20 about what the LXR's costs). The page draws the filter's curve where it is.
+Everything that moves the DJ filter moves the character filter the same way: the knob, the LP~ and HP~ sweeps, a global LFO on FILTER, LP or HP, RUSH's high-pass. DJ type is saved with the project (as DJ reso), not the kit. The filter runs on the first core only while the DJ filter is off the middle: the LXR's and RING about 13% of it, MS20 about 16%, ACID about 26% (estimates; the LOAD page shows them under MIXER). The page draws the filter's curve where it is.
 
-**DJ reso** (from 0.24.3, on the DJ FILTER page from 1.0) is the DJ filter's resonance. At 0 it is the gentle bump it always had; turned up, the filter whistles at its cutoff and rings on every hit, and near 127 it screams as you sweep it (the knob, the LP~ / HP~ keys, a global LFO). It gets louder as it rises, and with Master dirt in front of it, nastier. It costs no extra CPU: the filter is the same, only its damping changes. Unlike the drives it belongs to the project, not the kit (as the tape time does), so loading a kit doesn't change it. At the very top of the low-pass's range (the knob just left of the middle) the filter keeps its resonance low, so the bump comes in as you sweep down. The remote's GLOBAL CC 47 turns it too.
+**DJ reso** (from 0.24.3, on the DJ FILTER page from 1.0) is the DJ filter's resonance. At 0 it is the gentle bump it always had; turned up, the filter whistles at its cutoff and rings on every hit, and near 127 it screams as you sweep it (the knob, the LP~ / HP~ keys, a global LFO). It gets louder as it rises, and with Master dirt in front of it, nastier. It costs no extra CPU: the filter is the same, only its damping changes. Turning it glides the filter there over a few milliseconds (from 1.0), so a sweep doesn't click. Unlike the drives it belongs to the project, not the kit (as the tape time does), so loading a kit doesn't change it. At the very top of the low-pass's range (the knob just left of the middle) the filter keeps its resonance low, so the bump comes in as you sweep down. The remote's GLOBAL CC 47 turns it too.
 
 ### Master compressor and sidechain (from 0.16)
 
@@ -1643,12 +1652,39 @@ GLO twice (past the mixer) opens CONFIG. Turn SELECT for its pages:
 | MIDI CHANNELS (2 pages) | Each track's channel; page 2's KNOB 4, **Global in**: what the global channel takes (KEYS, the default; PAT+KIT; ALL; OFF: see [MIDI at a glance](#midi-at-a-glance)) |
 | MIDI NOTES (2 pages) | Each track's note (ANY or a note) |
 | MIDI OUT (2 pages, from 1.0) | Each track's notes out over USB MIDI on its channel: OFF (the default) or ON; the TX filter's N must be on too. Page 2's KNOB 4, **Volume**: the master volume, 0–127 (127 the default), after MASTER, saved with the settings; CC 124 sets it (see [MIDI at a glance](#midi-at-a-glance)) |
+| USB MIX (2 pages, from 1.0) | Each voice's place in the stereo mix while a computer records the FM-1 over USB: **IN** (the default) or **OUT**, a knob a voice (D1 D2 D3 SN, then CY HH). The six stems always play; see [USB audio](#usb-audio-the-mix-and-six-stems) |
 | DEVICE | LEDs (OFF / LOW / HIGH glow), Autosave, Accel (fast knob turns move further), Colours (screen palette: GREY, GREEN, AMBER, ICE, VIOLET, ROSE, PAPER, HI-CON, NIGHT, MONO or HYRULE, forest green and Triforce gold) |
 | REMOTE | Tracks (the TRACKS channel: OFF, 1–16; 15 by default), Global (the GLOBAL channel; 16 by default; never the same as Tracks), Knobs (PICKUP / ABS / REL), Mute/solo (PRESS / TOGGLE): see [the remote map](#the-remote-map) |
 | MORPH | Edits: SPLIT (the default from 1.0: at morph 100% the knobs edit the morph kit, below it the kit), BOTH KITS (a knob's edit moves the morph target too) or KIT ONLY (the kit alone, the LXR's way). Ctrl all: BOTH KITS (the default: Control All moves the morph target too) or KIT ONLY; see [Kits and morph](#11-kits-and-morph) and [Control All](#control-all-every-track-at-once) |
 | BUTTONS & KITS | **Kits first** (KNOB 2, from 0.19): FACTORY (the default) or SLOTS, the kit browser's order (see [Kits and morph](#11-kits-and-morph)). **Last page**: NO (the default) or YES. With YES, a button opens the page it showed when you left it: on CONFIG's BUTTONS & KITS page, press FX, then GLO, and you're back on BUTTONS & KITS. It works for SEQ (the track's pages or step edit, whichever you were on), FX, ARP (and each of its two sets), GLO (the mixer or CONFIG) and the sound buttons (the section and row). Pressed again, a button moves on as always. HOME still goes to the grid. |
 | LOAD | No knobs: where the processor's time goes, and the cores; see [the LOAD page](#the-load-page) |
 | ELIXIR | No knobs: the potion, the version, each core's load and the CPU line with the battery |
+
+### USB audio: the mix and six stems
+
+From 1.0 the FM-1 is also a **USB audio input** with eight channels (16-bit, 44.1 kHz, USB Audio Class 1: no driver needed). Connect it to a computer with the USB cable and choose **Elixir** as the input in your recording software:
+
+| USB channel | What |
+|---|---|
+| 1, 2 | The stereo mix, left and right: what the FM-1's outputs play, before the MASTER pot and the master volume (so recordings don't change with the pot) |
+| 3 | D1 |
+| 4 | D2 |
+| 5 | D3 |
+| 6 | SN |
+| 7 | CY |
+| 8 | HH (both hi-hat tracks: closed and open play the one voice) |
+
+Each **stem** (3–8) is one voice in mono, as the mixer takes it: after the voice's own processing (its filter, drive, bit reduction, its INSERT, cross modulation, choke and PERF's PUMP), before its pan, its FX and reverb sends, the FX bus, the reverb, the master compressor, DIRT and the DJ filter. A stem is at the voice's own level (VOLUME), on the same scale as the mix (full scale is the same in both), unpanned. A muted track gives a silent stem (its voice isn't struck).
+
+**USB MIX** (CONFIG, two pages: D1 D2 D3 SN, then CY HH) takes a voice **OUT** of the stereo mix, so you can process it apart in the computer: the kick out of the mix, say, through its own compressor. OUT removes the voice from the mix completely, its dry sound and its sends to the FX bus and the reverb alike, so no echo or reverb of it is left in channels 1–2; its stem still plays. OUT applies **only while a computer records** (the USB MIX page says RECORDING): the FM-1's own outputs follow the mix, so while recording you hear the mix without that voice; unplugged, or with no app reading the input, every voice plays as usual, so a forgotten OUT never silences a voice. The setting belongs to the FM-1 (saved with the settings), not to a kit or project.
+
+Things to know:
+
+- Recording software sees one eight-channel device; most label the channels 1–8 (USB audio 1 has no way to name them), so name the tracks as in the table.
+- The latency is about 4 ms on top of your computer's own. The FM-1's clock runs the stream (it is an *asynchronous* device), so there is no drift against the computer.
+- Only 44.1 kHz. If your project runs at 48 kHz, let the software convert the input, or use 44.1 kHz.
+- CONFIG → LOAD shows the stream's own share of the processor (**USB AUDIO**) and its **glitches** since power-on: a packet repeated or dropped (heard as a click in the recording only, not on the FM-1's outputs). Please report glitches with the pattern that caused them.
+- USB MIDI and installs over USB work as before. Windows may take a moment to set the device up again the first time, since the FM-1 now presents an audio function too.
 
 ### The CPU meter
 
@@ -1660,7 +1696,7 @@ To measure, open CONFIG while a dense pattern plays with the FX bus and reverb o
 
 The LOAD page (CONFIG's second-to-last) splits the CPU figure by part, each as a share of the time an audio buffer lasts (2.9 ms): **D1-D3** (the three drum voices, with their models), **SN-HH** (snare, cymbal, hi-hat), **MIXER** (cross modulation, choke, the mixer and the master), **FX BUS**, **REVERB**, and **SEQ, MOD** (the sequencer, MIDI, PERF, the LFOs and the rest). The first number is the average, the second the peak since CONFIG was opened; the bar shows the average with the peak as a tick. On one core the parts add up to about the CPU figure. The emulator shows 0 everywhere.
 
-Below them, the cores. The FM-1's processor has two cores, and from 0.15 Elixir uses both: the second renders D1–D3 (with their models) while the first renders SN, CY and HH, then mixes everything and runs the effects. With two cores, **D1-D3** is the second core's time, so the parts no longer add up to CPU. **CORE 0** is the first core's time, less its wait for the second, and **CORE 1** the second's (D1–D3; OFF on one core). Under them, **WAIT** is the time the first core waits for the second (if it grows, D1–D3 are the slower half), and **STACK** the memory the second core has used for its work (red past 3.5 KB of 4 KB). On one core, **1 CORE** says why the second core isn't running; D1–D3 then render on the first core, and only one model plays:
+Below them, the cores. The FM-1's processor has two cores, and from 0.15 Elixir uses both: the second renders D1–D3 (with their models) while the first renders SN, CY and HH, then mixes everything and runs the effects. From 1.0 the second core runs the reverb too, after the drums (it works on the last block's send, so it needn't wait for the mix), which takes 4–7% off the first. With two cores, the first line reads **D1-D3, REV**: the second core's time, so the parts no longer add up to CPU (REVERB then only counts adding its return). **CORE 0** is the first core's time, less its wait for the second, and **CORE 1** the second's (D1–D3; OFF on one core). Under them, **WAIT** is the time the first core waits for the second (if it grows, D1–D3 are the slower half), and **STACK** the memory the second core has used for its work (red past 3.5 KB of 4 KB). On one core, **1 CORE** says why the second core isn't running; D1–D3 then render on the first core, and only one model plays:
 
 | Reason | |
 |---|---|
@@ -1671,7 +1707,7 @@ Below them, the cores. The FM-1's processor has two cores, and from 0.15 Elixir 
 
 The last page, **ELIXIR**, shows the version (the cores' line moved to LOAD in 0.20).
 
-From 0.16 the first core also runs the reverb and reads the delay's echoes while it waits for the second, on the last buffer's sends (one block, 1.45 ms, late: inaudible), so the effects no longer add to the slower core's time. Under the cores, one reading a line: **CORE 0 WAITS** (with two cores), **CORE 1 STACK**, **USER STACK** and **SYS STACK**, the deepest use of each stack since power-on out of its size (red past three quarters). If one turns red after a busy session, please report it.
+From 0.16 the first core also runs the reverb and reads the delay's echoes while it waits for the second, on the last buffer's sends (one block, 1.45 ms, late: inaudible), so the effects no longer add to the slower core's time. Under the cores, one reading a line: **CORE 0 WAITS** (with two cores), **CORE 1 STACK**, **USER STACK** and **SYS STACK**, the deepest use of each stack since power-on out of its size (red past three quarters). If one turns red after a busy session, please report it. From 1.0, **USB AUDIO**: the [USB audio](#usb-audio-the-mix-and-six-stems) stream's share of the first core while a computer records (OFF when nothing does; it isn't counted in CPU or the parts above) and its glitches since power-on (red when there are any).
 
 ### The battery
 
@@ -1774,7 +1810,7 @@ NRPN *n* sets parameter *n* + 128: send CC 99 = *n* ÷ 128, CC 98 = *n* mod 128,
 | 75–80 | Transient waveform (0–13) |
 | 81–86 | Transient frequency |
 | 100–105 | Pulse width |
-| 106 | FX bus type (0 off, 1 drive, 2 ring, 3 comp, 4 delay, 5 phaser, 6 flanger) |
+| 106 | FX bus type (0 off, 1 drive, 2 ring, 3 comp, 4 delay, 5 phaser, 6 flanger, 7 chorus) |
 | 108 | FX bus dry/wet (0–100) |
 | 107 | FX bus output (0–5) |
 | 109 | Drive curve (0 tube, 1 fold, 2 clip) |

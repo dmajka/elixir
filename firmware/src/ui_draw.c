@@ -178,7 +178,7 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
         }
         break;
     case M_FX: {
-        static const char *const T[NFXPG] = {"REVERB", "FX BUS", "", "DELAY", "DELAY: MODE", "DELAY: TAPE", "DIRT",
+        static const char *const T[NFXPG] = {"REVERB", "FX BUS", "", "DELAY (1/2)", "DELAY (2/2)", "DELAY: TAPE", "DIRT",
                                              "DJ FILTER", "MASTER COMP", "COMP: SIDECHAIN", "FX SEND (1/2)", "FX SEND (2/2)",
                                              "REVERB SEND (1/2)", "REVERB SEND (2/2)"};
         uint32_t g = fx_page();
@@ -701,6 +701,7 @@ static void draw_gen_pop(int32_t y0)
     cv_text_r(226, 10, &AF_S, b, T_DIM, T_SURF);
 }
 static void draw_perf_page(int32_t y0);
+static uint32_t glfo_sig(uint32_t i) { return gls[i].dest != GD_OFF ? (uint32_t)gl.out[i] >> 11 : 0u; }
 static void draw_perf(int32_t y0)
 {
     draw_perf_page(y0);
@@ -750,7 +751,8 @@ static void draw_perf_page(int32_t y0)
             int on = gls[i].dest != GD_OFF && gls[i].depth;
             cv_text(x, 98, &AF_S, L[i], (int32_t)i == glfo_page() ? T_THEME : T_MID);
             cv_rect(x + 20, 102, 52, 4, T_SURF);
-            cv_rect(x + 20, 102, (int32_t)((uint32_t)gl.out[i] * 52u >> 16), 4, on ? T_ACCENT : T_DIM);
+            if (gls[i].dest != GD_OFF)               /* (Dest OFF: no motion, so a live LFO stands out) */
+                cv_rect(x + 20, 102, (int32_t)((uint32_t)gl.out[i] * 52u >> 16), 4, on ? T_ACCENT : T_DIM);
         }
     } else if (perf_stut()) {                        /* 0.16: STUTTER: the burst as it plays, a box a SIZE */
         uint32_t u = pf.st_on ? pf.st_units : 0u, k;
@@ -1129,22 +1131,37 @@ static uint32_t mixer_bar_par(uint32_t v)
         return fx_page() >= FXPG_RSEND ? PAR_REV_SEND1 + v : PAR_FX_SEND1 + v;
     return g == 2u ? PAR_FX_SEND1 + v : g == 3u ? PAR_REV_SEND1 + v : PAR_VOL1 + v;
 }
+/* the voices this page's knobs reach (their volume, pan or a send): the other bars drawn faint, so the eye maps
+ * the bars it sees to the four knobs */
+static uint32_t mixer_knob_voices(void)
+{
+    uint16_t k[4];
+    uint32_t i, v, m = 0;
+    page_params(k);
+    for (i = 0; i < 4u; i++)
+        for (v = 0; v < NVOICE; v++)
+            if (k[i] == PAR_VOL1 + v || k[i] == (v < 3u ? PAR_PAN1 + v : PAR_PAN4 + v - 3u) ||
+                k[i] == PAR_FX_SEND1 + v || k[i] == PAR_REV_SEND1 + v)
+                m |= 1u << v;
+    return m;
+}
 static void draw_mixer(int32_t y0)
 {
-    uint32_t v;
+    uint32_t v, m = mixer_knob_voices();
     (void)y0;
     for (v = 0; v < NVOICE; v++) {
         int32_t x = 10 + (int32_t)v * 38, h = par[mixer_bar_par(v)] * 90 / 127;
         int32_t pk = voice_peak[v] * 90 / 32768;
-        cv_rrect(x, 8, 26, 96, 3, T_SURF, T_BG);
-        cv_rect(x + 3, 104 - h - 3, 20, h, ux_mix(T_SURF, TRACK_COL[v], 55));
+        int on = (m >> v) & 1u;
+        cv_rrect(x, 8, 26, 96, 3, on ? T_SURF : ux_mix(T_BG, T_SURF, 45), T_BG);
+        cv_rect(x + 3, 104 - h - 3, 20, h, ux_mix(T_SURF, TRACK_COL[v], on ? 55 : 15));
         if (pk > 0 && mixer_bar_par(v) == PAR_VOL1 + v)
-            cv_rect(x + 3, 104 - pk - 3, 20, 2, T_ACCENT);
+            cv_rect(x + 3, 104 - pk - 3, 20, 2, on ? T_ACCENT : T_DIM);
         {   /* pan: a tick */
             int32_t p = par[v < 3u ? PAR_PAN1 + v : PAR_PAN4 + v - 3u];
-            cv_rect(x + 1 + p * 22 / 127, 108, 3, 4, T_THEME);
+            cv_rect(x + 1 + p * 22 / 127, 108, 3, 4, on ? T_THEME : T_DIM);
         }
-        text_c(x - 4, 114, 34, &AF_S, v == 5u ? "HH" : VOICE_SHORT[v], TRACK_COL[v], T_BG);
+        text_c(x - 4, 114, 34, &AF_S, v == 5u ? "HH" : VOICE_SHORT[v], on ? TRACK_COL[v] : T_DIM, T_BG);
     }
 }
 
@@ -1311,6 +1328,7 @@ static void draw_load(void)
 {
     static const uint8_t ORDER[NLD - 1u] = {LD_D13, LD_SNHH, LD_MIX, LD_FX, LD_REV, LD_SEQ};
     static const char *const PART[NLD] = {"SEQ, MOD", "D1-D3", "SN-HH", "MIXER", "FX BUS", "REVERB", "WAIT"};
+    const char *d13 = cores_why == CW_TWO ? "D1-D3, REV" : "D1-D3";   /* (1.0: core 1 runs the reverb too) */
     static const char *const WHY[] = {"", "ONE-CORE BUILD", "REC HELD AT POWER-ON", "BAD READ", "NO ANSWER",
                                       "FAULT", "SINCE A CRASH", "NO START"};
     char b[40];
@@ -1318,7 +1336,7 @@ static void draw_load(void)
     for (k = 0; k < NLD - 1u; k++) {
         uint32_t i = ORDER[k], a = (ld_q8[i] * 100u + 128u) >> 8, pk = (ld_pk[i] * 100u + 128u) >> 8;
         int32_t y = 2 + (int32_t)k * 12, w = (int32_t)(a > 100u ? 100u : a), wp = (int32_t)(pk > 100u ? 100u : pk);
-        cv_text(10, y, &AF_S, PART[i], T_TEXT);
+        cv_text(10, y, &AF_S, i == LD_D13 ? d13 : PART[i], T_TEXT);
         put_str(put_int(b, (int32_t)a), "%", 2);
         cv_text_r(104, y, &AF_S, b, T_TEXT, T_BG);
         put_str(put_int(b, (int32_t)pk), "%", 2);
@@ -1362,6 +1380,22 @@ static void draw_load(void)
         stack_line(b, sv, SSTACK_B);
         load_line(146, "SYS STACK", b, sv > SSTACK_B / 4u * 3u ? T_REC : T_TEXT);
     }
+#if UAC_STEMS
+    {   /* 1.0, Phase 8: the USB audio's service (TIMER5, outside the parts above) and its glitches since power-on */
+        uint32_t g, pm = uac_load_pm(&g);
+        if (stems_live()) {
+            put_int(b, (int32_t)(pm / 10u));
+            cat(b, ".", sizeof b);
+            put_int(b + str_len(b), (int32_t)(pm % 10u));
+            cat(b, "%  ", sizeof b);
+        } else {
+            put_str(b, "OFF  ", sizeof b);
+        }
+        put_int(b + str_len(b), (int32_t)g);
+        cat(b, g == 1u ? " GLITCH" : " GLITCHES", sizeof b);
+        load_line(160, "USB AUDIO", b, g ? T_REC : T_TEXT);
+    }
+#endif
 }
 
 static void draw_about(void);
@@ -1406,6 +1440,12 @@ static void draw_config_help(int32_t y0)
         y = help_item(y, "OUT", "the track's notes go out on its channel (TX N on too)");
         if (ui.page % NCONFIG == CF_MOUT + 1u)
             help_item(y, "VOLUME", "the master volume, after MASTER; CC 124 on the remote's channels");
+        break;
+    case CF_UMIX:                                    /* 1.0, Phase 8: the voices in the USB audio's stereo mix */
+    case CF_UMIX + 1:
+        y = help_item(y, "OUT", "leaves the stereo mix (USB 1-2, the outputs) while a computer records");
+        y = help_item(y, "STEMS", "USB 3-8: D1 D2 D3 SN CY HH, always");
+        help_text(HELP_X, y, stems_live() ? "RECORDING" : "NOT RECORDING: ALL IN THE MIX", stems_live() ? T_REC : T_MID);
         break;
     case CF_REMOTE: {                                /* 0.12: the remote; a channel it shares with a track warned of */
         uint32_t t, clash = 0;
@@ -1553,8 +1593,7 @@ static void draw_body(void)
         s = sig_add(s, sq.roll | ui.roll_latch << 8 | seq_mutes() << 16 | ui.shift << 24);
         s = sig_add(s, pfs.repeat | ui.track << 4 | (uint32_t)(pf.dj_d + 65536) >> 10 << 8 | (tape_q16 >> 11) << 20);
         if (glfo_page() >= 0)                        /* (0.13: the LFOs' bars, which page) */
-            s = sig_add(sig_add(s, (uint32_t)gl.out[0] >> 11 | (uint32_t)gl.out[1] >> 11 << 8 |
-                                       (uint32_t)gl.out[2] >> 11 << 16 | ui.page << 24),
+            s = sig_add(sig_add(s, glfo_sig(0) | glfo_sig(1) << 8 | glfo_sig(2) << 16 | ui.page << 24),
                         (uint32_t)gls[0].dest | (uint32_t)gls[1].dest << 8 | (uint32_t)gls[2].dest << 16 |
                             (uint32_t)dest_pop() << 24);   /* (0.25.2: DEST's name over it) */
         if (perf_dens())                             /* (19d: the tracks left out, DENSITY in use; 31: COMMIT) */
@@ -1630,7 +1669,9 @@ static void draw_body(void)
             s = sig_add(s, (uint32_t)par[PAR_DLY_WOW] | (uint32_t)par[PAR_DSAT] << 8 | fx_bpm_x10 << 16 |
                                (uint32_t)par[PAR_DLY_BAND] << 24);
             if (fx_page() == FXPG_DJ)                    /* (1.0: the DJ filter as it moves, its type and Reso) */
-                s = sig_add(s, (uint32_t)(pf.dj_d + 65536) >> 9 | (uint32_t)pfs.dj_ftype << 20 | (uint32_t)pfs.dj_reso << 24);
+                s = sig_add(sig_add(s, (uint32_t)(pf.dj_d + 65536) >> 9 | (uint32_t)pfs.dj_ftype << 20 |
+                                           (uint32_t)pfs.dj_reso << 24),
+                            pfs.dj_tune);            /* (1.0: RING's chord) */
             if (fx_page() == FXPG_COMP2 && mc.src && mc.src <= NVOICE)
                 s = sig_add(s, shown_pat()->main[mc.src - 1u][ui.bar & 3u] | ui.bar << 16);
             if (fx_page() == FXPG_COMP || fx_page() == FXPG_COMP2)   /* (0.16: the compressor's gain reduction) */
@@ -1646,7 +1687,7 @@ static void draw_body(void)
             break;
         case M_CONFIG:
             fn = draw_config_help;
-            s = sig_add(9, ui.page | (uint32_t)remote_ch << 8 | (uint32_t)remote_gch << 16);
+            s = sig_add(9, ui.page | stems_live() << 7 | (uint32_t)remote_ch << 8 | (uint32_t)remote_gch << 16);
             s = sig_add(s, cpu_pct() | cpu_peak_pct() << 8 | audio_late << 16 | (uint32_t)batt_level() << 28);
             if (ui.page % NCONFIG == CF_LOAD || ui.page % NCONFIG == CF_ABOUT) {
                 uint32_t i;
@@ -1654,6 +1695,12 @@ static void draw_body(void)
                     s = sig_add(s, ld_q8[i] | (uint32_t)ld_pk[i] << 16);
                 s = sig_add(s, cores_why | c1_stack() << 8);
                 s = sig_add(s, ustack_used() | sstack_used() << 16);
+#if UAC_STEMS
+                {
+                    uint32_t g, pm = uac_load_pm(&g);
+                    s = sig_add(s, pm | g << 10 | stems_live() << 31);
+                }
+#endif
             }
             break;
         case M_SOUND:
@@ -1712,6 +1759,9 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_IO_SLOT: put_str(b, "Slot", n); return;
     case VP_IO_SRC: put_str(b, ui.mode == M_SAVE ? "To" : "From", n); return;
     case VP_IO_TRACK: put_str(b, "Track", n); return;
+    case PAR_FILTER_FREQ_1 ... PAR_FILTER_FREQ_6: put_str(b, "Freq", n); return;   /* (1.0: the cards; the LXR's */
+    case PAR_RESO_1 ... PAR_RESO_6: put_str(b, "Reso", n); return;               /* "Frequncy", "Resnance", */
+    case PAR_FILTER_DRIVE_1 ... PAR_FILTER_DRIVE_6: put_str(b, "Drive", n); return;   /* "Overdriv") */
     case VP_NAME_POS: put_str(b, "Position", n); return;
     case VP_NAME_CHAR: put_str(b, "Letter", n); return;
     case VP_NAME_CASE: put_str(b, "Case", n); return;
@@ -1784,7 +1834,7 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     }
     case VP_TRACK_VOL: put_str(b, "Volume", n); return;
     case VP_MASTER: put_str(b, "Master", n); return;
-    case VP_DJ: put_str(b, "DJ filter", n); return;
+    case VP_DJ: put_str(b, ui.mode == M_FX ? "Filt" : "DJ filter", n); return;   /* (FX: its page names it) */
     case VP_COND: put_str(b, "Condition", n); return;
     case VP_RAT_N: put_str(b, "Hits", n); return;
     case VP_RAT_RATE: put_str(b, shown_pat()->rat[ui.track][ui.step & 63u] & RAT_BOUNCE ? "Curve" : "Rate", n); return;
@@ -1828,12 +1878,14 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     }
     case VP_REPEAT: put_str(b, "Repeat", n); return;
     case VP_TAPE: put_str(b, "Tape time", n); return;
-    case VP_DJRESO: put_str(b, "DJ reso", n); return;
-    case VP_DJTYPE: put_str(b, "DJ type", n); return;
+    case VP_DJRESO: put_str(b, ui.mode == M_FX && pfs.dj_ftype == DJT_RING ? "Decay" : "Reso", n); return;
+    case VP_DJTUNE: put_str(b, "Tune", n); return;
+    case VP_DJTYPE: put_str(b, "Type", n); return;
     case VP_MVOL: put_str(b, "Volume", n); return;   /* (1.0) */
     case VP_STRETCH: put_str(b, "Stretch", n); return;
     case VP_REALIGN: put_str(b, "Realign", n); return;
     case VP_MOUT ... VP_MOUT_LAST: put_str(b, VOICE_SHORT[p - VP_MOUT], n); cat(b, " out", n); return;
+    case VP_UMIX ... VP_UMIX_LAST: put_str(b, p - VP_UMIX == 5u ? "HH" : VOICE_SHORT[p - VP_UMIX], n); cat(b, " mix", n); return;
     case VP_TD ... VP_TD_LAST: put_str(b, VOICE_SHORT[p - VP_TD], n); cat(b, " dens", n); return;
     case VP_MSEL: put_str(b, "Macro", n); return;
     case VP_MTARGET: put_str(b, "Target", n); return;
@@ -2090,6 +2142,16 @@ static int card_unit(char *b, uint32_t n, uint32_t p, uint32_t v)
             else
                 put_x(b, 100u + f * 200u / 65536u);
             return 1;
+        case FX_CHORUS:                              /* (1.0: Rate, Depth, Delay, Lo cut) */
+            if (k == 1u)
+                put_ms(b, f * 40u / 65536u);
+            else if (k == 2u)
+                put_ms(b, 50u + f * 130u / 65536u);
+            else if (k == 3u)
+                put_hz(b, n, (20u + f * 780u / 65536u) * 100u);
+            else
+                put_hz(b, n, (uint32_t)(((uint64_t)3277u * (uint32_t)exp2_q16((int32_t)((f * 7643u) >> 10)) * 100u) >> 32));
+            return 1;
         case FX_PHASER: case FX_FLANGER:
             if (k)
                 return 0;
@@ -2275,11 +2337,17 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
     }
     case VP_REALIGN: put_str(b, v ? "PATTERN" : "STOP", n); return;
     case VP_DJTYPE: {
-        static const char *const T[NDJT] = {"LXR", "ACID", "MS20"};
+        static const char *const T[NDJT] = {"LXR", "ACID", "MS20", "RING"};
         put_str(b, T[v < NDJT ? v : 0u], n);
         return;
     }
+    case VP_DJTUNE: {
+        static const char *const T[NRTUNE] = {"NOTE", "OCTAVES", "FIFTHS", "MAJOR", "MINOR", "SUS4", "MIN7", "PENTA"};
+        put_str(b, T[v < NRTUNE ? v : 0u], n);
+        return;
+    }
     case VP_MOUT ... VP_MOUT_LAST: put_str(b, v ? "ON" : "OFF", n); return;
+    case VP_UMIX ... VP_UMIX_LAST: put_str(b, v ? "OUT" : "IN", n); return;
     case VP_DENS: case VP_TD ... VP_TD_LAST: {       /* (-64..63 as -100 .. +100%) */
         int32_t d = (int32_t)v - 64, pc = d < 0 ? d * 100 / 64 : d * 100 / 63;
         if (pc > 0)
@@ -2508,6 +2576,8 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
     case VP_DJ:
         if (v == 64u)
             put_str(b, "OFF", n);
+        else if (pfs.dj_ftype == DJT_RING)          /* (1.0: RING: its root) */
+            note_name(b, ring_root(((int32_t)v - 64) * 1040));
         else {
             put_str(b, v < 64u ? "LP " : "HP ", n);
             put_int(b + 3, v < 64u ? 64 - (int32_t)v : (int32_t)v - 64);

@@ -537,16 +537,16 @@ static void phase3(void)
                 pf.dj = DJ[d];
                 pf.sweep = 0;
                 pfs.dj_reso = (uint8_t)(rz ? 127u : 0u);
-                for (k = 0; k < 400u; k++) {
+                for (k = 0; k < 400u; k++) {         /* (1.0: the impulse once Reso has glided there) */
                     for (j = 0; j < 64u; j++)
-                        ml[j] = mr[j] = (int16_t)(k == 2u && j == 0u ? 20000 : 0);
+                        ml[j] = mr[j] = (int16_t)(k == 80u && j == 0u ? 20000 : 0);
                     perf_master(ml, mr);
                     for (j = 0; j < 64u; j++)
                         outl[(k % 100u) * 64u + j] = ml[j];
-                    if (k == 2u && rz == 0u)
+                    if (k == 80u && rz == 0u)
                         ok &= pf.dj_f[0].q == 39322;
-                    if (k == 9u)
-                        ring[rz] = rms(outl + 3u * 64u, 6u * 64u);
+                    if (k == 87u)
+                        ring[rz] = rms(outl + 81u * 64u, 6u * 64u);
                 }
                 tail[rz] = rms(outl + 99u * 64u, 64u);
             }
@@ -563,6 +563,7 @@ static void phase3(void)
         double fr, nf;
         eng_reset(0);
         kit_init_par();
+        par_set(PAR_FX_DELAY_TYPE, DELAY_NORMAL);    /* (1.0: the init kit's MODE is OFF) */
         par_set(PAR_DLY_LEVEL, 76);                  /* (1.0: the always-on delay) */
         par_set(PAR_FX_SEND1, 127);
         run_ms(50);
@@ -2938,7 +2939,7 @@ static void phase13_control_all(void)
     check(ui.mode == M_SOUND && ui.sect == S_FILTER, "SCL: the filter page");
     /* the filter on every voice, by the knob's steps from each one's own value, clamped */
     hold(B_OCTUP);
-    turn(EN_K1, 5);
+    turn(EN_K2, 5);                            /* (1.0: FILTER's knobs Type, Freq, Reso, Drive) */
     for (v = 0, ok = 1; v < NVOICE; v++)
         ok &= par[PAR_FILTER_FREQ_1 + v] == (v == 4u ? 127u : 25u + 15u * v);
     check(ok, "CONTROL ALL: every voice's filter +5 from its own value, the cymbal's clamped at 127");
@@ -2951,7 +2952,7 @@ static void phase13_control_all(void)
     check(!ui.ca && ui.ca_ask && par[PAR_FILTER_FREQ_1] == 25u, "letting go of OCT+: the dialog, the changes still sounding");
     run_ms(50);
     shot("control-all-ask");
-    turn(EN_K1, 3);
+    turn(EN_K2, 3);
     black(4);
     check(par[PAR_FILTER_FREQ_1] == 25u && ui.track == 2 && ui.ca_ask, "the dialog: knobs and keys do nothing");
     press(B_OCTDN);
@@ -2962,7 +2963,7 @@ static void phase13_control_all(void)
         k0[i] = par[kit_par(i)];
     black(0);
     hold(B_OCTUP);
-    turn(EN_K1, -10);
+    turn(EN_K2, -10);
     press(B_ENV);
     check(ui.mode == M_SOUND && ui.sect == S_AEG, "ENV pages while OCT+ is held");
     turn(EN_K2, 3);
@@ -3054,7 +3055,7 @@ static void phase13_control_all(void)
     press(B_SCL);
     v = par_base(PAR_FILTER_FREQ_1 + 2);
     hold(B_OCTUP);
-    turn(EN_K1, 6);
+    turn(EN_K2, 6);
     release(B_OCTUP);
     check(morph_par[kit_idx(PAR_FILTER_FREQ_1 + 2)] == 98u && par_base(PAR_FILTER_FREQ_1 + 2) == v + 6u,
           "full morph, BOTH KITS: the target moves too, D3's filter heard 6 higher");
@@ -3065,7 +3066,7 @@ static void phase13_control_all(void)
     run_ms(20);
     v = par_base(PAR_FILTER_FREQ_1 + 2);
     hold(B_OCTUP);
-    turn(EN_K1, 4);
+    turn(EN_K2, 4);
     release(B_OCTUP);
     press(B_OCTDN);
     check(par_base(PAR_FILTER_FREQ_1 + 2) == v + 4u, "half morph, BOTH KITS: heard 4 higher");
@@ -3074,7 +3075,7 @@ static void phase13_control_all(void)
     run_ms(20);
     v = par_base(PAR_FILTER_FREQ_1 + 2);
     hold(B_OCTUP);
-    turn(EN_K1, 6);
+    turn(EN_K2, 6);
     release(B_OCTUP);
     press(B_OCTDN);
     check(morph_par[kit_idx(PAR_FILTER_FREQ_1 + 2)] == 96u && par_base(PAR_FILTER_FREQ_1 + 2) == v,
@@ -3844,7 +3845,7 @@ static void fx_fresh(uint32_t dtype)                 /* (1.0: the always-on dela
     par_set(PAR_FX_DELAY_TYPE, dtype);
     par_set(PAR_DLY_LEVEL, 127);
     par_set(PAR_FX_ROUTING, R_ST1);
-    run_ms(10);
+    run_ms(30);                                      /* (1.0: a new MODE's line cleared over ~13 ms, its input faded in) */
     memset(fxbuf, 0, sizeof fxbuf);                  /* (the line from silence) */
     memset(&tp, 0, sizeof tp);
     fx.d_lp[0] = fx.d_lp[1] = 0;
@@ -3994,8 +3995,8 @@ static void phase21(void)
     {
         uint16_t pp[4];
         page_params(pp);
-        check(pp[0] == PAR_FX_DELAY_TYPE && pp[1] == PAR_DSYNC && pp[2] == PAR_ECHOREV && pp[3] == PAR_DLY_BAND,
-              "FX: DELAY: MODE, SYNC, ECHO > REVERB, BAND");
+        check(pp[0] == PAR_DLY_TONE && pp[1] == PAR_ECHOREV && pp[2] == PAR_DLY_FB && pp[3] == PAR_DLY_BAND,
+              "FX: DELAY page 2: TONE, ECHO > REVERB, FEEDBACK, BAND");
     }
     shot("fx-delay-send");
     par_set(PAR_FX_DELAY_TYPE, DELAY_NORMAL);
@@ -4120,6 +4121,33 @@ static void phase_016t2(void)                        /* 0.16-test2: FX's page or
     ui.force = 1;
     run_ms(100);
     shot("fx-order-delay");
+    {   /* 1.0: the delay's MODE knob (page 1, KNOB 1): OFF first, then MONO .. TAPE PP; the init kit's OFF */
+        static const uint8_t M[] = {DELAY_OFF, DELAY_NORMAL, DELAY_PINGPONG, DELAY_TAPE, DELAY_TAPEPP};
+        uint16_t pp[4];
+        uint8_t ik[KIT_LEN];
+        page_params(pp);
+        check(pp[0] == PAR_FX_DELAY_TYPE && pp[1] == PAR_DSYNC && pp[2] == PAR_DLY_TIME && pp[3] == PAR_DLY_LEVEL,
+              "FX: DELAY page 1: MODE, SYNC, TIME, LEVEL");
+        par_set(PAR_FX_DELAY_TYPE, DELAY_TAPEPP);
+        turn(EN_K1, -10);
+        ok = par[PAR_FX_DELAY_TYPE] == DELAY_OFF;
+        for (i = 1; i < sizeof M; i++) {
+            turn(EN_K1, 1);
+            ok &= par[PAR_FX_DELAY_TYPE] == M[i];
+        }
+        turn(EN_K1, 1);
+        ok &= par[PAR_FX_DELAY_TYPE] == DELAY_TAPEPP;
+        check(ok, "FX: DELAY MODE turns OFF, MONO, PING PONG, TAPE, TAPE PP");
+        kit_init_values(ik);
+        check(ik[kit_idx(PAR_FX_DELAY_TYPE)] == DELAY_OFF, "FX: the init kit's delay MODE is OFF");
+        par_set(PAR_FX_DELAY_TYPE, DELAY_OFF);
+        par_set(PAR_DLY_LEVEL, 100);
+        ui.force = 1;
+        run_ms(100);
+        check(!dly_active() || !fx.dl_e, "FX: DELAY MODE OFF: silent");
+        shot("fx-delay-off");
+        par_set(PAR_DLY_LEVEL, 0);
+    }
     par_set(PAR_FX_TYPE, FX_OFF);
     par_set(PAR_FX_DELAY_TYPE, DELAY_NORMAL);
     for (k = 0; k < NPALETTES && strcmp(UI_PALETTES[k].name, "HYRULE"); k++)
@@ -4273,12 +4301,12 @@ static void phase_016t3(void)
     fx_goto(FXPG_DLY);
     for (ok = 1, i = 0; i < NSYNCV - 1u; i++) {
         uint32_t a = (par[PAR_DLY_TIME] * 65536u / 127u * NSYNCV) >> 16, b;
-        turn(EN_K1, 1);
+        turn(EN_K3, 1);                              /* (1.0: TIME the delay page's third knob) */
         b = (par[PAR_DLY_TIME] * 65536u / 127u * NSYNCV) >> 16;
         ok &= b == a + 1u;
     }
     check(ok, "SYNC: TIME a note value a detent, up to 1/2");
-    turn(EN_K1, -3);
+    turn(EN_K3, -3);
     check(((par[PAR_DLY_TIME] * 65536u / 127u * NSYNCV) >> 16) == NSYNCV - 4u, "SYNC: .. and back down");
     par_set(PAR_DSYNC, 0);
     par_set(PAR_FX_TYPE, FX_OFF);
@@ -4510,30 +4538,30 @@ static void phase31(void)
     page_params(pp);
     vp_set(PAR_MORPH, 255);
     run_ms(20);
-    morph_par[kit_idx(pp[0])] = 40;
-    par_set(pp[0], 60);
+    morph_par[kit_idx(pp[1])] = 40;
+    par_set(pp[1], 60);
     kset.medit = 2;
-    turn(EN_K1, 5);
-    check(par[pp[0]] == 65u && morph_par[kit_idx(pp[0])] == 45u && par_base(pp[0]) == 45u,
+    turn(EN_K2, 5);
+    check(par[pp[1]] == 65u && morph_par[kit_idx(pp[1])] == 45u && par_base(pp[1]) == 45u,
           "morph at 100%: an edit moves the target too, heard (BOTH KITS)");
     kset.medit = 1;
-    turn(EN_K1, 5);
-    check(par[pp[0]] == 70u && morph_par[kit_idx(pp[0])] == 45u, "KIT ONLY: the kit alone, the LXR's way");
+    turn(EN_K2, 5);
+    check(par[pp[1]] == 70u && morph_par[kit_idx(pp[1])] == 45u, "KIT ONLY: the kit alone, the LXR's way");
     kset.medit = 0;                                  /* 1.0: SPLIT, the default: at 100% the morph kit alone */
-    check(vp_get(pp[0]) == 45u, "SPLIT at 100%: the card shows the morph kit's value");
-    turn(EN_K1, 5);
+    check(vp_get(pp[1]) == 45u, "SPLIT at 100%: the card shows the morph kit's value");
+    turn(EN_K2, 5);
     run_ms(20);
-    check(par[pp[0]] == 70u && morph_par[kit_idx(pp[0])] == 50u && par_base(pp[0]) == 50u,
+    check(par[pp[1]] == 70u && morph_par[kit_idx(pp[1])] == 50u && par_base(pp[1]) == 50u,
           "SPLIT at 100%: an edit moves the morph kit alone, heard");
     kit_save_ram(7, 1);
-    check(kit_at(7, kit_idx(pp[0])) == 50u, "SAVE MORPH at 100%: the morph kit as edited");
+    check(kit_at(7, kit_idx(pp[1])) == 50u, "SAVE MORPH at 100%: the morph kit as edited");
     vp_set(PAR_MORPH, 200);
     run_ms(20);
-    turn(EN_K1, 5);
-    check(par[pp[0]] == 75u && morph_par[kit_idx(pp[0])] == 50u && vp_get(pp[0]) == 75u,
+    turn(EN_K2, 5);
+    check(par[pp[1]] == 75u && morph_par[kit_idx(pp[1])] == 50u && vp_get(pp[1]) == 75u,
           "SPLIT below 100%: the kit alone");
     vp_set(PAR_MORPH, 0);
-    par_set(pp[0], init_kit_k(pp[0]) ? init_kit_k(pp[0]) : par[pp[0]]);
+    par_set(pp[1], init_kit_k(pp[1]) ? init_kit_k(pp[1]) : par[pp[1]]);
     run_ms(20);
     /* PERF RESET: SHIFT + HOME, from any page */
     perf_goto(0);
@@ -5513,6 +5541,19 @@ static void phase28(void)
                 break;
             }
     check(kk < 4u, "D1's FILTER page has the type");
+    {   /* 1.0: FILTER's first page Type, Freq, Reso, Drive, named so on the cards; the flash parts both known */
+        char c[4][16];
+        uint32_t q;
+        for (q = 0; q < 4u; q++)
+            card_name(c[q], sizeof c[q], sect_par(0, S_FILTER, 0, q));
+        check(sect_par(0, S_FILTER, 0, 0) == PAR_FILTER_TYPE_1 && sect_par(0, S_FILTER, 0, 1) == PAR_FILTER_FREQ_1 &&
+                  sect_par(0, S_FILTER, 0, 2) == PAR_RESO_1 && sect_par(0, S_FILTER, 0, 3) == PAR_FILTER_DRIVE_1 &&
+                  sect_par(5, S_FILTER, 0, 1) == PAR_FILTER_FREQ_6 && !strcmp(c[0], "Type") && !strcmp(c[1], "Freq") &&
+                  !strcmp(c[2], "Reso") && !strcmp(c[3], "Drive"),
+              "FILTER: Type, Freq, Reso, Drive");
+        check(FL_JEDEC_OK(0x856014u) && FL_JEDEC_OK(0xB36014u) && !FL_JEDEC_OK(0xEF4014u) && !FL_JEDEC_OK(0u),
+              "flash: the P25Q80 and the UC25HQ80 known, others not");
+    }
     if (h == 2u) {
         ui.half = 1;
         ui.force = 1;
@@ -6360,16 +6401,16 @@ static void phase30(void)
     shot("viz-gate-on");
     viz_set(S_GATE, 0, 0, 0);
     viz_page(0, S_FILTER, 0);
-    viz_set(S_FILTER, 0, 0, 70);
-    viz_set(S_FILTER, 0, 1, 110);
+    viz_set(S_FILTER, 0, 1, 70);                      /* (1.0: Type, Freq, Reso, Drive) */
+    viz_set(S_FILTER, 0, 2, 110);
     shot("viz-filter-res");
-    viz_set(S_FILTER, 0, 2, 1);
+    viz_set(S_FILTER, 0, 0, 1);
     shot("viz-filter-hp");
-    viz_set(S_FILTER, 0, 2, 12);
+    viz_set(S_FILTER, 0, 0, 12);
     shot("viz-filter-vowel");
+    viz_set(S_FILTER, 0, 0, 0);
+    viz_set(S_FILTER, 0, 1, 127);
     viz_set(S_FILTER, 0, 2, 0);
-    viz_set(S_FILTER, 0, 0, 127);
-    viz_set(S_FILTER, 0, 1, 0);
     viz_page(0, S_LFO, 0);
     viz_set(S_LFO, 0, 0, 20);
     viz_set(S_LFO, 0, 1, 100);
@@ -8299,9 +8340,45 @@ static void phase_100_4(void)
     check(pp[0] == VP_MOUT + 4u && pp[2] == VP_MOUT + 6u && pp[3] == VP_MVOL, "CONFIG: MIDI OUT, CY .. OH, Volume");
     run_ms(50);
     shot("config-midi-out-2");
+    turn(EN_SELECT, 1);                              /* (Phase 8: USB MIX, the voices in the stereo mix) */
+    page_params(pp);
+    check(ui.page == CF_UMIX && pp[0] == VP_UMIX && pp[3] == VP_UMIX + 3u, "CONFIG: USB MIX after MIDI OUT, D1 .. SN");
+    {
+        char nb[24], vb[24];
+        card_name(nb, sizeof nb, VP_UMIX);
+        card_value(vb, sizeof vb, VP_UMIX, vp_get(VP_UMIX));
+        check(!strcmp(nb, "D1 mix") && !strcmp(vb, "IN") && kset.mixout == 0u && mix_out == 0u,
+              "USB MIX: D1 mix IN, every voice in by default");
+        vp_set(VP_UMIX, 1);
+        vp_set(VP_UMIX + 5u, 1);
+        card_value(vb, sizeof vb, VP_UMIX, vp_get(VP_UMIX));
+        card_name(nb, sizeof nb, VP_UMIX + 5u);
+        check(!strcmp(vb, "OUT") && !strcmp(nb, "HH mix") && kset.mixout == 0x21u && mix_out == 0x21u,
+              "USB MIX: D1 and HH OUT (kset.mixout, voices.c mix_out)");
+        run_ms(50);
+        shot("config-usb-mix");
+        {   /* saved with the settings, read back at power-on; older settings (0 in the padding): all in */
+            elixir_settings_t k = kset;
+            st_save(OBJ_SETTINGS, &kset, sizeof kset);
+            kset.mixout = 0;
+            mix_out = 0;
+            persist_boot();
+            check(kset.mixout == 0x21u && mix_out == 0x21u, "USB MIX: kept in the settings");
+            k.mixout = 0;
+            st_save(OBJ_SETTINGS, &k, sizeof k);
+            persist_boot();
+            check(kset.mixout == 0u && mix_out == 0u, "USB MIX: settings with 0 there: every voice in");
+        }
+    }
     turn(EN_SELECT, 1);
     page_params(pp);
-    check(pp[0] == VP_LEDS, "CONFIG: DEVICE after MIDI OUT");
+    check(pp[0] == VP_UMIX + 4u && pp[1] == VP_UMIX + 5u && pp[2] == VP_NONE && pp[3] == VP_NONE,
+          "CONFIG: USB MIX, CY HH");
+    run_ms(50);
+    shot("config-usb-mix-2");
+    turn(EN_SELECT, 1);
+    page_params(pp);
+    check(pp[0] == VP_LEDS, "CONFIG: DEVICE after USB MIX");
     turn(EN_SELECT, (int32_t)CF_REMOTE - (int32_t)ui.page);
     page_params(pp);
     check(pp[0] == VP_RCH, "CONFIG: REMOTE at CF_REMOTE");
@@ -8320,6 +8397,85 @@ static uint32_t p5_pos(uint32_t t)                    /* track t's steps since t
 }
 /* 1.0 Phase 6: the character filters' UI (the rest: render_test); the global filter (the DJ filter's type) */
 /* 1.0: the delay's BAND: its knob, a global LFO's destination, GLOBAL's CC 3; a morph turns it on or off halfway */
+/* 1.0 (after Phase 8): CHORUS on the FX bus, the bus COMP's gain every 8 samples, the phaser's four stages */
+static double fxb_rms(const int32_t *x, uint32_t n) { double a = 0; uint32_t i; for (i = 0; i < n; i++) a += (double)x[i] * x[i]; return sqrt(a / n); }
+static void fxb_run(uint32_t type, double hz, int32_t amp, uint32_t blocks, double *rl, double *rr)
+{
+    static int32_t ol[200u * BLOCK], orr[200u * BLOCK];
+    uint32_t k, i, n = 0;
+    for (k = 0; k < blocks; k++) {
+        for (i = 0; i < BLOCK; i++, n++) {
+            fx_l[i] = fx_r[i] = (int16_t)(sin(2.0 * 3.14159265358979 * hz * n / FS) * amp);
+            mix_l[i] = mix_r[i] = 0;
+        }
+        if (type == FX_CHORUS)
+            fx_chorus();
+        else
+            fx_comp();
+        fx.dw_last = fx.dw;
+        if (k >= blocks - 100u) {
+            memcpy(ol + (k - (blocks - 100u)) * BLOCK, mix_l, sizeof mix_l);
+            memcpy(orr + (k - (blocks - 100u)) * BLOCK, mix_r, sizeof mix_r);
+        }
+    }
+    *rl = fxb_rms(ol, 100u * BLOCK);
+    *rr = fxb_rms(orr, 100u * BLOCK);
+}
+static void phase_100_fx2(void)
+{
+    double a, b, c, d;
+    int ok;
+    printf("1.0: CHORUS, the cheaper COMP\n");
+    eng_reset(0);
+    fx.route = R_ST1;
+    fx.dw = fx.dw_last = 32768;                      /* (all wet: what the effect adds) */
+    fx.type = fx.last_type = FX_CHORUS;
+    fx.p[0] = 30000;
+    fx.p[1] = 50000;
+    fx.p[2] = 20000;
+    fx.p[3] = 0;                                     /* LO CUT 20 Hz */
+    fxb_run(FX_CHORUS, 50.0, 12000, 150, &a, &b);
+    fx.p[3] = 65536;                                 /* .. 800 Hz */
+    fxb_run(FX_CHORUS, 50.0, 12000, 150, &c, &d);
+    printf("  CHORUS on 50 Hz: wet %.0f at LO CUT 20 Hz, %.0f at 800 Hz\n", a, c);
+    check(a > 5000.0 && c < a * 0.15, "CHORUS: LO CUT keeps the kick's lows out of the voices");
+    fx.p[3] = 0;
+    {                                                /* (wide: the sides' taps a quarter turn apart) */
+        static int32_t l2[100u * BLOCK];
+        uint32_t k, i, n = 0;
+        double dsum = 0;
+        for (k = 0; k < 100u; k++) {
+            for (i = 0; i < BLOCK; i++, n++) {
+                fx_l[i] = fx_r[i] = (int16_t)(sin(2.0 * 3.14159265358979 * 1500.0 * n / FS) * 12000);
+                mix_l[i] = mix_r[i] = 0;
+            }
+            fx_chorus();
+            for (i = 0; i < BLOCK; i++)
+                l2[k * BLOCK + i] = mix_l[i] - mix_r[i];
+        }
+        dsum = fxb_rms(l2 + 20u * BLOCK, 80u * BLOCK);
+        check(dsum > 1000.0, "CHORUS: the sides differ (stereo)");
+    }
+    /* COMP: a loud tone held down, the gain without steps */
+    fx.type = fx.last_type = FX_COMP;
+    par_set(PAR_FX_TYPE, FX_COMP);
+    par_set(PAR_FX_RATIO, 5);
+    par_set(PAR_FX_P1, 10);
+    par_set(PAR_FX_P2, 30);
+    par_set(PAR_FX_P3, 40);                          /* (threshold ~ -66 dB) */
+    par_set(PAR_FX_P4, 0);
+    snd_service();
+    fx.c_g = fx.c_gain;
+    fx.dw = fx.dw_last = 32768;
+    fxb_run(FX_COMP, 200.0, 20000, 150, &a, &b);
+    printf("  COMP on a loud tone: %.0f of %.0f\n", a, 20000.0 / sqrt(2.0));
+    ok = a < 20000.0 / sqrt(2.0) * 0.5;
+    check(ok, "COMP (every 8 samples): still compresses");
+    check(NFX == 8u && FX_CHORUS == 7u && !strcmp(L_FX[FX_CHORUS], "CHORUS"), "FX: CHORUS the eighth type (kits' 0..6 as they were)");
+    fx.type = fx.last_type = FX_OFF;
+    eng_reset(0);
+}
+
 static void phase_100_6b(void)
 {
     uint32_t i, ok;
@@ -8367,30 +8523,69 @@ static void phase_100_6(void)
     fx_goto(FXPG_DJ);
     run_ms(40);
     page_params(pp);
-    check(fx_page() == FXPG_DJ && pp[0] == VP_DJ && pp[1] == VP_DJRESO && pp[2] == VP_DJTYPE, "FX: DJ FILTER: the knob, Reso, Type");
-    turn(EN_K3, 1);
+    check(fx_page() == FXPG_DJ && pp[0] == VP_DJTYPE && pp[1] == VP_DJ && pp[2] == VP_DJRESO, "FX: DJ FILTER: Type, the knob, Reso");
+    turn(EN_K1, 1);
     check(pfs.dj_ftype == DJT_ACID, "Type: ACID");
     vp_set(VP_DJRESO, 110);
     pf.dj = 20;                                      /* (left: the low-pass) */
     for (i = 0; i < BLOCK; i++)
         l[i] = r[i] = (int16_t)(i & 8u ? 9000 : -9000);
-    perf_master(l, r);
+    for (i = 0; i < 100u; i++)                       /* (1.0: Reso glides, ~10 ms) */
+        perf_master(l, r);
     check(pf.dj_f[0].was == F_ACID && pf.dj_f[1].was == F_ACID && pf.dj_f[0].rk == 110 * 516, "the master through ACID, at its Reso");
     run_ms(40);
     shot("fx-dj-acid");
-    turn(EN_K3, 1);
+    turn(EN_K1, 1);
     pf.dj = 110;                                     /* (right: MS20's high-pass) */
     perf_master(l, r);
     check(pfs.dj_ftype == DJT_MS20 && pf.dj_f[0].was == F_MS20H, "MS20: its high-pass right of the middle");
     run_ms(40);
     shot("fx-dj-ms20");
-    turn(EN_K3, 5);
-    check(pfs.dj_ftype == DJT_MS20, "Type: MS20 the last");
+    page_params(pp);
+    check(pp[3] == VP_NONE, "Tune: not for MS20");
+    turn(EN_K1, 5);
+    page_params(pp);
+    check(pfs.dj_ftype == DJT_RING && pp[3] == VP_DJTUNE, "Type: RING the last, with Tune");
+    {                                                /* 1.0: RING: the chord's notes ring, the others don't */
+        char nm[16];
+        uint32_t k, j, root;
+        static int16_t y[200u * BLOCK];
+        static float yf[200u * BLOCK];
+        double g0, g7, g4, gx, g1;
+        vp_set(VP_DJTUNE, RC_MAJ);
+        vp_set(VP_DJRESO, 100);
+        pf.dj = 100;
+        root = ring_root((100 - 64) * 1040);
+        card_name(nm, sizeof nm, VP_DJRESO);
+        check(!strcmp(nm, "Decay"), "RING: Reso is Decay");
+        card_value(nm, sizeof nm, VP_DJ, 100);
+        check(root == 69u && !strcmp(nm, "A4"), "RING: the knob's root, by name");
+        for (k = 0; k < 200u; k++) {
+            for (j = 0; j < BLOCK; j++)
+                l[j] = r[j] = (int16_t)(k == 100u && j == 0u ? 30000 : 0);   /* (after the Decay's glide) */
+            perf_master(l, r);
+            for (j = 0; j < BLOCK; j++)
+                y[k * BLOCK + j] = (int16_t)((l[j] + r[j]) >> 1);
+        }
+        for (k = 0; k < 90u * BLOCK; k++)
+            yf[k] = y[101u * BLOCK + k];
+#define NOTE_HZ(n) (440.0 * pow(2.0, ((double)(n) - 69.0) / 12.0))
+        g0 = goertzel(yf, 90u * BLOCK, NOTE_HZ(root));
+        g4 = goertzel(yf, 90u * BLOCK, NOTE_HZ(root + 4u));
+        g7 = goertzel(yf, 90u * BLOCK, NOTE_HZ(root + 7u));
+        g1 = goertzel(yf, 90u * BLOCK, NOTE_HZ(root + 1u));
+        gx = goertzel(yf, 90u * BLOCK, NOTE_HZ(root + 10u));
+        printf("  RING MAJOR on A4: root %.2f, 3rd %.2f, 5th %.2f; b9 %.2f, b7 %.2f\n", g0, g4, g7, g1, gx);
+        check(g0 > 3.0 * g1 && g4 > 3.0 * g1 && g7 > 3.0 * gx && g0 > 3.0 * gx, "RING: the chord rings, not the notes beside it");
+        shot("fx-dj-ring");
+    }
     {                                                /* (the project keeps it) */
         int rc = proj_save(2, "DJTYPE  ");
         pfs.dj_ftype = DJT_LXR;
+        pfs.dj_tune = RC_NOTE;
         rc |= proj_load(2);
-        check(rc == 0 && pfs.dj_ftype == DJT_MS20 && pfs.dj_reso == 110, "a project keeps the DJ filter's type");
+        check(rc == 0 && pfs.dj_ftype == DJT_RING && pfs.dj_reso == 100 && pfs.dj_tune == RC_MAJ,
+              "a project keeps the DJ filter's type and RING's chord");
     }
     pf.dj = 64;
     pfs.dj_ftype = DJT_LXR;
@@ -9126,6 +9321,7 @@ int main(int argc, char **argv)
     phase_100_4();
     phase_100_5();
     phase_100_6();
+    phase_100_fx2();
     phase_100_6b();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;

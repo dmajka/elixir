@@ -1142,16 +1142,45 @@ static void viz_flt(uint32_t ty, uint32_t fv, uint32_t rs, const char *name)
 
 static void viz_filter(void)
 {
-    uint32_t ty = sv(S_FILTER, 0, 2) + 1u;
-    viz_flt(ty, sv(S_FILTER, 0, 0) * 65536u / 127u, sv(S_FILTER, 0, 1), ty - 1u < F_LAST ? L_FILTER[ty - 1u] : "");
+    uint32_t ty = sv(S_FILTER, 0, 0) + 1u;           /* (1.0: Type, Freq, Reso, Drive) */
+    viz_flt(ty, sv(S_FILTER, 0, 1) * 65536u / 127u, sv(S_FILTER, 0, 2), ty - 1u < F_LAST ? L_FILTER[ty - 1u] : "");
 }
 /* 1.0: FX's DJ FILTER page: the master's filter where the DJ knob (and what moves it) has it */
+static void viz_ring(int32_t d)                     /* 1.0: RING: its bands where they ring, the root brightest */
+{
+    static const char *const T[NRTUNE] = {"NOTE", "OCTAVES", "FIFTHS", "MAJOR", "MINOR", "SUS4", "MIN7", "PENTA"};
+    const int8_t *sh = RING_SH[pfs.dj_tune < NRTUNE ? pfs.dj_tune : 0u];
+    uint32_t root = ring_root(d), k;
+    int32_t h = 12 + (int32_t)pfs.dj_reso * (VY1 - VY0 - 16) / 127, o;
+    char b[32];
+    put_str(b, "RING ", sizeof b);
+    put_str(b + 5, T[pfs.dj_tune < NRTUNE ? pfs.dj_tune : 0u], sizeof b - 5u);
+    put_str(b + str_len(b), " ", sizeof b - str_len(b));
+    if (d)
+        note_name(b + str_len(b), root);
+    else
+        put_str(b + str_len(b), "OFF", sizeof b - str_len(b));
+    vz_panel(b);
+    for (o = 1; o < 10; o++)                         /* (the octaves over 20 Hz, as the filters' curve) */
+        cv_rect(VX0 + o * VN / 10, VY0, 1, VY1 - VY0, ux_mix(vz_bg(), T_TEXT, 6));
+    for (k = 0; k < NRB && sh[k] >= 0; k++) {
+        int32_t n = (int32_t)root + sh[k], lo = (n - 69) * 65536 / 12 + 292253, x;   /* (octaves over 20 Hz) */
+        if (n > 113)                                 /* (perform.c ring_block leaves them out, ~5.9 kHz) */
+            break;
+        x = VX0 + (int32_t)((int64_t)lo * VN / (10 * 65536));
+        cv_rect(x - 1, VY1 - h, 3, h, !d ? vz_faint() : k ? ux_mix(vz_bg(), T_THEME, 60) : T_ACCENT);
+    }
+}
 static void viz_djf(void)
 {
-    static const char *const T[NDJT] = {"LXR", "ACID", "MS20"};
+    static const char *const T[NDJT] = {"LXR", "ACID", "MS20", "RING"};
     int32_t d = pf.dj_d;
     uint32_t ty = dj_kind(d), rs = pfs.dj_reso;
     char b[24];
+    if (pfs.dj_ftype == DJT_RING) {
+        viz_ring(d);
+        return;
+    }
     put_str(b, T[pfs.dj_ftype < NDJT ? pfs.dj_ftype : 0u], sizeof b);
     put_str(b + str_len(b), !d ? " OFF" : d < 0 ? " LP" : " HP", sizeof b - str_len(b));
     if (!flt_char(ty)) {                             /* (the LXR's: its damping from Reso, perform.c, as a knob's) */
@@ -1907,14 +1936,18 @@ static void viz_echoes(int dub, int send)
     uint32_t h = 0x9E3779B9u;
     static const char *const NM[NDELAY] = {"MONO DELAY", "PING PONG", "TAPE DELAY", "TAPE PING PONG"};
     char b[24];
-    vz_panel(dub ? "DELAY: TAPE" : send ? "DELAY: ECHOES INTO THE REVERB" : par[PAR_DLY_LEVEL] ? "" : "DELAY: OFF (LEVEL 0)");
-    if (!dub && !send) {                             /* (its type spelled out, big; SYNC's division beside it) */
+    vz_panel(dub ? "DELAY: TAPE" : !send ? "" : par[PAR_FX_DELAY_TYPE] == DELAY_OFF ? "DELAY: OFF"
+             : par[PAR_DLY_LEVEL] ? "DELAY: ECHOES INTO THE REVERB" : "DELAY: OFF (LEVEL 0)");
+    if (!dub && !send) {                             /* (its type spelled out, big; SYNC's division beside it, or why
+                                                      * it is silent) */
         b[0] = 0;
-        if (fx.d_sync) {
+        if (par[PAR_FX_DELAY_TYPE] != DELAY_OFF && !par[PAR_DLY_LEVEL])
+            put_str(b, "LEVEL 0: SILENT", sizeof b);
+        else if (fx.d_sync) {
             put_str(b, "SYNC ", sizeof b);
             card_value(b + str_len(b), sizeof b - str_len(b), PAR_DLY_TIME, par[PAR_DLY_TIME]);
         }
-        cv_text(VX0, VZ_Y + 3, &AF_M, NM[ty], T_THEME);
+        cv_text(VX0, VZ_Y + 3, &AF_M, par[PAR_FX_DELAY_TYPE] == DELAY_OFF ? "DELAY OFF" : NM[ty], T_THEME);
         if (b[0])
             cv_text_r(VX1, VZ_Y + 6, &AF_S, b, T_MID, vz_bg());
     }
@@ -2041,6 +2074,23 @@ static void viz_fxbus(void)
             else
                 for (i = 0; i < VN; i++)
                     cv_pset(VX0 + (int32_t)i, vz_y[i] >> 4, ux_mix(vz_bg(), T_THEME, 45 - (int32_t)k * 15));
+        }
+        break;
+    }
+    case FX_CHORUS: {                                /* (1.0: the voices drifting about the dry, their lows cut) */
+        uint32_t k;
+        vz_panel("CHORUS: VOICES DRIFTING");
+        vz_hguide(VMID, vz_faint());
+        for (k = 0; k < 3u; k++) {
+            for (i = 0; i < VN; i++) {
+                uint32_t ph = i * (0xFFFFFFFFu / VN) * 3u + k * (40u + par[PAR_FX_P2]) * 0x00800000u;
+                vz_y[i] = vz_yq15(vz_sin(ph), VMID, 26);
+            }
+            if (k == 0u)
+                vz_trace(VX0, VN, VMID, T_THEME, vz_bg());
+            else
+                for (i = 0; i < VN; i++)
+                    cv_pset(VX0 + (int32_t)i, vz_y[i] >> 4, ux_mix(vz_bg(), T_THEME, 50 - (int32_t)k * 15));
         }
         break;
     }

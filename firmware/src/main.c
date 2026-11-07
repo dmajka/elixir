@@ -29,11 +29,21 @@ void fm1_timer5_irq(void)
     if (++sub == 10u)
         sub = 0;
     if (in_audio) {                             /* nested in the audio ISR: the scan only (main.c of Felucca) */
+#if UAC_STEMS
+        uac_service();                          /* 1.0: and the USB audio's packets, every tick: 8 channels take ~0.5 ms
+                                                 * on the bus, and at 2 kHz the next was often queued after the next
+                                                 * frame's IN (FNTSMG-1's and fm1-base's finding). It touches only EP4
+                                                 * and the ring's read side; usb_poll never runs nested */
+#endif
         t5_nested_ticks += fm1_ticks() - t0;
         return;
     }
     if (owed & 1u)
-        usb_poll();
+        usb_poll();                             /* (it services the stream too) */
+#if UAC_STEMS
+    else
+        uac_service();
+#endif
     if (owed & 2u)
         uart_midi_poll();
     owed = 0;

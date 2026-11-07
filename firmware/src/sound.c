@@ -632,16 +632,16 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
         fx.ring_wave = (uint8_t)itg;
         break;
     case PAR_FX_DELAY_TYPE:
-        if (fx.delay_type != itg) {
-            fx.delay_type = (uint8_t)(itg < NDELAY ? itg : DELAY_NORMAL);
-            memset(fxbuf, 0, sizeof fxbuf);          /* (21: the line at another rate: from silence; 1.0: any mode:
-                                                      * a mono line read as ping-pong's two halves smeared) */
-            memset(&tp, 0, sizeof tp);
-            fx.d_write &= delay_mask();              /* (1.0: MONO -> PING PONG: the heads inside the half line; */
-            fx.d_old &= delay_mask();                /* .. they wrote past it for a block) */
-            fx.d_new &= delay_mask();
-            delay_set_time(fx.d_time);
+        fx.d_off = (uint8_t)(itg == DELAY_OFF);      /* (1.0: OFF fades out, fxbus_process; the mode stays) */
+        if (fx.d_off) {
+            fx.dt_next = 0xFFu;
+            break;
         }
+        i = itg < NDELAY ? itg : DELAY_NORMAL;
+        if (dly_active() && fx.dl_e)                 /* (1.0: echoes sounding: they fade out first, fxbus_process) */
+            fx.dt_next = (uint8_t)(i != fx.delay_type || fx.dt_next != 0xFFu ? i : 0xFFu);
+        else
+            delay_type_now(i);
         break;
     case PAR_DSYNC:
         fx.d_sync = (uint8_t)(itg != 0u);

@@ -71,7 +71,9 @@ static struct {
     int32_t sweep;                                   /* the sweeps: -65536 (low-pass end) .. 65536 (high-pass) */
     int32_t dj_d;                                    /* the filter's position in use, -65536 .. 65536 */
     uint8_t dj_type;                                 /* the type the filter ran last (a change: its state reset) */
+    int32_t dj_rs;                                   /* 1.0: Reso as the filter has it, Q8 (glides to the knob's) */
     svf_t dj_f[2];
+    int32_t rg_s[8][2];                              /* 1.0: RING's bands (lp, bp; Q4 samples) */
     /* 0.6: PERFORM 2's states: CUTS (samples to the next 32nd, the gate, its gain Q15); PUMP (D1's hits seen, the
      * envelope Q15, rising); COMB (its write index, the loop's low-pass); CRUSH (the held sample, samples to the
      * next); REVERSE (the recorder's write index, half a sample; the part playing: its end, length, position in
@@ -116,14 +118,35 @@ static struct {
     uint8_t dvary;                                   /* 31: DENSITY's VARY, 0..127 (KSC1) */
     uint8_t dj_reso;                                 /* 0.24.3: the DJ filter's resonance, 0..127 (0: 0.6's) (KSC1) */
     uint8_t dj_ftype;                                /* 1.0: the DJ filter's type, DJT_* (KSC1) */
+    uint8_t dj_tune;                                 /* 1.0: RING's chord, RC_* (KSC1) */
 } pfs;
 /* 1.0: the DJ filter's type, the global character filter: the LXR's SVF (LP, HP), ACID (its LP; the LXR's HP) or MS20
  * (its LP, HP) */
-enum { DJT_LXR, DJT_ACID, DJT_MS20, NDJT };
+enum { DJT_LXR, DJT_ACID, DJT_MS20, DJT_RING, NDJT };
+/* 1.0: RING, a tuned resonator (after the Torso S-4's RING, as Rings' strings are): NRB band-passes at a chord over a
+ * root the DJ knob sweeps in semitones (C1 at the left end, C3 in the middle, C6 at the right: darker one way,
+ * brighter the other), Reso their ring time (T60 0.08 .. 2.6 s), TUNE the chord. On the mix summed to mono, the bands
+ * panned alternately left and right (the root in the middle); half the dry under it, so the drums keep their hit */
+#define NRB 8u
+enum { RC_NOTE, RC_OCT, RC_FIFTH, RC_MAJ, RC_MIN, RC_SUS4, RC_MIN7, RC_PENTA, NRTUNE };
+static const int8_t RING_SH[NRTUNE][NRB] = {
+    {0, 12, 19, 24, 28, 31, 34, 36},                 /* NOTE: the harmonics 1..8 (a string, tempered) */
+    {0, 12, 24, 36, -1, -1, -1, -1},                 /* OCTAVES */
+    {0, 7, 12, 19, 24, 31, 36, -1},                  /* FIFTHS */
+    {0, 4, 7, 12, 16, 19, 24, 28},                   /* MAJOR */
+    {0, 3, 7, 12, 15, 19, 24, 27},                   /* MINOR */
+    {0, 5, 7, 12, 17, 19, 24, -1},                   /* SUS4 */
+    {0, 3, 7, 10, 12, 15, 19, 22},                   /* MIN7 */
+    {0, 3, 5, 7, 10, 12, 15, 17}};                   /* PENTA (minor) */
+static uint32_t ring_root(int32_t d)                 /* the root at the DJ filter's position d, a MIDI note */
+{
+    int32_t q = 48 * 65536 + d * (d < 0 ? 24 : 36);
+    return (uint32_t)(q + 32768) >> 16;
+}
 static uint32_t dj_kind(int32_t d)                   /* the filter type at the DJ filter's position d (0: none) */
 {
-    static const uint8_t T[NDJT][2] = {{F_LP, F_HP}, {F_ACID, F_HP}, {F_MS20L, F_MS20H}};
-    return d ? T[pfs.dj_ftype < NDJT ? pfs.dj_ftype : 0u][d > 0] : 0u;
+    static const uint8_t T[DJT_RING][2] = {{F_LP, F_HP}, {F_ACID, F_HP}, {F_MS20L, F_MS20H}};
+    return d ? T[pfs.dj_ftype < DJT_RING ? pfs.dj_ftype : 0u][d > 0] : 0u;
 }
 static uint32_t dj_fval(int32_t d)                   /* .. its cutoff, Q16 (from the top, down to the left; up to the right) */
 {
@@ -185,6 +208,7 @@ static void perf_defaults(void)
     memset(&pfs, 0, sizeof pfs);
     pfs.repeat = 2;                                  /* 1/16 */
     pfs.tape = 64;                                   /* ~0.9 s */
+    pfs.dj_tune = RC_MAJ;                            /* (1.0: RING: a major chord) */
     pfs.drill = 80;
     pfs.jitter = 64;
     pfs.cuts = 50;
@@ -553,6 +577,57 @@ static void stutter(int16_t *l, int16_t *r)
     }
 }
 
+#define RG_LIM (1 << 26)
+#define RG_GAIN 45875                                /* (the bands' input, x their damping^0.4: 0.7) */
+static void ring_block(int16_t *l, int16_t *r, int32_t d, int32_t w)
+{
+    int32_t c[NRB], q[NRB], g[NRB], ts;
+    uint8_t pan[NRB];
+    uint32_t root = ring_root(d), nb = 0, k, i;
+    const int8_t *sh = RING_SH[pfs.dj_tune < NRTUNE ? pfs.dj_tune : 0u];
+    ts = (int32_t)(((int64_t)3528 * exp2_q16((int32_t)((int64_t)pf.dj_rs * 5 * 65536 / 32512))) >> 16);   /* T60 */
+    for (k = 0; k < NRB && sh[k] >= 0; k++) {
+        int32_t n = (int32_t)root + sh[k], wq, cq;
+        uint32_t qq;
+        wq = (int32_t)(((int64_t)440 * exp2_q16((n - 69) * 65536 / 12) * 411775 / FS) >> 16);   /* 2 pi f / FS */
+        if (wq > 55000)                              /* (over ~5.9 kHz: left out, Chamberlin's limit near) */
+            break;
+        cq = cham_coef(wq);
+        qq = 1852156736u / ((uint32_t)ts * ((uint32_t)cq >> 4));   /* 6.9 / (T60 c), Q16: its damping (both / 16:
+                                                      * 32 bits) */
+        q[nb] = qq > 65536u ? 65536 : qq < 33u ? 33 : (int32_t)qq;
+        c[nb] = cq;
+        g[nb] = mulq16(exp2_q16((log2_q16((uint32_t)q[nb]) - (16 << 16)) * 2 / 5), RG_GAIN);   /* (q^0.4: a
+                                                      * long ring about as loud as a short one) */
+        pan[nb] = (uint8_t)(k == 0u ? 0u : 1u + (k & 1u));   /* (0 the middle, 1 left, 2 right) */
+        nb++;
+    }
+    for (i = 0; i < BLOCK; i++) {
+        int32_t x = (l[i] + r[i]) << 3, yl = 0, yr = 0, o;   /* (the mono sum, Q4) */
+        for (k = 0; k < nb; k++) {
+            int32_t *st = pf.rg_s[k], xin = mulr16(x, g[k]), lp, bp;
+            lp = st[0] + mulr16(c[k], st[1]);
+            bp = st[1] + mulr16(c[k], xin - lp - mulr16(q[k], st[1]));
+            st[0] = clamp32(lp, -RG_LIM, RG_LIM);
+            st[1] = bp = clamp32(bp, -RG_LIM, RG_LIM);
+            if (pan[k] == 0u) {
+                yl += bp - (bp >> 2);
+                yr += bp - (bp >> 2);
+            } else if (pan[k] == 1u) {
+                yl += bp;
+                yr += bp >> 2;
+            } else {
+                yl += bp >> 2;
+                yr += bp;
+            }
+        }
+        o = (l[i] >> 1) + (int32_t)(((int64_t)fast_tanh(yl >> 3) * 24575) >> 16);   /* (0.75: room for the dry) */
+        l[i] = (int16_t)sat16(l[i] + (((o - l[i]) * w) >> 15));
+        o = (r[i] >> 1) + (int32_t)(((int64_t)fast_tanh(yr >> 3) * 24575) >> 16);
+        r[i] = (int16_t)sat16(r[i] + (((o - r[i]) * w) >> 15));
+    }
+}
+
 /* the master (engine_block): the DJ filter, the tape's fade; l, r: the block, saturated */
 static void perf_master(int16_t *l, int16_t *r)
 {
@@ -561,16 +636,30 @@ static void perf_master(int16_t *l, int16_t *r)
     int16_t f[BLOCK];
     pf.dj_d = d;
     {                                                /* 0.24.3: Reso: the damping R from 0.6 (as before) to 0.03, */
-        uint32_t k = 127u - (pfs.dj_reso & 127u);    /* on a square law (most of the knob where it bites) */
-        int32_t q = 1966 + (int32_t)(37356u * k * k / 16129u);
+        int32_t t = (int32_t)(pfs.dj_reso & 127u) << 8, e = t - pf.dj_rs;   /* on a square law (most of the knob
+                                                      * where it bites). 1.0: it glides there (~10 ms): the knob's
+                                                      * steps a block at a time clicked, ACID's (its makeup) most */
+        uint32_t k, rk;
+        int32_t q;
+        pf.dj_rs = !a || (e > -8 && e < 8) ? t : pf.dj_rs + e / 8;   /* (no filter: at once) */
+        k = (127u << 8) - (uint32_t)pf.dj_rs;        /* (Q8) */
+        q = 1966 + (int32_t)((uint64_t)37356u * k * k / (16129u << 16));
+        rk = (uint32_t)pf.dj_rs * 516u >> 8;         /* (1.0: ACID's, MS20's: their own curve, 0 .. 1) */
         for (c = 0; c < 2u; c++)
-            if (pf.dj_f[c].q != q || pf.dj_f[c].rk != (int32_t)pfs.dj_reso * 516) {
+            if (pf.dj_f[c].q != q || pf.dj_f[c].rk != (int32_t)rk) {
                 pf.dj_f[c].q = q;
-                pf.dj_f[c].rk = (int32_t)pfs.dj_reso * 516;   /* (1.0: ACID's, MS20's: their own curve, 0 .. 1) */
+                pf.dj_f[c].rk = (int32_t)rk;
                 pf.dj_f[c].dirty = 1;
             }
     }
-    if (a > 0) {
+    if (a > 0 && pfs.dj_ftype == DJT_RING) {         /* 1.0: RING */
+        w = a >= 8192 ? 32768 : a * 4;
+        if (pf.dj_type != 0xFFu) {                   /* (from rest) */
+            memset(pf.rg_s, 0, sizeof pf.rg_s);
+            pf.dj_type = 0xFFu;
+        }
+        ring_block(l, r, d, w);
+    } else if (a > 0) {
         type = dj_kind(d);
         w = a >= 8192 ? 32768 : a * 4;               /* (faded in over the first eighth: no click at the middle) */
         if (type != pf.dj_type) {

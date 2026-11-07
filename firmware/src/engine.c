@@ -96,6 +96,19 @@ static void engine_block(int32_t *out)
         mr[i] = (int16_t)sat16(mix_r[i]);
     }
     perf_master(ml, mr);                            /* the DJ filter, TAPE STOP's fade */
+#if UAC_STEMS
+    {   /* 1.0: the USB audio's 1-2: the stereo mix as the FM-1's DAC takes it, before MASTER and the master volume
+         * (the stems' level: voices.c); then the block goes out with its stems */
+        int16_t *ub = uac_block();
+        if (ub) {
+            for (i = 0; i < BLOCK; i++, ub += UAC_NCH) {
+                ub[0] = ml[i];
+                ub[1] = mr[i];
+            }
+            uac_block_done();
+        }
+    }
+#endif
     {
         int32_t g = out_gain, gt = out_hush ? 0 : out_vol_q12(), pk = 0;
         for (i = 0; i < BLOCK; i++) {

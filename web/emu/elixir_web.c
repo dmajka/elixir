@@ -175,6 +175,7 @@ static void flash_unhush(void) { out_hush = 0; }
 static uint32_t irq_save(void) { return 0; }
 static void irq_restore(uint32_t f) { (void)f; }
 static uint32_t fl_jedec_ram(void) { return 0x856014u; }
+#define FL_JEDEC_OK(id) ((id) == 0x856014u || (id) == 0xB36014u)
 #define FL_FAR(fn) (fn)
 #include "../../firmware/src/storage.c"
 #include "../../firmware/src/kitlib.c"

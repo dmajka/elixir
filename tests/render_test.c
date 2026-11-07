@@ -102,6 +102,275 @@ static void render_child(uint32_t now, uint32_t lv, int16_t *dst, uint32_t frame
         memset((char *)dst + got, 0, frames * 4u - got);
 }
 
+/* 1.0 (Phase 8): the USB audio's stems. In a child process (the same state each time): recording or not, mix_out,
+ * the beat (track < 0) or one track struck; the output into dst, the ring's frames into st */
+static int16_t st_out[2][FS * 2 * 2], st_ring[3][FS * 2][UAC_NCH];
+static void stems_child(uint32_t rec, uint32_t mask, int32_t track, int16_t *dst, int16_t (*st)[UAC_NCH], uint32_t frames)
+{
+    int fd[2];
+    pid_t pid;
+    uint32_t got = 0, want = frames * 4u + frames * 2u * UAC_NCH;
+    if (pipe(fd) != 0 || (pid = fork()) < 0) {
+        perror("fork");
+        exit(1);
+    }
+    if (pid == 0) {
+        uint32_t k, n;
+        close(fd[0]);
+        host_stems_on = (uint8_t)rec;
+        host_stem_w = 0;
+        mix_out = (uint8_t)mask;
+        if (track == -1)
+            seq_start(1);
+        else if (track >= 0)
+            voice_trigger((uint32_t)track, 127, SEQ_DEFAULT_NOTE);
+        for (k = 0; k < frames; k += n) {
+            n = render(frames - k < 690u * BLOCK ? frames - k : 690u * BLOCK);
+            if (!n || write(fd[1], out, n * 4u) != (ssize_t)(n * 4u))
+                _exit(2);
+        }
+        if (!rec)
+            memset(host_stems, 0, frames * 2u * UAC_NCH);
+        if (write(fd[1], host_stems, frames * 2u * UAC_NCH) != (ssize_t)(frames * 2u * UAC_NCH))
+            _exit(2);
+        _exit(0);
+    }
+    close(fd[1]);
+    while (got < want) {
+        ssize_t r = read(fd[0], got < frames * 4u ? (char *)dst + got : (char *)st + got - frames * 4u,
+                         got < frames * 4u ? frames * 4u - got : want - got);
+        if (r <= 0)
+            break;
+        got += (uint32_t)r;
+    }
+    close(fd[0]);
+    waitpid(pid, 0, 0);
+    if (got < want) {
+        printf("FAIL: the stems' child process\n");
+        exit(1);
+    }
+}
+static int32_t st_peak(int16_t (*st)[UAC_NCH], uint32_t c, uint32_t frames)
+{
+    int32_t pk = 0;
+    uint32_t i;
+    for (i = 0; i < frames; i++)
+        pk = abs(st[i][c]) > pk ? abs(st[i][c]) : pk;
+    return pk;
+}
+static uint32_t usb_stems_test(void)
+{
+    const uint32_t frames = FS * 2u / BLOCK * BLOCK;
+    uint32_t fails = 0, c, i, t, same;
+    int32_t pk;
+    double e0 = 0, e1 = 0;
+    printf("usb stems: the beat, 2 s\n");
+    stems_child(0, 0, -1, st_out[0], st_ring[0], frames);         /* the reference: nobody records */
+    stems_child(1, 0, -1, st_out[1], st_ring[1], frames);         /* recorded, every voice in the mix */
+    if (memcmp(st_out[0], st_out[1], frames * 4u)) {
+        printf("FAIL: recording the stems changes the output\n");
+        fails++;
+    }
+    for (i = same = 0; i < frames; i++)
+        same += st_ring[1][i][0] == st_out[1][2u * i] && st_ring[1][i][1] == st_out[1][2u * i + 1u];
+    if (same != frames) {
+        printf("FAIL: USB 1-2 aren't the output (%u of %u frames the same; MASTER full, volume 127)\n", same, frames);
+        fails++;
+    }
+    for (c = 2; c < UAC_NCH; c++) {
+        pk = st_peak(st_ring[1], c, frames);
+        printf("  USB %u %s stem peak %6d\n", c + 1u, c == 7u ? "HH" : VOICE_SHORT[c - 2u], pk);
+        if (pk < 500) {
+            printf("FAIL: the %s stem is silent in the beat\n", VOICE_SHORT[c - 2u]);
+            fails++;
+        }
+    }
+    stems_child(1, 1, -1, st_out[0], st_ring[2], frames);         /* D1 out of the mix */
+    for (i = same = 0; i < frames; i++)
+        for (c = 2; c < UAC_NCH; c++)
+            same += st_ring[2][i][c] == st_ring[1][i][c];
+    if (same != frames * (UAC_NCH - 2u)) {
+        printf("FAIL: D1 OUT of the mix changes the stems (%u of %u samples the same)\n", same, frames * 6u);
+        fails++;
+    }
+    for (i = 0; i < frames; i++) {                   /* what OUT took away from 1-2 */
+        double d = (double)st_ring[1][i][0] - st_ring[2][i][0], dd = (double)st_ring[1][i][2];
+        e0 += d * d;
+        e1 += dd * dd;
+    }
+    printf("  D1 OUT: the mix lost rms %.1f (the D1 stem's rms %.1f)\n", sqrt(e0 / frames), sqrt(e1 / frames));
+    if (e0 < e1 * 0.05) {
+        printf("FAIL: D1 OUT of the mix: the mix barely changed\n");
+        fails++;
+    }
+    stems_child(1, 63, -1, st_out[0], st_ring[2], frames);        /* every voice out: the mix silent, stems as before */
+    pk = st_peak(st_ring[2], 0, frames) > st_peak(st_ring[2], 1, frames) ? st_peak(st_ring[2], 0, frames)
+                                                                          : st_peak(st_ring[2], 1, frames);
+    printf("  every voice OUT: the mix's peak %d\n", pk);
+    if (pk > 4) {
+        printf("FAIL: every voice OUT of the mix, and the mix still sounds (peak %d)\n", pk);
+        fails++;
+    }
+    for (i = same = 0; i < frames; i++)
+        for (c = 2; c < UAC_NCH; c++)
+            same += st_ring[2][i][c] == st_ring[1][i][c];
+    if (same != frames * (UAC_NCH - 2u)) {
+        printf("FAIL: every voice OUT changes the stems\n");
+        fails++;
+    }
+    stems_child(0, 63, -1, st_out[1], st_ring[2], frames);        /* not recording: OUT does nothing */
+    stems_child(0, 0, -1, st_out[0], st_ring[2], frames);
+    if (memcmp(st_out[0], st_out[1], frames * 4u)) {
+        printf("FAIL: USB MIX OUT changes the output while nobody records\n");
+        fails++;
+    }
+    stems_child(1, 0, -2, st_out[0], st_ring[1], FS / 2u / BLOCK * BLOCK);   /* none struck: the beat's tails */
+    for (t = 0; t < NTRACK; t++) {                   /* each track struck: its voice's stem alone (7: the hi-hat's) */
+        uint32_t v = t < NVOICE ? t : V_HAT, n = FS / 2u / BLOCK * BLOCK, d;
+        stems_child(1, 0, (int32_t)t, st_out[0], st_ring[2], n);
+        for (c = 2; c < UAC_NCH; c++) {
+            pk = st_peak(st_ring[2], c, n);
+            for (i = d = 0; i < n; i++)
+                d += st_ring[2][i][c] != st_ring[1][i][c];
+            if (c - 2u == v ? pk < 500 : d != 0) {
+                printf("FAIL: track %u struck: the %s stem (peak %d, %u samples changed)\n", t + 1u,
+                       c == 7u ? "HH" : VOICE_SHORT[c - 2u], pk, d);
+                fails++;
+            }
+        }
+    }
+    return fails;
+}
+
+/* 1.0 (the user's crackles): the delay's MODE changed while its echoes sound: they fade out (fxbus.c dt_next) rather than
+ * stop dead. In a child: D1 struck into the delay, then (sw) MONO -> mode at block k; the output into dst */
+static int16_t dm_out[3][1200u * BLOCK * 2u];
+static void dmode_child(uint32_t sw, uint32_t mode, uint32_t k, int16_t *dst, uint32_t frames)
+{
+    int fd[2];
+    pid_t pid;
+    uint32_t got = 0;
+    if (pipe(fd) != 0 || (pid = fork()) < 0) {
+        perror("fork");
+        exit(1);
+    }
+    if (pid == 0) {
+        uint32_t b, n = 0;
+        close(fd[0]);
+        par_set(PAR_FX_DELAY_TYPE, DELAY_NORMAL);
+        par_set(PAR_DLY_LEVEL, sw >= 4u ? 0 : 127);   /* (4: the walk's pattern dry, no delay; 5: one hit's) */
+        par_set(PAR_DLY_TIME, 50);
+        par_set(PAR_DLY_FB, 100);
+        par_set(PAR_FX_SEND1, 64);
+        if (sw >= 2u && sw <= 4u) {                  /* (the walk's D1: a slow attack, no transient: no edge of its own) */
+            par_set(PAR_VELOA1, 40);
+            par_set(PAR_TRANS1_VOL, 0);
+            par_set(PAR_VELOD1, 30);
+        }
+        render(BLOCK);
+        voice_trigger(0, 127, SEQ_DEFAULT_NOTE);
+        for (b = 0; n < frames; b++) {
+            if ((sw < 2u || sw == 5u) && b == k - 4u)              /* (struck again: a loud sound going in as the new line starts) */
+                voice_trigger(0, 127, SEQ_DEFAULT_NOTE);
+            if (sw == 1u && b == k)
+                par_set(PAR_FX_DELAY_TYPE, mode);
+            if (sw >= 2u && sw <= 4u && b % 20u == 0u)            /* (the walk: a pattern of D1, smooth enough that a click shows; 3: the mode turned slowly) */
+                voice_trigger(0, b % 40u ? 90 : 127, SEQ_DEFAULT_NOTE);
+            if (sw == 3u && b >= k && (b - k) % 60u == 0u) {
+                static const uint8_t W[] = {1, 2, 3, 2, 1, 0, DELAY_OFF, 3, 0, DELAY_OFF, 2, 0, 1, 3, 1, 0};
+                uint32_t j = (b - k) / 60u;
+                if (j < sizeof W)
+                    par_set(PAR_FX_DELAY_TYPE, W[j]);
+            }
+            n += render(BLOCK);
+            if (write(fd[1], out, BLOCK * 4u) != (ssize_t)(BLOCK * 4u))
+                _exit(2);
+        }
+        _exit(0);
+    }
+    close(fd[1]);
+    while (got < frames * 4u) {
+        ssize_t r = read(fd[0], (char *)dst + got, frames * 4u - got);
+        if (r <= 0)
+            break;
+        got += (uint32_t)r;
+    }
+    close(fd[0]);
+    waitpid(pid, 0, 0);
+}
+static uint32_t delay_mode_test(void)
+{
+    static const char *const MN[NDELAY + 1u] = {"MONO", "PING PONG", "TAPE", "TAPE PP", "OFF"};
+    const uint32_t frames = FS / BLOCK * BLOCK, k = 200;    /* (block 200: ~0.29 s, the echoes sounding) */
+    uint32_t m, i, fails = 0;
+    dmode_child(0, 0, k, dm_out[0], frames);
+    dmode_child(5, 0, k, dm_out[2], frames);         /* (the dry sound: no delay) */
+    for (m = 1; m <= DELAY_OFF; m++) {
+        int32_t step = 0, echo = 0;
+        dmode_child(1, m, k, dm_out[1], frames);
+        for (i = k * BLOCK * 2u; i < (k * BLOCK + 32u) * 2u; i++) {   /* the first 32 samples after the change */
+            int32_t d = abs(dm_out[1][i] - dm_out[0][i]);
+            step = d > step ? d : step;
+            echo = abs(dm_out[0][i]) > echo ? abs(dm_out[0][i]) : echo;
+        }
+        printf("  delay MONO -> %-9s: the first 32 samples moved %5d (the echoes' peak there %5d)\n", MN[m], step, echo);
+        if (echo < 500 || step * 4 > echo) {
+            printf("FAIL: the delay's MODE change cuts its echoes (or there were none to test)\n");
+            fails++;
+        }
+        {   /* .. no step anywhere in the next ~120 ms beyond the steepest the steady MONO output takes */
+            int32_t s0 = 0, s1 = 0;
+            for (i = k * BLOCK * 2u; i < (k + 80u) * BLOCK * 2u; i++) {
+                int32_t a = abs(dm_out[0][i] - dm_out[0][i - 2u]), b = abs(dm_out[1][i] - dm_out[1][i - 2u]);
+                s0 = a > s0 ? a : s0;
+                s1 = b > s1 ? b : s1;
+            }
+            printf("  delay MONO -> %-9s: steepest step after %5d (steady MONO %5d)\n", MN[m], s1, s0);
+            if (s1 > s0 * 2 + 200) {
+                printf("FAIL: the delay's MODE change jumps after its fade (%s)\n", MN[m]);
+                fails++;
+            }
+        }
+        if (m == DELAY_OFF) {                        /* .. OFF: only the dry sound left, ~6 ms on */
+            int32_t left = 0;
+            for (i = (k + 8u) * BLOCK * 2u; i < (k + 40u) * BLOCK * 2u; i++)
+                left = abs(dm_out[1][i] - dm_out[2][i]) > left ? abs(dm_out[1][i] - dm_out[2][i]) : left;
+            printf("  delay MONO -> OFF      : the echoes left after its fade %d\n", left);
+            if (left) {
+                printf("FAIL: the delay's MODE OFF leaves echoes\n");
+                fails++;
+            }
+        } else {   /* .. and the mode changed after the fade (the line cleared: the old echoes gone, ~6 ms on) */
+            int32_t late = 0;
+            for (i = (k + 8u) * BLOCK * 2u; i < (k + 40u) * BLOCK * 2u; i++)
+                late = abs(dm_out[1][i] - dm_out[0][i]) > late ? abs(dm_out[1][i] - dm_out[0][i]) : late;
+            if (late < 500) {
+                printf("FAIL: the delay's MODE didn't change after its fade (%s)\n", MN[m]);
+                fails++;
+            }
+        }
+    }
+    {   /* the mode turned slowly through every change while a pattern plays: no step the steady pattern doesn't take */
+        const uint32_t wf = 1200u * BLOCK;
+        int32_t s0 = 0, s1 = 0;
+        dmode_child(2, 0, k, dm_out[0], wf);
+        dmode_child(3, 0, k, dm_out[1], wf);
+        dmode_child(4, 0, k, dm_out[2], wf);
+        for (i = 2u * BLOCK * 2u; i < wf * 2u; i++) {   /* (the echoes alone: the output less the dry pattern's) */
+            int32_t a = abs(dm_out[0][i] - dm_out[2][i] - dm_out[0][i - 2u] + dm_out[2][i - 2u]);
+            int32_t b = abs(dm_out[1][i] - dm_out[2][i] - dm_out[1][i - 2u] + dm_out[2][i - 2u]);
+            s0 = a > s0 ? a : s0;
+            s1 = b > s1 ? b : s1;
+        }
+        printf("  delay modes walked under a pattern: the echoes' steepest step %5d (steady MONO %5d)\n", s1, s0);
+        if (s1 > s0 * 2 + 200) {
+            printf("FAIL: the delay's MODE changes jump under a pattern\n");
+            fails++;
+        }
+    }
+    return fails;
+}
+
 static void stats(const char *name, uint32_t frames, int32_t *peak_out, double *rms_out)
 {
     int32_t peak = 0;
@@ -210,6 +479,10 @@ static void band_run(uint32_t ty, uint32_t band, uint32_t fb, int32_t *pk, doubl
     par_set(PAR_DLY_LEVEL, 127);
     par_set(PAR_DLY_BAND, band);
     snd_service();                                   /* (the posted settings, as at a block start) */
+    delay_type_now(ty);                              /* (1.0: fx_delay alone: no fade, no clear a block, no input */
+    fx.dt_clr = 0;                                   /* .. fade-in: fxbus_process's; the mode now, at full) */
+    fx.dl_g = fx.dl_in = 32768;
+    fx.dl_e = dl_gain();
     memset(fxbuf, 0, sizeof fxbuf);
     memset(&tp, 0, sizeof tp);
     memset(fx.bd, 0, sizeof fx.bd);
@@ -297,6 +570,8 @@ int main(int argc, char **argv)
     }
     seq_stop_now();
     render(FS / 2);
+    fails += usb_stems_test();                       /* (1.0, Phase 8) */
+    fails += delay_mode_test();
     for (t = 0; t < NTRACK; t++) {                   /* each voice alone, triggered */
         voice_trigger(t, 127, SEQ_DEFAULT_NOTE);
         frames = render(FS);
@@ -937,6 +1212,7 @@ int main(int argc, char **argv)
             par_set(PAR_FX_SEND1 + v, 127);
             par_set(PAR_REV_SEND1 + v, 0);
         }
+        par_set(PAR_FX_DELAY_TYPE, DELAY_NORMAL);    /* (1.0: the init kit's MODE is OFF) */
         par_set(PAR_DLY_LEVEL, 64);                  /* (1.0: the always-on delay) */
         par_set(PAR_DLY_TIME, 100);
         par_set(PAR_DLY_FB, 90);

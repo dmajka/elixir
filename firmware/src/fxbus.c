@@ -9,7 +9,7 @@
  * the mix), with its own TIME, FEEDBACK, TONE, LEVEL and WOW (sound.c PAR_DLY_*); its LEVEL 0: off. FX_DELAY stays
  * as a number (an older kit's: kit.c dly_migrate) and plays as OFF. */
 
-enum { FX_OFF, FX_DRIVE, FX_RING, FX_COMP, FX_DELAY, FX_PHASER, FX_FLANGER, NFX };
+enum { FX_OFF, FX_DRIVE, FX_RING, FX_COMP, FX_DELAY, FX_PHASER, FX_FLANGER, FX_CHORUS, NFX };   /* (1.0: CHORUS) */
 enum { DIST_TUBE, DIST_FOLD, DIST_RAT };
 enum { DELAY_NORMAL, DELAY_PINGPONG };            /* (21: TAPE, TAPE PP after them) */
 
@@ -27,6 +27,7 @@ static struct {
     osc_t ring;
     /* compressor (log2 domain, Q16) */
     int32_t c_env, c_thr, c_atk, c_rel, c_gain, c_ratio;
+    int32_t c_g;                                     /* (1.0: the gain as the last sub-block ended, Q16) */
     /* delay */
     uint32_t d_old, d_new, d_write;
     uint32_t d_fold, d_fnew;                         /* read fractions, Q16 */
@@ -41,6 +42,7 @@ static struct {
     int32_t ph_s[2][6], ph_fb[2];                    /* the allpasses' states, the chains' last outputs */
     int32_t fl_d[2];                                 /* the flanger's delay at the block's end, samples Q16 */
     uint32_t fl_w;                                   /* .. its write index */
+    int32_t ch_d[2][2], ch_lp[2];                    /* 1.0: CHORUS: its taps' delays (Q16 samples), LO CUT's states */
     uint8_t freeze;                                  /* PERF: FREEZE (the delay loops) */
     int32_t push;                                    /* .. FB PUSH, 0 .. 65536 (0.13: the global LFOs' amount) */
     int32_t lfo_fb, lfo_time;                        /* 19c: the global LFOs on the delay's feedback and time, -65536 ..
@@ -58,7 +60,20 @@ static struct {
     uint8_t band;
     int32_t lfo_band, bd_c, bd[2][2];
     uint32_t dl_hold, dl_drain;
+    /* 1.0 (after Phase 8, the user's crackles): the echoes' gain as the last block ended (LEVEL x dl_g, Q15), ramped to
+     * this block's a sample at a time; dl_g, a mode change's fade (Q15): a new MODE waits in dt_next (0xFF none) while
+     * the echoes fade out over DT_FADE blocks, then the line is cleared silent and the mode changes (it was cut
+     * mid-echo: a click). dw_last, DRY/WET as the last block ended (drywet_i ramps it). dt_clr: the new mode's line
+     * still being cleared, DT_CLR samples a block (the blocks left: the whole 64 KB at once in the ISR could make it
+     * late); the delay waits silent meanwhile. dl_in (Q15): the line's input faded in after a MODE change or a start,
+     * so the first echo doesn't begin with the edge of a sound cut in the middle (a click a delay time later) */
+    int32_t dl_e, dl_g, dw_last, dl_in;
+    uint8_t dt_next, dt_clr;
+    uint8_t d_off;                                   /* (1.0: MODE OFF: faded out as LEVEL 0 is, the mode kept) */
 } fx;
+#define DT_FADE 4u                                   /* blocks: 5.8 ms */
+#define DT_CLR 4096u                                 /* samples a block: 8 KB */
+#define DT_NCLR (FXBUF_SIZE / DT_CLR + 1u)           /* (the line, then the pitch shifter's window) */
 #define DL_HOLD (FXBUF_SIZE / BLOCK)                 /* (~0.74 s: the line once round) */
 /* 21b: SYNC's note values (TIME's 12 steps): 1/32, 1/16T, 1/16, 1/8T, 1/16., 1/8, 1/4T, 1/8., 1/4, 1/2T, 1/4., 1/2,
  * in ticks (96 a quarter note) */
@@ -147,6 +162,8 @@ static void fxbus_init(void)                         /* FxBus_init */
     uint32_t i;
     fx.type = FX_OFF;
     fx.dw = 0;
+    fx.dl_g = 32768;
+    fx.dt_next = 0xFFu;
     fx.ring.wave = W_REC;
     fx.ring.midi_freq = 70u << 8 | 64u;
     fx.c_ratio = 65536;
@@ -159,7 +176,12 @@ static void fxbus_init(void)                         /* FxBus_init */
 }
 
 /* --------------------------------------------------------- dry / wet --- */
-static inline int32_t drywet(int32_t dry, int32_t wet) { return dry + sat16(((wet - dry) * fx.dw) >> 15); }
+/* DRY/WET at sample i of the block: from where the last block left it to fx.dw (a morph or a knob: no zipper) */
+static inline int32_t drywet_i(uint32_t i, int32_t dry, int32_t wet)
+{
+    int32_t dw = fx.dw_last + (int32_t)(((fx.dw - fx.dw_last) * (int32_t)(i + 1u)) / (int32_t)BLOCK);
+    return dry + sat16(((wet - dry) * dw) >> 15);
+}
 
 /* the bus output into the mix: stereo (St1 / St2) or one side (L1 R1 L2 R2) */
 static int fx_stereo(void) { return fx.route <= R_ST2; }
@@ -234,10 +256,10 @@ static void fx_drive(void)                           /* Distortion_process */
             int32_t l = tube((fx_l[i] * g) >> 16, &fx.lp3[0], coff, outmod, p[3]);
             if (st) {
                 int32_t r = tube((fx_r[i] * g) >> 16, &fx.lp3[1], coff, outmod, p[3]);
-                mix_l[i] += drywet(fx_l[i], l);
-                mix_r[i] += drywet(fx_r[i], r);
+                mix_l[i] += drywet_i(i, fx_l[i], l);
+                mix_r[i] += drywet_i(i, fx_r[i], r);
             } else {
-                side[i] += drywet(fx_l[i], l);
+                side[i] += drywet_i(i, fx_l[i], l);
             }
         }
     } else if (fx.dist_type == DIST_FOLD) {
@@ -251,21 +273,21 @@ static void fx_drive(void)                           /* Distortion_process */
                 fx.lp3[c] += (int32_t)(((int64_t)coff * (v - fx.lp3[c])) >> 16);
                 w = sat16((int32_t)(((int64_t)foldback(fx.lp3[c]) * p[3]) >> 17));
                 if (!st)
-                    side[i] += drywet(in, w);
+                    side[i] += drywet_i(i, in, w);
                 else if (c)
-                    mix_r[i] += drywet(in, w);
+                    mix_r[i] += drywet_i(i, in, w);
                 else
-                    mix_l[i] += drywet(in, w);
+                    mix_l[i] += drywet_i(i, in, w);
             }
         }
     } else {
         int32_t gain = 65536 + 2304 * p[0];
         for (i = 0; i < BLOCK; i++) {
             if (st) {
-                mix_l[i] += drywet(fx_l[i], rat(fx_l[i], 0, coff, gain));
-                mix_r[i] += drywet(fx_r[i], rat(fx_r[i], 1, coff, gain));
+                mix_l[i] += drywet_i(i, fx_l[i], rat(fx_l[i], 0, coff, gain));
+                mix_r[i] += drywet_i(i, fx_r[i], rat(fx_r[i], 1, coff, gain));
             } else {
-                side[i] += drywet(fx_l[i], rat(fx_l[i], 0, coff, gain));
+                side[i] += drywet_i(i, fx_l[i], rat(fx_l[i], 0, coff, gain));
             }
         }
     }
@@ -283,40 +305,55 @@ static void fx_ring(void)                            /* Ringmod_process */
     for (i = 0; i < BLOCK; i++) {
         int32_t l = (fx_l[i] * o[i]) >> 16;
         if (st) {
-            mix_l[i] += drywet(fx_l[i], l);
-            mix_r[i] += drywet(fx_r[i], (fx_r[i] * o[i]) >> 16);
+            mix_l[i] += drywet_i(i, fx_l[i], l);
+            mix_r[i] += drywet_i(i, fx_r[i], (fx_r[i] * o[i]) >> 16);
         } else {
-            side[i] += drywet(fx_l[i], l);
+            side[i] += drywet_i(i, fx_l[i], l);
         }
     }
 }
 
 /* ------------------------------------------------------ COMPRESSOR --- */
 static const int32_t RATIO_M1[6] = {0, -32768, -43691, -49152, -54613, -57344};   /* ratio - 1, Q16 */
+/* 1.0: the detector and the gain every FC_SUB samples (on the peak of each FC_SUB), the gain ramped between: the
+ * LXR's did both a sample at a time (a log2 and an exp2 each: ~11% of core 0), the master COMP's way now (~3%) */
+#define FC_SUB 8u
+static inline int32_t pow8_q16(int32_t c)            /* c^8, Q16 (the per-sample coefficient over FC_SUB samples) */
+{
+    c = mulq16(c, c);
+    c = mulq16(c, c);
+    return mulq16(c, c);
+}
 static void fx_comp(void)                            /* Compressor_process, in log2 units */
 {
-    uint32_t i;
+    uint32_t i, j;
     int st = fx_stereo();
     int32_t *side = fx_side();
     int32_t rm1 = RATIO_M1[fx.ratio < 6 ? fx.ratio : 0];
-    for (i = 0; i < BLOCK; i++) {
-        int32_t in = st ? (fx_l[i] + fx_r[i]) >> 1 : fx_l[i];
-        uint32_t a = (uint32_t)iabs(in);
-        int32_t lv = a ? log2_q16(a) - (15 << 16) : -(40 << 16);   /* log2 of |in| / 32768 */
-        int32_t over = lv - fx.c_thr, coeff, gr;
-        int64_t g;
+    for (i = 0; i < BLOCK; i += FC_SUB) {
+        uint32_t a = 0;
+        int32_t lv, over, gt, dg, g;
+        for (j = i; j < i + FC_SUB; j++) {
+            uint32_t m = (uint32_t)iabs(st ? (fx_l[j] + fx_r[j]) >> 1 : fx_l[j]);
+            a = m > a ? m : a;
+        }
+        lv = a ? log2_q16(a) - (15 << 16) : -(40 << 16);   /* log2 of |in| / 32768 */
+        over = lv - fx.c_thr;
         if (over < 0)
             over = 0;
-        coeff = over > fx.c_env ? fx.c_atk : fx.c_rel;
-        fx.c_env = over + (int32_t)(((int64_t)coeff * (fx.c_env - over)) >> 16);
-        gr = exp2_q16((int32_t)(((int64_t)fx.c_env * rm1) >> 16));
-        g = ((int64_t)gr * fx.c_gain) >> 16;         /* Q16 */
-        if (st) {
-            mix_l[i] += drywet(fx_l[i], sat16((int32_t)((fx_l[i] * g) >> 16)));
-            mix_r[i] += drywet(fx_r[i], sat16((int32_t)((fx_r[i] * g) >> 16)));
-        } else {
-            side[i] += drywet(fx_l[i], sat16((int32_t)((fx_l[i] * g) >> 16)));
+        fx.c_env = over + mulq16(pow8_q16(over > fx.c_env ? fx.c_atk : fx.c_rel), fx.c_env - over);
+        gt = mulq16(exp2_q16(mulq16(fx.c_env, rm1)), fx.c_gain);   /* Q16 */
+        dg = (gt - fx.c_g) / (int32_t)FC_SUB;
+        for (j = i, g = fx.c_g; j < i + FC_SUB; j++) {
+            g += dg;
+            if (st) {
+                mix_l[j] += drywet_i(j, fx_l[j], sat16((int32_t)(((int64_t)fx_l[j] * g) >> 16)));
+                mix_r[j] += drywet_i(j, fx_r[j], sat16((int32_t)(((int64_t)fx_r[j] * g) >> 16)));
+            } else {
+                side[j] += drywet_i(j, fx_l[j], sat16((int32_t)(((int64_t)fx_l[j] * g) >> 16)));
+            }
         }
+        fx.c_g = gt;
     }
 }
 
@@ -355,7 +392,9 @@ static inline int32_t delay_read(uint32_t base, uint32_t pos, uint32_t frac, uin
     int32_t a = fxbuf[base + pos], b = fxbuf[base + ((pos + 1u) & mask)];
     return a + (int32_t)(((int64_t)(b - a) * (int32_t)frac) >> 16);
 }
-static int dly_active(void) { return fx.dl_lvl || fx.dl_hold; }   /* (1.0: the delay runs this block) */
+static int dly_on(void) { return fx.dl_lvl && !fx.d_off; }   /* (1.0: heard: LEVEL up, MODE not OFF) */
+static int dly_active(void) { return dly_on() || fx.dl_hold; }   /* (1.0: the delay runs this block) */
+static int32_t dl_gain(void) { return (int32_t)(((int64_t)fx.dl_lvl * fx.dl_g) >> 15); }   /* (the echoes' this block) */
 static inline int32_t tone(int32_t *lp, int32_t in)  /* the feedback's one-pole (Q8 state) */
 {
     *lp += (int32_t)(((int64_t)fx.d_tone * ((in << 8) - *lp)) >> 16);
@@ -434,6 +473,8 @@ static void delay_reads(void)                        /* the block's echoes, earl
  * GLITCH: the chance a repeat is changed: STUTTER (it loops its first 1/32 or 1/64), REVERSE, SKIP (an earlier
  * slice), HALF (half speed: an octave down), faded in and out over 32 samples */
 enum { DELAY_TAPE = 2, DELAY_TAPEPP, NDELAY };
+#define DELAY_OFF NDELAY                             /* (1.0: MODE OFF, the knob's first; stored after the modes: a
+                                                      * kit's 0..3 are as they were) */
 enum { DP_OFF, DP_UP12, DP_UP7, DP_DOWN12, DP_DETUNE, NDPITCH };
 enum { GL_NONE, GL_STUTTER, GL_REVERSE, GL_SKIP, GL_HALF };
 #define TP_MIN (220u << 16)                          /* 10 ms at half rate */
@@ -458,6 +499,27 @@ static uint32_t tp_rand(void)
 }
 static int is_tape(void) { return fx.delay_type == DELAY_TAPE || fx.delay_type == DELAY_TAPEPP; }
 static uint32_t tape_max(void) { return (fx.delay_type == DELAY_TAPE ? FXBUF_SIZE : FXBUF_SIZE >> 1) - 2u * BLOCK; }
+/* a MODE now (MONO, PING PONG, TAPE, TAPE PP): the line at another layout or rate starts from silence */
+static void delay_type_now(uint32_t t)
+{
+    fx.dt_next = 0xFFu;
+    if (t == fx.delay_type)
+        return;
+    fx.delay_type = (uint8_t)t;
+    fx.dt_clr = (uint8_t)DT_NCLR;                    /* (21: the line at another rate: from silence; 1.0: any mode:
+                                                      * a mono line read as ping-pong's two halves smeared; cleared a
+                                                      * piece a block, fxbus_process) */
+    fx.dl_in = 0;
+    memset(&tp, 0, sizeof tp);
+    memset(fx.d_lp, 0, sizeof fx.d_lp);
+    memset(fx.bd, 0, sizeof fx.bd);
+    fx.d_write &= delay_mask();                      /* (1.0: MONO -> PING PONG: the heads inside the half line; */
+    fx.d_old &= delay_mask();                        /* .. they wrote past it for a block) */
+    fx.d_new &= delay_mask();
+    fx.d_interp = 0;                                 /* (a crossfade under way read the old layout) */
+    fx.d_has_pending = 0;
+    delay_set_time(fx.d_time);
+}
 static int32_t tape_target(void)                     /* P1 (and the global LFOs) as the delay, Q16 half-rate */
 {
     uint32_t t = (uint32_t)clamp32(fx.dl_t + (fx.lfo_time >> 2), 0, 65536), mx = tape_max() << 16;
@@ -526,7 +588,7 @@ static void tape_glitch(void)                        /* a repeat starts: changed
 static void band_coef(int half)                      /* the block's coefficient, at the loop's rate */
 {
     int32_t oc = (int32_t)(((uint32_t)fx.band - 1u) * 331612u / 126u) + fx.lfo_band * 2;   /* (5.06 octaves) */
-    int32_t w = (int32_t)(((int64_t)1400 * exp2_q16(clamp32(oc, -3 << 16, 7 << 16))) >> 16);   /* (2 pi 150 / FS) */
+    int32_t w = (int32_t)(((int64_t)1400 * exp2_q16(clamp32(oc, -(3 << 16), 7 << 16))) >> 16);   /* (2 pi 150 / FS) */
     fx.bd_c = cham_coef(half ? 2 * w : w);
 }
 static inline int32_t band_peak(uint32_t c, int32_t x)   /* the echo x (a sample) with BAND's peak */
@@ -545,7 +607,7 @@ static void fx_tape(void)
     int32_t *side = fx_side(), e[2], fb, g = 65536 + fx.d_sat * 3 * 516;   /* (SATURATE: 1 .. 4) */
     uint32_t gi = (uint32_t)(0xFFFFFFFFu / (uint32_t)g) + 1u;
     int32_t wowd = (int32_t)(((int64_t)fx.d_wow * (40 << 16)) >> 16), fld = (int32_t)(((int64_t)fx.d_wow * (3 << 16)) >> 16);
-    int32_t er = fx.d_echorev, rv_sum = 0, lvl = fx.dl_lvl;
+    int32_t er = (int32_t)(((int64_t)fx.d_echorev * fx.dl_g) >> 15), rv_sum = 0, lvl, e0 = fx.dl_e, e1 = dl_gain();
     fb = (int32_t)(((int64_t)fx.d_fb * 75366) >> 16);   /* (to 115%) */
     fb += (int32_t)(((int64_t)(75366 - fb) * fx.push) >> 16);
     if (fx.lfo_fb)
@@ -559,6 +621,7 @@ static void fx_tape(void)
     for (h = 0; h < BLOCK / 2u; h++) {
         int32_t d, in[2], env = 65536;
         uint32_t k;
+        lvl = e0 + (int32_t)(((e1 - e0) * (int32_t)(2u * h + 2u)) / (int32_t)BLOCK);
         tp.cur += (tp.tgt - tp.cur) >> 11;           /* (the glide: ~90 ms) */
         if (++tp.wown >= 4096u) {                    /* WOW: a new drift every ~0.19 s */
             tp.wown = 0;
@@ -633,13 +696,14 @@ static void fx_tape(void)
     }
     if (rv_sum)
         rev_fed = 1;
+    fx.dl_e = e1;
 }
 
 static void fx_delay(void)                           /* Delay_process / Delay_processPingPong */
 {
     uint32_t i, mask = delay_mask(), half = FXBUF_SIZE >> 1;
     int pp = fx.delay_type != DELAY_NORMAL, st = fx_stereo();
-    int32_t er = fx.throw_echo ? 65536 : fx.d_echorev, rv_sum = 0, lvl = fx.dl_lvl;
+    int32_t er = fx.throw_echo ? 65536 : fx.d_echorev, rv_sum = 0, lvl, e0 = fx.dl_e, e1 = dl_gain();
     if (is_tape()) {
         fx_tape();
         d_read = 0;
@@ -650,8 +714,10 @@ static void fx_delay(void)                           /* Delay_process / Delay_pr
         fb = clamp32(fb + fx.lfo_fb, 0, 65536);
     if (fx.band)
         band_coef(0);
+    er = (int32_t)(((int64_t)er * fx.dl_g) >> 15);
     for (i = 0; i < BLOCK; i++) {
         int32_t ol, orr;
+        lvl = e0 + (int32_t)(((e1 - e0) * (int32_t)(i + 1u)) / (int32_t)BLOCK);
         if (d_read) {
             ol = d_ol[i];
             orr = d_or[i];
@@ -706,6 +772,7 @@ static void fx_delay(void)                           /* Delay_process / Delay_pr
     if (rv_sum)
         rev_fed = 1;
     d_read = 0;
+    fx.dl_e = e1;
 }
 /* 21b: the tempo (seq.c, as it changes): a synced NORMAL or PINGPONG time again (crossfaded); TAPE glides there */
 static void fx_tempo(uint32_t x10)
@@ -721,7 +788,7 @@ static void fx_tempo(uint32_t x10)
 static void fxbus_early(void)
 {
     d_read = 0;
-    if (!dly_active() || is_tape())
+    if (!dly_active() || is_tape() || fx.dt_clr)
         return;
     if (fx.d_interp <= 0) {                          /* 1.0: TIME (its knob, a track LFO; 19c: the global LFOs, +-1/4
                                                       * of its range) here, once a block: each move crossfaded, the
@@ -754,7 +821,7 @@ static void fx_out(uint32_t c, uint32_t i, int32_t y)   /* a channel's sample of
     else
         mix_l[i] += y;
 }
-/* PHASER: 6 first-order allpasses a channel, their corner swept by the LFO (the right a quarter turn on) round a
+/* PHASER: 4 first-order allpasses a channel (1.0: 6 before; the classic four, two notches, a third less CPU), their corner swept by the LFO (the right a quarter turn on) round a
  * CENTRE (P4: 100 Hz .. 3.2 kHz) over DEPTH (P2: up to +-3 octaves), FEEDBACK (P3: 0 .. 0.9) from the chain's end
  * to its start. DRY/WET 50%: the dry and the shifted halves, the notches deepest */
 static void fx_phaser(void)
@@ -772,20 +839,20 @@ static void fx_phaser(void)
         const int16_t *in = c ? fx_r : fx_l;
         for (i = 0; i < BLOCK; i++) {
             int32_t x = in[i] + (int32_t)(((int64_t)fx.ph_fb[c] * fb) >> 16), y = 0;
-            for (k = 0; k < 6u; k++) {               /* y = -a x + s, s = x + a y */
+            for (k = 0; k < 4u; k++) {               /* y = -a x + s, s = x + a y */
                 y = fx.ph_s[c][k] - (int32_t)(((int64_t)a * x) >> 16);
                 fx.ph_s[c][k] = clamp32(x + (int32_t)(((int64_t)a * y) >> 16), -(1 << 20), 1 << 20);
                 x = y;
             }
             fx.ph_fb[c] = clamp32(y, -65536, 65536);
-            fx_out(c, i, drywet(in[i], sat16(y)));
+            fx_out(c, i, drywet_i(i, in[i], sat16(y)));
         }
     }
 }
 /* FLANGER: a short delay in the FX buffer (FL_LEN samples a channel), swept by the LFO between DELAY (P4: 0.2 ..
  * 10 ms) and DELAY x (1 - DEPTH) (P2), FEEDBACK (P3: -0.9 at 0, none at the middle, +0.9 at the top); the delay
  * glides across the block, read between samples */
-#define FL_LEN 512u                                  /* (1.0: its most is 10 ms, 459 samples; its own line, the delay
+#define FL_LEN 1024u                                 /* (1.0: its most is 10 ms, 459 samples; CHORUS's 20 ms; its own line, the delay
                                                       * running beside it) */
 static int16_t fl_buf[2u * FL_LEN] POOL;
 static void fx_flanger(void)
@@ -810,9 +877,49 @@ static void fx_flanger(void)
             int32_t a = b[(w - di) & (FL_LEN - 1u)], bb = b[(w - di - 1u) & (FL_LEN - 1u)];
             int32_t y = a + (int32_t)(((int64_t)(bb - a) * (int32_t)fr) >> 16);
             b[w & (FL_LEN - 1u)] = (int16_t)sat16(in[i] + (int32_t)(((int64_t)y * fb) >> 16));
-            fx_out(c, i, drywet(in[i], y));
+            fx_out(c, i, drywet_i(i, in[i], y));
         }
         fx.fl_d[c] = d1;
+    }
+    fx.fl_w += BLOCK;
+}
+
+/* 1.0: CHORUS, for drums: two taps a side between DELAY (P3: 5 .. 18 ms) and DELAY + DEPTH (P2: up to 4 ms), swept
+ * by the LFO (P1; the taps half a turn apart, the right a quarter on: wide), no feedback (no metallic ring on a
+ * snare), and LO CUT (P4: 20 Hz .. 800 Hz) on the voices it adds: the kick's low end stays as it was, in the middle */
+static void fx_chorus(void)
+{
+    uint32_t i, c, t, nc = fx_stereo() ? 2u : 1u;
+    int32_t base = (220 << 16) + fx.p[2] * 574;      /* (Q16 samples: 5 .. 18 ms; with DEPTH at most 970 of FL_LEN) */
+    int32_t dep = (int32_t)(((int64_t)fx.p[1] * 176) >> 1);   /* (half the swing, Q16 samples: up to 88 = 2 ms) */
+    int32_t k = 186 + (int32_t)(((int64_t)fx.p[3] * 7283) >> 16);   /* (LO CUT's one-pole: 2 pi f / FS, Q16) */
+    mod_lfo_step();
+    for (c = 0; c < nc; c++) {
+        const int16_t *in = c ? fx_r : fx_l;
+        int16_t *b = fl_buf + c * FL_LEN;
+        int32_t d0[2], dd[2], lp = fx.ch_lp[c];
+        for (t = 0; t < 2u; t++) {
+            int32_t d1 = base + dep + (int32_t)(((int64_t)sine_at(fx.m_ph + c * 0x40000000u + t * 0x80000000u) * dep) >> 15);
+            d0[t] = fx.ch_d[c][t] ? fx.ch_d[c][t] : d1;
+            dd[t] = (d1 - d0[t]) / (int32_t)BLOCK;
+            fx.ch_d[c][t] = d1;
+        }
+        for (i = 0; i < BLOCK; i++) {
+            uint32_t w = fx.fl_w + i;
+            int32_t y = 0, hp;
+            for (t = 0; t < 2u; t++) {
+                uint32_t di = (uint32_t)d0[t] >> 16, fr = (uint32_t)d0[t] & 0xFFFFu;
+                int32_t a = b[(w - di) & (FL_LEN - 1u)], bb = b[(w - di - 1u) & (FL_LEN - 1u)];
+                y += a + (int32_t)(((int64_t)(bb - a) * (int32_t)fr) >> 16);
+                d0[t] += dd[t];
+            }
+            y >>= 1;
+            lp += (int32_t)(((int64_t)((y << 4) - lp) * k) >> 16);   /* (Q4) */
+            hp = y - (lp >> 4);
+            b[w & (FL_LEN - 1u)] = in[i];
+            fx_out(c, i, drywet_i(i, in[i], sat16(hp)));
+        }
+        fx.ch_lp[c] = lp;
     }
     fx.fl_w += BLOCK;
 }
@@ -984,9 +1091,13 @@ static void fxbus_process(void)                      /* FxBus_process */
     uint32_t i;
     int run = dly_active(), snap = run && fx.type != FX_OFF;
     if (fx.type != fx.last_type) {                   /* (another type: its buffers and states from silence) */
-        if (fx.type == FX_FLANGER)
+        if (fx.type == FX_FLANGER || fx.type == FX_CHORUS)
             memset(fl_buf, 0, sizeof fl_buf);
+        memset(fx.ch_d, 0, sizeof fx.ch_d);
+        fx.ch_lp[0] = fx.ch_lp[1] = 0;
         memset(fx.ph_s, 0, sizeof fx.ph_s);
+        fx.c_env = 0;                                /* (COMP: from rest, at its makeup) */
+        fx.c_g = fx.c_gain;
         fx.ph_fb[0] = fx.ph_fb[1] = fx.fl_d[0] = fx.fl_d[1] = 0;
         fx.last_type = fx.type;
     }
@@ -1001,6 +1112,9 @@ static void fxbus_process(void)                      /* FxBus_process */
         break;
     case FX_FLANGER:
         fx_flanger();
+        break;
+    case FX_CHORUS:
+        fx_chorus();
         break;
     case FX_DRIVE:
         fx_drive();
@@ -1024,16 +1138,49 @@ static void fxbus_process(void)                      /* FxBus_process */
         }
         break;
     }
-    if (run) {                                       /* 1.0: the delay on what the type gave the mix (OFF: the bus) */
+    fx.dw_last = fx.dw;                              /* (the bus's DRY/WET ramp: this block's end) */
+    if (!run && fx.dt_next != 0xFFu)                 /* (the delay stopped while a MODE waited: change it now) */
+        delay_type_now(fx.dt_next);
+    if (fx.dt_clr) {                                 /* a new MODE: its line cleared a piece a block, silent */
+        uint32_t c = --fx.dt_clr;
+        if (c < FXBUF_SIZE / DT_CLR)
+            memset(&fxbuf[c * DT_CLR], 0, DT_CLR * sizeof fxbuf[0]);
+        else
+            memset(ps_buf, 0, sizeof ps_buf);
+        fx.dl_e = fx.dl_g = fx.dl_in = 0;
+        fx.dl_drain = 0;
+        d_read = 0;
+    } else if (run) {                                /* 1.0: the delay on what the type gave the mix (OFF: the bus) */
         if (snap)
             for (i = 0; i < BLOCK; i++) {
                 fx_l[i] = (int16_t)sat16(mix_l[i] - dl_snap[0][i]);
                 fx_r[i] = (int16_t)sat16(mix_r[i] - dl_snap[1][i]);
             }
+        if (fx.dl_in < 32768) {                      /* (the line's input faded in: dl_in) */
+            int32_t g0 = fx.dl_in, g1 = g0 + (int32_t)(32768u / DT_FADE);
+            g1 = g1 > 32768 ? 32768 : g1;
+            for (i = 0; i < BLOCK; i++) {
+                int32_t g = g0 + (int32_t)(((g1 - g0) * (int32_t)(i + 1u)) / (int32_t)BLOCK);
+                fx_l[i] = (int16_t)((fx_l[i] * g) >> 15);
+                fx_r[i] = (int16_t)((fx_r[i] * g) >> 15);
+            }
+            fx.dl_in = g1;
+        }
         fx_delay();
-        fx.dl_hold = fx.dl_lvl ? DL_HOLD : fx.dl_hold - 1u;
+        if (fx.dt_next != 0xFFu) {                   /* a MODE waiting: the echoes fade out, then it changes */
+            if (fx.dl_g)
+                fx.dl_g = fx.dl_g > (int32_t)(32768u / DT_FADE) ? fx.dl_g - (int32_t)(32768u / DT_FADE) : 0;
+            else if (!fx.dl_e)
+                delay_type_now(fx.dt_next);
+        } else if (fx.d_off) {                       /* (MODE OFF: out over DT_FADE blocks, LEVEL 0's way after) */
+            fx.dl_g = fx.dl_g > (int32_t)(32768u / DT_FADE) ? fx.dl_g - (int32_t)(32768u / DT_FADE) : 0;
+        } else {                                     /* (back in over DT_FADE blocks) */
+            fx.dl_g = fx.dl_g < 32768 - (int32_t)(32768u / DT_FADE) ? fx.dl_g + (int32_t)(32768u / DT_FADE) : 32768;
+        }
+        fx.dl_hold = dly_on() ? DL_HOLD : fx.dl_hold - 1u;
         fx.dl_drain = FXBUF_SIZE / BLOCK;
     } else if (fx.dl_drain) {                        /* (off: the line to silence, a block's worth a block) */
+        fx.dl_in = 0;                                /* (on again: its input faded in) */
         fx.dl_drain--;
         memset(&fxbuf[fx.dl_drain * BLOCK], 0, BLOCK * sizeof fxbuf[0]);
         if (!fx.dl_drain) {

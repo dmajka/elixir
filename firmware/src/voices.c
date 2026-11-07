@@ -857,6 +857,20 @@ static uint32_t voice_active;                       /* bit v: the voice sounded 
 static uint8_t mc_key;
 static int32_t mc_kl[BLOCK], mc_kr[BLOCK];
 static int32_t voice_peak[NVOICE];
+/* 1.0 (Phase 8): the USB audio's stems (usb.c FELUCCA_UAC_CH 8: uac_block; a host test's stand-in). Each voice's
+ * block as the mixer takes it (after its insert, cross modulation, choke and PUMP; before the pan, the sends, the
+ * bus, the reverb and the master) on USB channel 3 + v; the stereo mix on 1-2 (engine.c). mix_out (CONFIG: USB MIX,
+ * kset.mixout): bit v, voice v left out of the stereo mix, its dry sound and its sends alike, while a computer
+ * records (uac_block not NULL); its stem plays on. Without a recording every voice is in the mix */
+#ifndef UAC_STEMS
+#define UAC_STEMS 0
+#endif
+static uint8_t mix_out;
+#if UAC_STEMS
+static uint32_t stems_live(void) { return uac_recording() != 0; }   /* (CONFIG: USB MIX's line) */
+#else
+static uint32_t stems_live(void) { return 0; }
+#endif
 
 static void mix_voice(const voice_t *v, const int16_t *buf, int32_t *dl, int32_t *dr)   /* mixer_addDataToOutput, with
                                                       * the sends; the dry part into dl, dr */
@@ -987,11 +1001,13 @@ static void voices_render(uint32_t lo, uint32_t hi)
 #if FELUCCA_CPU2
 static uint32_t c1_ticks;                            /* the second core's last job, TIMER4 (written there, read after
                                                       * the wait) */
+static void reverb_process(void);
 static void c1_drums(uint32_t arg)                   /* (runs on the second core) */
 {
     uint32_t t0 = fm1_ticks();
     (void)arg;
     voices_render(V_DRUM1, V_SNARE);
+    reverb_process();                                /* (1.0: the reverb too: core 0 has the FX and the master) */
     c1_ticks = fm1_ticks() - t0;
 }
 #endif
@@ -1005,14 +1021,19 @@ static uint8_t fx_now;                               /* (host tests: the reverb 
 /* 18b: the effects' work that needs no voice of this block, on core 0 while the second core renders D1-D3: the
  * reverb on the last block's send (reverb.c), the delay's reads (fxbus.c fxbus_early). Then the sends start again
  * for the mixer. On one core, the same work in the same order, so the sound doesn't depend on the cores */
+static void fx_sends_clear(void);
 static void fx_early(void)
 {
-    uint32_t i;
 #ifdef FX_NOW
     if (!fx_now)
 #endif
         reverb_process();
     fxbus_early();
+    fx_sends_clear();
+}
+static void fx_sends_clear(void)                     /* (1.0: after the reverb has read its send, on either core) */
+{
+    uint32_t i;
     for (i = 0; i < BLOCK; i++) {
         fx_l[i] = fx_r[i] = 0;
         rev_in[i] = 0;
@@ -1036,19 +1057,22 @@ static void voices_block(void)
     voice_active = 0;
     LOAD_MARK(LD_SEQ);
 #if FELUCCA_CPU2
-    if (fm1_cpu1_run(c1_drums, 0)) {                 /* D1-D3 on the second core, SN-HH and the early effects here */
+    if (fm1_cpu1_run(c1_drums, 0)) {                 /* D1-D3 and (1.0) the reverb on the second core, SN-HH and
+                                                      * the delay's early reads here */
         voices_render(V_SNARE, NVOICE);
         LOAD_MARK(LD_SNHH);
-        fx_early();
-        LOAD_MARK(LD_REV);
+        fxbus_early();
+        LOAD_MARK(LD_FX);
         if (fm1_cpu1_wait() == 0) {
             LOAD_MARK(LD_WAIT);
             ld_acc[LD_D13] += c1_ticks;
         } else {                                     /* it misread or didn't answer: held from now on, D1-D3 here */
             LOAD_MARK(LD_WAIT);
             voices_render(V_DRUM1, V_SNARE);
+            reverb_process();
             LOAD_MARK(LD_D13);
         }
+        fx_sends_clear();                            /* (the reverb has read the last block's send: now the new) */
     } else
 #endif
 #ifdef VOICES_SWAP
@@ -1066,6 +1090,9 @@ static void voices_block(void)
         fx_early();
         LOAD_MARK(LD_REV);
     }
+#if UAC_STEMS
+    int16_t *ub = uac_block();                       /* (NULL: nobody records) */
+#endif
     for (vi = 0; vi < NVOICE; vi++) {                /* cross modulation, choke, the mixer */
         voice_t *v = &vc[vi];
         const int16_t *b = vbuf[vi];
@@ -1091,7 +1118,6 @@ static void voices_block(void)
                 buf[i] = (int16_t)((buf[i] * (g >> 6)) >> 15);
             b = buf;
         }
-        mix_voice(v, b, mc_key == vi + 1u ? mc_kl : mix_l, mc_key == vi + 1u ? mc_kr : mix_r);
         for (i = 0; i < BLOCK; i += 4) {
             int32_t a = iabs(b[i]);
             if (a > pk)
@@ -1100,6 +1126,16 @@ static void voices_block(void)
         voice_peak[vi] = pk;
         if (pk > 64)
             voice_active |= 1u << vi;
+#if UAC_STEMS
+        if (ub) {                                    /* its stem; OUT of the mix: nothing more */
+            int16_t *st = ub + 2u + vi;
+            for (i = 0; i < BLOCK; i++, st += UAC_NCH)
+                *st = b[i];
+            if ((mix_out >> vi) & 1u)
+                continue;
+        }
+#endif
+        mix_voice(v, b, mc_key == vi + 1u ? mc_kl : mix_l, mc_key == vi + 1u ? mc_kr : mix_r);
     }
     if (space_on)                                    /* SPACE: the dry sound dipped to 0.4 */
         for (i = 0; i < BLOCK; i++) {

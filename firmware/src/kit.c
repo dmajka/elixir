@@ -265,12 +265,14 @@ static void dly_migrate(uint8_t *k, uint32_t sync, uint8_t *l2t)
         k[PAR_DLY_TONE] = k[PAR_FX_P3];
         k[PAR_DLY_FB] = k[PAR_FX_P4];
         k[PAR_DLY_LEVEL] = (uint8_t)((k[PAR_FX_DRY_WET] > 100u ? 100u : k[PAR_FX_DRY_WET]) * 127u / 100u);
+        k[PAR_FX_DELAY_TYPE] = (uint8_t)ty;          /* (on: never OFF) */
         k[PAR_FX_TYPE] = FX_OFF;
     }
     if (!(k[PAR_DLY_TIME] | k[PAR_DLY_FB] | k[PAR_DLY_TONE] | k[PAR_DLY_LEVEL] | k[PAR_DLY_WOW])) {
         k[PAR_DLY_TIME] = 64;                        /* (~180 ms) */
         k[PAR_DLY_FB] = 50;
         k[PAR_DLY_TONE] = 100;
+        k[PAR_FX_DELAY_TYPE] = DELAY_OFF;            /* (1.0: MODE OFF, the user's default) */
     }
 }
 /* a kit (kit layout) as Elixir reads it: the modulation targets indexes of MOD_TARGETS (preset_readDrumsetData's

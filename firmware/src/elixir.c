@@ -11,7 +11,18 @@
 #define FELUCCA_OTA 1
 #define FELUCCA_OTA_DRYRUN 0
 #define FELUCCA_CDC 0
-#define FELUCCA_UAC 0
+/* 1.0 (Phase 8): USB audio in. ELIXIR_USB_AUDIO 8: eight channels, the stereo mix on 1-2 and the six voices' stems on
+ * 3-8 (usb.c FELUCCA_UAC_CH; voices.c, engine.c write them; CONFIG: USB MIX); 0: MIDI only, as Elixir before 1.0
+ * (the same image as without the feature: tools/usb_audio8_budget.sh) */
+#ifndef ELIXIR_USB_AUDIO
+#define ELIXIR_USB_AUDIO 8
+#endif
+#if ELIXIR_USB_AUDIO != 0 && ELIXIR_USB_AUDIO != 8
+#error "ELIXIR_USB_AUDIO is 0 (off) or 8 (the mix and six stems)"
+#endif
+#define FELUCCA_UAC (ELIXIR_USB_AUDIO != 0)
+#define FELUCCA_UAC_CH 8
+#define FELUCCA_UAC_RING_ATTR POOL       /* (the ring, 6 KB: RAM is full) */
 #define FELUCCA_UART 1
 #define FELUCCA_CPU2 1                   /* 17b: the second core, started at power-on (main.c cores_boot, audio.c) */
 #define FM1_CPU1_USED 1

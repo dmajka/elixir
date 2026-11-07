@@ -4,6 +4,9 @@
  * engine's blocks (engine.c, BLOCK each), then Q15 -> 24 bit. The load meter as Felucca's. */
 #define HALF_FRAMES 128u          /* two of the engine's blocks: 2.9 ms at 44.1 kHz */
 #define HALF_WORDS (HALF_FRAMES * 2u)
+#if FELUCCA_UAC
+_Static_assert(HALF_FRAMES == UAC_HALF, "usb.c's ring is sized for this half");
+#endif
 #define CPU_AVG 32u
 #define OUT_SHIFT 7               /* Q15 -> 24-bit, -6 dBFS ceiling (Felucca's) */
 
@@ -75,6 +78,9 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
         ld_t = t0;
         for (i = 0; i < NLD; i++)
             ld_acc[i] = 0;
+#endif
+#if UAC_STEMS
+        uac_render_start();                    /* 1.0: the USB audio's ring takes this half (engine.c, voices.c write it) */
 #endif
         for (b = 0; b < HALF_FRAMES; b += BLOCK)
             engine_block(o + 2u * b);

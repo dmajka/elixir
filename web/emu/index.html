@@ -151,7 +151,8 @@ footer small { font-size: 11px; opacity: .8; }
     <option value="bin">relative 64±n</option>
     <option value="twos">relative 2's complement</option>
     <option value="sign">relative sign bit</option>
-  </select></span>
+  </select>
+  <label title="Off by default: the emulator's clock, notes and CC feedback would reach every MIDI port, a real FM-1 too (directly or through a hub such as the mioXL)"><input type="checkbox" id="midiouton"> Send MIDI out (to every port but an FM-1's own)</label></span>
 </p>
 
 <footer>
@@ -545,12 +546,22 @@ knobSelect.addEventListener("change", () => {
 });
 document.getElementById("midiknobs").hidden = !navigator.requestMIDIAccess;
 let midiOutputs = null;
+// 1.0: MIDI out is off until asked for. On, every output gets it but a port named like an FM-1 (a unit behind a hub has the
+// hub's port names: then only this switch keeps the emulator from playing it, clock and CC feedback, and echoing it back)
+const MIDI_OUT_ON = "elixir-emu-midiout", FM1_PORT = /elixir|kettle|fm-1|felucca/i, outBox = document.getElementById("midiouton");
+let midiOutOn = false;
+try { midiOutOn = localStorage.getItem(MIDI_OUT_ON) === "1"; } catch {}
+outBox.checked = midiOutOn;
+outBox.addEventListener("change", () => {
+  midiOutOn = outBox.checked;
+  try { localStorage.setItem(MIDI_OUT_ON, midiOutOn ? "1" : "0"); } catch {}
+});
 function midiOut(pkts) {                                          // the firmware's USB-MIDI packets -> Web MIDI outputs
-  if (!midiOutputs) return;
+  if (!midiOutputs || !midiOutOn) return;
   for (const p of pkts) {
     const st = (p >>> 8) & 255, cin = p & 15, n = st >= 0xF0 ? 1 : (cin === 0xC || cin === 0xD) ? 2 : 3;
     const msg = [st, (p >>> 16) & 127, (p >>> 24) & 127].slice(0, n);
-    for (const o of midiOutputs.values()) { try { o.send(msg); } catch {} }
+    for (const o of midiOutputs.values()) { if (!FM1_PORT.test(o.name || "")) try { o.send(msg); } catch {} }
   }
 }
 async function midiOn() {
@@ -559,6 +570,7 @@ async function midiOn() {
     const access = await navigator.requestMIDIAccess();
     const bind = () => {
       for (const input of access.inputs.values()) {
+        if (FM1_PORT.test(input.name || "")) { input.onmidimessage = null; continue; }   // (a real FM-1's own: not played from)
         input.onmidimessage = (e) => {
           const d = e.data;
           if (d[0] >= 0xF8) { send({ type: "midi", data: [d[0], 0, 0] }); return; }   // clock, start, stop

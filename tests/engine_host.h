@@ -35,6 +35,22 @@ static int midi_enqueue(uint32_t pkt, uint32_t source)
     return 1;
 }
 
+/* 1.0 (Phase 8): the USB audio's ring as usb.c gives it the render (FELUCCA_UAC_CH 8: uac_block, uac_block_done),
+ * here a flat buffer of HOST_STEM_FRAMES frames the render fills while host_stems_on: the stereo mix on 0-1, the six
+ * voices' stems on 2-7 (render_test) */
+#define UAC_STEMS 1
+#define UAC_NCH 8u
+#define HOST_STEM_FRAMES 96000u
+static int16_t host_stems[HOST_STEM_FRAMES][UAC_NCH];
+static uint32_t host_stem_w;
+static uint8_t host_stems_on;
+static int16_t *uac_block(void)
+{
+    return host_stems_on && host_stem_w + BLOCK <= HOST_STEM_FRAMES ? host_stems[host_stem_w] : (int16_t *)0;
+}
+static void uac_block_done(void) { host_stem_w += BLOCK; }
+static uint32_t uac_recording(void) { return host_stems_on; }
+
 #include "../firmware/src/dsp.c"
 #include "../firmware/src/voices.c"
 #include "../firmware/src/fxbus.c"

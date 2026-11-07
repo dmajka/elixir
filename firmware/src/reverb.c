@@ -25,6 +25,7 @@ static union {                          /* ROOM's allpasses; SPRING's allpass ch
 static struct {
     uint8_t type, size, damp;            /* the parameters: the model (0 ROOM, 1 SPRING, 2 HALL, 3 PLATE), SIZE, DAMP */
     int32_t level;                       /* the return, Q15 */
+    int32_t lvl_last;                    /* (1.0) the return as the last block ended (the ramp to level) */
     uint8_t rtype;                       /* the model running */
     uint8_t idle;                        /* blocks with no send and a silent tail (it sleeps: no work) */
     uint16_t comb_i[4], ap_i[2];
@@ -538,12 +539,14 @@ static void reverb_process(void)
         rev_switch(rev_in, wet, BLOCK, rt);
     else
         rev_model(rev_in, wet, BLOCK);
-    for (i = 0; i < BLOCK; i++) {
-        int32_t w = wet[i], s = hl.side ? rev_side[i] : 0;
-        rev_wl[i] = mulq16(w + s, rv.level << 1);
-        rev_wr[i] = mulq16(w - s, rv.level << 1);
+    for (i = 0; i < BLOCK; i++) {                   /* (LEVEL ramped from the last block's: no zipper as it moves) */
+        int32_t w = wet[i], s = hl.side ? rev_side[i] : 0,
+                g = rv.lvl_last + (int32_t)(((rv.level - rv.lvl_last) * (int32_t)(i + 1u)) / (int32_t)BLOCK);
+        rev_wl[i] = mulq16(w + s, g << 1);
+        rev_wr[i] = mulq16(w - s, g << 1);
         pk |= iabs(w) | iabs(s);
     }
+    rv.lvl_last = rv.level;
     if (pk >= REV_WILD) {
         rev_clear();
         return;
