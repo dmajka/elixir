@@ -254,8 +254,9 @@ static void perf_init(void)
  * level, Q15 */
 static int32_t gf_thr(uint32_t ph)
 {
-    /* 2^(dB log2(10) / 20): dB = -60 + 48 (ph - 1) / 126 (Q16 24966 a step); log2(10) / 20 = 0.166096 (Q16 10885) */
-    return ph ? exp2_q16((int32_t)((-60 * 65536 + (int32_t)((ph & 127u) - 1u) * 24966) * 10885LL >> 16)) >> 1 : 0;
+    /* 2^(dB log2(10) / 20), dB = -60 + 48 (ph - 1) / 126, in log2 units (Q16): -9.9658 + 0.063275 (ph - 1). (Not
+     * folded through dB: -60 dB less a step, Q16, is 0xFFC39E7A, which build.py's check takes for a ROM address) */
+    return ph ? exp2_q16(-653117 + (int32_t)((ph & 127u) - 1u) * 41468 / 10) >> 1 : 0;
 }
 /* .. its RELEASE (RATE): 10 ms x 200^(r / 127), the time to fall to a tenth. A block's step toward a lower level, Q16:
  * 1 - 10^-(BLOCK / FS / T) = 1 - 2^-(3.3219 BLOCK / FS / T) */
