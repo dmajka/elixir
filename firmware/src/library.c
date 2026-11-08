@@ -344,6 +344,8 @@ static uint32_t lib_kit_put(const uint8_t *a, uint32_t n)
             k[i] = i < cnt ? a[12 + i] : 0u;
         for (; i < cnt; i++)
             k[i] = a[12 + i];
+        if (cnt > END_OF_SOUND_PARAMETERS)           /* (an Elixir kit from before a value was added) */
+            kit_old_fill(k, cnt);
         kit_sanitize(k);
         kit_put(idx, k);
     }

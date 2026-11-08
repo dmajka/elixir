@@ -52,6 +52,7 @@ typedef struct {
     uint8_t ftype, mix_oscs, vol_mod, is_open;
     uint8_t pan, route, out_fx;  /* out_fx: the LXR's Out = FX BUS (a kit from before the sends) */
     int32_t fx_send, rev_send;   /* Q15 */
+    int32_t dly_send;            /* Q15 (1.0 Phase 16: into the delay, on top of the output) */
     int32_t fm1, fm2;            /* DRUM: FM amount; CYMBAL / HIHAT: the two modulators' gains. Q15 */
     int32_t peg_amt;             /* pitch EG depth, Q16 */
     int32_t mix;                 /* SNARE: noise / osc mix, Q15 */
@@ -763,6 +764,8 @@ static int32_t pump_g0 = 32768, pump_g1 = 32768;
 static int32_t pump_m0 = 32768, pump_m1 = 32768;    /* (1.0 Phase 10f: PUMP's as it was for the block being mixed) */
 static uint8_t space_on;
 static int16_t fx_l[BLOCK], fx_r[BLOCK];            /* the FX bus (the LXR's saturating int16 sums) */
+static int16_t dly_l[BLOCK] POOL, dly_r[BLOCK] POOL;   /* 1.0 Phase 16: the delay's own sends (fxbus.c fxbus_process) */
+static uint8_t dly_fed;                             /* .. a voice sent to it this block */
 /* the reverb's send (mono), a pair (1.0 Phase 10f): the mixer fills rev_in while the reverb (either core) reads the
  * other, the last block's (voices_turn swaps them) */
 static int32_t rev_ib[2][BLOCK];
@@ -771,7 +774,7 @@ static uint32_t rev_fed, rev_fed_r;                 /* a send fed it this block 
 /* what the mixer reads of each voice, as it was when the block being mixed was rendered (voices_turn): a hit's
  * random pan, a lock's send or a choke from the next block's hits leaves the last block's sound alone */
 typedef struct {
-    int32_t fx_send, rev_send, xamt, venv;
+    int32_t fx_send, rev_send, dly_send, xamt, venv;
     int16_t pan_l, pan_r;
     uint8_t route, out_fx, throw_fx, throw_rev, xsrc, xmode, choking;
 } mixs_t;
@@ -807,6 +810,15 @@ static void mix_voice(const mixs_t *v, const int16_t *buf, int32_t *dl, int32_t 
     const int32_t pl = v->pan_l, pr = v->pan_r;      /* the pan's gains, Q14 (1.0: AUTOPAN gone, no longer a sample) */
     int32_t rs = v->throw_rev ? 32767 : rev_g_mx == 65536u ? v->rev_send : clamp32((int32_t)(((int64_t)v->rev_send * rev_g_mx) >> 16), 0, 32767);
     int16_t dry[BLOCK];
+    if (v->dly_send) {                               /* 1.0 Phase 16: the delay send, panned as the FX send */
+        const int32_t ds = v->dly_send;
+        for (i = 0; i < BLOCK; i++) {
+            int32_t x = (buf[i] * ds) >> 15;
+            dly_l[i] = (int16_t)sat16(dly_l[i] + ((x * pl) >> 14));
+            dly_r[i] = (int16_t)sat16(dly_r[i] + ((x * pr) >> 14));
+        }
+        dly_fed = 1;
+    }
     if (rs) {
         int32_t any = 0;
         for (i = 0; i < BLOCK; i++) {
@@ -850,6 +862,7 @@ static void mix_voice(const mixs_t *v, const int16_t *buf, int32_t *dl, int32_t 
 static void fxbus_process(void);                    /* (fxbus.c) */
 static void fxbus_early(void);
 static void reverb_add(void);
+static void reverb_bus(void);
 static void modnodes_block(void);                   /* (sound.c) */
 
 /* one block of the six voices into mix_l / mix_r (Q15, unsaturated) */
@@ -966,6 +979,7 @@ static void voices_turn(void)
         mixs_t *m = &mxs[vi];
         m->fx_send = v->fx_send;
         m->rev_send = v->rev_send;
+        m->dly_send = v->dly_send;
         m->xamt = v->xamt;
         m->venv = venv[vi];
         m->pan_l = v->pan_l;
@@ -991,6 +1005,11 @@ static void voices_turn(void)
     for (i = 0; i < BLOCK; i++) {
         fx_l[i] = fx_r[i] = 0;
         rev_in[i] = 0;
+    }
+    if (dly_fed) {                                   /* (1.0 Phase 16: cleared only after a send: none, none to do) */
+        memset(dly_l, 0, sizeof dly_l);
+        memset(dly_r, 0, sizeof dly_r);
+        dly_fed = 0;
     }
     reverb_turn();
 }
@@ -1118,6 +1137,7 @@ static void voices_block(void)
             mc_kr[i] = (mc_kr[i] * 13107) >> 15;
         }
     LOAD_MARK(LD_MIX);
+    reverb_bus();                                    /* (1.0 Phase 16: REV > FX's share into the bus's input) */
     fxbus_process();
     LOAD_MARK(LD_FX);
 #ifdef FX_NOW

@@ -22,13 +22,18 @@
  *   1.0: CC 3 (undefined in MIDI, off the grid) the delay's BAND
  *   buttons, 48 + 8 x row + column:
  *     48  PLAY / STOP, REC, FILL, REPEAT, FREEZE, THROW REV, THROW FX, FB PUSH (held)
- *     56  TAPE STOP, LP sweep, HP sweep, REVERSE (held), the previous pattern, the next, -, -
- *     64  select D1 .. OH    72 roll D1 .. OH, the selected track    80 DRILL, the same
+ *     56  TAPE STOP, LP sweep, HP sweep, REVERSE (held), the previous pattern, the next, CONTROL ALL held, latched
+ *     64  select D1 .. OH, CONTROL ALL's revert    72 roll D1 .. OH, the selected track    80 DRILL, the same
  *     88  HALF JITTER CUTS SHORT PUMP COMB SPACE CRUSH, held    96 the same, latched
  *     104 DENSITY: D1 .. OH left out (again: back in), all back in
  *   1.0: CC 112 + column: roll D1 .. OH, the selected track (as it was when the CC left 0), held by the CC's value
  *   (0 off; seq.c croll_grid: a small turn 1/4 .. 1/16 on the grid, the rest 1/32 .. 1/256 off it), several at once
  *   from a controller's faders.
+ * 1.0 Phase 17: CONTROL ALL by MIDI (62 held, 63 latched; midi.c ca_rm): the panel's knobs on a sound page as with
+ *   OCT+ held, and a voice's parameter from TRACKS' rows, a CC or an NRPN moves it on every track in Control All by
+ *   the step it made on its own (ui.c ca_take); the select buttons 64 .. 70 (and the panel's track keys) leave a track
+ *   out or put it back (lit: in). Off: kept, no dialog. 71 reverts the kit to before the last Control All (until a
+ *   kit loads), as OCT- does on the panel while it is on.
  * Both channels (midi.c): CC 124 the master volume, 125 the morph target, 126 a slot kit, 127 a factory kit.
  * Knobs (CONFIG): PICKUP (a pot acts once it passes the value: nothing jumps), ABS, REL (encoders: 64 +/- n, or
  * two's complement). Under REC a track's knob records a lock on its own track, as a panel knob on the selected one.
@@ -49,7 +54,7 @@
 #define RM_ROLL0 112u                                /* 1.0: GLOBAL's rolls a track: 112 .. 119 */
 #define RM_NK (RM_NTK + RM_NGK)                      /* the knobs: TRACKS' then GLOBAL's */
 #define RM_NB (RM_NTB + RM_NGB)                      /* the buttons: the same */
-enum { RR_VOL, RR_PAN, RR_FILTER, RR_RESO, RR_DECAY, RR_PITCH, RR_DRIVE, RR_FXS, RR_REVS, RR_SRATE, RR_LFO, RR_RNDP };
+enum { RR_VOL, RR_PAN, RR_FILTER, RR_RESO, RR_DECAY, RR_PITCH, RR_DLYS, RR_FXS, RR_REVS, RR_SRATE, RR_LFO, RR_RNDP };
 enum { RB_MUTE, RB_SOLO };                           /* TRACKS' button rows */
 enum { RG_PERF, RG_PERF2, RG_SELECT, RG_ROLL, RG_DRILL, RG_HOLD, RG_LATCH, RG_DENS };   /* GLOBAL's */
 static const uint16_t RM_GK[RM_NGK] = {
@@ -63,9 +68,11 @@ static const uint16_t RM_GK[RM_NGK] = {
 #define RM_REC 0xFDu
 #define RM_PREV 0xFCu
 #define RM_NEXT 0xFBu
+#define RM_CAH 0xFAu                                 /* (1.0 Phase 17: CONTROL ALL held, latched) */
+#define RM_CAL 0xF9u
 #define RM_NONE 0xFFu
 static const uint8_t RM_PF[16] = {RM_PLAY, RM_REC, PF_FILL, PF_STUT, PF_FREEZE, PF_THROW_R, PF_THROW_F, PF_PUSH,
-                                  PF_TAPE, PF_SWEEP_LP, PF_SWEEP_HP, PF_REVERSE, RM_PREV, RM_NEXT, RM_NONE, RM_NONE};
+                                  PF_TAPE, PF_SWEEP_LP, PF_SWEEP_HP, PF_REVERSE, RM_PREV, RM_NEXT, RM_CAH, RM_CAL};
 static const uint8_t RM_FX[8] = {PF_HALF, PF_JITTER, PF_CUTS, PF_SHORT, PF_PUMP, PF_COMB, PF_SPACE, PF_CRUSH};
 
 static struct {
@@ -102,7 +109,7 @@ static uint32_t rm_par(uint32_t i)
     case RR_RESO: return PAR_RESO_1 + v;
     case RR_DECAY: return t == 6u ? PAR_VELOD6_OPEN : PAR_VELOD1 + 2u * v;
     case RR_PITCH: return PAR_COARSE1 + 2u * v;
-    case RR_DRIVE: return PAR_DRIVE1 + v;
+    case RR_DLYS: return PAR_DSEND1 + v;             /* (1.0 Phase 16: the delay send, in DRIVE's place) */
     case RR_FXS: return PAR_FX_SEND1 + v;
     case RR_REVS: return PAR_REV_SEND1 + v;
     case RR_SRATE: return PAR_VOICE_DECIMATION1 + v;
@@ -163,6 +170,10 @@ static void rm_knob(uint32_t i, uint32_t v)
         }
         now = lo + (v * (hi - lo) + 63u) / 127u;
     }
+    if (i < RM_NTK && ca_take(p, now)) {             /* (Phase 17: Control All by MIDI: every track by the step) */
+        rm.sent[i] = (uint8_t)rm_to_cc(p);
+        return;
+    }
     morph_follow(p, (int32_t)now - (int32_t)vp_get(p));   /* (31: as the panel's knobs) */
     vp_set(p, now);
     rm.sent[i] = (uint8_t)rm_to_cc(p);               /* (no echo of what came in) */
@@ -178,6 +189,29 @@ static void rm_held(uint32_t pf_bit, int down)       /* a PERF effect held from 
     if (down && pf_bit == PF_FREEZE && (!par[PAR_DLY_LEVEL] || par[PAR_FX_DELAY_TYPE] == DELAY_OFF))
         ui_message(par[PAR_FX_DELAY_TYPE] == DELAY_OFF ? "FREEZE: THE DELAY IS OFF" : "FREEZE: THE DELAY'S LEVEL IS 0");
     perf_apply();
+}
+/* 1.0 Phase 17: Control All by MIDI on or off (off: kept, no dialog; OCT+ still held: the panel's, its dialog then) */
+static void ca_rm_set(uint32_t m)
+{
+    if (!ca_rm == !m) {
+        ca_rm = (uint8_t)m;
+        return;
+    }
+    ca_rm = (uint8_t)m;
+    if (m) {
+        ui_message("CONTROL ALL: ON");
+    } else if (!ui.copy) {
+        ui_message(ui.ca ? "CONTROL ALL KEPT" : "CONTROL ALL: OFF");
+        ui.ca = 0;
+    }
+    ui.force = 1;
+}
+static void ca_revert(void)                          /* (button 71) */
+{
+    if (ui.ca_len || (ui.ca_kept && kit_loads == ui.ca_loads))
+        control_all_undo();
+    else
+        ui_message("CONTROL ALL: NOTHING TO REVERT");
 }
 static void rm_button(uint32_t j, int down)          /* button j (TRACKS' 0 .., then GLOBAL's) */
 {
@@ -200,13 +234,21 @@ static void rm_button(uint32_t j, int down)          /* button j (TRACKS' 0 .., 
             }
         } else if (f == RM_REC && down) {
             sq.rec ^= 1u;
+        } else if (f == RM_CAH) {
+            ca_rm_set(down ? ca_rm | 1u : ca_rm & ~1u);
+        } else if (f == RM_CAL && down) {
+            ca_rm_set(ca_rm ^ 2u);
         } else if ((f == RM_PREV || f == RM_NEXT) && down) {
             seq_set_next_pattern((sq.active + (f == RM_NEXT ? 1u : NUM_PATTERN - 1u)) % NUM_PATTERN);
         } else if (f < NPF2) {
             rm_held(f, down);
         }
     } else if (r == RG_SELECT) {
-        if (down && c < 7u)
+        if (down && c == 7u)                         /* (Phase 17: CONTROL ALL's revert) */
+            ca_revert();
+        else if (down && ca_rm)                      /* (.. on: the track out / in) */
+            ca_out_key(c);
+        else if (down)
             track_select(c);
     } else if (r == RG_ROLL) {
         if (down)
@@ -242,9 +284,14 @@ static int rm_state(uint32_t j)
     case RG_PERF:
     case RG_PERF2: {
         uint32_t f = RM_PF[(r - RG_PERF) * 8u + c];
-        return f == RM_PLAY ? sq.running != 0 : f == RM_REC ? sq.rec != 0 : f < NPF2 ? (pf.on >> f) & 1u : 0;
+        return f == RM_PLAY ? sq.running != 0 : f == RM_REC ? sq.rec != 0 : f == RM_CAH ? ca_rm & 1u :
+               f == RM_CAL ? (ca_rm >> 1) & 1u : f < NPF2 ? (pf.on >> f) & 1u : 0;
     }
-    case RG_SELECT: return c < 7u && ui.track == c;
+    case RG_SELECT:                                  /* (Phase 17: Control All on: lit, the tracks in it; 71 lit while
+                                                      * there is a Control All to revert) */
+        if (c == 7u)
+            return ui.ca_kept && kit_loads == ui.ca_loads;
+        return ca_rm ? !((kset.caout >> c) & 1u) : ui.track == c;
     case RG_ROLL: return (sq.roll >> t) & 1u;
     case RG_DRILL: return (sq.drill >> t) & 1u;
     case RG_HOLD: return (pf.on >> RM_FX[c]) & 1u;
@@ -295,6 +342,13 @@ static void remote_service(void)
         remote_reset();
         rm.init = 1;
         rm.usb_on = usb.config != 0;
+    }
+    while (ca_qr != ca_qw) {                         /* (Phase 17: the voices' CCs and NRPNs while Control All is on) */
+        uint32_t e = ca_q[ca_qr % CAQ];
+        RING_PUBLISH();
+        ca_qr++;
+        if (!ca_take(e & 0xFFFFu, e >> 16))
+            vp_set(e & 0xFFFFu, e >> 16);
     }
     while (rin_r != rin_w) {
         uint32_t pkt = rin_q[rin_r % RQ], st = (pkt >> 8) & 0xFFu;

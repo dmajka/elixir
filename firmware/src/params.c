@@ -165,6 +165,9 @@ static const struct { uint16_t first; uint8_t n; uint16_t dtype; const char *nm[
     {PAR_INSB1, 6, DTYPE_0B127, {"Rate", "Insert", "inb", "Ins rate"}},
     {PAR_INSC1, 6, DTYPE_0B127, {"Feedback", "Insert", "inc", "Ins fdbk"}},
     {PAR_FLTX1, 6, DTYPE_0B127, {"Env amt", "Filter", "fen", "F envamt"}},   /* (1.0: LADDER's: flt_x_name) */
+    {PAR_DSEND1, 6, DTYPE_0B127, {"Dly send", "Send", "dls", "Dly"}},   /* (1.0 Phase 16) */
+    {PAR_DLY_ROUTE, 1, DTYPE_0B127, {"Route", "Delay", "drt", "D route"}},
+    {PAR_REV_FX, 1, DTYPE_0B127, {"Rev>FX", "Reverb", "r>f", "Rev>FX"}},
 };
 static uint32_t par_k(uint32_t p)                    /* its row in K_PARS (p >= NUM_PARAMS) */
 {

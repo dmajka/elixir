@@ -130,7 +130,7 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
         uint8_t l[NSPG][2];
         uint32_t i, k = sound_pages(l);
         uint32_t a = ui.half, z = sect_half_used(ui.track, ui.sect, 0) + sect_half_used(ui.track, ui.sect, 1);
-        if (ui.copy) {                               /* 0.11: OCT+ held: the knobs move every voice */
+        if (ui.copy || ca_rm) {                      /* 0.11: OCT+ held: the knobs move every voice (Phase 17: or MIDI) */
             put_str(b, "CONTROL ALL: ", n);
             put_str(b + str_len(b), SECT_NAME[ui.sect], n - str_len(b));
         } else {
@@ -178,8 +178,9 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
         }
         break;
     case M_FX: {
-        static const char *const T[NFXPG] = {"REVERB", "FX BUS", "", "DELAY (1/2)", "DELAY (2/2)", "DELAY: TAPE", "DIRT",
-                                             "DJ FILTER", "MASTER COMP", "COMP: SIDECHAIN", "FX SEND (1/2)", "FX SEND (2/2)",
+        static const char *const T[NFXPG] = {"REVERB", "FX BUS", "", "DELAY (1/2)", "DELAY (2/2)", "DELAY: TAPE",
+                                             "ROUTING", "DIRT", "DJ FILTER", "RING (2/2)", "MASTER COMP", "COMP: SIDECHAIN",
+                                             "FX SEND (1/2)", "FX SEND (2/2)", "DELAY SEND (1/2)", "DELAY SEND (2/2)",
                                              "REVERB SEND (1/2)", "REVERB SEND (2/2)"};
         uint32_t g = fx_page();
         if (g == FXPG_PARS) {                        /* (the type's knobs: named after it) */
@@ -188,7 +189,8 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
         } else {
             int gr = par[PAR_FX_DELAY_TYPE] == DELAY_GRAIN;   /* (1.0 Phase 13: GRAIN's page second) */
             put_str(b, gr && g == FXPG_DLY ? "DELAY (1/3)" : gr && g == FXPG_DUB ? "GRAIN (2/3)"
-                     : gr && g == FXPG_DLY2 ? "DELAY (3/3)" : T[g], n);
+                     : gr && g == FXPG_DLY2 ? "DELAY (3/3)"
+                     : g == FXPG_DJ && pfs.dj_ftype == DJT_RING ? "RING (1/2)" : T[g], n);   /* (1.0 Phase 18) */
         }
         break;
     }
@@ -1100,7 +1102,7 @@ static int32_t mixer_voice(uint32_t p, int *pan)     /* the voice a knob's param
             *pan = 1;
             return (int32_t)v;
         }
-        if (p == PAR_VOL1 + v || p == PAR_FX_SEND1 + v || p == PAR_REV_SEND1 + v)
+        if (p == PAR_VOL1 + v || p == PAR_FX_SEND1 + v || p == PAR_REV_SEND1 + v || p == PAR_DSEND1 + v)
             return (int32_t)v;
     }
     return -1;
@@ -1170,8 +1172,9 @@ static void draw_fx(int32_t y0)
     case FXPG_DLY: viz_echoes(0, 0); break;
     case FXPG_DLY2: viz_echoes(0, 1); break;
     case FXPG_DUB: viz_echoes(1, 0); break;
+    case FXPG_ROUTE: viz_route(); break;                 /* (1.0 Phase 16) */
     case FXPG_DIRT: viz_dirt(); break;
-    case FXPG_DJ: viz_djf(); break;
+    case FXPG_DJ: case FXPG_DJ2: viz_djf(); break;
     case FXPG_COMP: viz_mcomp(0); break;
     case FXPG_COMP2: viz_mcomp(1); break;
     default: draw_mixer(y0); break;                  /* (31: the sends, as the mixer shows them) */
@@ -1507,7 +1510,8 @@ static void draw_sound(int32_t y0)
 }
 static void draw_sound_strip(void)
 {
-    uint32_t k, s = sig_add(ui.track, ui.bar | ui.copy << 2 | ui.ca << 3 | ui.mode << 4);
+    uint32_t k, s = sig_add(ui.track, ui.bar | ui.copy << 2 | ui.ca << 3 | ui.mode << 4 | (uint32_t)ca_rm << 8 |
+                                          (uint32_t)kset.caout << 10);
     const pattern_t *pt = shown_pat();
     for (k = 0; k < 4u; k++)
         s = sig_add(s, pt->main[ui.track][k]);
@@ -1515,8 +1519,15 @@ static void draw_sound_strip(void)
     if (!region(R_STRIP, s))
         return;
     cv_begin(240, BODY_H - SOUND_VIZ_H, T_BG);
-    if (ui.copy) {                                   /* 0.11: Control All: what OCT- and letting go do */
-        cv_text(6, 4, &AF_S, ui.ca ? "LET GO: KEEP OR REVERT" : "KNOB: ALL TRACKS   TRACK KEY: COPY", T_ACCENT);
+    if (ui.copy || ca_rm) {                          /* 0.11: Control All: what OCT- and letting go do (Phase 17: the
+                                                      * tracks in it, the left-out ones dim; by MIDI: no dialog) */
+        if (ui.copy && !ui.ca) {
+            cv_text(6, 4, &AF_S, "KNOB: ALL TRACKS   TRACK KEY: COPY", T_ACCENT);
+        } else {
+            for (k = 0; k < NTRACK; k++)
+                cv_text(6 + (int32_t)k * 18, 4, &AF_S, VOICE_SHORT[k], (kset.caout >> k) & 1u ? T_DIM : TRACK_COL[k]);
+            cv_text(136, 4, &AF_S, ca_rm ? "OCT-: REVERT" : "LET GO: ASKS", T_ACCENT);
+        }
     } else {
         for (k = 0; k < 16u; k++) {                  /* the track's steps in the shown bar */
             uint32_t st = ui.bar * 16u + k;
@@ -1554,6 +1565,8 @@ static uint32_t sound_sig(void)
         for (h = 0; h < 2u; h++)                     /* (30: the pages drawn from another section's knobs) */
             for (k = 0; k < 4u; k++)
                 s = sig_add(s, sv(S_SHAPE, h, k) | sv(S_AEG, h, k) << 8 | sv(S_MOD, h, k) << 16 | sv(S_OSC, h, k) << 24);
+    if (ui.sect == S_SENDS)                          /* (1.0 Phase 16: the picture's caption) */
+        s = sig_add(s, par[PAR_DLY_ROUTE]);
     if (ui.sect == S_XMOD)
         for (k = 0; k < NVOICE; k++)
             s = sig_add(s, par[PAR_CHOKE1 + k]);
@@ -1704,16 +1717,20 @@ static void draw_body(void)
                                (uint32_t)par[PAR_DLY_BAND] << 24);
             if (fx_page() >= FXPG_FSEND)                 /* (the send pages: the mixer's bars) */
                 s = sig_add(s, mixer_sig());
-            if (fx_page() == FXPG_DJ)                    /* (1.0: the DJ filter as it moves, its type and Reso) */
+            if (fx_page() == FXPG_DJ || fx_page() == FXPG_DJ2)   /* (1.0: the DJ filter as it moves, its type and Reso) */
                 s = sig_add(sig_add(s, (uint32_t)(pf.dj_d + 65536) >> 9 | (uint32_t)pfs.dj_ftype << 20 |
                                            (uint32_t)pfs.dj_reso << 24),
-                            pfs.dj_tune);            /* (1.0: RING's chord) */
+                            pfs.dj_tune | (uint32_t)pfs.dj_spread << 8 | (uint32_t)pfs.dj_slope << 16 |
+                                (uint32_t)pfs.dj_tone << 24 | (uint32_t)pfs.dj_wet << 3);   /* (RING's chord, its
+                                                      * page 2: Phase 18) */
             if (fx_page() == FXPG_COMP2 && mc.src && mc.src <= NVOICE)
                 s = sig_add(s, shown_pat()->main[mc.src - 1u][ui.bar & 3u] | ui.bar << 16);
             if (fx_page() == FXPG_COMP || fx_page() == FXPG_COMP2)   /* (0.16: the compressor's gain reduction) */
                 s = sig_add(s, (uint32_t)(mc.gr >> 12) | mc.ratio << 16 | mc.src << 20);
             for (v = 0; v < NVOICE; v++)
-                s = sig_add(s, par[PAR_FX_SEND1 + v] | (uint32_t)par[PAR_REV_SEND1 + v] << 8);
+                s = sig_add(s, par[PAR_FX_SEND1 + v] | (uint32_t)par[PAR_REV_SEND1 + v] << 8 |
+                                   (uint32_t)par[PAR_DSEND1 + v] << 16);
+            s = sig_add(s, (uint32_t)par[PAR_DLY_ROUTE] | (uint32_t)par[PAR_REV_FX] << 8);   /* (1.0 Phase 16) */
             break;
         }
         case M_KEYS:
@@ -1785,6 +1802,24 @@ static void draw_body(void)
 /* ------------------------------------------------------------- cards --- */
 static void card_name(char *b, uint32_t n, uint32_t p)
 {
+    if (ui.mode == M_SOUND && ui.sect == S_SENDS) {  /* 1.0 Phase 16: FX TRACK SENDS: short, to fit */
+        const char *t = p == PAR_FX_DRY_WET ? "FX D/W" : p == PAR_DLY_LEVEL ? "Dly lvl" : p == PAR_REV_LEVEL ? "Rev lvl"
+                      : p >= PAR_DSEND1 && p < PAR_DSEND1 + 6u ? "Delay" : p >= PAR_REV_SEND1 && p < PAR_REV_SEND1 + 6u
+                      ? "Reverb" : p >= PAR_FX_SEND1 && p < PAR_FX_SEND1 + 6u ? "FX" : 0;
+        if (t) {
+            put_str(b, t, n);
+            return;
+        }
+    }
+    if (p >= PAR_DSEND1 && p < PAR_DSEND1 + 6u) {    /* (1.0 Phase 16: as the other sends, its voice) */
+        put_str(b, p - PAR_DSEND1 == 5u ? "HH" : VOICE_SHORT[p - PAR_DSEND1], n);
+        put_str(b + 2, " dly", n - 2);
+        return;
+    }
+    if (p == PAR_DLY_LEVEL && ui.mode != M_FX) {
+        put_str(b, "Dly level", n);
+        return;
+    }
     if (par[PAR_FX_DELAY_TYPE] == DELAY_GRAIN && (p == PAR_DLY_TIME || p == PAR_DLY_WOW || p == PAR_GLITCH || p == PAR_DSAT)) {
         put_str(b, p == PAR_DLY_TIME ? "Position" : p == PAR_DLY_WOW ? "Size" : p == PAR_GLITCH ? "Density" : "Scatter", n);
         return;                                      /* (1.0 Phase 13: GRAIN's knobs) */
@@ -1922,6 +1957,10 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_TAPE: put_str(b, "Tape time", n); return;
     case VP_DJRESO: put_str(b, ui.mode == M_FX && pfs.dj_ftype == DJT_RING ? "Decay" : "Reso", n); return;
     case VP_DJTUNE: put_str(b, "Tune", n); return;
+    case VP_DJSPREAD: put_str(b, "Spread", n); return;   /* (1.0 Phase 18: RING (2/2)) */
+    case VP_DJSLOPE: put_str(b, "Slope", n); return;
+    case VP_DJTONE: put_str(b, "Tone", n); return;
+    case VP_DJWET: put_str(b, "Wet", n); return;
     case VP_DJTYPE: put_str(b, "Type", n); return;
     case VP_MVOL: put_str(b, "Volume", n); return;   /* (1.0) */
     case VP_STRETCH: put_str(b, "Stretch", n); return;
@@ -2272,6 +2311,20 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
         return;
     }
     switch (p) {                                     /* (0.16: the master compressor) */
+    case PAR_DLY_ROUTE:                              /* (1.0 Phase 16: DLY > FX, PARALLEL, FX > DLY) */
+        if (v == 64u) {
+            put_str(b, "PARALLEL", n);
+            return;
+        }
+        put_str(b, v > 64u ? "F>D " : "D>F ", n);   /* (short, for the card; the ROUTING page spells it out) */
+        put_str(put_int(b + 4, (int32_t)(v > 64u ? (v - 64u) * 100u / 63u : (64u - v) * 100u / 64u)), "%", 2);
+        return;
+    case PAR_ECHOREV:
+        if (dly_loop()) {                            /* (1.0 Phase 16: held at 0: REV > FX and FX > DLY make a loop) */
+            put_str(b, "LOOP", n);
+            return;
+        }
+        break;
     case PAR_MC_THR: put_str(put_int(b, -(int32_t)((127u - v) * 48u + 63u) / 127), " dB", 4); return;
     case PAR_MC_ATK: {
         uint32_t tq = (uint32_t)(((uint64_t)289014u * (uint32_t)exp2_q16((int32_t)(v & 127u) * 5143)) >> 16);
@@ -2477,6 +2530,17 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
     }
     case VP_MOUT ... VP_MOUT_LAST: put_str(b, v ? "ON" : "OFF", n); return;
     case VP_UMIX ... VP_UMIX_LAST: put_str(b, v ? "OUT" : "IN", n); return;
+    case VP_DJSPREAD: case VP_DJWET:                 /* (1.0 Phase 18: RING (2/2): 0 .. 100%; Spread 0 MONO) */
+        if (p == VP_DJSPREAD && !v)
+            put_str(b, "MONO", n);
+        else
+            put_str(put_int(b, (int32_t)v * 100 / 127), "%", 2);
+        return;
+    case VP_DJSLOPE: case VP_DJTONE:                 /* (-64 .. +63 about the middle, as before) */
+        if (v > 64u)
+            b[0] = '+';
+        put_int(b + (v > 64u), (int32_t)v - 64);
+        return;
     case VP_DENS: case VP_TD ... VP_TD_LAST: {       /* (-64..63 as -100 .. +100%) */
         int32_t d = (int32_t)v - 64, pc = d < 0 ? d * 100 / 64 : d * 100 / 63;
         if (pc > 0)

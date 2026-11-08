@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 796" width="480" height="796" role="img" aria-label="Signal flow of the whole mix: the tracks&#x27; dry sound, the FX bus and the reverb into the mix, then the master compressor, master dirt, DJ filter, perform effects and the MASTER knob">
-<title>Signal flow of the whole mix: the tracks&#x27; dry sound, the FX bus and the reverb into the mix, then the master compressor, master dirt, DJ filter, perform effects and the MASTER knob</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 796" width="480" height="796" role="img" aria-label="Signal flow of the whole mix: the tracks&#x27; dry sound, the FX bus, the delay and the reverb into the mix, then the master compressor, master dirt, DJ filter, perform effects and the MASTER knob">
+<title>Signal flow of the whole mix: the tracks&#x27; dry sound, the FX bus, the delay and the reverb into the mix, then the master compressor, master dirt, DJ filter, perform effects and the MASTER knob</title>
 <style>
 .bx { fill: #fcf8ef; stroke: #cdbb98; stroke-width: 1.2; }
 .bx.k { fill: #f3e6cb; }
@@ -23,16 +23,16 @@
 <path class="a" d="M240 60 V83" marker-end="url(#ah)"/>
 <rect class="bx" x="172" y="84" width="136" height="58" rx="7"/><text class="t" x="184" y="104">BUS DIRT</text><text class="d" x="184" y="121">a drive before</text><text class="d" x="184" y="136">the effect</text><text class="p" x="298" y="104">FX</text>
 <path class="a" d="M240 142 V151" marker-end="url(#ah)"/>
-<rect class="bx" x="172" y="152" width="136" height="58" rx="7"/><text class="t" x="184" y="172">FX BUS</text><text class="d" x="184" y="189">DRIVE, RING, COMP,</text><text class="d" x="184" y="204">PHASER or FLANGER</text><text class="p" x="298" y="172">FX</text>
-<path class="a" d="M240 210 V219" marker-end="url(#ah)"/>
-<rect class="bx" x="172" y="220" width="136" height="58" rx="7"/><text class="t" x="184" y="240">DELAY</text><text class="d" x="184" y="257">always on, after</text><text class="d" x="184" y="272">the bus: Level</text><text class="p" x="298" y="240">FX</text>
+<rect class="bx" x="172" y="152" width="136" height="58" rx="7"/><text class="t" x="184" y="172">FX BUS</text><text class="d" x="184" y="189">RING, COMP, PHASER,</text><text class="d" x="184" y="204">FLANGER or SHIFT</text><text class="p" x="298" y="172">FX</text>
+<path class="a m" d="M240 210 V219" marker-end="url(#ah)"/>
+<rect class="bx" x="172" y="220" width="136" height="58" rx="7"/><text class="t" x="184" y="240">DELAY</text><text class="d" x="184" y="257">its sends, and the</text><text class="d" x="184" y="272">bus as ROUTING sets</text><text class="p" x="298" y="240">FX</text>
 <path class="a" d="M240 278 V289" marker-end="url(#ah)"/>
 <path class="a" d="M392 60 V83" marker-end="url(#ah)"/>
 <rect class="bx" x="324" y="84" width="136" height="92" rx="7"/><text class="t" x="336" y="104">REVERB</text><text class="d" x="336" y="121">ROOM, SPRING,</text><text class="d" x="336" y="136">HALL or PLATE;</text><text class="d" x="336" y="151">Size, Damping,</text><text class="d" x="336" y="166">Level</text><text class="p" x="450" y="104">FX</text>
 <path class="a m" d="M308 249 H360 V177" marker-end="url(#ah)"/>
 <text class="d" x="366" y="214">ECHO</text><text class="d" x="366" y="229">&gt;REV</text>
 <path class="a" d="M430 176 V289" marker-end="url(#ah)"/>
-<rect class="bx k" x="20" y="290" width="440" height="44" rx="7"/><text class="t c" x="240.0" y="310">MIX</text><text class="d c" x="240.0" y="327">the dry voices, the bus and its echoes, the reverb&#x27;s return</text>
+<rect class="bx k" x="20" y="290" width="440" height="44" rx="7"/><text class="t c" x="240.0" y="310">MIX</text><text class="d c" x="240.0" y="327">the dry voices, the bus, the echoes, the reverb&#x27;s return</text>
 <path class="a" d="M240.0 334 V355" marker-end="url(#ah)"/>
 <rect class="bx" x="74" y="356" width="332" height="58" rx="7"/><text class="t" x="86" y="376">MASTER COMP</text><text class="d" x="86" y="393">Thresh, Ratio, Attack, Release; sidechain:</text><text class="d" x="86" y="408">the mix, or one track to duck the rest</text><text class="p" x="396" y="376">FX</text>
 <path class="a" d="M240.0 414 V431" marker-end="url(#ah)"/>

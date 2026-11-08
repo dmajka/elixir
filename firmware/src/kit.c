@@ -11,7 +11,8 @@
  * the targets): 288 of KIT_LEN's 398 bytes, 7 KB of pool back. Only here: the edit buffer, the morph target, projects,
  * the library and LXR files keep a byte a value. kit_get / kit_put a whole kit; kit_load_ram unpacks straight into
  * par[] (it runs in the audio ISR too: a pattern's kit, MIDI's bank select), with no buffer shared with the main loop */
-#define KIT_PK 344                                   /* (a slot's bytes: kit_pk_init checks the widths fit) */
+#define KIT_PK 352                                   /* (a slot's bytes: kit_pk_init checks the widths fit; 1.0 Phase 16:
+                                                      * 344 -> 352, the delay sends) */
 #define KIT_SHARED NUM_KITS                          /* 37: a row past the slots: the shared voices (seq.c PV_*) */
 static uint8_t kits[NUM_KITS + 1][KIT_PK] POOL;      /* (the pool, the fast RAM kept for the ISR) */
 static uint8_t kit_w[KIT_LEN] POOL;                  /* each value's bits (kit_pk_init) */
@@ -56,7 +57,16 @@ static uint32_t init_kit_k(uint32_t p)
     }
     if ((p >= PAR_INSA1 && p < PAR_FLTX1) || (p >= PAR_L2RATE1 && p < PAR_L2RATE1 + 6u))
         return 64;                                   /* (27a: the insert's knobs, its type OFF; 25b: LFO 2's rate) */
+    if (p == PAR_DLY_ROUTE)                          /* (1.0 Phase 16: PARALLEL) */
+        return 64;
     return p == PAR_REV_SIZE ? 64u : p == PAR_REV_DAMP ? 48u : p == PAR_REV_LEVEL ? 100u : 0u;
+}
+/* 1.0 Phase 16: a kit stored before a value was added (its first `have` values, kit layout): the values past it that
+ * aren't the init kit's to keep its sound. The delay's route: FX > DLY 127, the delay after the bus as it was */
+static void kit_old_fill(uint8_t *k, uint32_t have)
+{
+    if (have <= kit_idx(PAR_DLY_ROUTE))
+        k[kit_idx(PAR_DLY_ROUTE)] = DLY_ROUTE_OLD;
 }
 
 static void dly_migrate(uint8_t *k, uint32_t sync, uint8_t *l2t);

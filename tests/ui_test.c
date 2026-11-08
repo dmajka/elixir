@@ -364,6 +364,8 @@ static void phase2(void)
     check(par[PAR_XSRC1 + 3] == 1 && par[PAR_XAMT1 + 3] > 0 && par[PAR_CHOKE1 + 3] == 1, "CROSS MOD: source, amount");
     shot("xmod");
     press(B_LFO);
+    check(ui.sect == S_SENDS, "LFO again: FX TRACK SENDS (1.0 Phase 16)");
+    press(B_LFO);
     check(ui.sect == S_LFO, "LFO again: back to the LFO page");
     press(B_SEQ);
     black(0);
@@ -565,6 +567,7 @@ static void phase3(void)
         kit_init_par();
         par_set(PAR_FX_DELAY_TYPE, DELAY_NORMAL);    /* (1.0: the init kit's MODE is OFF) */
         par_set(PAR_DLY_LEVEL, 76);                  /* (1.0: the always-on delay) */
+        par_set(PAR_DLY_ROUTE, 127);                 /* (1.0 Phase 16: the bus into it) */
         par_set(PAR_FX_SEND1, 127);
         run_ms(50);
         voice_trigger(0, 127, SEQ_DEFAULT_NOTE);
@@ -2946,9 +2949,14 @@ static void phase13_control_all(void)
     check(ok, "CONTROL ALL: every voice's filter +5 from its own value, the cymbal's clamped at 127");
     check(ui.ca, "CONTROL ALL under way");
     shot("control-all");
-    /* a voice key now selects, it doesn't copy */
+    /* a voice key now leaves the track out (1.0 Phase 17; was: selects), no COPY; again: back in */
     black(2);
-    check(ui.track == 2 && !ui.copy_src, "CONTROL ALL: a voice key selects the track, no COPY");
+    check(ui.track == 0 && !ui.copy_src && (kset.caout & 4u) && par[PAR_FILTER_FREQ_1 + 2] == 50u,
+          "CONTROL ALL: a voice key leaves the track out (back as it was), no COPY");
+    black(2);
+    check(!kset.caout && par[PAR_FILTER_FREQ_1 + 2] == 50u, "again: back in (where it is)");
+    par[PAR_FILTER_FREQ_1 + 2] = 55;
+    track_select(2);
     release(B_OCTUP);
     check(!ui.ca && ui.ca_ask && par[PAR_FILTER_FREQ_1] == 25u, "letting go of OCT+: the dialog, the changes still sounding");
     run_ms(50);
@@ -3152,8 +3160,7 @@ static void phase12_remote(void)
     check(par[PAR_VELOD6_CLOSED] == 11 && par[PAR_VELOD6_OPEN] == 22, "CH's decay, OH's decay: each its own");
     track_select(2);
     rcc(56 + 7, 99);
-    check(par[PAR_DRIVE1 + 2] == vp_min(PAR_DRIVE1 + 2) + (99u * (vp_max(PAR_DRIVE1 + 2) - vp_min(PAR_DRIVE1 + 2)) + 63u) / 127u,
-          "column 8: the selected track (D3's drive)");
+    check(par[PAR_DSEND1 + 2] == 99u, "column 8: the selected track (D3's delay send, 1.0 Phase 16)");
     i = par[PAR_FILTER_FREQ_1];
     rcc(38, 5);                                      /* (the LXR's CC 38 is D1's filter: here OH's resonance) */
     check(par[PAR_FILTER_FREQ_1] == i && par[PAR_RESO_6] == 5, "the remote channel: the remote map, not the LXR's");
@@ -3845,6 +3852,7 @@ static void fx_fresh(uint32_t dtype)                 /* (1.0: the always-on dela
     par_set(PAR_FX_TYPE, FX_OFF);
     par_set(PAR_FX_DELAY_TYPE, dtype);
     par_set(PAR_DLY_LEVEL, 127);
+    par_set(PAR_DLY_ROUTE, 127);                     /* (1.0 Phase 16: FX > DLY, the bus into the delay) */
     par_set(PAR_FX_ROUTING, R_ST1);
     run_ms(30);                                      /* (1.0: a new MODE's line cleared over ~13 ms, its input faded in) */
     memset(fxbuf, 0, sizeof fxbuf);                  /* (the line from silence) */
@@ -4091,14 +4099,16 @@ static double p23_h3(const int32_t *x, uint32_t n)   /* the 3rd harmonic's share
 }
 static void phase_016t2(void)                        /* 0.16-test2: FX's page order; the HYRULE palette */
 {
-#define FXSENDS FXPG_FSEND, FXPG_FSEND2, FXPG_RSEND, FXPG_RSEND2   /* (31: the sends last) */
-    static const uint8_t OFF[] = {FXPG_REV, FXPG_BUS, FXPG_DLY, FXPG_DLY2, FXPG_DIRT, FXPG_DJ, FXPG_COMP, FXPG_COMP2, FXSENDS};
-    static const uint8_t PH[] = {FXPG_REV, FXPG_BUS, FXPG_PARS, FXPG_DLY, FXPG_DLY2, FXPG_DIRT, FXPG_DJ, FXPG_COMP, FXPG_COMP2,
-                                 FXSENDS};
-    static const uint8_t DL[] = {FXPG_REV, FXPG_BUS, FXPG_DLY, FXPG_DLY2, FXPG_DUB, FXPG_DIRT, FXPG_DJ, FXPG_COMP, FXPG_COMP2,
-                                 FXSENDS};   /* (1.0: the always-on delay's; TAPE's page with TAPE) */
+#define FXSENDS FXPG_FSEND, FXPG_FSEND2, FXPG_DSEND, FXPG_DSEND2, FXPG_RSEND, FXPG_RSEND2   /* (31: the sends last;
+                                                      * 1.0 Phase 16: the delay's between) */
+    static const uint8_t OFF[] = {FXPG_REV, FXPG_BUS, FXPG_DLY, FXPG_DLY2, FXPG_ROUTE, FXPG_DIRT, FXPG_DJ, FXPG_COMP,
+                                  FXPG_COMP2, FXSENDS};
+    static const uint8_t PH[] = {FXPG_REV, FXPG_BUS, FXPG_PARS, FXPG_DLY, FXPG_DLY2, FXPG_ROUTE, FXPG_DIRT, FXPG_DJ,
+                                 FXPG_COMP, FXPG_COMP2, FXSENDS};
+    static const uint8_t DL[] = {FXPG_REV, FXPG_BUS, FXPG_DLY, FXPG_DLY2, FXPG_DUB, FXPG_ROUTE, FXPG_DIRT, FXPG_DJ,
+                                 FXPG_COMP, FXPG_COMP2, FXSENDS};   /* (1.0: the always-on delay's; TAPE's page with TAPE) */
     static const struct { uint32_t type, dtype; const uint8_t *pg; uint32_t n; } C[3] = {
-        {FX_OFF, DELAY_NORMAL, OFF, 12}, {FX_PHASER, DELAY_NORMAL, PH, 13}, {FX_OFF, DELAY_TAPE, DL, 13}};
+        {FX_OFF, DELAY_NORMAL, OFF, 15}, {FX_PHASER, DELAY_NORMAL, PH, 16}, {FX_OFF, DELAY_TAPE, DL, 16}};
     uint32_t k, i, ok;
     uint8_t l[NFXPG];
     press(B_HOME);
@@ -5454,7 +5464,7 @@ static void phase26(void)
 static void phase29(void)
 {
     static const uint8_t ORD[] = {S_MODEL, S_OSC, S_FM, S_CLICK, S_FILTER, S_SHAPE, S_INSERT, S_AEG, S_GATE, S_MOD,
-                                  S_LFO, S_LFOM, S_LFO2, S_RANDOM, S_XMOD};
+                                  S_LFO, S_LFOM, S_LFO2, S_RANDOM, S_XMOD, S_SENDS};
     uint8_t l[NSPG][2];
     uint16_t pp[4];
     char b[40];
@@ -5470,7 +5480,7 @@ static void phase29(void)
             j++;
         ok &= j < sizeof ORD && l[i][0] != S_MIX;
     }
-    check(ok && l[0][0] == S_MODEL && l[n - 1u][0] == S_XMOD, "the sound pages: MODEL first, CROSS MOD last, no MIX");
+    check(ok && l[0][0] == S_MODEL && l[n - 1u][0] == S_SENDS, "the sound pages: MODEL first, FX TRACK SENDS last (1.0 Phase 16), no MIX");
     sound_open(S_MODEL, 0);
     run_ms(20);
     page_params(pp);
@@ -6043,7 +6053,8 @@ static void phase32(void)
         sp_roll();
         run_ms(60);
         shot("spells-voices");
-        check(par[PAR_MODEL1] == MD_LXR && par[PAR_MODEL1 + 2u] >= MD_MC0, "KICK and MICRO: the LXR's kick, MICRO above");
+        check(par[PAR_MODEL1] == MD_LXR && (par[PAR_MODEL1 + 2u] >= MD_MC0 || par[PAR_MODEL1 + 2u] == MD_NOISE),
+              "KICK and MICRO: the LXR's kick, MICRO (or NOISE, with them) above");
         hold(B_OCTDN);
         release(B_OCTDN);
         sp.eng = 0;                                  /* (none: the engines as they are, any spell) */
@@ -8994,6 +9005,329 @@ static double gr13_level(const int32_t *x, uint32_t n, double hz)   /* the rms o
     }
     return sqrt(p / (n / 1024u));
 }
+/* 1.0 Phase 16: the delay sends, the route between the bus and the delay, REV > FX, the library's packed kits, FX
+ * TRACK SENDS, the mixer's DLY SEND, the remote's row 7 */
+static void bus_alone(uint32_t blocks, int32_t bus, int32_t dly)   /* a click into the bus and / or the delay send */
+{
+    uint32_t b, i;
+    snd_service();                                   /* (the values set: as the ISR takes them) */
+    for (b = 0; b < blocks; b++) {
+        fxbus_early();
+        for (i = 0; i < BLOCK; i++) {
+            fx_l[i] = fx_r[i] = (int16_t)(b == 0u && i == 0u ? bus : 0);
+            dly_l[i] = dly_r[i] = (int16_t)(b == 0u && i == 0u ? dly : 0);
+            mix_l[i] = mix_r[i] = 0;
+            rev_in[i] = 0;
+        }
+        dly_fed = b == 0u && dly;
+        rev_fed = 0;
+        fxbus_process();
+        if (b * BLOCK + BLOCK <= sizeof p21_l / sizeof p21_l[0])
+            for (i = 0; i < BLOCK; i++) {
+                p21_l[b * BLOCK + i] = (int16_t)sat16(mix_l[i]);
+                p21_r[b * BLOCK + i] = (int16_t)sat16(mix_r[i]);
+            }
+    }
+    dly_fed = 0;
+}
+static int32_t peak_in(const int16_t *x, uint32_t from, uint32_t to)
+{
+    int32_t m = 0;
+    uint32_t i;
+    for (i = from; i < to; i++)
+        m = abs(x[i]) > m ? abs(x[i]) : m;
+    return m;
+}
+static void phase_100_16(void)
+{
+    uint32_t i, d;
+    int32_t e127, e96, e64, at0, ech;
+    int ok;
+    char b[24];
+    uint8_t k[KIT_LEN], k2[KIT_LEN];
+    printf("1.0 Phase 16: delay sends, route, REV > FX\n");
+    p4_reset();
+    /* the kit: the new values fit, the init kit PARALLEL, a kit from before them FX > DLY */
+    kit_init_values(k);
+    check(kit_pk_bits <= KIT_PK * 8u && k[kit_idx(PAR_DLY_ROUTE)] == 64u && k[kit_idx(PAR_REV_FX)] == 0u &&
+              k[kit_idx(PAR_DSEND1)] == 0u, "the init kit: PARALLEL, no delay sends, REV > FX 0; the slot packs");
+    kit_old_fill(k, kit_idx(PAR_DSEND1));
+    check(k[kit_idx(PAR_DLY_ROUTE)] == DLY_ROUTE_OLD, "a kit from before Phase 16: FX > DLY 127 (as it sounded)");
+    /* the route, the bus alone: MONO at a short TIME, the bus OFF */
+    fx_fresh(DELAY_NORMAL);
+    par_set(PAR_DLY_TIME, 20);
+    par_set(PAR_DLY_FB, 0);
+    par_set(PAR_DLY_TONE, 127);
+    run_ms(20);
+    d = 0;
+    par_set(PAR_DLY_ROUTE, 127);
+    fx_fresh(DELAY_NORMAL);
+    par_set(PAR_DLY_ROUTE, 127);
+    bus_alone(200, 16000, 0);
+    at0 = p21_l[0];
+    d = first_peak(p21_l, 100, 12000, 1000);
+    e127 = peak_in(p21_l, 100, 12000);
+    printf("  FX > DLY 127: the bus's click %d, its echo %d at %u\n", at0, e127, d);
+    check(at0 > 15000 && e127 > 4000 && d > 100u, "FX > DLY 127: the bus into the delay (as before Phase 16)");
+    fx_fresh(DELAY_NORMAL);
+    par_set(PAR_DLY_ROUTE, 96);
+    bus_alone(200, 16000, 0);
+    e96 = peak_in(p21_l, 100, 12000);
+    fx_fresh(DELAY_NORMAL);
+    par_set(PAR_DLY_ROUTE, 64);
+    bus_alone(200, 16000, 0);
+    e64 = peak_in(p21_l, 100, 12000);
+    printf("  the bus's echo: FX > DLY 127 %d, 96 %d, PARALLEL %d\n", e127, e96, e64);
+    check(e96 > e127 / 3 && e96 < e127 * 2 / 3 && e64 == 0 && p21_l[0] > 15000,
+          "FX > DLY 50%: half the echo; PARALLEL: the FX send's sound is not delayed");
+    fx_fresh(DELAY_NORMAL);
+    par_set(PAR_DLY_ROUTE, 64);
+    bus_alone(200, 0, 16000);
+    ech = peak_in(p21_l, 100, 12000);
+    check(abs(p21_l[0]) < 50 && ech > 4000 && first_peak(p21_l, 100, 12000, 1000) == d,
+          "PARALLEL: the delay send's echo at TIME, nothing dry");
+    /* DLY > FX: the echoes through the bus (OFF: as PARALLEL; RING: changed), none left in the mix past the bus */
+    fx_fresh(DELAY_NORMAL);
+    par_set(PAR_DLY_ROUTE, 0);
+    bus_alone(200, 0, 16000);
+    ok = abs(peak_in(p21_l, 100, 12000) - ech) <= 2;
+    par_set(PAR_FX_TYPE, FX_RING);
+    par_set(PAR_FX_DRY_WET, 100);
+    run_ms(20);
+    fx_fresh(DELAY_NORMAL);
+    par_set(PAR_FX_TYPE, FX_RING);
+    par_set(PAR_FX_DRY_WET, 100);
+    par_set(PAR_DLY_ROUTE, 0);
+    bus_alone(200, 0, 16000);
+    {
+        int32_t diff = 0, pk = peak_in(p21_l, 100, 12000);
+        static int16_t par_l[FS];
+        memcpy(par_l, p21_l, sizeof par_l);
+        fx_fresh(DELAY_NORMAL);
+        par_set(PAR_FX_TYPE, FX_RING);
+        par_set(PAR_FX_DRY_WET, 100);
+        par_set(PAR_DLY_ROUTE, 64);
+        bus_alone(200, 0, 16000);
+        for (i = 100; i < 12000u; i++)
+            diff = abs(p21_l[i] - par_l[i]) > diff ? abs(p21_l[i] - par_l[i]) : diff;
+        printf("  DLY > FX 100%% into RING: the echo's peak %d, %d from PARALLEL's\n", pk, diff);
+        check(ok && diff > 1000, "DLY > FX: the echoes through the bus effect (OFF: the same echo)");
+    }
+    par_set(PAR_FX_TYPE, FX_OFF);
+    /* the loop guard: REV > FX with FX > DLY: ECHO > REVERB held at 0 */
+    fx_fresh(DELAY_NORMAL);
+    par_set(PAR_ECHOREV, 127);
+    par_set(PAR_REV_FX, 100);
+    par_set(PAR_DLY_ROUTE, 127);
+    {
+        int32_t any = 0;
+        uint32_t bk;
+        for (bk = 0; bk < 60u; bk++) {
+            bus_alone(1, bk ? 0 : 16000, 0);
+            for (i = 0; i < BLOCK; i++)
+                any |= rev_in[i];
+        }
+        card_value(b, sizeof b, PAR_ECHOREV, 127);
+        ok = !any && dly_loop() && !strcmp(b, "LOOP");
+        par_set(PAR_DLY_ROUTE, 64);
+        fx_fresh(DELAY_NORMAL);
+        par_set(PAR_DLY_ROUTE, 64);
+        for (bk = 0, any = 0; bk < 60u; bk++) {
+            bus_alone(1, 0, bk ? 0 : 16000);
+            for (i = 0; i < BLOCK; i++)
+                any |= rev_in[i];
+        }
+        check(ok && any && !dly_loop(), "the loop (REV > FX, FX > DLY): ECHO > REVERB held at 0, its card LOOP");
+    }
+    par_set(PAR_REV_FX, 0);
+    par_set(PAR_ECHOREV, 0);
+    /* the whole engine: D1's delay send echoes with no FX send; REV > FX with the bus OFF and PARALLEL sounds as 0 */
+    {
+        double r0, r1, t0, t1;
+        eng_reset(0);
+        kit_init_par();
+        par_set(PAR_FX_DELAY_TYPE, DELAY_NORMAL);
+        par_set(PAR_DLY_LEVEL, 127);
+        par_set(PAR_DLY_TIME, 60);
+        run_ms(50);
+        voice_trigger(0, 127, SEQ_DEFAULT_NOTE);
+        run_ms(250);
+        t0 = out_rms(400);
+        eng_reset(0);
+        kit_init_par();
+        par_set(PAR_FX_DELAY_TYPE, DELAY_NORMAL);
+        par_set(PAR_DLY_LEVEL, 127);
+        par_set(PAR_DLY_TIME, 60);
+        par_set(PAR_DSEND1, 127);
+        run_ms(50);
+        voice_trigger(0, 127, SEQ_DEFAULT_NOTE);
+        run_ms(250);
+        t1 = out_rms(400);
+        printf("  D1's tail: delay send 0 %.1f, 127 %.1f\n", t0, t1);
+        check(t1 > t0 * 3.0 + 20.0, "a voice's DELAY SEND: its echoes, with no FX send");
+        eng_reset(0);
+        kit_init_par();
+        par_set(PAR_REV_SEND1, 127);
+        run_ms(50);
+        voice_trigger(0, 127, SEQ_DEFAULT_NOTE);
+        run_ms(100);
+        r0 = out_rms(500);
+        eng_reset(0);
+        kit_init_par();
+        par_set(PAR_REV_SEND1, 127);
+        par_set(PAR_REV_FX, 127);
+        run_ms(50);
+        voice_trigger(0, 127, SEQ_DEFAULT_NOTE);
+        run_ms(100);
+        r1 = out_rms(500);
+        printf("  the reverb's tail: REV > FX 0 %.1f, 127 (bus OFF) %.1f\n", r0, r1);
+        check(r0 > 50.0 && fabs(r1 - r0) < r0 * 0.1, "REV > FX into the bus OFF: the reverb as it was");
+        eng_reset(0);
+        kit_init_par();
+    }
+    /* the library: kits packed in 2 pages; one that won't pack, as it is in 3; a short one filled */
+    {
+        kl_hdr_t h;
+        uint32_t j;
+        int32_t n;
+        kit_init_values(k);
+        k[kit_idx(PAR_DSEND1 + 2)] = 99;
+        k[kit_idx(PAR_DLY_ROUTE)] = 20;
+        k[kit_idx(PAR_REV_FX)] = 77;
+        ok = !kl_write(KLK_KIT, 120, "PACKED  ", k, KIT_LEN) && !kl_head((uint32_t)kl.at[0][120], &h) &&
+             (h.kind & KL_PACKED) && h.rsv == KIT_LEN && kl_npages(h.len) <= 2u;
+        printf("  a kit packed: %u bytes of %u\n", h.len, KIT_LEN);
+        n = kl_read(KLK_KIT, 120, k2, KIT_LEN, 0);
+        check(ok && n == (int32_t)KIT_LEN && !memcmp(k, k2, KIT_LEN), "the library: a kit packed (2 pages), read back");
+        for (j = 0; j < KIT_LEN; j++)
+            k[j] = (uint8_t)(200u + j % 50u);
+        ok = !kl_write(KLK_KIT, 121, "RAW     ", k, KIT_LEN) && !kl_head((uint32_t)kl.at[0][121], &h) &&
+             !(h.kind & KL_PACKED) && h.len == KIT_LEN && kl_npages(h.len) == 3u;
+        n = kl_read(KLK_KIT, 121, k2, KIT_LEN, 0);
+        check(ok && n == (int32_t)KIT_LEN && !memcmp(k, k2, KIT_LEN), "the library: one that won't pack, as it is (3 pages)");
+        kit_init_values(k);
+        k[kit_idx(PAR_DLY_LEVEL)] = 90;
+        kl_write(KLK_KIT, 122, "OLDER   ", k, kit_idx(PAR_DSEND1));
+        check(!libkit_get(122, k2) && k2[kit_idx(PAR_DLY_ROUTE)] == DLY_ROUTE_OLD && k2[kit_idx(PAR_DLY_LEVEL)] == 90u,
+              "the library: a kit from before Phase 16 loads FX > DLY 127");
+        kl_scan();                                   /* (power-on: the packed and the 3-page entries found again) */
+        ok = kl_exists(KLK_KIT, 120) && kl_exists(KLK_KIT, 121) && kl_exists(KLK_KIT, 122);
+        kl_write(KLK_KIT, 120, 0, 0, 0);
+        kl_write(KLK_KIT, 121, 0, 0, 0);
+        kl_write(KLK_KIT, 122, 0, 0, 0);
+        check(ok && !kl_exists(KLK_KIT, 121), "the library: found again at power-on, deleted");
+    }
+    /* the cards */
+    card_value(b, sizeof b, PAR_DLY_ROUTE, 64);
+    ok = !strcmp(b, "PARALLEL");
+    card_value(b, sizeof b, PAR_DLY_ROUTE, 127);
+    ok &= !strcmp(b, "F>D 100%");
+    card_value(b, sizeof b, PAR_DLY_ROUTE, 96);
+    ok &= !strcmp(b, "F>D 50%");
+    card_value(b, sizeof b, PAR_DLY_ROUTE, 0);
+    ok &= !strcmp(b, "D>F 100%");
+    check(ok, "Route's card: D>F 100% .. PARALLEL .. F>D 100%");
+    /* FX TRACK SENDS: the last sound page; FX, Delay, Reverb; the returns under them */
+    {
+        uint8_t l[NSPG][2];
+        uint16_t pp[4];
+        uint32_t n;
+        ui.mode = M_SOUND;
+        ui.track = 1;
+        n = sound_pages(l);
+        ui.sect = S_SENDS;
+        ui.half = 0;
+        page_params(pp);
+        ok = l[n - 1u][0] == S_SENDS && pp[0] == PAR_FX_SEND1 + 1 && pp[1] == PAR_DSEND1 + 1 &&
+             pp[2] == PAR_REV_SEND1 + 1 && pp[3] == VP_NONE;
+        card_name(b, sizeof b, pp[0]);
+        ok &= !strcmp(b, "FX");
+        card_name(b, sizeof b, pp[1]);
+        ok &= !strcmp(b, "Delay");
+        card_name(b, sizeof b, pp[2]);
+        ok &= !strcmp(b, "Reverb");
+        ui.force = 1;
+        run_ms(100);
+        shot("sends-track");
+        ui.half = 1;
+        page_params(pp);
+        ok &= pp[0] == PAR_FX_DRY_WET && pp[1] == PAR_DLY_LEVEL && pp[2] == PAR_REV_LEVEL;
+        card_name(b, sizeof b, pp[1]);
+        ok &= !strcmp(b, "Dly lvl");
+        check(ok, "FX TRACK SENDS: the last page, FX / Delay / Reverb, the returns under them");
+        /* Control All on it: every track's delay send */
+        ui.half = 0;
+        par_set(PAR_FX_SEND1 + 1, 40);
+        par_set(PAR_DSEND1 + 1, 90);
+        par_set(PAR_REV_SEND1 + 1, 64);
+        par_set(PAR_DLY_LEVEL, 100);
+        par_set(PAR_DLY_ROUTE, 96);
+        ui.force = 1;
+        run_ms(100);
+        shot("sends-track-set");
+        par_set(PAR_DLY_ROUTE, 64);
+        for (i = 0; i < NVOICE; i++)
+            par_set(PAR_DSEND1 + i, 10u * i);
+        ui.copy = 1;
+        knob_turn(1, 5);
+        ok = 1;
+        for (i = 0; i < NVOICE; i++)
+            ok &= par[PAR_DSEND1 + i] == 10u * i + 5u;
+        control_all_undo();
+        ui.copy = 0;
+        for (i = 0; i < NVOICE; i++)
+            ok &= par[PAR_DSEND1 + i] == 10u * i;
+        check(ok, "Control All on FX TRACK SENDS: every track's delay send, reverted");
+    }
+    /* the mixer's DLY SEND, the FX pages' ROUTING and DELAY SEND */
+    {
+        uint8_t l[NFXPG];
+        uint32_t n, j, rt = 99, ds = 99, di = 99;
+        ok = NMIXER == 10u && P_MIXER[6][0] == PAR_DSEND1 && P_MIXER[7][2] == PAR_DLY_LEVEL &&
+             !strcmp(MIXER_TITLE[3], "MIXER: DLY SEND");
+        n = fx_shown(l);
+        for (j = 0; j < n; j++) {
+            rt = l[j] == FXPG_ROUTE ? j : rt;
+            ds = l[j] == FXPG_DSEND ? j : ds;
+            di = l[j] == FXPG_DIRT ? j : di;
+        }
+        ok &= rt + 1u == di && ds < n && l[ds + 1u] == FXPG_DSEND2 && l[ds + 2u] == FXPG_RSEND;
+        check(ok, "the mixer's DLY SEND pages; FX: ROUTING before DIRT, DELAY SEND between FX's and REVERB's");
+        ui.mode = M_MIXER;
+        ui.page = 6;
+        ui.force = 1;
+        run_ms(100);
+        shot("mixer-dly-send");
+        ui.mode = M_FX;
+        ui.page = rt;
+        ui.force = 1;
+        run_ms(100);
+        shot("fx-routing");
+        par_set(PAR_DLY_LEVEL, 100);
+        par_set(PAR_DLY_ROUTE, 110);
+        par_set(PAR_REV_FX, 80);
+        par_set(PAR_ECHOREV, 60);
+        ui.force = 1;
+        run_ms(100);
+        shot("fx-routing-loop");
+        par_set(PAR_DLY_ROUTE, 20);
+        ui.force = 1;
+        run_ms(100);
+        shot("fx-routing-dlyfx");
+        par_set(PAR_DLY_ROUTE, 64);
+        par_set(PAR_REV_FX, 0);
+        par_set(PAR_ECHOREV, 0);
+        ui.mode = M_HOME;
+    }
+    /* the remote: TRACKS row 7 (CC 56..63) the delay send */
+    vp_set(VP_RKNOBS, RK_ABS);
+    rm_in(remote_ch, 0xB0u, 56, 100);
+    rm_in(remote_ch, 0xB0u, 59, 30);
+    check(par[PAR_DSEND1] == 100u && par[PAR_DSEND1 + 3] == 30u, "the remote: TRACKS CC 56.. the delay sends (DRIVE's row)");
+    eng_reset(0);
+    kit_init_par();
+}
+
 static void phase_100_13(void)
 {
     static int32_t ol[800u * BLOCK], orr[800u * BLOCK];
@@ -9809,7 +10143,7 @@ static void phase_100_5(void)
     par_set(PAR_PAN1, 10);
     par_set(PAR_PAN4, 118);
     for (t = 0; t < NVOICE; t++)
-        par_set(PAR_FX_SEND1 + t, 0);
+        par_set(PAR_DSEND1 + t, 0);                  /* (1.0 Phase 16: CANYON moves the delay sends) */
     a = par[PAR_REV_SIZE];
     perf_goto(PG_WANDER);
     wd_vset(WV_QUEST, Q_CANYON);
@@ -9820,7 +10154,7 @@ static void phase_100_5(void)
     press(B_OCTUP);
     {
         uint32_t fbmax = 0, pp = 0, cleanpp = 1, mode = par[PAR_FX_DELAY_TYPE], lvl = par[PAR_DLY_LEVEL], inward = 0;
-        uint32_t diff = 0, panmin = 127, panmax = 0, sz = 0, lv = 0;
+        uint32_t diff = 0, panmin = 127, panmax = 0, sz = 0, lv = 0, lost = 0;
         for (i = 0; i < 70u && wd.state == WS_ROAD; i++) {
             run_ms(240000u / seq_bpm());
             if (par[PAR_FX_DELAY_TYPE] != mode) {
@@ -9832,9 +10166,10 @@ static void phase_100_5(void)
             fbmax = par[PAR_DLY_FB] > fbmax ? par[PAR_DLY_FB] : fbmax;
             sz = par[PAR_REV_SIZE] > sz ? par[PAR_REV_SIZE] : sz;
             lv = par[PAR_DLY_LEVEL] > lv ? par[PAR_DLY_LEVEL] : lv;
+            lost |= wd_cht() % 5u == 3u;             /* (the path is random, its seed the clock: LOST may not come) */
             if (wd_cht() == 0u && i == 6u)
                 inward = par[PAR_PAN1] > 10u && par[PAR_PAN4] < 118u && par[PAR_PAN1] < 40u && par[PAR_PAN4] > 88u;
-            if (par[PAR_FX_SEND1 + 1u] != par[PAR_FX_SEND1 + 4u])
+            if (par[PAR_DSEND1 + 1u] != par[PAR_DSEND1 + 4u])
                 diff++;
             if (wd_cht() >= 2u && wd_cht() < 4u) {
                 panmin = par[PAR_PAN2] < panmin ? par[PAR_PAN2] : panmin;
@@ -9843,17 +10178,18 @@ static void phase_100_5(void)
             if (i == 30u)
                 shot("p5-canyon");
         }
-        printf("  THE CANYON, %u bars: level to %u, feedback to %u, size %u -> %u; D2's pan %u..%u, sends apart %u bars\n",
+        printf("  THE CANYON, %u bars: level to %u, feedback to %u, size %u -> %u; D2's pan %u..%u, sends apart %u bars%s\n",
                (unsigned)i, (unsigned)lv, (unsigned)fbmax, (unsigned)a, (unsigned)sz, (unsigned)panmin, (unsigned)panmax,
-               (unsigned)diff);
+               (unsigned)diff, lost ? ", LOST IN ECHOES on the way" : ", never LOST");
         check(inward, "THE CANYON: at the mouth, the voices drawn in a little from where they were");
         check(diff >= 8u && panmax >= panmin + 10u, ".. each voice its own send, then the voices wander apart");
         check(pp && cleanpp, "MONO -> PING PONG, the echoes faded out first");
-        check(lv >= 60u && sz > a && fbmax >= 126u, ".. the echoes build, the reverb grows, the feedback rings at 126+");
+        check(lv >= 60u && sz > a && fbmax >= (lost ? 126u : 78u),
+              ".. the echoes build, the reverb grows, the feedback rings at 126+ (when LOST)");
         run_ms(500);
         check(wd.state == WS_IDLE && par[PAR_DLY_LEVEL] == 0u && !par[PAR_DSYNC] && par[PAR_REV_SIZE] == a &&
                   par[PAR_FX_DELAY_TYPE] == DELAY_NORMAL && par[PAR_PAN1] == 10u && par[PAR_PAN4] == 118u &&
-                  par[PAR_FX_SEND1 + 1u] == 0u, "out of the canyon (HOME): the delay, the reverb, the pans, the sends home");
+                  par[PAR_DSEND1 + 1u] == 0u, "out of the canyon (HOME): the delay, the reverb, the pans, the sends home");
     }
     wd.k[WV_JOURNEY] = WJ_ENDLESS;                   /* (ENDLESS: never out) */
     wd.quest = Q_CANYON;
@@ -9866,6 +10202,286 @@ static void phase_100_5(void)
     press(B_PLAY);
     wd_defaults();
     p4_reset();
+}
+
+/* 1.0 Phase 17: Control All by MIDI (GLOBAL's 62 held, 63 latched, 71 revert), tracks left out of it */
+static void phase_100_17(void)
+{
+    uint32_t v, ok;
+    uint8_t k0[KIT_LEN], acc = kset.accel, rk = kset.rknobs;
+    uint32_t i;
+    printf("1.0 Phase 17: Control All by MIDI\n");
+    p4_reset();
+    track_select(0);
+    kit_init_par();
+    snd_post_all();
+    kset.accel = 0;
+    kset.caout = 0;
+    vp_set(VP_RKNOBS, RK_ABS);
+    for (v = 0; v < NVOICE; v++)
+        par[PAR_FILTER_FREQ_1 + v] = (uint8_t)(20u + 15u * v);
+    for (i = 0; i < KIT_LEN; i++)
+        k0[i] = par[kit_par(i)];
+    /* latched by 63: the remote's filter knob on D2 moves every track's filter by its step */
+    for (i = 0; i < 40u; i++) {                      /* (the feedback settled; the out queue drained as it goes) */
+        run_ms(10);
+        (void)fb_seen(0, 0, 0);
+    }
+    gcc(63, 127);
+    ok = fb_seen(0xB0u | remote_gch, 63, 127);
+    gcc(63, 0);
+    check(ca_rm == 2u && !ui.ca, "63: Control All latched, nothing moved yet");
+    for (i = 0; i < 30u; i++) {                 /* (the out queue drained as it goes) */
+        run_ms(10);
+        ok |= fb_seen(0xB0u | remote_gch, 63, 127);
+    }
+    check(ok, "63's light on");
+    rcc(24 + 1, 50);                                 /* (TRACKS' filter row, D2: 35 -> ABS 50) */
+    for (v = 0, ok = 1; v < NVOICE; v++)
+        ok &= par[PAR_FILTER_FREQ_1 + v] == 20u + 15u * v + 15u;
+    check(ok && ui.ca, "a TRACKS filter knob: every voice's filter by D2's step, offsets kept");
+    /* an LXR CC on a voice's channel (CC n: parameter n - 1): D1's filter, the others by its step */
+    web_midi(0xB0 | midi_track_ch(0), PAR_FILTER_FREQ_1 + 1u, 25);
+    run_ms(20);
+    for (v = 0, ok = 1; v < NVOICE; v++)
+        ok &= par[PAR_FILTER_FREQ_1 + v] == 20u + 15u * v + 5u;
+    check(ok, "the LXR's filter CC on D1's channel: every voice by D1's step (-10)");
+    /* an NRPN (Elixir's per-voice: the delay send) */
+    par[PAR_DSEND1 + 3] = 10;
+    web_midi(0xB0 | midi_track_ch(3), 99, (PAR_DSEND1 + 3u - 128u) >> 7);
+    web_midi(0xB0 | midi_track_ch(3), 98, (PAR_DSEND1 + 3u - 128u) & 127u);
+    web_midi(0xB0 | midi_track_ch(3), 6, 30);
+    run_ms(20);
+    check(par[PAR_DSEND1 + 3] == 30u && par[PAR_DSEND1] == 30u - 10u && par[PAR_DSEND1 + 5] == 20u,
+          "an NRPN delay send on SN: every track's delay send by its step");
+    /* a track left out (the remote's select 64 + 2: D3): back to the snapshot, then not moved */
+    gbtn(64 + 2);
+    check((kset.caout & 4u) && par[PAR_FILTER_FREQ_1 + 2] == k0[kit_idx(PAR_FILTER_FREQ_1 + 2)] &&
+              par[PAR_DSEND1 + 2] == 0u, "select 66 with Control All on: D3 left out, its voice back as it was");
+    check(ui.track == 0, "no track selected");
+    rcc(24 + 0, 35);                                 /* D1 25 -> 35: +10 */
+    check(par[PAR_FILTER_FREQ_1 + 1] == 50u && par[PAR_FILTER_FREQ_1 + 2] == 50u,
+          "D3 left out: not moved; D2 moved");
+    rcc(24 + 2, 60);
+    check(par[PAR_FILTER_FREQ_1 + 2] == 60u && par[PAR_FILTER_FREQ_1 + 1] == 50u, "D3's own knob: D3 alone");
+    /* the hats: out only when CH and OH both are */
+    gbtn(64 + 5);
+    v = par[PAR_FILTER_FREQ_1 + 5];
+    rcc(24 + 0, 36);
+    check(par[PAR_FILTER_FREQ_1 + 5] == v + 1u, "CH alone left out: the hat voice still in (OH)");
+    gbtn(64 + 6);
+    rcc(24 + 0, 37);
+    check(par[PAR_FILTER_FREQ_1 + 5] == k0[kit_idx(PAR_FILTER_FREQ_1 + 5)], "CH and OH out: the hat voice out, as it was");
+    run_ms(60);
+    shot("ca-midi-strip");
+    /* the panel: the knobs on a sound page as with OCT+ held; a track key out / in */
+    black(1);
+    check(kset.caout & 2u, "the panel's track key, Control All latched: D2 out");
+    black(1);
+    check(!(kset.caout & 2u) && ui.track == 0 && par[PAR_FILTER_FREQ_1 + 1] == 35u,
+          "again: back in (left out, it went back as it was)");
+    press(B_SCL);
+    turn(EN_K2, 2);
+    check(par[PAR_FILTER_FREQ_1] == 39u && par[PAR_FILTER_FREQ_1 + 1] == 37u && par[PAR_FILTER_FREQ_1 + 2] == 60u,
+          "a panel knob on FILTER with Control All latched: every track in it");
+    run_ms(60);
+    shot("ca-midi-sound");
+    /* off: kept, no dialog; 71 reverts until a kit loads */
+    gbtn(63);
+    check(!ca_rm && !ui.ca && !ui.ca_ask && par[PAR_FILTER_FREQ_1] == 39u, "63 again: off, kept, no dialog");
+    for (i = ok = 0; i < 30u; i++) {
+        run_ms(10);
+        ok |= fb_seen(0xB0u | remote_gch, 71, 127);
+    }
+    check(ok, "71's light: a Control All to revert");
+    gbtn(71);
+    for (i = 0, ok = 1; i < KIT_LEN; i++)
+        ok &= par[kit_par(i)] == k0[i];
+    check(ok && !ui.ca_kept, "71: the kit as before the first Control All move");
+    /* held by 62: on while held; OCT- on the panel reverts */
+    gcc(62, 127);
+    check(ca_rm == 1u, "62 held: on");
+    rcc(24 + 0, 30);
+    check(par[PAR_FILTER_FREQ_1 + 3] == k0[kit_idx(PAR_FILTER_FREQ_1 + 3)] + 10u, "62 held: a knob moves the tracks in");
+    press(B_OCTDN);
+    for (i = 0, ok = 1; i < KIT_LEN; i++)
+        ok &= par[kit_par(i)] == k0[i];
+    check(ok && !ui.shift, "OCT- with Control All on by MIDI: reverted, not SHIFT");
+    rcc(24 + 0, 40);
+    gcc(62, 0);
+    check(!ca_rm && !ui.ca && par[PAR_FILTER_FREQ_1 + 3] == k0[kit_idx(PAR_FILTER_FREQ_1 + 3)] + 20u,
+          "62 let go: off, kept");
+    /* as a note, and a kit load ends the revert */
+    gnote(63, 1);
+    gnote(63, 0);
+    check(ca_rm == 2u, "63 as a note: latched");
+    rcc(24 + 0, 50);
+    check(ui.ca_kept && par[PAR_FILTER_FREQ_1 + 3] == k0[kit_idx(PAR_FILTER_FREQ_1 + 3)] + 30u, "a move by note's latch");
+    gnote(63, 1);
+    gnote(63, 0);
+    check(!ca_rm, "63 as a note again: off");
+    kit_load_ram(0);
+    run_ms(20);
+    v = par[PAR_FILTER_FREQ_1];
+    gbtn(71);
+    check(par[PAR_FILTER_FREQ_1] == v && msg_on() && ui.msg[13] == 'N', "a kit loaded: 71 has nothing to revert");
+    /* off: CCs as before (one track) */
+    v = par[PAR_FILTER_FREQ_1 + 1];
+    rcc(24 + 0, 64);
+    check(par[PAR_FILTER_FREQ_1] == 64u && par[PAR_FILTER_FREQ_1 + 1] == v, "Control All off: D1 alone");
+    /* the mask is kept in the settings */
+    check(kset.caout == 0x64u, "the left-out tracks in the settings (D3, CH, OH)");
+    kset.caout = 0;
+    kset.accel = acc;
+    kset.rknobs = rk;
+    goto_mode(B_HOME, M_HOME);
+    kit_init_par();
+    snd_post_all();
+}
+
+/* 1.0 Phase 18: RING (the DJ filter) (2/2): SPREAD, SLOPE, TONE, WET */
+#define RG18_HASH 0x30837059u                        /* (RING's output before Phase 18: the defaults reproduce it) */
+static uint32_t rg18_run(uint32_t in, float *yl, float *yr, uint32_t nb)   /* RING on in (0 a hit at block 20, 1 DC,
+                                                      * 2 noise then silence) from rest; its hash */
+{
+    int16_t l[BLOCK], r[BLOCK];
+    uint32_t k, j, h = 2166136261u, x = 12345u;
+    pf.dj_type = 0;                                  /* (its state reset) */
+    pf.dj_rs = (int32_t)pfs.dj_reso << 8;            /* (Decay without its glide) */
+    for (k = 0; k < nb; k++) {
+        for (j = 0; j < BLOCK; j++) {
+            x = x * 1103515245u + 12345u;
+            l[j] = r[j] = (int16_t)(in == 0u ? (k == 20u && j == 0u ? 30000 : 0) : in == 1u ? 8000
+                                    : k < nb / 2u ? (int32_t)(x >> 16) % 12000 - 6000 : 0);
+            if (in == 2u)
+                r[j] = (int16_t)(l[j] / 2);
+        }
+        perf_master(l, r);
+        for (j = 0; j < BLOCK; j++) {
+            h = (h ^ (uint16_t)l[j]) * 16777619u;
+            h = (h ^ (uint16_t)r[j]) * 16777619u;
+            if (yl)
+                yl[k * BLOCK + j] = l[j];
+            if (yr)
+                yr[k * BLOCK + j] = r[j];
+        }
+    }
+    return h;
+}
+static void phase_100_18(void)
+{
+    static float yl[200u * BLOCK], yr[200u * BLOCK];
+    uint16_t pp[4];
+    uint32_t h, root, k, ok;
+    double a0, a1, b[3], e0, e1;
+    printf("1.0 Phase 18: RING (2/2): Spread, Slope, Tone, Wet\n");
+    p4_reset();
+    goto_mode(B_HOME, M_HOME);
+    press(B_FX);
+    pfs.dj_ftype = DJT_LXR;
+    fx_goto(FXPG_DJ2);
+    check(fx_page() != FXPG_DJ2, "RING (2/2): not with the LXR's filter");
+    pfs.dj_ftype = DJT_RING;
+    fx_goto(FXPG_DJ2);
+    run_ms(40);
+    page_params(pp);
+    check(fx_page() == FXPG_DJ2 && pp[0] == VP_DJSPREAD && pp[1] == VP_DJSLOPE && pp[2] == VP_DJTONE && pp[3] == VP_DJWET,
+          "RING (2/2): Spread, Slope, Tone, Wet");
+    check(pfs.dj_spread == 64 && pfs.dj_slope == 64 && pfs.dj_tone == 64 && pfs.dj_wet == 64, "RING (2/2): 64s by default");
+    turn(EN_K4, -3);
+    check(pfs.dj_wet == 61, "RING (2/2): Wet by the knob");
+    {
+        char nm[16];
+        card_value(nm, sizeof nm, VP_DJWET, 127);
+        ok = !strcmp(nm, "100%");
+        card_value(nm, sizeof nm, VP_DJSPREAD, 0);
+        ok &= !strcmp(nm, "MONO");
+        card_value(nm, sizeof nm, VP_DJTONE, 80);
+        ok &= !strcmp(nm, "+16");
+        card_value(nm, sizeof nm, VP_DJSLOPE, 60);
+        check(ok && !strcmp(nm, "-4"), "RING (2/2): the cards' values");
+    }
+    pfs.dj_wet = 64;
+    pfs.dj_tune = RC_MAJ;
+    pfs.dj_reso = 100;
+    pf.dj = 100;                                     /* (A4) */
+    root = ring_root((100 - 64) * 1040);
+    h = rg18_run(2u, NULL, NULL, 120u);
+    printf("  RING's hash at the defaults: 0x%08x\n", h);
+    check(h == RG18_HASH, "RING (2/2): the defaults bit-exact with before");
+    pfs.dj_wet = 0;                                  /* (Wet 0: the dry alone) */
+    rg18_run(1u, yl, NULL, 40u);
+    for (ok = 1, k = 20u * BLOCK; k < 40u * BLOCK; k++)
+        ok &= yl[k] == 8000.0f;
+    check(ok, "RING: Wet 0 the dry exactly");
+    pfs.dj_wet = 127;                                /* (Wet 127: no dry: DC rings no band) */
+    rg18_run(1u, yl, NULL, 120u);
+    for (e0 = 0, k = 60u * BLOCK; k < 120u * BLOCK; k++)   /* (the mean: the bands still ring from the step) */
+        e0 += yl[k] / (60.0 * BLOCK);
+    printf("  RING Wet 100%%, DC 8000 in: %.1f out (the mean)\n", e0);
+    check(fabs(e0) < 80.0, "RING: Wet 127 no dry");
+    pfs.dj_wet = 64;
+    for (k = 0; k < 2u; k++) {                       /* (Tone: the top band (MAJOR's +28) against the root) */
+        pfs.dj_tone = k ? 127 : 0;
+        rg18_run(0u, yl, NULL, 120u);
+        *(k ? &a1 : &a0) = goertzel(yl + 21u * BLOCK, 60u * BLOCK, NOTE_HZ(root + 28u)) /
+                           goertzel(yl + 21u * BLOCK, 60u * BLOCK, NOTE_HZ(root));
+    }
+    printf("  RING Tone: the top band / the root: dark %.3f, bright %.3f\n", a0, a1);
+    check(a1 > 16.0 * a0, "RING: Tone tilts the bands' level");
+    pfs.dj_tone = 64;
+    pfs.dj_reso = 30;                                /* (Decay short: room above for Slope; the bands' damping has a
+                                                      * floor, ring_block's q >= 33) */
+    for (k = 0; k < 3u; k++) {                       /* (Slope: the top band's ring late against early, the root's) */
+        pfs.dj_slope = (uint8_t)(k * 127u / 2u);
+        rg18_run(0u, yl, NULL, 200u);
+        e0 = goertzel(yl + 70u * BLOCK, 30u * BLOCK, NOTE_HZ(root + 28u)) / goertzel(yl + 21u * BLOCK, 30u * BLOCK, NOTE_HZ(root + 28u));
+        e1 = goertzel(yl + 70u * BLOCK, 30u * BLOCK, NOTE_HZ(root)) / goertzel(yl + 21u * BLOCK, 30u * BLOCK, NOTE_HZ(root));
+        b[k] = e0 / e1;
+    }
+    printf("  RING Slope: the top band's decay against the root's: left %.4f, middle %.3f, right %.2f\n", b[0], b[1], b[2]);
+    check(b[0] < 0.1 * b[1] && b[2] > 2.0 * b[1], "RING: Slope shortens / lengthens the top bands' ring");
+    pfs.dj_slope = 64;
+    pfs.dj_reso = 100;
+    pfs.dj_spread = 0;                               /* (Spread 0: all in the middle) */
+    rg18_run(0u, yl, yr, 60u);
+    for (ok = 1, k = 0; k < 60u * BLOCK; k++)
+        ok &= yl[k] == yr[k];
+    check(ok, "RING: Spread 0 mono");
+    pfs.dj_spread = 127;                             /* (127: the 3rd (band 1) on the right alone) */
+    rg18_run(0u, yl, yr, 120u);
+    a0 = goertzel(yl + 21u * BLOCK, 60u * BLOCK, NOTE_HZ(root + 4u));
+    a1 = goertzel(yr + 21u * BLOCK, 60u * BLOCK, NOTE_HZ(root + 4u));
+    printf("  RING Spread 127: the 3rd left %.3f, right %.3f\n", a0, a1);
+    check(a0 * 8.0 < a1, "RING: Spread 127 hard left / right");
+    pfs.dj_spread = 64;
+    pfs.dj_slope = 96;                               /* (the page: the bands' heights by Slope, their light by Tone) */
+    pfs.dj_tone = 30;
+    rg18_run(0u, NULL, NULL, 2u);
+    run_ms(40);
+    shot("fx-dj-ring2");
+    pfs.dj_slope = pfs.dj_tone = 64;
+    {                                                /* (the project keeps them) */
+        int rc;
+        pfs.dj_spread = 10;
+        pfs.dj_slope = 20;
+        pfs.dj_tone = 30;
+        pfs.dj_wet = 40;
+        rc = proj_save(2, "RING2   ");
+        pfs.dj_spread = pfs.dj_slope = pfs.dj_tone = pfs.dj_wet = 64;
+        rc |= proj_load(2);
+        check(rc == 0 && pfs.dj_spread == 10 && pfs.dj_slope == 20 && pfs.dj_tone == 30 && pfs.dj_wet == 40,
+              "a project keeps RING's Spread, Slope, Tone, Wet");
+    }
+    pfs.dj_spread = pfs.dj_slope = pfs.dj_tone = pfs.dj_wet = 64;
+    pfs.dj_reso = 0;
+    pf.dj = 64;
+    pfs.dj_ftype = DJT_LXR;
+    {
+        int16_t l[BLOCK] = {0}, r[BLOCK] = {0};
+        perf_master(l, r);
+    }
+    goto_mode(B_HOME, M_HOME);
 }
 
 int main(int argc, char **argv)
@@ -10146,7 +10762,7 @@ int main(int argc, char **argv)
     shot("mixer-fx-send");
     turn(EN_K1, 40);
     check(par[PAR_FX_SEND1] >= 40, "the mixer's K1: D1's FX send");
-    turn(EN_SELECT, 2);
+    turn(EN_SELECT, 4);                             /* (1.0 Phase 16: past DLY SEND's two) */
     turn(EN_K1, 30);
     check(par[PAR_REV_SEND1] >= 30, "the mixer's K1: D1's reverb send");
     keys |= 1u << WHITE_KEY[2];                       /* a lock on step 3: D1's reverb send */
@@ -10382,6 +10998,9 @@ int main(int argc, char **argv)
     phase_100_11();
     phase_100_12();
     phase_100_13();
+    phase_100_16();
+    phase_100_17();
+    phase_100_18();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;
 }

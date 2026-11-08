@@ -9,7 +9,12 @@
  * entry is its 32-byte header (the commit record: written last, after its payload) then the payload; a slot's newest
  * valid entry (seq) wins at boot, so a write torn at any point leaves the slot as it was. A deleted slot is an entry of
  * no payload. One sector is kept erased: when no sector has room, the one with the most dead pages has its live entries
- * copied into it and is erased, becoming the erased one. */
+ * copied into it and is erased, becoming the erased one.
+ *
+ * 1.0 Phase 16 (format 2): a kit's values packed (kl_pack: 0 in 1 bit, 1..15 in 6, 16..127 in 10, 128..255 in 11;
+ * ~280-350 bytes, 2 pages), its kind's top bit set and the header's rsv its count; a kit that doesn't pack into 2
+ * pages is written as it is in 3. Older firmware skips both (the kind, the length): it sees the slot's older entry,
+ * or none. Older entries (a byte a value, 2 pages) load as before. */
 
 #define KL_BASE 0xEA000u
 #define KL_NSEC 18u
@@ -19,6 +24,8 @@
 #define KL_MAGIC 0x4C4Bu                            /* "KL" */
 #define KL_HDR 32u
 enum { KLK_KIT = 1, KLK_SOUND = 2 };
+#define KL_PACKED 0x80u                             /* (1.0 Phase 16: the kind's bit: a kit packed) */
+#define KL_KITMAX (3u * 256u)                       /* (a kit's entry, its header too: 3 pages) */
 
 typedef struct {
     uint16_t magic;
@@ -30,7 +37,7 @@ typedef struct {
     uint32_t hcrc;                                   /* the header's above */
 } kl_hdr_t;
 _Static_assert(sizeof(kl_hdr_t) == 28u, "the library's commit record");
-_Static_assert(KL_HDR + KIT_LEN <= 512u, "a library kit: 2 pages");
+_Static_assert(KL_HDR + KIT_LEN <= KL_KITMAX, "a library kit: 3 pages at most");
 
 static struct {
     int16_t at[2][128];                              /* [kind - 1][slot]: the first page of its newest entry, -1 none */
@@ -52,13 +59,73 @@ static int kl_exists(uint32_t kind, uint32_t slot)
 {
     return kind >= 1u && kind <= 2u && slot < 128u && ((kl.has[kind - 1u][slot >> 3] >> (slot & 7u)) & 1u);
 }
+static uint32_t kl_kind(const kl_hdr_t *h) { return h->kind & (uint8_t)~KL_PACKED; }
 static int kl_head(uint32_t pg, kl_hdr_t *h)          /* a valid commit record at page pg: 0 */
 {
+    uint32_t k;
     if (st_read(kl_off(pg), h, sizeof *h))
         return -1;
-    if (h->magic != KL_MAGIC || h->hcrc != st_crc32(h, sizeof *h - 4u) || h->kind < 1u || h->kind > 2u ||
-        h->slot >= 128u || KL_HDR + h->len > 512u || (pg & 15u) + kl_npages(h->len) > 16u)
+    k = kl_kind(h);
+    if (h->magic != KL_MAGIC || h->hcrc != st_crc32(h, sizeof *h - 4u) || k < 1u || k > 2u ||
+        ((h->kind & KL_PACKED) && (k != KLK_KIT || KL_HDR + h->len > 512u)) ||
+        h->slot >= 128u || KL_HDR + h->len > (k == KLK_KIT ? KL_KITMAX : 512u) || (pg & 15u) + kl_npages(h->len) > 16u)
         return -1;
+    return 0;
+}
+/* 1.0 Phase 16: a kit's n values packed into out (max bytes): its bytes, 0 if they don't fit. Each value as a prefix
+ * code, low bits first: 0 "0"; 1..15 "10" + 4 bits; 16..127 "110" + 7; 128..255 "111" + 8 */
+static uint32_t kl_pack(const uint8_t *k, uint32_t n, uint8_t *out, uint32_t max)
+{
+    uint32_t i, acc = 0, b = 0, o = 0;
+    for (i = 0; i < n; i++) {
+        uint32_t v = k[i], c, w;
+        if (!v) {
+            c = 0;
+            w = 1;
+        } else if (v < 16u) {
+            c = 1u | v << 2;
+            w = 6;
+        } else if (v < 128u) {
+            c = 3u | v << 3;
+            w = 10;
+        } else {
+            c = 7u | v << 3;
+            w = 11;
+        }
+        acc |= c << b;
+        b += w;
+        while (b >= 8u) {
+            if (o >= max)
+                return 0;
+            out[o++] = (uint8_t)acc;
+            acc >>= 8;
+            b -= 8u;
+        }
+    }
+    if (b) {
+        if (o >= max)
+            return 0;
+        out[o++] = (uint8_t)acc;
+    }
+    return o;
+}
+/* .. back: n values from in's len bytes: 0, or -1 (it ran out) */
+static int kl_unpack(const uint8_t *in, uint32_t len, uint8_t *k, uint32_t n)
+{
+    uint32_t i, acc = 0, b = 0, o = 0;
+    for (i = 0; i < n; i++) {
+        uint32_t w;
+        while (b < 11u && o < len) {
+            acc |= (uint32_t)in[o++] << b;
+            b += 8u;
+        }
+        w = !(acc & 1u) ? 1u : !(acc & 2u) ? 6u : !(acc & 4u) ? 10u : 11u;
+        if (w > b)
+            return -1;
+        k[i] = (uint8_t)(w == 1u ? 0u : w == 6u ? (acc >> 2) & 15u : (acc >> 3) & (w == 10u ? 127u : 255u));
+        acc >>= w;
+        b -= w;
+    }
     return 0;
 }
 static uint32_t kl_payload_crc(uint32_t pg, uint32_t len)
@@ -86,9 +153,8 @@ static void kl_live(uint8_t *live)
             if (kl.at[k][s] < 0)
                 continue;
             pg = (uint32_t)kl.at[k][s];
-            i = k == 0u ? 2u : 1u;                   /* (a kit: 2 pages; a deleted kit only its first) */
-            if (!kl_exists(k + 1u, s) || (k == 0u && !kl_head(pg, &h) && kl_npages(h.len) == 1u))
-                i = 1u;
+            i = kl_exists(k + 1u, s) && !kl_head(pg, &h) ? kl_npages(h.len) : 1u;   /* (its pages; a deleted one:
+                                                      * its first) */
             while (i--)
                 live[(pg + i) >> 3] |= (uint8_t)(1u << ((pg + i) & 7u));
         }
@@ -105,14 +171,14 @@ static void kl_scan(void)                            /* power-on: the newest ent
     for (pg = 0; pg < KL_PAGES; pg++) {
         kl_hdr_t h;
         if (!kl_head(pg, &h) && kl_payload_crc(pg, h.len) == h.crc) {
-            int16_t *at = &kl.at[h.kind - 1u][h.slot];
+            int16_t *at = &kl.at[kl_kind(&h) - 1u][h.slot];
             kl_hdr_t o;
             if (*at < 0 || kl_head((uint32_t)*at, &o) || (int32_t)(h.seq - o.seq) > 0) {
                 *at = (int16_t)pg;
                 if (h.len)
-                    kl.has[h.kind - 1u][h.slot >> 3] |= (uint8_t)(1u << (h.slot & 7u));
+                    kl.has[kl_kind(&h) - 1u][h.slot >> 3] |= (uint8_t)(1u << (h.slot & 7u));
                 else
-                    kl.has[h.kind - 1u][h.slot >> 3] &= (uint8_t)~(1u << (h.slot & 7u));
+                    kl.has[kl_kind(&h) - 1u][h.slot >> 3] &= (uint8_t)~(1u << (h.slot & 7u));
             }
             if ((int32_t)(h.seq + 1u - kl.seq) > 0)
                 kl.seq = h.seq + 1u;
@@ -223,12 +289,18 @@ static int kl_write(uint32_t kind, uint32_t slot, const char *name, const uint8_
 {
     kl_hdr_t h;
     int32_t pg;
-    uint32_t i;
+    uint32_t i, raw = len, pk = 0;
+    uint8_t pb[512u - KL_HDR];
     int rc = 0;
     if (data_locked)                                 /* (0.24.1: another app's data, kept: nothing claimed) */
         return ST_LOCKED;
-    if (!kl.ok || kind < 1u || kind > 2u || slot >= 128u || KL_HDR + len > 512u)
+    if (!kl.ok || kind < 1u || kind > 2u || slot >= 128u || KL_HDR + len > (kind == KLK_KIT ? KL_KITMAX : 512u))
         return -1;
+    if (kind == KLK_KIT && len && (pk = kl_pack(data, len, pb, sizeof pb)) != 0) {   /* (1.0 Phase 16: packed, 2
+                                                      * pages; if not, as it is in 3) */
+        data = pb;
+        len = pk;
+    }
     flash_hush();
     pg = kl_find(kl_npages(len));
     if (pg < 0 && !kl_gc())
@@ -241,10 +313,11 @@ static int kl_write(uint32_t kind, uint32_t slot, const char *name, const uint8_
         kl_set_erased((uint32_t)pg + i, 0);
     memset(&h, 0, sizeof h);
     h.magic = KL_MAGIC;
-    h.kind = (uint8_t)kind;
+    h.kind = (uint8_t)(kind | (pk ? KL_PACKED : 0u));
     h.slot = (uint8_t)slot;
     h.seq = kl.seq++;
     h.len = (uint16_t)len;
+    h.rsv = (uint16_t)(pk ? raw : 0u);
     h.crc = ~st_crc32_add(0xFFFFFFFFu, data, len);
     for (i = 0; i < 8u; i++) {                       /* (stops at a terminator: a short name reads no further) */
         h.name[i] = name && *name ? *name : ' ';
@@ -276,8 +349,19 @@ static int32_t kl_read(uint32_t kind, uint32_t slot, uint8_t *buf, uint32_t max,
     if (!kl_exists(kind, slot))
         return -1;
     pg = (uint32_t)kl.at[kind - 1u][slot];
-    if (kl_head(pg, &h) || h.len > max || st_read(kl_off(pg) + KL_HDR, buf, h.len) ||
-        ~st_crc32_add(0xFFFFFFFFu, buf, h.len) != h.crc)
+    if (kl_head(pg, &h))
+        return -1;
+    if (h.kind & KL_PACKED) {                        /* (1.0 Phase 16: a packed kit: its first max values) */
+        uint8_t pb[512u - KL_HDR];
+        uint32_t n = h.rsv < max ? h.rsv : max;
+        if (st_read(kl_off(pg) + KL_HDR, pb, h.len) || ~st_crc32_add(0xFFFFFFFFu, pb, h.len) != h.crc ||
+            kl_unpack(pb, h.len, buf, n))
+            return -1;
+        if (name)
+            memcpy(name, h.name, 8);
+        return (int32_t)n;
+    }
+    if (h.len > max || st_read(kl_off(pg) + KL_HDR, buf, h.len) || ~st_crc32_add(0xFFFFFFFFu, buf, h.len) != h.crc)
         return -1;
     if (name)
         memcpy(name, h.name, 8);
@@ -290,6 +374,14 @@ static int kl_peek(uint32_t kind, uint32_t slot, uint8_t *buf, uint32_t n)
     uint32_t pg;
     if (!kl_exists(kind, slot))
         return -1;
+    if (kind == KLK_KIT) {                           /* (1.0 Phase 16: maybe packed: read whole) */
+        uint8_t k[KIT_LEN];
+        int32_t len = kl_read(kind, slot, k, sizeof k, 0);
+        if (len < (int32_t)n || n > sizeof k)
+            return -1;
+        memcpy(buf, k, n);
+        return 0;
+    }
     pg = (uint32_t)kl.at[kind - 1u][slot];
     return kl_head(pg, &h) || h.len < n || st_read(kl_off(pg) + KL_HDR, buf, n) ? -1 : 0;
 }
@@ -407,6 +499,7 @@ static int libkit_get(uint32_t n, uint8_t *k)
         return -1;
     for (i = (uint32_t)len; i < KIT_LEN; i++)        /* (a kit from before a parameter was added: its init value) */
         k[i] = (uint8_t)(i >= END_OF_SOUND_PARAMETERS ? init_kit_k(kit_par(i)) : 0u);
+    kit_old_fill(k, (uint32_t)len);
     kit_sanitize(k);
     return 0;
 }

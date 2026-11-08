@@ -1178,7 +1178,8 @@ static void viz_ring(int32_t d)                     /* 1.0: RING: its bands wher
     static const char *const T[NRTUNE] = {"NOTE", "OCTAVES", "FIFTHS", "MAJOR", "MINOR", "SUS4", "MIN7", "PENTA"};
     const int8_t *sh = RING_SH[pfs.dj_tune < NRTUNE ? pfs.dj_tune : 0u];
     uint32_t root = ring_root(d), k;
-    int32_t h = 12 + (int32_t)pfs.dj_reso * (VY1 - VY0 - 16) / 127, o;
+    int32_t h = 12 + (int32_t)pfs.dj_reso * (VY1 - VY0 - 16) / 127, o, top = 0;
+    const int32_t sl = (int32_t)(pfs.dj_slope & 127u) - 64, tn = (int32_t)(pfs.dj_tone & 127u) - 64;
     char b[32];
     put_str(b, "RING ", sizeof b);
     put_str(b + 5, T[pfs.dj_tune < NRTUNE ? pfs.dj_tune : 0u], sizeof b - 5u);
@@ -1190,12 +1191,18 @@ static void viz_ring(int32_t d)                     /* 1.0: RING: its bands wher
     vz_panel(b);
     for (o = 1; o < 10; o++)                         /* (the octaves over 20 Hz, as the filters' curve) */
         cv_rect(VX0 + o * VN / 10, VY0, 1, VY1 - VY0, ux_mix(vz_bg(), T_TEXT, 6));
+    for (k = 1; k < NRB && sh[k] >= 0; k++)
+        top = sh[k];
     for (k = 0; k < NRB && sh[k] >= 0; k++) {
-        int32_t n = (int32_t)root + sh[k], lo = (n - 69) * 65536 / 12 + 292253, x;   /* (octaves over 20 Hz) */
+        int32_t n = (int32_t)root + sh[k], lo = (n - 69) * 65536 / 12 + 292253, x, hk, pc;   /* (octaves over 20 Hz) */
         if (n > 113)                                 /* (perform.c ring_block leaves them out, ~5.9 kHz) */
             break;
         x = VX0 + (int32_t)((int64_t)lo * VN / (10 * 65536));
-        cv_rect(x - 1, VY1 - h, 3, h, !d ? vz_faint() : k ? ux_mix(vz_bg(), T_THEME, 60) : T_ACCENT);
+        hk = clamp32((int32_t)(((int64_t)h * exp2_q16(sl * sh[k] * 65536 / 768 / 3)) >> 16), 4, VY1 - VY0 - 2);   /* (1.0
+                                                      * Phase 18: SLOPE's ring time, TONE's level as the brightness) */
+        pc = clamp32((int32_t)(((int64_t)60 * exp2_q16(tn < 0 ? tn * sh[k] * 65536 / 768 : -tn * (top - sh[k]) * 65536 / 768)) >> 16),
+                     12, 100);
+        cv_rect(x - 1, VY1 - hk, 3, hk, !d ? vz_faint() : k ? ux_mix(vz_bg(), T_THEME, pc) : T_ACCENT);
     }
 }
 static void viz_djf(void)
@@ -1475,6 +1482,29 @@ static void viz_random(void)
     }
 }
 
+/* 1.0 Phase 16: FX TRACK SENDS: the voice's three sends as bars in its colour, each return's level a tick on its
+ * line; the caption, how the bus and the delay are joined (ROUTING) */
+static void viz_sends(void)
+{
+    static const char *const N[3] = {"FX", "DELAY", "REVERB"};
+    static const uint16_t R[3] = {PAR_FX_DRY_WET, PAR_DLY_LEVEL, PAR_REV_LEVEL};
+    uint32_t v = track_voice(ui.track), k;
+    char b[24], c[32];
+    card_value(b, sizeof b, PAR_DLY_ROUTE, par[PAR_DLY_ROUTE]);
+    put_str(c, "BUS & DELAY: ", sizeof c);
+    put_str(c + 13, b, sizeof c - 13u);
+    vz_panel(c);
+    for (k = 0; k < 3u; k++) {
+        static const uint16_t S[3] = {PAR_FX_SEND1, PAR_DSEND1, PAR_REV_SEND1};
+        int32_t y = VY0 + 10 + (int32_t)k * 24, a = par[S[k] + v], w = a * 140 / 127;
+        int32_t r = (int32_t)vp_get(R[k]) * 140 / (int32_t)(vp_max(R[k]) ? vp_max(R[k]) : 1u);
+        cv_text(VX0, y - 5, &AF_S, N[k], a ? T_TEXT : T_DIM);
+        cv_rect(76, y, 140, 1, vz_faint());
+        if (w)
+            cv_rect(76, y - 3, w, 7, ux_mix(vz_bg(), TRACK_COL[ui.track], 70));
+        cv_rect(76 + (r > 139 ? 139 : r), y - 6, 1, 13, ux_mix(vz_bg(), T_TEXT, 50));   /* (the return's level) */
+    }
+}
 /* CROSS MOD / CHOKE: the source's voice into this one (its mode, by the amount); the voices that choke each other */
 static void viz_xmod(void)
 {
@@ -1542,6 +1572,7 @@ static void draw_sound_viz(void)
     case S_LFO2: viz_lfo(1); break;
     case S_RANDOM: viz_random(); break;
     case S_XMOD: viz_xmod(); break;
+    case S_SENDS: viz_sends(); break;
     default: vz_panel(""); break;
     }
 }
@@ -2049,6 +2080,67 @@ static void vz_comp_curve(int32_t thr_db, int32_t ratio_x10, int32_t gain_db, in
         if (gh)
             cv_rect(gx, VY0, gw, gh, T_ACCENT);
         cv_text(gx + gw + 6, VY0, &AF_S, "GR", T_MID);
+    }
+}
+/* 1.0 Phase 16: ROUTING: BUS, DELAY, REVERB, each into MIX by what it keeps; the links between them on the left,
+ * each as thick as its share: FX > DLY (down), DLY > FX (up), REV > FX (up, from the reverb), ECHO > REV (down; struck
+ * through: LOOP) */
+#define RT_X 72
+static void rt_box(int32_t y, const char *t, int on)
+{
+    uint16_t f = on ? ux_mix(vz_bg(), T_THEME, 35) : vz_faint();
+    cv_rrect(RT_X, y, 64, 20, 4, f, vz_bg());
+    text_c(RT_X, y + CAP_IN(S, 20), 64, &AF_S, t, on ? T_TEXT : T_DIM, f);
+}
+static void rt_link(int32_t x, int32_t y0, int32_t y1, int32_t amt)   /* a bracket on the left: box at y0 -> box at y1 */
+{
+    int32_t w = 1 + amt * 3 / 127, i, top = y0 < y1 ? y0 : y1, bot = y0 < y1 ? y1 : y0;
+    uint16_t c = ux_mix(vz_bg(), T_THEME, 45 + amt * 55 / 127);
+    if (!amt)
+        return;
+    cv_rect(x, y0 - w / 2, RT_X - 2 - x, w, c);
+    cv_rect(x, top - w / 2, w, bot - top + w, c);
+    cv_rect(x, y1 - w / 2, RT_X - 2 - x, w, c);
+    for (i = 0; i < 5; i++)                          /* (the head, into the box at y1) */
+        cv_rect(RT_X - 2 - 5 + i, y1 - 4 + i, 1, 9 - 2 * i, c);
+}
+static void viz_route(void)
+{
+    static const int32_t Y[3] = {30, 62, 94};        /* (BUS, DELAY, REVERB) */
+    int32_t r = par[PAR_DLY_ROUTE], fd = r > 64 ? (r - 64) * 127 / 63 : 0, df = r < 64 ? (64 - r) * 127 / 64 : 0;
+    int32_t rf = par[PAR_REV_FX], er = par[PAR_ECHOREV], keep[3], k, i, x = RT_X + 32, w;
+    uint16_t mf = ux_mix(vz_bg(), T_THEME, 20), c;
+    char b[24];
+    if (r == 64)
+        put_str(b, "BUS & DELAY: PARALLEL", sizeof b);
+    else
+{
+        put_str(b, r > 64 ? "FX > DLY " : "DLY > FX ", sizeof b);
+        put_str(put_int(b + 9, r > 64 ? (r - 64) * 100 / 63 : (64 - r) * 100 / 64), "%", 2);
+    }
+    vz_panel(b);
+    rt_box(Y[0], "BUS", 1);
+    rt_box(Y[1], "DELAY", par[PAR_DLY_LEVEL] != 0);
+    rt_box(Y[2], "REVERB", par[PAR_REV_LEVEL] != 0);
+    cv_rrect(176, Y[0], 44, Y[2] + 20 - Y[0], 4, mf, vz_bg());
+    text_c(176, (Y[0] + Y[2] + 20) / 2 - 6, 44, &AF_S, "MIX", T_TEXT, mf);
+    keep[0] = 127;
+    keep[1] = 127 - df;
+    keep[2] = 127 - rf;
+    for (k = 0; k < 3; k++)                          /* (into the mix: what each keeps) */
+        if (keep[k] > 0)
+            cv_rect(RT_X + 64, Y[k] + 10 - keep[k] * 2 / 127, 176 - RT_X - 64, 1 + keep[k] * 4 / 127,
+                    ux_mix(vz_bg(), T_THEME, 30 + keep[k] * 50 / 127));
+    rt_link(RT_X - 14, fd ? Y[0] + 6 : Y[1] + 6, fd ? Y[1] + 6 : Y[0] + 6, fd | df);   /* FX > DLY or DLY > FX */
+    rt_link(RT_X - 28, Y[2] + 14, Y[0] + 14, rf);                                        /* REV > FX */
+    if (er) {                                        /* ECHO > REV: down, DELAY into REVERB; struck: LOOP */
+        w = 1 + er * 3 / 127;
+        c = dly_loop() ? T_DIM : ux_mix(vz_bg(), T_THEME, 45 + er * 55 / 127);
+        cv_rect(x - w / 2, Y[1] + 20, w, Y[2] - Y[1] - 20 - 1, c);
+        for (i = 0; i < 4; i++)
+            cv_rect(x - 3 + i, Y[2] - 4 + i, 7 - 2 * i, 1, c);
+        if (dly_loop())
+            cv_rect(x - 8, Y[1] + 25, 17, 2, T_TEXT);
     }
 }
 static void viz_fxbus(void)

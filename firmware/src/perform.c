@@ -121,6 +121,7 @@ static struct {
     uint8_t dj_reso;                                 /* 0.24.3: the DJ filter's resonance, 0..127 (0: 0.6's) (KSC1) */
     uint8_t dj_ftype;                                /* 1.0: the DJ filter's type, DJT_* (KSC1) */
     uint8_t dj_tune;                                 /* 1.0: RING's chord, RC_* (KSC1) */
+    uint8_t dj_spread, dj_slope, dj_tone, dj_wet;    /* 1.0 Phase 18: RING (2/2), 0..127, 64 as before (KSC1) */
 } pfs;
 /* 1.0: the DJ filter's type, the global character filter: the LXR's SVF (LP, HP), ACID (its LP; the LXR's HP) or MS20
  * (its LP, HP) */
@@ -128,7 +129,10 @@ enum { DJT_LXR, DJT_ACID, DJT_MS20, DJT_RING, NDJT };
 /* 1.0: RING, a tuned resonator (after the Torso S-4's RING, as Rings' strings are): NRB band-passes at a chord over a
  * root the DJ knob sweeps in semitones (C1 at the left end, C3 in the middle, C6 at the right: darker one way,
  * brighter the other), Reso their ring time (T60 0.08 .. 2.6 s), TUNE the chord. On the mix summed to mono, the bands
- * panned alternately left and right (the root in the middle); half the dry under it, so the drums keep their hit */
+ * panned alternately left and right (the root in the middle); half the dry under it, so the drums keep their hit.
+ * 1.0 Phase 18: RING (2/2): SPREAD the side bands' pan (0 all in the middle, 64 as above, 127 hard), SLOPE their ring
+ * time up the chord (left shorter, right longer: x 2^(+-1) an octave over the root), TONE their level tilted (left the
+ * root loudest, right the top band: +-6 dB an octave), WET the dry under it (0 all dry, 64 as above, 127 none) */
 #define NRB 8u
 enum { RC_NOTE, RC_OCT, RC_FIFTH, RC_MAJ, RC_MIN, RC_SUS4, RC_MIN7, RC_PENTA, NRTUNE };
 static const int8_t RING_SH[NRTUNE][NRB] = {
@@ -217,6 +221,7 @@ static void perf_defaults(void)
     pfs.repeat = 2;                                  /* 1/16 */
     pfs.tape = 64;                                   /* ~0.9 s */
     pfs.dj_tune = RC_MAJ;                            /* (1.0: RING: a major chord) */
+    pfs.dj_spread = pfs.dj_slope = pfs.dj_tone = pfs.dj_wet = 64;   /* (1.0 Phase 18: as before) */
     pfs.drill = 80;
     pfs.jitter = 64;
     pfs.cuts = 50;
@@ -639,7 +644,8 @@ static void stutter(int16_t *l, int16_t *r)
 /* (1.0 Phase 10d: a band at a time over 16 samples, its coefficients and states held, its pan its own loop: ~40%
  * fewer instructions than a sample at a time through every band) */
 static inline __attribute__((always_inline)) void rg_band(int32_t *st, const int32_t *xm, int32_t *yl, int32_t *yr,
-                                                          int32_t c, int32_t q, int32_t g, const uint32_t pan)
+                                                          int32_t c, int32_t q, int32_t g, const uint32_t mid,
+                                                          int32_t gl, int32_t gr)
 {
     int32_t s0 = st[0], s1 = st[1];
     uint32_t i;
@@ -649,16 +655,14 @@ static inline __attribute__((always_inline)) void rg_band(int32_t *st, const int
         bp = s1 + mulr16(c, xin - lp - mulr16(q, s1));
         s0 = clamp_hl(lp, -RG_LIM, RG_LIM);
         s1 = bp = clamp_hl(bp, -RG_LIM, RG_LIM);
-        if (pan == 0u) {                             /* (the middle) */
+        if (mid) {                                   /* (the middle) */
             int32_t m = bp - (bp >> 2);
             yl[i] += m;
             yr[i] += m;
-        } else if (pan == 1u) {                      /* (left) */
-            yl[i] += bp;
-            yr[i] += bp >> 2;
-        } else {
-            yl[i] += bp >> 2;
-            yr[i] += bp;
+        } else {                                     /* (1.0 Phase 18: SPREAD's pair, Q16; 64: 1 and 1/4 exactly,
+                                                      * as the shifts before) */
+            yl[i] += (int32_t)(((int64_t)bp * gl) >> 16);
+            yr[i] += (int32_t)(((int64_t)bp * gr) >> 16);
         }
     }
     st[0] = s0;
@@ -676,19 +680,31 @@ static inline __attribute__((always_inline)) int32_t rg_up(const int32_t *y)   /
 }
 static void ring_block(int16_t *l, int16_t *r, int32_t d, int32_t w)
 {
-    int32_t c[NRB], q[NRB], g[NRB], ts;
+    int32_t c[NRB], q[NRB], g[NRB], ts, top = 0, gn, gf, gd, gw;
+    const int32_t sl = (int32_t)(pfs.dj_slope & 127u) - 64, tn = (int32_t)(pfs.dj_tone & 127u) - 64,
+                  sp = (int32_t)(pfs.dj_spread & 127u), wt = (int32_t)(pfs.dj_wet & 127u);
     uint32_t root = ring_root(d), nb = 0, k, i, b;
     const int8_t *sh = RING_SH[pfs.dj_tune < NRTUNE ? pfs.dj_tune : 0u];
     ts = (int32_t)(((int64_t)1764 * exp2_q16((int32_t)((int64_t)pf.dj_rs * 5 * 65536 / 32512))) >> 16);   /* T60,
                                                       * half-rate samples */
+    for (k = 1; k < NRB && sh[k] >= 0; k++)          /* (1.0 Phase 18: the chord's top, for TONE right) */
+        top = sh[k];
+    gn = sp <= 64 ? 49152 + 256 * sp : 65536;        /* (SPREAD: the near side, the far, Q16; 0: both the middle's */
+    gf = sp <= 64 ? 49152 - 512 * sp : 16384 * (127 - sp) / 63;   /* 3/4) */
+    gd = wt <= 64 ? 32768 - 256 * wt : 16384 * (127 - wt) / 63;   /* (WET: the dry, Q15; the bands, Q16 on tanh's: */
+    gw = wt <= 64 ? 24575 * wt / 64 : 24575 + 8192 * (wt - 64) / 63;   /* 64: 1/2 and 0.75, as before) */
     for (k = 0; k < NRB && sh[k] >= 0; k++) {
-        int32_t n = (int32_t)root + sh[k], wq, cq, cf, cr;
+        int32_t n = (int32_t)root + sh[k], wq, cq, cf, cr, tk = ts, el;
         uint32_t qq;
+        if (sl)                                      /* (SLOPE: the band's T60, x 2^(+-3) at 3 octaves: 32 bits
+                                                      * below, ~2.8e9 at most) */
+            tk = (int32_t)(((int64_t)ts * exp2_q16(sl * sh[k] * 65536 / 768)) >> 16);
+        el = tn < 0 ? tn * sh[k] * 65536 / 768 : -tn * (top - sh[k]) * 65536 / 768;   /* (TONE, log2) */
         wq = (int32_t)(((int64_t)440 * exp2_q16((n - 69) * 65536 / 12) * 411775 / FS) >> 16);   /* 2 pi f / FS */
         if (wq > 55000)                              /* (over ~5.9 kHz: left out) */
             break;
         cq = rg_coef(wq * 2);                        /* (at half rate) */
-        qq = 1852156736u / ((uint32_t)ts * ((uint32_t)cq >> 4));   /* 6.9 / (T60 c), Q16: its damping (both / 16:
+        qq = 1852156736u / ((uint32_t)tk * ((uint32_t)cq >> 4));   /* 6.9 / (T60 c), Q16: its damping (both / 16:
                                                       * 32 bits) */
         q[nb] = qq > 65536u ? 65536 : qq < 33u ? 33 : (int32_t)qq;
         c[nb] = cq;
@@ -696,7 +712,7 @@ static void ring_block(int16_t *l, int16_t *r, int32_t d, int32_t w)
         cr = (int32_t)(log2_q16(65536u - (uint32_t)(mulq16(cq, cq) >> 2)) -   /* input x cos(w) / cos(w / 2) */
                        log2_q16(65536u - (uint32_t)(mulq16(cf, cf) >> 2)));   /* rings as at the full rate; cos^2 =
                                                       * 1 - c^2 / 4: cr is log2 of the ratio squared) */
-        g[nb] = mulq16(exp2_q16((log2_q16((uint32_t)q[nb]) - (16 << 16)) * 2 / 5 + cr / 2), RG_GAIN);   /* (q^0.4:
+        g[nb] = mulq16(exp2_q16((log2_q16((uint32_t)q[nb]) - (16 << 16)) * 2 / 5 + cr / 2 + el), RG_GAIN);   /* (q^0.4:
                                                       * a long ring about as loud as a short one) */
         nb++;                                        /* (the bands' pan: 0 the middle, odd right, even left) */
     }
@@ -716,11 +732,9 @@ static void ring_block(int16_t *l, int16_t *r, int32_t d, int32_t w)
         }
         for (k = 0; k < nb; k++) {
             if (k == 0u)
-                rg_band(pf.rg_s[k], xm, yl + 5, yr + 5, c[k], q[k], g[k], 0u);
-            else if (k & 1u)
-                rg_band(pf.rg_s[k], xm, yl + 5, yr + 5, c[k], q[k], g[k], 2u);
-            else
-                rg_band(pf.rg_s[k], xm, yl + 5, yr + 5, c[k], q[k], g[k], 1u);
+                rg_band(pf.rg_s[k], xm, yl + 5, yr + 5, c[k], q[k], g[k], 1u, 0, 0);
+            else                                     /* (odd right, even left) */
+                rg_band(pf.rg_s[k], xm, yl + 5, yr + 5, c[k], q[k], g[k], 0u, k & 1u ? gf : gn, k & 1u ? gn : gf);
         }
         for (i = 0; i < RG_SUB; i++) {               /* (up: even samples between, odd on the half-rate ones) */
             int32_t j, o, v[2][2];
@@ -730,10 +744,10 @@ static void ring_block(int16_t *l, int16_t *r, int32_t d, int32_t w)
             v[1][1] = yr[i + 3u];
             for (j = 0; j < 2; j++) {
                 int16_t *pl = lb + 2u * i + (uint32_t)j, *pr = rb + 2u * i + (uint32_t)j;
-                o = (*pl >> 1) + (int32_t)(((int64_t)fast_tanh(v[0][j] >> 3) * 24575) >> 16);   /* (0.75: room
+                o = ((*pl * gd) >> 15) + (int32_t)(((int64_t)fast_tanh(v[0][j] >> 3) * gw) >> 16);   /* (0.75: room
                                                       * for the dry) */
                 *pl = (int16_t)sat16(*pl + (((o - *pl) * w) >> 15));
-                o = (*pr >> 1) + (int32_t)(((int64_t)fast_tanh(v[1][j] >> 3) * 24575) >> 16);
+                o = ((*pr * gd) >> 15) + (int32_t)(((int64_t)fast_tanh(v[1][j] >> 3) * gw) >> 16);
                 *pr = (int16_t)sat16(*pr + (((o - *pr) * w) >> 15));
             }
         }

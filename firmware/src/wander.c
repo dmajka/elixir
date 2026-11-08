@@ -156,8 +156,8 @@ static const chap_t CH_FROG[5] = {{"COLD WATER", {0, 0, 0, 0}, 2, {1, 2}, 64},
                                   {"THE FROST", {-45, -30, 45, 0}, 3, {CH_END, CH_END}, 128}};
 static const int8_t FROG_HEAT[5] = {0, 50, -50, 100, -100};
 /* .. THE CANYON: the voices lost in it, then out together. The delay's level, feedback and echoes into the reverb (at
- * least these), the reverb's level and size (home's and these more); each voice's FX SEND its own (when, how far, how
- * fast), its pan drawn in towards the middle at the mouth, then wandering wider each chapter; the delay MONO in the
+ * least these), the reverb's level and size (home's and these more); each voice's DELAY SEND its own (1.0 Phase 16:
+ * its FX SEND before; when, how far, how fast), its pan drawn in towards the middle at the mouth, then wandering wider each chapter; the delay MONO in the
  * narrows, PING PONG from the echo chamber; lost in echoes, the feedback swells to 126-127 (it rings) and falls back.
  * THE WAY OUT: all of it home's, the voices together. ENDLESS: never out (the narrows .. lost again). The echo's
  * note values (SYNC) */
@@ -171,7 +171,7 @@ static const uint16_t CY_P[NCY] = {PAR_DLY_LEVEL, PAR_DLY_FB, PAR_ECHOREV, PAR_R
 static const uint8_t CY_T[5][NCY] = {{48, 45, 10, 0, 0}, {64, 62, 30, 10, 15}, {72, 78, 55, 20, 30}, {84, 94, 80, 28, 45},
                                     {0, 0, 0, 0, 0}};
 static const uint8_t CY_SPREAD[5] = {0, 20, 40, 60, 0};   /* (how far a pan wanders, either way) */
-static const uint8_t CY_SEND[5][2] = {{16, 32}, {24, 64}, {30, 90}, {20, 105}, {0, 0}};   /* (a voice's FX SEND: from,
+static const uint8_t CY_SEND[5][2] = {{16, 32}, {24, 64}, {30, 90}, {20, 105}, {0, 0}};   /* (a voice's DELAY SEND: from,
                                                       * to (at least home's)) */
 static const uint16_t CY_PAN[NVOICE] = {PAR_PAN1, PAR_PAN2, PAR_PAN3, PAR_PAN4, PAR_PAN5, PAR_PAN6};
 static const uint8_t CY_TIME[5][4] = {{8, 8, 8, 8}, {7, 8, 7, 5}, {4, 5, 6, 7}, {3, 4, 6, 7}, {8, 8, 8, 8}};
@@ -1530,7 +1530,7 @@ static uint32_t wd_cy_base(uint32_t v)               /* a voice's pan drawn a th
     int32_t h = wd_home[kit_idx(CY_PAN[v])];
     return (uint32_t)(h + (64 - h) / 3);
 }
-static void wd_cy_aim(uint32_t v, int pan)           /* a voice's next aim: its pan, or its FX SEND (and when) */
+static void wd_cy_aim(uint32_t v, int pan)           /* a voice's next aim: its pan, or its DELAY SEND (and when) */
 {
     uint32_t c = wd_cht() % 5u;
     if (pan) {
@@ -1540,7 +1540,7 @@ static void wd_cy_aim(uint32_t v, int pan)           /* a voice's next aim: its 
         return;
     }
     {
-        uint32_t h = wd_home[kit_idx(PAR_FX_SEND1 + v)], lo = CY_SEND[c][0], hi = CY_SEND[c][1];
+        uint32_t h = wd_home[kit_idx(PAR_DSEND1 + v)], lo = CY_SEND[c][0], hi = CY_SEND[c][1];
         uint32_t x = lo + wd_rnd(hi - lo + 1u);
         wd.cy_snd[v] = (uint8_t)(c == 4u ? h : x > h ? x : h);
         wd.cy_wait[v] = (uint8_t)(c == 4u ? 0u : wd_rnd(c ? 8u : 4u));   /* (each in its own time) */
@@ -1556,7 +1556,7 @@ static int wd_cy_near(uint32_t p, uint32_t tg, uint32_t r)   /* p a step towards
     }
     return par[p] == tg;
 }
-static void wd_cy_voices_bar(void)                   /* a bar: each voice's pan and FX SEND a little on its way */
+static void wd_cy_voices_bar(void)                   /* a bar: each voice's pan and DELAY SEND a little on its way */
 {
     uint32_t v, m = wd_cy_voices(), c = wd_cht() % 5u, r = 1u + wd.k[WV_STRIDE] / 64u;
     for (v = 0; v < NVOICE; v++) {
@@ -1568,7 +1568,7 @@ static void wd_cy_voices_bar(void)                   /* a bar: each voice's pan 
             wd.cy_wait[v]--;
             continue;
         }
-        if (wd_cy_near(PAR_FX_SEND1 + v, wd.cy_snd[v], wd.cy_rate[v]) && c >= 2u && c < 4u)
+        if (wd_cy_near(PAR_DSEND1 + v, wd.cy_snd[v], wd.cy_rate[v]) && c >= 2u && c < 4u)
             wd_cy_aim(v, 0);                         /* (a voice calling out, then quieter, then again) */
     }
 }

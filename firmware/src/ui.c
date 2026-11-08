@@ -25,12 +25,12 @@
 enum { M_HOME, M_PATTERN, M_SONG, M_SOUND, M_STEP, M_PERF, M_EUCLID, M_FX, M_MIXER, M_CONFIG, M_SAVE, M_LOAD,
        M_RECOPT, M_KEYS, NMODE };
 enum { S_OSC, S_AEG, S_MOD, S_FM, S_CLICK, S_FILTER, S_LFO, S_MIX, S_SHAPE, S_RANDOM, S_XMOD, S_MODEL, S_LFOM,
-       S_GATE, S_LFO2, S_INSERT, NSECT };
-#define NSPG 32                                      /* the sound pages a track can have (sections x halves) */
+       S_GATE, S_LFO2, S_INSERT, S_SENDS, NSECT };
+#define NSPG 34                                      /* the sound pages a track can have (sections x halves) */
 /* (29: LFO and LFO MODE are LFO 1's three pages; MIX is no longer shown, its parameters are elsewhere) */
 static const char *const SECT_NAME[NSECT] = {"OSCILLATOR", "AMP EG", "MOD EG / VELO", "FM", "TRANSIENT", "FILTER",
                                              "LFO 1", "MIX", "SHAPE", "RANDOM PER HIT", "CROSS MOD / CHOKE", "MODEL",
-                                             "LFO 1", "GATE", "LFO 2", "INSERT FX"};
+                                             "LFO 1", "GATE", "LFO 2", "INSERT FX", "FX TRACK SENDS"};
 enum { IO_KIT, IO_PATTERN, IO_SONG, IO_MORPH, IO_SOUND, IO_PROJECT, IO_FACTORY, IO_FMORPH, NIO };   /* (FACTORY: LOAD,
                                                                                       * a kit bank; FMORPH: as the morph target) */
 static const char *const IO_NAME[NIO] = {"KIT", "PATTERN", "SONG", "MORPH", "SOUND", "PROJECT", "KIT", "MORPH"};
@@ -70,7 +70,8 @@ enum { VP_BASE = 0x400, VP_NONE = VP_BASE, VP_IO_TYPE, VP_IO_SLOT, VP_NAME_POS, 
        VP_STRETCH, VP_REALIGN,                       /* (1.0: TIME STRETCH, a track's; when the tracks realign) */
        VP_DJTYPE,                                    /* (1.0: the DJ filter's type, perform.c DJT_*) */
        VP_DJTUNE,                                    /* (1.0: RING's chord, perform.c RC_*) */
-       VP_UMIX, VP_UMIX_LAST = VP_UMIX + NVOICE - 1 };   /* (1.0: a voice IN / OUT of the stereo mix while USB records) */
+       VP_UMIX, VP_UMIX_LAST = VP_UMIX + NVOICE - 1,   /* (1.0: a voice IN / OUT of the stereo mix while USB records) */
+       VP_DJSPREAD, VP_DJSLOPE, VP_DJTONE, VP_DJWET };   /* (1.0 Phase 18: RING (2/2), perform.c pfs.dj_spread ..) */
 _Static_assert(NPAR <= VP_BASE, "the virtual parameters after the parameters (25b + 27a: NPAR 525, past 0x200)");
 /* the ACTION page's action (OCT+ does it); 0.10: those of the track's generator (gen_acts) */
 enum { ACT_NONE, ACT_DICE, ACT_COMMIT, ACT_UNDO, ACT_RESET, NACT };
@@ -100,6 +101,8 @@ static struct {
     uint8_t copy_src;                /* COPY: the source track + 1 / pattern + 1 */
     uint8_t ca, ca_loads;            /* 0.11: Control All under way (the kit as it was: ca_snap), kit_loads then */
     uint8_t ca_ask;                  /* .. OCT+ let go: its dialog (OCT+ reverts, OCT- keeps) */
+    uint8_t ca_kept;                 /* 1.0 Phase 17: ca_snap holds the kit before the last Control All (until a kit
+                                      * load: ca_loads): GLOBAL's button 71 reverts to it */
     uint8_t dx_ask, dx_seen;         /* 0.24.1: another app's data found (project.c fx_found): 1 asked, 2 COPY (OCT+)
                                       * once, 3 erasing (dx_ms: when); dx_seen: asked this power-on */
     uint32_t dx_ms;
@@ -242,7 +245,7 @@ static uint32_t track_voice(uint32_t t) { return t < 6u ? t : 5u; }
 static uint32_t track_page(uint32_t t) { return t; }
 /* Elixir's sections (S_SHAPE ..): the first of each six per-voice parameters, by half (0: none). MODEL: the DRUM
  * voices' only */
-static const uint16_t K_PAGES[8][8] = {{PAR_SHAPE1, PAR_DRIVE1, PAR_VOICE_DECIMATION1, PAR_BITS1,   /* (29: the */
+static const uint16_t K_PAGES[NSECT - S_SHAPE][8] = {{PAR_SHAPE1, PAR_DRIVE1, PAR_VOICE_DECIMATION1, PAR_BITS1,   /* (29: the */
                                         PAR_TILT1},       /* .. sample rate from MIX, before bits as it plays) */
                                        {PAR_RND_PITCH1, PAR_RND_DECAY1, PAR_RND_FILTER1, PAR_RND_PAN1},
                                        {PAR_XSRC1, PAR_XMODE1, PAR_XAMT1, PAR_CHOKE1},
@@ -251,7 +254,9 @@ static const uint16_t K_PAGES[8][8] = {{PAR_SHAPE1, PAR_DRIVE1, PAR_VOICE_DECIMA
                                        {0},               /* (0.13: LFO 1's MODE; 1.0: on LFO 1's page 2) */
                                        {PAR_GATE1},       /* (19b) */
                                        {0},               /* (25b: LFO 2: lfo_par) */
-                                       {PAR_INS1, PAR_INSA1, PAR_INSB1, PAR_INSC1}};         /* (27a) */
+                                       {PAR_INS1, PAR_INSA1, PAR_INSB1, PAR_INSC1},          /* (27a) */
+                                       {PAR_FX_SEND1, PAR_DSEND1, PAR_REV_SEND1}};   /* (1.0 Phase 16: the second
+                                                      * row, the kit's returns: sect_par_raw) */
 /* 1.0: every LFO's knobs in one order (LP_*: page 1 Dest, Depth, Sync, Rate; page 2 Wave, Phase, Mode, Retrigger;
  * the global LFOs' too, ui.c P_PERF). LFO 1's Voice is no knob: its Dest turns through every voice's (lfo1_dest_turn) */
 enum { LP_DEST, LP_DEPTH, LP_SYNC, LP_RATE, LP_WAVE, LP_PHASE, LP_MODE, LP_RETRIG, NLP };
@@ -278,6 +283,10 @@ static uint32_t sect_par_raw(uint32_t t, uint32_t s, uint32_t h, uint32_t k)
         return lfo_par(t, s == S_LFO2, h * 4u + k);
     if (s == S_FILTER && h == 1u)                    /* 1.0: FILTER X, the second page's first knob */
         return k == 0u ? PAR_FLTX1 + track_voice(t) : 0u;
+    if (s == S_SENDS && h == 1u) {                   /* 1.0 Phase 16: under each send its return's level (the kit's) */
+        static const uint16_t R[4] = {PAR_FX_DRY_WET, PAR_DLY_LEVEL, PAR_REV_LEVEL, 0};
+        return k < 4u ? R[k] : 0u;
+    }
     if (s < S_SHAPE)
         return LXR_PAGES[track_page(t)][s][8u + lxr_knob(s, h, k)];
     q = K_PAGES[s - S_SHAPE][h * 4u + k];
@@ -335,7 +344,8 @@ static uint32_t par_unheard(uint32_t t, uint32_t p)  /* (one of those knobs: lxr
 static uint32_t sect_group(uint32_t s)
 {
     static const uint8_t G[NSECT] = {S_MODEL, S_AEG, S_AEG, S_MODEL, S_MODEL, S_FILTER, S_LFO, S_MIX, S_FILTER, S_LFO,
-                                     S_LFO, S_MODEL, S_LFO, S_AEG, S_LFO, S_FILTER};   /* (29: EDIT opens MODEL) */
+                                     S_LFO, S_MODEL, S_LFO, S_AEG, S_LFO, S_FILTER, S_LFO};   /* (29: EDIT opens
+                                                      * MODEL; 1.0 Phase 16: SENDS in LFO's group, last) */
     return G[s];
 }
 
@@ -359,7 +369,7 @@ static int sect_half_used(uint32_t t, uint32_t s, uint32_t h)
  * modulation last; MIX not shown (volume, pan: the mixer; sample rate: SHAPE; MIDI: CONFIG; length: SEQ's TRACK) */
 #define NSORD (NSECT - 1u)
 static const uint8_t SECT_ORDER[NSORD] = {S_MODEL, S_OSC, S_FM, S_CLICK, S_FILTER, S_SHAPE, S_INSERT, S_AEG, S_GATE,
-                                          S_MOD, S_LFO, S_LFOM, S_LFO2, S_RANDOM, S_XMOD};
+                                          S_MOD, S_LFO, S_LFOM, S_LFO2, S_RANDOM, S_XMOD, S_SENDS};
 static uint32_t sect_rank(uint32_t s)
 {
     uint32_t i;
@@ -534,9 +544,10 @@ static uint32_t gen_acts(const pattern_t *p, uint32_t t, uint8_t out[NGACT])
  * always-on DELAY after the bus (TIME, FEEDBACK, TONE, LEVEL; its MODE, SYNC, ECHO > REVERB; with TAPE, its WOW,
  * SATURATE, GLITCH, PITCH); 23: DIRT, the bus's and the master's; the master's COMPRESSOR and its SIDECHAIN; 31: the
  * voices' FX and reverb sends, the mixer's pages. ui.page counts the pages shown (fx_page: which one it is) */
-#define NFXPG 14u
-enum { FXPG_REV, FXPG_BUS, FXPG_PARS, FXPG_DLY, FXPG_DLY2, FXPG_DUB, FXPG_DIRT, FXPG_DJ, FXPG_COMP, FXPG_COMP2,
-       FXPG_FSEND, FXPG_FSEND2, FXPG_RSEND, FXPG_RSEND2 };
+#define NFXPG 18u
+enum { FXPG_REV, FXPG_BUS, FXPG_PARS, FXPG_DLY, FXPG_DLY2, FXPG_DUB, FXPG_ROUTE, FXPG_DIRT, FXPG_DJ, FXPG_DJ2, FXPG_COMP,
+       FXPG_COMP2, FXPG_FSEND, FXPG_FSEND2, FXPG_DSEND, FXPG_DSEND2, FXPG_RSEND, FXPG_RSEND2 };   /* (1.0 Phase 16:
+                                                      * ROUTING, the delay sends; in the order shown) */
 static const uint16_t P_FX[NFXPG][4] = {{PAR_REV_TYPE, PAR_REV_SIZE, PAR_REV_DAMP, PAR_REV_LEVEL},
                                         {PAR_FX_TYPE, PAR_FX_DRY_WET, VP_FX_SUB, VP_NONE},
                                         {PAR_FX_P1, PAR_FX_P2, PAR_FX_P3, PAR_FX_P4},
@@ -544,12 +555,16 @@ static const uint16_t P_FX[NFXPG][4] = {{PAR_REV_TYPE, PAR_REV_SIZE, PAR_REV_DAM
                                         {PAR_DLY_TONE, PAR_ECHOREV, PAR_DLY_FB, PAR_DLY_BAND},   /* .. order: FEEDBACK
                                                       * and BAND side by side, as they work together) */
                                         {PAR_DLY_WOW, PAR_DSAT, PAR_GLITCH, PAR_DPITCH},
+                                        {PAR_DLY_ROUTE, PAR_REV_FX, PAR_ECHOREV, VP_NONE},
                                         {PAR_FXDIRT, VP_NONE, PAR_MDIRT, PAR_MDIRT_AMT},
                                         {VP_DJTYPE, VP_DJ, VP_DJRESO, VP_DJTUNE},   /* (1.0: the global filter: Type, Filt, Reso; RING: Tune) */
+                                        {VP_DJSPREAD, VP_DJSLOPE, VP_DJTONE, VP_DJWET},   /* (1.0 Phase 18: RING (2/2)) */
                                         {PAR_MC_THR, PAR_MC_RATIO, PAR_MC_ATK, PAR_MC_REL},
                                         {PAR_MC_SRC, PAR_MC_GAIN, PAR_MC_MIX, VP_NONE},
                                         {PAR_FX_SEND1, PAR_FX_SEND1 + 1, PAR_FX_SEND1 + 2, PAR_FX_SEND1 + 3},
                                         {PAR_FX_SEND1 + 4, PAR_FX_SEND1 + 5, PAR_FX_DRY_WET, VP_NONE},
+                                        {PAR_DSEND1, PAR_DSEND1 + 1, PAR_DSEND1 + 2, PAR_DSEND1 + 3},
+                                        {PAR_DSEND1 + 4, PAR_DSEND1 + 5, PAR_DLY_LEVEL, VP_NONE},
                                         {PAR_REV_SEND1, PAR_REV_SEND1 + 1, PAR_REV_SEND1 + 2, PAR_REV_SEND1 + 3},
                                         {PAR_REV_SEND1 + 4, PAR_REV_SEND1 + 5, PAR_REV_LEVEL, VP_MVOL}};
 static uint32_t fx_shown(uint8_t out[NFXPG])        /* the pages shown, in order */
@@ -568,12 +583,17 @@ static uint32_t fx_shown(uint8_t out[NFXPG])        /* the pages shown, in order
         if (par[PAR_FX_DELAY_TYPE] == DELAY_TAPE || par[PAR_FX_DELAY_TYPE] == DELAY_TAPEPP)
             out[n++] = FXPG_DUB;
     }
+    out[n++] = FXPG_ROUTE;                           /* (1.0 Phase 16: the bus, the delay and the reverb's order) */
     out[n++] = FXPG_DIRT;
     out[n++] = FXPG_DJ;
+    if (pfs.dj_ftype == DJT_RING)                    /* (1.0 Phase 18: RING's second page) */
+        out[n++] = FXPG_DJ2;
     out[n++] = FXPG_COMP;
     out[n++] = FXPG_COMP2;
     out[n++] = FXPG_FSEND;
     out[n++] = FXPG_FSEND2;
+    out[n++] = FXPG_DSEND;
+    out[n++] = FXPG_DSEND2;
     out[n++] = FXPG_RSEND;
     out[n++] = FXPG_RSEND2;
     return n;
@@ -584,17 +604,19 @@ static uint32_t fx_page(void)                        /* the page on screen (FXPG
     uint32_t n = fx_shown(l);
     return l[ui.page < n ? ui.page : n - 1u];
 }
-#define NMIXER 8u
+#define NMIXER 10u
 static const uint16_t P_MIXER[NMIXER][4] = {{PAR_VOL1, PAR_VOL2, PAR_VOL3, PAR_VOL4},
                                             {PAR_VOL5, PAR_VOL6, PAR_FX_DRY_WET, VP_MASTER},
                                             {PAR_PAN1, PAR_PAN2, PAR_PAN3, PAR_PAN4},
                                             {PAR_PAN5, PAR_PAN6, PAR_REV_LEVEL, PAR_REV_SIZE},
                                             {PAR_FX_SEND1, PAR_FX_SEND1 + 1, PAR_FX_SEND1 + 2, PAR_FX_SEND1 + 3},
                                             {PAR_FX_SEND1 + 4, PAR_FX_SEND1 + 5, PAR_FX_DRY_WET, VP_NONE},
+                                            {PAR_DSEND1, PAR_DSEND1 + 1, PAR_DSEND1 + 2, PAR_DSEND1 + 3},   /* (1.0 */
+                                            {PAR_DSEND1 + 4, PAR_DSEND1 + 5, PAR_DLY_LEVEL, VP_NONE},   /* .. Phase 16) */
                                             {PAR_REV_SEND1, PAR_REV_SEND1 + 1, PAR_REV_SEND1 + 2, PAR_REV_SEND1 + 3},
                                             {PAR_REV_SEND1 + 4, PAR_REV_SEND1 + 5, PAR_REV_LEVEL, VP_MVOL}};
 static const char *const MIXER_TITLE[NMIXER / 2u] = {"MIXER: VOLUME", "MIXER: PAN", "MIXER: FX SEND",
-                                                     "MIXER: REV SEND"};   /* (Phase 12: REV, so (1/2) fits) */
+                                                     "MIXER: DLY SEND", "MIXER: REV SEND"};   /* (Phase 12: REV, so (1/2) fits) */
 #define NCONFIG 16u
 static const uint16_t P_CONFIG[NCONFIG][4] = {
     {PAR_BPM, PAR_SHUFFLE, PAR_FOLLOW, VP_PLAY},     /* (37: Play in place of Kit chg) */
@@ -939,6 +961,8 @@ static uint32_t tgt_group(uint32_t v, uint32_t p)    /* (SECT_ORDER's rank, or T
     uint32_t i, t, h, k;
     for (i = 0; i < NSORD; i++) {
         uint32_t s = SECT_ORDER[i];
+        if (s == S_SENDS)                            /* (1.0 Phase 16: the sends stay MIX & SENDS', the returns theirs) */
+            continue;
         for (t = v; t <= (v == 5u ? 6u : v); t++)   /* (the hat: the open hat's page too) */
             for (h = 0; h < 2u; h++)
                 for (k = 0; k < 4u; k++)
@@ -1287,6 +1311,10 @@ static uint32_t vp_get(uint32_t p)
     case VP_DJRESO: return pfs.dj_reso;
     case VP_DJTYPE: return pfs.dj_ftype;
     case VP_DJTUNE: return pfs.dj_tune;
+    case VP_DJSPREAD: return pfs.dj_spread;          /* (1.0 Phase 18) */
+    case VP_DJSLOPE: return pfs.dj_slope;
+    case VP_DJTONE: return pfs.dj_tone;
+    case VP_DJWET: return pfs.dj_wet;
     case VP_M1: case VP_M1 + 1: case VP_M1 + 2: case VP_M1 + 3: return pfs.m[p - VP_M1].val;
     case VP_MSEL: return ui.msel;
     case VP_MTARGET: return lock_idx_of(pfs.m[ui.msel].par);
@@ -1472,6 +1500,7 @@ static uint32_t vp_max(uint32_t p)
     case VP_EH2: return shown_pat()->gen[ui.track][1] ? shown_pat()->gen[ui.track][1] : 16u;
     case VP_ER2: return (shown_pat()->gen[ui.track][1] ? shown_pat()->gen[ui.track][1] : 16u) - 1u;
     case VP_EOP: return NEUOP - 1u;
+    case VP_DJSPREAD ... VP_DJWET:
     case VP_MASTER: case VP_DJ: case VP_TAPE: case VP_DJRESO: case VP_M1: case VP_M1 + 1: case VP_M1 + 2: case VP_M1 + 3: return 127;
     case VP_REPEAT: case VP_MSEL: return 3;
     case VP_MTARGET: return NUM_MOD_TARGETS - 1u + NLOCK_K;
@@ -1751,6 +1780,10 @@ static void vp_set(uint32_t p, uint32_t v)
     case VP_DJRESO: pfs.dj_reso = (uint8_t)v; return;
     case VP_DJTYPE: pfs.dj_ftype = (uint8_t)(v < NDJT ? v : 0u); return;
     case VP_DJTUNE: pfs.dj_tune = (uint8_t)(v < NRTUNE ? v : 0u); return;
+    case VP_DJSPREAD: pfs.dj_spread = (uint8_t)(v & 127u); return;   /* (1.0 Phase 18) */
+    case VP_DJSLOPE: pfs.dj_slope = (uint8_t)(v & 127u); return;
+    case VP_DJTONE: pfs.dj_tone = (uint8_t)(v & 127u); return;
+    case VP_DJWET: pfs.dj_wet = (uint8_t)(v & 127u); return;
     case VP_M1: case VP_M1 + 1: case VP_M1 + 2: case VP_M1 + 3: macro_set(p - VP_M1, v); return;
     case VP_MSEL: ui.msel = (uint8_t)v; return;
     case VP_MTARGET: {
@@ -1976,25 +2009,28 @@ static void vp_set(uint32_t p, uint32_t v)
  * turns; KIT ONLY moves the kit alone, the LXR's way (at full morph, nothing heard). */
 static uint8_t ca_snap[KIT_LEN] POOL, ca_msnap[KIT_LEN] POOL;
 static uint32_t ca_name(uint32_t t) { return t == 31u || t == 32u ? 4u : t; }   /* (the hats' closed, open decay) */
-/* the parameter on track u that is knob k's on the shown page (the same name in the same section), 0 none */
-static uint32_t ca_par(uint32_t u, uint32_t k)
+/* the parameter on track u that is knob k's of section s's half h on track tr's page (the same name in the same
+ * section), 0 none */
+static uint32_t ca_par_at(uint32_t tr, uint32_t s, uint32_t h, uint32_t k, uint32_t u)
 {
-    const uint16_t *a = LXR_PAGES[track_page(ui.track)][ui.sect], *b;
-    uint32_t j = lxr_knob(ui.sect, ui.half, k), i, t, n = 0;
-    if (ui.sect >= S_SHAPE || ui.sect == S_LFO || (ui.sect == S_FILTER && ui.half))   /* (Elixir's: blocks of six, the
-                                                                                         * voice's own; the LFOs too) */
-        return sect_par(u, ui.sect, ui.half, k);
+    const uint16_t *a = LXR_PAGES[track_page(tr)][s], *b;
+    uint32_t j = lxr_knob(s, h, k), i, t, n = 0;
+    if (s >= S_SHAPE || s == S_LFO || (s == S_FILTER && h))   /* (Elixir's: blocks of six, the voice's own; the LFOs) */
+        return sect_par(u, s, h, k);
     if (!(t = ca_name(a[j])))
         return 0;
     for (i = 0; i < j; i++)                          /* (its n-th of that name: the metal voices' two frequencies) */
         if (ca_name(a[i]) == t)
             n++;
-    b = LXR_PAGES[track_page(u)][ui.sect];
+    b = LXR_PAGES[track_page(u)][s];
     for (i = 0; i < 8u; i++)
         if (ca_name(b[i]) == t && !n--)
             return b[8u + i] != PAR_NONE ? b[8u + i] : 0u;
     return 0;
 }
+/* 1.0 Phase 17: a track left out of Control All (kset.caout; the hats' voice only when CH and OH both are) */
+static int ca_isout(uint32_t u) { return u < 5u ? (kset.caout >> u) & 1u : (kset.caout & 0x60u) == 0x60u; }
+static int ca_keys(void) { return ca_rm || (ui.copy && ui.ca && !ui.ca_len); }   /* (a track key: out / in) */
 /* 1.0 (10c): the MODEL knob's order: the LXR's, Rings', Plaits', MICRO's, then Elixir's own (NOISE, in P NOISE's
  * number, and ENSEMBLE). The ones a voice hasn't (model_ok: Rings' and Plaits' on SN-HH, the dropped ones) passed */
 static const uint8_t MODEL_ORDER[NMODEL] = {
@@ -2047,7 +2083,8 @@ static uint32_t knob_next(uint32_t q, uint32_t v, int32_t step)
         return order_turn(DLY_ORDER, NDLY_ORDER, v, step);
     return model_step(q, v, (uint32_t)clamp32((int32_t)v + step, (int32_t)vp_min(q), (int32_t)vp_max(q)));
 }
-static void control_all(uint32_t k, int32_t step)
+/* knob k of section s's half h, as on track tr's page, on every track in Control All by step from each one's value */
+static void ca_move(uint32_t tr, uint32_t s, uint32_t h, uint32_t k, int32_t step)
 {
     uint16_t done[NTRACK];
     uint32_t u, i, nd = 0;
@@ -2057,15 +2094,16 @@ static void control_all(uint32_t k, int32_t step)
             ca_msnap[i] = morph_par[i];
         }
         ui.ca = 1;
+        ui.ca_kept = 1;
         ui.ca_loads = kit_loads;
         ui.copy_used = 1;                            /* (nothing copied on release) */
         ui.copy_src = 0;
     }
     for (u = 0; u < NTRACK; u++) {
-        uint32_t q = ca_par(u, k);
+        uint32_t q = ca_par_at(tr, s, h, k, u);
         for (i = 0; i < nd && done[i] != q; i++)     /* (the hats' voice once) */
             ;
-        if (!q || i < nd)
+        if (!q || i < nd || (u != tr && ca_isout(u)))   /* (Phase 17: the tracks left out, but the one turned) */
             continue;
         done[nd++] = (uint16_t)q;
         if (q >= PAR_TARGET_LFO1 && q <= PAR_TARGET_LFO6) {   /* (1.0: each LFO 1 through its own list) */
@@ -2087,6 +2125,55 @@ static void control_all(uint32_t k, int32_t step)
         vp_set(q, knob_next(q, vp_get(q), step));
     }
 }
+static void control_all(uint32_t k, int32_t step) { ca_move(ui.track, ui.sect, ui.half, k, step); }
+/* 1.0 Phase 17: a voice's parameter p to v from MIDI (the remote's TRACKS rows, a CC, an NRPN; the main loop) while
+ * Control All is on by MIDI: p's knob on every track in it, by the step it made on its own track. 0: not Control
+ * All's (off, its own track left out, a list a step means nothing in, no knob has it): the caller sets it alone */
+static int ca_take(uint32_t p, uint32_t v)
+{
+    uint32_t t, s, h, k, vo = par_voice(p);
+    int32_t d;
+    if (!ca_rm || vo >= 6u || is_lfo_sync(p) || is_target(p) || (p >= PAR_TARGET_LFO1 && p <= PAR_TARGET_LFO6) ||
+        (p >= PAR_MODEL1 && p < PAR_MODEL1 + 6u))
+        return 0;
+    for (t = vo; t <= (vo == 5u ? 6u : vo); t++)     /* (the hat: the open hat's page too) */
+        for (s = 0; s < NSECT; s++)
+            for (h = 0; h < 2u; h++)
+                for (k = 0; k < 4u; k++)
+                    if (sect_par_raw(t, s, h, k) == p)
+                        goto found;
+    return 0;
+found:
+    if (ca_isout(t) || ca_par_at(t, s, h, k, t) != p)   /* (left out; a knob its model hides now) */
+        return 0;
+    d = (int32_t)v - (int32_t)vp_get(p);
+    if (d)
+        ca_move(t, s, h, k, d);
+    ui.force = 1;
+    return 1;
+}
+/* 1.0 Phase 17: a track key while Control All is on: the track left out (its voice back as Control All found it) or
+ * back in; kept in the settings */
+static void ca_out_key(uint32_t t)
+{
+    uint32_t v = track_voice(t), i;
+    int was = ca_isout(t);
+    char b[24];
+    kset.caout ^= (uint8_t)(1u << t);
+    settings_later();
+    if (ui.ca && !ui.ca_len && !was && ca_isout(t)) {
+        for (i = 0; i < KIT_LEN; i++)
+            if (par_voice(kit_par(i)) == v) {
+                par[kit_par(i)] = ca_snap[i];
+                morph_par[i] = ca_msnap[i];
+            }
+        snd_post_all();
+    }
+    put_str(b, VOICE_SHORT[t], sizeof b);
+    put_str(b + 2, (kset.caout >> t) & 1u ? " LEFT OUT" : " BACK IN", sizeof b - 2u);
+    ui_message(b);
+    ui.force = 1;
+}
 static void control_all_undo(void)
 {
     uint32_t i;
@@ -2103,7 +2190,7 @@ static void control_all_undo(void)
         morph_par[i] = ca_msnap[i];
     }
     snd_post_all();
-    ui.ca = ui.ca_ask = 0;
+    ui.ca = ui.ca_ask = ui.ca_kept = 0;
     ui_message("CONTROL ALL REVERTED");
 }
 
@@ -2166,8 +2253,9 @@ static void knob_turn(uint32_t k, int32_t n)
     ui.knob_ms[k] = fm1_ms;
     ui.hot = (uint8_t)(k + 1u);
     ui.hot_ms = fm1_ms;
-    if (ui.copy && ui.mode == M_SOUND && ui.held_step < 0 && !ui.sb_open && !ui.kb_open) {
-        control_all(k, step);                        /* 0.11: OCT+ held: every voice */
+    if ((ui.copy || ca_rm) && ui.mode == M_SOUND && ui.held_step < 0 && !ui.sb_open && !ui.kb_open &&
+        !ca_isout(ui.track)) {
+        control_all(k, step);                        /* 0.11: OCT+ held: every voice (Phase 17: or by MIDI) */
         return;
     }
     if (ui.copy && p == PAR_TRACK_LENGTH && ui.held_step < 0 && !ui.kb_open && !ui.ca) {
@@ -2919,7 +3007,11 @@ static void black_down(uint32_t k)
     }
     if (k < NTRACK) {
         uint32_t t = k;
-        if (ui.copy && ui.mode != M_PATTERN && !ui.ca) {   /* COPY + a track, then the target (Control All: select) */
+        if (ca_keys()) {                             /* 1.0 Phase 17: Control All on: the track out / in */
+            ca_out_key(t);
+            return;
+        }
+        if (ui.copy && ui.mode != M_PATTERN && !ui.ca) {   /* COPY + a track, then the target */
             ui.copy_used = 1;
             if (!ui.copy_src) {
                 ui.copy_src = (uint8_t)(t + 1u);
@@ -3119,7 +3211,7 @@ static void button_down(uint32_t b)
     }
     switch (b) {
     case B_OCTDN:
-        if (ui.copy && ui.ca) {                      /* 0.11: Control All's undo, not SHIFT */
+        if ((ui.copy || ca_rm) && ui.ca) {           /* 0.11: Control All's undo, not SHIFT (Phase 17: by MIDI too) */
             control_all_undo();
             ui.shift_used = 1;
             return;
@@ -3392,7 +3484,7 @@ static void button_up(uint32_t b)
         }
     } else if (b == B_OCTUP) {
         pf.st_hold = 0;                              /* (0.16: STUTTER lets go) */
-        if (ui.ca) {                                  /* 0.11: Control All: ask */
+        if (ui.ca && !ca_rm) {                        /* 0.11: Control All: ask (Phase 17: on by MIDI, it goes on) */
             ui.ca = 0;
             ui.ca_ask = 1;
         }
@@ -3663,6 +3755,11 @@ static void ui_leds(void)
             led_put(nl, id, k == ui.track);
             led_put(nb, id, sq.ru_R && k == sq.ru_tr);
             led_put(nd, id, !muted);
+            continue;
+        }
+        if (ca_keys()) {                             /* (Phase 17: Control All: lit, the tracks in it; dim, left out) */
+            led_put(nl, id, !((kset.caout >> k) & 1u));
+            led_put(nd, id, 1);
             continue;
         }
         led_put(nl, id, (k == ui.track && !ui.perf) || (flash && !muted));

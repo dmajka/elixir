@@ -115,7 +115,7 @@ The FM-1's keyboard has 16 white keys and 11 black keys, numbered left to right 
 | **EDIT** | Sound: model → oscillator → FM → transient (press again: the next section; SELECT goes through every sound page). SHIFT (OCT−) + EDIT: **KEYS** (the keys play the track's voice, on every page until SHIFT (OCT−) + EDIT again) |
 | **ENV** | Sound: amp envelope → gate → mod envelope / velocity |
 | **SCL** | Sound: filter → shape → insert FX |
-| **LFO** | Sound: LFO 1 → LFO 2 → random per hit → cross mod / choke |
+| **LFO** | Sound: LFO 1 → LFO 2 → random per hit → cross mod / choke → FX track sends |
 | **GLO** | Mixer → config |
 | **FX** | FX bus → reverb (turn SELECT for the pages) |
 | **SEQ** | The track's pages (track, generator, action, groove, bounce, melody, scale) → step edit (press again: back; SELECT for the pages). SHIFT (OCT−) + SEQ: the links |
@@ -358,7 +358,7 @@ A ROADS song never stops at END or LOOP: the row after the last is the first. Th
 
 ## 9. Shaping the sound
 
-Select a track, then press a sound button. Pressing the same button again moves to the next section; turning SELECT steps through every page, in a synth's order: **model, oscillator, FM, transient, filter, shape, insert FX, amp EG, gate, mod EG / velocity**, then the modulation: **LFO 1, LFO 2, random per hit, cross mod / choke**. EDIT opens the first (MODEL), ENV the amp EG, SCL the filter and LFO the LFOs. Each page shows eight parameters (two rows of four); the lit row is on the knobs, and SELECT gives the other row. From 1.0 pressing a sound button again only moves to its next section, never to a section's second page. A section with more than one page has its page in the title: MOD EG / VELO (1/2), (2/2).
+Select a track, then press a sound button. Pressing the same button again moves to the next section; turning SELECT steps through every page, in a synth's order: **model, oscillator, FM, transient, filter, shape, insert FX, amp EG, gate, mod EG / velocity**, then the modulation: **LFO 1, LFO 2, random per hit, cross mod / choke, FX track sends** (1.0). EDIT opens the first (MODEL), ENV the amp EG, SCL the filter and LFO the LFOs. Each page shows eight parameters (two rows of four); the lit row is on the knobs, and SELECT gives the other row. From 1.0 pressing a sound button again only moves to its next section, never to a section's second page. A section with more than one page has its page in the title: MOD EG / VELO (1/2), (2/2).
 
 From 0.19 the top of each page is a picture of what its knobs do rather than a list of their values (the knob cards below already show those): the oscillator's wave, the envelope's curve with its times, the filter's response with its cutoff in Hz, an LFO over a bar at the tempo with the track's retriggers, a model's description with its knobs as vials, and so on. It changes as you turn a knob. The FX pages (the reverb's tail, the delay's echoes, the compressors' curves and gain reduction, DIRT) and the SEQ pages Groove, Bounce, Melody, Melody loop and Scale have pictures too; Track, Generator and Action keep the grid. The MODEL page names the model, says what it is and draws it. A Rings, Plaits, MICRO or ENSEMBLE model makes its own sound, so on that voice the FM and TRANSIENT pages are hidden and the OSC page keeps only Coarse and Fine (the model's pitch); its other knobs show -- and don't turn. The AMP EG page stays where the amp EG shapes the model (from 0.25: ENSEMBLE, and the Plaits engines that don't make their own envelope: all but P STRING, P MODAL, P BD, P SD and P HH); for Rings and MICRO it is hidden. Rings with Exciter turned up keeps every page, since the voice's own sound strikes it. If Exciter is down in the kit but up in the morph kit, those pages stay, greyed and locked, until you morph. The reverb page draws what makes its sound (from 0.20: ROOM a hut, HALL a castle, PLATE a steel shield, SPRING a bare spring), growing with Size, its echoes going out as arcs (Level, Damping); P SPEECH's MODEL page is a wizard whose lips move as you turn its knobs; the delay page spells out its mode (Tape ping pong and so on). Knobs read in their own units where those say more than 0–127: the filter's cutoff in Hz, its resonance as Q, the envelopes' times in ms, the LFOs' rates in Hz, the sample rate in kHz.
 
@@ -510,6 +510,15 @@ Each hit varies by up to the amount set: pitch up to an octave either way at 127
 - **Source:** another voice that modulates this one.
 - **Mode:** **DUCK** (this voice drops while the source sounds: sidechain), **FILTER** (the source's level opens this voice's filter), **RING** (the two multiplied).
 - **Choke:** a group 1–4. A hit on any voice in the group fades the others in that group out (within 1.5 ms). The hats already choke each other, since they share a voice.
+
+**FX track sends** (LFO, last; from 1.0): the track's three sends in one place, with the returns they feed on the other row.
+
+| | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
+|---|---|---|---|---|
+| Row 1 | FX | Delay | Reverb | – |
+| Row 2 | FX D/W | Dly lvl | Rev lvl | – |
+
+The page draws the three sends as bars in the track's colour, each with its return's level as a tick, and names the delay's routing (below, [Routing](#routing-from-10)). The returns on row 2 are the kit's, shared by every track. Control All works here as on any sound page: hold it and turn FX to raise every track's FX send.
 
 ### Models: Rings and Plaits (Drum 1–3, experimental)
 
@@ -671,7 +680,9 @@ As on Elektron's boxes: hold **OCT+** on a sound page and turn a knob, and that 
 - **The same parameter** is the one with the same name in the same section: the filter's frequency on each voice, the amp EG's decay (the closed hat's and the open hat's decay both). A voice without it is left alone: FM moves only Drum 1–3, a model only the drums. Elixir's own pages (shape, random, cross mod) move every voice. The hats share a voice, so it moves once.
 - **Page while you hold.** The sound buttons and SELECT still page: hold OCT+, turn the filter, press ENV, turn the decay. Everything you change during the hold is one move.
 - **Keep or revert.** When you let go of OCT+, a dialog asks **REVERT THE KIT?** and the changes keep sounding until you answer. Press **OCT+** again (the default) to put the whole kit back as it was before the first turn (**CONTROL ALL REVERTED**), or **OCT−** to keep the changes (**CONTROL ALL KEPT**). So a thumb slipping off OCT+ doesn't keep anything by accident. While the dialog is open, the knobs, keys and other buttons do nothing, except PLAY and REC. You can also press OCT− while still holding OCT+ to revert at once, then turn again to start a new one. As on Elektron, the kit is the working copy: RELOAD (SHIFT (OCT−) + key 13) or loading the kit goes back further.
-- **COPY (OCT+) still works.** Until a knob turns, OCT+ is COPY as before (track, bar). Once a knob has turned, the voice keys select a track and the bar keys show a bar; nothing is copied on release.
+- **COPY (OCT+) still works.** Until a knob turns, OCT+ is COPY as before (track, bar). Once a knob has turned, the bar keys show a bar and the voice keys leave tracks out (below); nothing is copied on release.
+- **Leave tracks out** (from 1.0). Once a knob has turned (OCT+ still held), a voice key leaves that track out of Control All: it goes back to how it was before the first turn, and the knobs no longer move it. Press it again to put it back in (it rejoins from where it is). The strip under the picture shows the tracks, the left-out ones dim, and the voice keys light for the tracks in it. The choice is kept in the settings, so the same tracks stay out next time. CH and OH share the hat voice: it is left out only when both are. Turning a knob on a left-out track's own page moves that track alone.
+- **From MIDI** (from 1.0). The remote's GLOBAL buttons **62** (held) and **63** (latched) turn Control All on without OCT+; **71** reverts. See [Control All by MIDI](#control-all-by-midi-from-10).
 - **With morph.** What you hear is a mix of the kit and the morph target, so a change to the kit alone fades out as morph goes up: at full morph you'd hear nothing. So with morph turned up, Control All moves the morph target's value by the same steps too, and the change is heard at any morph amount and stays as you turn morph. Reverting puts the target back as well. CONFIG → MORPH → **Ctrl all: KIT ONLY** moves the kit alone instead (the LXR's way); **BOTH KITS** is the default. The kit slot the target was loaded from isn't changed. Single knob edits work the same way (below).
 - **Not recorded.** Under REC, Control All writes no locks: it changes the kit. A kit loaded during the hold or the dialog (a pattern change, MIDI) ends it, kept.
 
@@ -681,23 +692,24 @@ As on Elektron's boxes: hold **OCT+** on a sound page and turn a knob, and that 
 
 ### Signal flow
 
-Each voice runs through the same chain, in this order. The page button that holds each stage is on its right; the modulation (LFOs, envelopes, velocity, locks, morph) moves the knobs of any stage. At the end the voice splits three ways: dry, the FX send and the reverb send.
+Each voice runs through the same chain, in this order. The page button that holds each stage is on its right; the modulation (LFOs, envelopes, velocity, locks, morph) moves the knobs of any stage. At the end the voice splits four ways: dry, the FX send, the delay send (1.0) and the reverb send.
 
 ![Signal flow of one track](docs/img/flow-track.svg)
 
-The six voices meet in the mix: their dry sound, the FX bus (which the FX sends feed in place of dry) and the reverb's return. The whole mix then goes through the master's chain to the outputs.
+The six voices meet in the mix: their dry sound, the FX bus (which the FX sends feed in place of dry), the delay (as ROUTING sets it) and the reverb's return. The whole mix then goes through the master's chain to the outputs.
 
 ![Signal flow of the whole mix](docs/img/flow-master.svg)
 
 ### The mixer (GLO)
 
-Turn SELECT for eight pages. Each page draws four bars, one above each knob (from 1.0): a voice's bar in its track colour, with its level as a tick on the volume pages; pan bars grow from the middle.
+Turn SELECT for ten pages. Each page draws four bars, one above each knob (from 1.0): a voice's bar in its track colour, with its level as a tick on the volume pages; pan bars grow from the middle.
 
 | Pages | Knobs |
 |---|---|
 | VOLUME (2 pages) | each voice's volume; FX dry/wet; the master level (shown, set by the MASTER pot) |
 | PAN (2 pages) | each voice's pan; the reverb's level and size |
 | FX SEND (2 pages) | each voice's FX send; FX dry/wet |
+| DLY SEND (2 pages, 1.0) | each voice's delay send; the delay's level |
 | REV SEND (2 pages) | each voice's reverb send; the reverb's level |
 
 The bars show the current page's values, with each voice's level on the volume pages.
@@ -705,11 +717,12 @@ The bars show the current page's values, with each voice's level on the volume p
 ### Sends
 
 - **FX send** sets how much of the voice goes *through* the FX bus instead of straight to its output. At 127 all of it does. (This is the LXR's "Out = FX BUS"; kits from the LXR or from older Elixir versions that used it load as FX send 127.)
+- **Delay send** (from 1.0) feeds the voice into the delay, on top of its output, without the FX bus. A voice with its FX send up and its delay send at 0 isn't delayed (unless ROUTING sends the bus into the delay).
 - **Reverb send** feeds the voice into the reverb, on top of its output.
 
 ### The FX bus (FX)
 
-One effect at a time, then **the delay, always there after it** (from 1.0). The pages come in order: the reverb first, then the bus and the selected effect's page, then the delay's pages, then DIRT, then the DJ FILTER (from 1.0), then the master compressor's two pages, then the voices' FX and reverb sends, the mixer's four send pages, so you can set them while you shape the effects. Only the pages that apply are shown: with the bus OFF there are no effect parameters, DELAY: TAPE is there only in the TAPE modes and GRAIN only in GRAIN (where it comes second: DELAY (1/3), GRAIN (2/3), DELAY (3/3)).
+One effect at a time, then **the delay, always there after it** (from 1.0). The pages come in order: the reverb first, then the bus and the selected effect's page, then the delay's pages, then ROUTING (1.0), then DIRT, then the DJ FILTER (from 1.0), then the master compressor's two pages, then the voices' FX, delay and reverb sends, the mixer's six send pages, so you can set them while you shape the effects. Only the pages that apply are shown: with the bus OFF there are no effect parameters, DELAY: TAPE is there only in the TAPE modes and GRAIN only in GRAIN (where it comes second: DELAY (1/3), GRAIN (2/3), DELAY (3/3)).
 
 | Page | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
@@ -720,12 +733,15 @@ One effect at a time, then **the delay, always there after it** (from 1.0). The 
 | DELAY (2/2) | Tone | Echo>Rev | Feedback | Band |
 | DELAY: TAPE (TAPE modes) | Wow | Saturate | Glitch | Pitch |
 | GRAIN (GRAIN, 1.0; second, before DELAY (2/2)) | Size | Scatter | Density | Pitch |
+| ROUTING (1.0) | Route | Rev>FX | Echo>Rev | – |
 | DIRT | Bus dirt | – | Master | Amount |
 | DJ FILTER (1.0) | Type | Filt | Reso | – |
 | MASTER COMP | Thresh | Ratio | Attack | Release |
 | COMP: SIDECHAIN | Sidechain | Makeup | Mix | – |
 | FX SEND (1/2) | D1 fx | D2 fx | D3 fx | SN fx |
 | FX SEND (2/2) | CY fx | HH fx | Dry/Wet | – |
+| DELAY SEND (1/2) (1.0) | D1 dly | D2 dly | D3 dly | SN dly |
+| DELAY SEND (2/2) (1.0) | CY dly | HH dly | Dly level | – |
 | REV SEND (1/2) | D1 rev | D2 rev | D3 rev | SN rev |
 | REV SEND (2/2) | CY rev | HH rev | Rev level | Volume (1.0) |
 
@@ -741,7 +757,7 @@ From 1.0 the bus has no **DRIVE**: the DIRT page's Master does the same job acro
 
 ### The delay (from 1.0: always on)
 
-The FX sends feed the bus, and the delay hears what comes out of it: **BUS DIRT → the bus's effect → the delay → the mix**. So you can have a phaser *and* echoes, a flanged ring *and* a dub delay. The delay adds its echoes on top of the bus's sound at **Level**; with Mode OFF or at Level 0 it is off (the echoes fade out in a few milliseconds, then it sleeps and costs nothing). With the bus type OFF and Level up, it is the plain delay of before.
+The FX sends feed the bus and the delay sends feed the delay; the ROUTING page sets how the two meet ([below](#routing-from-10)). With Route at FX > DLY 100% (every kit from before 1.0 Phase 16), the delay hears what comes out of the bus: **BUS DIRT → the bus's effect → the delay → the mix**. So you can have a phaser *and* echoes, a flanged ring *and* a dub delay. The delay adds its echoes on top of the bus's sound at **Level**; with Mode OFF or at Level 0 it is off (the echoes fade out in a few milliseconds, then it sleeps and costs nothing). With the bus type OFF and Level up, it is the plain delay of before.
 
 **DELAY (1/2):**
 
@@ -758,6 +774,16 @@ The FX sends feed the bus, and the delay hears what comes out of it: **BUS DIRT 
 - **Band:** below.
 
 **Band** (from 1.0) puts a resonant peak in the delay's loop, the dub engineer's mid boost on the echo return: OFF (the default), or a frequency from 150 Hz to 5 kHz (TAPE and TAPE PP to about 3.3 kHz). That band goes round a little louder than the rest of the echo on every pass, so it colours the repeats halfway up **Feedback** and, pushed near the top, builds into a self-oscillating howl at its pitch while the rest of the echo dies away. TAPE howls from about Feedback 80, PING PONG and TAPE PP from about 100, MONO builds slowly at the very top. Turn Band while it howls to sweep the scream; FB PUSH (held) gets there at once. The howl is held by a soft clip in the loop (TAPE's saturation, which MONO and PING PONG use too while Band is on), so it saturates rather than running away; it can still be loud, so keep Level in mind. It is part of the kit; a morph turns it on or off halfway. A global LFO's **DELAY BAND** sweeps it up to two octaves either way (OFF stays off), and the remote's GLOBAL **CC 3** turns it. Off, it costs nothing; on, a little CPU (well under 1%).
+
+### Routing (from 1.0)
+
+The FX page's **ROUTING** page sets how the FX bus, the delay and the reverb feed each other. It draws the three as boxes feeding the mix, each line as thick as what it sends.
+
+- **Route** (KNOB 1) is one knob with three ways. In the middle, **PARALLEL** (a new kit's): the bus hears the FX sends, the delay hears the delay sends, side by side. Turned right, **FX > DLY**: that much of the bus's output goes into the delay too, up to 100% at the end (the chain from before, which older kits load with). Turned left, **DLY > FX**: that much of the echoes goes through the bus (phased, ring-modulated or frequency-shifted echoes) instead of straight to the mix. The card shows **F>D** or **D>F** and the amount.
+- **Rev>FX** (KNOB 2): the reverb's return through the FX bus as well as straight out: a shifted or phased reverb. The bus must be on for it to do anything. With Route at FX > DLY it also reaches the delay.
+- **Echo>Rev** (KNOB 3) is the delay page's, here too. With Rev>FX up and Route at FX > DLY, the echoes into the reverb would make a loop (reverb → bus → delay → reverb), so Echo>Rev is held at 0 and its card reads **LOOP**; the diagram strikes the link through.
+
+All three are part of the kit, morph and can be locked. Rev>FX costs nothing until it's turned up; the routing itself costs nothing.
 
 Its Time, Feedback, Tone and Level are **LFO and velocity destinations** (a track's DEST list ends with Delay time, Delay feedback, Delay tone, Delay level), so a kick can open the echoes or an LFO can sweep their time.
 
@@ -812,7 +838,15 @@ The **DJ FILTER** page (after DIRT) holds the [DJ filter](#perf-pages-arp-select
 - **MS20**: the MS20 low-pass on the left, its high-pass on the right.
 - **RING** (from 1.0): a tuned resonator, after the Torso S-4's RING: eight band-pass filters tuned to a chord, so the whole beat rings in key. **Filt** sets the chord's root, in semitones (the card names it): C3 just off the middle, down to C1 at the left end, up to C6 at the right; off in the middle as always. **Decay** (Reso's place) is how long the bands ring, from a short knock (0.08 s) to a long shimmer (2.6 s). **Tune** picks the chord: **NOTE** (one pitch and its harmonics, like a struck string), **OCTAVES**, **FIFTHS**, **MAJOR** (the default), **MINOR**, **SUS4**, **MIN7** and **PENTA** (minor pentatonic). The bands are spread across the stereo field, the root in the middle; half the dry mix stays under them so the drums keep their hit. Sweep Filt (or a global LFO on FILTER) for stepped, in-tune glides; set Decay long and the hats become a drone. It costs about what the LXR's filter does (OCTAVES, four bands, less); bands above about 6 kHz are left out. Tune is saved with the project.
 
-Everything that moves the DJ filter moves the character filter the same way: the knob, the LP~ and HP~ sweeps, a global LFO on FILTER, LP or HP, RUSH's high-pass. DJ type is saved with the project (as DJ reso), not the kit. The filter runs on the first core only while the DJ filter is off the middle: the LXR's about 9% of it, MS20 about 11%, ACID about 18%, RING about 3% more than the LXR's (its bands run at half the sample rate; OCTAVES, 4 notes, less) (estimates; the LOAD page shows them under MIXER). The page draws the filter's curve where it is.
+  From 1.0 RING has a second page, **RING (2/2)** (after the first while the type is RING; the first page's title reads RING (1/2)). Each knob's middle (64, the default) is RING's sound before this page existed:
+  - **Spread:** how wide the bands are panned. 0 (MONO) all in the middle; the middle, every other band mostly left or mostly right; 127 hard left and right. The root stays in the middle.
+  - **Slope:** how the ring time changes up the chord. Left, the higher bands ring shorter than the root (a plucked, woody ring); right, longer (they hang on after the root dies). At full, the top of a three-octave chord rings about 8 times shorter or longer. The bands have a longest ring, so with Decay near the top, Slope right adds little to the high bands.
+  - **Tone:** the bands' levels tilted by pitch. Left, the root loudest and the high bands quieter (dark); right, the top band loudest and the low ones quieter (bright); up to 6 dB an octave.
+  - **Wet:** how much of the dry mix stays under the bands. 0% all dry (the bands silent), 50% half the dry (as before), 100% no dry at all, only the ring.
+
+  The picture shows Slope as the bars' heights and Tone as their brightness. The four are saved with the project; a project from before keeps the middle.
+
+Everything that moves the DJ filter moves the character filter the same way: the knob, the LP~ and HP~ sweeps, a global LFO on FILTER, LP or HP, RUSH's high-pass. DJ type is saved with the project (as DJ reso), not the kit. The filter runs on the first core only while the DJ filter is off the middle: the LXR's about 9% of it, MS20 about 11%, ACID about 18%, RING about 3% more than the LXR's (its bands run at half the sample rate; OCTAVES, 4 notes, less; RING (2/2)'s knobs about 1% more) (estimates; the LOAD page shows them under MIXER). The page draws the filter's curve where it is.
 
 **DJ reso** (from 0.24.3, on the DJ FILTER page from 1.0) is the DJ filter's resonance. At 0 it is the gentle bump it always had; turned up, the filter whistles at its cutoff and rings on every hit, and near 127 it screams as you sweep it (the knob, the LP~ / HP~ keys, a global LFO). It gets louder as it rises, and with Master dirt in front of it, nastier. It costs no extra CPU: the filter is the same, only its damping changes. Turning it glides the filter there over a few milliseconds (from 1.0), so a sweep doesn't click. Unlike the drives it belongs to the project, not the kit (as the tape time does), so loading a kit doesn't change it. At the very top of the low-pass's range (the knob just left of the middle) the filter keeps its resonance low, so the bump comes in as you sweep down. The remote's GLOBAL CC 47 turns it too.
 
@@ -1589,10 +1623,9 @@ With OFF, none of these do anything. Clock, start, continue and stop have no cha
 | TRACKS: filter frequency, resonance | CC 38–43, 44–49 |
 | TRACKS: decay | CC 51 53 55 57 59; 61 (CH), 62 (OH) |
 | TRACKS: pitch | CC 9 11 13 15 17 19 |
-| TRACKS: drive | CC 103–108 |
 | TRACKS: sample rate | CC 109–114 |
 | TRACKS: LFO amount | CC 122–127 |
-| TRACKS: FX send, reverb send | NRPN 174–179, 180–185 |
+| TRACKS: FX send, delay send, reverb send | NRPN 174–179, 403–408, 180–185 |
 | GLOBAL: SRate (11) | CC 115 |
 | GLOBAL: shuffle, morph, roll rate (9, 10, 13) | NRPN 133, 120, 119 |
 | GLOBAL: FX dry/wet, P1–P4 (16–20) | NRPN 108, 110–113 |
@@ -1622,7 +1655,7 @@ Knobs and faders are CCs. Every number is used once on its channel, so a knob an
 | Resonance | **32** | **33** | **34** | **35** | **36** | **37** | **38** | **39** |
 | Decay | **40** | **41** | **42** | **43** | **44** | **45** closed | **46** open | **47** |
 | Pitch (coarse) | **48** | **49** | **50** | **51** | **52** | **53** | **54** | **55** |
-| Drive | **56** | **57** | **58** | **59** | **60** | **61** | **62** | **63** |
+| Delay send (1.0) | **56** | **57** | **58** | **59** | **60** | **61** | **62** | **63** |
 | FX send | **64** | **65** | **66** | **67** | **68** | **69** | **70** | **71** |
 | Reverb send | **72** | **73** | **74** | **75** | **76** | **77** | **78** | **79** |
 | Sample rate | **80** | **81** | **82** | **83** | **84** | **85** | **86** | **87** |
@@ -1650,8 +1683,8 @@ Two more GLOBAL knobs sit off the grid (1.0): **CC 3**, the delay's **Band** (0 
 | | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
 |---|---|---|---|---|---|---|---|---|
 | Transport, held | **48** PLAY / STOP | **49** REC | **50** FILL | **51** REPEAT | **52** FREEZE | **53** THROW REV | **54** THROW FX | **55** FB PUSH |
-| Held · patterns | **56** TAPE STOP | **57** LP sweep | **58** HP sweep | **59** REVERSE | **60** previous | **61** next |  |  |
-| Select | **64** D1 | **65** D2 | **66** D3 | **67** SN | **68** CY | **69** CH | **70** OH |  |
+| Held · patterns | **56** TAPE STOP | **57** LP sweep | **58** HP sweep | **59** REVERSE | **60** previous | **61** next | **62** CONTROL ALL (held) | **63** CONTROL ALL (latched) |
+| Select | **64** D1 | **65** D2 | **66** D3 | **67** SN | **68** CY | **69** CH | **70** OH | **71** CONTROL ALL revert |
 | Roll (held) | **72** D1 | **73** D2 | **74** D3 | **75** SN | **76** CY | **77** CH | **78** OH | **79** selected |
 | DRILL (held) | **80** D1 | **81** D2 | **82** D3 | **83** SN | **84** CY | **85** CH | **86** OH | **87** selected |
 | Effects, held | **88** HALF | **89** JITTER | **90** CUTS | **91** SHORT | **92** PUMP | **93** COMB | **94** SPACE | **95** CRUSH |
@@ -1670,6 +1703,15 @@ The effects are PERF's (see [Performance mode](#13-performance-mode-perf)); they
 **DENSITY a track** (TRACKS row 12, CC 96–103, from 1.0; random pitch was there before): each track's own DENSITY, centred (64) by default: below thins the track, above builds it (chances, then ghosts, then ratchets, as BUILD says), on top of the DENSITY knob's. A track the DENSITY buttons leave out still takes its own. DENSITY's COMMIT writes only the knob's into the pattern; RESET PERF centres them all.
 
 **A roll per track** (GLOBAL CC 112–119, from 1.0): each fader rolls its track at its own rate while it is up, so several tracks can roll at once, each on its own hits (its step's note). The curve is steep: the first turn is on the grid, 1/4 (1–4), 1/8 (5–8), 1/16 (9–16), 1/32 (17–32); from 33 the roll goes free, off the grid, from 1/32 up to 1/256 at the top, like RUSH's end. Down to 0 stops it. They play only while the sequencer runs, and under REC the hits are recorded. CC 119 rolls the track selected when the fader left 0, and keeps rolling it if you select another. RESET PERF stops them all. The buttons 72–79 (Roll, held) stay as they were: the selected roll rate, all tracks together.
+
+#### Control All by MIDI (from 1.0)
+
+Hold GLOBAL's button **62**, or press **63** to latch it (again: off), and [Control All](#control-all-every-track-at-once) is on without OCT+; the buttons light while it is. While it is on:
+
+- **A voice's parameter from MIDI moves on every track in it** by the step it made on its own track, so the tracks keep their differences, as the panel's knob does. That covers the TRACKS rows (any column), the LXR's per-voice CCs on a track's channel (filter CC 38–43 and the rest of [the sound by CC](#the-sound-by-cc)) and the per-voice NRPNs (the sends, the delay sends …). An absolute knob's step is the new value minus the track's current one (after PICKUP), a relative one's as sent. Lists where a step means nothing (a model, an LFO's sync or destination) still move their own track alone. Nothing is recorded under REC.
+- **The panel's knobs** on a sound page act as with OCT+ held, and the title reads CONTROL ALL.
+- **Tracks left out:** the Select buttons **64–70** (and the panel's voice keys) leave a track out or put it back, instead of selecting it; their lights show the tracks in it. The left-out tracks are the same set as the panel's and kept in the settings.
+- **Off** (62 let go, 63 again): the changes are kept, with no dialog (no thumb to slip). **71** (or OCT− on the panel while it is on) puts every track back as it was before the first Control All move. 71 works during it and after it, until the next Control All or a kit load, and lights while there is something to revert; it reverts the panel's Control All too.
 
 **Knobs** (REMOTE page, KNOB 2):
 - **PICKUP** (the default): a knob or fader does nothing until it reaches or passes the current value, then follows. If the value changes elsewhere (the panel, a kit), it waits again. Nothing jumps.
@@ -1789,6 +1831,7 @@ In PERF, SHIFT (OCT−) + a white key latches it instead. From 1.0 that is on PE
 | COPY (OCT+) + pattern, pattern | Copy a pattern (pattern page) |
 | SHIFT (OCT−) + COPY (OCT+) | CLEAR (again to confirm) |
 | COPY (OCT+) held + knob (sound page) | Control All: the parameter on every track; let go, then OCT+ reverts or OCT− keeps |
+| COPY (OCT+) held, after a knob turn + voice key | Control All: the track left out (again: back in; kept in the settings) |
 | SHIFT (OCT−) held + knob | Fine adjust: one step a detent, no acceleration (1.0) |
 | COPY (OCT+) held + length knob (grid, TRACK) | Every track's length; let go, then OCT+ reverts or OCT− keeps (1.0) |
 | SHIFT (OCT−) + PLAY | Play the song from the start |
@@ -1912,6 +1955,10 @@ Six numbers per voice-based setting, in the order D1 D2 D3 SN CY HH.
 | 379–384 | Insert amount |
 | 385–390 | Insert knob 3 (shift or pitch) |
 | 391–396 | Insert knob 4 (feedback or AM) |
+| 397–402 | Filter X: the character filters' ENV AMT, LADDER's BASS COMP (1.0) |
+| 403–408 | Delay send (1.0) |
+| 409 | Delay route (0 DLY > FX 100%, 64 PARALLEL, 127 FX > DLY 100%) (1.0) |
+| 410 | Rev > FX (1.0) |
 
 The LXR's own parameters keep their CC and NRPN numbers.
 

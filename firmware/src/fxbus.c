@@ -90,7 +90,14 @@ static struct {
     int32_t dl_e, dl_g, dw_last, dl_in;
     uint8_t dt_next, dt_clr;
     uint8_t d_off;                                   /* (1.0: MODE OFF: faded out as LEVEL 0 is, the mode kept) */
+    /* 1.0 Phase 16: the bus and the delay (PAR_DLY_ROUTE: 64 PARALLEL, above FX > DLY, below DLY > FX: fx_route),
+     * REV > FX (Q15: the reverb's return's share into the bus, reverb.c reverb_bus) */
+    uint8_t d_route;
+    int32_t rev_fx;
 } fx;
+/* 1.0 Phase 16: delay -> ECHO > REVERB -> reverb -> REV > FX -> bus -> FX > DLY -> delay is a loop: ECHO > REVERB is
+ * held at 0 while REV > FX and FX > DLY are both up (its card: LOOP) */
+static int dly_loop(void) { return fx.rev_fx && fx.d_route > 64u; }
 #define DT_FADE 4u                                   /* blocks: 5.8 ms */
 #define DT_CLR 4096u                                 /* samples a block: 8 KB */
 #define DT_NCLR (FXBUF_SIZE / DT_CLR + 1u)           /* (the line, then the pitch shifter's window) */
@@ -656,7 +663,7 @@ static void fx_tape(void)
     int32_t *side = fx_side(), e[2], fb, g = 65536 + fx.d_sat * 3 * 516;   /* (SATURATE: 1 .. 4) */
     uint32_t gi = (uint32_t)(0xFFFFFFFFu / (uint32_t)g) + 1u;
     int32_t wowd = (int32_t)(((int64_t)fx.d_wow * (40 << 16)) >> 16), fld = (int32_t)(((int64_t)fx.d_wow * (3 << 16)) >> 16);
-    int32_t er = (int32_t)(((int64_t)fx.d_echorev * fx.dl_g) >> 15), rv_sum = 0, lvl, e0 = fx.dl_e, e1 = dl_gain();
+    int32_t er = dly_loop() ? 0 : (int32_t)(((int64_t)fx.d_echorev * fx.dl_g) >> 15), rv_sum = 0, lvl, e0 = fx.dl_e, e1 = dl_gain();
     fb = (int32_t)(((int64_t)fx.d_fb * 75366) >> 16);   /* (to 115%) */
     fb += (int32_t)(((int64_t)(75366 - fb) * fx.push) >> 16);
     if (fx.lfo_fb)
@@ -857,7 +864,7 @@ static __attribute__((noinline)) void fx_grain(void)
     uint32_t i, j, k, len = gr_len(fx.d_wow), rate = gr_rate(fx.d_glitch), mean = 0;
     int st = fx_stereo();
     int32_t *side = fx_side(), *al = d_ol, *ar = d_or, sc = fx.d_sat * 516, gn = 65536, rv_sum = 0;
-    int32_t er = fx.throw_echo ? 65536 : fx.d_echorev, lvl, e0 = fx.dl_e, e1 = dl_gain();
+    int32_t er = dly_loop() ? 0 : fx.throw_echo ? 65536 : fx.d_echorev, lvl, e0 = fx.dl_e, e1 = dl_gain();
     int32_t fb = fx.d_fb + (int32_t)(((int64_t)(65536 - fx.d_fb) * fx.push) >> 16);
     uint32_t st0[GR_N];
     if (fx.lfo_fb)
@@ -941,7 +948,7 @@ static void fx_delay(void)                           /* Delay_process / Delay_pr
 {
     uint32_t i, mask = delay_mask(), half = FXBUF_SIZE >> 1;
     int pp = fx.delay_type != DELAY_NORMAL, st = fx_stereo();
-    int32_t er = fx.throw_echo ? 65536 : fx.d_echorev, rv_sum = 0, lvl, e0 = fx.dl_e, e1 = dl_gain();
+    int32_t er = dly_loop() ? 0 : fx.throw_echo ? 65536 : fx.d_echorev, rv_sum = 0, lvl, e0 = fx.dl_e, e1 = dl_gain();
     if (is_tape() || is_grain()) {
         if (is_grain())
             fx_grain();
@@ -1480,10 +1487,9 @@ static void comp_master(int32_t *l, int32_t *r)      /* the mix (engine.c), then
 
 /* ---------------------------------------------------------- the bus --- */
 static int32_t dl_snap[2][BLOCK] POOL;              /* (1.0: the mix before the bus's type: what it added, the delay's in) */
-static void fxbus_process(void)                      /* FxBus_process */
+static void fx_type_run(void)                        /* the bus's type on fx_l / fx_r, into the mix */
 {
     uint32_t i;
-    int run = dly_active(), snap = run && fx.type != FX_OFF;
     if (fx.type != fx.last_type) {                   /* (another type: its buffers and states from silence) */
         if (fx.type == FX_FLANGER || fx.type == FX_CHORUS || fx.type == FX_SHIFT)
             memset(fl_buf, 0, sizeof fl_buf);
@@ -1498,10 +1504,6 @@ static void fxbus_process(void)                      /* FxBus_process */
         fx.last_type = fx.type;
     }
     dirt_bus();
-    if (snap) {
-        memcpy(dl_snap[0], mix_l, sizeof dl_snap[0]);
-        memcpy(dl_snap[1], mix_r, sizeof dl_snap[1]);
-    }
     switch (fx.type) {
     case FX_PHASER:
         fx_phaser();
@@ -1542,6 +1544,10 @@ static void fxbus_process(void)                      /* FxBus_process */
         break;
     }
     fx.dw_last = fx.dw;                              /* (the bus's DRY/WET ramp: this block's end) */
+}
+static void fx_delay_run(int run)                    /* the delay on fx_l / fx_r (its input), into the mix */
+{
+    uint32_t i;
     if (!run && fx.dt_next != 0xFFu)                 /* (the delay stopped while a MODE waited: change it now) */
         delay_type_now(fx.dt_next);
     if (fx.dt_clr) {                                 /* a new MODE: its line cleared a piece a block, silent */
@@ -1553,12 +1559,7 @@ static void fxbus_process(void)                      /* FxBus_process */
         fx.dl_e = fx.dl_g = fx.dl_in = 0;
         fx.dl_drain = 0;
         d_read = 0;
-    } else if (run) {                                /* 1.0: the delay on what the type gave the mix (OFF: the bus) */
-        if (snap)
-            for (i = 0; i < BLOCK; i++) {
-                fx_l[i] = (int16_t)sat16(mix_l[i] - dl_snap[0][i]);
-                fx_r[i] = (int16_t)sat16(mix_r[i] - dl_snap[1][i]);
-            }
+    } else if (run) {                                /* 1.0: the delay on its input (fx_route) */
         if (fx.dl_in < 32768) {                      /* (the line's input faded in: dl_in) */
             int32_t g0 = fx.dl_in, g1 = g0 + (int32_t)(32768u / DT_FADE);
             g1 = g1 > 32768 ? 32768 : g1;
@@ -1592,5 +1593,70 @@ static void fxbus_process(void)                      /* FxBus_process */
             memset(&gs, 0, sizeof gs);
             fx.d_lp[0] = fx.d_lp[1] = 0;
         }
+    }
+}
+/* 1.0 Phase 16: the bus and the delay, as PAR_DLY_ROUTE has them. PARALLEL (64): the bus on its sends, the delay on
+ * its own (voices.c dly_l). FX > DLY (above): the bus's output's share into the delay too (127: all of it, the chain
+ * as it was, bit for bit with no delay sends). DLY > FX (below): the delay first, its echoes' share into the bus's
+ * input in place of the mix (0: all of them) */
+static void fxbus_process(void)                      /* FxBus_process */
+{
+    uint32_t i, r = fx.d_route;
+    int run = dly_active();
+    if (r >= 64u) {
+        int32_t a = r > 64u ? (int32_t)((r - 64u) * 32768u / 63u) : 0;
+        int snap = run && a && fx.type != FX_OFF;
+        if (snap) {
+            memcpy(dl_snap[0], mix_l, sizeof dl_snap[0]);
+            memcpy(dl_snap[1], mix_r, sizeof dl_snap[1]);
+        }
+        fx_type_run();
+        if (run) {                                   /* (the delay's input: its sends, and the bus's share) */
+            if (snap)
+                for (i = 0; i < BLOCK; i++) {        /* (the bus's output: what the type added to the mix) */
+                    fx_l[i] = (int16_t)sat16(mix_l[i] - dl_snap[0][i]);
+                    fx_r[i] = (int16_t)sat16(mix_r[i] - dl_snap[1][i]);
+                }
+            if (a < 32768)                           /* (FX OFF: the bus's output is its input, fx_l as it is) */
+                for (i = 0; i < BLOCK; i++) {
+                    fx_l[i] = (int16_t)((fx_l[i] * a) >> 15);
+                    fx_r[i] = (int16_t)((fx_r[i] * a) >> 15);
+                }
+            if (dly_fed)
+                for (i = 0; i < BLOCK; i++) {
+                    fx_l[i] = (int16_t)sat16(fx_l[i] + dly_l[i]);
+                    fx_r[i] = (int16_t)sat16(fx_r[i] + dly_r[i]);
+                }
+        }
+        fx_delay_run(run);
+    } else {
+        int32_t b = (int32_t)((64u - r) * 32768u / 64u);
+        int16_t bl[BLOCK], br[BLOCK];
+        memcpy(bl, fx_l, sizeof bl);                 /* (the bus's input, kept while the delay has fx_l) */
+        memcpy(br, fx_r, sizeof br);
+        if (dly_fed) {
+            memcpy(fx_l, dly_l, sizeof bl);
+            memcpy(fx_r, dly_r, sizeof br);
+        } else {
+            memset(fx_l, 0, sizeof bl);
+            memset(fx_r, 0, sizeof br);
+        }
+        if (run) {
+            memcpy(dl_snap[0], mix_l, sizeof dl_snap[0]);
+            memcpy(dl_snap[1], mix_r, sizeof dl_snap[1]);
+        }
+        fx_delay_run(run);
+        if (run)
+            for (i = 0; i < BLOCK; i++) {            /* (the echoes: their share out of the mix, into the bus) */
+                int32_t el = (int32_t)(((int64_t)(mix_l[i] - dl_snap[0][i]) * b) >> 15);
+                int32_t er = (int32_t)(((int64_t)(mix_r[i] - dl_snap[1][i]) * b) >> 15);
+                mix_l[i] -= el;
+                mix_r[i] -= er;
+                bl[i] = (int16_t)sat16(bl[i] + el);
+                br[i] = (int16_t)sat16(br[i] + er);
+            }
+        memcpy(fx_l, bl, sizeof bl);
+        memcpy(fx_r, br, sizeof br);
+        fx_type_run();
     }
 }

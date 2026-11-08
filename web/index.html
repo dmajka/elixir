@@ -316,6 +316,13 @@
             and FREEZE holds the line while the grains play on.</li>
           <li>Delete a pattern: on the pattern page, hold SHIFT (OCT−) and tap the pattern; COPY confirms. The page lists
             COPY, PASTE and DELETE in larger type.</li>
+          <li>A delay send on every track (the mixer's DLY SEND pages, the remote's old Drive row, CC 56–63), so a track
+            can be echoed without the FX bus. ROUTING's one knob runs from DLY &gt; FX (the echoes through the bus)
+            through PARALLEL to FX &gt; DLY (the bus into the delay, as before); Rev&gt;FX sends the reverb's return
+            through the bus: a shifted or phased reverb. Older kits load as they sounded.</li>
+          <li>FX TRACK SENDS, the last sound page (LFO): a track's FX, delay and reverb sends, with the returns.</li>
+          <li>The kit library stores kits packed (format 2), so a kit still fits two pages as it grows. Older libraries
+            read as before.</li>
           <li>A master volume after everything (CONFIG → MIDI OUT, the last send page, CC 124), saved in the settings.</li>
         </ul>
         <h4>Sequencer and time</h4>
@@ -345,6 +352,9 @@
           <li>Per-track density on CC 96–103 (channel 15), centred by default, in place of random pitch.</li>
           <li>Per-track rolls by CC (channel 16, CC 112–119): the CC's value is the rate, several tracks at once.</li>
           <li>MIDI out per track (CONFIG → MIDI OUT), off by default.</li>
+          <li>Control All by MIDI: the remote's buttons 62 (held) and 63 (latched) turn it on, and a voice's CC, NRPN or
+            TRACKS knob then moves every track by its step; 71 reverts. Tracks can be left out of Control All (a voice
+            key during one, or the remote's Select buttons), kept in the settings.</li>
         </ul>
         <h4>Wander</h4>
         <ul>

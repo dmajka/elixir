@@ -347,8 +347,9 @@ static void proj_write_payload(void)
     pw_bytes("KSC1", 4);                            /* 19: the scale last chosen, DENSITY, STUTTER (0.16), VARY (31),
                                                       * 39: RUSH: a byte unused (0.23-test1's GHOST), FLAM, PITCH,
                                                       * START, FREE, TOP, FILTER, GLIDE (older firmware: the 11 read,
-                                                      * these skipped), 0.24.3: the DJ filter's resonance; 1.0: its type */
-    pw_byte(22);
+                                                      * these skipped), 0.24.3: the DJ filter's resonance; 1.0: its type;
+                                                      * Phase 18: RING's SPREAD, SLOPE, TONE, WET */
+    pw_byte(26);
     pw_byte(scl_last.root);
     pw_byte(scl_last.scale);
     pw_byte((uint8_t)pfs.dens);
@@ -371,6 +372,10 @@ static void proj_write_payload(void)
     pw_byte(pfs.dj_reso);
     pw_byte(pfs.dj_ftype);                           /* (1.0: older firmware skips it) */
     pw_byte(pfs.dj_tune);                            /* (1.0: RING's chord) */
+    pw_byte(pfs.dj_spread);                          /* (1.0 Phase 18: RING (2/2)) */
+    pw_byte(pfs.dj_slope);
+    pw_byte(pfs.dj_tone);
+    pw_byte(pfs.dj_wet);
     pw_bytes("KSP2", 4);                            /* 32: SPELLS: the knobs, the targets, the GRIMOIRE's recipes */
     sp_write();
     pw_bytes("KWND", 4);                            /* 40: WANDER: the knobs, the tracks, the parts (not the road) */
@@ -456,12 +461,15 @@ static int proj_read_payload(uint32_t ver)
     n = ver < 2u ? NUM_PARAMS : pr_u16();
     pr_bytes(par, n < NPAR ? n : NPAR);
     pr_skip(n > NPAR ? n - NPAR : 0u);
+    if (n <= PAR_DLY_ROUTE)                         /* (1.0 Phase 16: from before the route: the delay after the bus) */
+        par[PAR_DLY_ROUTE] = DLY_ROUTE_OLD;
     nk = ver < 2u ? END_OF_SOUND_PARAMETERS : pr_u16();
     if (nk > 8u * 64u)
         return -33;
     memcpy(morph_par, init, KIT_LEN);
     pr_bytes(morph_par, nk < KIT_LEN ? nk : KIT_LEN);
     pr_skip(nk > KIT_LEN ? nk - KIT_LEN : 0u);
+    kit_old_fill(morph_par, nk);
     par[PAR_MORPH] = morph_amt = (uint8_t)pr_byte();   /* (0.13: the knob; the LFOs' push: morph_update) */
     kit_loaded = (uint8_t)(pr_byte() % NUM_KITS);
     kit_morph_loaded = (uint8_t)(pr_byte() % NUM_KITS);
@@ -490,6 +498,7 @@ static int proj_read_payload(uint32_t ver)
         if (kp) {
             for (i = nk; i < KIT_LEN; i++)
                 kp[i] = init[i];
+            kit_old_fill(kp, nk);
             memcpy(kit_names[k], nm, KIT_NAME_LEN);
             if (ver < 7u)
                 proj_models_08(kp);
@@ -679,10 +688,11 @@ static int proj_read_payload(uint32_t ver)
     if (!pr.err && pr.pos + 4u <= pr.end) {
         pr_bytes(tag, 4);
         if (!memcmp(tag, "KSC1", 4)) {               /* 19: the scale last chosen, DENSITY; STUTTER */
-            uint8_t b[22] = {0, 0, 0, 40, DB_GHOSTS, 0, 0, 1, 2, SV_OFF, 0, 0, 0, 12, 75, 80, RT_256, 60, 8, 0, DJT_LXR, RC_MAJ};
-            n = pr_byte();                           /* (31: VARY 0 before; 39: RUSH's; 0.24.3: Reso 0) */
-            pr_bytes(b, n < 22u ? n : 22u);
-            pr_skip(n > 22u ? n - 22u : 0u);
+            uint8_t b[26] = {0, 0, 0, 40, DB_GHOSTS, 0, 0, 1, 2, SV_OFF, 0, 0, 0, 12, 75, 80, RT_256, 60, 8, 0, DJT_LXR, RC_MAJ,
+                             64, 64, 64, 64};
+            n = pr_byte();                           /* (31: VARY 0 before; 39: RUSH's; 0.24.3: Reso 0; Phase 18: 64s) */
+            pr_bytes(b, n < 26u ? n : 26u);
+            pr_skip(n > 26u ? n - 26u : 0u);
             scl_last.root = (uint8_t)(b[0] % 12u);
             scl_last.scale = (uint8_t)(b[1] < NSCALE ? b[1] : SC_CHROM);
             pfs.dens = (int8_t)clamp32((int8_t)b[2], -64, 63);
@@ -704,6 +714,10 @@ static int proj_read_payload(uint32_t ver)
             pfs.dj_reso = (uint8_t)(b[19] & 127u);
             pfs.dj_ftype = (uint8_t)(b[20] < NDJT ? b[20] : DJT_LXR);   /* (1.0) */
             pfs.dj_tune = (uint8_t)(b[21] < NRTUNE ? b[21] : RC_MAJ);
+            pfs.dj_spread = (uint8_t)(b[22] & 127u);   /* (1.0 Phase 18) */
+            pfs.dj_slope = (uint8_t)(b[23] & 127u);
+            pfs.dj_tone = (uint8_t)(b[24] & 127u);
+            pfs.dj_wet = (uint8_t)(b[25] & 127u);
         }
     }
     if (!pr.err && pr.pos + 4u <= pr.end) {
@@ -967,8 +981,10 @@ typedef struct {
     uint8_t mixout;                                  /* (1.0, Phase 8: CONFIG: USB MIX, voices.c mix_out: bit v, voice v
                                                       * out of the stereo mix while a computer records; the padding
                                                       * before: 0, all in) */
+    uint8_t caout;                                   /* (1.0 Phase 17: the tracks left out of Control All, bit t; ui.c
+                                                      * ca_out_key. Settings from before are shorter: 0, all in) */
 } elixir_settings_t;
-_Static_assert(sizeof(elixir_settings_t) == 280u, "settings: mixout in the padding (the length unchanged)");
+_Static_assert(sizeof(elixir_settings_t) == 284u, "settings: caout after mixout");
 _Static_assert(__builtin_offsetof(elixir_settings_t, ccmap) == SET_LEN_016, "settings: the map after 0.16's 20 bytes");
 static elixir_settings_t kset = {SET_MAGIC, 11, 1, 1, 1, 0xFF, 100, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, {0}, 127, 0};   /* (palette 11: SAND) */
 static uint32_t cc_map_at(uint32_t cc) { return kset.ccmap[cc & 127u]; }
@@ -1140,6 +1156,7 @@ static void persist_boot(void)                      /* power-on: the flash, the 
     midi_mout = kset.mout;
     sq.realign_pat = kset.realign != 0;
     kset.mixout &= 63u;
+    kset.caout &= 127u;
     mix_out = kset.mixout;
     data_locked = fx_scan() != 0;                    /* (0.24.1: before kl_scan, which may erase a sector) */
     proj_scan();

@@ -42,6 +42,13 @@ static uint8_t midi_note_mask;
 static uint16_t nrpn_num;
 static volatile uint8_t midi_seen;                  /* MIDI arrived (the UI's indicator) */
 static volatile uint16_t midi_cc_par;               /* the last parameter MIDI changed + 1 (the UI shows it) */
+/* 1.0 Phase 17: Control All by MIDI (remote.c: GLOBAL's button 62 held, bit 0; 63 latched, bit 1; the main loop
+ * writes it). While on, a voice's parameter from a CC or an NRPN goes to the main loop (ui.c ca_take: every track in
+ * Control All by its step), not into the edit buffer here */
+static volatile uint8_t ca_rm;
+#define CAQ 16u
+static volatile uint32_t ca_q[CAQ];                 /* p | v << 16 */
+static volatile uint8_t ca_qw, ca_qr;
 
 /* 0.12: the remote: its channels (0..15, 0xFF off; the settings set them; 0.16: TRACKS' and GLOBAL's), what came in
  * on them for the main loop (remote.c), what the main loop sends back (its feedback) */
@@ -203,6 +210,15 @@ static void midi_param(uint32_t p, uint32_t v)
         sq.roll_rate = (uint8_t)(v > 13u ? 13u : v);
         par[PAR_ROLL] = sq.roll_rate;
         sq.roll_free = 0;
+        return;
+    }
+    if (ca_rm && par_voice(p) < 6u && par_sound(p) && !(p >= PAR_AUDIO_OUT1 && p <= PAR_AUDIO_OUT6)) {
+        if ((uint8_t)(ca_qw - ca_qr) < CAQ) {        /* (Phase 17: Control All's, the main loop's; no lock recorded) */
+            ca_q[ca_qw % CAQ] = p | v << 16;
+            RING_PUBLISH();
+            ca_qw++;
+        }
+        midi_cc_par = (uint16_t)(p + 1u);
         return;
     }
     par[p] = (uint8_t)v;

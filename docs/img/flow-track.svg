@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 726" width="480" height="726" role="img" aria-label="Signal flow of one track: source, filter, amp EG, shape, sample rate, bits and tilt, insert FX, cross mod and choke, volume and pan, then dry, FX send and reverb send">
-<title>Signal flow of one track: source, filter, amp EG, shape, sample rate, bits and tilt, insert FX, cross mod and choke, volume and pan, then dry, FX send and reverb send</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 726" width="480" height="726" role="img" aria-label="Signal flow of one track: source, filter, amp EG, shape, sample rate, bits and tilt, insert FX, cross mod and choke, volume and pan, then dry, FX send, delay send and reverb send">
+<title>Signal flow of one track: source, filter, amp EG, shape, sample rate, bits and tilt, insert FX, cross mod and choke, volume and pan, then dry, FX send, delay send and reverb send</title>
 <style>
 .bx { fill: #fcf8ef; stroke: #cdbb98; stroke-width: 1.2; }
 .bx.k { fill: #f3e6cb; }
@@ -55,11 +55,13 @@
 <path class="a m" d="M372 425.0 H355" marker-end="url(#ah)"/>
 <path class="a m" d="M372 501.0 H355" marker-end="url(#ah)"/>
 <path class="a" d="M186.0 606 V624"/>
-<path class="a" d="M88 624 H392"/>
-<path class="a" d="M88 624 V643" marker-end="url(#ah)"/>
-<rect class="bx k" x="20" y="644" width="136" height="66" rx="7"/><text class="t c" x="88.0" y="664">DRY</text><text class="d c" x="88.0" y="681">to the mix</text>
-<path class="a" d="M240 624 V643" marker-end="url(#ah)"/>
-<rect class="bx k" x="172" y="644" width="136" height="66" rx="7"/><text class="t c" x="240.0" y="664">FX SEND</text><text class="d c" x="240.0" y="681">to the FX bus,</text><text class="d c" x="240.0" y="696">in place of dry</text>
-<path class="a" d="M392 624 V643" marker-end="url(#ah)"/>
-<rect class="bx k" x="324" y="644" width="136" height="66" rx="7"/><text class="t c" x="392.0" y="664">REVERB SEND</text><text class="d c" x="392.0" y="681">to the reverb,</text><text class="d c" x="392.0" y="696">on top of dry</text>
+<path class="a" d="M70 624 H409"/>
+<path class="a" d="M70 624 V643" marker-end="url(#ah)"/>
+<rect class="bx k" x="20" y="644" width="101" height="66" rx="7"/><text class="t c" x="70.5" y="664">DRY</text><text class="d c" x="70.5" y="681">to the mix</text>
+<path class="a" d="M183 624 V643" marker-end="url(#ah)"/>
+<rect class="bx k" x="133" y="644" width="101" height="66" rx="7"/><text class="t c" x="183.5" y="664">FX SEND</text><text class="d c" x="183.5" y="681">to the FX bus,</text><text class="d c" x="183.5" y="696">in place of dry</text>
+<path class="a" d="M296 624 V643" marker-end="url(#ah)"/>
+<rect class="bx k" x="246" y="644" width="101" height="66" rx="7"/><text class="t c" x="296.5" y="664">DLY SEND</text><text class="d c" x="296.5" y="681">to the delay,</text><text class="d c" x="296.5" y="696">on top of dry</text>
+<path class="a" d="M409 624 V643" marker-end="url(#ah)"/>
+<rect class="bx k" x="359" y="644" width="101" height="66" rx="7"/><text class="t c" x="409.5" y="664">REV SEND</text><text class="d c" x="409.5" y="681">to the reverb,</text><text class="d c" x="409.5" y="696">on top of dry</text>
 </svg>

@@ -262,6 +262,7 @@ static void dmode_child(uint32_t sw, uint32_t mode, uint32_t k, int16_t *dst, ui
         par_set(PAR_DLY_TIME, 50);
         par_set(PAR_DLY_FB, 100);
         par_set(PAR_FX_SEND1, 64);
+        par_set(PAR_DLY_ROUTE, 127);                 /* (1.0 Phase 16: the bus into the delay) */
         if (sw >= 2u && sw <= 4u) {                  /* (the walk's D1: a slow attack, no transient: no edge of its own) */
             par_set(PAR_VELOA1, 40);
             par_set(PAR_TRANS1_VOL, 0);

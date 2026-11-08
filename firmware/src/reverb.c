@@ -573,12 +573,42 @@ static void reverb_turn(void)                        /* (voices_turn) */
 {
     rev_rs ^= 1u;
 }
+/* 1.0 Phase 16: REV > FX (fx.rev_fx, Q15): that share of the return into the FX bus's input (before fxbus_process),
+ * the rest into the mix (reverb_add, after it). The return is blocks old already: no new delay */
+static uint32_t rev_half(void)
+{
+#ifdef FX_NOW
+    if (fx_now)                                      /* (host tests: reverb_now fills this block's after the bus: the */
+        return rev_rs ^ 1u;                          /* .. bus takes the last block's) */
+#endif
+    return rev_rs;
+}
+static void reverb_bus(void)
+{
+    uint32_t i, o = rev_half();
+    const int32_t *wl = rev_ret[o][0], *wr = rev_ret[o][1];
+    const int32_t a = fx.rev_fx;
+    if (!a || !rev_ok[o])
+        return;
+    for (i = 0; i < BLOCK; i++) {
+        fx_l[i] = (int16_t)sat16(fx_l[i] + (int32_t)(((int64_t)wl[i] * a) >> 15));
+        fx_r[i] = (int16_t)sat16(fx_r[i] + (int32_t)(((int64_t)wr[i] * a) >> 15));
+    }
+}
 static void reverb_add(void)                         /* the return into the mix (after the mixer and SPACE's dip) */
 {
     uint32_t i;
     const int32_t *wl = rev_ret[rev_rs][0], *wr = rev_ret[rev_rs][1];
+    const int32_t a = fx.rev_fx;
     if (!rev_ok[rev_rs])
         return;
+    if (a) {                                         /* (REV > FX: the rest; the bus has its share) */
+        for (i = 0; i < BLOCK; i++) {
+            mix_l[i] += wl[i] - (int32_t)(((int64_t)wl[i] * a) >> 15);
+            mix_r[i] += wr[i] - (int32_t)(((int64_t)wr[i] * a) >> 15);
+        }
+        return;
+    }
     for (i = 0; i < BLOCK; i++) {
         mix_l[i] += wl[i];
         mix_r[i] += wr[i];

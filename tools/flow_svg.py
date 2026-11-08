@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 # Elixir: the manual's signal-flow diagrams (MANUAL.md section 10), as SVG files GitHub and the site both show:
-#   docs/img/flow-track.svg     one track: source, filter, amp EG, shape, ..., volume and pan, then the three ways out
+#   docs/img/flow-track.svg     one track: source, filter, amp EG, shape, ..., volume and pan, then the four ways out
 #   docs/img/flow-master.svg    the six tracks into the FX bus, the reverb and the mix, then the master's chain
 # Follows voices.c (voices_render, voices_block) and engine.c (engine_block). Run it when the routing changes (and
 # commit the SVGs):  tools/flow_svg.py
@@ -85,17 +85,17 @@ def track():
     for i in range(len(stages) - 1):
         y = Y0 + PITCH * i + H / 2
         b.append(arrow(f"M{mx - 2} {y} H{X + BW + 3}", mod=True))
-    # the three ways out
-    ys, yb = bot + 18, bot + 38
-    lanes = [(20, "DRY", ["to the mix"]), (172, "FX SEND", ["to the FX bus,", "in place of dry"]),
-             (324, "REVERB SEND", ["to the reverb,", "on top of dry"])]
+    # the four ways out (1.0 Phase 16: the delay send)
+    ys, yb, lw = bot + 18, bot + 38, 101
+    lanes = [(20, "DRY", ["to the mix"]), (133, "FX SEND", ["to the FX bus,", "in place of dry"]),
+             (246, "DLY SEND", ["to the delay,", "on top of dry"]), (359, "REV SEND", ["to the reverb,", "on top of dry"])]
     b.append(line(f"M{cx} {bot} V{ys}"))
-    b.append(line(f"M{20 + 68} {ys} H{324 + 68}"))
+    b.append(line(f"M{20 + lw // 2} {ys} H{359 + lw // 2}"))
     for x, t, ls in lanes:
-        b.append(arrow(f"M{x + 68} {ys} V{yb - 1}"))
-        b.append(box(x, yb, 136, 66, t, ls, cls="bx k", centre=True))
+        b.append(arrow(f"M{x + lw // 2} {ys} V{yb - 1}"))
+        b.append(box(x, yb, lw, 66, t, ls, cls="bx k", centre=True))
     return svg(W, yb + 66 + 16, "Signal flow of one track: source, filter, amp EG, shape, sample rate, bits and tilt, "
-               "insert FX, cross mod and choke, volume and pan, then dry, FX send and reverb send", b)
+               "insert FX, cross mod and choke, volume and pan, then dry, FX send, delay send and reverb send", b)
 
 
 def master():
@@ -107,16 +107,16 @@ def master():
     b.append(arrow("M240 60 V83"))
     b.append(box(172, 84, 136, 58, "BUS DIRT", ["a drive before", "the effect"], "FX"))
     b.append(arrow("M240 142 V151"))
-    b.append(box(172, 152, 136, 58, "FX BUS", ["DRIVE, RING, COMP,", "PHASER or FLANGER"], "FX"))
-    b.append(arrow("M240 210 V219"))
-    b.append(box(172, 220, 136, 58, "DELAY", ["always on, after", "the bus: Level"], "FX"))
+    b.append(box(172, 152, 136, 58, "FX BUS", ["RING, COMP, PHASER,", "FLANGER or SHIFT"], "FX"))
+    b.append(arrow("M240 210 V219", mod=True))     # (1.0 Phase 16: as ROUTING sets it)
+    b.append(box(172, 220, 136, 58, "DELAY", ["its sends, and the", "bus as ROUTING sets"], "FX"))
     b.append(arrow("M240 278 V289"))
     b.append(arrow("M392 60 V83"))
     b.append(box(324, 84, 136, 92, "REVERB", ["ROOM, SPRING,", "HALL or PLATE;", "Size, Damping,", "Level"], "FX"))
     b.append(arrow("M308 249 H360 V177", mod=True))
     b.append('<text class="d" x="366" y="214">ECHO</text><text class="d" x="366" y="229">&gt;REV</text>')
     b.append(arrow("M430 176 V289"))
-    b.append(box(20, 290, 440, 44, "MIX", ["the dry voices, the bus and its echoes, the reverb's return"], cls="bx k", centre=True))
+    b.append(box(20, 290, 440, 44, "MIX", ["the dry voices, the bus, the echoes, the reverb's return"], cls="bx k", centre=True))
     chain = [("MASTER COMP", ["Thresh, Ratio, Attack, Release; sidechain:", "the mix, or one track to duck the rest"],
               "FX"),
              ("MASTER DIRT", ["TAPE, TUBE, FUZZ, DIODE or FOLD; Amount"], "FX"),
@@ -131,7 +131,7 @@ def master():
         b.append(arrow(f"M{cx} {y + H} V{y + PITCH - 1}"))
         y += PITCH
     b.append(box(X, y, BW, 44, "OUTPUT", ["the headphone and line outs"], cls="bx k", centre=True))
-    return svg(W, y + 44 + 16, "Signal flow of the whole mix: the tracks' dry sound, the FX bus and the reverb into "
+    return svg(W, y + 44 + 16, "Signal flow of the whole mix: the tracks' dry sound, the FX bus, the delay and the reverb into "
                "the mix, then the master compressor, master dirt, DJ filter, perform effects and the MASTER knob", b)
 
 

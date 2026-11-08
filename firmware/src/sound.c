@@ -79,8 +79,14 @@ enum {
     PAR_INSC1 = PAR_INSB1 + 6,
     PAR_FLTX1 = PAR_INSC1 + 6,                   /* 1.0: FILTER X (dsp.c ch_block): the character filters' ENV AMT, LADDER's
                                                   * BASS COMP */
-    NPAR = PAR_FLTX1 + 6
+    PAR_DSEND1 = PAR_FLTX1 + 6,                  /* 1.0 Phase 16: the voice into the delay (on top of its output, as
+                                                  * REV SEND; voices.c dly_l) */
+    PAR_DLY_ROUTE = PAR_DSEND1 + 6,              /* .. the bus and the delay: 64 PARALLEL, above FX > DLY (127: the bus
+                                                  * into the delay, as before Phase 16), below DLY > FX (fxbus.c) */
+    PAR_REV_FX,                                  /* .. REV > FX: the reverb's return's share into the bus's input */
+    NPAR
 };
+#define DLY_ROUTE_OLD 127u                           /* (a kit saved before Phase 16: the delay after the bus) */
 /* 1.0: the always-on delay's own settings (fxbus.c), in five of the seven bytes the LXR's kit leaves unused (221 ..:
  * 0 in every LXR and factory kit; only Elixir 0.2 used them, project.c clears a version-2 project's), so a kit stays
  * 470 bytes and an LXR still reads it. TIME, FEEDBACK, TONE, LEVEL (0: the delay off), TAPE's WOW. Not lockable (as
@@ -521,6 +527,10 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
         vc[p - PAR_REV_SEND1].rev_send = f >> 1;
         return;
     }
+    if (p >= PAR_DSEND1 && p < PAR_DSEND1 + NVOICE) {   /* (1.0 Phase 16) */
+        vc[p - PAR_DSEND1].dly_send = f >> 1;
+        return;
+    }
     if (p >= PAR_PWM_1 && p <= PAR_PWM_6) {
         vc[p - PAR_PWM_1].pwm = (uint32_t)f;
         return;
@@ -670,6 +680,12 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
         break;
     case PAR_ECHOREV:
         fx.d_echorev = f;
+        break;
+    case PAR_DLY_ROUTE:                              /* (1.0 Phase 16: fxbus.c fx_route) */
+        fx.d_route = (uint8_t)(itg & 127u);
+        break;
+    case PAR_REV_FX:
+        fx.rev_fx = f >> 1;
         break;
     case PAR_GLITCH:
         fx.d_glitch = (int32_t)(itg & 127u) * 516;
