@@ -9,13 +9,13 @@
  * the mix), with its own TIME, FEEDBACK, TONE, LEVEL and WOW (sound.c PAR_DLY_*); its LEVEL 0: off. FX_DELAY stays
  * as a number (an older kit's: kit.c dly_migrate) and plays as OFF. */
 
-enum { FX_OFF, FX_DRIVE, FX_RING, FX_COMP, FX_DELAY, FX_PHASER, FX_FLANGER, FX_CHORUS, NFX };   /* (1.0: CHORUS) */
+enum { FX_OFF, FX_DRIVE, FX_RING, FX_COMP, FX_DELAY, FX_PHASER, FX_FLANGER, FX_CHORUS, FX_SHIFT, NFX };   /* (1.0: CHORUS;
+                                                      * Phase 12: SHIFT, the frequency shifter) */
 /* 1.0 (after Phase 10e, the user: "I can't really hear much"): CHORUS is set aside, its code kept, not built in
  * (ELIXIR_FX_CHORUS=1 builds it). NFX_LIVE: the types the knob reaches; a kit's CHORUS loads as OFF (kit.c) */
 #ifndef FX_CHORUS_ON
 #define FX_CHORUS_ON 0
 #endif
-#define NFX_LIVE (FX_CHORUS_ON ? NFX : FX_CHORUS)
 /* 1.0 Phase 10f (the user: the same as the master's DIRT): DRIVE set aside the same way (ELIXIR_FX_DRIVE=1 builds it);
  * a kit's or a CC's DRIVE plays and shows as OFF, the knob goes from OFF to RING */
 #ifndef FX_DRIVE_ON
@@ -23,7 +23,7 @@ enum { FX_OFF, FX_DRIVE, FX_RING, FX_COMP, FX_DELAY, FX_PHASER, FX_FLANGER, FX_C
 #endif
 static inline uint32_t fx_live(uint32_t t)          /* the type that plays: OFF for a dropped one (and the old DELAY) */
 {
-    return t < NFX_LIVE && t != FX_DELAY && (FX_DRIVE_ON || t != FX_DRIVE) ? t : FX_OFF;
+    return t < NFX && t != FX_DELAY && (FX_DRIVE_ON || t != FX_DRIVE) && (FX_CHORUS_ON || t != FX_CHORUS) ? t : FX_OFF;
 }
 enum { DIST_TUBE, DIST_FOLD, DIST_RAT };
 enum { DELAY_NORMAL, DELAY_PINGPONG };            /* (21: TAPE, TAPE PP after them) */
@@ -59,6 +59,10 @@ static struct {
     int32_t fl_d[2];                                 /* the flanger's delay at the block's end, samples Q16 */
     uint32_t fl_w;                                   /* .. its write index */
     int32_t ch_d[2][2], ch_lp[2];                    /* 1.0: CHORUS: its taps' delays (Q16 samples), LO CUT's states */
+    /* 1.0 Phase 12: SHIFT: the Hilbert pair's allpasses (each: its last two inputs, then outputs), the I chain's one
+     * sample's delay, the oscillator's phase, the feedback line's delay as the last block ended (Q16 samples) */
+    int32_t sh_s[8][4], sh_q1, sh_d;
+    uint32_t sh_ph;
     uint8_t freeze;                                  /* PERF: FREEZE (the delay loops) */
     int32_t push;                                    /* .. FB PUSH, 0 .. 65536 (0.13: the global LFOs' amount) */
     int32_t lfo_fb, lfo_time;                        /* 19c: the global LFOs on the delay's feedback and time, -65536 ..
@@ -947,6 +951,112 @@ static void fx_flanger(void)
     fx.fl_w += BLOCK;
 }
 
+/* 1.0 Phase 12: SHIFT, a frequency shifter (Bode's): every partial moved by the same Hz, so a drum's harmonics stop
+ * being harmonic (metallic, bell-like) and, slowly, a barber-pole phasing. The bus's sum (mono) through a Hilbert pair:
+ * two chains of 4 allpasses (Olli Niemitalo's coefficients: 90 degrees apart within ~0.7 degree over 20 Hz .. 20 kHz,
+ * the image ~-40 dB), the first a sample later; times a quadrature oscillator: up and down the sum and difference of I cos and Q sin (with
+ * this table's signs: ui_test phase_100_12).
+ * SHIFT (P1, centred: 0, then +-0.1 Hz .. +-1 kHz, exponential), FDBK (P2: 0 .. 0.95, FB PUSH to the most) through a
+ * line (fl_buf, 1 block .. 20 ms: DELAY, P3; each pass shifted again: the endless spirals; a soft clip in the loop),
+ * SPREAD (P4: the right from up to down: at full the left goes up, the right down). Block at a time: the line at
+ * least a block, so each allpass runs over the block alone (~8 instructions a sample) */
+#define SH_LEN (2u * FL_LEN)                         /* (the flanger's line, both halves: 1,024 samples, 23 ms) */
+_Static_assert(SH_LEN >= 900u, "SHIFT: 20 ms of line");
+/* chain c's four allpasses over the block, in place (Q10): HILB (voices.c, the insert SHIFTER's), (a^2 - z^-2) /
+ * (1 - a^2 z^-2) */
+static void sh_chain(int32_t *b, uint32_t c)
+{
+    uint32_t k, i;
+    for (k = c * 4u; k < c * 4u + 4u; k++) {
+        int32_t a = HILB[k], *z = fx.sh_s[k], x1 = z[0], x2 = z[1], y1 = z[2], y2 = z[3];
+        for (i = 0; i < BLOCK; i += 2u) {            /* (two at a time: no moves between the states) */
+            int32_t x = b[i], y = (int32_t)(((int64_t)a * (x + y2) + (1 << 29)) >> 30) - x2;
+            int32_t xb = b[i + 1u], yb = (int32_t)(((int64_t)a * (xb + y1) + (1 << 29)) >> 30) - x1;
+            x2 = x, x1 = xb, y2 = y, y1 = yb;
+            b[i] = y;
+            b[i + 1u] = yb;
+        }
+        z[0] = x1, z[1] = x2, z[2] = y1, z[3] = y2;
+    }
+}
+static uint32_t sh_inc(int32_t p)                    /* SHIFT's Hz (P1, Q16 0 .. 1) as the oscillator's step a sample */
+{
+    int32_t d = p - 32768, a = iabs(d), hz;           /* (0.1 Hz x 10^(4 t): t from just past the middle to an end) */
+    if (a < 300)                                     /* (the middle: still) */
+        return 0;
+    a = a - 300 > 32468 ? 32468 : a - 300;
+    hz = (int32_t)(((int64_t)6554 * exp2_q16((int32_t)(((int64_t)a * 870824) / 32468))) >> 16);   /* (Q16 Hz;
+                                                      * 13.2877 octaves, Q16 870813) */
+    hz = (int32_t)(((int64_t)hz * 97391) >> 16);     /* (2^32 / FS = 97391.5) */
+    return d < 0 ? (uint32_t)-hz : (uint32_t)hz;
+}
+/* the output: the pair against the oscillator (cos, sin Q30, turned by (cr, sr) a sample: from the table at the block's
+ * start, so it never drifts), up into the line and the mix; two: the right from up to down by SPREAD (inlined a route
+ * each: no test a sample) */
+static inline __attribute__((always_inline)) void sh_out(const int32_t *bi, const int32_t *bq, int two, int32_t sp,
+                                                         int32_t *side)
+{
+    uint32_t i, w = fx.fl_w, ph = fx.sh_ph, inc = sh_inc(fx.p[0]);
+    int32_t c = -(sine_at(ph) << 15), s = sine_at(ph + 0x40000000u) << 15;   /* (cos, sin: the LXR's table is -cos) */
+    int32_t cr = -(sine_at(inc) << 15), sr = sine_at(inc + 0x40000000u) << 15;   /* (the step's) */
+    int32_t ii = fx.sh_q1, dw = 0, ddw = fx.dw - fx.dw_last, g0 = fx.dw_last;
+    for (i = 0; i < BLOCK; i++) {
+        int32_t q = bq[i], up, dn, g, t;
+        int64_t pi = (int64_t)ii * s, pq = (int64_t)q * c;
+        up = sat16((int32_t)((pi - pq + (1LL << 39)) >> 40));   /* (Q10 x Q30 -> Q0, rounded: truncation's -0.5 went
+                                                      * round the loop as a limit cycle; measured: the sum moves 1 kHz to
+                                                      * 1.1 kHz on +100) */
+        ii = bi[i];
+        t = (int32_t)(((int64_t)c * cr - (int64_t)s * sr) >> 30);
+        s = (int32_t)(((int64_t)s * cr + (int64_t)c * sr) >> 30);
+        c = t;
+        fl_buf[(w + i) & (SH_LEN - 1u)] = (int16_t)up;
+        dw += ddw;
+        g = g0 + (dw >> 6);
+        if (two) {
+            int32_t r;
+            dn = sat16((int32_t)((pi + pq + (1LL << 39)) >> 40));
+            r = up + (((dn - up) * sp) >> 15);
+            mix_l[i] += fx_l[i] + (((up - fx_l[i]) * g) >> 15);
+            mix_r[i] += fx_r[i] + (((r - fx_r[i]) * g) >> 15);
+        } else {
+            side[i] += fx_l[i] + (((up - fx_l[i]) * g) >> 15);
+        }
+    }
+    fx.sh_q1 = ii;
+    fx.sh_ph = ph + inc * BLOCK;
+    fx.fl_w = w + BLOCK;
+}
+static void fx_shift(void)
+{
+    int32_t bi[BLOCK], bq[BLOCK];
+    uint32_t i, w = fx.fl_w;
+    int st = fx_stereo();
+    int32_t fb = (int32_t)(((int64_t)fx.p[1] * 31130) >> 16);   /* (Q15: 0 .. 0.95) */
+    int32_t d1 = (BLOCK << 16) + (int32_t)(((int64_t)fx.p[2] * ((882 - BLOCK) << 6)) >> 6);   /* (Q16 samples: a
+                                                      * block .. 20 ms) */
+    int32_t d0 = fx.sh_d ? fx.sh_d : d1, dd = (d1 - d0) / (int32_t)BLOCK;
+    fb += (int32_t)(((int64_t)(31130 - fb) * fx.push) >> 16);   /* (FB PUSH: to the most) */
+    for (i = 0; i < BLOCK; i++, d0 += dd) {          /* the input and the line's pass back (it reaches no further than
+                                                      * last block's end: the line is at least a block) */
+        uint32_t di = (uint32_t)d0 >> 16, fr = (uint32_t)d0 & 0xFFFFu, r = w + i - di;
+        int32_t a = fl_buf[r & (SH_LEN - 1u)], b = fl_buf[(r - 1u) & (SH_LEN - 1u)];
+        int32_t y = a + (int32_t)(((int64_t)(b - a) * (int32_t)fr) >> 16);
+        int32_t x = st ? (fx_l[i] + fx_r[i]) >> 1 : fx_l[i];
+        x += (y * fb + 16384) >> 15;
+        if (fb)                                      /* (the loop's soft clip, 2 x soft3: ~1% at half scale) */
+            x = soft3(x >> 1) * 2;
+        bi[i] = bq[i] = x << 10;
+    }
+    fx.sh_d = d1;
+    sh_chain(bi, 0);
+    sh_chain(bq, 1);
+    if (st)
+        sh_out(bi, bq, 1, fx.p[3] >> 1, 0);
+    else
+        sh_out(bi, bq, 0, 0, fx_side());
+}
+
 #if FX_CHORUS_ON
 /* 1.0: CHORUS, for drums: two taps a side between DELAY (P3: 5 .. 18 ms) and DELAY + DEPTH (P2: up to 4 ms), swept
  * by the LFO (P1; the taps half a turn apart, the right a quarter on: wide), no feedback (no metallic ring on a
@@ -1156,8 +1266,10 @@ static void fxbus_process(void)                      /* FxBus_process */
     uint32_t i;
     int run = dly_active(), snap = run && fx.type != FX_OFF;
     if (fx.type != fx.last_type) {                   /* (another type: its buffers and states from silence) */
-        if (fx.type == FX_FLANGER || fx.type == FX_CHORUS)
+        if (fx.type == FX_FLANGER || fx.type == FX_CHORUS || fx.type == FX_SHIFT)
             memset(fl_buf, 0, sizeof fl_buf);
+        memset(fx.sh_s, 0, sizeof fx.sh_s);
+        fx.sh_q1 = fx.sh_d = 0;
         memset(fx.ch_d, 0, sizeof fx.ch_d);
         fx.ch_lp[0] = fx.ch_lp[1] = 0;
         memset(fx.ph_s, 0, sizeof fx.ph_s);
@@ -1190,6 +1302,9 @@ static void fxbus_process(void)                      /* FxBus_process */
 #endif
     case FX_RING:
         fx_ring();
+        break;
+    case FX_SHIFT:
+        fx_shift();
         break;
     case FX_COMP:
         fx_comp();

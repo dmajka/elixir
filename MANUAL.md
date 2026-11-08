@@ -689,14 +689,14 @@ The six voices meet in the mix: their dry sound, the FX bus (which the FX sends 
 
 ### The mixer (GLO)
 
-Turn SELECT for eight pages:
+Turn SELECT for eight pages. Each page draws four bars, one above each knob (from 1.0): a voice's bar in its track colour, with its level as a tick on the volume pages; pan bars grow from the middle.
 
 | Pages | Knobs |
 |---|---|
 | VOLUME (2 pages) | each voice's volume; FX dry/wet; the master level (shown, set by the MASTER pot) |
 | PAN (2 pages) | each voice's pan; the reverb's level and size |
 | FX SEND (2 pages) | each voice's FX send; FX dry/wet |
-| REVERB SEND (2 pages) | each voice's reverb send; the reverb's level |
+| REV SEND (2 pages) | each voice's reverb send; the reverb's level |
 
 The bars show the current page's values, with each voice's level on the volume pages.
 
@@ -723,8 +723,8 @@ One effect at a time, then **the delay, always there after it** (from 1.0). The 
 | COMP: SIDECHAIN | Sidechain | Makeup | Mix | – |
 | FX SEND (1/2) | D1 fx | D2 fx | D3 fx | SN fx |
 | FX SEND (2/2) | CY fx | HH fx | Dry/Wet | – |
-| REVERB SEND (1/2) | D1 rev | D2 rev | D3 rev | SN rev |
-| REVERB SEND (2/2) | CY rev | HH rev | Rev level | Volume (1.0) |
+| REV SEND (1/2) | D1 rev | D2 rev | D3 rev | SN rev |
+| REV SEND (2/2) | CY rev | HH rev | Rev level | Volume (1.0) |
 
 | Type | Mode | P1 | P2 | P3 | P4 |
 |---|---|---|---|---|---|
@@ -732,8 +732,9 @@ One effect at a time, then **the delay, always there after it** (from 1.0). The 
 | COMP | ratio 1:1 … 8:1 | Attack | Release | Threshold | Gain |
 | PHASER | – | Rate | Depth | Feedback | Centre |
 | FLANGER | – | Rate | Depth | Feedback (below the middle: negative) | Delay |
+| SHIFT (1.0) | – | Shift | Fdbk | Delay | Spread |
 
-From 1.0 the bus has no **DRIVE**: the DIRT page's Master does the same job across the whole mix, with more types. A kit or a CC that picks DRIVE plays with the bus OFF, and the page shows OFF. The phaser and flanger sound strongest at DRY/WET 50%. From 1.0 the **PHASER** has four stages (two notches, the classic sound) rather than six, and one chain for both sides: the left hears the dry sound plus the phased one, the right the dry sound minus it, so the right's notches fall between the left's (the classic stereo phaser) and it sweeps wide across the speakers. It costs well under half what it did. Summed to mono, the two sides cancel back to the dry sound, so the phaser is a stereo effect: listen in stereo. **COMP** (the LXR's bus compressor) now works out its gain every 8 samples, as the master compressor does, for less than half the CPU; kits that use it sound as before. The bus always plays in stereo (the FM-1 has one stereo output).
+From 1.0 the bus has no **DRIVE**: the DIRT page's Master does the same job across the whole mix, with more types. A kit or a CC that picks DRIVE plays with the bus OFF, and the page shows OFF. The phaser and flanger sound strongest at DRY/WET 50%. From 1.0 the **PHASER** has four stages (two notches, the classic sound) rather than six, and one chain for both sides: the left hears the dry sound plus the phased one, the right the dry sound minus it, so the right's notches fall between the left's (the classic stereo phaser) and it sweeps wide across the speakers. It costs well under half what it did. Summed to mono, the two sides cancel back to the dry sound, so the phaser is a stereo effect: listen in stereo. **SHIFT** (from 1.0) is a frequency shifter, the classic Bode effect. Where a pitch shifter multiplies every frequency, SHIFT adds the same number of hertz to each, so a drum's overtones stop lining up as harmonics: a kick turns to a gong, a snare to a clanging bell, hats to metal. **Shift** is centred: 0 Hz in the middle, then up (right) or down (left) from 0.1 Hz to 1 kHz, finer near the middle. A shift of a fraction of a hertz to a few hertz is a slow barber-pole phasing at DRY/WET 50%: the shifted copy drifts against the dry one. **Fdbk** sends the output back in through a short line (**Delay**, 1.5 to 20 ms), so each pass is shifted again: a falling or rising spiral of copies, endless at the top (FB PUSH takes it there at once; a soft clip keeps it in bounds). **Spread** sends the left up and the right down by the same amount, wide in stereo. The bus sums its input to mono first. It is one of the heavier bus types: about 5% of the first core on the unit (CONFIG → LOAD, as FX BUS). **COMP** (the LXR's bus compressor) now works out its gain every 8 samples, as the master compressor does, for less than half the CPU; kits that use it sound as before. The bus always plays in stereo (the FM-1 has one stereo output).
 
 ### The delay (from 1.0: always on)
 
@@ -1833,7 +1834,7 @@ NRPN *n* sets parameter *n* + 128: send CC 99 = *n* ÷ 128, CC 98 = *n* mod 128,
 | 75–80 | Transient waveform (0–13) |
 | 81–86 | Transient frequency |
 | 100–105 | Pulse width |
-| 106 | FX bus type (0 off, 2 ring, 3 comp, 5 phaser, 6 flanger; 1 drive and 4 delay play as off: drive is gone from 1.0, the delay is always there) |
+| 106 | FX bus type (0 off, 2 ring, 3 comp, 5 phaser, 6 flanger, 8 shift (1.0); 1 drive, 4 delay and 7 (chorus) play as off: drive is gone from 1.0, the delay is always there) |
 | 108 | FX bus dry/wet (0–100) |
 | 107 | FX bus output (0–5) |
 | 109 | Drive curve (0 tube, 1 fold, 2 clip) |

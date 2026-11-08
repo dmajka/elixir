@@ -2015,7 +2015,8 @@ static void viz_fxbus(void)
         vz_drive_curve(fx.dist_type % 3u, (int32_t)par[PAR_FX_P1] * 65536 / 127, VMID, 32, T_THEME, 1);
         break;
     case FX_RING:
-        vz_panel("RING MOD: TIMES A SINE");
+        vz_panel("RING MOD");                        /* (its name, then what it does under it: as a track's pages) */
+        cv_text(VX0, VY0, &AF_S, "THE BUS TIMES A SINE", T_MID);
         vz_hguide(VMID, vz_faint());
         for (i = 0; i < VN; i++) {
             int32_t w = vz_sin(i * (0xFFFFFFFFu / VN) * 2u), m = vz_sin(i * (0xFFFFFFFFu / VN) * (3u + par[PAR_FX_P1] / 8u));
@@ -2034,27 +2035,45 @@ static void viz_fxbus(void)
     }
     case FX_PHASER: case FX_FLANGER: {
         uint32_t k, nn = ty == FX_PHASER ? 2u : 9u;
-        vz_panel(ty == FX_PHASER ? "PHASER: NOTCHES SWEEPING" : "FLANGER: A COMB SWEEPING");
+        vz_panel(ty == FX_PHASER ? "PHASER" : "FLANGER");
+        cv_text(VX0, VY0, &AF_S, ty == FX_PHASER ? "NOTCHES SWEEPING" : "A COMB SWEEPING", T_MID);
         for (k = 0; k < 3u; k++) {
             for (i = 0; i < VN; i++) {
                 uint32_t ph = (i + k * (6u + par[PAR_FX_P1] / 8u)) * (0x80000000u / VN) * nn;
                 int32_t c = vz_sin(ph), dip = (32767 - iabs(c)) >> 7;
                 dip = (int32_t)(((int64_t)dip * dip * dip) >> 16) * (int32_t)par[PAR_FX_P2] / 127;
                 dip = dip * (40 + (int32_t)par[PAR_FX_P3]) / 167;
-                vz_y[i] = (int16_t)((VY0 + 8) * 16 + dip * 8);
+                vz_y[i] = (int16_t)((VY0 + 18) * 16 + dip * 8);
             }
             if (k == 0u)
-                vz_trace(VX0, VN, VY0 + 8, T_THEME, vz_bg());
+                vz_trace(VX0, VN, VY0 + 18, T_THEME, vz_bg());
             else
                 for (i = 0; i < VN; i++)
                     cv_pset(VX0 + (int32_t)i, vz_y[i] >> 4, ux_mix(vz_bg(), T_THEME, 45 - (int32_t)k * 15));
         }
         break;
     }
+    case FX_SHIFT: {                                 /* (Phase 12: a tone's harmonics (faint) and where SHIFT moves them:
+                                                      * by the same Hz each, no longer in a row; SPREAD: down too) */
+        int32_t d = (int32_t)par[PAR_FX_P1] - 64, f0 = (int32_t)VN / 7, sh = d * f0 * 3 / 4 / 64, h;
+        vz_panel("SHIFT");
+        cv_text(VX0, VY0, &AF_S, d ? (d > 0 ? "EVERY PARTIAL UP BY THE SAME HZ" : "EVERY PARTIAL DOWN BY THE SAME HZ")
+                                   : "CENTRED: NO SHIFT", T_MID);
+        for (h = 1; h <= 6; h++) {
+            int32_t x = VX0 + h * f0, ht = (VY1 - VY0 - 14) * (8 - h) / 8;
+            cv_rect(x, VY1 - ht, 1, ht, vz_faint());
+            if (par[PAR_FX_P4] > 8u && x - sh > VX0 && x - sh < VX0 + (int32_t)VN)
+                cv_rect(x - sh, VY1 - ht * 3 / 4, 2, ht * 3 / 4, ux_mix(vz_bg(), T_THEME, 25 + (int32_t)par[PAR_FX_P4] * 35 / 127));
+            if (x + sh > VX0 && x + sh < VX0 + (int32_t)VN)
+                cv_rect(x + sh, VY1 - ht, 2, ht, T_THEME);
+        }
+        break;
+    }
 #if FX_CHORUS_ON
     case FX_CHORUS: {                                /* (1.0: the voices drifting about the dry, their lows cut) */
         uint32_t k;
-        vz_panel("CHORUS: VOICES DRIFTING");
+        vz_panel("CHORUS");
+        cv_text(VX0, VY0, &AF_S, "VOICES DRIFTING", T_MID);
         vz_hguide(VMID, vz_faint());
         for (k = 0; k < 3u; k++) {
             for (i = 0; i < VN; i++) {

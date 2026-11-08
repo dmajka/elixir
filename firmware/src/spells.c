@@ -799,8 +799,9 @@ static void sp_fx(const spell_t *S, const spc_t *c)
         sp_par(PAR_REV_DAMP, (int32_t)(50u - (c->c[0] * 40u >> 7)));
     }
     if ((S->fl & SF_FXALL) && c->all && sp_rnd(128) < c->sm) {
-        static const uint8_t T[3] = {FX_PHASER, FX_FLANGER, FX_RING};   /* (Phase 10f: DRIVE set aside) */
-        sp_par(PAR_FX_TYPE, T[sp_rnd(3)]);
+        static const uint8_t T[4] = {FX_PHASER, FX_FLANGER, FX_RING, FX_SHIFT};   /* (Phase 10f: DRIVE set aside;
+                                                      * Phase 12: SHIFT) */
+        sp_par(PAR_FX_TYPE, T[sp_rnd(4)]);
         sp_par(PAR_FX_DRY_WET, (int32_t)((30u + sp_rnd(60)) * sp.lim[SPL_FXMIX] / 127u));
         sp_par(PAR_FX_P1, (int32_t)sp_rnd(128));
         sp_par(PAR_FX_P2, (int32_t)sp_rnd(128));

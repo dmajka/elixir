@@ -59,11 +59,8 @@ static const char *const L_ROUTE[] = {"OFF", "USB>DIN", "DIN>DIN", "ALL>DIN", "T
 static const char *const L_MFILT[] = {"OFF", "N", "R", "RN", "C", "CN", "CR", "CRN",
                                       "P", "PN", "PR", "PRN", "PC", "PCN", "PCR", "ALL"};
 static const char *const L_MIXFM[] = {"FM", "MIX"};
-static const char *const L_FX[NFX_LIVE] = {"OFF", FX_DRIVE_ON ? "DRIVE" : "OFF", "RING", "COMP", "DELAY", "PHASER", "FLANGER",
-#if FX_CHORUS_ON
-                                           "CHORUS"
-#endif
-};
+static const char *const L_FX[NFX] = {"OFF", FX_DRIVE_ON ? "DRIVE" : "OFF", "RING", "COMP", "DELAY", "PHASER", "FLANGER",
+                                      FX_CHORUS_ON ? "CHORUS" : "OFF", "SHIFT"};   /* (Phase 12: SHIFT, 4 bits) */
 static const char *const L_DIST[] = {"TUBE", "FOLD", "CLIP"};
 static const char *const L_RATIO[] = {"1:1", "2:1", "3:1", "4:1", "6:1", "8:1"};
 static const char *const L_DELAY[] = {"MONO", "PING PONG", "TAPE", "TAPE PP", "OFF"};   /* (21: TAPE's; 1.0: OFF, the

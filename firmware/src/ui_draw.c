@@ -184,7 +184,7 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
         uint32_t g = fx_page();
         if (g == FXPG_PARS) {                        /* (the type's knobs: named after it) */
             put_str(b, "FX BUS: ", n);
-            put_str(b + 8, L_FX[par[PAR_FX_TYPE] < NFX_LIVE ? par[PAR_FX_TYPE] : 0], n - 8u);
+            put_str(b + 8, L_FX[par[PAR_FX_TYPE] < NFX ? par[PAR_FX_TYPE] : 0], n - 8u);
         } else {
             put_str(b, T[g], n);
         }
@@ -1123,47 +1123,75 @@ static void draw_io(int32_t y0)
     }
 }
 
-/* the mixer's bars: the volumes (and the pans' ticks), or a send (its pages: the FX send, the reverb send) */
-static uint32_t mixer_bar_par(uint32_t v)
+/* 1.0 Phase 12 (the user: six bars over four knobs confused): the mixer's pages (and FX's send pages) draw a bar a
+ * knob, each over its card: a voice's volume, pan or send in its colour (a volume with the voice's level as it
+ * plays), anything else (FX mix, Master, the reverb's) in the theme's; no knob, no bar */
+static int32_t mixer_voice(uint32_t p, int *pan)     /* the voice a knob's parameter belongs to, -1 none */
 {
-    uint32_t g = (ui.page % NMIXER) / 2u;
-    if (ui.mode == M_PERF)                           /* (PERF's MIX pages: the volumes) */
-        return PAR_VOL1 + v;
-    if (ui.mode == M_FX)                             /* (31: FX's send pages) */
-        return fx_page() >= FXPG_RSEND ? PAR_REV_SEND1 + v : PAR_FX_SEND1 + v;
-    return g == 2u ? PAR_FX_SEND1 + v : g == 3u ? PAR_REV_SEND1 + v : PAR_VOL1 + v;
+    uint32_t v;
+    *pan = 0;
+    for (v = 0; v < NVOICE; v++) {
+        if (p == (v < 3u ? PAR_PAN1 + v : PAR_PAN4 + v - 3u)) {
+            *pan = 1;
+            return (int32_t)v;
+        }
+        if (p == PAR_VOL1 + v || p == PAR_FX_SEND1 + v || p == PAR_REV_SEND1 + v)
+            return (int32_t)v;
+    }
+    return -1;
 }
-/* the voices this page's knobs reach (their volume, pan or a send): the other bars drawn faint, so the eye maps
- * the bars it sees to the four knobs */
-static uint32_t mixer_knob_voices(void)
+static uint32_t mixer_sig(void)
 {
     uint16_t k[4];
-    uint32_t i, v, m = 0;
+    uint32_t i, s = 7;
+    int pan;
     page_params(k);
-    for (i = 0; i < 4u; i++)
-        for (v = 0; v < NVOICE; v++)
-            if (k[i] == PAR_VOL1 + v || k[i] == (v < 3u ? PAR_PAN1 + v : PAR_PAN4 + v - 3u) ||
-                k[i] == PAR_FX_SEND1 + v || k[i] == PAR_REV_SEND1 + v)
-                m |= 1u << v;
-    return m;
+    for (i = 0; i < 4u; i++) {
+        int32_t v = mixer_voice(k[i], &pan);
+        s = sig_add(s, k[i] | (k[i] != VP_NONE ? vp_get(k[i]) : 0u) << 16);
+        if (v >= 0 && k[i] == PAR_VOL1 + (uint32_t)v)
+            s = sig_add(s, (uint32_t)(voice_peak[v] >> 10));
+    }
+    return s;
 }
 static void draw_mixer(int32_t y0)
 {
-    uint32_t v, m = mixer_knob_voices();
+    uint16_t k[4];
+    uint32_t i;
     (void)y0;
-    for (v = 0; v < NVOICE; v++) {
-        int32_t x = 10 + (int32_t)v * 38, h = par[mixer_bar_par(v)] * 90 / 127;
-        int32_t pk = voice_peak[v] * 90 / 32768;
-        int on = (m >> v) & 1u;
-        cv_rrect(x, 8, 26, 96, 3, on ? T_SURF : ux_mix(T_BG, T_SURF, 45), T_BG);
-        cv_rect(x + 3, 104 - h - 3, 20, h, ux_mix(T_SURF, TRACK_COL[v], on ? 55 : 15));
-        if (pk > 0 && mixer_bar_par(v) == PAR_VOL1 + v)
-            cv_rect(x + 3, 104 - pk - 3, 20, 2, on ? T_ACCENT : T_DIM);
-        {   /* pan: a tick */
-            int32_t p = par[v < 3u ? PAR_PAN1 + v : PAR_PAN4 + v - 3u];
-            cv_rect(x + 1 + p * 22 / 127, 108, 3, 4, on ? T_THEME : T_DIM);
+    page_params(k);
+    for (i = 0; i < 4u; i++) {
+        uint32_t p = k[i], val, mn, mx;
+        int32_t x = (int32_t)i * 60 + 17, h, v;
+        int pan;
+        uint16_t c;
+        char b[24];
+        if (p == VP_NONE)
+            continue;
+        v = mixer_voice(p, &pan);
+        val = vp_get(p);
+        mn = vp_min(p);
+        mx = vp_max(p);
+        c = v >= 0 ? TRACK_COL[v] : T_THEME;
+        cv_rrect(x, 8, 26, 96, 3, T_SURF, T_BG);
+        if (pan) {                                   /* (pan: from the middle to where it is) */
+            int32_t y = 104 - 3 - (int32_t)(val * 90u / 127u), m = 104 - 3 - 45;
+            cv_rect(x + 2, 104 - 3 - 45, 22, 1, T_LINE);
+            cv_rect(x + 3, y < m ? y : m, 20, (y < m ? m - y : y - m) + 2, ux_mix(T_SURF, c, 55));
+        } else {
+            h = mx > mn ? (int32_t)((val - mn) * 90u / (mx - mn)) : 0;
+            cv_rect(x + 3, 104 - h - 3, 20, h, ux_mix(T_SURF, c, 55));
+            if (v >= 0 && p == PAR_VOL1 + (uint32_t)v) {   /* (a volume: the voice's level as it plays) */
+                int32_t pk = voice_peak[v] * 90 / 32768;
+                if (pk > 0)
+                    cv_rect(x + 3, 104 - pk - 3, 20, 2, T_ACCENT);
+            }
         }
-        text_c(x - 4, 114, 34, &AF_S, v == 5u ? "HH" : VOICE_SHORT[v], on ? TRACK_COL[v] : T_DIM, T_BG);
+        if (v >= 0)
+            put_str(b, v == 5 ? "HH" : VOICE_SHORT[v], sizeof b);
+        else
+            card_name(b, sizeof b, p);
+        text_c((int32_t)i * 60, 110, 60, &AF_S, b, v >= 0 ? c : T_MID, T_BG);
     }
 }
 
@@ -1669,11 +1697,8 @@ static void draw_body(void)
         case M_MIXER: {
             uint32_t v;
             fn = draw_mixer;
-            s = 7;
-            for (v = 0; v < NVOICE; v++)
-                s = sig_add(s, par[mixer_bar_par(v)] | (uint32_t)(voice_peak[v] >> 10) << 8 |
-                                   (uint32_t)par[v < 3u ? PAR_PAN1 + v : PAR_PAN4 + v - 3u] << 16);
-            s = sig_add(s, ui.page);
+            s = sig_add(mixer_sig(), ui.page);
+            (void)v;
             break;
         }
         case M_FX: {
@@ -1693,6 +1718,8 @@ static void draw_body(void)
                                (uint32_t)par[PAR_DLY_LEVEL] << 24);   /* (1.0: the delay's) */
             s = sig_add(s, (uint32_t)par[PAR_DLY_WOW] | (uint32_t)par[PAR_DSAT] << 8 | fx_bpm_x10 << 16 |
                                (uint32_t)par[PAR_DLY_BAND] << 24);
+            if (fx_page() >= FXPG_FSEND)                 /* (the send pages: the mixer's bars) */
+                s = sig_add(s, mixer_sig());
             if (fx_page() == FXPG_DJ)                    /* (1.0: the DJ filter as it moves, its type and Reso) */
                 s = sig_add(sig_add(s, (uint32_t)(pf.dj_d + 65536) >> 9 | (uint32_t)pfs.dj_ftype << 20 |
                                            (uint32_t)pfs.dj_reso << 24),
@@ -2176,6 +2203,37 @@ static int card_unit(char *b, uint32_t n, uint32_t p, uint32_t v)
                 put_hz(b, n, (uint32_t)(((uint64_t)3277u * (uint32_t)exp2_q16((int32_t)((f * 7643u) >> 10)) * 100u) >> 32));
             return 1;
 #endif
+        case FX_SHIFT:                               /* (Phase 12: Shift, Fdbk, Delay, Spread) */
+            if (k == 0u) {
+                uint32_t inc = sh_inc((int32_t)f), a = inc > 0x80000000u ? 0u - inc : inc;
+                uint32_t c = (uint32_t)(((uint64_t)a * 100u * FS) >> 32);   /* (hundredths of a Hz) */
+                char *q = b;
+                if (!a) {
+                    put_str(b, "0Hz", n);
+                    return 1;
+                }
+                *q++ = inc > 0x80000000u ? '-' : '+';  /* (no space: "+85Hz" as the insert's, big on the card) */
+                if (c >= 99950u) {
+                    q = put_int(q, 1);
+                    put_str(q, "kHz", n - (uint32_t)(q - b));
+                    return 1;
+                }
+                if (c >= 1000u) {
+                    q = put_int(q, (int32_t)((c + 50u) / 100u));
+                } else {
+                    q = put_int(q, (int32_t)(c / 100u));
+                    *q++ = '.';
+                    q = put_int(q, (int32_t)(c / 10u % 10u));
+                    if (c < 100u)
+                        q = put_int(q, (int32_t)(c % 10u));
+                }
+                put_str(q, "Hz", n - (uint32_t)(q - b));
+            } else if (k == 2u) {
+                put_ms(b, (uint32_t)((BLOCK + (((uint64_t)f * (882u - BLOCK)) >> 16)) * 100u / 441u));
+            } else {
+                put_str(put_int(b, (int32_t)((k == 1u ? f * 95u : f * 100u) >> 16)), "%", 2);
+            }
+            return 1;
         case FX_PHASER: case FX_FLANGER:
             if (k)
                 return 0;

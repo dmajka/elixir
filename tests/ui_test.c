@@ -8482,8 +8482,9 @@ static void phase_100_fx2(void)
 #if FX_CHORUS_ON
     check(NFX == 8u && FX_CHORUS == 7u && !strcmp(L_FX[FX_CHORUS], "CHORUS"), "FX: CHORUS the eighth type (kits' 0..6 as they were)");
 #else
-    check(NFX_LIVE == 7u && sizeof L_FX / sizeof L_FX[0] == 7u && vp_max(PAR_FX_TYPE) == FX_FLANGER,
-          "FX: CHORUS set aside (the knob stops at FLANGER)");
+    check(!strcmp(L_FX[FX_CHORUS], "OFF") && model_step(PAR_FX_TYPE, FX_FLANGER, FX_CHORUS) == FX_SHIFT &&
+              model_step(PAR_FX_TYPE, FX_SHIFT, FX_CHORUS) == FX_FLANGER,
+          "FX: CHORUS set aside (reads OFF; the knob from FLANGER to SHIFT and back)");
     par_set(PAR_FX_TYPE, FX_CHORUS);                 /* (a CC or a kit from before: plays as OFF) */
     snd_service();
     check(fx.type == FX_OFF, "FX: CHORUS plays as OFF");
@@ -8722,6 +8723,201 @@ static void phase_100_10c(void)
     check(ok, "a lock on P MODAL plays MODAL, on P GRAIN the LXR");
     par_set(PAR_MODEL1, MD_LXR);
     run_ms(20);
+    goto_mode(B_HOME, M_HOME);
+}
+
+/* 1.0 Phase 12: SHIFT, the frequency shifter (FX bus type 8) */
+static void sh12_run(double hz, int32_t amp, uint32_t blocks, int32_t *ol, int32_t *orr, int st)
+{
+    uint32_t k, i, n = 0;
+    for (k = 0; k < blocks; k++) {
+        for (i = 0; i < BLOCK; i++, n++) {
+            fx_l[i] = fx_r[i] = (int16_t)(hz > 0 ? sin(2.0 * 3.14159265358979 * hz * n / FS) * amp :
+                                          ((n / 37u) & 1u ? amp : -amp));   /* (hz 0: a square, full of partials) */
+            if (!st)
+                fx_r[i] = 0;
+            mix_l[i] = mix_r[i] = 0;
+        }
+        fx_shift();
+        fx.dw_last = fx.dw;
+        if (ol)
+            for (i = 0; i < BLOCK; i++) {
+                ol[k * BLOCK + i] = mix_l[i];
+                orr[k * BLOCK + i] = mix_r[i];
+            }
+    }
+}
+static double sh12_level(const int32_t *x, uint32_t n, double hz)   /* Goertzel: the amplitude at hz */
+{
+    double w = 2.0 * 3.14159265358979 * hz / FS, c = 2.0 * cos(w), s1 = 0, s2 = 0, s0;
+    uint32_t i;
+    for (i = 0; i < n; i++) {
+        s0 = x[i] + c * s1 - s2;
+        s2 = s1;
+        s1 = s0;
+    }
+    return sqrt(s1 * s1 + s2 * s2 - c * s1 * s2) * 2.0 / n;
+}
+static void phase_100_12(void)
+{
+    static int32_t ol[400u * BLOCK], orr[400u * BLOCK];
+    const uint32_t N = 256u * BLOCK;
+    double up, img, dry, dn, dimg, mx;
+    uint32_t i, inc;
+    int ok = 1;
+    char b[24];
+    int32_t pk;
+    printf("1.0 Phase 12: SHIFT\n");
+    eng_reset(0);
+    fx.route = R_ST1;
+    fx.type = fx.last_type = FX_SHIFT;
+    fx.dw = fx.dw_last = 32768;                      /* (all wet) */
+    fx.push = 0;
+    /* SHIFT for +100 Hz: the knob's Q16 (by the curve: 0.1 Hz x 10^(4 t)) */
+    {
+        int32_t p = 32768 + 300 + (int32_t)(32468.0 * log(100.0 / 0.1) / log(10000.0) + 0.5);
+        fx.p[0] = p;
+        inc = sh_inc(p);
+        printf("  SHIFT's step for +100 Hz: %.2f Hz\n", inc * (double)FS / 4294967296.0);
+        ok = fabs(inc * (double)FS / 4294967296.0 - 100.0) < 1.0 && sh_inc(65536 - p) == 0u - inc && sh_inc(32768 + 258) == 0u &&
+             fabs(sh_inc(65536) * (double)FS / 4294967296.0 - 1000.0) < 15.0 && fabs(sh_inc(32768 + 301) * (double)FS / 4294967296.0 - 0.1) < 0.01;
+        check(ok, "SHIFT: the knob's middle still, +-0.1 Hz just past it, +-1 kHz at the ends, exponential");
+    }
+    fx.p[1] = 0;
+    fx.p[2] = 0;
+    fx.p[3] = 65536;                                 /* (SPREAD full: the right goes down) */
+    memset(fx.sh_s, 0, sizeof fx.sh_s);
+    sh12_run(1000.0, 16000, 300, ol, orr, 1);
+    up = sh12_level(ol + 40u * BLOCK, N, 1100.0);
+    img = sh12_level(ol + 40u * BLOCK, N, 900.0);
+    dry = sh12_level(ol + 40u * BLOCK, N, 1000.0);
+    dn = sh12_level(orr + 40u * BLOCK, N, 900.0);
+    dimg = sh12_level(orr + 40u * BLOCK, N, 1100.0);
+    printf("  1 kHz shifted +100 Hz: 1.1 kHz %.0f, image 900 Hz %.1f dB, 1 kHz %.1f dB; the right (SPREAD): 900 Hz %.0f, "
+           "image %.1f dB\n", up, 20 * log10(img / up), 20 * log10(dry / up), dn, 20 * log10(dimg / dn));
+    check(up > 16000 * 0.85 && img < up * 0.0316 && dry < up * 0.0316 && dn > 16000 * 0.85 && dimg < dn * 0.0316,
+          "SHIFT: 1 kHz + 100 Hz lands at 1.1 kHz, the image under -30 dB; SPREAD's right side at 900 Hz");
+    for (i = 0; i < 4u; i++) {                       /* (the image across the band) */
+        static const double F[4] = {80.0, 300.0, 4000.0, 12000.0};
+        double u, m;
+        memset(fx.sh_s, 0, sizeof fx.sh_s);
+        sh12_run(F[i], 16000, 300, ol, orr, 1);
+        u = sh12_level(ol + 40u * BLOCK, N, F[i] + 100.0);
+        m = sh12_level(ol + 40u * BLOCK, N, F[i] - 100.0);
+        printf("  %5.0f Hz: up %.0f, image %.1f dB\n", F[i], u, 20 * log10(m / u));
+        ok &= m < u * 0.0316 && u > 16000 * 0.8;
+    }
+    check(ok, "SHIFT: the image under -30 dB from 80 Hz to 12 kHz");
+    /* bounded: full FDBK and FB PUSH, a full-scale square, the shortest and longest DELAY */
+    for (i = 0; i < 2u; i++) {
+        uint32_t k;
+        fx.p[1] = 65536;
+        fx.p[2] = i ? 65536 : 0;
+        fx.push = 65536;
+        sh12_run(0, 32767, 400, ol, orr, 1);
+        pk = 0;
+        for (k = 0; k < 400u * BLOCK; k++)
+            pk = iabs(ol[k]) > pk ? iabs(ol[k]) : pk;
+        {                                            /* (the allpasses' states: within 4 x full scale) */
+            int32_t st = 0, j;
+            for (j = 0; j < 8; j++)
+                for (k = 0; k < 4u; k++)
+                    st = iabs(fx.sh_s[j][k] >> 10) > st ? iabs(fx.sh_s[j][k] >> 10) : st;
+            printf("  full FDBK + PUSH, DELAY %s, a full-scale square: peak %d, states %d\n", i ? "20 ms" : "1.5 ms",
+                   (int)pk, (int)st);
+            ok &= pk <= 32768 && st < 4 * 32768;
+        }
+    }
+    fx.push = 0;
+    check(ok, "SHIFT: bounded at full feedback and FB PUSH");
+    /* silence after: the line rings down with FDBK, then nothing (no limit cycle) */
+    fx.p[1] = 32768;
+    fx.p[2] = 20000;
+    sh12_run(0, 0, 400, ol, orr, 1);
+    pk = 0;
+    for (i = 300u * BLOCK; i < 400u * BLOCK; i++)
+        pk = iabs(ol[i]) > pk ? iabs(ol[i]) : pk;
+    printf("  silence after, half FDBK: peak %d\n", (int)pk);
+    check(pk <= 2, "SHIFT: silent after silence (half FDBK)");
+    /* a type change clears its line and states */
+    sh12_run(1000.0, 16000, 50, 0, 0, 1);
+    fx.type = FX_PHASER;
+    memset(fx_l, 0, sizeof fx_l);
+    memset(fx_r, 0, sizeof fx_r);
+    fxbus_process();
+    for (i = 0, ok = 1; i < 8u; i++)
+        ok &= !fx.sh_s[i][0] && !fx.sh_s[i][1] && !fx.sh_s[i][2] && !fx.sh_s[i][3];
+    fx.type = FX_SHIFT;
+    memset(mix_l, 0, sizeof mix_l);
+    memset(mix_r, 0, sizeof mix_r);
+    fxbus_process();
+    for (i = 0; i < 2u * FL_LEN; i++)
+        ok &= fl_buf[i] == 0;
+    for (i = 0; i < BLOCK; i++)
+        ok &= mix_l[i] == 0 && mix_r[i] == 0;
+    check(ok, "SHIFT: a type change clears (its allpasses, then its line: silent from silence)");
+    /* mono route: the left only, shifted up */
+    fx.route = R_L1;
+    fx.p[1] = 0;
+    fx.p[0] = 32768 + 300 + (int32_t)(32468.0 * log(100.0 / 0.1) / log(10000.0) + 0.5);
+    memset(fx.sh_s, 0, sizeof fx.sh_s);
+    sh12_run(1000.0, 16000, 300, ol, orr, 0);
+    up = sh12_level(ol + 40u * BLOCK, N, 1100.0);
+    mx = sh12_level(orr + 40u * BLOCK, N, 1100.0);
+    check(up > 16000 * 0.85 && mx < 1.0, "SHIFT on L1: the left, shifted, the right untouched");
+    fx.route = R_ST1;
+    /* the knob and the cards */
+    goto_mode(B_FX, M_FX);
+    par_set(PAR_FX_TYPE, FX_FLANGER);
+    snd_service();
+    check(model_step(PAR_FX_TYPE, FX_FLANGER, FX_CHORUS) == FX_SHIFT && vp_max(PAR_FX_TYPE) == FX_SHIFT &&
+              !strcmp(L_FX[FX_SHIFT], "SHIFT"), "FX: the knob past FLANGER: SHIFT (the last)");
+    par_set(PAR_FX_TYPE, FX_SHIFT);
+    snd_service();
+    check(fx.type == FX_SHIFT, "FX: SHIFT plays");
+    card_name(b, sizeof b, PAR_FX_P1);
+    ok = !strcmp(b, "Shift");
+    card_value(b, sizeof b, PAR_FX_P1, 64);
+    ok &= !strcmp(b, "0Hz");
+    card_value(b, sizeof b, PAR_FX_P1, 127);
+    printf("  SHIFT's card: 127 %s", b);
+    ok &= !strcmp(b, "+1kHz");
+    card_value(b, sizeof b, PAR_FX_P1, 65);
+    printf(", 65 %s", b);
+    card_value(b, sizeof b, PAR_FX_P1, 0);
+    printf(", 0 %s", b);
+    ok &= !strcmp(b, "-1kHz");
+    card_value(b, sizeof b, PAR_FX_P3, 0);
+    printf("; DELAY 0 %s", b);
+    card_value(b, sizeof b, PAR_FX_P3, 127);
+    printf(", 127 %s\n", b);
+    ok &= !strcmp(b, "20 ms");
+    card_name(b, sizeof b, PAR_FX_P4);
+    ok &= !strcmp(b, "Spread");
+    check(ok, "SHIFT's cards: Shift (0Hz in the middle, +-1kHz), Delay to 20 ms, Spread");
+    par_set(PAR_FX_P1, 90);
+    par_set(PAR_FX_P2, 80);
+    par_set(PAR_FX_P4, 100);
+    par_set(PAR_FX_DRY_WET, 64);
+    snd_service();
+    run_ms(100);
+    for (i = 0; i < 4u && fx_page() != FXPG_BUS; i++)
+        turn(EN_SELECT, 1);
+    shot("fx-shift");
+    {
+        uint8_t k[KIT_LEN];
+        memset(k, 0, sizeof k);
+        k[PAR_FX_TYPE] = FX_SHIFT;
+        kit_sanitize(k);
+        ok = k[PAR_FX_TYPE] == FX_SHIFT;
+        kit_put(0, k);
+        kit_get(0, k);
+        check(ok && k[PAR_FX_TYPE] == FX_SHIFT && kit_pk_bits <= KIT_PK * 8u, "a kit keeps SHIFT (FX type 4 bits, the packed kit fits)");
+        printf("  packed kit: %u bits of %u\n", (unsigned)kit_pk_bits, (unsigned)(KIT_PK * 8u));
+    }
+    par_set(PAR_FX_TYPE, FX_OFF);
+    par_set(PAR_FX_DRY_WET, 0);
+    snd_service();
     goto_mode(B_HOME, M_HOME);
 }
 
@@ -9838,6 +10034,7 @@ int main(int argc, char **argv)
     phase_100_10();
     phase_100_10c();
     phase_100_11();
+    phase_100_12();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;
 }

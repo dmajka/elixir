@@ -587,7 +587,7 @@ static const uint16_t P_MIXER[NMIXER][4] = {{PAR_VOL1, PAR_VOL2, PAR_VOL3, PAR_V
                                             {PAR_REV_SEND1, PAR_REV_SEND1 + 1, PAR_REV_SEND1 + 2, PAR_REV_SEND1 + 3},
                                             {PAR_REV_SEND1 + 4, PAR_REV_SEND1 + 5, PAR_REV_LEVEL, VP_MVOL}};
 static const char *const MIXER_TITLE[NMIXER / 2u] = {"MIXER: VOLUME", "MIXER: PAN", "MIXER: FX SEND",
-                                                     "MIXER: REVERB SEND"};
+                                                     "MIXER: REV SEND"};   /* (Phase 12: REV, so (1/2) fits) */
 #define NCONFIG 16u
 static const uint16_t P_CONFIG[NCONFIG][4] = {
     {PAR_BPM, PAR_SHUFFLE, PAR_FOLLOW, VP_PLAY},     /* (37: Play in place of Kit chg) */
@@ -889,7 +889,7 @@ static const char *const FX_P_NAME[NFX][4] = {
     {"-", "-", "-", "-"}, {"Drive", "Color", "Tone", "Volume"}, {"Freq", "-", "-", "-"},
     {"Attack", "Release", "Threshld", "Gain"}, {"Time", "Range", "Tone", "Feedback"},
     {"Rate", "Depth", "Feedback", "Centre"}, {"Rate", "Depth", "Feedback", "Delay"},
-    {"Rate", "Depth", "Delay", "Lo cut"}};
+    {"Rate", "Depth", "Delay", "Lo cut"}, {"Shift", "Fdbk", "Delay", "Spread"}};
 
 /* a mod target's voice range (VEL DEST: its own; LFO TARGET: the voice PAR_VOICE_LFO picks) */
 static void target_range(uint32_t p, uint32_t *lo, uint32_t *hi)
@@ -2015,6 +2015,8 @@ static uint32_t model_step(uint32_t p, uint32_t from, uint32_t to)
         return to > from ? FX_DELAY + 1u : FX_DELAY - 1u;
     if (p == PAR_FX_TYPE && to == FX_DRIVE && !fx_live(to))   /* (Phase 10f: DRIVE set aside) */
         return to > from ? FX_RING : FX_OFF;
+    if (p == PAR_FX_TYPE && to == FX_CHORUS && !fx_live(to))   /* (CHORUS set aside: FLANGER, then SHIFT) */
+        return to > from ? FX_SHIFT : FX_FLANGER;
     if (p >= PAR_INS1 && p < PAR_INS1 + 6u && to != ins_live(to))   /* (1.0: the dropped inserts: past them) */
         return to > from ? INS_SHIFT : INS_OFF;
     if (p < PAR_MODEL1 || p >= PAR_MODEL1 + 6u)
