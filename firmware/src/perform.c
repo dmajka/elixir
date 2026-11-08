@@ -74,6 +74,8 @@ static struct {
     int32_t dj_rs;                                   /* 1.0: Reso as the filter has it, Q8 (glides to the knob's) */
     svf_t dj_f[2];
     int32_t rg_s[8][2];                              /* 1.0: RING's bands (lp, bp; Q4 samples) */
+    int32_t rg_xh[9], rg_yh[2][5];                   /* 1.0 Phase 10e: RING's half-band filters' histories (the mono
+                                                      * sum in, the bands' left and right out) */
     /* 0.6: PERFORM 2's states: CUTS (samples to the next 32nd, the gate, its gain Q15); PUMP (D1's hits seen, the
      * envelope Q15, rising); COMB (its write index, the loop's low-pass); CRUSH (the held sample, samples to the
      * next); REVERSE (the recorder's write index, half a sample; the part playing: its end, length, position in
@@ -579,9 +581,15 @@ static void stutter(int16_t *l, int16_t *r)
 
 #define RG_LIM (1 << 26)
 #define RG_GAIN 45875                                /* (the bands' input, x their damping^0.4: 0.7) */
-#define RG_SUB 16u
-/* (1.0 Phase 10d: a band at a time over 16 samples, its coefficients and states held, its pan its own loop: the same
- * sums to the bit, ~40% fewer instructions than a sample at a time through every band) */
+#define RG_SUB 16u                                   /* (half-rate samples a pass: 32 at 44.1 kHz) */
+/* 1.0 Phase 10e: the bands run at half rate (22.05 kHz; all sit under ~5.9 kHz): the mono sum down through a
+ * half-band low-pass (11 taps, 3 coefficients: -45 dB from 16.2 kHz, the top band's alias, -0.05 dB at 5.9 kHz), the
+ * bands' sums back up through the same (x 2); ~10 samples' delay on the ring, the dry untouched */
+#define RG_H0 19781                                  /* (Q16; the centre 1/2) */
+#define RG_H1 (-4211)
+#define RG_H2 861
+/* (1.0 Phase 10d: a band at a time over 16 samples, its coefficients and states held, its pan its own loop: ~40%
+ * fewer instructions than a sample at a time through every band) */
 static inline __attribute__((always_inline)) void rg_band(int32_t *st, const int32_t *xm, int32_t *yl, int32_t *yr,
                                                           int32_t c, int32_t q, int32_t g, const uint32_t pan)
 {
@@ -608,49 +616,82 @@ static inline __attribute__((always_inline)) void rg_band(int32_t *st, const int
     st[0] = s0;
     st[1] = s1;
 }
+static int32_t rg_coef(int32_t w)                    /* 2 sin(w / 2) ~ w - w^3 / 24 + w^5 / 1920, w Q16 (to ~1.7) */
+{
+    int32_t w2 = mulq16(w, w), w3 = mulq16(w2, w);
+    return w - w3 / 24 + mulq16(w3, w2) / 1920;
+}
+static inline __attribute__((always_inline)) int32_t rg_up(const int32_t *y)   /* between y[2] and y[3], Q16 x 2 */
+{
+    return (int32_t)(((int64_t)(y[2] + y[3]) * (2 * RG_H0) + (int64_t)(y[1] + y[4]) * (2 * RG_H1) +
+                      (int64_t)(y[0] + y[5]) * (2 * RG_H2) + 32768) >> 16);
+}
 static void ring_block(int16_t *l, int16_t *r, int32_t d, int32_t w)
 {
     int32_t c[NRB], q[NRB], g[NRB], ts;
     uint32_t root = ring_root(d), nb = 0, k, i, b;
     const int8_t *sh = RING_SH[pfs.dj_tune < NRTUNE ? pfs.dj_tune : 0u];
-    ts = (int32_t)(((int64_t)3528 * exp2_q16((int32_t)((int64_t)pf.dj_rs * 5 * 65536 / 32512))) >> 16);   /* T60 */
+    ts = (int32_t)(((int64_t)1764 * exp2_q16((int32_t)((int64_t)pf.dj_rs * 5 * 65536 / 32512))) >> 16);   /* T60,
+                                                      * half-rate samples */
     for (k = 0; k < NRB && sh[k] >= 0; k++) {
-        int32_t n = (int32_t)root + sh[k], wq, cq;
+        int32_t n = (int32_t)root + sh[k], wq, cq, cf, cr;
         uint32_t qq;
         wq = (int32_t)(((int64_t)440 * exp2_q16((n - 69) * 65536 / 12) * 411775 / FS) >> 16);   /* 2 pi f / FS */
-        if (wq > 55000)                              /* (over ~5.9 kHz: left out, Chamberlin's limit near) */
+        if (wq > 55000)                              /* (over ~5.9 kHz: left out) */
             break;
-        cq = cham_coef(wq);
+        cq = rg_coef(wq * 2);                        /* (at half rate) */
         qq = 1852156736u / ((uint32_t)ts * ((uint32_t)cq >> 4));   /* 6.9 / (T60 c), Q16: its damping (both / 16:
                                                       * 32 bits) */
         q[nb] = qq > 65536u ? 65536 : qq < 33u ? 33 : (int32_t)qq;
         c[nb] = cq;
-        g[nb] = mulq16(exp2_q16((log2_q16((uint32_t)q[nb]) - (16 << 16)) * 2 / 5), RG_GAIN);   /* (q^0.4: a
-                                                      * long ring about as loud as a short one) */
+        cf = rg_coef(wq);                            /* (a band peaks at 1 / (q cos(w / 2)), w at its own rate: the */
+        cr = (int32_t)(log2_q16(65536u - (uint32_t)(mulq16(cq, cq) >> 2)) -   /* input x cos(w) / cos(w / 2) */
+                       log2_q16(65536u - (uint32_t)(mulq16(cf, cf) >> 2)));   /* rings as at the full rate; cos^2 =
+                                                      * 1 - c^2 / 4: cr is log2 of the ratio squared) */
+        g[nb] = mulq16(exp2_q16((log2_q16((uint32_t)q[nb]) - (16 << 16)) * 2 / 5 + cr / 2), RG_GAIN);   /* (q^0.4:
+                                                      * a long ring about as loud as a short one) */
         nb++;                                        /* (the bands' pan: 0 the middle, odd right, even left) */
     }
-    for (b = 0; b < BLOCK; b += RG_SUB) {
-        int32_t xm[RG_SUB], yl[RG_SUB], yr[RG_SUB];
+    for (b = 0; b < BLOCK; b += 2u * RG_SUB) {
+        int32_t xb[9u + 2u * RG_SUB], xm[RG_SUB], yl[5u + RG_SUB], yr[5u + RG_SUB];
         int16_t *lb = l + b, *rb = r + b;
-        for (i = 0; i < RG_SUB; i++) {
-            xm[i] = (lb[i] + rb[i]) << 3;            /* (the mono sum, Q4) */
-            yl[i] = yr[i] = 0;
+        memcpy(xb, pf.rg_xh, sizeof pf.rg_xh);
+        memcpy(yl, pf.rg_yh[0], sizeof pf.rg_yh[0]);
+        memcpy(yr, pf.rg_yh[1], sizeof pf.rg_yh[1]);
+        for (i = 0; i < 2u * RG_SUB; i++)
+            xb[9u + i] = (lb[i] + rb[i]) << 3;       /* (the mono sum, Q4) */
+        for (i = 0; i < RG_SUB; i++) {               /* (down: centred on xb[2i + 5]) */
+            const int32_t *x = xb + 2u * i;
+            xm[i] = (int32_t)(((int64_t)x[5] * 32768 + (int64_t)(x[4] + x[6]) * RG_H0 +
+                               (int64_t)(x[2] + x[8]) * RG_H1 + (int64_t)(x[0] + x[10]) * RG_H2 + 32768) >> 16);
+            yl[5u + i] = yr[5u + i] = 0;
         }
         for (k = 0; k < nb; k++) {
             if (k == 0u)
-                rg_band(pf.rg_s[k], xm, yl, yr, c[k], q[k], g[k], 0u);
+                rg_band(pf.rg_s[k], xm, yl + 5, yr + 5, c[k], q[k], g[k], 0u);
             else if (k & 1u)
-                rg_band(pf.rg_s[k], xm, yl, yr, c[k], q[k], g[k], 2u);
+                rg_band(pf.rg_s[k], xm, yl + 5, yr + 5, c[k], q[k], g[k], 2u);
             else
-                rg_band(pf.rg_s[k], xm, yl, yr, c[k], q[k], g[k], 1u);
+                rg_band(pf.rg_s[k], xm, yl + 5, yr + 5, c[k], q[k], g[k], 1u);
         }
-        for (i = 0; i < RG_SUB; i++) {
-            int32_t o = (lb[i] >> 1) + (int32_t)(((int64_t)fast_tanh(yl[i] >> 3) * 24575) >> 16);   /* (0.75: room
+        for (i = 0; i < RG_SUB; i++) {               /* (up: even samples between, odd on the half-rate ones) */
+            int32_t j, o, v[2][2];
+            v[0][0] = rg_up(yl + i);
+            v[0][1] = yl[i + 3u];
+            v[1][0] = rg_up(yr + i);
+            v[1][1] = yr[i + 3u];
+            for (j = 0; j < 2; j++) {
+                int16_t *pl = lb + 2u * i + (uint32_t)j, *pr = rb + 2u * i + (uint32_t)j;
+                o = (*pl >> 1) + (int32_t)(((int64_t)fast_tanh(v[0][j] >> 3) * 24575) >> 16);   /* (0.75: room
                                                       * for the dry) */
-            lb[i] = (int16_t)sat16(lb[i] + (((o - lb[i]) * w) >> 15));
-            o = (rb[i] >> 1) + (int32_t)(((int64_t)fast_tanh(yr[i] >> 3) * 24575) >> 16);
-            rb[i] = (int16_t)sat16(rb[i] + (((o - rb[i]) * w) >> 15));
+                *pl = (int16_t)sat16(*pl + (((o - *pl) * w) >> 15));
+                o = (*pr >> 1) + (int32_t)(((int64_t)fast_tanh(v[1][j] >> 3) * 24575) >> 16);
+                *pr = (int16_t)sat16(*pr + (((o - *pr) * w) >> 15));
+            }
         }
+        memcpy(pf.rg_xh, xb + 2u * RG_SUB, sizeof pf.rg_xh);
+        memcpy(pf.rg_yh[0], yl + RG_SUB, sizeof pf.rg_yh[0]);
+        memcpy(pf.rg_yh[1], yr + RG_SUB, sizeof pf.rg_yh[1]);
     }
 }
 
@@ -681,6 +722,8 @@ static void perf_master(int16_t *l, int16_t *r)
         w = a >= 8192 ? 32768 : a * 4;
         if (pf.dj_type != 0xFFu) {                   /* (from rest) */
             memset(pf.rg_s, 0, sizeof pf.rg_s);
+            memset(pf.rg_xh, 0, sizeof pf.rg_xh);
+            memset(pf.rg_yh, 0, sizeof pf.rg_yh);
             pf.dj_type = 0xFFu;
         }
         ring_block(l, r, d, w);

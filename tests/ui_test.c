@@ -8866,6 +8866,38 @@ static void phase_100_6(void)
         printf("  RING MAJOR on A4: root %.2f, 3rd %.2f, 5th %.2f; b9 %.2f, b7 %.2f\n", g0, g4, g7, g1, gx);
         check(g0 > 3.0 * g1 && g4 > 3.0 * g1 && g7 > 3.0 * gx && g0 > 3.0 * gx, "RING: the chord rings, not the notes beside it");
         shot("fx-dj-ring");
+        {                                            /* 1.0 Phase 10e: the bands at half rate: the top one (NOTE's 8th
+                                                      * harmonic of F5, 5.59 kHz) rings at its pitch; a tone at its
+                                                      * alias (22.05 - 5.59 kHz) doesn't ring it */
+            double gt = 0, gb = 0, gs = 0, ga = 0, ft, fa;
+            uint32_t p;
+            vp_set(VP_DJTUNE, RC_NOTE);
+            pf.dj = 115;
+            root = ring_root((115 - 64) * 1040);
+            ft = NOTE_HZ(root + 36u);
+            fa = FS / 2.0 - ft;
+            for (p = 0; p < 3u; p++) {               /* (a hit; a tone at the band; one at its alias) */
+                memset(pf.rg_s, 0, sizeof pf.rg_s);
+                for (k = 0; k < 120u; k++) {
+                    for (j = 0; j < BLOCK; j++)
+                        l[j] = r[j] = (int16_t)(p ? 4000.0 * sin(2 * M_PI * (p == 1u ? ft : fa) * (k * BLOCK + j) / FS)
+                                                  : (k == 20u && j == 0u ? 30000 : 0));
+                    perf_master(l, r);
+                    for (j = 0; j < BLOCK; j++)
+                        yf[k * BLOCK + j] = (float)((l[j] + r[j]) >> 1);
+                }
+                if (p == 0u) {
+                    gt = goertzel(yf + 21u * BLOCK, 60u * BLOCK, ft);
+                    gb = goertzel(yf + 21u * BLOCK, 60u * BLOCK, ft * 0.94);
+                } else
+                    *(p == 1u ? &gs : &ga) = goertzel(yf + 40u * BLOCK, 80u * BLOCK, ft);
+            }
+            printf("  RING NOTE on F5: the top band (%.0f Hz) rings %.3f, a semitone below %.3f; a tone there %.1f, "
+                   "at its alias %.4f\n", ft, gt, gb, gs, ga);
+            check(gt > 4.0 * gb && ga < gs * 0.01, "RING at half rate: the top band at its pitch, its alias -40 dB");
+            vp_set(VP_DJTUNE, RC_MAJ);
+            pf.dj = 100;
+        }
     }
     {                                                /* (the project keeps it) */
         int rc = proj_save(2, "DJTYPE  ");
