@@ -193,6 +193,7 @@ The pattern lasts as long as its longest track (in time, counting [track clocks]
 - **Copy a bar to another bar:** on the grid, hold **COPY** (OCT+) and press a bar key. The shown bar is copied, *every track*, into that bar, with each step's velocity, locks, timing, conditions and ratchets. A track that ended before the target bar grows to include it, unless its length isn't a whole number of bars (a 12-step track stays at 12). On other pages (sound pages, step edit), COPY (OCT+) + bar key copies the selected track only.
 - **Copy a track:** hold COPY (OCT+), press the source track's black key, then the target's.
 - **Copy a pattern:** on the pattern page, hold COPY (OCT+), press the source pattern's white key, then the target's.
+- **Delete a pattern** (from 1.0): on the pattern page, hold SHIFT (OCT−) and press the pattern's white key; the screen asks DELETE PATTERN P05?: COPY (OCT+) deletes it, SHIFT keeps it.
 
 ### Clearing
 
@@ -317,9 +318,10 @@ Elixir has **32 patterns** in two banks of 16, and **64 songs**.
 - **White key:** queue that pattern. While playing, it starts when the current pattern ends (the header shows >nn); while stopped, at once.
 - **Bar keys 8–9:** bank 1 (patterns 1–16) or bank 2 (17–32).
 - **Knobs:** **Voices** (FREE, LOCKED or KIT, below), shuffle, Edits (KEEP or DROP, below), **Play** (PATTERN or SONG: what PLAY plays, see [Songs](#songs-home-a-fourth-press)).
-- **Copy a pattern:** hold **COPY (OCT+)** and tap the pattern, then hold COPY again and tap the target. The page shows both steps (COPY, PASTE). A LOCKED pattern's voices go with it.
+- **Copy a pattern:** hold **COPY (OCT+)** and tap the pattern, then hold COPY again and tap the target. A LOCKED pattern's voices go with it.
+- **Delete a pattern** (from 1.0): hold **SHIFT (OCT−)** and tap the pattern (or CLEAR, SHIFT + COPY, then the pattern). On this page SHIFT doesn't show its menu. The screen asks **DELETE PATTERN P05?**: **COPY (OCT+)** deletes it (its steps, generators, links, scale, groove and shuffle, as a new project's empty pattern), **SHIFT (OCT−)** keeps it; any other button, or COPY alone before you pick, cancels. Deleting the playing pattern empties it as it plays (a LOCKED pattern's voices are left in its slot). A song row that played it plays the empty pattern.
 
-**Voices** (from 0.20) sets where a pattern's sounds come from. The page shows a lock: open for FREE, shut for LOCKED and KIT.
+**Voices** (from 0.20) sets where a pattern's sounds come from; its card shows FREE, LOCKED or KIT (and the kit slot). Below the patterns the page lists COPY, PASTE and DELETE.
 
 | Voices | |
 |---|---|
@@ -707,16 +709,17 @@ The bars show the current page's values, with each voice's level on the volume p
 
 ### The FX bus (FX)
 
-One effect at a time, then **the delay, always there after it** (from 1.0). The pages come in order: the reverb first, then the bus and the selected effect's page, then the delay's pages, then DIRT, then the DJ FILTER (from 1.0), then the master compressor's two pages, then the voices' FX and reverb sends, the mixer's four send pages, so you can set them while you shape the effects. Only the pages that apply are shown: with the bus OFF there are no effect parameters, and DELAY: TAPE is there only in the TAPE modes.
+One effect at a time, then **the delay, always there after it** (from 1.0). The pages come in order: the reverb first, then the bus and the selected effect's page, then the delay's pages, then DIRT, then the DJ FILTER (from 1.0), then the master compressor's two pages, then the voices' FX and reverb sends, the mixer's four send pages, so you can set them while you shape the effects. Only the pages that apply are shown: with the bus OFF there are no effect parameters, DELAY: TAPE is there only in the TAPE modes and GRAIN only in GRAIN (where it comes second: DELAY (1/3), GRAIN (2/3), DELAY (3/3)).
 
 | Page | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
 | REVERB | Model | Size | Damping | Level |
 | FX BUS | Type | Dry/Wet | the type's mode | – |
 | FX BUS: *type* | P1 | P2 | P3 | P4 |
-| DELAY (1/2) | Mode | Sync | Time | Level |
+| DELAY (1/2) | Mode | Sync | Time (GRAIN: Position) | Level |
 | DELAY (2/2) | Tone | Echo>Rev | Feedback | Band |
 | DELAY: TAPE (TAPE modes) | Wow | Saturate | Glitch | Pitch |
+| GRAIN (GRAIN, 1.0; second, before DELAY (2/2)) | Size | Scatter | Density | Pitch |
 | DIRT | Bus dirt | – | Master | Amount |
 | DJ FILTER (1.0) | Type | Filt | Reso | – |
 | MASTER COMP | Thresh | Ratio | Attack | Release |
@@ -742,7 +745,7 @@ The FX sends feed the bus, and the delay hears what comes out of it: **BUS DIRT 
 
 **DELAY (1/2):**
 
-- **Mode:** OFF (the first, and a new kit's), MONO, PING PONG, TAPE or TAPE PP. Changing it fades the echoes out over a few milliseconds, clears the line and fades its input back in, so the switch doesn't click; the new mode's first echoes come about 20 ms after the turn. OFF keeps every other setting: pick a mode again and the delay is as it was. A saved kit keeps its mode; the init kit, and an LXR or factory kit without a delay, load with OFF.
+- **Mode:** OFF (the first, and a new kit's), MONO, PING PONG, TAPE, TAPE PP or GRAIN ([below](#the-grain-delay-from-10)). Changing it fades the echoes out over a few milliseconds, clears the line and fades its input back in, so the switch doesn't click; the new mode's first echoes come about 20 ms after the turn. OFF keeps every other setting: pick a mode again and the delay is as it was. A saved kit keeps its mode; the init kit, and an LXR or factory kit without a delay, load with OFF.
 - **Sync** ON turns Time into note values at the tempo: 1/32, 1/16T, 1/16, 1/8T, 1/16., 1/8, 1/4T, 1/8., 1/4, 1/2T, 1/4., 1/2 (each detent of Time the next one; a value too long for the line plays at half, the card shows /2 or /4; a tempo change follows).
 - **Time:** from 0.6 ms to the line's most (0.74 s; half a side in PING PONG; twice in the TAPE modes), finer at the short end. The card shows milliseconds, or the note value with Sync on.
 - **Level:** how loud the echoes are. 0: the delay is off.
@@ -772,6 +775,24 @@ The **DELAY: TAPE** page:
 - **Pitch:** each repeat shifted again: **+12**, **+7**, **−12** or **DETUNE** (a few cents), so the echoes climb or fall. Into the plate it shimmers.
 
 The delay's settings are part of the kit; Mode, Sync and Pitch don't morph.
+
+### The grain delay (from 1.0)
+
+**GRAIN**, the delay's last mode, is a granular delay: instead of echoes it plays **grains**, short slices of what went into the delay, each faded in and out, from somewhere in the last 0.74 s, at its own pitch and place in the stereo field. Few and long, it smears a hit into a cloud; many and short, it breaks a beat into a fizz; frozen, it holds a texture you can keep playing. The line is MONO's (full rate, 0.74 s); up to 8 grains sound at once.
+
+The delay's knobs take new names in GRAIN (the cards show them):
+
+- **Position** (Time's knob): how far back the grains read, from just behind the input to 0.74 s, finer at the short end. With **Sync** on, a note value at the tempo, as Time. A global LFO's DELAY TIME moves it.
+- **Size** (the GRAIN page, the delay's second in GRAIN; Wow's knob): each grain's length, 10 to 400 ms.
+- **Scatter** (Saturate's knob): how much the grains wander. At 0 they start at regular times from one point, in the centre: a steady, buzzy stream. Turned up, each starts somewhere further back (up to a Size and 50 ms), at an uneven time, and panned wider, until at 100% they fly anywhere across the speakers: the cloud.
+- **Density** (Glitch's knob): grains a second, OFF (no new grains: the cloud dies away), then 0.5 to 100. Their level is evened out as they overlap, so more grains don't just mean louder. Past what Size lets overlap (8 at once), more Density only fills the gaps.
+- **Pitch:** **OFF**, or each grain at random either as it is or **+12**, **+7** or **−12**: a chord of the sound with itself. **DETUNE** sets each grain a little off (up to ±20 cents): a chorus-like thickening.
+- **Feedback** puts the grains back into the line, through **Tone**, **Band** and the tape's soft clip, so they come round again and blur further; with Pitch at +12 the octaves climb on every pass (a shimmer). FB PUSH takes it to the top.
+- **Level**, **Echo>Rev** as for the echoes: with Echo>Rev up, the grains into a long reverb are the classic granular wash.
+
+PERF's **FREEZE** stops the line: nothing new is written and the grains keep playing what it holds (move Position, Size and Pitch over the frozen sound). Release it and the line takes in the sound again.
+
+GRAIN costs more CPU the more grains overlap (Size × Density): about 3–5% of the first core (5% with Feedback up), plus about 1% for each grain sounding at once (1.5% with Pitch at +7, −12 or DETUNE): with 8 at once, about 13% (CONFIG → LOAD, FX BUS). When the first core nears its limit (from about 83% busy) it plays fewer grains at once rather than breaking up. A kit with GRAIN plays as MONO on firmware before 1.0's GRAIN.
 
 ### Dirt (from 0.16)
 
@@ -1841,7 +1862,7 @@ NRPN *n* sets parameter *n* + 128: send CC 99 = *n* ÷ 128, CC 98 = *n* mod 128,
 | 110–113 | FX bus P1–P4 (see [the FX bus](#the-fx-bus-fx)) |
 | 114 | Comp ratio (0–5) |
 | 115 | Ring carrier waveform (0–5) |
-| 117 | Delay mode (0 mono, 1 ping pong) |
+| 117 | Delay mode (0 mono, 1 ping pong, 2 tape, 3 tape pp, 4 off, 5 grain (1.0)) |
 | 133 | Shuffle |
 
 NRPN 120 (morph, 0–127 for 0–255) and 119 (roll rate, 0–13) act as the panel's knobs do (from 0.12). The DJ filter, repeat, tape, the PERFORM 2 effects, mutes and solo aren't in this map: use [the remote map](#the-remote-map).

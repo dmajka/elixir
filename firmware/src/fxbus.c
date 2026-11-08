@@ -393,7 +393,10 @@ static uint32_t delay_samples(uint32_t t)
         return sync_samples(t, hi);
     return (uint32_t)(D_LOW_MIN + (((((uint64_t)t * t) >> 16) * (hi - D_LOW_MIN)) >> 16));
 }
-static uint32_t delay_mask(void) { return fx.delay_type == DELAY_NORMAL ? FXBUF_MASK : FXBUF_MASK >> 1; }
+static uint32_t delay_mask(void)
+{
+    return fx.delay_type == DELAY_NORMAL || fx.delay_type == 5u ? FXBUF_MASK : FXBUF_MASK >> 1;   /* (5: GRAIN's) */
+}
 static void delay_set_at(uint32_t t, uint32_t w)    /* Delay_setDelayTime, the write head at w */
 {
     if (fx.d_interp <= 0) {
@@ -497,6 +500,9 @@ static void delay_reads(void)                        /* the block's echoes, earl
 enum { DELAY_TAPE = 2, DELAY_TAPEPP, NDELAY };
 #define DELAY_OFF NDELAY                             /* (1.0: MODE OFF, the knob's first; stored after the modes: a
                                                       * kit's 0..3 are as they were) */
+#define DELAY_GRAIN (DELAY_OFF + 1u)                 /* (1.0 Phase 13: GRAIN, after OFF: older kits unchanged, 3 bits) */
+_Static_assert(DELAY_GRAIN == 5u, "delay_mask: GRAIN's full line");
+static inline uint32_t dly_mode(uint32_t t) { return t < NDELAY || t == DELAY_GRAIN ? t : DELAY_NORMAL; }
 enum { DP_OFF, DP_UP12, DP_UP7, DP_DOWN12, DP_DETUNE, NDPITCH };
 enum { GL_NONE, GL_STUTTER, GL_REVERSE, GL_SKIP, GL_HALF };
 #define TP_MIN (220u << 16)                          /* 10 ms at half rate */
@@ -514,6 +520,20 @@ static struct {
     uint32_t gleft, glen, gskip, gst;                /* .. half-rate samples left, its length, SKIP's slices, STUTTER's */
     uint32_t psw, psd;                               /* the shifter's write index, its delay (Q16) */
 } tp;
+#define GR_N 8u                                     /* (1.0 Phase 13: GRAIN's grains, below) */
+#define GR_SUB 16u                                   /* (.. their starts, lengths and window points: 16 samples) */
+typedef struct {
+    uint32_t pos, step, wph, winc, left;             /* the read (Q16, absolute), its step (Q16), the window's phase and
+                                                      * its step each GR_SUB samples, the samples left (0: free) */
+    int32_t w;                                       /* the window at the last GR_SUB point (Q15) */
+    int16_t gl, gr;                                  /* the pan, Q15 */
+} grain_t;
+static struct {
+    grain_t g[GR_N];
+    uint32_t next;                                   /* samples to the next grain */
+    int32_t hp;                                      /* the feedback's low cut (Q8) */
+} gs;
+static uint8_t gr_cap = GR_N;
 static uint32_t tp_rand(void)
 {
     tp.rng = tp.rng * 1664525u + 1013904223u;
@@ -524,6 +544,7 @@ static uint32_t tape_max(void) { return (fx.delay_type == DELAY_TAPE ? FXBUF_SIZ
 /* a MODE now (MONO, PING PONG, TAPE, TAPE PP): the line at another layout or rate starts from silence */
 static void delay_type_now(uint32_t t)
 {
+    uint32_t was = fx.delay_type;
     fx.dt_next = 0xFFu;
     if (t == fx.delay_type)
         return;
@@ -533,11 +554,17 @@ static void delay_type_now(uint32_t t)
                                                       * piece a block, fxbus_process) */
     fx.dl_in = 0;
     memset(&tp, 0, sizeof tp);
+    memset(&gs, 0, sizeof gs);                       /* (1.0 Phase 13: GRAIN's grains) */
     memset(fx.d_lp, 0, sizeof fx.d_lp);
     memset(fx.bd, 0, sizeof fx.bd);
     fx.d_write &= delay_mask();                      /* (1.0: MONO -> PING PONG: the heads inside the half line; */
     fx.d_old &= delay_mask();                        /* .. they wrote past it for a block) */
     fx.d_new &= delay_mask();
+    if (was == DELAY_GRAIN) {                        /* (1.0 Phase 13: GRAIN moved the write head alone: the read head
+                                                      * back at TIME behind it) */
+        fx.d_old = (fx.d_write - 1u - (delay_samples(fx.d_time) >> 16)) & delay_mask();
+        fx.d_fold = delay_samples(fx.d_time) & 0xFFFFu;
+    }
     fx.d_interp = 0;                                 /* (a crossfade under way read the old layout) */
     fx.d_has_pending = 0;
     delay_set_time(fx.d_time);
@@ -721,13 +748,205 @@ static void fx_tape(void)
     fx.dl_e = e1;
 }
 
+/* ----------------------------------------------------------- GRAIN --- */
+/* 1.0 Phase 13: GRAIN, a granular delay (written from scratch, after Clouds' ideas: a random position and pan, a smooth
+ * window, a pitch a grain, feedback, a freeze). The input (mono, full rate) keeps writing the line as MONO's does; up to
+ * GR_N grains read it back, each a Hann window over its SIZE, from POSITION behind the write head (TIME's knob; SYNC: a
+ * note value), at its own pitch (PITCH: OFF, or a grain at random either as it is or +12 / +7 / -12; DETUNE: each a
+ * little off), panned at random. DENSITY (GLITCH's knob): grains a second (OFF, 0.5 .. 100); SCATTER (SATURATE's): how
+ * far the start, the timing and the pan wander (0: regular, from one point, centred). FEEDBACK puts the grains back
+ * into the line through TONE, BAND and TAPE's soft clip (+12 in the loop: the octaves climbing); FREEZE stops the line
+ * (the write head too) and the grains keep playing what it holds. Grains start on GR_SUB steps, their windows ramped
+ * between GR_SUB points; every read stays inside what was written and not yet overwritten (GR_EDGE). Fewer grains
+ * when core 0 is late (gr_cap, audio.c). The block's sums in d_ol / d_or (MONO's early reads: not used in GRAIN) */
+#define GR_EDGE (BLOCK + 2u)                         /* (a read at least this far inside the written line) */
+#define GR_PMAX (FXBUF_SIZE - 2u * GR_EDGE)          /* (POSITION's most, samples: ~0.74 s) */
+static int is_grain(void) { return fx.delay_type == DELAY_GRAIN; }
+static uint32_t gr_pos(void)                         /* POSITION (and the global LFOs), samples behind the head */
+{
+    uint32_t t = (uint32_t)clamp32(fx.dl_t + (fx.lfo_time >> 2), 0, 65536);
+    if (fx.d_sync)
+        return sync_samples(t, (uint64_t)GR_PMAX << 16) >> 16;
+    return (uint32_t)((((uint64_t)t * t) >> 16) * GR_PMAX >> 16);
+}
+static uint32_t gr_len(int32_t f)                    /* SIZE: 10 .. 400 ms, exponential (x40: 5.32 octaves), GR_SUBs */
+{
+    uint32_t n = (uint32_t)(((uint64_t)441u * (uint32_t)exp2_q16((int32_t)(((int64_t)f * 348779) >> 16))) >> 16);
+    return (n + GR_SUB - 1u) & ~(GR_SUB - 1u);
+}
+static uint32_t gr_rate(int32_t d)                   /* DENSITY (GLITCH's 0 .. 65532): grains a second, Q16; 0: none */
+{
+    if (d < 516)
+        return 0;                                    /* (0.5 x 200^((v - 1) / 126): 7.64 octaves) */
+    return (uint32_t)exp2_q16(-65536 + (int32_t)(((int64_t)(d - 516) * 500948) / (65532 - 516)));
+}
+static uint32_t gr_rand(void) { return tp_rand() & 0xFFFFu; }   /* (tp: not used in GRAIN) */
+static void gr_start(uint32_t j, uint32_t len, int32_t sc)   /* a grain from sample j of the block, if one is free */
+{
+    static const uint32_t STEP[NDPITCH] = {65536, 131072, 98193, 32768, 65536};
+    uint32_t k, n = 0, step, d, lo, hi, adv = fx.freeze ? 0u : 65536u, ext;
+    grain_t *g = 0;
+    int32_t pan;
+    for (k = 0; k < GR_N; k++)
+        if (gs.g[k].left)
+            n++;
+        else if (!g)
+            g = &gs.g[k];
+    if (!g || n >= gr_cap)
+        return;
+    step = fx.d_pitch == DP_DETUNE ? (uint32_t)(65536 + ((int32_t)gr_rand() - 32768) / 43)   /* (+-20 cents) */
+         : fx.d_pitch && fx.d_pitch < NDPITCH && (gr_rand() & 1u) ? STEP[fx.d_pitch] : 65536u;
+    for (;; len = (len >> 1) & ~(GR_SUB - 1u)) {    /* (a pitched grain under FREEZE: shorter, to fit the line) */
+        ext = (uint32_t)(((uint64_t)(step > adv ? step - adv : adv - step) * len) >> 16) + 1u;
+        if (2u * GR_EDGE + ext < FXBUF_SIZE || len <= GR_SUB)
+            break;
+    }
+    lo = GR_EDGE + (step > adv ? ext : 0u);         /* (the read nears the head: it starts that much further back; */
+    hi = FXBUF_SIZE - GR_EDGE - (step < adv ? ext : 0u);   /* .. it falls behind: that much nearer) */
+    d = gr_pos() + (uint32_t)(((uint64_t)gr_rand() * (uint32_t)sc >> 16) * (len + 2205u) >> 16);   /* (SCATTER: up
+                                                      * to a SIZE and 50 ms further back) */
+    d = d < lo ? lo : d > hi ? hi : d;
+    g->pos = ((fx.d_write + j - d) & FXBUF_MASK) << 16;
+    g->step = step;
+    g->left = len;
+    g->wph = 0;
+    g->winc = (uint32_t)(0x100000000ull / (len / GR_SUB));
+    g->w = 0;
+    pan = (int32_t)(((int64_t)((int32_t)gr_rand() - 32768) * sc) >> 16);   /* (SCATTER: the pan's width) */
+    g->gl = (int16_t)sat16(-sine_at(0x20000000u + ((uint32_t)pan << 15)));   /* (cos and sin of pi/4 +- pi/4) */
+    g->gr = (int16_t)sat16(sine_at(0x60000000u + ((uint32_t)pan << 15)));
+}
+/* a grain into the block's sums (al, ar from sample j0; Q12: no shift a grain, the sums shifted once). The window and
+ * the pan as one gain a side (Q12), ramped across each GR_SUB samples; a grain on whole samples (PITCH OFF, +12: it starts on
+ * one and steps 1 or 2) read without interpolating. (8 grains of full scale: 2^30, no overflow) */
+static __attribute__((noinline)) void gr_render(grain_t *g, uint32_t j0, int32_t *al, int32_t *ar)
+{
+    uint32_t pos = g->pos, step = g->step, left = g->left, k, whole = !(step & 0xFFFFu) && !(pos & 0xFFFFu);
+    int32_t w = g->w, gl = g->gl, gr = g->gr, *pl = al + j0, *pr = ar + j0, *end = al + BLOCK;
+    const int16_t *buf = fxbuf;
+    for (; pl < end && left; pl += GR_SUB, pr += GR_SUB, left -= GR_SUB) {
+        int32_t w1, wl, wr, dl, dr;
+        g->wph += g->winc;
+        w1 = (32768 + sine_at(g->wph)) >> 1;          /* (Hann: (1 - cos) / 2; the LXR's table is -cos) */
+        wl = (w * gl) >> 18;
+        wr = (w * gr) >> 18;
+        dl = (((w1 * gl) >> 18) - wl) >> 4;
+        dr = (((w1 * gr) >> 18) - wr) >> 4;
+        w = w1;
+        if (whole) {
+            for (k = 0; k < GR_SUB; k++, pos += step, wl += dl, wr += dr) {
+                int32_t x = buf[(pos >> 16) & FXBUF_MASK];
+                pl[k] += x * wl;
+                pr[k] += x * wr;
+            }
+        } else {
+            for (k = 0; k < GR_SUB; k++, pos += step, wl += dl, wr += dr) {
+                uint32_t p = (pos >> 16) & FXBUF_MASK;
+                int32_t a = buf[p], x = a + (int32_t)(((int64_t)(buf[(p + 1u) & FXBUF_MASK] - a) * (int32_t)(pos & 0xFFFFu)) >> 16);
+                pl[k] += x * wl;
+                pr[k] += x * wr;
+            }
+        }
+    }
+    g->pos = pos;
+    g->left = left;
+    g->w = w;
+}
+static __attribute__((noinline)) void fx_grain(void)
+{
+    uint32_t i, j, k, len = gr_len(fx.d_wow), rate = gr_rate(fx.d_glitch), mean = 0;
+    int st = fx_stereo();
+    int32_t *side = fx_side(), *al = d_ol, *ar = d_or, sc = fx.d_sat * 516, gn = 65536, rv_sum = 0;
+    int32_t er = fx.throw_echo ? 65536 : fx.d_echorev, lvl, e0 = fx.dl_e, e1 = dl_gain();
+    int32_t fb = fx.d_fb + (int32_t)(((int64_t)(65536 - fx.d_fb) * fx.push) >> 16);
+    uint32_t st0[GR_N];
+    if (fx.lfo_fb)
+        fb = clamp32(fb + fx.lfo_fb, 0, 65536);
+    if (fx.band)
+        band_coef(0);
+    er = (int32_t)(((int64_t)er * fx.dl_g) >> 15);
+    memset(d_ol, 0, sizeof d_ol);
+    memset(d_or, 0, sizeof d_or);
+    for (k = 0; k < GR_N; k++)
+        st0[k] = 0;
+    if (rate) {                                      /* (the grains' overlap past 2: the level down by its root) */
+        uint32_t ov = (uint32_t)(((uint64_t)rate * len) / FS);   /* (Q16) */
+        mean = (uint32_t)(((uint64_t)FS << 16) / rate);
+        if (ov > 2u << 16)
+            gn = exp2_q16(-((log2_q16(ov) - (17 << 16)) >> 1));
+    }
+    for (j = 0; j < BLOCK; j += GR_SUB) {            /* the new grains, a GR_SUB step each */
+        if (!rate) {
+            gs.next = 0;
+            break;
+        }
+        if (gs.next > GR_SUB) {
+            gs.next -= GR_SUB;
+            continue;
+        }
+        gs.next += (uint32_t)(((uint64_t)mean * (uint32_t)(65536 + (((int32_t)gr_rand() - 32768) * sc >> 15))) >> 16);
+        gs.next = gs.next < GR_SUB ? GR_SUB : gs.next;
+        for (k = 0; k < GR_N && gs.g[k].left; k++)
+            ;
+        if (k < GR_N)
+            st0[k] = j;
+        gr_start(j, len, sc);
+    }
+    for (k = 0; k < GR_N; k++)
+        if (gs.g[k].left)
+            gr_render(&gs.g[k], st0[k], al, ar);
+    for (i = 0; i < BLOCK; i++) {                    /* the grains out at LEVEL (and into the reverb); al: their mono sum */
+        int32_t l = (int32_t)(((int64_t)al[i] * gn) >> 28), r = (int32_t)(((int64_t)ar[i] * gn) >> 28);   /* (Q12) */
+        lvl = e0 + (((e1 - e0) * (int32_t)(i + 1u)) >> 6);   /* (BLOCK 64: a shift, not a divide) */
+        if (st) {
+            mix_l[i] += (l * lvl) >> 15;
+            mix_r[i] += (r * lvl) >> 15;
+        } else {
+            side[i] += (l * lvl) >> 15;
+        }
+        if (er) {
+            rev_in[i] += (int32_t)(((int64_t)(l + r) * er) >> 17);
+            rv_sum |= l | r;
+        }
+        al[i] = (l + r) >> 1;
+    }
+    if (!fx.freeze) {                                /* the line: the input, the grains back through the loop */
+        uint32_t w = fx.d_write;
+        if (fb) {
+            int32_t hp = gs.hp, band = fx.band;
+            for (i = 0; i < BLOCK; i++, w = (w + 1u) & FXBUF_MASK) {
+                int32_t x = al[i], u, u3;
+                hp += (int32_t)(((int64_t)1843 * ((x << 8) - hp)) >> 16);   /* (~100 Hz: 1 - 0.9719) */
+                x = tone(&fx.d_lp[0], x - (hp >> 8));
+                if (band)
+                    x = band_peak(0, x);
+                u = fx_l[i] + fx_r[i] + (int32_t)(((int64_t)x * fb) >> 16);   /* (TAPE's soft clip, u - 4/27 u^3, */
+                u = u > 49152 ? 49152 : u < -49152 ? -49152 : u;   /* .. the divide a multiply: 4/27 = 9709 / 65536) */
+                u3 = (int32_t)(((int64_t)u * u >> 15) * u >> 15);
+                fxbuf[w] = (int16_t)sat16(u - (int32_t)(((int64_t)u3 * 9709) >> 16));
+            }
+            gs.hp = hp;
+        } else {
+            for (i = 0; i < BLOCK; i++, w = (w + 1u) & FXBUF_MASK)
+                fxbuf[w] = (int16_t)sat16(fx_l[i] + fx_r[i]);
+        }
+        fx.d_write = w;
+    }
+    if (rv_sum)
+        rev_fed = 1;
+    fx.dl_e = e1;
+}
+
 static void fx_delay(void)                           /* Delay_process / Delay_processPingPong */
 {
     uint32_t i, mask = delay_mask(), half = FXBUF_SIZE >> 1;
     int pp = fx.delay_type != DELAY_NORMAL, st = fx_stereo();
     int32_t er = fx.throw_echo ? 65536 : fx.d_echorev, rv_sum = 0, lvl, e0 = fx.dl_e, e1 = dl_gain();
-    if (is_tape()) {
-        fx_tape();
+    if (is_tape() || is_grain()) {
+        if (is_grain())
+            fx_grain();
+        else
+            fx_tape();
         d_read = 0;
         return;
     }
@@ -802,7 +1021,7 @@ static void fx_tempo(uint32_t x10)
     if (x10 == fx_bpm_x10)
         return;
     fx_bpm_x10 = x10;
-    if (fx.d_sync && !is_tape())
+    if (fx.d_sync && !is_tape() && !is_grain())
         delay_set_time(fx.d_time);
 }
 
@@ -810,7 +1029,7 @@ static void fx_tempo(uint32_t x10)
 static void fxbus_early(void)
 {
     d_read = 0;
-    if (!dly_active() || is_tape() || fx.dt_clr)
+    if (!dly_active() || is_tape() || is_grain() || fx.dt_clr)
         return;
     if (fx.d_interp <= 0) {                          /* 1.0: TIME (its knob, a track LFO; 19c: the global LFOs, +-1/4
                                                       * of its range) here, once a block: each move crossfaded, the
@@ -1370,6 +1589,7 @@ static void fxbus_process(void)                      /* FxBus_process */
         if (!fx.dl_drain) {
             memset(ps_buf, 0, sizeof ps_buf);
             memset(&tp, 0, sizeof tp);
+            memset(&gs, 0, sizeof gs);
             fx.d_lp[0] = fx.d_lp[1] = 0;
         }
     }

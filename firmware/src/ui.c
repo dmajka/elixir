@@ -103,6 +103,7 @@ static struct {
                                       * once, 3 erasing (dx_ms: when); dx_seen: asked this power-on */
     uint32_t dx_ms;
     uint8_t clear_open, clear_sel;
+    uint8_t pdel, pdel_n;            /* 1.0: the pattern page's delete: 1 CLEAR pressed (pick one), 2 asked; the pattern */
     uint8_t ca_len;                  /* 1.0: Control All on the tracks' lengths (OCT+ held, the length knob): ca_lens */
     uint8_t ca_lens[NTRACK];         /* .. the lengths as they were */
     uint8_t fine;                    /* 1.0: a knob turned with OCT- held (fine: no acceleration; the page stays shown) */
@@ -225,7 +226,7 @@ static void ui_message(const char *s)
     ui.msg_long = 0;
     ui.force = 1;
 }
-static int ui_asking(void) { return ui.ca_ask || ui.dx_ask; }   /* a dialog: the keys and knobs wait */
+static int ui_asking(void) { return ui.ca_ask || ui.dx_ask || ui.pdel == 2u; }   /* a dialog: the keys and knobs wait */
 static const char *fx_msg(const char *what)          /* 0.24.1: "WYRD'S DATA: NOT SAVED" */
 {
     static char b[32];
@@ -558,9 +559,14 @@ static uint32_t fx_shown(uint8_t out[NFXPG])        /* the pages shown, in order
     if (t != FX_OFF && t != FX_DELAY)
         out[n++] = FXPG_PARS;
     out[n++] = FXPG_DLY;
-    out[n++] = FXPG_DLY2;
-    if (par[PAR_FX_DELAY_TYPE] == DELAY_TAPE || par[PAR_FX_DELAY_TYPE] == DELAY_TAPEPP)
-        out[n++] = FXPG_DUB;
+    if (par[PAR_FX_DELAY_TYPE] == DELAY_GRAIN) {     /* (1.0 Phase 13: GRAIN's SIZE, SCATTER, DENSITY, PITCH second, */
+        out[n++] = FXPG_DUB;                         /* .. the user's order) */
+        out[n++] = FXPG_DLY2;
+    } else {
+        out[n++] = FXPG_DLY2;
+        if (par[PAR_FX_DELAY_TYPE] == DELAY_TAPE || par[PAR_FX_DELAY_TYPE] == DELAY_TAPEPP)
+            out[n++] = FXPG_DUB;
+    }
     out[n++] = FXPG_DIRT;
     out[n++] = FXPG_DJ;
     out[n++] = FXPG_COMP;
@@ -1125,7 +1131,8 @@ static uint32_t order_turn(const uint8_t *o, uint32_t c, uint32_t v, int32_t n) 
     return o[clamp32((int32_t)(i < c ? i : 0u) + n, 0, (int32_t)c - 1)];
 }
 static uint32_t gd_turn(uint32_t d, int32_t n) { return order_turn(GD_ORDER, NGD, d, n); }
-static const uint8_t DLY_ORDER[NDELAY + 1u] = {DELAY_OFF, DELAY_NORMAL, DELAY_PINGPONG, DELAY_TAPE, DELAY_TAPEPP};   /* (1.0:
+#define NDLY_ORDER (NDELAY + 2u)
+static const uint8_t DLY_ORDER[NDLY_ORDER] = {DELAY_OFF, DELAY_NORMAL, DELAY_PINGPONG, DELAY_TAPE, DELAY_TAPEPP, DELAY_GRAIN};   /* (1.0:
                                                       * the delay's MODE knob, OFF first) */
 
 /* a parameter's index in the lock targets (lock_target_par; 0: none) */
@@ -2031,7 +2038,7 @@ static uint32_t knob_next(uint32_t q, uint32_t v, int32_t step)
     if (is_target(q))
         return target_turn(q, v, step);
     if (q == PAR_FX_DELAY_TYPE)
-        return order_turn(DLY_ORDER, NDELAY + 1u, v, step);
+        return order_turn(DLY_ORDER, NDLY_ORDER, v, step);
     return model_step(q, v, (uint32_t)clamp32((int32_t)v + step, (int32_t)vp_min(q), (int32_t)vp_max(q)));
 }
 static void control_all(uint32_t k, int32_t step)
@@ -2221,7 +2228,7 @@ static void knob_turn(uint32_t k, int32_t n)
         ui.dest_p = (uint16_t)p;
     }
     if (p == PAR_FX_DELAY_TYPE)                      /* (1.0: OFF, then the modes) */
-        v = (int32_t)order_turn(DLY_ORDER, NDELAY + 1u, vp_get(p), n);
+        v = (int32_t)order_turn(DLY_ORDER, NDLY_ORDER, vp_get(p), n);
     if (p == VP_GMODE) {                             /* (1.0: the generator's name and what it does, a while) */
         ui.dest_ms = fm1_ms;
         ui.dest_p = (uint16_t)p;
@@ -2259,6 +2266,7 @@ static void mode_set(uint32_t m)
         ui.page = kset.pmem ? ui.mpage[m] : 0u;      /* (0.13: the page it was on, with CONFIG BUTTONS) */
         ui.io_naming = 0;
         ui.sb_open = 0;                              /* (the sound browser: what it loaded stays) */
+        ui.pdel = 0;                                 /* (1.0: the pattern page's delete let go) */
     }
     if ((m == M_HOME || m == M_STEP || m == M_EUCLID || m == M_PATTERN || m == M_SONG || m == M_KEYS) && ui.perf) {
         uint32_t t;
@@ -2641,7 +2649,8 @@ static int keys_live(void)
 }
 /* 1.0: SHIFT (OCT-) held: the menu (SHIFT + a white key), on every page but PERF's (its own: latches, SPELLS',
  * WANDER's) and KEYS (an accent); a knob turned meanwhile hides it (fine adjust: the page's values) */
-static int shift_menu(void) { return ui.shift && ui.mode != M_PERF && !keys_live(); }
+static int shift_menu(void) { return ui.shift && ui.mode != M_PERF && ui.mode != M_PATTERN && !keys_live(); }   /* (1.0:
+                                                      * the pattern page: SHIFT + a pattern deletes it) */
 /* PERF's keys: 1..7 roll their track, 8..16 the effects (perform.c PF_*); SHIFT + a key latches it (again: lets
  * go), a key on what is latched lets go of it. 0.6: on the PERFORM 2 pages, the second bank (1..7: DRILL); a key
  * lets go in the bank it went down in */
@@ -2734,6 +2743,24 @@ static void white_down(uint32_t w)
     if (keys_live()) {
         key_play(WHITE_KEY[w], (int32_t)w);
         return;
+    }
+    if (ui.mode == M_PATTERN && ui.shift && ui.pdel != 2u)   /* 1.0: the pattern page: SHIFT (OCT-) + a pattern */
+        ui.pdel = 1;
+    if (ui.pdel) {                                   /* 1.0: CLEAR or SHIFT on the pattern page: this one, asked */
+        uint32_t n = ui.bank * 16u + w;
+        if (ui.shift)
+            ui.shift_used = 1;
+        if (ui.mode != M_PATTERN) {
+            ui.pdel = 0;
+        } else {
+            if (ui.pdel == 1u && n < NUM_PATTERN) {
+                ui.pdel = 2;
+                ui.pdel_n = (uint8_t)n;
+                ui.msg[0] = 0;                       /* (the dialog says it now) */
+                ui.force = 1;
+            }
+            return;
+        }
     }
     if (perf_spells()) {                             /* 32: SPELLS: what the spell may change (SHIFT: only that) */
         if (ui.shift)
@@ -3039,6 +3066,35 @@ static void button_down(uint32_t b)
         if (b != B_PLAY && b != B_REC)               /* (the transport still works; the rest waits) */
             return;
     }
+    if (ui.pdel == 2u) {                             /* 1.0: DELETE PATTERN?: COPY (OCT+) deletes, SHIFT (OCT-) keeps */
+        if (b == B_OCTUP || b == B_OCTDN) {
+            if (b == B_OCTUP) {
+                char m[24];
+                pat_delete(ui.pdel_n);
+                m[0] = 'P';
+                m[1] = (char)('0' + (ui.pdel_n + 1u) / 10u);
+                m[2] = (char)('0' + (ui.pdel_n + 1u) % 10u);
+                put_str(m + 3, " DELETED", sizeof m - 3u);
+                ui_message(m);
+                ui.copy_used = 1;
+            } else {
+                ui_message("PATTERN KEPT");
+                ui.shift_used = 1;
+            }
+            ui.pdel = 0;
+        }
+        ui.force = 1;
+        if (b != B_PLAY && b != B_REC)               /* (the transport still works; the rest waits) */
+            return;
+    } else if (ui.pdel && b != B_OCTDN) {            /* (armed: any other button lets it go) */
+        ui.pdel = 0;
+        ui.force = 1;
+        if (b == B_OCTUP && !ui.shift) {
+            ui_message("DELETE: CANCELLED");
+            ui.copy_used = 1;
+            return;
+        }
+    }
     if (ui.ca_ask) {                                 /* 0.11: Control All's dialog: OCT+ reverts, OCT- keeps */
         if (b == B_OCTUP) {
             control_all_undo();
@@ -3067,6 +3123,13 @@ static void button_down(uint32_t b)
             ui.shift_used = 1;
             if (sq.rec && sq.running) {               /* recording: SHIFT CLEAR erases as the steps play */
                 sq.erase = 1;
+                return;
+            }
+            if (ui.mode == M_PATTERN) {               /* 1.0: the pattern page: CLEAR, then the pattern to delete */
+                ui.pdel = 1;
+                ui_message("DELETE: PRESS A PATTERN");
+                ui.msg_long = 1;
+                ui.force = 1;
                 return;
             }
             if (!ui.clear_open) {
@@ -3635,7 +3698,7 @@ static void ui_leds(void)
         led_put(nb, panel.btn[B_OCTUP], wd_course());
         led_put(nb, panel.btn[B_OCTDN], wd.state != WS_IDLE);
     }
-    led_put(nb, panel.btn[B_OCTUP], ui.ca || ui.ca_ask || ui.dx_ask || ui.clear_open || ui.kb_open || ui.sb_open || ui.copy_src || ((ui.mode == M_SAVE ||
+    led_put(nb, panel.btn[B_OCTUP], ui.ca || ui.ca_ask || ui.dx_ask || ui.pdel || ui.clear_open || ui.kb_open || ui.sb_open || ui.copy_src || ((ui.mode == M_SAVE ||
                                                                                      ui.mode == M_LOAD) && !ui.copy));
     for (k = 0; k < NB; k++)
         if (k != B_PLAY)

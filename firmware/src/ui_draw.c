@@ -186,7 +186,9 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
             put_str(b, "FX BUS: ", n);
             put_str(b + 8, L_FX[par[PAR_FX_TYPE] < NFX ? par[PAR_FX_TYPE] : 0], n - 8u);
         } else {
-            put_str(b, T[g], n);
+            int gr = par[PAR_FX_DELAY_TYPE] == DELAY_GRAIN;   /* (1.0 Phase 13: GRAIN's page second) */
+            put_str(b, gr && g == FXPG_DLY ? "DELAY (1/3)" : gr && g == FXPG_DUB ? "GRAIN (2/3)"
+                     : gr && g == FXPG_DLY2 ? "DELAY (3/3)" : T[g], n);
         }
         break;
     }
@@ -946,50 +948,13 @@ static void draw_patterns(int32_t y0)
         if (used && i != sq.active && i != sq.pending)
             cv_rect(x + 5, y + 10, 3, 3, T_TEXT);
     }
-    {   /* 37: the playing pattern's voices: a lock, open (FREE) or shut (LOCKED, KIT), what they are */
-        const pattern_t *p = &pat[sq.active];
-        uint32_t v = pat_voices(p);
-        uint16_t c = v == PV_LOCKED ? T_THEME : v == PV_KIT ? T_TEXT : T_MID;
-        int32_t x = 12, y = 55 - (v == PV_FREE ? 5 : 0);
-        char b[40];
-        cv_rrect(x + 4, y, 18, 22, 8, c, T_BG);       /* the shackle */
-        cv_rrect(x + 8, y + 4, 10, 20, 5, T_BG, c);
-        if (v == PV_FREE)
-            cv_rect(x + 18, y + 10, 4, 10, T_BG);     /* (open: its right leg out) */
-        cv_rrect(x, 69, 26, 21, 3, c, T_BG);          /* the body, its keyhole */
-        cv_rrect(x + 11, 74, 4, 6, 2, T_BG, c);
-        cv_rect(x + 12, 79, 2, 5, T_BG);
-        if (v == PV_KIT) {
-            put_str(b, "KIT ", sizeof b);
-            two_digits(b + 4, pat_kit(p) + 1u);
-        } else {
-            put_str(b, v == PV_LOCKED ? "LOCKED" : "FREE", sizeof b);
+    {   /* (1.0, the user: the keys, larger, in place of 37's lock; the Voices card says FREE / LOCKED / KIT) */
+        static const char *const K[3][2] = {{"COPY", "hold OCT+, tap pattern"}, {"PASTE", "hold OCT+, tap target"},
+                                            {"DELETE", "hold OCT-, tap pattern"}};
+        for (i = 0; i < 3u; i++) {
+            cv_text(10, 60 + (int32_t)i * 21, &AF_M, K[i][0], T_THEME);
+            cv_text(84, 60 + (int32_t)i * 21, &AF_M, K[i][1], T_TEXT);
         }
-        cv_text(48, 53, &AF_M, b, T_TEXT);
-        put_str(b, "BANK ", sizeof b);
-        b[5] = (char)('1' + ui.bank);
-        b[6] = 0;
-        cv_text_r(232, 57, &AF_S, sq.pending != sq.active ? "QUEUED" : b, sq.pending != sq.active ? T_ACCENT : T_MID,
-                  T_BG);
-        if (v == PV_KIT) {
-            put_str(b, "plays kit slot ", sizeof b);
-            two_digits(b + 15, pat_kit(p) + 1u);
-            b[17] = ' ';
-            memcpy(b + 18, kit_names[pat_kit(p)], 8);
-            b[26] = 0;
-        } else if (v == PV_LOCKED) {
-            put_str(b, "its own voices, in kit slot ", sizeof b);
-            two_digits(b + str_len(b), PV_SLOT(sq.active) + 1u);
-        } else {
-            put_str(b, "voices shared by every FREE pattern", sizeof b);
-        }
-        cv_text(48, 77, &AF_S, b, T_MID);
-    }
-    {
-        static const char *const CP[2] = {"COPY", "hold OCT+, tap the pattern"};
-        static const char *const PA[2] = {"PASTE", "hold OCT+, tap the target"};
-        help_pairs(10, 98, CP, 1);
-        help_pairs(10, 112, PA, 1);
     }
 }
 
@@ -1597,6 +1562,22 @@ static uint32_t sound_sig(void)
     return s;
 }
 
+/* 1.0: the pattern page's DELETE (CLEAR, then a pattern) */
+static void draw_pdel_ask(int32_t y0)
+{
+    char t[24];
+    (void)y0;
+    put_str(t, "DELETE PATTERN P", sizeof t);
+    t[16] = (char)('0' + (ui.pdel_n + 1u) / 10u);
+    t[17] = (char)('0' + (ui.pdel_n + 1u) % 10u);
+    put_str(t + 18, "?", 2);
+    cv_rrect(10, 20, 220, 88, 6, T_SURF, T_BG);
+    cv_text_in(10, 30, 220, &AF_S, ui.pdel_n == sq.active ? "THE PLAYING PATTERN" : "PATTERNS", T_MID, T_SURF);
+    cv_text_in(10, 50, 220, &AF_M, t, T_ACCENT, T_SURF);
+    cv_text_in(10, 76, 220, &AF_S, "COPY (OCT+): delete", T_TEXT, T_SURF);
+    cv_text_in(10, 90, 220, &AF_S, "SHIFT (OCT-): keep", T_MID, T_SURF);
+}
+
 static void draw_body(void)
 {
     uint32_t s;
@@ -1605,6 +1586,9 @@ static void draw_body(void)
     if (ui.dx_ask) {                                 /* 0.24.1: another app's data */
         fn = draw_dx_ask;
         s = sig_add(97, ui.dx_ask | (uint32_t)fx_found << 4 | (uint32_t)fx_apps << 8);
+    } else if (ui.pdel == 2u) {                      /* 1.0: DELETE PATTERN? */
+        fn = draw_pdel_ask;
+        s = sig_add(211, ui.pdel_n | (uint32_t)(ui.pdel_n == sq.active) << 8);
     } else if (ui.ca_ask) {                          /* 0.11: Control All's dialog */
         fn = draw_ca_ask;
         s = 41u + ui.ca_len;
@@ -1801,6 +1785,10 @@ static void draw_body(void)
 /* ------------------------------------------------------------- cards --- */
 static void card_name(char *b, uint32_t n, uint32_t p)
 {
+    if (par[PAR_FX_DELAY_TYPE] == DELAY_GRAIN && (p == PAR_DLY_TIME || p == PAR_DLY_WOW || p == PAR_GLITCH || p == PAR_DSAT)) {
+        put_str(b, p == PAR_DLY_TIME ? "Position" : p == PAR_DLY_WOW ? "Size" : p == PAR_GLITCH ? "Density" : "Scatter", n);
+        return;                                      /* (1.0 Phase 13: GRAIN's knobs) */
+    }
     if (p >= PAR_FX_P1 && p <= PAR_FX_P4) {
         put_str(b, FX_P_NAME[fx.type < NFX ? fx.type : 0][p - PAR_FX_P1], n);
         return;
@@ -2105,6 +2093,35 @@ static void put_x(char *b, uint32_t r100)
 static int card_unit(char *b, uint32_t n, uint32_t p, uint32_t v)
 {
     uint32_t f = (v & 127u) * 65536u / 127u;
+    if (par[PAR_FX_DELAY_TYPE] == DELAY_GRAIN) {     /* (1.0 Phase 13: GRAIN's POSITION, SIZE, DENSITY, SCATTER) */
+        if (p == PAR_DLY_TIME && !fx.d_sync) {
+            put_ms(b, (uint32_t)((((uint64_t)f * f) >> 16) * GR_PMAX >> 16) * 100u / 441u);
+            return 1;
+        }
+        if (p == PAR_DLY_WOW) {
+            put_ms(b, gr_len((int32_t)f) * 100u / 441u);
+            return 1;
+        }
+        if (p == PAR_GLITCH) {
+            uint32_t r = gr_rate((int32_t)((v & 127u) * 516u)) * 10u >> 16;   /* (tenths a second) */
+            char *e;
+            if (!r) {
+                put_str(b, "OFF", n);
+                return 1;
+            }
+            e = put_int(b, (int32_t)(r / 10u));
+            if (r < 100u) {
+                *e++ = '.';
+                e = put_int(e, (int32_t)(r % 10u));
+            }
+            put_str(e, "/s", 3);
+            return 1;
+        }
+        if (p == PAR_DSAT) {
+            put_str(put_int(b, (int32_t)((v & 127u) * 100u / 127u)), "%", 2);
+            return 1;
+        }
+    }
     if (p >= PAR_FILTER_FREQ_1 && p <= PAR_FILTER_FREQ_6) {
         put_hz(b, n, (uint32_t)(((uint64_t)(uint32_t)lut1024(FILT_F, f) * (FS * 100u)) >> 16));
         return 1;
@@ -2271,7 +2288,7 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
         static const char *const NV[NSYNCV] = {"1/32", "1/16T", "1/16", "1/8T", "1/16.", "1/8", "1/4T", "1/8.", "1/4",
                                                "1/2T", "1/4.", "1/2"};
         uint32_t t = v * 65536u / 127u, i = (t * NSYNCV) >> 16, k = 1;
-        uint64_t mx = is_tape() ? (uint64_t)tape_max() << 17
+        uint64_t mx = is_tape() ? (uint64_t)tape_max() << 17 : is_grain() ? (uint64_t)GR_PMAX << 16
                     : fx.delay_type == DELAY_NORMAL ? D_HI_MAX : (uint64_t)D_HI_MAX * 48 / 100, sm;
         i = i < NSYNCV ? i : NSYNCV - 1u;
         sm = sync_len(i);

@@ -122,6 +122,8 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
             uint32_t load = cpu_q8 * (CPU_AVG - 1u) + (us * 256u) / (HALF_FRAMES * 1000000u / FS) + audio_cpu_rem;
             cpu_q8 = load / CPU_AVG;
             audio_cpu_rem = load % CPU_AVG;
+            gr_cap = (uint8_t)(cpu_q8 > 240u ? 2u : cpu_q8 > 228u ? 4u : cpu_q8 > 212u ? 6u : GR_N);   /* (1.0 Phase 13:
+                                                    * GRAIN's grains fewer as core 0 nears its limit: 83, 89, 94%) */
         }
         if (fm1_audio_free_half() != half && !out_hush)
             audio_late++;                          /* the DMA moved on while we rendered (a save's erases: not

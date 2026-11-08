@@ -1899,18 +1899,63 @@ static void viz_reverb(void)
             vz_arc(cx, cy, rx + i * 5, ux_mix(vz_bg(), T_THEME, al));
     }
 }
+/* 1.0 Phase 13: GRAIN's cloud, particles as Plaits' P PARTCL draws them: the line across, now at the right (a faint
+ * mark); the cloud centred POSITION back, as wide as SIZE and SCATTER, as tall as SCATTER's pan, as many dots as
+ * DENSITY (bunched to the middle: three randoms averaged); PITCH's shifted grains brighter, above (+12, +7) or below
+ * (-12); FEEDBACK a fainter cloud further back */
+static void vz_grains(void)
+{
+    uint32_t h = 0x2545F491u, k, n = par[PAR_GLITCH] ? 14u + par[PAR_GLITCH] * 70u / 127u : 0u, nf;
+    int32_t sc = (int32_t)par[PAR_DSAT], fb = (int32_t)par[PAR_DLY_FB];
+    int32_t hw = 12 + (int32_t)par[PAR_DLY_WOW] * 34 / 127 + sc * 20 / 127, hh = 8 + sc * 30 / 127;
+    int32_t cx = VX1 - 8 - hw - (int32_t)(par[PAR_DLY_TIME] * par[PAR_DLY_TIME]) * (VN - 40 - 2 * hw) / (127 * 127);
+    cv_rect(VX1 - 2, VMID - 26, 1, 52, vz_faint());  /* (now) */
+    nf = fb > 30 ? n * (uint32_t)fb / 254u : 0u;
+    for (k = 0; k < n + nf; k++) {
+        int32_t x, y, ccx = cx, al = 45, sz = 2;
+        uint32_t r[4], i;
+        for (i = 0; i < 4u; i++) {
+            h ^= h << 13;
+            h ^= h >> 17;
+            h ^= h << 5;
+            r[i] = h;
+        }
+        if (k >= n) {                                /* (FEEDBACK: round again, further back, fainter) */
+            ccx = cx - 2 * hw - 10;
+            al = 25;
+        }
+        x = ccx + (int32_t)(((r[0] & 255u) + (r[1] & 255u) + (r[2] & 255u)) * 2u * (uint32_t)hw / 765u) - hw;
+        y = VMID + (int32_t)((((r[0] >> 8) & 255u) + ((r[1] >> 8) & 255u) + ((r[2] >> 8) & 255u)) * 2u * (uint32_t)hh / 765u) - hh;
+        if (par[PAR_DPITCH] && par[PAR_DPITCH] != 4u && (r[3] & 1u) && k < n) {   /* (a shifted grain) */
+            y += par[PAR_DPITCH] == 3u ? hh / 2 + 8 : -hh / 2 - 8;
+            al = 90;
+        } else {
+            al += (int32_t)((r[3] >> 4) % 45u);
+        }
+        if ((r[3] >> 12) % 5u == 0u)
+            sz = 3;
+        if (x < VX0 || x > VX1 - 4 || y < VY0 || y > VY1 - 3)
+            continue;
+        cv_rect(x, y, sz, sz, ux_mix(vz_bg(), T_THEME, al));
+        if (k < n && (r[3] >> 20) % 11u == 0u)
+            vz_sparkle(x, y, 2);
+    }
+    if (!n)
+        cv_text(VX0 + 4, VMID - 4, &AF_S, "DENSITY OFF: NO GRAINS", T_MID);
+}
 /* the delay's echoes: each a bar, FEEDBACK's power of the first; PING PONG left above, right below; TAPE wobbles;
  * TONE darkens the later ones; (DUB) the pitch climbing or falling, GLITCH breaking some; (SEND) the echoes into a wash */
 static void viz_echoes(int dub, int send)
 {
-    uint32_t ty = fx.delay_type < NDELAY ? fx.delay_type : 0u, n;
+    uint32_t ty = dly_mode(fx.delay_type), n;
     int32_t gap = 12 + (int32_t)par[PAR_DLY_TIME] * 44 / 127, fb = (int32_t)par[PAR_DLY_FB];
     int32_t lvl = (8 + (int32_t)par[PAR_DLY_LEVEL] * 22 / 127) * 65536 / 34;   /* (1.0: LEVEL the first's height) */
     int32_t tone = (int32_t)par[PAR_DLY_TONE], x = VX0 + 4, pp = ty == DELAY_PINGPONG || ty == DELAY_TAPEPP, tape = ty >= DELAY_TAPE;
     uint32_t h = 0x9E3779B9u;
-    static const char *const NM[NDELAY] = {"MONO DELAY", "PING PONG", "TAPE DELAY", "TAPE PING PONG"};
+    static const char *const NM[DELAY_GRAIN + 1u] = {"MONO DELAY", "PING PONG", "TAPE DELAY", "TAPE PING PONG", "",
+                                                     "GRAIN DELAY"};
     char b[24];
-    vz_panel(dub ? "DELAY: TAPE" : !send ? "" : par[PAR_FX_DELAY_TYPE] == DELAY_OFF ? "DELAY: OFF"
+    vz_panel(dub ? (ty == DELAY_GRAIN ? "DELAY: GRAIN" : "DELAY: TAPE") : !send ? "" : par[PAR_FX_DELAY_TYPE] == DELAY_OFF ? "DELAY: OFF"
              : par[PAR_DLY_LEVEL] ? "DELAY: ECHOES INTO THE REVERB" : "DELAY: OFF (LEVEL 0)");
     if (!dub && !send) {                             /* (its type spelled out, big; SYNC's division beside it, or why
                                                       * it is silent) */
@@ -1930,6 +1975,10 @@ static void viz_echoes(int dub, int send)
         int32_t i, a = (int32_t)par[PAR_ECHOREV] * 16 / 127;
         for (i = 0; i < VN; i++)
             cv_rect(VX0 + i, VMID - a, 1, 2 * a, ux_mix(vz_bg(), T_THEME, 10 + i * 15 / VN));
+    }
+    if (ty == DELAY_GRAIN) {                         /* (1.0 Phase 13) */
+        vz_grains();
+        return;
     }
     cv_rect(x, VMID - 30, 3, VMID, T_ACCENT);            /* (the hit, then its echoes) */
     for (n = 1; n < 24u; n++) {

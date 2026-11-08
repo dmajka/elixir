@@ -655,7 +655,7 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
             fx.dt_next = 0xFFu;
             break;
         }
-        i = itg < NDELAY ? itg : DELAY_NORMAL;
+        i = dly_mode(itg);
         if (dly_active() && fx.dl_e)                 /* (1.0: echoes sounding: they fade out first, fxbus_process) */
             fx.dt_next = (uint8_t)(i != fx.delay_type || fx.dt_next != 0xFFu ? i : 0xFFu);
         else

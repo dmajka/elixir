@@ -565,6 +565,21 @@ static void seq_clear_pattern(pattern_t *p)
     p->groove = p->ghum = p->gskip = 0;
     p->gamt = GAMT_DEFAULT;
 }
+/* 1.0: a pattern deleted (the pattern page: CLEAR, a pattern, COPY): blank, as a new project's; the playing one's voices
+ * go unkept as pv_copy's do (a LOCKED one's slot is left as it was) */
+static void pat_delete(uint32_t n)
+{
+    uint32_t a = pat_voices(&pat[sq.active]);
+    if (n >= NUM_PATTERN)
+        return;
+    seq_clear_pattern(&pat[n]);
+    pat[n].shuffle = pat[n].kit = 0;
+    pat[n].gx = pat[n].gy = pat[n].gchaos = 0;
+    if (n == sq.active) {
+        pv_switch(a == PV_LOCKED ? PV_KIT : a, n, n);
+        pat_backup = pat[n];
+    }
+}
 static int pat_blank(const pattern_t *p)             /* nothing on and no generator: a blank pattern */
 {
     uint32_t t, k;

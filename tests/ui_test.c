@@ -4123,7 +4123,7 @@ static void phase_016t2(void)                        /* 0.16-test2: FX's page or
     run_ms(100);
     shot("fx-order-delay");
     {   /* 1.0: the delay's MODE knob (page 1, KNOB 1): OFF first, then MONO .. TAPE PP; the init kit's OFF */
-        static const uint8_t M[] = {DELAY_OFF, DELAY_NORMAL, DELAY_PINGPONG, DELAY_TAPE, DELAY_TAPEPP};
+        static const uint8_t M[] = {DELAY_OFF, DELAY_NORMAL, DELAY_PINGPONG, DELAY_TAPE, DELAY_TAPEPP, DELAY_GRAIN};
         uint16_t pp[4];
         uint8_t ik[KIT_LEN];
         page_params(pp);
@@ -4137,8 +4137,8 @@ static void phase_016t2(void)                        /* 0.16-test2: FX's page or
             ok &= par[PAR_FX_DELAY_TYPE] == M[i];
         }
         turn(EN_K1, 1);
-        ok &= par[PAR_FX_DELAY_TYPE] == DELAY_TAPEPP;
-        check(ok, "FX: DELAY MODE turns OFF, MONO, PING PONG, TAPE, TAPE PP");
+        ok &= par[PAR_FX_DELAY_TYPE] == DELAY_GRAIN;
+        check(ok, "FX: DELAY MODE turns OFF, MONO, PING PONG, TAPE, TAPE PP, GRAIN");
         kit_init_values(ik);
         check(ik[kit_idx(PAR_FX_DELAY_TYPE)] == DELAY_OFF, "FX: the init kit's delay MODE is OFF");
         par_set(PAR_FX_DELAY_TYPE, DELAY_OFF);
@@ -8921,6 +8921,329 @@ static void phase_100_12(void)
     goto_mode(B_HOME, M_HOME);
 }
 
+/* 1.0 Phase 13: the delay's GRAIN mode */
+static uint32_t gr13_active(void)
+{
+    uint32_t k, n = 0;
+    for (k = 0; k < GR_N; k++)
+        n += gs.g[k].left != 0u;
+    return n;
+}
+/* the delay alone for n blocks: a sine (hz; 0: a full-scale square) for the first `in` blocks, then silence; the
+ * output into ol / orr (if given); the most grains at once, the largest step from one sample to the next */
+static uint32_t gr13_run(double hz, int32_t amp, uint32_t blocks, uint32_t in, int32_t *ol, int32_t *orr, int32_t *jump)
+{
+    static uint32_t n;
+    static int32_t last;
+    uint32_t k, i, most = 0;
+    int16_t dl[BLOCK], dr[BLOCK];                    /* (the input as it was: dl_in's fade rewrites fx_l) */
+    for (k = 0; k < blocks; k++, n += BLOCK) {
+        fxbus_early();
+        for (i = 0; i < BLOCK; i++) {
+            int32_t x = k >= in ? 0 : hz > 0 ? (int32_t)(sin(2.0 * M_PI * hz * (n + i) / FS) * amp)
+                                             : (((n + i) / 37u) & 1u ? amp : -amp);
+            dl[i] = dr[i] = fx_l[i] = fx_r[i] = (int16_t)sat16(x);
+            mix_l[i] = mix_r[i] = 0;
+            rev_in[i] = 0;
+        }
+        fxbus_process();
+        most = gr13_active() > most ? gr13_active() : most;
+        for (i = 0; i < BLOCK; i++) {
+            int32_t wl = mix_l[i] - dl[i];           /* (the delay's alone: the bus OFF passes its input on) */
+            if (ol) {
+                ol[k * BLOCK + i] = wl;
+                orr[k * BLOCK + i] = mix_r[i] - dr[i];
+            }
+            if (jump && iabs(wl - last) > *jump)
+                *jump = iabs(wl - last);
+            last = wl;
+        }
+    }
+    return most;
+}
+static double gr13_level(const int32_t *x, uint32_t n, double hz)   /* the rms of 1,024-sample frames' levels at hz */
+{
+    double p = 0;
+    uint32_t i;
+    for (i = 0; i + 1024u <= n; i += 1024u) {
+        double a = sh12_level(x + i, 1024u, hz);
+        p += a * a;
+    }
+    return sqrt(p / (n / 1024u));
+}
+static void phase_100_13(void)
+{
+    static int32_t ol[800u * BLOCK], orr[800u * BLOCK];
+    uint32_t i, most;
+    int32_t pk, j0, j1;
+    double a1, a2, b1, b2;
+    int ok = 1;
+    char b[24];
+    printf("1.0 Phase 13: GRAIN\n");
+    p4_reset();
+    /* the knob: past TAPE PP, the last; the list's name; a kit keeps it */
+    check(order_turn(DLY_ORDER, NDLY_ORDER, DELAY_TAPEPP, 1) == DELAY_GRAIN &&
+              order_turn(DLY_ORDER, NDLY_ORDER, DELAY_GRAIN, 1) == DELAY_GRAIN && vp_max(PAR_FX_DELAY_TYPE) == DELAY_GRAIN &&
+              !strcmp(L_DELAY[DELAY_GRAIN], "GRAIN"), "GRAIN: the delay MODE knob's last, past TAPE PP");
+    {
+        uint8_t k[KIT_LEN];
+        memset(k, 0, sizeof k);
+        k[PAR_FX_DELAY_TYPE] = DELAY_GRAIN;
+        k[PAR_DLY_LEVEL] = 100;
+        kit_sanitize(k);
+        ok = k[PAR_FX_DELAY_TYPE] == DELAY_GRAIN;
+        kit_put(0, k);
+        kit_get(0, k);
+        check(ok && k[PAR_FX_DELAY_TYPE] == DELAY_GRAIN && kit_pk_bits <= KIT_PK * 8u, "a kit keeps GRAIN (3 bits)");
+    }
+    fx_fresh(DELAY_GRAIN);
+    memset(&gs, 0, sizeof gs);
+    check(fx.delay_type == DELAY_GRAIN && is_grain() && !is_tape(), "GRAIN plays");
+    /* the cards */
+    card_name(b, sizeof b, PAR_DLY_TIME);
+    ok = !strcmp(b, "Position");
+    card_name(b, sizeof b, PAR_DLY_WOW);
+    ok &= !strcmp(b, "Size");
+    card_name(b, sizeof b, PAR_GLITCH);
+    ok &= !strcmp(b, "Density");
+    card_name(b, sizeof b, PAR_DSAT);
+    ok &= !strcmp(b, "Scatter");
+    check(ok, "GRAIN's cards: Position, Size, Density, Scatter");
+    card_value(b, sizeof b, PAR_DLY_WOW, 0);
+    printf("  SIZE 0 %s", b);
+    ok = !strcmp(b, "10 ms");
+    card_value(b, sizeof b, PAR_DLY_WOW, 127);
+    printf(", 127 %s", b);
+    ok &= !strcmp(b, "400 ms");
+    card_value(b, sizeof b, PAR_GLITCH, 0);
+    printf("; DENSITY 0 %s", b);
+    ok &= !strcmp(b, "OFF");
+    card_value(b, sizeof b, PAR_GLITCH, 1);
+    printf(", 1 %s", b);
+    ok &= !strcmp(b, "0.5/s");
+    card_value(b, sizeof b, PAR_GLITCH, 127);
+    printf(", 127 %s", b);
+    ok &= !strcmp(b, "100/s");
+    card_value(b, sizeof b, PAR_DLY_TIME, 127);
+    printf("; POSITION 127 %s\n", b);
+    ok &= !strcmp(b, "740 ms");
+    check(ok, "GRAIN's cards: SIZE 10 .. 400 ms, DENSITY OFF, 0.5 .. 100 a second, POSITION to 0.74 s");
+    /* a click, SCATTER 0, short grains overlapping, POSITION 64: it comes back POSITION later (each grain reads from
+     * there on) */
+    par_set(PAR_DLY_TIME, 64);
+    par_set(PAR_DLY_WOW, 20);
+    par_set(PAR_GLITCH, 127);
+    par_set(PAR_DSAT, 0);
+    par_set(PAR_DLY_FB, 0);
+    par_set(PAR_DPITCH, 0);
+    snd_service();
+    {
+        uint32_t d = gr_pos(), at;
+        fx_alone(400, 20000, 20000, 0);
+        at = first_peak(p21_l, 100, 20000, 200);   /* (past the dry click: the bus passes its input) */
+        printf("  a click, POSITION 64 (%u samples): back at %u\n", (unsigned)d, (unsigned)at);
+        check(at + 800u >= d && at <= d + 800u, "GRAIN: a click comes back POSITION later");
+    }
+    /* grains at once: SIZE 400 ms at the most DENSITY: 8; under load (gr_cap) fewer */
+    par_set(PAR_DLY_WOW, 127);
+    par_set(PAR_DSAT, 127);
+    snd_service();
+    memset(&gs, 0, sizeof gs);
+    most = gr13_run(300.0, 8000, 300, 300, 0, 0, 0);
+    printf("  SIZE 400 ms, DENSITY 100/s: %u grains at once", (unsigned)most);
+    ok = most == GR_N;
+    gr_cap = 4;
+    for (i = 0; i < GR_N; i++)
+        gs.g[i].left = 0;
+    most = gr13_run(300.0, 8000, 300, 300, 0, 0, 0);
+    printf("; under load (cap 4) %u\n", (unsigned)most);
+    gr_cap = GR_N;
+    check(ok && most == 4u, "GRAIN: up to 8 grains at once, fewer under load");
+    /* PITCH +12: half the grains an octave up (a 500 Hz sine: energy at 1 kHz); OFF: none there */
+    par_set(PAR_DLY_TIME, 90);
+    par_set(PAR_DLY_WOW, 60);
+    par_set(PAR_GLITCH, 100);
+    par_set(PAR_DSAT, 60);
+    for (i = 0; i < 2u; i++) {
+        par_set(PAR_DPITCH, i ? DP_UP12 : DP_OFF);
+        snd_service();
+        memset(&gs, 0, sizeof gs);
+        gr13_run(500.0, 8000, 800, 800, ol, orr, 0);
+        b1 = gr13_level(ol + 300u * BLOCK, 500u * BLOCK, 500.0);
+        b2 = gr13_level(ol + 300u * BLOCK, 500u * BLOCK, 1000.0);
+        if (i) {
+            a1 = b1;
+            a2 = b2;
+        } else {
+            j0 = (int32_t)(b2 * 1000.0 / (b1 + 1e-9));
+        }
+        printf("  PITCH %s: 500 Hz %.0f, 1 kHz %.0f\n", i ? "+12" : "OFF", b1, b2);
+    }
+    check(j0 < 30 && a2 > a1 * 0.5 && a1 > 500.0, "GRAIN: PITCH +12 puts grains an octave up (OFF: none there)");
+    /* bounded: full FEEDBACK + PUSH, +12, DENSITY and SIZE at the most, a full-scale square */
+    par_set(PAR_DLY_FB, 127);
+    par_set(PAR_DLY_WOW, 127);
+    par_set(PAR_GLITCH, 127);
+    par_set(PAR_DPITCH, DP_UP12);
+    snd_service();
+    fx.push = 65536;
+    memset(&gs, 0, sizeof gs);
+    gr13_run(0, 32767, 800, 800, ol, orr, 0);
+    fx.push = 0;
+    for (i = 0, pk = 0; i < 800u * BLOCK; i++)
+        pk = iabs(ol[i]) > pk ? iabs(ol[i]) : iabs(orr[i]) > pk ? iabs(orr[i]) : pk;
+    printf("  full FEEDBACK + PUSH, +12, a full-scale square: peak %d\n", (int)pk);
+    check(pk < 2 * 32768, "GRAIN: bounded at full feedback and density");
+    /* silent after silence (half FEEDBACK: the loop dies away, no limit cycle) */
+    par_set(PAR_DLY_FB, 64);
+    par_set(PAR_DPITCH, DP_OFF);
+    snd_service();
+    gr13_run(300.0, 8000, 100, 100, 0, 0, 0);
+    gr13_run(0, 0, 3000, 0, 0, 0, 0);
+    gr13_run(0, 0, 100, 0, ol, orr, 0);
+    for (i = 0, pk = 0; i < 100u * BLOCK; i++)
+        pk = iabs(ol[i]) > pk ? iabs(ol[i]) : pk;
+    printf("  silence after (4.4 s), FEEDBACK 64: peak %d\n", (int)pk);
+    check(pk <= 2, "GRAIN: silent after silence");
+    /* FREEZE: the line held (not written), the grains still playing it */
+    par_set(PAR_DLY_FB, 0);
+    snd_service();
+    gr13_run(300.0, 8000, 400, 400, 0, 0, 0);
+    {
+        static int16_t keep[FXBUF_SIZE];
+        uint32_t w = fx.d_write;
+        memcpy(keep, fxbuf, sizeof keep);
+        fx.freeze = 1;
+        gr13_run(700.0, 8000, 400, 400, ol, orr, 0);
+        fx.freeze = 0;
+        a1 = sh12_level(ol + 200u * BLOCK, 200u * BLOCK, 300.0);
+        a2 = sh12_level(ol + 200u * BLOCK, 200u * BLOCK, 700.0);
+        printf("  FREEZE: 300 Hz (held) %.0f, 700 Hz (the input) %.1f\n", a1, a2);
+        printf("  .. the line %s, the head %s\n", memcmp(keep, fxbuf, sizeof keep) ? "written" : "held", w == fx.d_write ? "held" : "moved");
+        check(!memcmp(keep, fxbuf, sizeof keep) && w == fx.d_write && a1 > 500.0 && a2 < a1 * 0.01,
+              "GRAIN: FREEZE holds the line, the grains play it on");
+    }
+    /* a MODE change: TAPE's echoes fade, the line cleared, then GRAIN's grains; no step bigger than the sound's own */
+    fx_fresh(DELAY_TAPE);
+    par_set(PAR_DLY_TIME, 40);
+    par_set(PAR_DLY_FB, 80);
+    par_set(PAR_DLY_WOW, 0);                         /* (TAPE plain: no wow, glitches, saturation) */
+    par_set(PAR_GLITCH, 0);
+    par_set(PAR_DSAT, 0);
+    snd_service();
+    {
+        int32_t jt = 0, jg = 0, jp = 0, ja = 0, jb = 0;   /* (steady: TAPE, GRAIN, PING PONG; the changes) */
+        gr13_run(200.0, 8000, 600, 600, 0, 0, 0);
+        gr13_run(200.0, 8000, 300, 300, 0, 0, &jt);
+        par_set(PAR_FX_DELAY_TYPE, DELAY_GRAIN);
+        par_set(PAR_DLY_WOW, 60);
+        par_set(PAR_GLITCH, 90);
+        par_set(PAR_DSAT, 60);
+        snd_service();
+        gr13_run(200.0, 8000, 200, 200, ol, orr, &ja);    /* (the echoes out, the line cleared, the grains in) */
+        ok = fx.delay_type == DELAY_GRAIN && gr13_active() > 0u;
+        gr13_run(200.0, 8000, 400, 400, 0, 0, &jg);
+        par_set(PAR_FX_DELAY_TYPE, DELAY_PINGPONG);
+        snd_service();
+        gr13_run(200.0, 8000, 200, 200, ol, orr, &jb);
+        ok &= fx.delay_type == DELAY_PINGPONG && !gr13_active();
+        gr13_run(200.0, 8000, 600, 600, 0, 0, 0);
+        gr13_run(200.0, 8000, 300, 300, 0, 0, &jp);
+        printf("  the largest step a sample: TAPE %d, -> GRAIN %d, GRAIN %d, -> PING PONG %d, PING PONG %d\n", (int)jt,
+               (int)ja, (int)jg, (int)jb, (int)jp);
+        check(ok && ja <= (jt > jg ? jt : jg) * 5 / 4 && jb <= (jg > jp ? jg : jp) * 5 / 4,
+              "GRAIN: MODE changes in and out without a click (no step past either side's own)");
+    }
+    /* the pages: GRAIN's own second (SIZE, SCATTER, DENSITY, PITCH; the user's order), then TONE .. BAND */
+    par_set(PAR_FX_DELAY_TYPE, DELAY_GRAIN);
+    par_set(PAR_DLY_TIME, 70);
+    par_set(PAR_DLY_WOW, 70);
+    par_set(PAR_GLITCH, 90);
+    par_set(PAR_DSAT, 80);
+    par_set(PAR_DLY_FB, 60);
+    par_set(PAR_DPITCH, DP_UP12);
+    snd_service();
+    goto_mode(B_FX, M_FX);
+    {
+        uint8_t o[NFXPG];
+        uint32_t n = fx_shown(o), k;
+        for (k = 0; k < n && o[k] != FXPG_DLY; k++)
+            ;
+        check(k + 2u < n && o[k + 1u] == FXPG_DUB && o[k + 2u] == FXPG_DLY2, "GRAIN: its page second, after MODE's");
+        par_set(PAR_FX_DELAY_TYPE, DELAY_TAPE);
+        n = fx_shown(o);
+        for (k = 0; k < n && o[k] != FXPG_DLY; k++)
+            ;
+        check(k + 2u < n && o[k + 1u] == FXPG_DLY2 && o[k + 2u] == FXPG_DUB, "TAPE: its page third, as before");
+        par_set(PAR_FX_DELAY_TYPE, DELAY_GRAIN);
+        snd_service();
+    }
+    fx_goto(FXPG_DLY);
+    ui.force = 1;
+    run_ms(100);
+    shot("fx-grain");
+    fx_goto(FXPG_DUB);
+    ui.force = 1;
+    run_ms(100);
+    {
+        char t[32];
+        uint32_t pg, np;
+        title_text(t, sizeof t, &pg, &np);
+        check(!strcmp(t, "GRAIN (2/3)"), "GRAIN: its page titled GRAIN (2/3)");
+    }
+    shot("fx-grain-2");
+    par_set(PAR_FX_DELAY_TYPE, DELAY_OFF);
+    par_set(PAR_DLY_LEVEL, 0);
+    par_set(PAR_DPITCH, DP_OFF);
+    snd_service();
+    goto_mode(B_HOME, M_HOME);
+    /* 1.0: the pattern page: CLEAR (SHIFT + COPY), a pattern, then COPY deletes it (SHIFT keeps it) */
+    {
+        pattern_t *p5 = &pat[4];
+        p5->main[0][0] = 0x1111u;
+        p5->gen[1][0] = 1;
+        p5->shuffle = 9;
+        mode_set(M_PATTERN);
+        ui.bank = 0;
+        run_ms(50);
+        hold(B_OCTDN);
+        press(B_OCTUP);
+        release(B_OCTDN);
+        ok = ui.pdel == 1u;
+        white(4);
+        ok &= ui.pdel == 2u && ui.pdel_n == 4u;
+        run_ms(50);
+        shot("pattern-delete-ask");
+        white(6);                                    /* (keys wait while it asks) */
+        ok &= ui.pdel == 2u && sq.pending != 6u;
+        press(B_OCTDN);
+        ok &= ui.pdel == 0u && p5->main[0][0] == 0x1111u;
+        check(ok, "PATTERNS: CLEAR, a pattern: DELETE PATTERN P05?; SHIFT keeps it");
+        hold(B_OCTDN);
+        press(B_OCTUP);
+        release(B_OCTDN);
+        white(4);
+        press(B_OCTUP);
+        check(ui.pdel == 0u && pat_blank(p5) && !p5->shuffle && !p5->gen[1][0] && !strcmp(ui.msg, "P05 DELETED"),
+              "PATTERNS: COPY deletes it (blank)");
+        hold(B_OCTDN);
+        press(B_OCTUP);
+        release(B_OCTDN);
+        press(B_OCTUP);
+        check(ui.pdel == 0u, "PATTERNS: COPY alone after CLEAR cancels");
+        p5->main[2][1] = 0x0101u;                    /* (SHIFT (OCT-) held + the pattern: the same question) */
+        shot("pattern-page");
+        hold(B_OCTDN);
+        check(!shift_menu(), "PATTERNS: SHIFT held shows the patterns (no menu)");
+        white(4);
+        ok = ui.pdel == 2u && ui.pdel_n == 4u;
+        press(B_OCTUP);
+        release(B_OCTDN);
+        check(ok && ui.pdel == 0u && pat_blank(p5), "PATTERNS: SHIFT (OCT-) + a pattern, COPY: deleted");
+        goto_mode(B_HOME, M_HOME);
+    }
+}
+
 /* 1.0 Phase 11: a global LFO's FOLLOW (an envelope follower on a voice), a 4th global LFO */
 static uint32_t fol11_blocks(uint32_t r)             /* RELEASE r: blocks from full to a tenth, the source silent */
 {
@@ -10035,6 +10358,7 @@ int main(int argc, char **argv)
     phase_100_10c();
     phase_100_11();
     phase_100_12();
+    phase_100_13();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;
 }
