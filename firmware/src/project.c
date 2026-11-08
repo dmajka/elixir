@@ -970,7 +970,7 @@ typedef struct {
 } elixir_settings_t;
 _Static_assert(sizeof(elixir_settings_t) == 280u, "settings: mixout in the padding (the length unchanged)");
 _Static_assert(__builtin_offsetof(elixir_settings_t, ccmap) == SET_LEN_016, "settings: the map after 0.16's 20 bytes");
-static elixir_settings_t kset = {SET_MAGIC, 2, 1, 1, 1, 0xFF, 100, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, {0}, 127, 0};   /* (palette 2: AMBER) */
+static elixir_settings_t kset = {SET_MAGIC, 11, 1, 1, 1, 0xFF, 100, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, {0}, 127, 0};   /* (palette 11: SAND) */
 static uint32_t cc_map_at(uint32_t cc) { return kset.ccmap[cc & 127u]; }
 static uint8_t remote_of(uint32_t v, uint32_t dflt) { return (uint8_t)(v > 16u ? 0xFFu : v ? v - 1u : dflt - 1u); }
 static uint8_t settings_dirty;

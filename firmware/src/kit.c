@@ -356,3 +356,11 @@ static void kit_factory_load(uint32_t f)             /* one into the edit buffer
     kit_loads++;
     snd_post_all();
 }
+static void kit_factory_morph(uint32_t f)            /* one as the morph target (LOAD > MORPH From FACTORY) */
+{
+    if (f >= FACTORY_NKITS)
+        return;
+    kit_factory_values(f, morph_par);
+    kit_loads++;
+    snd_post_all();
+}

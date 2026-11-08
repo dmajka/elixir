@@ -4153,7 +4153,7 @@ static void phase_016t2(void)                        /* 0.16-test2: FX's page or
     par_set(PAR_FX_DELAY_TYPE, DELAY_NORMAL);
     for (k = 0; k < NPALETTES && strcmp(UI_PALETTES[k].name, "HYRULE"); k++)
         ;
-    check(k == NPALETTES - 1u, "HYRULE: the last palette (saved ids stay)");
+    check(k == 10u, "HYRULE: palette 10 (saved ids stay: palettes are appended)");
     vp_set(VP_PALETTE, k);
     ui.page = 0;
     press(B_HOME);
@@ -7966,6 +7966,29 @@ static void phase_100_2(void)
         shot("load-kit-factory");
         turn(EN_K2, -2);
         check(ui.io_type == IO_KIT && !ui.io_src, "From SLOTS again");
+        {                                            /* MORPH From FACTORY: a factory kit as the morph target */
+            uint8_t want[KIT_LEN], kitpar[KIT_LEN];
+            uint32_t i, same = 1, kept = 1;
+            turn(EN_K1, 1);
+            check(ui.io_type == IO_MORPH && vp_max(VP_IO_SRC) == 2u, "LOAD MORPH: From SLOTS, LIBRARY, FACTORY");
+            turn(EN_K2, 2);
+            check(ui.io_type == IO_FMORPH && vp_get(VP_IO_TYPE) == 1u && vp_get(VP_IO_SRC) == 2u &&
+                      vp_max(VP_IO_SLOT) == FACTORY_NKITS - 1u, "MORPH From FACTORY: still MORPH, the kits (no ALL)");
+            shot("load-morph-factory");
+            for (i = 0; i < KIT_LEN; i++)
+                kitpar[i] = par[kit_par(i)];
+            vp_set(VP_IO_SLOT, 3);
+            io_ok();
+            kit_factory_values(3, want);
+            for (i = 0; i < KIT_LEN; i++) {
+                same &= morph_par[i] == want[i];
+                kept &= par[kit_par(i)] == kitpar[i];
+            }
+            check(same && kept, "MORPH From FACTORY: factory kit 4 the morph target, the kit as it was");
+            turn(EN_K2, -2);
+            check(ui.io_type == IO_MORPH && !ui.io_src, "MORPH From SLOTS again");
+            turn(EN_K1, -1);
+        }
         press(B_HOME);
         check(ui.mode == M_SONG, "LOAD, HOME: the song");
         press(B_HOME);

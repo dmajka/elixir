@@ -31,8 +31,9 @@ enum { S_OSC, S_AEG, S_MOD, S_FM, S_CLICK, S_FILTER, S_LFO, S_MIX, S_SHAPE, S_RA
 static const char *const SECT_NAME[NSECT] = {"OSCILLATOR", "AMP EG", "MOD EG / VELO", "FM", "TRANSIENT", "FILTER",
                                              "LFO 1", "MIX", "SHAPE", "RANDOM PER HIT", "CROSS MOD / CHOKE", "MODEL",
                                              "LFO 1", "GATE", "LFO 2", "INSERT FX"};
-enum { IO_KIT, IO_PATTERN, IO_SONG, IO_MORPH, IO_SOUND, IO_PROJECT, IO_FACTORY, NIO };   /* (FACTORY: LOAD, a kit bank) */
-static const char *const IO_NAME[NIO] = {"KIT", "PATTERN", "SONG", "MORPH", "SOUND", "PROJECT", "KIT"};
+enum { IO_KIT, IO_PATTERN, IO_SONG, IO_MORPH, IO_SOUND, IO_PROJECT, IO_FACTORY, IO_FMORPH, NIO };   /* (FACTORY: LOAD,
+                                                                                      * a kit bank; FMORPH: as the morph target) */
+static const char *const IO_NAME[NIO] = {"KIT", "PATTERN", "SONG", "MORPH", "SOUND", "PROJECT", "KIT", "MORPH"};
 /* 1.0: the Type knob's order, most used first. LOAD: no PATTERN or SONG (their own pages pick them); FACTORY is a
  * KIT From FACTORY (the From knob's third). SAVE: the same, then PATTERN, SONG */
 static const uint8_t IO_LOAD_ORD[] = {IO_KIT, IO_MORPH, IO_SOUND, IO_PROJECT};
@@ -706,7 +707,7 @@ static void page_params(uint16_t out[4])
         if (ui.io_type == IO_KIT || ui.io_type == IO_MORPH) {
             out[1] = VP_IO_SRC;
             out[2] = VP_IO_SLOT;
-        } else if (ui.io_type == IO_FACTORY) {       /* (1.0: a KIT From FACTORY) */
+        } else if (ui.io_type == IO_FACTORY || ui.io_type == IO_FMORPH) {   /* (1.0: a KIT or MORPH From FACTORY) */
             out[1] = VP_IO_SRC;
             out[2] = VP_IO_SLOT;
         } else if (ui.io_type == IO_SOUND) {         /* (1.0: the track, then the Slot) */
@@ -1227,13 +1228,14 @@ static uint32_t vp_get(uint32_t p)
         return fx.type == FX_DRIVE ? par[PAR_FX_DIST_TYPE] : fx.type == FX_RING ? par[PAR_FX_WAVE]
              : fx.type == FX_COMP ? par[PAR_FX_RATIO] : 0u;
     case VP_IO_TYPE: {                               /* (1.0: its place in IO_*_ORD; FACTORY is KIT's) */
-        uint32_t i, t = ui.io_type == IO_FACTORY ? IO_KIT : ui.io_type;
+        uint32_t i, t = ui.io_type == IO_FACTORY ? IO_KIT : ui.io_type == IO_FMORPH ? IO_MORPH : ui.io_type;
         for (i = 0; i < io_nord() && io_ord(i) != t; i++)
             ;
         return i < io_nord() ? i : 0u;
     }
     case VP_IO_SLOT: return ui.io_slot;
-    case VP_IO_SRC: return ui.io_type == IO_FACTORY ? 2u : ui.io_src;   /* (1.0: SLOTS, LIBRARY, FACTORY) */
+    case VP_IO_SRC: return ui.io_type == IO_FACTORY || ui.io_type == IO_FMORPH ? 2u : ui.io_src;   /* (1.0: SLOTS,
+                                                                                                * LIBRARY, FACTORY) */
     case VP_IO_TRACK: return ui.track;
     case VP_NAME_POS: return ui.io_pos;
     case VP_NAME_CHAR: return (uint8_t)ui.io_name[ui.io_pos & 7u];
@@ -1430,6 +1432,7 @@ static uint32_t vp_max(uint32_t p)
         return io_lib() ? (ui.io_type == IO_SOUND ? KL_SOUNDS : KL_KITS) - 1u
              : ui.io_type == IO_PROJECT ? PROJ_USER - 1u : ui.io_type == IO_PATTERN ? NUM_PATTERN - 1u
              : ui.io_type == IO_FACTORY ? FACTORY_NKITS          /* (the last: all of them into the slots) */
+             : ui.io_type == IO_FMORPH ? FACTORY_NKITS - 1u      /* (a morph target: one kit, no ALL) */
              : ui.io_type == IO_SONG ? NUM_SONGS - 1u : NUM_KITS - 1u;
     case VP_NAME_POS: return 7;
     case VP_NAME_CHAR: return 126;
@@ -1444,7 +1447,8 @@ static uint32_t vp_max(uint32_t p)
     case VP_RHOME: return NSONGHOME - 1u;
     case VP_VOICES: return NPV - 1u;
     case VP_LEDS: return 2;
-    case VP_IO_SRC: return ui.mode == M_LOAD && (ui.io_type == IO_KIT || ui.io_type == IO_FACTORY) ? 2u : 1u;
+    case VP_IO_SRC: return ui.mode == M_LOAD && (ui.io_type == IO_KIT || ui.io_type == IO_FACTORY ||
+                                                 ui.io_type == IO_MORPH || ui.io_type == IO_FMORPH) ? 2u : 1u;
     case VP_AUTOSAVE: case VP_ACCEL: case VP_PKEEP: case VP_KBSLOTS: return 1;
     case VP_KB_SRC: return 2;
     case VP_GTAKES: return NGTAKES - 1u;
@@ -1624,11 +1628,13 @@ static void vp_set(uint32_t p, uint32_t v)
         return;
     case VP_IO_SLOT: ui.io_slot = (uint8_t)v; return;
     case VP_IO_SRC:
-        if (v == 2u) {                               /* (1.0: KIT From FACTORY: the factory kits' list) */
-            ui.io_type = IO_FACTORY;
+        if (v == 2u) {                               /* (1.0: KIT, MORPH From FACTORY: the factory kits' list) */
+            ui.io_type = ui.io_type == IO_MORPH || ui.io_type == IO_FMORPH ? IO_FMORPH : IO_FACTORY;
         } else {
             if (ui.io_type == IO_FACTORY)
                 ui.io_type = IO_KIT;
+            else if (ui.io_type == IO_FMORPH)
+                ui.io_type = IO_MORPH;
             ui.io_src = (uint8_t)v;
         }
         ui.io_slot = io_slot_default(ui.io_type);
@@ -2362,7 +2368,7 @@ static uint32_t io_slot_default(uint32_t type)
     if ((type == IO_KIT || type == IO_MORPH) && ui.io_src)
         return ui.lib_kit;
     return type == IO_KIT ? kit_loaded : type == IO_MORPH ? kit_morph_loaded : type == IO_PATTERN ? sq.active
-         : type == IO_SONG ? sq.song : type == IO_FACTORY ? 0u : (pj.loaded < PROJ_USER ? pj.loaded : 0u);
+         : type == IO_SONG ? sq.song : type == IO_FACTORY || type == IO_FMORPH ? 0u : (pj.loaded < PROJ_USER ? pj.loaded : 0u);
 }
 static void io_open(uint32_t m, uint32_t type)
 {
@@ -2500,6 +2506,10 @@ static void io_ok(void)
             break;
         }
         kit_load_morph(s);
+        ui_message("MORPH TARGET LOADED");
+        break;
+    case IO_FMORPH:                                   /* (a factory kit as the morph target, as KIT From FACTORY) */
+        kit_factory_morph(s);
         ui_message("MORPH TARGET LOADED");
         break;
     case IO_PATTERN:

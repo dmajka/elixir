@@ -997,7 +997,7 @@ static void draw_song(int32_t y0)
 
 static void io_slot_name(char *b, uint32_t n, uint32_t type, uint32_t s)
 {
-    if (type == IO_FACTORY) {
+    if (type == IO_FACTORY || type == IO_FMORPH) {
         if (s >= FACTORY_NKITS) {
             put_str(b, "ALL > SLOTS", n);
         } else {

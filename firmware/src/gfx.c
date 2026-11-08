@@ -20,7 +20,7 @@ typedef struct {
     uint8_t psh;                        /* log2 of the phases per glyph: g[i << psh] .. g[(i << psh) + phases - 1] */
     const uint8_t *hc;                  /* data's Huffman code (cv_alpha_hc), 0 = 2 px per byte (cv_alpha) */
 } aafont_t;
-typedef struct { const char *name; uint16_t bg, surf, text, theme, accent; } ui_pal_t;
+typedef struct { const char *name; uint16_t bg, surf, text, theme, accent; uint8_t open; } ui_pal_t;   /* (open: tools/gen_ui_palettes.py OPEN) */
 typedef struct { uint16_t off; uint8_t w; const char *label; } kc_t;
 #include "ui_fonts.h"                   /* AF_S 12 px / 400, AF_M 15 px / 500, AF_L 28 px / 600 */
 #include "ui_palettes.h"
@@ -82,7 +82,7 @@ static uint8_t cv_flip;          /* cv_alpha_hc: the cell mirrored left <-> righ
 /* Five stored colours per palette, the rest derived with fixed blends (tools/gen_ui_palettes.py) */
 static struct {
     uint16_t bg, surf, text, theme, accent;
-    uint16_t mid, dim, line, sel, tint, ink, rec, raise, key, lane, grid;
+    uint16_t mid, dim, line, sel, tint, ink, rec, raise, key, lane, grid, panel;
     uint8_t light, mono;
     uint8_t style;               /* MENU > STYLE (ui.c style_apply): ST_FLAT, ST_LINE */
     uint32_t gen;                /* bumped by palette_set (the text ramps follow) */
@@ -108,6 +108,7 @@ static struct {
 #define T_RAISE ux.raise         /* a raised area on a surface: stubs, guides, slots, chips, button wells */
 #define T_KEY ux.key             /* a keycap's fill (its label: T_INK; unavailable: a T_DIM fill) */
 #define T_LANE ux.lane           /* the piano roll: an in-scale row (SURF -> THEME 10 %) */
+#define T_PANEL ux.panel         /* the pictures' panels (ui_viz.c): SURF; an OPEN palette's: BG */
 #define T_GRID ux.grid           /* the piano roll: a step line (SURF -> TEXT 6 %; beats and C rows: RAISE) */
 #define NPALETTES UI_NPALETTES
 
@@ -167,6 +168,7 @@ static void palette_set(uint32_t i)
     ux.key = ux_mix(p->bg, p->text, UI_KEY_PCT);
     ux.lane = ux_mix(ux.surf, p->theme, 10);
     ux.grid = ux_mix(ux.surf, p->text, 6);
+    ux.panel = p->open ? p->bg : ux.surf;
     ux.light = ux_luma(p->bg) > 128u;
     ux.rec = ux.mono ? p->accent : ux.light ? UI_REC_LIGHT : UI_REC_DARK;
     if (!cust && i == UI_BW_INDEX) {             /* MONO: black and white, set, not blended (tools/gen_ui_palettes.py) */

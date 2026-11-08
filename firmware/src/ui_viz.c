@@ -21,9 +21,9 @@ static int32_t vz_h = 104;
 static int16_t vz_y[VN] __attribute__((section(".pool")));   /* a curve's y per column, 1/16 px */
 static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v);
 
-static uint16_t vz_bg(void) { return T_SURF; }
-static uint16_t vz_fill(void) { return ux_mix(T_SURF, T_THEME, 16); }
-static uint16_t vz_faint(void) { return ux_mix(T_SURF, T_MID, 40); }
+static uint16_t vz_bg(void) { return T_PANEL; }
+static uint16_t vz_fill(void) { return ux_mix(T_PANEL, T_THEME, 16); }
+static uint16_t vz_faint(void) { return ux_mix(T_PANEL, T_MID, 40); }
 static uint16_t vz_star(void) { return ux_mix(T_THEME, RGB(255, 255, 255), 55); }
 static uint32_t sv(uint32_t s, uint32_t h, uint32_t k)    /* the track's section s, half h, knob k: its value */
 {
@@ -36,8 +36,8 @@ static int32_t vz_sin(uint32_t ph) { return sine_at(ph + 0x40000000u); }   /* si
 static void vz_sparkle(int32_t x, int32_t y, int32_t r)
 {
     uint16_t c = vz_star();
-    cv_rect(x - r, y, 2 * r + 1, 1, ux_mix(T_SURF, c, 70));
-    cv_rect(x, y - r, 1, 2 * r + 1, ux_mix(T_SURF, c, 70));
+    cv_rect(x - r, y, 2 * r + 1, 1, ux_mix(T_PANEL, c, 70));
+    cv_rect(x, y - r, 1, 2 * r + 1, ux_mix(T_PANEL, c, 70));
     cv_rect(x - 1, y - 1, 3, 3, c);
     cv_pset(x, y, RGB(255, 255, 255));
 }
@@ -48,11 +48,11 @@ static void vz_panel(const char *cap)
     static const uint8_t STARS[14][2] = {{30, 30}, {70, 52}, {118, 28}, {160, 66}, {204, 38}, {48, 84}, {96, 74},
                                          {142, 90}, {186, 86}, {222, 60}, {16, 58}, {132, 48}, {84, 40}, {176, 30}};
     uint32_t i;
-    cv_rrect(VZ_X, VZ_Y, VZ_W, VZ_H, 6, vz_bg(), T_BG);
+    cv_rrect(VZ_X, VZ_Y, VZ_W, VZ_H, 6, vz_bg(), T_BG);   /* (OPEN: BG on BG, no panel) */
     if (ux.style == ST_LINE)
         cv_frame(VZ_X, VZ_Y, VZ_W, VZ_H, T_RULE);
     for (i = 0; i < 14u; i++)
-        cv_pset(STARS[i][0], STARS[i][1], ux_mix(T_SURF, T_TEXT, 14));
+        cv_pset(STARS[i][0], STARS[i][1], ux_mix(T_PANEL, T_TEXT, 14));
     if (cap && cap[0])
         cv_text_fit(VX0, VZ_Y + 4, &AF_S, cap, T_MID, vz_bg(), VX1 - VX0);
 }
