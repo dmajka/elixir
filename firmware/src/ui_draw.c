@@ -745,14 +745,14 @@ static void draw_perf_page(int32_t y0)
         cv_text(6, 98, &AF_S, "TAPE", T_REC);
         cv_rect(44, 102, (int32_t)(tape_q16 * 186u >> 16), 4, T_REC);
     } else if (glfo_page() >= 0) {                   /* 0.13: the global LFOs as they move */
-        for (i = 0; i < NGLFO; i++) {
-            static const char *const L[NGLFO] = {"L1", "L2", "L3"};
-            int32_t x = 6 + (int32_t)i * 78;
+        for (i = 0; i < NGLFO; i++) {                /* (1.0 Phase 11: four; FOLLOW's level as its bar) */
+            static const char *const L[NGLFO] = {"L1", "L2", "L3", "L4"};
+            int32_t x = 6 + (int32_t)i * 58;
             int on = gls[i].dest != GD_OFF && gls[i].depth;
             cv_text(x, 98, &AF_S, L[i], (int32_t)i == glfo_page() ? T_THEME : T_MID);
-            cv_rect(x + 20, 102, 52, 4, T_SURF);
+            cv_rect(x + 20, 102, 34, 4, T_SURF);
             if (gls[i].dest != GD_OFF)               /* (Dest OFF: no motion, so a live LFO stands out) */
-                cv_rect(x + 20, 102, (int32_t)((uint32_t)gl.out[i] * 52u >> 16), 4, on ? T_ACCENT : T_DIM);
+                cv_rect(x + 20, 102, (int32_t)((uint32_t)gl.out[i] * 34u >> 16), 4, on ? T_ACCENT : T_DIM);
         }
     } else if (perf_stut()) {                        /* 0.16: STUTTER: the burst as it plays, a box a SIZE */
         uint32_t u = pf.st_on ? pf.st_units : 0u, k;
@@ -786,6 +786,8 @@ static void draw_perf_page(int32_t y0)
         cv_text(6, 112, &AF_S, pf.st_hold ? "HELD: STUTTERING" : "OCT+ HELD: STUTTER NOW", pf.st_hold ? T_ACCENT : T_MID);
     else if (b[0])
         cv_text_fit(6, 112, &AF_S, b, T_ACCENT, T_BG, 228);
+    else if (glfo_page() >= 0 && gls[glfo_page()].wave == GW_FOLLOW)   /* (1.0 Phase 11) */
+        cv_text(6, 112, &AF_S, "FOLLOW: + DEPTH PUSHES, - DUCKS", T_MID);
     else if (glfo_page() >= 0)
         cv_text(6, 112, &AF_S, "OCT+: TRIGGER THIS LFO", T_MID);
     else
@@ -1615,9 +1617,10 @@ static void draw_body(void)
         s = sig_add(s, sq.roll | ui.roll_latch << 8 | seq_mutes() << 16 | ui.shift << 24);
         s = sig_add(s, pfs.repeat | ui.track << 4 | (uint32_t)(pf.dj_d + 65536) >> 10 << 8 | (tape_q16 >> 11) << 20);
         if (glfo_page() >= 0)                        /* (0.13: the LFOs' bars, which page) */
-            s = sig_add(sig_add(s, glfo_sig(0) | glfo_sig(1) << 8 | glfo_sig(2) << 16 | ui.page << 24),
-                        (uint32_t)gls[0].dest | (uint32_t)gls[1].dest << 8 | (uint32_t)gls[2].dest << 16 |
-                            (uint32_t)dest_pop() << 24);   /* (0.25.2: DEST's name over it) */
+            s = sig_add(sig_add(sig_add(s, glfo_sig(0) | glfo_sig(1) << 8 | glfo_sig(2) << 16 | glfo_sig(3) << 24),
+                                (uint32_t)gls[0].dest | (uint32_t)gls[1].dest << 8 | (uint32_t)gls[2].dest << 16 |
+                                    (uint32_t)gls[3].dest << 24),
+                        ui.page | (uint32_t)dest_pop() << 8);   /* (0.25.2: DEST's name over it) */
         if (perf_dens())                             /* (19d: the tracks left out, DENSITY in use; 31: COMMIT) */
             s = sig_add(s, pfs.dex | (uint32_t)(uint8_t)sq.dens << 8 | 1u << 16 | (uint32_t)(pfs.dens != 0) << 17 |
                                (uint32_t)dundo << 18);
@@ -1851,7 +1854,9 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     }
     case VP_GL ... VP_GL_LAST: {
         static const char *const N[NGLSET] = {"Dest", "Depth", "Sync", "Wave", "Mode", "Trig", "Phase", "Rate"};
-        put_str(b, N[(p - VP_GL) % NGLSET], n);
+        static const char *const F[NGLSET] = {"Dest", "Depth", "", "Wave", "", "Source", "Thresh", "Release"};
+        put_str(b, (gls[(p - VP_GL) / NGLSET].wave == GW_FOLLOW ? F : N)[(p - VP_GL) % NGLSET], n);   /* (1.0 Phase
+                                                      * 11: FOLLOW's) */
         return;
     }
     case VP_TRACK_VOL: put_str(b, "Volume", n); return;
@@ -2281,6 +2286,36 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
     case VP_MEDIT: put_str(b, v == 1u ? "KIT ONLY" : v ? "BOTH KITS" : "SPLIT", n); return;   /* (1.0: SPLIT) */
     case VP_PMEM: put_str(b, v ? "YES" : "NO", n); return;
     case VP_GL ... VP_GL_LAST:
+        if (gls[(p - VP_GL) / NGLSET].wave == GW_FOLLOW) {   /* (1.0 Phase 11: FOLLOW's SOURCE, THRESHOLD, RELEASE) */
+            uint32_t k = (p - VP_GL) % NGLSET;
+            if (k == 5u) {
+                put_str(b, v >= GF_ALL ? "ALL" : v == V_HAT ? "HH" : VOICE_SHORT[v], n);
+                return;
+            }
+            if (k == 6u) {
+                if (v) {
+                    put_int(b, -60 + (int32_t)(((v & 127u) - 1u) * 48u + 63u) / 126);
+                    put_str(b + str_len(b), " dB", n - str_len(b));
+                } else {
+                    put_str(b, "OFF", n);
+                }
+                return;
+            }
+            if (k == 7u) {                           /* (10 ms x 200^(v / 127)) */
+                uint32_t ms = (uint32_t)((10ull * (uint32_t)exp2_q16((int32_t)((v & 127u) * 500948u / 127u)) + 32768u) >> 16);
+                char *q;
+                if (ms < 1000u) {
+                    q = put_int(b, (int32_t)ms);
+                    put_str(q, " ms", n - (uint32_t)(q - b));
+                } else {
+                    q = put_int(b, (int32_t)(ms / 1000u));
+                    *q++ = '.';
+                    q = put_int(q, (int32_t)((ms % 1000u + 50u) / 100u > 9u ? 9u : (ms % 1000u + 50u) / 100u));
+                    put_str(q, " s", n - (uint32_t)(q - b));
+                }
+                return;
+            }
+        }
         switch ((p - VP_GL) % NGLSET) {
         case 0: {
             static const char *const D[NGD] = {"OFF", "MORPH", "FILTER", "LP", "HP", "FB PUSH", "COMB", "CRUSH",
@@ -2329,7 +2364,7 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
             }
             return;
         }
-        case 3: put_str(b, L_LFOW[v % NLFO], n); return;
+        case 3: put_str(b, v == GW_FOLLOW ? "FOLLOW" : L_LFOW[v % NLFO], n); return;
         case 4: {
             static const char *const M[NGM] = {"FREE", "TRIG", "HOLD", "ONE", "HALF"};
             put_str(b, M[v < NGM ? v : 0], n);

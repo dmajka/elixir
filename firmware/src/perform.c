@@ -170,17 +170,22 @@ static uint32_t gd_bi(uint32_t g)                    /* (its place in gl.bi, NGB
 }
 enum { GM_FREE, GM_TRIG, GM_HOLD, GM_ONE, GM_HALF, NGM };
 enum { GT_PLAY, GT_PATTERN, GT_BAR, NGT };
-#define NGLFO 3u
+#define NGLFO 4u                                     /* (1.0 Phase 11: a 4th) */
+/* 1.0 Phase 11: WAVE's value past the LFO waves: FOLLOW, an envelope follower on a voice's level (older firmware reads
+ * it % NLFO, as SINE). Its knobs re-labelled: TRIG the SOURCE (a voice, GF_ALL: the loudest), RATE the RELEASE
+ * (10 ms .. 2 s, to a tenth; the attack instant), PHASE the THRESHOLD (0 OFF, then -60 .. -12 dB); SYNC, MODE unused */
+#define GW_FOLLOW NLFO
+#define GF_ALL NVOICE
 /* SYNC: a cycle, in sixths of a 16th (4 ticks): 0.13's 1/16 .. 256 bars, then (1.0) 1/32 and the triplets and dotted
- * ones, 3/8 and 5/16 (GL_ORDER: the knob's, OFF then slow .. fast as the track LFOs'). GL_FREE: SYNC OFF, RATE in Hz */
+ * ones, 3/8 and 5/16 (GL_ORDER: the knob's, OFF then fast .. slow as the track LFOs': more bars to the right). GL_FREE: SYNC OFF, RATE in Hz */
 #define NGLEN 28u
 #define GL_FREE 0x7Fu
 static const uint16_t GL_LEN[NGLEN] = {6, 12, 24, 48, 96, 192, 288, 384, 576, 768, 1152, 1536, 2304, 3072, 4608, 6144,
                                        9216, 12288, 24576,
                                        3, 4, 8, 18, 16, 30, 36, 32, 72};   /* (1/32 1/16T 1/8T 3/16 1/4T 5/16 3/8
                                                                             * 1/2T 3/4) */
-static const uint8_t GL_ORDER[NGLEN + 1u] = {GL_FREE, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 27, 3, 25,
-                                             26, 24, 2, 22, 23, 1, 21, 0, 20, 19};
+static const uint8_t GL_ORDER[NGLEN + 1u] = {GL_FREE, 19, 20, 0, 21, 1, 23, 22, 2, 24, 26, 25, 3, 27, 4, 5, 6, 7, 8,
+                                             9, 10, 11, 12, 13, 14, 15, 16, 17, 18};
 static struct {                                      /* the project's (KGL1) */
     uint8_t dest, len, wave, mode, trig, phase;      /* GD_*, GL_LEN's index (GL_FREE), LFO_*, GM_*, GT_*, 0..127 */
     int8_t depth;                                    /* -127 .. 127 */
@@ -198,6 +203,7 @@ static struct {
     uint32_t tick[NGLFO];                            /* the tick length and SPEED l[n].inc was worked out for */
     uint8_t len[NGLFO];
     int32_t out[NGLFO];                              /* their value, 0 .. 65536 (the screen) */
+    int32_t fol[NGLFO];                              /* 1.0 Phase 11: FOLLOW's level, Q16 */
     int32_t dj;                                      /* the DJ filter moved by them, -65536 .. 65536 */
     int32_t amt[NGD];                                /* each effect's amount from them, 0 .. 65536 */
     volatile int32_t morph;                          /* morph moved by them, -255 .. 255 (the main loop's) */
@@ -244,6 +250,40 @@ static void perf_init(void)
     }
 }
 
+/* 1.0 Phase 11: FOLLOW's THRESHOLD (PHASE: 0 OFF, then -60 .. -12 dB: at the top a loud hit still gets over it) as a
+ * level, Q15 */
+static int32_t gf_thr(uint32_t ph)
+{
+    /* 2^(dB log2(10) / 20): dB = -60 + 48 (ph - 1) / 126 (Q16 24966 a step); log2(10) / 20 = 0.166096 (Q16 10885) */
+    return ph ? exp2_q16((int32_t)((-60 * 65536 + (int32_t)((ph & 127u) - 1u) * 24966) * 10885LL >> 16)) >> 1 : 0;
+}
+/* .. its RELEASE (RATE): 10 ms x 200^(r / 127), the time to fall to a tenth. A block's step toward a lower level, Q16:
+ * 1 - 10^-(BLOCK / FS / T) = 1 - 2^-(3.3219 BLOCK / FS / T) */
+static int32_t gf_rel(uint32_t r)
+{
+    /* 3.3219 x BLOCK / FS / 10 ms, Q16, x 200^-(r / 127) (log2(200) = 7.6439) */
+    _Static_assert(BLOCK == 64u, "gf_rel: 31595 = 3.3219 x 64 / 44100 / 0.01, Q16");
+    int32_t k = (int32_t)((31595LL * exp2_q16(-(int32_t)((r & 127u) * 500948u / 127u))) >> 16);
+    return 65536 - exp2_q16(-k);
+}
+/* .. a block: the source's last peak over the threshold, x 2 (full from 6 dB under the top), at once up, down by
+ * RELEASE. Its value 0 .. 65536 */
+static int32_t gf_step(uint32_t n)
+{
+    uint32_t s = gls[n].trig, i;
+    int32_t pk = 0, t = gf_thr(gls[n].phase), x, f = gl.fol[n];
+    if (s >= GF_ALL) {
+        for (i = 0; i < NVOICE; i++)
+            pk = vpk[i] > pk ? vpk[i] : pk;
+    } else {
+        pk = vpk[s];
+    }
+    x = pk > t ? (int32_t)(((int64_t)(pk - t) << 17) / (32768 - t + 1)) : 0;
+    x = x < 65536 ? x : 65536;
+    f = x >= f ? x : f - (int32_t)(((int64_t)(f - x) * gf_rel(gls[n].rate) + 65535) >> 16);
+    return gl.fol[n] = f;
+}
+
 /* 0.13: the global LFOs, a block (the audio ISR, perf_block): their triggers, a step, what they move */
 static void glfo_block(void)
 {
@@ -258,7 +298,12 @@ static void glfo_block(void)
         lfo_t *l = &gl.l[n];
         const uint32_t g = gls[n].dest < NGD ? gls[n].dest : GD_OFF, m = gls[n].mode < NGM ? gls[n].mode : GM_FREE;
         uint32_t t = sq.tick_q16 ? sq.tick_q16 : 1u;
-        int32_t d = gls[n].depth, x;
+        int32_t d = gls[n].depth, x, xb;
+        if (gls[n].wave == GW_FOLLOW) {              /* (1.0 Phase 11: FOLLOW: the level, from 0 either way) */
+            gl.out[n] = gf_step(n);
+            goto moved;
+        }
+        gl.fol[n] = 0;
         if (gls[n].len >= NGLEN) {                   /* 1.0: SYNC OFF: RATE */
             gl.len[n] = GL_FREE;
             l->inc = gl_rate_inc(gls[n].rate);
@@ -279,15 +324,17 @@ static void glfo_block(void)
             gl.out[n] = lfo_calc(l);
             l->inc = inc;
         }
+    moved:
         if (g == GD_OFF || !d)
             continue;
         x = gl.out[n];
+        xb = gls[n].wave == GW_FOLLOW ? x : 2 * x - 65536;   /* (FOLLOW: + pushes, - ducks; an LFO swings both ways) */
         if (g == GD_MORPH) {
             morph += d * x / 32768;                  /* (127 x 65536 / 32768: about 255) */
         } else if (g == GD_FILTER) {
-            gl.dj += (int32_t)(((int64_t)d * (2 * x - 65536)) / 127);
+            gl.dj += (int32_t)(((int64_t)d * xb) / 127);
         } else if (gd_bi(g) < NGBI) {                /* (19c: either way from where it is) */
-            bi[gd_bi(g)] = clamp32(bi[gd_bi(g)] + (int32_t)(((int64_t)d * (2 * x - 65536)) / 127), -65536, 65536);
+            bi[gd_bi(g)] = clamp32(bi[gd_bi(g)] + (int32_t)(((int64_t)d * xb) / 127), -65536, 65536);
         } else {                                     /* the rest from 0 by |depth|; a negative one upside down */
             int32_t a = (d > 0 ? x : 65536 - x) * (d > 0 ? d : -d) / 127;
             if (g == GD_LP)

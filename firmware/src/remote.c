@@ -40,9 +40,10 @@
 #define RM_NTK 96u                                   /* TRACKS' knobs: CC 8 .. 103 */
 #define RM_TB0 104u                                  /* .. its buttons: 104 .. 119 */
 #define RM_NTB 16u
-#define RM_NGK 41u                                   /* GLOBAL's knobs: CC 8 .. 47, then CC 3 */
+#define RM_NGK 42u                                   /* GLOBAL's knobs: CC 8 .. 47, then CC 3, CC 2 */
 #define RM_XCC 3u                                    /* 1.0: GLOBAL's 41st knob, off the grid: the delay's band */
-#define RM_GCC(i) ((i) < 40u ? RM_CC0 + (i) : RM_XCC)  /* GLOBAL's knob i as its CC */
+#define RM_XCC2 2u                                   /* 1.0 Phase 11: its 42nd: LFO 4's depth */
+#define RM_GCC(i) ((i) < 40u ? RM_CC0 + (i) : (i) == 40u ? RM_XCC : RM_XCC2)   /* GLOBAL's knob i as its CC */
 #define RM_GB0 48u                                   /* .. its buttons: 48 .. 111 */
 #define RM_NGB 64u
 #define RM_ROLL0 112u                                /* 1.0: GLOBAL's rolls a track: 112 .. 119 */
@@ -57,7 +58,7 @@ static const uint16_t RM_GK[RM_NGK] = {
     PAR_REV_LEVEL, PAR_REV_SIZE, PAR_REV_DAMP, PAR_MDIRT_AMT, VP_DENS, VP_GHOST, VP_BUILD, VP_DVARY,
     VP_M1, VP_M1 + 1, VP_M1 + 2, VP_M1 + 3, VP_P2, VP_P2 + 1, VP_P2 + 2, VP_P2 + 3,
     VP_P2 + 4, VP_P2 + 5, VP_P2 + 6, VP_P2 + 7, GLV(0, 1), GLV(1, 1), GLV(2, 1), VP_DJRESO,
-    PAR_DLY_BAND};
+    PAR_DLY_BAND, GLV(3, 1)};
 #define RM_PLAY 0xFEu
 #define RM_REC 0xFDu
 #define RM_PREV 0xFCu
@@ -257,8 +258,8 @@ static void rm_in(uint32_t ch, uint32_t st, uint32_t d1, uint32_t d2)
 {
     int glob = ch == remote_gch, cc = st == 0xB0u;
     uint32_t nk = glob ? RM_NGK : RM_NTK, b0 = glob ? RM_GB0 : RM_TB0, nb = glob ? RM_NGB : RM_NTB, j;
-    if (glob && cc && d1 == RM_XCC) {
-        rm_knob(RM_NTK + 40u, d2);
+    if (glob && cc && (d1 == RM_XCC || d1 == RM_XCC2)) {
+        rm_knob(RM_NTK + (d1 == RM_XCC ? 40u : 41u), d2);
     } else if (cc && d1 >= RM_CC0 && d1 < RM_CC0 + (glob ? 40u : nk)) {
         rm_knob(d1 - RM_CC0 + (glob ? RM_NTK : 0u), d2);
     } else if (glob && cc && d1 >= RM_ROLL0 && d1 < RM_ROLL0 + 8u) {   /* 1.0: a track's roll, by the CC's value */

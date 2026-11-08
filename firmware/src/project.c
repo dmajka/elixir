@@ -668,9 +668,10 @@ static int proj_read_payload(uint32_t ver)
                 gls[i].len = (uint8_t)(b[2] < NGLEN || b[2] == GL_FREE ? b[2] : 7u);
                 if (c > NGLKGL)
                     gls[i].rate = (uint8_t)(b[7] & 127u);
-                gls[i].wave = (uint8_t)(b[3] % NLFO);
+                gls[i].wave = (uint8_t)(b[3] == GW_FOLLOW ? GW_FOLLOW : b[3] % NLFO);   /* (1.0 Phase 11: FOLLOW, */
                 gls[i].mode = (uint8_t)(b[4] < NGM ? b[4] : GM_FREE);
-                gls[i].trig = (uint8_t)(b[5] < NGT ? b[5] : GT_PLAY);
+                gls[i].trig = (uint8_t)(b[5] < (b[3] == GW_FOLLOW ? GF_ALL + 1u : NGT) ? b[5] : GT_PLAY);   /* .. its
+                                                      * SOURCE in TRIG) */
                 gls[i].phase = (uint8_t)(b[6] & 127u);
             }
         }

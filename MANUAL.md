@@ -424,7 +424,7 @@ Every LFO has the same knobs in the same places, the global LFOs (PERF, GLOBAL M
 | Page 2 | **Wave** | **Phase** | **Mode** | **Retrigger** (the global LFOs: **Trig**) |
 
 - **Dest:** what it moves. **Depth:** how far (the LXR's Amount).
-- **Sync:** OFF, or one cycle's length at the tempo. With Sync OFF the LFO runs at **Rate** (in Hz); with a sync value Rate reads SYNC and does nothing. The track LFOs' sync values, slow to fast: 4/1 (four bars), 2/1, 1/1, 3/4, 1/2, 3/8, 1/2T, 5/16, 1/4, 3/16, 1/4T, 1/8, 1/8T, 1/16, 1/32. T is a triplet; 3/4, 3/8 and 3/16 are the dotted half, quarter and eighth. (1/2T, 1/4T and 1/8T are the LXR's 1/3, 1/6 and 1/12, renamed; 3/4, 3/8, 5/16 and 3/16 are new in 1.0.)
+- **Sync:** OFF, or one cycle's length at the tempo. With Sync OFF the LFO runs at **Rate** (in Hz); with a sync value Rate reads SYNC and does nothing. Turning right makes the cycle longer. The track LFOs' sync values, fast to slow: 1/32, 1/16, 1/8T, 1/8, 1/4T, 3/16, 1/4, 5/16, 1/2T, 3/8, 1/2, 3/4, 1/1, 2/1, 4/1 (four bars). T is a triplet; 3/4, 3/8 and 3/16 are the dotted half, quarter and eighth. (1/2T, 1/4T and 1/8T are the LXR's 1/3, 1/6 and 1/12, renamed; 3/4, 3/8, 5/16 and 3/16 are new in 1.0.)
 - **Wave:** SINE, TRI, SAW UP, SAW DN, SQUARE, RANDOM, EXP UP, EXP DN.
 - **Phase:** where in its cycle a restart starts it (the LXR's Offset).
 - **Mode:** how a hit starts it (below).
@@ -1076,6 +1076,8 @@ The pages are in four sets. ARP opens **PERFORM** (the performance pages, PERFOR
 | GLOBAL LFO 2 (2/2) | Wave | Phase | Mode | Trig |
 | GLOBAL LFO 3 (1/2) | Dest | Depth | Sync | Rate |
 | GLOBAL LFO 3 (2/2) | Wave | Phase | Mode | Trig |
+| GLOBAL LFO 4 (1/2) | Dest | Depth | Sync | Rate (FOLLOW: Dest, Depth, –, Release) |
+| GLOBAL LFO 4 (2/2) | Wave | Phase | Mode | Trig (FOLLOW: Wave, Thresh, –, Source) |
 | MACROS | Macro 1 | Macro 2 | Macro 3 | Macro 4 |
 | MACRO SETUP | Macro (1–4) | Target | Min | Max |
 | LINKS | Link (1–8) | Start | Amount | Depth |
@@ -1159,15 +1161,15 @@ Each track keeps its own move, so the bass can go up a fifth while the lead stay
 
 ### Global LFOs
 
-Three LFOs (the third from 0.16) that move the whole kit's performance controls, not a voice's sound. Slow one down to many bars and it plays the set for you: a kit morphing into the next over 64 bars, a filter opening over 16, comb resonance drifting in and out.
+Four LFOs (the third from 0.16, the fourth from 1.0) that move the whole kit's performance controls, not a voice's sound. Slow one down to many bars and it plays the set for you: a kit morphing into the next over 64 bars, a filter opening over 16, comb resonance drifting in and out.
 
 | Knob | Does |
 |---|---|
 | **Dest** | What it moves (below), or OFF. Turning it shows the destination's full name and group over the page for a few seconds (from 0.25.2) |
 | **Depth** | −127 to +127. How far it moves it; negative turns it the other way |
-| **Sync** | OFF, or one cycle's length at the tempo, slow to fast: 256, 128, 96, 64, 48, 32, 24, 16, 12, 8, 6, 4, 3 and 2 bars, 1 bar, then 3/4, 1/2, 3/8, 1/2T, 5/16, 1/4, 3/16, 1/4T, 1/8, 1/8T, 1/16, 1/16T, 1/32 (T a triplet; 3/4, 3/8, 3/16 dotted). At 120 BPM, 256 bars is about 8½ minutes. (Before 1.0 this was Speed, turning the other way, fast to slow.) |
+| **Sync** | OFF, or one cycle's length at the tempo; turning right makes it longer: 1/32, 1/16T, 1/16, 1/8T, 1/8, 3/16, 1/4T, 1/4, 5/16, 1/2T, 3/8, 1/2, 3/4, 1 bar, then 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128 and 256 bars (T a triplet; 3/4, 3/8, 3/16 dotted). At 120 BPM, 256 bars is about 8½ minutes. |
 | **Rate** | With Sync OFF (from 1.0): the speed in Hz, from one cycle in 100 s (shown as its time below 0.1 Hz) to 20 Hz, not following the tempo. With a sync value it reads SYNC. |
-| **Wave** | The LFO waves: SINE, TRI, SAW UP, SAW DN, SQUARE, RANDOM, EXP UP, EXP DN |
+| **Wave** | The LFO waves: SINE, TRI, SAW UP, SAW DN, SQUARE, RANDOM, EXP UP, EXP DN, then **FOLLOW** (from 1.0: [below](#follow-a-voices-level-from-10)) |
 | **Phase** | Where in its cycle a trigger starts it |
 | **Mode** | **FREE** (runs on its own; the default), **TRIG** (starts again at each trigger), **HOLD** (runs, its value held at each trigger), **ONE** (one cycle from a trigger, then still at its end), **HALF** (half a cycle) |
 | **Trig** | What triggers it: **PLAY** (the sequencer starting), **PATTERN** (PLAY and each pattern change), **BAR** (PLAY and each bar) |
@@ -1193,8 +1195,24 @@ Dest turns through them in groups, in the signal's order and each group by name:
 - **The knobs stay put.** The LFO moves the sound, not the setting: the Morph knob, the DJ filter and the effects' settings read as you left them, and that is what the project saves.
 - **Synced to the clock:** a sync value follows the tempo, MIDI clock, HALF and TAPE STOP (a free Rate only TAPE STOP). The LFOs run when stopped too (FREE, or after a trigger).
 - **OCT+** on a global LFO's page triggers it by hand (a FREE LFO has no trigger: set its Mode first).
-- The screen shows the LFOs moving (L1, L2, L3) on their pages. LFOs on the same destination add up.
+- The screen shows the LFOs moving (L1–L4) on their pages. LFOs on the same destination add up.
+- The remote's GLOBAL channel turns their depths: CC 44–46 for LFOs 1–3, **CC 2** for LFO 4 (off the grid, as the delay's Band on CC 3).
 - They are saved with the project.
+
+#### FOLLOW: a voice's level (from 1.0)
+
+Wave **FOLLOW** turns a global LFO into an envelope follower: instead of a wave it follows how loud a voice plays, so a kick can duck the reverb, pump the master or open the DJ filter on every hit. Its knobs change names:
+
+| Knob | With FOLLOW |
+|---|---|
+| **Source** (Trig's place) | The voice it listens to: D1, D2, D3, SN, CY, HH, or **ALL** (the loudest of them at each moment). It hears the voice before the mixer: its volume and mutes don't change what it follows |
+| **Thresh** (Phase's place) | OFF (the default: every level), or −60 to −12 dB: only what goes over it moves the destination, and the follower reaches full halfway from the threshold to the top. If L4's bar doesn't move, the threshold is above the voice's level |
+| **Release** (Rate's place) | How fast it lets go after the sound falls: 10 ms to 2 s (the time to fall to a tenth). The attack is instant |
+| Sync, Mode | Unused (blank) |
+
+**Depth's sign:** + pushes the destination up with the level, − ducks it. Unlike a wave, the follower moves only one way from where the knob is: at rest it doesn't move the destination at all. (On the effects that fade in, PUMP, COMB, CRUSH and the rest, a negative depth plays them fully at rest and takes them out on each hit.) OCT+ has nothing to trigger. The L bar shows the level it follows.
+
+**The reverb ducked by the kick:** GLOBAL LFO 4: Dest REV SEND, Depth −127, Release about 150 ms; page 2: Wave FOLLOW, Source D1. The reverb's sends drop on each kick and swell back between them, the room breathing with the beat while the kick stays dry. With Dest FILTER and Depth +60 instead, every kick opens the DJ filter towards its high-pass side.
 
 **A kit morphing into another over 64 bars:** LOAD → MORPH the second kit; GLOBAL LFO 1: Dest MORPH, Depth +127, Sync 64 BARS; page 2: Wave SAW UP, Mode ONE, Trig PLAY. Press PLAY: morph goes from the knob's value to full over 64 bars and stays there. With Mode FREE and Wave TRI instead, it morphs there and back for as long as you play.
 
@@ -1602,7 +1620,7 @@ Knobs and faders are CCs. Every number is used once on its channel, so a knob an
 | 32–39 | **32** Macro 1 | **33** Macro 2 | **34** Macro 3 | **35** Macro 4 | **36** DRILL | **37** JITTER | **38** CUTS | **39** PUMP |
 | 40–47 | **40** COMB note | **41** COMB fb | **42** CRUSH | **43** REV length | **44** LFO 1 depth | **45** LFO 2 depth | **46** LFO 3 depth | **47** DJ reso |
 
-One more GLOBAL knob sits off the grid (1.0): **CC 3**, the delay's **Band** (0 OFF). Map a spare knob or fader to it.
+Two more GLOBAL knobs sit off the grid (1.0): **CC 3**, the delay's **Band** (0 OFF), and **CC 2**, **LFO 4's depth**. Map spare knobs or faders to them.
 
 **GLOBAL (channel 16): buttons, CC or note 48–111**
 

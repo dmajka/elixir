@@ -320,10 +320,15 @@
         <h4>LFOs</h4>
         <ul>
           <li>Every LFO has the same knobs in the same places: Dest, Depth, Sync, Rate, then Wave, Phase, Mode,
-            Retrigger. LFO 1's Dest reaches every voice's parameters.</li>
+            Retrigger. LFO 1's Dest reaches every voice's parameters. Sync turns from the shortest (1/32) to the
+            longest: more bars to the right.</li>
           <li>The global LFOs can run free in Hz (0.01–20 Hz) as well as synced, and every LFO gains 3/8, 5/16,
             triplet and dotted values. Master DIRT's amount is a new global destination.</li>
           <li>A global LFO on MORPH costs much less CPU.</li>
+          <li>A fourth global LFO (its depth on the remote's GLOBAL CC 2).</li>
+          <li>A global LFO's Wave can be FOLLOW: an envelope follower on a voice (or the loudest of them), with a
+            threshold and a release from 10 ms to 2 s. Negative Depth ducks, so the kick can duck the reverb sends,
+            pump the master or open the DJ filter on every hit.</li>
         </ul>
         <h4>MIDI and performance</h4>
         <ul>

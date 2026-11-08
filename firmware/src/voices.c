@@ -102,6 +102,7 @@ static uint32_t rev_g = 65536u;                      /* 19c: the reverb sends mo
 static uint8_t rp_scaled;                            /* 19a: the next hit's random pitch is in the scale's degrees
                                                       * (seq.c seq_trigger): no bend */
 static int32_t venv[NVOICE];                         /* each voice's output envelope, Q15 (cross modulation) */
+static int32_t vpk[NVOICE];                          /* 1.0 Phase 11: .. its last block's peak, Q15 (a global LFO's FOLLOW) */
 static uint32_t tape_q16 = 65536u;                   /* PERF's TAPE STOP: every voice's pitch (and the tempo), Q16 */
 static int32_t exp2_q16(int32_t y);                  /* (fxbus.c) */
 /* random per hit: its own generator (the noise oscillators' sequence stays as the LXR's), -32768 .. 32767 */
@@ -128,8 +129,8 @@ enum { LM_TRIG, LM_HOLD, LM_ONE, LM_HALF, NLFOMODE };
  * through them by length (ui.c SYNC_ORDER) */
 #define NSYNC 16u
 static const uint16_t SYNC_SCALE_X60[NSYNC] = {0, 15, 30, 60, 120, 180, 240, 360, 480, 720, 960, 1920, 80, 160, 192, 320};
-static const uint8_t SYNC_ORDER[NSYNC] = {0, 1, 2, 3, 12, 4, 13, 5, 14, 6, 15, 7, 8, 9, 10, 11};   /* (OFF, then slow ..
-                                                                                         * fast: the knob's, a CC's) */
+static const uint8_t SYNC_ORDER[NSYNC] = {0, 11, 10, 9, 8, 7, 15, 6, 14, 5, 13, 4, 12, 3, 2, 1};   /* (OFF, then fast ..
+                                                                                         * slow: the knob's, a CC's) */
 static int is_lfo_sync(uint32_t p);                  /* (sound.c) */
 
 static void lfo_update_inc(lfo_t *l)                 /* lfo_setFreq / lfo_setSync */
@@ -909,6 +910,7 @@ static void voices_render(uint32_t lo, uint32_t hi)
         }
         if (v->choking == 2u)
             pk = 0;
+        vpk[vi] = pk;
         venv[vi] = pk > venv[vi] ? pk : venv[vi] - (venv[vi] >> 5);   /* (release ~45 ms) */
     }
 }

@@ -408,7 +408,7 @@ static const char *const STEP_TITLE[4] = {"STEP", "TRIG", "LOCKS", "RATCHET"};
  * STUTTER after DENSITY (OCT+ held: on). 29: two sets, ARP between them: PERFORM (the MIX pages gone: the mixer has
  * them), GLOBAL MOD (the global LFOs, the macros, the links); SELECT stays in the set. 32: SPELLS between them
  * (0.19: a fifth, MOTION). 39: RUSH after STUTTER. 40: WANDER after SPELLS, a set of its own (QUEST, PACE, HOME) */
-#define NPERF 28u
+#define NPERF 30u
 #define PG_DENS 2u
 #define PG_STUT 3u
 #define PG_RUSH 4u                                   /* (2 pages: RUSH, RUSH SETUP) */
@@ -418,9 +418,10 @@ static const char *const STEP_TITLE[4] = {"STEP", "TRIG", "LOCKS", "RATCHET"};
                                                       * spells.c) */
 #define PG_WANDER 15u                                /* 40: WANDER (3 pages: QUEST, PACE, HOME; wander.c) */
 #define PG_GMOD 18u                                  /* GLOBAL MOD's first page */
-#define PG_GLFO 18u                                  /* (6 pages: LFO 1, its mode, LFO 2 .., LFO 3 ..) */
-#define PG_MACRO 24u                                 /* (2 pages: MACROS, MACRO SETUP) */
-#define PG_LINKS 26u                                 /* (2 pages: LINKS, LINK SETUP) */
+#define PG_GLFO 18u                                  /* (8 pages: LFO 1, its mode, LFO 2 .., LFO 3 .., 1.0: LFO 4 ..) */
+#define PG_MACRO (PG_GLFO + 2u * NGLFO)              /* (2 pages: MACROS, MACRO SETUP) */
+#define PG_LINKS (PG_MACRO + 2u)                     /* (2 pages: LINKS, LINK SETUP) */
+_Static_assert(PG_LINKS + 2u == NPERF, "PERF's pages: GLOBAL MOD's last");
 #define GLV(n, k) (VP_GL + (n) * NGLSET + (k))
 static const uint16_t P_PERF[NPERF][4] = {{PAR_BPM, PAR_ROLL, PAR_MORPH, PAR_VOICE_DECIMATION_ALL},
                                           {VP_DJ, VP_REPEAT, PAR_SHUFFLE, VP_TAPE},
@@ -446,6 +447,8 @@ static const uint16_t P_PERF[NPERF][4] = {{PAR_BPM, PAR_ROLL, PAR_MORPH, PAR_VOI
                                           {GLV(1, 3), GLV(1, 6), GLV(1, 4), GLV(1, 5)},
                                           {GLV(2, 0), GLV(2, 1), GLV(2, 2), GLV(2, 7)},
                                           {GLV(2, 3), GLV(2, 6), GLV(2, 4), GLV(2, 5)},
+                                          {GLV(3, 0), GLV(3, 1), GLV(3, 2), GLV(3, 7)},
+                                          {GLV(3, 3), GLV(3, 6), GLV(3, 4), GLV(3, 5)},
                                           {VP_M1, VP_M1 + 1, VP_M1 + 2, VP_M1 + 3},
                                           {VP_MSEL, VP_MTARGET, VP_MMIN, VP_MMAX},
                                           {VP_LINK, VP_LSTART, VP_LAMT, VP_DEPTH},
@@ -457,6 +460,7 @@ static const char *const PERF_TITLE[NPERF] = {"PERFORM", "PERFORM: MORE", "PERFO
                                               "SPELLS: LIMITS", "SPELLS: MOTION", "WANDER: QUEST", "WANDER: PACE",
                                               "WANDER: HOME", "GLOBAL LFO 1 (1/2)", "GLOBAL LFO 1 (2/2)", "GLOBAL LFO 2 (1/2)",
                                               "GLOBAL LFO 2 (2/2)", "GLOBAL LFO 3 (1/2)", "GLOBAL LFO 3 (2/2)",
+                                              "GLOBAL LFO 4 (1/2)", "GLOBAL LFO 4 (2/2)",
                                               "MACROS", "MACRO SETUP", "LINKS", "LINK SETUP"};
 static int perf_dens(void) { return ui.mode == M_PERF && ui.page % NPERF == PG_DENS; }
 static int perf_stut(void) { return ui.mode == M_PERF && ui.page % NPERF == PG_STUT; }
@@ -714,8 +718,11 @@ static void page_params(uint16_t out[4])
     case M_KEYS: p = P_KEYS; break;
     default: break;
     }
-    for (k = 0; k < 4u; k++)
-        out[k] = p[k];
+    for (k = 0; k < 4u; k++) {
+        uint32_t q = p[k];
+        out[k] = (uint16_t)(q >= VP_GL && q <= VP_GL_LAST && gls[(q - VP_GL) / NGLSET].wave == GW_FOLLOW &&
+                                    ((q - VP_GL) % NGLSET == 2u || (q - VP_GL) % NGLSET == 4u) ? VP_NONE : q);
+    }                                                /* (1.0 Phase 11: FOLLOW: no SYNC, no MODE) */
     if (out[3] == VP_DJTUNE && pfs.dj_ftype != DJT_RING)
         out[3] = VP_NONE;                            /* (1.0: Tune: RING's alone) */
     if (ui.mode == M_PERF && ui.page % NPERF == 0u && (sq.roll & ~ui.roll_latch))
@@ -1446,7 +1453,9 @@ static uint32_t vp_max(uint32_t p)
     case VP_DJTYPE: return NDJT - 1u;
     case VP_DJTUNE: return NRTUNE - 1u;
     case VP_GL ... VP_GL_LAST: {
-        static const uint8_t MX[NGLSET] = {NGD - 1, 254, GL_FREE, NLFO - 1, NGM - 1, NGT - 1, 127, 127};
+        static const uint8_t MX[NGLSET] = {NGD - 1, 254, GL_FREE, GW_FOLLOW, NGM - 1, NGT - 1, 127, 127};
+        if ((p - VP_GL) % NGLSET == 5u && gls[(p - VP_GL) / NGLSET].wave == GW_FOLLOW)
+            return GF_ALL;                           /* (1.0 Phase 11: FOLLOW's SOURCE: a voice, ALL) */
         return MX[(p - VP_GL) % NGLSET];
     }
     case VP_EH2: return shown_pat()->gen[ui.track][1] ? shown_pat()->gen[ui.track][1] : 16u;
@@ -1710,7 +1719,11 @@ static void vp_set(uint32_t p, uint32_t v)
         case 0: gls[n].dest = (uint8_t)v; break;
         case 1: gls[n].depth = (int8_t)((int32_t)v - 127); break;
         case 2: gls[n].len = (uint8_t)v; break;
-        case 3: gls[n].wave = (uint8_t)v; break;
+        case 3:
+            gls[n].wave = (uint8_t)v;
+            if (v != GW_FOLLOW && gls[n].trig >= NGT)   /* (1.0 Phase 11: out of FOLLOW: its SOURCE no trigger) */
+                gls[n].trig = GT_PLAY;
+            break;
         case 4: gls[n].mode = (uint8_t)v; break;
         case 5: gls[n].trig = (uint8_t)v; break;
         case 6: gls[n].phase = (uint8_t)v; break;
@@ -3133,9 +3146,11 @@ static void button_down(uint32_t b)
         }
         if (glfo_page() >= 0) {                      /* 0.13: OCT+ on a global LFO's page: it starts again */
             uint32_t n = (uint32_t)glfo_page();
-            static const char *const TR[NGLFO] = {"LFO 1 TRIGGERED", "LFO 2 TRIGGERED", "LFO 3 TRIGGERED"};
+            static const char *const TR[NGLFO] = {"LFO 1 TRIGGERED", "LFO 2 TRIGGERED", "LFO 3 TRIGGERED",
+                                                  "LFO 4 TRIGGERED"};
             glfo_ev |= (uint8_t)(GLE_KEY << n);
-            ui_message(gls[n].mode == GM_FREE ? "FREE: NO TRIGGER (SEE MODE)" : TR[n]);
+            ui_message(gls[n].wave == GW_FOLLOW ? "FOLLOW: NO TRIGGER" : gls[n].mode == GM_FREE ?
+                       "FREE: NO TRIGGER (SEE MODE)" : TR[n]);
             return;
         }
         if (ui.mode == M_SONG) {                      /* COPY in the song: insert a row (a copy of the one above); */

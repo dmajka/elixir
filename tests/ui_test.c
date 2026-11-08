@@ -2262,7 +2262,8 @@ static void phase9_perf(void)
                                          "SPELLS: GRIMOIRE", "SPELLS: CAST", "SPELLS: CHARACTER", "SPELLS: LIMITS",
                                          "SPELLS: MOTION", "WANDER: QUEST", "WANDER: PACE", "WANDER: HOME",
                                          "GLOBAL LFO 1 (1/2)", "GLOBAL LFO 1 (2/2)", "GLOBAL LFO 2 (1/2)",
-                                         "GLOBAL LFO 2 (2/2)", "GLOBAL LFO 3 (1/2)", "GLOBAL LFO 3 (2/2)", "MACROS",
+                                         "GLOBAL LFO 2 (2/2)", "GLOBAL LFO 3 (1/2)", "GLOBAL LFO 3 (2/2)",
+                                         "GLOBAL LFO 4 (1/2)", "GLOBAL LFO 4 (2/2)", "MACROS",
                                          "MACRO SETUP", "LINKS", "LINK SETUP"};
     pattern_t *p = &pat[0];
     uint16_t kp[4];
@@ -3128,8 +3129,8 @@ static void phase12_remote(void)
     for (i = 0; i < RM_NGB; i++)
         seen[RM_GB0 + i]++;
     for (i = 0; i < 128u; i++)
-        ok |= seen[i] > 1u || (seen[i] && ((i < 8u && i != RM_XCC) || i >= 120u));
-    check(!ok, "the remote map: each number once a channel, within 8..119 (and GLOBAL's CC 3)");
+        ok |= seen[i] > 1u || (seen[i] && ((i < 8u && i != RM_XCC && i != RM_XCC2) || i >= 120u));
+    check(!ok, "the remote map: each number once a channel, within 8..119 (and GLOBAL's CC 3, 1.0 Phase 11: CC 2)");
     vp_set(VP_RKNOBS, RK_ABS);
     goto_mode(B_GLO, M_CONFIG);
     while (ui.page != CF_REMOTE)
@@ -8106,13 +8107,13 @@ static void phase_100_3(void)
     p4_reset();
     if (sq.running)
         press(B_PLAY);
-    for (ok = 1, i = 1; i + 1u < NSYNC; i++)          /* (the knob's order: by length, slow .. fast) */
-        ok &= SYNC_SCALE_X60[SYNC_ORDER[i]] < SYNC_SCALE_X60[SYNC_ORDER[i + 1u]];
+    for (ok = 1, i = 1; i + 1u < NSYNC; i++)          /* (the knob's order: by length, fast .. slow: more bars to the right) */
+        ok &= SYNC_SCALE_X60[SYNC_ORDER[i]] > SYNC_SCALE_X60[SYNC_ORDER[i + 1u]];
     check(ok && SYNC_ORDER[0] == 0u && par_max(PAR_SYNC_LFO1) == 15u && par_max_k(PAR_L2SYNC1) == 15u,
           "SYNC: OFF, then 15 by length (4 bits: the kits as they were)");
     for (ok = 1, i = 1; i < NGLEN; i++)
-        ok &= GL_LEN[GL_ORDER[i]] > GL_LEN[GL_ORDER[i + 1u]];
-    check(ok && GL_ORDER[0] == GL_FREE, "the global LFOs' SYNC: OFF, then slow .. fast");
+        ok &= GL_LEN[GL_ORDER[i]] < GL_LEN[GL_ORDER[i + 1u]];
+    check(ok && GL_ORDER[0] == GL_FREE, "the global LFOs' SYNC: OFF, then fast .. slow (more bars to the right)");
     /* LFO 1 on the second page, its sync knob by length: 1/4 on to 3/16, 3/8 a dotted quarter */
     goto_mode(B_HOME, M_HOME);
     ui.track = 0;
@@ -8124,11 +8125,11 @@ static void phase_100_3(void)
     par_set(PAR_SYNC_LFO1, 6);                        /* (1/4) */
     run_ms(20);
     turn(EN_K3, 1);
-    check(par[PAR_SYNC_LFO1] == 15u, "SYNC K3 on from 1/4: 3/16 (by length)");
-    par_format(b, PAR_SYNC_LFO1, 15, sizeof b);
-    check(!strcmp(b, "3/16"), "its name: 3/16");
+    check(par[PAR_SYNC_LFO1] == 14u, "SYNC K3 on from 1/4: 5/16 (by length, longer to the right)");
+    par_format(b, PAR_SYNC_LFO1, 14, sizeof b);
+    check(!strcmp(b, "5/16"), "its name: 5/16");
     turn(EN_K3, -2);
-    check(par[PAR_SYNC_LFO1] == 14u, "SYNC back two: 5/16");
+    check(par[PAR_SYNC_LFO1] == 15u, "SYNC back two: 3/16");
     par_format(b, PAR_SYNC_LFO1, 5, sizeof b);
     check(!strcmp(b, "1/2T"), "the LXR's 1/3: a half-note triplet, 1/2T");
     par_set(PAR_SYNC_LFO1, 13);                       /* (3/8 at 120 BPM: 0.75 s a cycle) */
@@ -8177,7 +8178,7 @@ static void phase_100_3(void)
     perf_goto(PG_GLFO);
     gls[0].len = GL_FREE;
     turn(EN_K3, 1);
-    check(gls[0].len == 18u, "SYNC K3 on from OFF: 256 bars");
+    check(gls[0].len == 19u, "SYNC K3 on from OFF: 1/32 (the shortest first, more bars to the right)");
     turn(EN_K3, -1);
     check(gls[0].len == GL_FREE, "SYNC back: OFF");
     turn(EN_K4, 5);
@@ -8724,6 +8725,156 @@ static void phase_100_10c(void)
     goto_mode(B_HOME, M_HOME);
 }
 
+/* 1.0 Phase 11: a global LFO's FOLLOW (an envelope follower on a voice), a 4th global LFO */
+static uint32_t fol11_blocks(uint32_t r)             /* RELEASE r: blocks from full to a tenth, the source silent */
+{
+    uint32_t n = 0, i;
+    gls[0].rate = (uint8_t)r;
+    gls[0].phase = 0;
+    gls[0].trig = GF_ALL;
+    gl.fol[0] = 65536;
+    for (i = 0; i < NVOICE; i++)
+        vpk[i] = 0;
+    while (gf_step(0) > 6554 && n < 100000u)
+        n++;
+    return n + 1u;
+}
+static void phase_100_11(void)
+{
+    uint16_t pp[4];
+    char b[24];
+    uint32_t i, n0, n64, n127;
+    int32_t lo, hi, g0, gpk;
+    int ok;
+    printf("1.0 Phase 11: FOLLOW, a 4th global LFO\n");
+    p4_reset();
+    perf_defaults();
+    /* the release: 10 ms .. 2 s to a tenth (a block 1.451 ms) */
+    n0 = fol11_blocks(0);
+    n64 = fol11_blocks(64);
+    n127 = fol11_blocks(127);
+    printf("  RELEASE to a tenth: 0 %.1f ms, 64 %.0f ms, 127 %.0f ms\n", n0 * 1.4512, n64 * 1.4512, n127 * 1.4512);
+    check(n0 >= 6u && n0 <= 9u && n64 * 1.4512 > 120 && n64 * 1.4512 < 170 && n127 * 1.4512 > 1850 &&
+          n127 * 1.4512 < 2150, "FOLLOW: RELEASE 10 ms .. 2 s (to a tenth), ~141 ms halfway");
+    /* the threshold: a level under it reads 0; over, from 0; full 6 dB under the top */
+    gl.fol[0] = 0;
+    gls[0].trig = 1;
+    gls[0].rate = 0;
+    gls[0].phase = 64;                               /* (-36 dB: 520) */
+    vpk[1] = 450;
+    lo = gf_step(0);
+    vpk[1] = 16384;
+    hi = gf_step(0);
+    vpk[0] = 32767;                                  /* (not the source) */
+    vpk[1] = 0;
+    for (i = 0; i < 40u; i++)
+        g0 = gf_step(0);
+    printf("  THRESHOLD -36 dB: %d under it, %d at -6 dB, %d with D1 loud and D2 the source\n", (int)lo, (int)hi, (int)g0);
+    check(lo == 0 && hi > 60000 && g0 == 0, "FOLLOW: THRESHOLD, the SOURCE alone");
+    gls[0].trig = GF_ALL;
+    vpk[1] = 0;
+    vpk[4] = 20000;
+    check(gf_step(0) > 65000, "FOLLOW: SOURCE ALL takes the loudest (CY)");
+    vpk[4] = 0;
+    gl.fol[0] = 0;
+    /* a kick through FOLLOW ducking the reverb's sends (REV SEND, -127) */
+    gls[0].dest = GD_RSEND;
+    gls[0].depth = -127;
+    gls[0].wave = GW_FOLLOW;
+    gls[0].trig = 0;                                 /* (D1) */
+    gls[0].phase = 0;
+    gls[0].rate = 40;                                /* (~57 ms) */
+    run_ms(200);
+    g0 = (int32_t)rev_g;
+    voice_trigger(0, 127, SEQ_DEFAULT_NOTE);
+    gpk = 65536;
+    hi = 0;
+    for (i = 0; i < 20u; i++) {
+        run_ms(1);
+        gpk = (int32_t)rev_g < gpk ? (int32_t)rev_g : gpk;
+        hi = gl.out[0] > hi ? gl.out[0] : hi;
+    }
+    run_ms(1500);
+    printf("  D1 ducks REV SEND: rev_g %d before, %d at the hit (follower %d), %d 1.5 s on\n", (int)g0, (int)gpk,
+           (int)hi, (int)rev_g);
+    check(g0 > 65000 && hi > 30000 && gpk < 65536 - 15000 && rev_g > 65000u, "FOLLOW: a kick ducks REVERB SEND, back after");
+    gls[0].depth = 127;
+    voice_trigger(0, 127, SEQ_DEFAULT_NOTE);
+    gpk = 0;
+    for (i = 0; i < 20u; i++) {
+        run_ms(1);
+        gpk = (int32_t)rev_g > gpk ? (int32_t)rev_g : gpk;
+    }
+    check(gpk > 65536 + 15000, "FOLLOW: + DEPTH pushes (from where it is, up only)");
+    /* the pages: LFO 4's, FOLLOW's knobs */
+    goto_mode(B_ARP, M_PERF);
+    perf_goto(PG_GLFO + 7u);
+    page_params(pp);
+    check(pp[0] == GLV(3, 3) && pp[1] == GLV(3, 6) && pp[2] == GLV(3, 4) && pp[3] == GLV(3, 5) && ui.page == PG_MACRO - 1u,
+          "PERF: LFO 4's second page before MACROS");
+    turn(EN_K1, 30);
+    check(gls[3].wave == GW_FOLLOW, "LFO 4: WAVE past EXP DN: FOLLOW");
+    page_params(pp);
+    card_name(b, sizeof b, pp[3]);
+    ok = pp[2] == VP_NONE && !strcmp(b, "Source");
+    card_name(b, sizeof b, pp[1]);
+    ok &= !strcmp(b, "Thresh");
+    turn(EN_K4, 20);
+    card_value(b, sizeof b, pp[3], vp_get(pp[3]));
+    ok &= gls[3].trig == GF_ALL && !strcmp(b, "ALL");
+    check(ok, "FOLLOW: Source (to ALL), Thresh; MODE blank");
+    turn(EN_K2, -200);
+    card_value(b, sizeof b, pp[1], vp_get(pp[1]));
+    ok = !strcmp(b, "OFF");
+    gls[3].phase = 127;
+    card_value(b, sizeof b, pp[1], 127);
+    ok &= !strcmp(b, "-12 dB");
+    card_value(b, sizeof b, pp[1], 1);
+    ok &= !strcmp(b, "-60 dB");
+    gls[3].phase = 0;
+    check(ok, "FOLLOW: THRESHOLD OFF, -60 .. -12 dB");
+    turn(EN_SELECT, -1);
+    page_params(pp);
+    card_name(b, sizeof b, pp[3]);
+    ok = pp[2] == VP_NONE && !strcmp(b, "Release");
+    card_value(b, sizeof b, pp[3], 0);
+    ok &= !strcmp(b, "10 ms");
+    card_value(b, sizeof b, pp[3], 127);
+    ok &= !strcmp(b, "2.0 s");
+    card_value(b, sizeof b, pp[3], 64);
+    printf("  RELEASE's card at 64: %s\n", b);
+    check(ok, "FOLLOW: Release 10 ms .. 2.0 s, SYNC blank");
+    gls[3].dest = GD_PUMP;
+    gls[3].depth = 100;
+    play_from_start();
+    run_ms(300);
+    shot("glfo-follow");
+    press(B_PLAY);
+    turn(EN_SELECT, 1);
+    turn(EN_K1, -1);
+    check(gls[3].wave == LFO_EXP_DOWN && gls[3].trig == GT_PLAY, "out of FOLLOW: its SOURCE back to a trigger (PLAY)");
+    turn(EN_K1, 1);
+    gls[3].trig = GF_ALL;
+    /* the remote: CC 2 on GLOBAL's channel, LFO 4's depth */
+    rm_in(remote_gch, 0xB0u, RM_XCC2, 0);
+    lo = gls[3].depth;
+    rm_in(remote_gch, 0xB0u, RM_XCC2, 127);
+    check(lo == -127 && gls[3].depth == 127, "the remote: GLOBAL's CC 2, LFO 4's depth");
+    /* the project: the 4th, FOLLOW's settings */
+    gls[3].phase = 50;
+    gls[3].rate = 70;
+    {
+        int rc = proj_save(1, "FOLLOW  ");
+        perf_defaults();
+        rc |= proj_load(1);
+        check(rc == 0 && gls[3].wave == GW_FOLLOW && gls[3].trig == GF_ALL && gls[3].phase == 50 && gls[3].rate == 70 &&
+                  gls[3].dest == GD_PUMP && gls[3].depth == 127 && gls[0].wave == GW_FOLLOW && gls[0].trig == 0,
+              "project: LFO 4, FOLLOW (SOURCE ALL, THRESHOLD, RELEASE)");
+    }
+    perf_defaults();
+    goto_mode(B_HOME, M_HOME);
+}
+
 static void phase_100_10(void)
 {
     uint32_t e, k, i, n = 0;
@@ -9065,7 +9216,7 @@ static void phase_100_5(void)
     web_share[WEB_SHARE_V2] = 1;
     web_share[WEB_SHARE_V2 + 1u + WV_JOURNEY] = 6;
     b = web_share_put(WEB_SHARE_V5);
-    check(a == WEB_SHARE_V5 + 1u && b == 0u && wd.k[WV_JOURNEY] == WJ_ENDLESS, "an older phone link's ENDLESS: ENDLESS");
+    check(a == WEB_SHARE_V6 + NGLKGL + 1u && b == 0u && wd.k[WV_JOURNEY] == WJ_ENDLESS, "an older phone link's ENDLESS: ENDLESS");
     web_share[WEB_SHARE_V2 + 1u + WV_JOURNEY] = 6;
     b = web_share_put(a);
     check(b == 0u && wd.k[WV_JOURNEY] == 6u, "a new one's 1024 BARS: 1024 BARS");
@@ -9686,6 +9837,7 @@ int main(int argc, char **argv)
     phase_100_6b();
     phase_100_10();
     phase_100_10c();
+    phase_100_11();
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;
 }
