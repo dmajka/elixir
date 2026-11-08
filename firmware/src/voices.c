@@ -678,133 +678,38 @@ static void post_block(voice_t *v, int16_t *buf)
 
 /* ----------------------------------------------------------- insert --- */
 /* 27a: one INSERT per track, after the shaper, the bits and the tilt, before the pan and the sends (mono). AMOUNT (a)
- * is how much of it is heard, 0 none, whatever the type; b and c are the type's (params.c names them). Its LFO steps
- * a block at a time, and the delays and gains are ramped across the block. The delay types have the voice's own line
- * (ins_line: Phase 28's COMB keeps its own). A new type starts from rest */
+ * is how much of it is heard, 0 none, whatever the type; b and c are the type's (params.c names them). A new type
+ * starts from rest. 1.0 (after Phase 10e, the user: they didn't sound great and cost CPU): PHASER, FLANGER, CHORUS,
+ * TREMOLO and AUTOPAN dropped; their numbers stay (kits store them) and play as OFF (ins_live; kit.c sanitizes) */
 enum { INS_OFF, INS_PHASER, INS_FLANGER, INS_CHORUS, INS_TREMOLO, INS_AUTOPAN, INS_SHIFT, INS_RING, NINS };
-#define INS_LINE 512u
+static inline uint32_t ins_live(uint32_t t) { return t == INS_SHIFT || t == INS_RING ? t : INS_OFF; }
+static const uint8_t INS_LIVE[3] = {INS_OFF, INS_SHIFT, INS_RING};   /* (an LFO picks among these) */
 typedef struct {
     uint8_t type, a, b, c;       /* (sound.c: PAR_INS1 ..) */
     uint8_t was;                 /* the type its state is for */
-    uint16_t wp;                 /* the line's write position */
-    uint32_t ph, osc;            /* the LFO's phase (a block); RING's and SHIFTER's oscillator (a sample) */
-    int32_t st[33];              /* PHASER: 4 allpasses' x1, y1; SHIFTER: 8 sections' x1 x2 y1 y2, then the delay */
+    uint32_t osc;                /* RING's and SHIFTER's oscillator (a sample) */
+    int32_t st[33];              /* SHIFTER: 8 sections' x1 x2 y1 y2, then the delay */
     int32_t fb;                  /* the last output, fed back */
-    int32_t d[2];                /* FLANGER, CHORUS: the taps' delays at the block's end, Q16 samples */
-    int32_t g;                   /* TREMOLO: the gain at the block's end, Q15 */
-    int32_t pg[2][2];            /* AUTOPAN: the left and right gains at the block's start [0] and end [1], Q15 */
 } ins_t;
 static ins_t ins[NVOICE] RAMBUF;                    /* (RAMTEXT's: the pool is short) */
-static int16_t ins_line[NVOICE][INS_LINE] POOL;     /* (6 KB) */
 /* SHIFTER: two chains of four allpasses 90 degrees apart (Olli Niemitalo's, a^2 in Q30); the first's output a sample
  * late */
 static const int32_t HILB[8] = {514752760, 940832443, 1048613677, 1071056671,
                                 173686865, 787083823, 1015061512, 1063647745};
 
-static uint32_t ins_inc(uint32_t b)                  /* the LFO's step a block: 0.05 Hz .. 12.8 Hz (b 0..127) */
-{
-    return (uint32_t)(((uint64_t)311665u * (uint32_t)exp2_q16((int32_t)(b * 8u * 65536u / 127u))) >> 16);
-}
-static int32_t ins_shape(uint32_t ph, uint32_t c)    /* TREMOLO, AUTOPAN: a sine (c 0) to a square (127), Q15 */
-{
-    int32_t v = sine_at(ph), q = v >= 0 ? 32767 : -32767;
-    return v + (((q - v) * (int32_t)c) / 127);
-}
-static inline int32_t ins_read(const int16_t *l, uint32_t wp, int32_t d)   /* the line d (Q16) samples back */
-{
-    uint32_t pos = (wp << 16) - (uint32_t)d, i = (pos >> 16) & (INS_LINE - 1u), f = pos & 0xFFFFu;
-    int32_t x0 = l[i], x1 = l[(i + 1u) & (INS_LINE - 1u)];
-    return x0 + (int32_t)(((int64_t)(x1 - x0) * (int32_t)f) >> 16);
-}
 static void ins_block(uint32_t vi, int16_t *buf)
 {
     ins_t *s = &ins[vi];
-    int16_t *line = ins_line[vi];
-    uint32_t i, t = s->type < NINS ? s->type : INS_OFF;
+    uint32_t i, t = ins_live(s->type);
     int32_t amt = s->a * 258;                        /* Q15 */
     if (t != s->was) {                               /* (a new type: from rest) */
         memset(s->st, 0, sizeof s->st);
         s->fb = 0;
-        s->d[0] = s->d[1] = 0;
-        s->g = 32768;
-        s->pg[0][0] = s->pg[0][1] = s->pg[1][0] = s->pg[1][1] = 32768;
-        if (t == INS_FLANGER || t == INS_CHORUS)
-            memset(line, 0, sizeof ins_line[0]);
         s->was = (uint8_t)t;
     }
     if (t == INS_OFF)
         return;
     switch (t) {
-    case INS_PHASER: {                               /* 4 first-order allpasses swept 150 Hz .. 4.8 kHz, fed back + or - */
-        int32_t l, w, c, fbk = ((int32_t)s->c - 64) * 400, m = amt >> 1;   /* (c 64: no feedback) */
-        s->ph += ins_inc(s->b);
-        l = 65536 - iabs((int32_t)(s->ph >> 15) - 65536);                     /* (a triangle, Q16) */
-        w = (int32_t)(((int64_t)150 * exp2_q16(l * 5) * 76490) >> 30);       /* (pi f / FS, Q16) */
-        c = (int32_t)(((int64_t)(65536 - w) << 15) / (65536 + w));
-        for (i = 0; i < BLOCK; i++) {                /* (8 bits below the sample's, rounded: no limit cycle) */
-            int32_t x = buf[i], in = clamp32((x << 8) + (int32_t)(((int64_t)s->fb * fbk) >> 15), -(1 << 23), 1 << 23), k, o;
-            for (k = 0; k < 8; k += 2) {
-                int32_t y = (int32_t)(((int64_t)c * (s->st[k + 1] - in) + 16384) >> 15) + s->st[k];
-                s->st[k] = in;
-                s->st[k + 1] = y = clamp32(y, -(1 << 24), 1 << 24);
-                in = y;
-            }
-            s->fb = in;
-            o = (in + 128) >> 8;
-            buf[i] = (int16_t)sat16(x + (((o - x) * m) >> 15));
-        }
-        break;
-    }
-    case INS_FLANGER:                                /* 0.23 .. 4.7 ms, fed back + or - (c 64: none) */
-    case INS_CHORUS: {                               /* two taps either side of 6 ms, c the depth */
-        int32_t d0[2] = {0, 0}, dd[2] = {0, 0}, fbk = t == INS_FLANGER ? clamp32(((int32_t)s->c - 64) * 480, -30000, 30000) : 0;
-        int32_t m = amt >> 1;
-        uint32_t k, n = t == INS_CHORUS ? 2u : 1u;
-        s->ph += ins_inc(s->b);
-        for (k = 0; k < n; k++) {
-            int32_t e;
-            if (t == INS_FLANGER) {
-                int32_t l = 65536 - iabs((int32_t)(s->ph >> 15) - 65536);
-                e = (10 << 16) + l * 200;
-            } else {
-                e = (265 << 16) + (int32_t)(((int64_t)sine_at(s->ph + k * 0x80000000u) * s->c * 3467) >> 10);   /* (+-215) */
-            }
-            d0[k] = s->d[k] ? s->d[k] : e;
-            dd[k] = (e - d0[k]) / (int32_t)BLOCK;
-            s->d[k] = e;
-        }
-        for (i = 0; i < BLOCK; i++) {
-            int32_t x = buf[i], r = ins_read(line, s->wp, d0[0]);
-            if (n == 2u)
-                r = (r + ins_read(line, s->wp, d0[1])) >> 1;
-            line[s->wp] = (int16_t)sat16(x + ((r * fbk) >> 15));
-            s->wp = (uint16_t)((s->wp + 1u) & (INS_LINE - 1u));
-            d0[0] += dd[0];
-            d0[1] += dd[1];
-            buf[i] = (int16_t)sat16(x + (((r - x) * m) >> 15));
-        }
-        break;
-    }
-    case INS_TREMOLO: {
-        int32_t g0 = s->g, g1, dg;
-        s->ph += ins_inc(s->b);
-        g1 = 32768 - (int32_t)((((int64_t)ins_shape(s->ph, s->c) + 32767) * amt) >> 16);
-        dg = (g1 - g0) / (int32_t)BLOCK;
-        for (i = 0; i < BLOCK; i++, g0 += dg)
-            buf[i] = (int16_t)((buf[i] * g0) >> 15);
-        s->g = g1;
-        break;
-    }
-    case INS_AUTOPAN: {                              /* (mix_voice pans with pg: one side turned down at a time) */
-        int32_t p;
-        s->ph += ins_inc(s->b);
-        p = (int32_t)(((int64_t)ins_shape(s->ph, s->c) * amt) >> 15);
-        s->pg[0][0] = s->pg[1][0];
-        s->pg[0][1] = s->pg[1][1];
-        s->pg[1][0] = 32768 - (p > 0 ? p : 0);
-        s->pg[1][1] = 32768 + (p < 0 ? p : 0);
-        break;
-    }
     case INS_SHIFT: {                                /* +-500 Hz (b 64: none), fed back + or - (c 64: none; at most
                                                       * 0.64: near DC the pair is less than 90 degrees apart) */
         int32_t d = (int32_t)s->b - 64, hz = d * d * 500 / (63 * 63), fbk = clamp32(((int32_t)s->c - 64) * 335, -21000, 21000);
@@ -854,10 +759,24 @@ static int32_t mix_l[BLOCK], mix_r[BLOCK];          /* the outputs (both stereo 
 /* 0.6: PERFORM 2 (perform.c). PUMP: every voice but D1 through a gain from pump_g0 to pump_g1 over the block (Q15);
  * SPACE: the dry mix dipped before the FX bus and reverb join it (and the reverb held: reverb.c) */
 static int32_t pump_g0 = 32768, pump_g1 = 32768;
+static int32_t pump_m0 = 32768, pump_m1 = 32768;    /* (1.0 Phase 10f: PUMP's as it was for the block being mixed) */
 static uint8_t space_on;
 static int16_t fx_l[BLOCK], fx_r[BLOCK];            /* the FX bus (the LXR's saturating int16 sums) */
-static int32_t rev_in[BLOCK];                       /* the reverb's send (mono) */
-static uint32_t rev_fed;                            /* a send fed it this block */
+/* the reverb's send (mono), a pair (1.0 Phase 10f): the mixer fills rev_in while the reverb (either core) reads the
+ * other, the last block's (voices_turn swaps them) */
+static int32_t rev_ib[2][BLOCK];
+static int32_t *rev_in = rev_ib[0];
+static uint32_t rev_fed, rev_fed_r;                 /* a send fed it this block (the mixer's; the reverb's) */
+/* what the mixer reads of each voice, as it was when the block being mixed was rendered (voices_turn): a hit's
+ * random pan, a lock's send or a choke from the next block's hits leaves the last block's sound alone */
+typedef struct {
+    int32_t fx_send, rev_send, xamt, venv;
+    int16_t pan_l, pan_r;
+    uint8_t route, out_fx, throw_fx, throw_rev, xsrc, xmode, choking;
+} mixs_t;
+static mixs_t mxs[NVOICE];
+static uint32_t rev_g_mx = 65536u;                  /* (rev_g, mc_key, space_on, PUMP's, as they were then) */
+static uint8_t mc_key_mx, space_mx;
 static uint32_t voice_active;                       /* bit v: the voice sounded this block (the UI's meters) */
 /* 0.16: the master compressor's SIDECHAIN voice (1..6, 0 none: fxbus.c mcomp): its dry part goes here, not into the
  * mix, so the compressor's gain leaves it alone (comp_master adds it back) */
@@ -879,28 +798,14 @@ static uint32_t stems_live(void) { return uac_recording() != 0; }   /* (CONFIG: 
 static uint32_t stems_live(void) { return 0; }
 #endif
 
-static void mix_voice(const voice_t *v, const int16_t *buf, int32_t *dl, int32_t *dr)   /* mixer_addDataToOutput, with
+static void mix_voice(const mixs_t *v, const int16_t *buf, int32_t *dl, int32_t *dr)   /* mixer_addDataToOutput, with
                                                       * the sends; the dry part into dl, dr */
 {
     uint32_t i;
     int32_t s = v->out_fx || v->throw_fx ? 32768 : v->fx_send >= 32767 ? 32768 : v->fx_send;
-    const ins_t *in = &ins[v - vc];
-    int16_t pl[BLOCK], pr[BLOCK];                    /* the pan's gains a sample (27a: AUTOPAN moves them), Q14 */
-    int32_t rs = v->throw_rev ? 32767 : rev_g == 65536u ? v->rev_send : clamp32((int32_t)(((int64_t)v->rev_send * rev_g) >> 16), 0, 32767);
+    const int32_t pl = v->pan_l, pr = v->pan_r;      /* the pan's gains, Q14 (1.0: AUTOPAN gone, no longer a sample) */
+    int32_t rs = v->throw_rev ? 32767 : rev_g_mx == 65536u ? v->rev_send : clamp32((int32_t)(((int64_t)v->rev_send * rev_g_mx) >> 16), 0, 32767);
     int16_t dry[BLOCK];
-    if (in->type == INS_AUTOPAN && in->was == INS_AUTOPAN) {
-        int32_t gl = in->pg[0][0], gr = in->pg[0][1], dgl = (in->pg[1][0] - gl) / (int32_t)BLOCK,
-                dgr = (in->pg[1][1] - gr) / (int32_t)BLOCK;
-        for (i = 0; i < BLOCK; i++, gl += dgl, gr += dgr) {
-            pl[i] = (int16_t)((v->pan_l * gl) >> 15);
-            pr[i] = (int16_t)((v->pan_r * gr) >> 15);
-        }
-    } else {
-        for (i = 0; i < BLOCK; i++) {
-            pl[i] = v->pan_l;
-            pr[i] = v->pan_r;
-        }
-    }
     if (rs) {
         int32_t any = 0;
         for (i = 0; i < BLOCK; i++) {
@@ -912,8 +817,8 @@ static void mix_voice(const voice_t *v, const int16_t *buf, int32_t *dl, int32_t
     if (s) {                                         /* the FX send: its share through the bus (panned, as the LXR's) */
         for (i = 0; i < BLOCK; i++) {
             int32_t x = s == 32768 ? buf[i] : (buf[i] * s) >> 15;
-            fx_l[i] = (int16_t)sat16(fx_l[i] + ((x * pl[i]) >> 14));
-            fx_r[i] = (int16_t)sat16(fx_r[i] + ((x * pr[i]) >> 14));
+            fx_l[i] = (int16_t)sat16(fx_l[i] + ((x * pl) >> 14));
+            fx_r[i] = (int16_t)sat16(fx_r[i] + ((x * pr) >> 14));
         }
         if (s == 32768)
             return;
@@ -934,8 +839,8 @@ static void mix_voice(const voice_t *v, const int16_t *buf, int32_t *dl, int32_t
         break;
     default:
         for (i = 0; i < BLOCK; i++) {
-            dl[i] += (buf[i] * pl[i]) >> 14;
-            dr[i] += (buf[i] * pr[i]) >> 14;
+            dl[i] += (buf[i] * pl) >> 14;
+            dr[i] += (buf[i] * pr) >> 14;
         }
         break;
     }
@@ -943,22 +848,24 @@ static void mix_voice(const voice_t *v, const int16_t *buf, int32_t *dl, int32_t
 
 static void fxbus_process(void);                    /* (fxbus.c) */
 static void fxbus_early(void);
-static void reverb_process(void);                   /* (reverb.c) */
 static void reverb_add(void);
 static void modnodes_block(void);                   /* (sound.c) */
 
 /* one block of the six voices into mix_l / mix_r (Q15, unsaturated) */
 static void voice_filter_mods(void);                /* (sound.c) */
-static int16_t vbuf[NVOICE][BLOCK];                 /* the voices' blocks, rendered (cross modulation reads them) */
+/* the voices' blocks, a pair (1.0 Phase 10f): the voices render into vb_out while the mixer takes vbuf, the block
+ * rendered last time (voices_turn swaps them). Cross modulation and the master compressor's key read vbuf */
+static int16_t vbuf_b[2][NVOICE][BLOCK];
+static int16_t (*vbuf)[BLOCK] = vbuf_b[0], (*vb_out)[BLOCK] = vbuf_b[1];
 
 /* cross modulation: voice vi's block from its source's (rendered this block, as it was before its own cross
  * modulation): DUCK turns it down by the source's envelope, RING multiplies the two (x2) and blends that in */
 static void xmod_block(uint32_t vi, int16_t *out)
 {
-    const voice_t *v = &vc[vi];
+    const mixs_t *v = &mxs[vi];
     uint32_t i, s = v->xsrc - 1u;
     if (v->xmode == XM_DUCK) {
-        int32_t g = 32768 - (int32_t)(((int64_t)v->xamt * venv[s]) >> 15);
+        int32_t g = 32768 - (int32_t)(((int64_t)v->xamt * mxs[s].venv) >> 15);
         for (i = 0; i < BLOCK; i++)
             out[i] = (int16_t)((out[i] * g) >> 15);
     } else if (v->xmode == XM_RING) {
@@ -977,7 +884,7 @@ static void voices_render(uint32_t lo, uint32_t hi)
     uint32_t i, vi;
     for (vi = lo; vi < hi; vi++) {
         voice_t *v = &vc[vi];
-        int16_t *b = vbuf[vi];
+        int16_t *b = vb_out[vi];
         int32_t pk = 0;
         if (vi <= V_DRUM3)
             drum_block(v, b);
@@ -1005,22 +912,28 @@ static void voices_render(uint32_t lo, uint32_t hi)
         venv[vi] = pk > venv[vi] ? pk : venv[vi] - (venv[vi] >> 5);   /* (release ~45 ms) */
     }
 }
+/* 1.0 Phase 10f: the voices a block ahead of the mixer. Each block core 1 renders D1-D3 (into vb_out) while core 0
+ * renders SN-HH beside it and then mixes the block both rendered last time (vbuf): the mixer, the FX bus and the
+ * master no longer wait for D1-D3, so the block's length is the longer core's, not core 1's plus the mixer's. The
+ * output is one block (1.45 ms) later. Core 1 is waited for at the block's end (voices_end, engine.c), before the
+ * next block's voices change anything it reads. The reverb (on the mixer's last send, rev_ib, into the return the
+ * mixer takes next block: reverb.c) runs on either core: rev_c1 */
 #if FELUCCA_CPU2
 static uint32_t c1_ticks, c1_vt;                     /* the second core's last job, and its voices alone, TIMER4 (written
                                                       * there, read after the wait) */
-/* 1.0 (after Phase 10, the user's two models + reverb breaking up): the reverb (on the last block's send: either core
- * can run it while the other renders) goes to the core whose other work was the lighter last block. Core 1 with two
- * models is the long side, and what core 0 does after the wait (the mixer, the FX bus, the master) follows it: the
- * reverb there made the block late. With plain kits core 0's SN-HH is the heavier, and it stays on core 1 */
+static uint32_t rv_t, c0_t0;                         /* the reverb's last time (either core); core 0's start this block */
+static uint8_t c1_go;                                /* this block: core 1 took a job (bit 0), the reverb in it (bit 1) */
+/* the reverb goes to the core whose other work was the lighter last block: on core 0 the block is max(c0 + R, c1),
+ * on core 1 max(c0, c1 + R) (R the reverb's time). The shorter, with 1/8 hysteresis */
 static uint8_t rev_c1 = 1;                           /* (this block: on core 1) */
-static void reverb_process(void);
+static void reverb_job(void);
 static void c1_drums(uint32_t arg)                   /* (runs on the second core; arg: the reverb too) */
 {
     uint32_t t0 = fm1_ticks();
     voices_render(V_DRUM1, V_SNARE);
     c1_vt = fm1_ticks() - t0;
     if (arg)
-        reverb_process();
+        reverb_job();
     c1_ticks = fm1_ticks() - t0;
 }
 #endif
@@ -1030,35 +943,114 @@ static uint8_t voices_swap;                          /* (host tests: SN-HH first
 #ifdef FX_NOW
 static uint8_t fx_now;                               /* (host tests: the reverb on this block's send, as before 18b) */
 #endif
-
-/* 18b: the effects' work that needs no voice of this block, on core 0 while the second core renders D1-D3: the
- * reverb on the last block's send (reverb.c), the delay's reads (fxbus.c fxbus_early). Then the sends start again
- * for the mixer. On one core, the same work in the same order, so the sound doesn't depend on the cores */
-static void fx_sends_clear(void);
-static void fx_early(void)
-{
+static void reverb_job(void);                        /* (reverb.c) */
+static void reverb_turn(void);
 #ifdef FX_NOW
-    if (!fx_now)
+static void reverb_now(void);
 #endif
-        reverb_process();
-    fxbus_early();
-    fx_sends_clear();
-}
-static void fx_sends_clear(void)                     /* (1.0: after the reverb has read its send, on either core) */
+
+/* the block's start (core 1 idle): what was rendered goes to the mixer, with each voice's envelope and choke as they
+ * were after it (a choked voice fades over that block, then is silent: its next render sees 2). The sends start again
+ * in the pair's other half; the reverb reads the half the mixer filled last */
+static uint8_t vb_turned;                            /* (voices_end turned it: the next voices_block doesn't) */
+static void voices_turn(void)
 {
-    uint32_t i;
+    uint32_t i, vi;
+    int16_t (*t)[BLOCK] = vbuf;
+    vbuf = vb_out;
+    vb_out = t;
+    for (vi = 0; vi < NVOICE; vi++) {
+        voice_t *v = &vc[vi];
+        mixs_t *m = &mxs[vi];
+        m->fx_send = v->fx_send;
+        m->rev_send = v->rev_send;
+        m->xamt = v->xamt;
+        m->venv = venv[vi];
+        m->pan_l = v->pan_l;
+        m->pan_r = v->pan_r;
+        m->route = v->route;
+        m->out_fx = v->out_fx;
+        m->throw_fx = v->throw_fx;
+        m->throw_rev = v->throw_rev;
+        m->xsrc = v->xsrc;
+        m->xmode = v->xmode;
+        m->choking = v->choking;
+        if (v->choking == 1u)
+            v->choking = 2;
+    }
+    rev_g_mx = rev_g;
+    mc_key_mx = mc_key;
+    space_mx = space_on;
+    pump_m0 = pump_g0;
+    pump_m1 = pump_g1;
+    rev_in = rev_ib[rev_in == rev_ib[0]];
+    rev_fed_r = rev_fed;
+    rev_fed = 0;
     for (i = 0; i < BLOCK; i++) {
         fx_l[i] = fx_r[i] = 0;
         rev_in[i] = 0;
     }
-    rev_fed = 0;
+    reverb_turn();
 }
 
-/* one block of the six voices into mix_l / mix_r (Q15, unsaturated) */
-static void voices_block(void)
+/* the mixer's work for voice vi (the block being mixed): cross modulation, choke, PUMP, its peak, its USB stem (ub:
+ * the USB audio's block or 0), then mix_voice */
+static void mix_one(uint32_t vi, int16_t *ub)
 {
     int16_t buf[BLOCK];
+    uint32_t i;
+    const mixs_t *v = &mxs[vi];
+    const int16_t *b = vbuf[vi];
+    int32_t pk = 0;
+    uint32_t ch = v->choking;
+    (void)ub;
+    if ((v->xsrc && v->xsrc != vi + 1u && v->xamt && v->xmode != XM_FILTER) || ch) {
+        memcpy(buf, b, sizeof buf);
+        if (v->xsrc && v->xsrc != vi + 1u && v->xamt && v->xmode != XM_FILTER)
+            xmod_block(vi, buf);
+        if (ch == 1u) {                              /* choked: out over this block, then silent */
+            for (i = 0; i < BLOCK; i++)
+                buf[i] = (int16_t)((buf[i] * (int32_t)(BLOCK - 1u - i)) / (int32_t)BLOCK);
+        } else if (ch) {
+            memset(buf, 0, sizeof buf);
+        }
+        b = buf;
+    }
+    if (vi != V_DRUM1 && (pump_m0 < 32768 || pump_m1 < 32768)) {
+        int32_t g = pump_m0 << 6, dg = pump_m1 - pump_m0;   /* (Q21 ramp: 64 samples) */
+        if (b != buf)
+            memcpy(buf, b, sizeof buf);
+        for (i = 0; i < BLOCK; i++, g += dg)
+            buf[i] = (int16_t)((buf[i] * (g >> 6)) >> 15);
+        b = buf;
+    }
+    for (i = 0; i < BLOCK; i += 4) {
+        int32_t a = iabs(b[i]);
+        if (a > pk)
+            pk = a;
+    }
+    voice_peak[vi] = pk;
+    if (pk > 64)
+        voice_active |= 1u << vi;
+#if UAC_STEMS
+    if (ub) {                                        /* its stem; OUT of the mix: nothing more */
+        int16_t *st = ub + 2u + vi;
+        for (i = 0; i < BLOCK; i++, st += UAC_NCH)
+            *st = b[i];
+        if ((mix_out >> vi) & 1u)
+            return;
+    }
+#endif
+    mix_voice(v, b, mc_key_mx == vi + 1u ? mc_kl : mix_l, mc_key_mx == vi + 1u ? mc_kr : mix_r);
+}
+
+/* one block: this block's voices rendered (vb_out), last block's mixed into mix_l / mix_r (Q15, unsaturated) */
+static void voices_block(void)
+{
     uint32_t i, vi;
+    if (!vb_turned)                                  /* (host tests calling this alone) */
+        voices_turn();
+    vb_turned = 0;
     modnodes_block();                                /* reset the targets, velocity and LFO modulation */
     voice_filter_mods();                             /* random per hit, cross modulation's FILTER */
     for (vi = 0; vi < NVOICE; vi++) {
@@ -1070,97 +1062,53 @@ static void voices_block(void)
     voice_active = 0;
     DG_MARK(DG_PRE);
     LOAD_MARK(LD_SEQ);
+#if UAC_STEMS
+    int16_t *ub = uac_block();                       /* (NULL: nobody records) */
+#else
+    int16_t *ub = 0;
+#endif
 #if FELUCCA_CPU2
-    uint32_t c0_t = fm1_ticks(), rc1 = rev_c1;
-    if (fm1_cpu1_run(c1_drums, rc1)) {               /* D1-D3 (and the reverb, rev_c1) on the second core, SN-HH and
-                                                      * the delay's early reads here */
+    uint32_t rc1 = rev_c1;
+#ifdef FX_NOW
+    rc1 = rc1 && !fx_now;
+#endif
+    c0_t0 = fm1_ticks();
+    if (fm1_cpu1_run(c1_drums, rc1)) {               /* D1-D3 (and the reverb, rev_c1) on the second core */
+        c1_go = (uint8_t)(1u | rc1 << 1);
         voices_render(V_SNARE, NVOICE);
         LOAD_MARK(LD_SNHH);
-        fxbus_early();
-        LOAD_MARK(LD_FX);
-        c0_t = fm1_ticks() - c0_t;                   /* (core 0's own work beside core 1, the reverb not counted) */
         if (!rc1) {
-            reverb_process();
+            uint32_t t = fm1_ticks();
+            reverb_job();
             LOAD_MARK(LD_REV);
+            rv_t = fm1_ticks() - t;
         }
-        if (fm1_cpu1_wait() == 0) {
-            LOAD_MARK(LD_WAIT);
-            ld_acc[LD_D13] += c1_ticks;
-            if (rev_c1 ? c1_vt > c0_t + (c0_t >> 3) : c1_vt + (c1_vt >> 3) < c0_t)
-                rev_c1 ^= 1u;                        /* (next block: the reverb beside the lighter; 1/8 hysteresis) */
-        } else {                                     /* it misread or didn't answer: held from now on, D1-D3 here */
-            LOAD_MARK(LD_WAIT);
-            voices_render(V_DRUM1, V_SNARE);
-            if (rc1)
-                reverb_process();
-            LOAD_MARK(LD_D13);
-        }
-        fx_sends_clear();                            /* (the reverb has read the last block's send: now the new) */
-    } else
-#endif
-#ifdef VOICES_SWAP
-    if (voices_swap) {
-        voices_render(V_SNARE, NVOICE);
-        fx_early();
-        voices_render(V_DRUM1, V_SNARE);
     } else
 #endif
     {
-        voices_render(V_DRUM1, V_SNARE);
-        LOAD_MARK(LD_D13);
-        voices_render(V_SNARE, NVOICE);
-        LOAD_MARK(LD_SNHH);
-        fx_early();
+#ifdef VOICES_SWAP
+        if (voices_swap) {
+            voices_render(V_SNARE, NVOICE);
+            voices_render(V_DRUM1, V_SNARE);
+        } else
+#endif
+        {
+            voices_render(V_DRUM1, V_SNARE);
+            LOAD_MARK(LD_D13);
+            voices_render(V_SNARE, NVOICE);
+            LOAD_MARK(LD_SNHH);
+        }
+#ifdef FX_NOW
+        if (!fx_now)
+#endif
+            reverb_job();
         LOAD_MARK(LD_REV);
     }
-#if UAC_STEMS
-    int16_t *ub = uac_block();                       /* (NULL: nobody records) */
-#endif
-    for (vi = 0; vi < NVOICE; vi++) {                /* cross modulation, choke, the mixer */
-        voice_t *v = &vc[vi];
-        const int16_t *b = vbuf[vi];
-        int32_t pk = 0;
-        if ((v->xsrc && v->xsrc != vi + 1u && v->xamt && v->xmode != XM_FILTER) || v->choking) {
-            memcpy(buf, b, sizeof buf);
-            if (v->xsrc && v->xsrc != vi + 1u && v->xamt && v->xmode != XM_FILTER)
-                xmod_block(vi, buf);
-            if (v->choking == 1u) {                  /* choked: out over this block, then silent */
-                for (i = 0; i < BLOCK; i++)
-                    buf[i] = (int16_t)((buf[i] * (int32_t)(BLOCK - 1u - i)) / (int32_t)BLOCK);
-                v->choking = 2;
-            } else if (v->choking) {
-                memset(buf, 0, sizeof buf);
-            }
-            b = buf;
-        }
-        if (vi != V_DRUM1 && (pump_g0 < 32768 || pump_g1 < 32768)) {
-            int32_t g = pump_g0 << 6, dg = pump_g1 - pump_g0;   /* (Q21 ramp: 64 samples) */
-            if (b != buf)
-                memcpy(buf, b, sizeof buf);
-            for (i = 0; i < BLOCK; i++, g += dg)
-                buf[i] = (int16_t)((buf[i] * (g >> 6)) >> 15);
-            b = buf;
-        }
-        for (i = 0; i < BLOCK; i += 4) {
-            int32_t a = iabs(b[i]);
-            if (a > pk)
-                pk = a;
-        }
-        voice_peak[vi] = pk;
-        if (pk > 64)
-            voice_active |= 1u << vi;
-#if UAC_STEMS
-        if (ub) {                                    /* its stem; OUT of the mix: nothing more */
-            int16_t *st = ub + 2u + vi;
-            for (i = 0; i < BLOCK; i++, st += UAC_NCH)
-                *st = b[i];
-            if ((mix_out >> vi) & 1u)
-                continue;
-        }
-#endif
-        mix_voice(v, b, mc_key == vi + 1u ? mc_kl : mix_l, mc_key == vi + 1u ? mc_kr : mix_r);
-    }
-    if (space_on)                                    /* SPACE: the dry sound dipped to 0.4 */
+    fxbus_early();                                   /* (the delay's reads: needs no voice) */
+    LOAD_MARK(LD_FX);
+    for (vi = 0; vi < NVOICE; vi++)                  /* cross modulation, choke, the mixer */
+        mix_one(vi, ub);
+    if (space_mx)                                    /* SPACE: the dry sound dipped to 0.4 */
         for (i = 0; i < BLOCK; i++) {
             mix_l[i] = (mix_l[i] * 13107) >> 15;
             mix_r[i] = (mix_r[i] * 13107) >> 15;
@@ -1172,15 +1120,54 @@ static void voices_block(void)
     LOAD_MARK(LD_FX);
 #ifdef FX_NOW
     if (fx_now)
-        reverb_process();
+        reverb_now();                                /* (this block's send into the return added now) */
 #endif
     reverb_add();
     LOAD_MARK(LD_REV);
 }
 
+/* the block's end (engine.c, after the master): core 1 waited for, so the next block's voices may change what it
+ * reads; the reverb's core for the next block */
+static void voices_end(void)
+{
+#if FELUCCA_CPU2
+    if (c1_go) {
+        uint32_t c0 = fm1_ticks() - c0_t0 - (c1_go & 2u ? 0u : rv_t);   /* (core 0's own work beside core 1, the
+                                                                         * reverb not counted) */
+        if (fm1_cpu1_wait() == 0) {
+            LOAD_MARK(LD_WAIT);
+            ld_acc[LD_D13] += c1_ticks;
+            if (c1_go & 2u)
+                rv_t = c1_ticks - c1_vt;
+            {
+                uint32_t a = c0 + rv_t, on0 = a > c1_vt ? a : c1_vt;
+                uint32_t b = c1_vt + rv_t, on1 = b > c0 ? b : c0;
+                if (rev_c1 ? on0 + (on1 >> 3) < on1 : on1 + (on0 >> 3) < on0)
+                    rev_c1 ^= 1u;
+            }
+        } else {                                     /* it misread or didn't answer: held from now on, D1-D3 here */
+            LOAD_MARK(LD_WAIT);
+            voices_render(V_DRUM1, V_SNARE);
+            if (c1_go & 2u)
+                reverb_job();
+            LOAD_MARK(LD_D13);
+        }
+        c1_go = 0;
+    }
+#endif
+    voices_turn();                                   /* (before the next block's hits) */
+    vb_turned = 1;
+}
+
 static void voices_init(void)                       /* initDrumVoice, Snare_init, Cymbal_init, HiHat_init */
 {
     uint32_t i;
+    memset(vbuf_b, 0, sizeof vbuf_b);                /* (Phase 10f: nothing rendered yet to mix) */
+    memset(mxs, 0, sizeof mxs);
+    vb_turned = 0;
+    memset(rev_ib, 0, sizeof rev_ib);
+    rev_fed = rev_fed_r = 0;
+    pump_m0 = pump_m1 = 32768;
     for (i = 0; i < NVOICE; i++) {
         voice_t *v = &vc[i];
         v->vol = 26214;                              /* 0.8 */
@@ -1221,7 +1208,6 @@ static void voices_init(void)                       /* initDrumVoice, Snare_init
         v->lfo2.rate = 65536u;
         lfo_update_inc(&v->lfo2);
         memset(&ins[i], 0, sizeof ins[i]);
-        memset(ins_line[i], 0, sizeof ins_line[i]);
         osc_recalc(&v->osc);
         osc_recalc(&v->mod);
         osc_recalc(&v->mod2);

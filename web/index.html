@@ -302,6 +302,11 @@
             colours the echoes halfway up Feedback and, pushed near the top, self-oscillates at its pitch, held by a
             soft clip. A global LFO can sweep it, and the remote's GLOBAL CC 3 turns it.</li>
           <li>The flanger has its own delay line, so it no longer shares the delay's.</li>
+          <li>The track inserts are now SHIFTER and RING, the two that sounded best and cost least: PHASER, FLANGER,
+            CHORUS, TREMOLO and AUTOPAN are gone (a kit that used one loads with its insert OFF). The FX bus keeps
+            its phaser and flanger.</li>
+          <li>The FX bus's DRIVE is gone: DIRT's Master does the same across the whole mix. A kit that used it loads
+            with the bus OFF.</li>
           <li>A master volume after everything (CONFIG → MIDI OUT, the last send page, CC 124), saved in the settings.</li>
         </ul>
         <h4>Sequencer and time</h4>
@@ -358,6 +363,12 @@
         <h4>Under the hood</h4>
         <ul>
           <li>35 KB more RAM, from memory that sat unused, for what comes next.</li>
+          <li>The voices now work a block ahead of the mixer: while the second core renders the drums for the next
+            block, the first mixes and runs the effects on the last. Neither waits for the other mid-block, so two
+            models fit beside the effects. The output is 1.45 ms later as a whole (the tracks stay together), and the
+            reverb runs on whichever core leaves the block shortest.</li>
+          <li>The LOAD page's bottom line reads BLOCK: the first core's work plus its wait for the second, the figure
+            that has to stay under 100% for no dropouts. CORE 0 reads CORE 0 WORK.</li>
         </ul>
       </div>
       <div class="card"><h3>0.25.2<span>3 November 2026</span></h3>

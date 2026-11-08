@@ -479,18 +479,14 @@ Every track has a second LFO: **LFO 2** (LFO, after LFO 1). It has LFO 1's knobs
 
 | Type | Sound | Knob 3 | Knob 4 |
 |---|---|---|---|
-| **PHASER** | Four allpasses swept from 150 Hz to 4.8 kHz: the classic swirl, per drum | Rate | Feedback (0 none, + or −) |
-| **FLANGER** | A short delay (0.2–4.7 ms) swept: jet, metallic | Rate | Feedback (0 none, + or −) |
-| **CHORUS** | Two voices of the sound around 6 ms, swept opposite ways: width and shimmer (mono until the pan) | Rate | Depth |
-| **TREMOLO** | The level moved | Rate | Shape (sine to square) |
-| **AUTOPAN** | The pan moved: one side turned down at a time | Rate | Shape (sine to square) |
 | **SHIFTER** | A frequency shifter: every partial moved by the same Hz, so the sound goes inharmonic and metallic (dub techno's smear). Feedback makes the barber-pole rising or falling sweep | Shift (−500 to +500 Hz; middle none) | Feedback (0 none, + or −) |
 | **RING** | Ring modulation against a sine | Pitch (20 Hz to 2.6 kHz) | AM (0: ring, the sound's own pitch gone; up: amplitude modulation, which keeps it) |
 
-- The rates go from one cycle in 20 s to about 13 Hz. The insert's LFO runs free (it doesn't restart at hits); for a synced sweep, put LFO 2 on the insert's knobs.
+- From 1.0 the types are OFF, SHIFTER and RING. PHASER, FLANGER, CHORUS, TREMOLO and AUTOPAN (up to 0.25) are gone: they didn't sound good enough for what they cost. A kit or a lock that used one plays with the insert OFF, and the page shows OFF. The FX bus still has a phaser and a flanger.
+- For a sweep, put LFO 2 on the insert's knobs (the shift or the pitch).
 - **Morph:** the knobs glide; the type switches at the halfway point, and when the two kits' types differ the Amount goes down to 0 there and up again, so the switch is silent.
 - All the knobs can be locked per step and moved by the LFOs and velocity (the type can't: a moving one would click).
-- **CPU** (estimated, not yet measured on the FM-1): a phaser, flanger, chorus or ring should cost well under 1% a track, the shifter about 1%. Six shifters on a busy kit can push the CPU meter up: see CONFIG's CPU meter.
+- **CPU** (estimated): RING costs well under 1% a track, the shifter about 1%. Six shifters on a busy kit can push the CPU meter up: see CONFIG → LOAD.
 - A comb is in the filter (COMB+ and COMB−), not here.
 
 **Gate** (ENV, after the amp EG; from 0.16): **OFF** (the LXR's: a hit runs the attack and the decay, whatever the step) or **ON**: the voice holds the top of its attack for the step's **Length** (step edit's STEP page), then decays. With Length AUTO a gated voice plays as before. Part of the kit; it doesn't morph. A Plaits model's low-pass gate stays open while it holds, so P VA or P WTABLE can play a held bass note or a pad.
@@ -732,14 +728,12 @@ One effect at a time, then **the delay, always there after it** (from 1.0). The 
 
 | Type | Mode | P1 | P2 | P3 | P4 |
 |---|---|---|---|---|---|
-| DRIVE | TUBE / FOLD / CLIP | Drive | Color | Tone | Volume |
 | RING | the carrier waveform | Frequency | – | – | – |
 | COMP | ratio 1:1 … 8:1 | Attack | Release | Threshold | Gain |
 | PHASER | – | Rate | Depth | Feedback | Centre |
 | FLANGER | – | Rate | Depth | Feedback (below the middle: negative) | Delay |
-| CHORUS (1.0) | – | Rate | Depth (up to 4 ms) | Delay (5–18 ms) | Lo cut (20–800 Hz) |
 
-The phaser and flanger sound strongest at DRY/WET 50%. **CHORUS** (from 1.0) is made for drums: two voices a side drifting around the dry sound (the sides a quarter turn apart, so it spreads wide), no feedback (no metallic ring on a snare), and **Lo cut** on the voices it adds, so a kick sent to it keeps its low end solid and in the middle. Try Lo cut around 200 Hz on a full kit, a short Delay for a thick doubling, a longer one with slow Rate for a wide wash on hats and claps. It costs a little more than the flanger, a little less than the phaser. From 1.0 the **PHASER** has four stages (two notches, the classic sound) rather than six, and one chain for both sides: the left hears the dry sound plus the phased one, the right the dry sound minus it, so the right's notches fall between the left's (the classic stereo phaser) and it sweeps wide across the speakers. It costs well under half what it did. Summed to mono, the two sides cancel back to the dry sound, so the phaser is a stereo effect: listen in stereo. **COMP** (the LXR's bus compressor) now works out its gain every 8 samples, as the master compressor does, for less than half the CPU; kits that use it sound as before. The bus always plays in stereo (the FM-1 has one stereo output).
+From 1.0 the bus has no **DRIVE**: the DIRT page's Master does the same job across the whole mix, with more types. A kit or a CC that picks DRIVE plays with the bus OFF, and the page shows OFF. The phaser and flanger sound strongest at DRY/WET 50%. From 1.0 the **PHASER** has four stages (two notches, the classic sound) rather than six, and one chain for both sides: the left hears the dry sound plus the phased one, the right the dry sound minus it, so the right's notches fall between the left's (the classic stereo phaser) and it sweeps wide across the speakers. It costs well under half what it did. Summed to mono, the two sides cancel back to the dry sound, so the phaser is a stereo effect: listen in stereo. **COMP** (the LXR's bus compressor) now works out its gain every 8 samples, as the master compressor does, for less than half the CPU; kits that use it sound as before. The bus always plays in stereo (the FM-1 has one stereo output).
 
 ### The delay (from 1.0: always on)
 
@@ -1692,7 +1686,7 @@ Each **stem** (3–8) is one voice in mono, as the mixer takes it: after the voi
 Things to know:
 
 - Recording software sees one eight-channel device; most label the channels 1–8 (USB audio 1 has no way to name them), so name the tracks as in the table.
-- The latency is about 4 ms on top of your computer's own. The FM-1's clock runs the stream (it is an *asynchronous* device), so there is no drift against the computer.
+- The latency is about 5.5 ms on top of your computer's own. The FM-1's clock runs the stream (it is an *asynchronous* device), so there is no drift against the computer.
 - Only 44.1 kHz. If your project runs at 48 kHz, let the software convert the input, or use 44.1 kHz.
 - CONFIG → LOAD shows the stream's own share of the processor (**USB AUDIO**) and its **glitches** since power-on: a packet repeated or dropped (heard as a click in the recording only, not on the FM-1's outputs). Please report glitches with the pattern that caused them.
 - USB MIDI and installs over USB work as before. Windows may take a moment to set the device up again the first time, since the FM-1 now presents an audio function too.
@@ -1707,7 +1701,7 @@ To measure, open CONFIG while a dense pattern plays with the FX bus and reverb o
 
 The LOAD page (CONFIG's second-to-last) splits the CPU figure by part, each as a share of the time an audio buffer lasts (2.9 ms): **D1-D3** (the three drum voices, with their models), **SN-HH** (snare, cymbal, hi-hat), **MIXER** (cross modulation, choke, the mixer and the master), **FX BUS**, **REVERB**, and **SEQ, MOD** (the sequencer, MIDI, PERF, the LFOs and the rest). The first number is the average, the second the peak since CONFIG was opened; the bar shows the average with the peak as a tick. On one core the parts add up to about the CPU figure. The emulator shows 0 everywhere.
 
-Below them, the cores. The FM-1's processor has two cores, and from 0.15 Elixir uses both: the second renders D1–D3 (with their models) while the first renders SN, CY and HH, then mixes everything and runs the effects. From 1.0 the second core runs the reverb too, after the drums (it works on the last block's send, so it needn't wait for the mix), which takes 4–7% off the first. With two cores, the first line reads **D1-D3, REV**: the second core's time, so the parts no longer add up to CPU (REVERB then only counts adding its return). **CORE 0** is the first core's time, less its wait for the second, and **CORE 1** the second's (D1–D3; OFF on one core). Under them, **WAIT** is the time the first core waits for the second (if it grows, D1–D3 are the slower half), and **STACK** the memory the second core has used for its work (red past 3.5 KB of 4 KB). On one core, **1 CORE** says why the second core isn't running; D1–D3 then render on the first core, and only one model plays:
+Below them, the cores. The FM-1's processor has two cores, and from 0.15 Elixir uses both: the second renders D1–D3 (with their models) while the first renders SN, CY and HH and runs the rest. From 1.0 the voices work **a block ahead of the mixer**: while the second core renders D1–D3 for the next block, the first renders SN, CY and HH for it too, then mixes the block both cores finished last time and runs the FX bus, the reverb's return and the master. Neither core waits for the other in the middle of a block, so the block takes as long as the busier core, rather than the second core's time plus everything after it. That is what lets two models play beside the effects. The cost is that the output comes out one block (1.45 ms) later, all of it together: the tracks stay in time with each other, and against an external clock it is about as much as MIDI clock moves anyway. Either core can run the reverb (on the mix's last send, so it needn't wait for anything): each block it goes to the core that leaves the block shortest, worked out from the last block's times. While the second core has it, the first line reads **D1-D3, REV**: the second core's time, so the parts no longer add up to CPU (REVERB then only counts adding its return). **CORE 0 WORK** is the first core's time, less its wait for the second, and **CORE 1** the second's (D1–D3; OFF on one core). What counts is the first core's work *plus* its wait, the **BLOCK** line at the bottom (the CPU figure of the other CONFIG pages): past 100% at a peak, the buffer is late (LATE counts them) and you hear a dropout. Under them, **WAIT** is the time the first core waits at the end of a block for the second to finish (if it grows, D1–D3 are the busier side: a lighter model, or the reverb's sends at 0, helps), and **STACK** the memory the second core has used for its work (red past 3.5 KB of 4 KB). On one core, **1 CORE** says why the second core isn't running; D1–D3 then render on the first core, and only one model plays:
 
 | Reason | |
 |---|---|
@@ -1718,7 +1712,7 @@ Below them, the cores. The FM-1's processor has two cores, and from 0.15 Elixir 
 
 The last page, **ELIXIR**, shows the version (the cores' line moved to LOAD in 0.20).
 
-From 0.16 the first core also runs the reverb and reads the delay's echoes while it waits for the second, on the last buffer's sends (one block, 1.45 ms, late: inaudible), so the effects no longer add to the slower core's time. Under the cores, one reading a line: **CORE 0 WAITS** (with two cores), **CORE 1 STACK**, **USER STACK** and **SYS STACK**, the deepest use of each stack since power-on out of its size (red past three quarters). If one turns red after a busy session, please report it. From 1.0, **USB AUDIO**: the [USB audio](#usb-audio-the-mix-and-six-stems) stream's share of the first core while a computer records (OFF when nothing does; it isn't counted in CPU or the parts above) and its glitches since power-on (red when there are any).
+The reverb works on the mix's last send, so its return comes two blocks (2.9 ms) after its send: inaudible on a reverb. Under the cores, one reading a line: **CORE 0 WAITS** (with two cores), **CORE 1 STACK**, **USER STACK** and **SYS STACK**, the deepest use of each stack since power-on out of its size (red past three quarters). If one turns red after a busy session, please report it. From 1.0, **USB AUDIO**: the [USB audio](#usb-audio-the-mix-and-six-stems) stream's share of the first core while a computer records (OFF when nothing does; it isn't counted in CPU or the parts above) and its glitches since power-on (red when there are any).
 
 ### The battery
 
@@ -1821,7 +1815,7 @@ NRPN *n* sets parameter *n* + 128: send CC 99 = *n* ÷ 128, CC 98 = *n* mod 128,
 | 75–80 | Transient waveform (0–13) |
 | 81–86 | Transient frequency |
 | 100–105 | Pulse width |
-| 106 | FX bus type (0 off, 1 drive, 2 ring, 3 comp, 4 delay, 5 phaser, 6 flanger, 7 chorus) |
+| 106 | FX bus type (0 off, 2 ring, 3 comp, 5 phaser, 6 flanger; 1 drive and 4 delay play as off: drive is gone from 1.0, the delay is always there) |
 | 108 | FX bus dry/wet (0–100) |
 | 107 | FX bus output (0–5) |
 | 109 | Drive curve (0 tube, 1 fold, 2 clip) |
@@ -1874,10 +1868,10 @@ Six numbers per voice-based setting, in the order D1 D2 D3 SN CY HH.
 | 355–360 | LFO 2 sync (0 off, 1 4/1, 2 2/1, 3 1/1, 4 1/2, 5 1/2T, 6 1/4, 7 1/4T, 8 1/8, 9 1/8T, 10 1/16, 11 1/32, 12 3/4, 13 3/8, 14 5/16, 15 3/16) |
 | 361–366 | LFO 2 retrigger (0 off, 1–6 D1 … HH) |
 | 367–372 | LFO 2 phase |
-| 373–378 | Insert type (0 off, 1 phaser, 2 flanger, 3 chorus, 4 tremolo, 5 autopan, 6 shifter, 7 ring) |
+| 373–378 | Insert type (0 off, 6 shifter, 7 ring; 1–5, dropped in 1.0, play as off) |
 | 379–384 | Insert amount |
-| 385–390 | Insert knob 3 (rate, shift or pitch) |
-| 391–396 | Insert knob 4 (feedback, depth, shape or AM) |
+| 385–390 | Insert knob 3 (shift or pitch) |
+| 391–396 | Insert knob 4 (feedback or AM) |
 
 The LXR's own parameters keep their CC and NRPN numbers.
 
@@ -1909,7 +1903,7 @@ What changed in the port:
 
 What Elixir adds:
 
-- **Sound:** Control All (OCT+ held, a knob: every track); LFO modes (hold, one-shot, half); a second LFO and an insert effect (phaser, flanger, chorus, tremolo, autopan, frequency shifter, ring) on every track; seven more filter types; FX and reverb sends per voice; four reverbs (Clouds' plate among them); nine waveshapers; bits; tilt EQ; random per hit; choke groups; cross modulation; a gate per voice; phaser and flanger; a tape delay with sync, glitches and pitch-shifted repeats, its echoes into the reverb; dirt on the FX bus and the master; a sound browser and a kit library.
+- **Sound:** Control All (OCT+ held, a knob: every track); LFO modes (hold, one-shot, half); a second LFO and an insert effect (frequency shifter, ring) on every track; seven more filter types; FX and reverb sends per voice; four reverbs (Clouds' plate among them); nine waveshapers; bits; tilt EQ; random per hit; choke groups; cross modulation; a gate per voice; phaser and flanger; a tape delay with sync, glitches and pitch-shifted repeats, its echoes into the reverb; dirt on the FX bus and the master; a sound browser and a kit library.
 - **Models (experimental):** Rings' resonators and fifteen of Plaits' engines on the drum voices, two at a time. Not in the LXR-02.
 - **MICRO:** ten microsound types (clicks, click trains, crunch, bits, noise bursts, snaps, resonant grains, dust, pops, chirps, after GLITCH) on every track.
 - **Performance:** PERF with fill, repeat, freeze, throws, feedback push, tape stop, filter sweeps, a DJ filter, four macros, the voices' volumes on two pages, PERFORM 2, DENSITY (thinning or building the whole pattern) and three global LFOs (morph, the DJ filter, the effects, density, transpose, the delay, macros, down to 256 bars a cycle); KEYS, to play a voice from the keyboard.

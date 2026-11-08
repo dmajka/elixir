@@ -446,7 +446,6 @@ static void i27_run(uint32_t type, uint32_t a, uint32_t b, uint32_t c, const int
     uint32_t i;
     if (fresh) {
         memset(&ins[5], 0, sizeof ins[5]);
-        memset(ins_line[5], 0, sizeof ins_line[5]);
         ins[5].was = 0xFF;
     }
     ins[5].type = (uint8_t)type;
@@ -495,7 +494,7 @@ static void band_run(uint32_t ty, uint32_t band, uint32_t fb, int32_t *pk, doubl
         }
         memset(mix_l, 0, sizeof mix_l);
         memset(mix_r, 0, sizeof mix_r);
-        memset(rev_in, 0, sizeof rev_in);
+        memset(rev_in, 0, BLOCK * sizeof *rev_in);
         d_read = 0;
         fx_delay();
         for (i = 0; i < BLOCK; i++) {
@@ -611,16 +610,22 @@ int main(int argc, char **argv)
         {   /* 0.24: P CHORD bit-exact across its knobs (its 15 waves now a table of their own, P WTABLE parked) */
             uint32_t k, h = 2166136261u, i;
             par_set(PAR_MODEL1, MD_PL0 + 6u);        /* (PE_CHORD) */
-            for (k = 0; k < 27u; k++) {
+            for (k = 0; k < 27u; k++) {              /* (Phase 10f: the output a block later, so each window too: its
+                                                      * last block the next render's first) */
                 par_set(PAR_MDECAY1, (k % 3u) * 63u);
                 par_set(PAR_MDAMP1, ((k / 3u) % 3u) * 63u);
                 par_set(PAR_MMAT1, (k / 9u) * 63u);
                 render(FS / 16);
+                for (i = 0; k && i < BLOCK * 2u; i++)
+                    h = (h ^ (uint16_t)out[i]) * 16777619u;
                 voice_trigger(0, 127, SEQ_DEFAULT_NOTE);
                 frames = render(FS / 8);
-                for (i = 0; i < frames * 2u; i++)
+                for (i = BLOCK * 2u; i < frames * 2u; i++)
                     h = (h ^ (uint16_t)out[i]) * 16777619u;
             }
+            render(BLOCK);
+            for (i = 0; i < BLOCK * 2u; i++)
+                h = (h ^ (uint16_t)out[i]) * 16777619u;
             if (h != 0xb5fecaa3u) {                  /* (0.23's, before the split) */
                 printf("FAIL: P CHORD hash %08x, not 0.23's b5fecaa3\n", h);
                 fails++;
@@ -1001,10 +1006,10 @@ int main(int argc, char **argv)
         static const char *const IN[NINS] = {"OFF", "PHASER", "FLANGER", "CHORUS", "TREMOLO", "AUTOPAN", "SHIFTER",
                                              "RING"};
         static int16_t in[FS * 2], o[FS * 2];
-        uint32_t ty, i, c;
+        uint32_t ty, i, c, j;
         printf("phase 27a: the insert\n");
-        for (ty = 1; ty < NINS; ty++)
-            for (c = 0; c <= 127u; c += 127u) {
+        for (j = 1; j < 3u; j++)                     /* (1.0: SHIFTER and RING, the others dropped) */
+            for (ty = INS_LIVE[j], c = 0; c <= 127u; c += 127u) {
                 int32_t pk = 0;
                 for (i = 0; i < FS * 2u; i++)
                     in[i] = (int16_t)(i < 8192u ? (i & 32u ? 32767 : -32768) : 0);
@@ -1052,72 +1057,6 @@ int main(int argc, char **argv)
                 fails++;
             }
         }
-        {   /* PHASER (slowest rate: its sweep stands still): notches between 30 Hz and 2 kHz */
-            double mn = 9, hz;
-            for (hz = 30; hz < 2000; hz *= 1.06) {
-                double a = 0, b = 0;
-                i27_sine(in, 4096, hz, 8000);
-                i27_run(INS_PHASER, 127, 0, 64, in, o, 4096, 1);
-                for (i = 2048; i < 4096u; i++) {
-                    a += (double)in[i] * in[i];
-                    b += (double)o[i] * o[i];
-                }
-                if (sqrt(b / a) < mn)
-                    mn = sqrt(b / a);
-            }
-            printf("  phaser: its deepest notch %.3f\n", mn);
-            if (mn > 0.2) {
-                printf("FAIL: the phaser has no notch\n");
-                fails++;
-            }
-        }
-        {   /* FLANGER and CHORUS: a click comes back where their delays are (slowest rate): 10 samples; 265 (CHORUS,
-             * depth 0) */
-            int32_t at[2] = {0, 0}, pk[2] = {0, 0};
-            for (c = 0; c < 2u; c++) {
-                memset(in, 0, 2048 * sizeof in[0]);
-                in[1024] = 20000;
-                i27_run(c ? INS_CHORUS : INS_FLANGER, 127, 0, c ? 0 : 64, in, o, 2048, 1);
-                for (i = 1026; i < 2048u; i++)
-                    if (abs(o[i]) > pk[c]) {
-                        pk[c] = abs(o[i]);
-                        at[c] = (int32_t)i - 1024;
-                    }
-            }
-            printf("  flanger's echo at %d samples, chorus's at %d\n", at[0], at[1]);
-            if (at[0] < 9 || at[0] > 12 || at[1] < 263 || at[1] > 267) {
-                printf("FAIL: the delays' echoes aren't where they should be\n");
-                fails++;
-            }
-        }
-        {   /* TREMOLO (full, square, fastest): the loudest block 20 dB over the quietest; AUTOPAN: each side down */
-            double mx = 0, mn = 1e18;
-            int32_t gl = 32768, gr = 32768;
-            i27_sine(in, FS, 3000, 8000);
-            i27_run(INS_TREMOLO, 127, 127, 127, in, o, FS, 1);
-            for (i = 4096; i + BLOCK <= FS; i += BLOCK) {
-                double e = 0;
-                uint32_t k;
-                for (k = 0; k < BLOCK; k++)
-                    e += (double)o[i + k] * o[i + k];
-                mx = e > mx ? e : mx;
-                mn = e < mn ? e : mn;
-            }
-            if (mx < 100 * mn) {
-                printf("FAIL: TREMOLO moves the level %.1f dB\n", 10 * log10(mx / (mn + 1)));
-                fails++;
-            }
-            i27_run(INS_AUTOPAN, 127, 127, 127, in, o, BLOCK, 1);
-            for (i = 0; i < FS; i += BLOCK) {
-                i27_run(INS_AUTOPAN, 127, 127, 127, in, o, BLOCK, 0);
-                gl = ins[5].pg[1][0] < gl ? ins[5].pg[1][0] : gl;
-                gr = ins[5].pg[1][1] < gr ? ins[5].pg[1][1] : gr;
-            }
-            if (gl > 1000 || gr > 1000 || memcmp(in, o, BLOCK * sizeof o[0])) {
-                printf("FAIL: AUTOPAN's gains down to %d, %d (or it changed the voice)\n", gl, gr);
-                fails++;
-            }
-        }
         memset(&ins[5], 0, sizeof ins[5]);
     }
     {   /* 0.15 (17c): D1-D3 render on the second core while core 0 renders SN-HH. A voice must touch only its own
@@ -1136,10 +1075,10 @@ int main(int argc, char **argv)
         par_set(PAR_MODEL1 + 5, MD_MC0 + 7);             /* .. JITTER and REVERSE: their noise their own too) */
         par_set(PAR_MMAT1 + 3, 90);
         par_set(PAR_MEXC1 + 5, 64);
-        par_set(PAR_INS1 + 1, INS_FLANGER);              /* (27a: inserts' state their own too) */
+        par_set(PAR_INS1 + 1, INS_RING);                 /* (27a: inserts' state their own too) */
         par_set(PAR_INS1 + 3, INS_SHIFT);
         par_set(PAR_INSC1 + 3, 100);
-        par_set(PAR_INS1 + 4, INS_PHASER);
+        par_set(PAR_INS1 + 4, INS_SHIFT);
         par_set(PAR_L2AMT1 + 1, 100);                    /* (25b: and LFO 2's) */
         par_set(PAR_L2TGT1 + 1, NUM_MOD_TARGETS + 2u);   /* (TILT: the reverb test after starts silent) */
         for (k = 0; k < 16; k += 3)
@@ -1208,8 +1147,8 @@ int main(int argc, char **argv)
     }
     {   /* 18b: the reverb runs a block behind (on core 0 while the second core renders), the delay reads early when it
          * can. Every voice through the FX bus (DELAY, a time change half way) and into the reverb: the delay's output
-         * must be the same bit for bit as with the effects after the mixer, and the reverb's return the same one
-         * block later */
+         * must be the same bit for bit as with the effects after the mixer, and the reverb's return the same two
+         * blocks later (Phase 10f: the mixer a block behind the voices, the reverb on its last send) */
         static int16_t a[FS * 2 * 3], b[FS * 2 * 3], c[FS * 2 * 3];
         uint8_t vol[NVOICE];
         uint32_t v, i, n = FS * 3 / BLOCK * BLOCK, bad = 0, clip = 0, wet = 0;
@@ -1245,17 +1184,17 @@ int main(int argc, char **argv)
         for (k = 0; k < NREV; k++) {
             par_set(PAR_REV_TYPE, k);
             render_child(1, 100, a, n);              /* the reverb as before */
-            render_child(0, 100, b, n);              /* a block behind */
+            render_child(0, 100, b, n);              /* two blocks behind (Phase 10f) */
             render_child(0, 0, c, n);                /* the dry sound */
             for (i = bad = 0; i < n * 2u; i++) {
-                int32_t now = i >= 2u * BLOCK ? a[i - 2u * BLOCK] - c[i - 2u * BLOCK] : 0, late = b[i] - c[i];
+                int32_t now = i >= 4u * BLOCK ? a[i - 4u * BLOCK] - c[i - 4u * BLOCK] : 0, late = b[i] - c[i];
                 clip += iabs(a[i]) >= 32767 || iabs(b[i]) >= 32767;
                 wet += late != 0;
                 bad += now != late;
             }
-            printf("  reverb %u a block behind: %u samples differ (%u wet)\n", k, bad, wet);
+            printf("  reverb %u two blocks behind: %u samples differ (%u wet)\n", k, bad, wet);
             if (bad || clip || !wet) {
-                printf("FAIL: the reverb's return isn't the same one block later%s\n", clip ? " (it clipped)" : "");
+                printf("FAIL: the reverb's return isn't the same two blocks later%s\n", clip ? " (it clipped)" : "");
                 fails++;
             }
             wet = clip = 0;

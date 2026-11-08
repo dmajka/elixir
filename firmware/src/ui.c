@@ -2000,6 +2000,10 @@ static uint32_t model_step(uint32_t p, uint32_t from, uint32_t to)
 {
     if (p == PAR_FX_TYPE && to == FX_DELAY)          /* (1.0: the delay is always there, not a type: past it) */
         return to > from ? FX_DELAY + 1u : FX_DELAY - 1u;
+    if (p == PAR_FX_TYPE && to == FX_DRIVE && !fx_live(to))   /* (Phase 10f: DRIVE set aside) */
+        return to > from ? FX_RING : FX_OFF;
+    if (p >= PAR_INS1 && p < PAR_INS1 + 6u && to != ins_live(to))   /* (1.0: the dropped inserts: past them) */
+        return to > from ? INS_SHIFT : INS_OFF;
     if (p < PAR_MODEL1 || p >= PAR_MODEL1 + 6u)
         return to;
     return model_turn(p - PAR_MODEL1, from, (int32_t)to - (int32_t)from);

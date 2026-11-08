@@ -184,7 +184,7 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
         uint32_t g = fx_page();
         if (g == FXPG_PARS) {                        /* (the type's knobs: named after it) */
             put_str(b, "FX BUS: ", n);
-            put_str(b + 8, L_FX[par[PAR_FX_TYPE] < NFX ? par[PAR_FX_TYPE] : 0], n - 8u);
+            put_str(b + 8, L_FX[par[PAR_FX_TYPE] < NFX_LIVE ? par[PAR_FX_TYPE] : 0], n - 8u);
         } else {
             put_str(b, T[g], n);
         }
@@ -1205,13 +1205,13 @@ static void draw_batt(int32_t y)
     for (i = 0; i < lvl; i++)
         cv_rect(x + 2 + i * 6, y + 3, 5, 6, lvl == 1 ? T_REC : T_THEME);
 }
-static void draw_cpu(int32_t y)
+static void draw_cpu(int32_t y, const char *name)   /* (name: "CPU "; LOAD's "BLOCK ") */
 {
     char b[40];
     uint32_t c = cpu_pct(), pk = cpu_peak_pct();
     int32_t w = (int32_t)(c > 100u ? 100u : c), wp = (int32_t)(pk > 100u ? 100u : pk);
-    put_str(b, "CPU ", sizeof b);
-    put_int(b + 4, (int32_t)c);
+    put_str(b, name, sizeof b);
+    put_int(b + str_len(b), (int32_t)c);
     put_str(b + str_len(b), "%  PEAK ", sizeof b - str_len(b));
     put_int(b + str_len(b), (int32_t)pk);
     put_str(b + str_len(b), "%", sizeof b - str_len(b));
@@ -1351,7 +1351,7 @@ static void draw_load(void)
         if (wp)
             cv_rect(152 + wp * 78 / 100, y + 3, 2, 6, T_ACCENT);
     }
-    put_str(b, "CORE 0  ", sizeof b);                /* (37: from the ELIXIR page) core 0: the ISR less its wait */
+    put_str(b, "CORE 0 WORK ", sizeof b);           /* (37: from the ELIXIR page) core 0: the ISR less its wait */
     {
         uint32_t c = cpu_pct(), w = (ld_q8[LD_WAIT] * 100u + 128u) >> 8;
         put_int(b + str_len(b), (int32_t)(cores_why == CW_TWO && c > w ? c - w : c));
@@ -1426,7 +1426,8 @@ static void draw_config_help(int32_t y0)
     (void)y0;
     if (ui.page % NCONFIG == CF_LOAD) {
         draw_load();
-        draw_cpu(178);                               /* (the cards' place: LOAD has no knobs) */
+        draw_cpu(178, "BLOCK ");                     /* (the cards' place: LOAD has no knobs. 1.0: BLOCK, the
+                                                      * whole half's time, CORE 0 + its WAIT: what LATE counts) */
         return;
     }
     if (ui.page % NCONFIG == CF_ABOUT) {
@@ -2120,11 +2121,6 @@ static int card_unit(char *b, uint32_t n, uint32_t p, uint32_t v)
         put_x(b, ((262144u + (((v & 127u) << 20) * 10u) / 339u) * 25u) >> 18);
         return 1;
     }
-    if (p >= PAR_INSB1 && p < PAR_INSB1 + 6u && ins[p - PAR_INSB1].type >= INS_PHASER &&
-        ins[p - PAR_INSB1].type <= INS_AUTOPAN) {    /* (the insert's LFO, voices.c ins_inc: 0.05 Hz x 2^(8 v)) */
-        put_hz(b, n, (uint32_t)((5u * (uint32_t)exp2_q16((int32_t)((v & 127u) * 8u * 65536u / 127u))) >> 16));
-        return 1;
-    }
     if (p == PAR_DLY_BAND) {                         /* (1.0: OFF, or its centre; TAPE's half-rate loop stops at ~3.3 kHz) */
         uint32_t h;
         if (!v) {
@@ -2163,6 +2159,7 @@ static int card_unit(char *b, uint32_t n, uint32_t p, uint32_t v)
             else
                 put_x(b, 100u + f * 200u / 65536u);
             return 1;
+#if FX_CHORUS_ON
         case FX_CHORUS:                              /* (1.0: Rate, Depth, Delay, Lo cut) */
             if (k == 1u)
                 put_ms(b, f * 40u / 65536u);
@@ -2173,6 +2170,7 @@ static int card_unit(char *b, uint32_t n, uint32_t p, uint32_t v)
             else
                 put_hz(b, n, (uint32_t)(((uint64_t)3277u * (uint32_t)exp2_q16((int32_t)((f * 7643u) >> 10)) * 100u) >> 32));
             return 1;
+#endif
         case FX_PHASER: case FX_FLANGER:
             if (k)
                 return 0;
@@ -2845,5 +2843,5 @@ static void draw_about(void)
     }
     cv_text(82, 40, &AF_S, ELIXIR_VERSION, T_THEME);
     cv_text(82, 54, &AF_S, "the LXR-02 on the FM-1", T_MID);
-    draw_cpu(110);
+    draw_cpu(110, "CPU ");
 }

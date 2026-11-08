@@ -157,7 +157,7 @@ static const uint8_t SP_LIST[NSL][5] = {{FK(F_BP), FK(F_HP), FK(F_PEAK), FK(F_CO
                                         {FK(F_LP), FK(F_LP2), FK(F_DUB), FK(F_LP4), FK(F_LP)},
                                         {FK(F_LP), FK(F_BP), FK(F_PEAK), FK(F_UBP), FK(F_LP2)}, {SH_FOLD, SH_SFOLD, SH_RECT, SH_FOLD, SH_SFOLD},
                                         {SH_CLIP, SH_BITE, SH_FUZZ, SH_RECT, SH_CLIP}, {SH_TAPE, SH_LXR, SH_ASYM, SH_TAPE, SH_LXR},
-                                        {INS_PHASER, INS_FLANGER, INS_CHORUS, INS_SHIFT, INS_RING}};
+                                        {INS_SHIFT, INS_RING, INS_SHIFT, INS_RING, INS_RING}};   /* (1.0) */
 
 static const smove_t MV_POLTER[] = {
     {R_FMAMT, 20, 100, MF_W3 | MF_C1}, {R_FMFREQ, 10, 127, MF_W3}, {R_FMWAVE, 0, 7, MF_W2 | MF_SET},
@@ -799,8 +799,8 @@ static void sp_fx(const spell_t *S, const spc_t *c)
         sp_par(PAR_REV_DAMP, (int32_t)(50u - (c->c[0] * 40u >> 7)));
     }
     if ((S->fl & SF_FXALL) && c->all && sp_rnd(128) < c->sm) {
-        static const uint8_t T[4] = {FX_PHASER, FX_FLANGER, FX_RING, FX_DRIVE};
-        sp_par(PAR_FX_TYPE, T[sp_rnd(4)]);
+        static const uint8_t T[3] = {FX_PHASER, FX_FLANGER, FX_RING};   /* (Phase 10f: DRIVE set aside) */
+        sp_par(PAR_FX_TYPE, T[sp_rnd(3)]);
         sp_par(PAR_FX_DRY_WET, (int32_t)((30u + sp_rnd(60)) * sp.lim[SPL_FXMIX] / 127u));
         sp_par(PAR_FX_P1, (int32_t)sp_rnd(128));
         sp_par(PAR_FX_P2, (int32_t)sp_rnd(128));

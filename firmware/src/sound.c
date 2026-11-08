@@ -609,7 +609,7 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
         vc[p - PAR_PAN4 + 3u].pan = (uint8_t)itg;
         break;
     case PAR_FX_TYPE:                                /* (1.0: DELAY isn't a type now: an older kit's plays as OFF) */
-        fx.type = (uint8_t)(itg < NFX && itg != FX_DELAY ? itg : FX_OFF);
+        fx.type = (uint8_t)fx_live(itg);
         fxbus_update();
         break;
     case PAR_DLY_TIME:                               /* (1.0: fxbus_early moves the delay there) */
@@ -773,7 +773,8 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
             ins_t *n = &ins[(p - PAR_INS1) % 6u];
             uint8_t v = (uint8_t)(mod ? (127u * (uint32_t)f) >> 16 : itg & 127u);
             switch ((p - PAR_INS1) / 6u) {
-            case 0: n->type = (uint8_t)pick(itg < NINS ? itg : 0u, (uint32_t)f, mod, NINS); break;
+            case 0: n->type = (uint8_t)(mod ? INS_LIVE[pick(0u, (uint32_t)f, mod, 3u)] : ins_live(itg)); break;   /* (1.0: OFF,
+                                                      * SHIFTER, RING) */
             case 1: n->a = v; break;
             case 2: n->b = v; break;
             default: n->c = v; break;

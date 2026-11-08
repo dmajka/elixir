@@ -10,6 +10,21 @@
  * as a number (an older kit's: kit.c dly_migrate) and plays as OFF. */
 
 enum { FX_OFF, FX_DRIVE, FX_RING, FX_COMP, FX_DELAY, FX_PHASER, FX_FLANGER, FX_CHORUS, NFX };   /* (1.0: CHORUS) */
+/* 1.0 (after Phase 10e, the user: "I can't really hear much"): CHORUS is set aside, its code kept, not built in
+ * (ELIXIR_FX_CHORUS=1 builds it). NFX_LIVE: the types the knob reaches; a kit's CHORUS loads as OFF (kit.c) */
+#ifndef FX_CHORUS_ON
+#define FX_CHORUS_ON 0
+#endif
+#define NFX_LIVE (FX_CHORUS_ON ? NFX : FX_CHORUS)
+/* 1.0 Phase 10f (the user: the same as the master's DIRT): DRIVE set aside the same way (ELIXIR_FX_DRIVE=1 builds it);
+ * a kit's or a CC's DRIVE plays and shows as OFF, the knob goes from OFF to RING */
+#ifndef FX_DRIVE_ON
+#define FX_DRIVE_ON 0
+#endif
+static inline uint32_t fx_live(uint32_t t)          /* the type that plays: OFF for a dropped one (and the old DELAY) */
+{
+    return t < NFX_LIVE && t != FX_DELAY && (FX_DRIVE_ON || t != FX_DRIVE) ? t : FX_OFF;
+}
 enum { DIST_TUBE, DIST_FOLD, DIST_RAT };
 enum { DELAY_NORMAL, DELAY_PINGPONG };            /* (21: TAPE, TAPE PP after them) */
 
@@ -243,6 +258,7 @@ static int32_t rat(int32_t in, uint32_t c, int32_t coff, int32_t gain)   /* one 
     fx.last[c] = (int32_t)(((int64_t)fx.lp3[c] * p[3]) >> 16);
     return sat16(fx.last[c] >> 1);
 }
+#if FX_DRIVE_ON
 static void fx_drive(void)                           /* Distortion_process */
 {
     const int32_t *p = fx.p;
@@ -295,6 +311,7 @@ static void fx_drive(void)                           /* Distortion_process */
 }
 
 /* ------------------------------------------------------------ RING --- */
+#endif
 static void fx_ring(void)                            /* Ringmod_process */
 {
     int16_t o[BLOCK];
@@ -405,7 +422,7 @@ static inline int32_t tone(int32_t *lp, int32_t in)  /* the feedback's one-pole 
  * change waiting for it, as the LXR's loop does sample by sample); fx_delay writes the line (the input, the echoes
  * through the tone filter and the feedback) and mixes. When every read of the block is of a sample written before
  * it (the heads a block or more behind the write head: from ~1.5 ms; delay_far), the reads run early, on core 0
- * while the second core renders D1-D3 (voices.c fx_early), and the echoes are exactly the same as read in the loop:
+ * while the second core renders D1-D3 (voices.c voices_block), and the echoes are exactly the same as read in the loop:
  * no latency */
 static int32_t d_ol[BLOCK] POOL, d_or[BLOCK] POOL;   /* the block's echoes, left and right (mono: left) */
 static uint8_t d_read;                               /* .. read already this block */
@@ -785,7 +802,7 @@ static void fx_tempo(uint32_t x10)
         delay_set_time(fx.d_time);
 }
 
-/* 18b: what the bus can do before the mixer has its input (voices.c fx_early): the delay's reads, when far */
+/* 18b: what the bus can do before the mixer has its input (voices.c voices_block): the delay's reads, when far */
 static void fxbus_early(void)
 {
     d_read = 0;
@@ -898,8 +915,8 @@ static void fx_phaser(void)
 /* FLANGER: a short delay in the FX buffer (FL_LEN samples a channel), swept by the LFO between DELAY (P4: 0.2 ..
  * 10 ms) and DELAY x (1 - DEPTH) (P2), FEEDBACK (P3: -0.9 at 0, none at the middle, +0.9 at the top); the delay
  * glides across the block, read between samples */
-#define FL_LEN 1024u                                 /* (1.0: its most is 10 ms, 459 samples; CHORUS's 20 ms; its own line, the delay
-                                                      * running beside it) */
+#define FL_LEN (FX_CHORUS_ON ? 1024u : 512u)          /* (1.0: its most is 10 ms, 459 samples; CHORUS's 20 ms; its own line,
+                                                      * the delay running beside it) */
 static int16_t fl_buf[2u * FL_LEN] POOL;
 static void fx_flanger(void)
 {
@@ -930,6 +947,7 @@ static void fx_flanger(void)
     fx.fl_w += BLOCK;
 }
 
+#if FX_CHORUS_ON
 /* 1.0: CHORUS, for drums: two taps a side between DELAY (P3: 5 .. 18 ms) and DELAY + DEPTH (P2: up to 4 ms), swept
  * by the LFO (P1; the taps half a turn apart, the right a quarter on: wide), no feedback (no metallic ring on a
  * snare), and LO CUT (P4: 20 Hz .. 800 Hz) on the voices it adds: the kick's low end stays as it was, in the middle */
@@ -969,6 +987,7 @@ static void fx_chorus(void)
     }
     fx.fl_w += BLOCK;
 }
+#endif
 
 /* ------------------------------------------------------------ DIRT --- */
 /* 23b: the bus's DIRT (any type, before it: into the echo, the phaser ..): a gain of 1 .. 8 into soft3 (voices.c),
@@ -1159,12 +1178,16 @@ static void fxbus_process(void)                      /* FxBus_process */
     case FX_FLANGER:
         fx_flanger();
         break;
+#if FX_CHORUS_ON
     case FX_CHORUS:
         fx_chorus();
         break;
+#endif
+#if FX_DRIVE_ON
     case FX_DRIVE:
         fx_drive();
         break;
+#endif
     case FX_RING:
         fx_ring();
         break;

@@ -59,7 +59,11 @@ static const char *const L_ROUTE[] = {"OFF", "USB>DIN", "DIN>DIN", "ALL>DIN", "T
 static const char *const L_MFILT[] = {"OFF", "N", "R", "RN", "C", "CN", "CR", "CRN",
                                       "P", "PN", "PR", "PRN", "PC", "PCN", "PCR", "ALL"};
 static const char *const L_MIXFM[] = {"FM", "MIX"};
-static const char *const L_FX[] = {"OFF", "DRIVE", "RING", "COMP", "DELAY", "PHASER", "FLANGER", "CHORUS"};
+static const char *const L_FX[NFX_LIVE] = {"OFF", FX_DRIVE_ON ? "DRIVE" : "OFF", "RING", "COMP", "DELAY", "PHASER", "FLANGER",
+#if FX_CHORUS_ON
+                                           "CHORUS"
+#endif
+};
 static const char *const L_DIST[] = {"TUBE", "FOLD", "CLIP"};
 static const char *const L_RATIO[] = {"1:1", "2:1", "3:1", "4:1", "6:1", "8:1"};
 static const char *const L_DELAY[] = {"MONO", "PING PONG", "TAPE", "TAPE PP", "OFF"};   /* (21: TAPE's; 1.0: OFF, the
@@ -87,7 +91,7 @@ _Static_assert(sizeof L_MODEL / sizeof L_MODEL[0] == NMODEL, "rings.c: the MODEL
 static const char *const L_BITS[] = {"OFF", "15", "14", "13", "12", "11", "10", "9", "8", "7", "6", "5", "4", "3",
                                      "2", "1"};
 static const char *const L_LFOMODE[] = {"TRIG", "HOLD", "ONE", "HALF"};   /* (0.13: voices.c LM_*) */
-static const char *const L_INS[] = {"OFF", "PHASER", "FLANGER", "CHORUS", "TREMOLO", "AUTOPAN", "SHIFTER", "RING"};
+static const char *const L_INS[] = {"OFF", "OFF", "OFF", "OFF", "OFF", "OFF", "SHIFTER", "RING"};   /* (1.0: 1-5 dropped) */
 _Static_assert(sizeof L_INS / sizeof L_INS[0] == NINS, "voices.c: the insert's types");
 enum { MENU_REV_MODEL = 27, MENU_SHAPE, MENU_XMODE, MENU_CHOKE, MENU_BITS, MENU_MODEL, MENU_LFOMODE, MENU_GATE,
        MENU_DPITCH, MENU_DIRT, MENU_CRATIO, MENU_CSRC, MENU_INS };   /* (Elixir's) */
@@ -226,17 +230,15 @@ static const char *pl_knob_name(uint32_t p, uint32_t which)
 /* 27a: the insert's B and C are its type's (long, category, short, 8 letters) */
 static const char *ins_knob_name(uint32_t p, uint32_t which)
 {
-    static const char *const B[3][4] = {{"Rate", "Insert", "inb", "Ins rate"}, {"Shift", "Insert", "inb", "InsShift"},
-                                        {"Pitch", "Insert", "inb", "InsPitch"}};
-    static const char *const C[4][4] = {{"Feedback", "Insert", "inc", "Ins fdbk"}, {"Depth", "Insert", "inc", "InsDepth"},
-                                        {"Shape", "Insert", "inc", "InsShape"}, {"AM", "Insert", "inc", "Ins AM"}};
+    static const char *const B[2][4] = {{"Shift", "Insert", "inb", "InsShift"}, {"Pitch", "Insert", "inb", "InsPitch"}};
+    static const char *const C[2][4] = {{"Feedback", "Insert", "inc", "Ins fdbk"}, {"AM", "Insert", "inc", "Ins AM"}};
     uint32_t t;
     if (p < PAR_INSB1 || p >= PAR_FLTX1)
         return 0;
     t = ins[(p - PAR_INS1) % 6u].type;
     if (p < PAR_INSC1)
-        return B[t == INS_SHIFT ? 1 : t == INS_RING ? 2 : 0][which];
-    return C[t == INS_CHORUS ? 1 : t == INS_TREMOLO || t == INS_AUTOPAN ? 2 : t == INS_RING ? 3 : 0][which];
+        return B[t == INS_RING][which];
+    return C[t == INS_RING][which];
 }
 static const char *flt_x_name(uint32_t p, uint32_t which)   /* 1.0: FILTER X on LADDER: BASS COMP */
 {
@@ -487,7 +489,7 @@ static void par_format(char *b, uint32_t p, uint32_t v, uint32_t max)
             par_hz(b, max);
             return;
         }
-        if (p >= PAR_INSC1 && (t == INS_PHASER || t == INS_FLANGER || t == INS_SHIFT)) {
+        if (p >= PAR_INSC1 && t == INS_SHIFT) {
             put_int(b + (d > 0), d);
             if (d > 0)
                 b[0] = '+';

@@ -290,6 +290,10 @@ static void kit_sanitize(uint8_t *p)
         if (p[PAR_TRANS1_WAVE + i] >= LXR_TRANS_N + 2u)  /* packed slot. Some LXR kits have 24) */
             p[PAR_TRANS1_WAVE + i] = 0;
     out_migrate(&p[PAR_AUDIO_OUT1], &p[kit_idx(PAR_FX_SEND1)]);
+    if (p[PAR_FX_TYPE] != FX_DELAY && !fx_live(p[PAR_FX_TYPE]))   /* (1.0: CHORUS, DRIVE set aside: OFF. DELAY: below) */
+        p[PAR_FX_TYPE] = FX_OFF;
+    for (i = 0; i < 6u; i++)                         /* (1.0: the dropped inserts: OFF) */
+        p[kit_idx(PAR_INS1 + i)] = (uint8_t)ins_live(p[kit_idx(PAR_INS1 + i)]);
     dly_migrate(p, p[kit_idx(PAR_DSYNC)], &p[kit_idx(PAR_L2TGT1)]);
     for (i = 0; i < 6u; i++)                         /* (24: SN-HH have the LXR's engine and MICRO's types. 0.24: */
         p[kit_idx(PAR_MODEL1 + i)] = (uint8_t)model_pick(i, p[kit_idx(PAR_MODEL1 + i)]);   /* P WTABLE, not built in,

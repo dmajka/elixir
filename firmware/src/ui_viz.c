@@ -1285,11 +1285,10 @@ static void viz_shape(void)
     vz_trace(VX0, VN, VMID, T_THEME, vz_fill());
 }
 
-/* INSERT FX: what the type does: the notches (PHASER, FLANGER), the voices (CHORUS), the level (TREMOLO), the sides
- * (AUTOPAN), the partials moved (SHIFTER), a wave times a sine (RING) */
+/* INSERT FX: what the type does: the partials moved (SHIFTER), a wave times a sine (RING) */
 static void viz_insert(void)
 {
-    uint32_t ty = sv(S_INSERT, 0, 0), a = sv(S_INSERT, 0, 1), pb = sv(S_INSERT, 0, 2), pc = sv(S_INSERT, 0, 3), i;
+    uint32_t ty = ins_live(sv(S_INSERT, 0, 0)), a = sv(S_INSERT, 0, 1), pb = sv(S_INSERT, 0, 2), pc = sv(S_INSERT, 0, 3), i;
     char b[40];
     put_str(b, ty < NINS ? L_INS[ty] : "", sizeof b);
     vz_panel(ty ? b : "NO INSERT: THE VOICE AS IT IS");
@@ -1300,58 +1299,6 @@ static void viz_insert(void)
         return;
     }
     switch (ty) {
-    case INS_PHASER: case INS_FLANGER: {             /* (notches: 4 spread, or a comb; feedback sharpens them) */
-        uint32_t k;
-        for (k = 0; k < 3u; k++) {                   /* (three moments of the sweep: the rate's spread) */
-            uint32_t off = k * (8u + pb / 4u);
-            for (i = 0; i < VN; i++) {
-                uint32_t ph = (i + off) * (0x80000000u / VN) * (ty == INS_PHASER ? 2u : 9u);
-                int32_t c = vz_sin(ph), dip = (32767 - iabs(c)) >> 7;   /* (0 .. 255 at the notch) */
-                dip = (int32_t)(((int64_t)dip * dip * dip) >> 16) * (int32_t)a / 127;
-                dip = dip * (40 + (ty == INS_PHASER ? iabs((int32_t)pc - 64) * 2 : (int32_t)pc)) / 167;
-                vz_y[i] = (int16_t)((VY0 + 8) * 16 + dip * 8);
-            }
-            if (k == 0u)
-                vz_trace(VX0, VN, VY0 + 8, T_THEME, vz_bg());
-            else
-                for (i = 0; i < VN; i++)
-                    cv_pset(VX0 + (int32_t)i, vz_y[i] >> 4, ux_mix(vz_bg(), T_THEME, 45 - (int32_t)k * 15));
-        }
-        cv_text(VX0, VY1 - 12, &AF_S, "LOWS", T_MID);
-        cv_text_r(VX1, VY1 - 12, &AF_S, "HIGHS", T_MID, vz_bg());
-        return;
-    }
-    case INS_CHORUS: {                               /* (two copies, detuned by the depth) */
-        uint32_t k;
-        vz_hguide(VMID, vz_faint());
-        for (k = 0; k < 3u; k++) {
-            int32_t det = ((int32_t)k - 1) * (int32_t)pc * (int32_t)a / 900;
-            for (i = 0; i < VN; i++)
-                vz_y[i] = vz_yq15(vz_sin(i * (0x80000000u / VN) * 5u + (uint32_t)(det * (int32_t)i * 600000)), VMID, 26);
-            if (k == 1u)
-                vz_trace(VX0, VN, VMID, T_THEME, vz_bg());
-            else
-                for (i = 0; i < VN; i++)
-                    cv_pset(VX0 + (int32_t)i, vz_y[i] >> 4, ux_mix(vz_bg(), T_THEME, 45));
-        }
-        return;
-    }
-    case INS_TREMOLO: case INS_AUTOPAN: {            /* (the level by its LFO: rate, depth a, sine to square) */
-        uint32_t cyc = 1u + pb / 24u, side;
-        for (side = 0; side < (ty == INS_AUTOPAN ? 2u : 1u); side++) {
-            int32_t mid = ty == INS_AUTOPAN ? (side ? 82 : 42) : VMID, hh = ty == INS_AUTOPAN ? 14 : 30;
-            for (i = 0; i < VN; i++) {
-                int32_t l = ins_shape(i * (0xFFFFFFFFu / VN) * cyc + (side ? 0x80000000u : 0u), pc);   /* Q15 */
-                int32_t gn = 32768 - (int32_t)(((int64_t)(32768 - l) / 2) * (int32_t)a / 127);
-                int32_t w = vz_sin(i * (0xFFFFFFFFu / VN) * 9u);
-                vz_y[i] = vz_yq15((int32_t)(((int64_t)w * gn) >> 15), mid, hh);
-            }
-            vz_trace(VX0, VN, mid, T_THEME, vz_fill());
-            if (ty == INS_AUTOPAN)
-                cv_text(VX0, mid - 6, &AF_S, side ? "R" : "L", T_MID);
-        }
-        return;
-    }
     case INS_SHIFT: {                                /* (the partials, and where they move: +- 500 Hz) */
         int32_t sh = ((int32_t)pb - 64) * 3;
         for (i = 1; i <= 6u; i++) {
@@ -2057,7 +2004,7 @@ static void vz_comp_curve(int32_t thr_db, int32_t ratio_x10, int32_t gain_db, in
 }
 static void viz_fxbus(void)
 {
-    uint32_t ty = par[PAR_FX_TYPE] < NFX ? par[PAR_FX_TYPE] : 0u, i;
+    uint32_t ty = fx_live(par[PAR_FX_TYPE]), i;
     char b[40];
     switch (ty) {
     case FX_DRIVE:
@@ -2104,6 +2051,7 @@ static void viz_fxbus(void)
         }
         break;
     }
+#if FX_CHORUS_ON
     case FX_CHORUS: {                                /* (1.0: the voices drifting about the dry, their lows cut) */
         uint32_t k;
         vz_panel("CHORUS: VOICES DRIFTING");
@@ -2121,6 +2069,7 @@ static void viz_fxbus(void)
         }
         break;
     }
+#endif
     default:
         vz_panel("THE FX BUS IS OFF");
         for (i = 0; i < VN; i++)

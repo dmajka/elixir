@@ -374,7 +374,7 @@ static void phase2(void)
     press(B_FX);
     fx_goto(FXPG_BUS);
     turn(EN_K1, -10);
-    turn(EN_K1, 4);                                  /* (1.0: past DELAY) */
+    turn(EN_K1, 3);                                  /* (1.0: past DELAY; Phase 10f: and DRIVE) */
     check(par[PAR_FX_TYPE] == FX_PHASER, "FX: PHASER");
     shot("fx-phaser");
     {
@@ -5156,7 +5156,7 @@ static void phase25b(void)
     par_set(PAR_L2RATE1 + 3, 77);
     par_set(PAR_L2SYNC1 + 3, 5);
     par_set(PAR_L2OFS1 + 3, 33);
-    par_set(PAR_INS1 + 3, INS_CHORUS);
+    par_set(PAR_INS1 + 3, INS_RING);
     par_set(PAR_INSC1 + 3, 99);
     run_ms(10);
     {
@@ -5167,14 +5167,14 @@ static void phase25b(void)
         rc |= proj_load(1);
         run_ms(10);
         check(rc == 0 && par[PAR_L2RATE1 + 3] == 77 && par[PAR_L2SYNC1 + 3] == 5 && par[PAR_L2OFS1 + 3] == 33 &&
-              par[PAR_INS1 + 3] == INS_CHORUS && par[PAR_INSC1 + 3] == 99 && ins[3].type == INS_CHORUS,
+              par[PAR_INS1 + 3] == INS_RING && par[PAR_INSC1 + 3] == 99 && ins[3].type == INS_RING,
               "a project keeps LFO 2 and the insert");
         rc = libkit_save(5, "L2KIT   ", 0);
         par_set(PAR_L2RATE1 + 3, 1);
         par_set(PAR_INS1 + 3, 0);
         rc |= libkit_load(5, 0);
         run_ms(10);
-        check(rc == 0 && par[PAR_L2RATE1 + 3] == 77 && par[PAR_INS1 + 3] == INS_CHORUS, "a library kit keeps them");
+        check(rc == 0 && par[PAR_L2RATE1 + 3] == 77 && par[PAR_INS1 + 3] == INS_RING, "a library kit keeps them");
         for (i = 0; i < KIT_LEN; i++)                /* a library kit from before them: their init values */
             kb[i] = par[kit_par(i)];
         rc = kl_write(KLK_KIT, 6, "OLD     ", kb, 398);
@@ -5213,20 +5213,16 @@ static void phase27a(void)
     check(ui.sect == S_FILTER, "again: back to FILTER");
     sound_open(S_INSERT, 0);
     run_ms(20);
-    turn(EN_K1, 2);
-    run_ms(20);
-    check(par[PAR_INS1 + 3] == INS_FLANGER && ins[3].type == INS_FLANGER, "K1: FLANGER");
-    par_format(b, PAR_INSC1 + 3, 64, sizeof b);
-    check(!strcmp(par_name(PAR_INSB1 + 3), "Rate") && !strcmp(par_name(PAR_INSC1 + 3), "Feedback") && !strcmp(b, "0"),
-          "FLANGER: Rate, Feedback (64: none)");
-    shot("insert-flanger");
-    turn(EN_K1, 4);
+    turn(EN_K1, 1);                                  /* (1.0: OFF, SHIFTER, RING: the dropped types passed) */
     run_ms(20);
     par_format(b, PAR_INSB1 + 3, 127, sizeof b);
-    check(par[PAR_INS1 + 3] == INS_SHIFT && !strcmp(par_name(PAR_INSB1 + 3), "Shift") && !strcmp(b, "+500Hz"),
-          "SHIFTER: Shift, +500Hz at 127");
+    check(par[PAR_INS1 + 3] == INS_SHIFT && ins[3].type == INS_SHIFT && !strcmp(par_name(PAR_INSB1 + 3), "Shift") &&
+          !strcmp(b, "+500Hz"), "K1 from OFF: SHIFTER (Shift, +500Hz at 127)");
     par_format(b, PAR_INSB1 + 3, 1, sizeof b);
     check(!strcmp(b, "-500Hz"), "..-500Hz at 1");
+    par_format(b, PAR_INSC1 + 3, 64, sizeof b);
+    check(!strcmp(par_name(PAR_INSC1 + 3), "Feedback") && !strcmp(b, "0"), "SHIFTER: Feedback (64: none)");
+    shot("insert-shifter");
     turn(EN_K1, 1);
     run_ms(20);
     par_format(b, PAR_INSB1 + 3, 64, sizeof b);
@@ -5234,24 +5230,35 @@ static void phase27a(void)
     check(par[PAR_INS1 + 3] == INS_RING && !strcmp(par_name(PAR_INSC1 + 3), "AM") && !strcmp(b, "230Hz"),
           "RING: Pitch in Hz, AM");
     shot("insert-ring");
-    turn(EN_K1, -4);
+    turn(EN_K1, 3);
     run_ms(20);
-    check(par[PAR_INS1 + 3] == INS_CHORUS && !strcmp(par_name(PAR_INSC1 + 3), "Depth"), "CHORUS: Depth");
-    /* the snare through the chorus at full amount: it sounds, and the lock list has the knobs */
+    check(par[PAR_INS1 + 3] == INS_RING, "RING the last");
+    turn(EN_K1, -1);
+    run_ms(20);
+    check(par[PAR_INS1 + 3] == INS_SHIFT, "back: SHIFTER");
+    /* the snare through the shifter at full amount: it sounds, and the lock list has the knobs */
     par_set(PAR_INSA1 + 3, 127);
     voice_trigger(3, 127, SEQ_DEFAULT_NOTE);
     for (i = 0; i < 40u; i++) {
         run_ms(1);
         pk = venv[3] > pk ? venv[3] : pk;
     }
-    check(pk > 1000, "SN through the CHORUS");
+    check(pk > 1000, "SN through the SHIFTER");
     check(par_lockable(PAR_INSB1 + 3) && par_lockable(PAR_INS1 + 3), "the insert's knobs lock");
+    turn(EN_K1, -1);
+    run_ms(20);
+    check(par[PAR_INS1 + 3] == INS_OFF, "back: OFF (past the dropped types)");
+    par_set(PAR_INS1 + 3, INS_TREMOLO);              /* (a lock or CC with a dropped type: OFF) */
+    run_ms(5);
+    par_format(b, PAR_INS1 + 3, INS_TREMOLO, sizeof b);
+    check(ins[3].type == INS_OFF && !strcmp(b, "OFF"), "a dropped type plays and reads OFF");
+    par_set(PAR_INS1 + 3, INS_SHIFT);
     /* morph: the type switches at 50%, AMOUNT through 0 when the types differ */
     for (i = 0; i < KIT_LEN; i++)
         morph_par[i] = par[kit_par(i)];
-    morph_par[kit_idx(PAR_INS1 + 3)] = INS_PHASER;
-    check(morph_mix(PAR_INS1 + 3, INS_CHORUS, INS_PHASER, 127) == INS_CHORUS &&
-          morph_mix(PAR_INS1 + 3, INS_CHORUS, INS_PHASER, 128) == INS_PHASER &&
+    morph_par[kit_idx(PAR_INS1 + 3)] = INS_RING;
+    check(morph_mix(PAR_INS1 + 3, INS_SHIFT, INS_RING, 127) == INS_SHIFT &&
+          morph_mix(PAR_INS1 + 3, INS_SHIFT, INS_RING, 128) == INS_RING &&
           morph_mix(PAR_INSA1 + 3, 127, 100, 128) == 0 && morph_mix(PAR_INSA1 + 3, 127, 100, 255) == 100 &&
           morph_mix(PAR_INSB1 + 3, 0, 100, 128) == morph_lerp(0, 100, 128), "morph: the type at 50%, AMOUNT through 0");
     /* the kit check: a type past the list is OFF */
@@ -6431,15 +6438,6 @@ static void phase30(void)
     shot("viz-shape-srate");
     viz_set(S_SHAPE, 0, 2, 127);
     viz_page(0, S_INSERT, 0);
-    viz_set(S_INSERT, 0, 0, INS_PHASER);
-    shot("viz-insert-phaser");
-    viz_set(S_INSERT, 0, 0, INS_TREMOLO);
-    viz_set(S_INSERT, 0, 3, 100);
-    shot("viz-insert-tremolo");
-    viz_set(S_INSERT, 0, 0, INS_AUTOPAN);
-    shot("viz-insert-autopan");
-    viz_set(S_INSERT, 0, 0, INS_CHORUS);
-    shot("viz-insert-chorus");
     viz_set(S_INSERT, 0, 0, INS_SHIFT);
     viz_set(S_INSERT, 0, 2, 90);
     shot("viz-insert-shifter");
@@ -6605,10 +6603,12 @@ static void phase30(void)
     run_ms(40);
     shot("viz-fx-send");
     fx_goto(FXPG_BUS);
+#if FX_DRIVE_ON
     vp_set(PAR_FX_TYPE, FX_DRIVE);
     vp_set(PAR_FX_P1, 90);
     run_ms(40);
     shot("viz-fx-drive");
+#endif
     vp_set(PAR_FX_TYPE, FX_COMP);
     vp_set(PAR_FX_P3, 60);
     vp_set(VP_FX_SUB, 3);
@@ -8411,9 +8411,11 @@ static void fxb_run(uint32_t type, double hz, int32_t amp, uint32_t blocks, doub
             fx_l[i] = fx_r[i] = (int16_t)(sin(2.0 * 3.14159265358979 * hz * n / FS) * amp);
             mix_l[i] = mix_r[i] = 0;
         }
+#if FX_CHORUS_ON
         if (type == FX_CHORUS)
             fx_chorus();
         else
+#endif
             fx_comp();
         fx.dw_last = fx.dw;
         if (k >= blocks - 100u) {
@@ -8431,6 +8433,7 @@ static void phase_100_fx2(void)
     printf("1.0: CHORUS, the cheaper COMP\n");
     eng_reset(0);
     fx.route = R_ST1;
+#if FX_CHORUS_ON
     fx.dw = fx.dw_last = 32768;                      /* (all wet: what the effect adds) */
     fx.type = fx.last_type = FX_CHORUS;
     fx.p[0] = 30000;
@@ -8459,6 +8462,7 @@ static void phase_100_fx2(void)
         dsum = fxb_rms(l2 + 20u * BLOCK, 80u * BLOCK);
         check(dsum > 1000.0, "CHORUS: the sides differ (stereo)");
     }
+#endif
     /* COMP: a loud tone held down, the gain without steps */
     fx.type = fx.last_type = FX_COMP;
     par_set(PAR_FX_TYPE, FX_COMP);
@@ -8474,7 +8478,44 @@ static void phase_100_fx2(void)
     printf("  COMP on a loud tone: %.0f of %.0f\n", a, 20000.0 / sqrt(2.0));
     ok = a < 20000.0 / sqrt(2.0) * 0.5;
     check(ok, "COMP (every 8 samples): still compresses");
+#if FX_CHORUS_ON
     check(NFX == 8u && FX_CHORUS == 7u && !strcmp(L_FX[FX_CHORUS], "CHORUS"), "FX: CHORUS the eighth type (kits' 0..6 as they were)");
+#else
+    check(NFX_LIVE == 7u && sizeof L_FX / sizeof L_FX[0] == 7u && vp_max(PAR_FX_TYPE) == FX_FLANGER,
+          "FX: CHORUS set aside (the knob stops at FLANGER)");
+    par_set(PAR_FX_TYPE, FX_CHORUS);                 /* (a CC or a kit from before: plays as OFF) */
+    snd_service();
+    check(fx.type == FX_OFF, "FX: CHORUS plays as OFF");
+    {
+        uint8_t k[KIT_LEN];
+        memset(k, 0, sizeof k);
+        k[PAR_FX_TYPE] = FX_CHORUS;
+        k[kit_idx(PAR_INS1 + 2)] = INS_PHASER;
+        k[kit_idx(PAR_INS1 + 3)] = INS_RING;
+        k[kit_idx(PAR_INS1 + 4)] = INS_AUTOPAN;
+        k[kit_idx(PAR_INS1 + 5)] = INS_SHIFT;
+        kit_sanitize(k);
+        check(k[PAR_FX_TYPE] == FX_OFF && k[kit_idx(PAR_INS1 + 2)] == INS_OFF && k[kit_idx(PAR_INS1 + 3)] == INS_RING &&
+              k[kit_idx(PAR_INS1 + 4)] == INS_OFF && k[kit_idx(PAR_INS1 + 5)] == INS_SHIFT,
+              "a kit's CHORUS and dropped inserts load OFF, SHIFTER and RING kept");
+    }
+    par_set(PAR_FX_TYPE, FX_OFF);
+#endif
+#if !FX_DRIVE_ON
+    par_set(PAR_FX_TYPE, FX_DRIVE);                  /* (Phase 10f: a CC or a kit from before: plays as OFF) */
+    snd_service();
+    check(fx.type == FX_OFF && !strcmp(L_FX[FX_DRIVE], "OFF"), "FX: DRIVE set aside, plays and reads OFF");
+    check(model_step(PAR_FX_TYPE, FX_OFF, FX_DRIVE) == FX_RING && model_step(PAR_FX_TYPE, FX_RING, FX_DRIVE) == FX_OFF,
+          "FX: the knob goes from OFF to RING and back");
+    {
+        uint8_t k[KIT_LEN];
+        memset(k, 0, sizeof k);
+        k[PAR_FX_TYPE] = FX_DRIVE;
+        kit_sanitize(k);
+        check(k[PAR_FX_TYPE] == FX_OFF, "a kit's DRIVE loads OFF");
+    }
+    par_set(PAR_FX_TYPE, FX_OFF);
+#endif
     fx.type = fx.last_type = FX_OFF;
     eng_reset(0);
 }
@@ -9192,8 +9233,8 @@ int main(int argc, char **argv)
     shot("config");
     press(B_FX);
     fx_goto(FXPG_BUS);
-    turn(EN_K1, 4);                                   /* (1.0: past DELAY, not a type now: PHASER) */
-    check(par[PAR_FX_TYPE] == FX_PHASER, "FX type: 4 detents from OFF to PHASER, past DELAY");
+    turn(EN_K1, 3);                                   /* (past DELAY and DRIVE, not types now: PHASER) */
+    check(par[PAR_FX_TYPE] == FX_PHASER, "FX type: 3 detents from OFF to PHASER, past DRIVE and DELAY");
     shot("fx");
     turn(EN_SELECT, 1);
     shot("fx-2");
@@ -9345,7 +9386,7 @@ int main(int argc, char **argv)
             fxbus_init();
             reverb_init();
             kit_init_par();
-            par[PAR_FX_TYPE] = FX_DRIVE;
+            par[PAR_FX_TYPE] = FX_RING;               /* (Phase 10f: DRIVE set aside) */
             par[PAR_FX_DRY_WET] = 60;
             par[PAR_FX_P1] = 90;
             if (k == 0)

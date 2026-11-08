@@ -131,4 +131,5 @@ static void engine_block(int32_t *out)
         quiet_blocks = pk > QUIET_LEVEL ? 0u : quiet_blocks + (quiet_blocks < 0xFFFFFFu);
     }
     LOAD_MARK(LD_MIX);                              /* (the master's: the mixer's) */
+    voices_end();                                   /* (1.0 Phase 10f: core 1's D1-D3 for the next block, waited for) */
 }

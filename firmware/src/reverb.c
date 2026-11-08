@@ -514,21 +514,23 @@ static __attribute__((noinline)) void rev_switch(const int32_t *in_, int32_t *we
     rv.rtype = (uint8_t)rt;
 }
 
-/* 18b: the reverb runs a block behind, on core 0 while the second core renders D1-D3 (voices.c fx_early): the
- * last block's send (rev_in, rev_fed: the mixer fills them again after this) through the model, the return into
- * rev_wl / rev_wr, which reverb_add puts into this block's mix. One block late (1.45 ms) is inaudible on a send. With
- * no send and a return below 4 for 255 blocks (0.37 s), it sleeps (the voices' CPU back); a send wakes it. A return
- * far past any level the models reach (a corrupted line) clears them and mutes the block (JIANT's range check) */
-static int32_t rev_wl[BLOCK] POOL, rev_wr[BLOCK] POOL;   /* the return, for the mix */
-static uint8_t rev_out;                             /* rev_wl / rev_wr hold a return */
+/* 18b: the reverb runs on the mixer's last send while the voices render (either core: voices.c rev_c1). 1.0 Phase 10f:
+ * the mixer a block behind the voices, the send (in, fed: voices.c rev_ib, the half the mixer filled last block)
+ * goes through the model into one half of the return (rev_ret[o]) while the mixer adds the other (rev_rs), last
+ * block's: two blocks late (2.9 ms), inaudible on a send. With no send and a return below 4 for 255 blocks (0.37 s),
+ * it sleeps (the voices' CPU back); a send wakes it. A return far past any level the models reach (a corrupted
+ * line) clears them and mutes the block (JIANT's range check) */
+static int32_t rev_ret[2][2][BLOCK] POOL;           /* the return, a pair, each left and right */
+static uint8_t rev_ok[2];                           /* rev_ret[o] holds a return */
+static uint8_t rev_rs;                              /* the half reverb_add takes; reverb_job fills the other */
 #define REV_WILD (1 << 22)
-static void reverb_process(void)
+static void reverb_process(const int32_t *in, uint32_t fed, uint32_t o)
 {
-    int32_t *wet = rev_wet;
+    int32_t *wet = rev_wet, *wl = rev_ret[o][0], *wr = rev_ret[o][1];
     uint32_t i, rt = rv.type < NREV ? rv.type : 0u;
     int32_t pk = 0;
-    rev_out = 0;
-    if (rev_fed || space_on)
+    rev_ok[o] = 0;
+    if (fed || space_on)
         rv.idle = 0;
     else if (rv.idle >= 255u)
         return;
@@ -536,14 +538,14 @@ static void reverb_process(void)
         wet[i] = 0;
     hl.side = 0;
     if (rt != rv.rtype)
-        rev_switch(rev_in, wet, BLOCK, rt);
+        rev_switch(in, wet, BLOCK, rt);
     else
-        rev_model(rev_in, wet, BLOCK);
+        rev_model(in, wet, BLOCK);
     for (i = 0; i < BLOCK; i++) {                   /* (LEVEL ramped from the last block's: no zipper as it moves) */
         int32_t w = wet[i], s = hl.side ? rev_side[i] : 0,
                 g = rv.lvl_last + (int32_t)(((rv.level - rv.lvl_last) * (int32_t)(i + 1u)) / (int32_t)BLOCK);
-        rev_wl[i] = mulq16(w + s, g << 1);
-        rev_wr[i] = mulq16(w - s, g << 1);
+        wl[i] = mulq16(w + s, g << 1);
+        wr[i] = mulq16(w - s, g << 1);
         pk |= iabs(w) | iabs(s);
     }
     rv.lvl_last = rv.level;
@@ -551,26 +553,42 @@ static void reverb_process(void)
         rev_clear();
         return;
     }
-    rev_out = 1;
-    if (!rev_fed && pk < 4)                          /* (silent: count towards sleep, 255 = asleep) */
+    rev_ok[o] = 1;
+    if (!fed && pk < 4)                              /* (silent: count towards sleep, 255 = asleep) */
         rv.idle = (uint8_t)(rv.idle + 1u);
-    else if (!rev_fed)
+    else if (!fed)
         rv.idle = 0;
+}
+static void reverb_job(void)                         /* (either core, beside the voices) */
+{
+    reverb_process(rev_ib[rev_in == rev_ib[0]], rev_fed_r, rev_rs ^ 1u);
+}
+#ifdef FX_NOW
+static void reverb_now(void)                         /* (host tests: this block's send, into the return added now) */
+{
+    reverb_process(rev_in, rev_fed, rev_rs);
+}
+#endif
+static void reverb_turn(void)                        /* (voices_turn) */
+{
+    rev_rs ^= 1u;
 }
 static void reverb_add(void)                         /* the return into the mix (after the mixer and SPACE's dip) */
 {
     uint32_t i;
-    if (!rev_out)
+    const int32_t *wl = rev_ret[rev_rs][0], *wr = rev_ret[rev_rs][1];
+    if (!rev_ok[rev_rs])
         return;
     for (i = 0; i < BLOCK; i++) {
-        mix_l[i] += rev_wl[i];
-        mix_r[i] += rev_wr[i];
+        mix_l[i] += wl[i];
+        mix_r[i] += wr[i];
     }
 }
 
 static void reverb_init(void)
 {
     rev_clear();
+    rev_ok[0] = rev_ok[1] = 0;
     rv.type = rv.rtype = 0;
     rv.size = 64;
     rv.damp = 48;
