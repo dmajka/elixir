@@ -120,7 +120,7 @@ def master():
     chain = [("MASTER COMP", ["Thresh, Ratio, Attack, Release; sidechain:", "the mix, or one track to duck the rest"],
               "FX"),
              ("MASTER DIRT", ["TAPE, TUBE, FUZZ, DIODE or FOLD; Amount"], "FX"),
-             ("DJ FILTER", ["Low-pass one way, high-pass the other;", "DJ reso; DJ type: LXR, ACID or MS20"], "FX"),
+             ("MASTER FILTER", ["Low-pass one way, high-pass the other;", "Filter reso; type: LXR, RING, ACID or MS20"], "FX"),
              ("PERFORM FX", ["COMB, CUTS, CRUSH, REVERSE, STUTTER,", "then TAPE STOP"], "PERF"),
              ("MASTER", ["The MASTER knob: the volume"], "")]
     X, BW, H, PITCH, y = 74, 332, 58, 76, 356
@@ -132,7 +132,7 @@ def master():
         y += PITCH
     b.append(box(X, y, BW, 44, "OUTPUT", ["the headphone and line outs"], cls="bx k", centre=True))
     return svg(W, y + 44 + 16, "Signal flow of the whole mix: the tracks' dry sound, the FX bus, the delay and the reverb into "
-               "the mix, then the master compressor, master dirt, DJ filter, perform effects and the MASTER knob", b)
+               "the mix, then the master compressor, master dirt, master filter, perform effects and the MASTER knob", b)
 
 
 if __name__ == "__main__":

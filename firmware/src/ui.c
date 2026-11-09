@@ -1138,13 +1138,13 @@ static const uint8_t GD_ORDER[NGD] = {GD_OFF, GD_DENSITY, GD_JITTER, GD_MCHANGE,
                                       GD_DIRT, GD_PUMP, GD_FILTER, GD_HP, GD_LP, GD_RTONE, GD_RWET, GD_MACRO1, GD_MACRO1 + 1,
                                       GD_MACRO1 + 2, GD_MACRO1 + 3};
 static const char *const GD_FULL[NGD][2] = {
-    {"", "Off"}, {"KIT", "Morph"}, {"DJ FILTER", "DJ filter"}, {"DJ FILTER", "Low-pass sweep"},
-    {"DJ FILTER", "High-pass sweep"}, {"DELAY", "Feedback push"}, {"MASTER FX", "Comb"}, {"MASTER FX", "Crush"},
+    {"", "Off"}, {"KIT", "Morph"}, {"MASTER FILTER", "Filter"}, {"MASTER FILTER", "Low-pass sweep"},
+    {"MASTER FILTER", "High-pass sweep"}, {"DELAY", "Feedback push"}, {"MASTER FX", "Comb"}, {"MASTER FX", "Crush"},
     {"SEQUENCER", "Jitter"}, {"MASTER FX", "Cuts"}, {"MASTER FX", "Pump"}, {"SEQUENCER", "Density"},
     {"SEQUENCER", "Transpose"}, {"SEQUENCER", "Melody change"}, {"SEQUENCER", "Melody spread"},
     {"DELAY", "Delay feedback"}, {"DELAY", "Delay time"}, {"REVERB", "Reverb sends"}, {"MACROS", "Macro 1"},
     {"MACROS", "Macro 2"}, {"MACROS", "Macro 3"}, {"MACROS", "Macro 4"}, {"SEQUENCER", "Stutter chance"},
-    {"MASTER FX", "Dirt amount"}, {"DELAY", "Delay band"}, {"DJ FILTER", "Ring wet"}, {"DJ FILTER", "Ring tone"}};
+    {"MASTER FX", "Dirt amount"}, {"DELAY", "Delay band"}, {"MASTER FILTER", "Ring wet"}, {"MASTER FILTER", "Ring tone"}};
 _Static_assert(NMACRO == 4u && NGD == 27u, "GD_ORDER, GD_FULL: every destination");
 static int is_gl_dest(uint32_t p) { return p >= VP_GL && p <= VP_GL_LAST && (p - VP_GL) % NGLSET == 0u; }
 static uint32_t order_turn(const uint8_t *o, uint32_t c, uint32_t v, int32_t n)   /* (v n places on in order o) */

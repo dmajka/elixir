@@ -179,7 +179,7 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
         break;
     case M_FX: {
         static const char *const T[NFXPG] = {"REVERB", "FX BUS", "", "DELAY (1/2)", "DELAY (2/2)", "DELAY: TAPE",
-                                             "ROUTING", "DIRT", "DJ FILTER", "RING (2/2)", "MASTER COMP", "COMP: SIDECHAIN",
+                                             "ROUTING", "DIRT", "MASTER FILTER", "RING (2/2)", "MASTER COMP", "COMP: SIDECHAIN",
                                              "FX SEND (1/2)", "FX SEND (2/2)", "DELAY SEND (1/2)", "DELAY SEND (2/2)",
                                              "REVERB SEND (1/2)", "REVERB SEND (2/2)"};
         uint32_t g = fx_page();
@@ -1980,7 +1980,7 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     }
     case VP_TRACK_VOL: put_str(b, "Volume", n); return;
     case VP_MASTER: put_str(b, "Master", n); return;
-    case VP_DJ: put_str(b, ui.mode == M_FX ? "Filt" : "DJ filter", n); return;   /* (FX: its page names it) */
+    case VP_DJ: put_str(b, ui.mode == M_FX ? "Filt" : "Mst filter", n); return;   /* (FX: its page names it) */
     case VP_COND: put_str(b, "Condition", n); return;
     case VP_RAT_N: put_str(b, "Hits", n); return;
     case VP_RAT_RATE: put_str(b, shown_pat()->rat[ui.track][ui.step & 63u] & RAT_BOUNCE ? "Curve" : "Rate", n); return;
