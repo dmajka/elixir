@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 796" width="480" height="796" role="img" aria-label="Signal flow of the whole mix: the tracks&#x27; dry sound, the FX bus, the delay and the reverb into the mix, then the master compressor, master dirt, DJ filter, perform effects and the MASTER knob">
-<title>Signal flow of the whole mix: the tracks&#x27; dry sound, the FX bus, the delay and the reverb into the mix, then the master compressor, master dirt, DJ filter, perform effects and the MASTER knob</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 796" width="480" height="796" role="img" aria-label="Signal flow of the whole mix: the tracks&#x27; dry sound, the FX bus, the delay and the reverb into the mix, then the master compressor, master dirt, master filter, perform effects and the MASTER knob">
+<title>Signal flow of the whole mix: the tracks&#x27; dry sound, the FX bus, the delay and the reverb into the mix, then the master compressor, master dirt, master filter, perform effects and the MASTER knob</title>
 <style>
 .bx { fill: #fcf8ef; stroke: #cdbb98; stroke-width: 1.2; }
 .bx.k { fill: #f3e6cb; }
@@ -38,7 +38,7 @@
 <path class="a" d="M240.0 414 V431" marker-end="url(#ah)"/>
 <rect class="bx" x="74" y="432" width="332" height="58" rx="7"/><text class="t" x="86" y="452">MASTER DIRT</text><text class="d" x="86" y="469">TAPE, TUBE, FUZZ, DIODE or FOLD; Amount</text><text class="p" x="396" y="452">FX</text>
 <path class="a" d="M240.0 490 V507" marker-end="url(#ah)"/>
-<rect class="bx" x="74" y="508" width="332" height="58" rx="7"/><text class="t" x="86" y="528">DJ FILTER</text><text class="d" x="86" y="545">Low-pass one way, high-pass the other;</text><text class="d" x="86" y="560">DJ reso; DJ type: LXR, ACID or MS20</text><text class="p" x="396" y="528">FX</text>
+<rect class="bx" x="74" y="508" width="332" height="58" rx="7"/><text class="t" x="86" y="528">MASTER FILTER</text><text class="d" x="86" y="545">Low-pass one way, high-pass the other;</text><text class="d" x="86" y="560">Filter reso; type: LXR, RING, ACID or MS20</text><text class="p" x="396" y="528">FX</text>
 <path class="a" d="M240.0 566 V583" marker-end="url(#ah)"/>
 <rect class="bx" x="74" y="584" width="332" height="58" rx="7"/><text class="t" x="86" y="604">PERFORM FX</text><text class="d" x="86" y="621">COMB, CUTS, CRUSH, REVERSE, STUTTER,</text><text class="d" x="86" y="636">then TAPE STOP</text><text class="p" x="396" y="604">PERF</text>
 <path class="a" d="M240.0 642 V659" marker-end="url(#ah)"/>

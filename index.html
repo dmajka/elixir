@@ -98,6 +98,10 @@
   .feature:nth-child(odd) { grid-template-columns: 1fr 300px; }
   .feature:nth-child(odd) .screen { order: 2; }
   .feature h3 { font-size: 22px; margin-bottom: 10px; }
+  .feature .ml { display: inline-flex; vertical-align: middle; margin-left: .35em; padding: 2px; border-radius: 4px;
+                 color: var(--dim); opacity: .4; transition: opacity .15s; }
+  .feature .ml:hover, .feature .ml:focus-visible { opacity: .9; }
+  .feature .ml svg { width: 15px; height: 15px; }
   .feature p { color: var(--dim); max-width: 36em; }
   .feature .tag { font-size: 13px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase;
                   color: var(--accent); margin: 0 0 6px; }
@@ -170,7 +174,7 @@
         <a class="btn alt" href="install/">Install on your FM-1</a>
         <a class="btn alt" href="manual/">Read the manual</a>
       </div>
-      <p class="meta">Version 1.0, released November 9, 2026 · <a href="#updates">what's new</a></p>
+      <p class="meta">Version 1.0.1, released November 9, 2026 · <a href="#updates">what's new</a></p>
       <div class="support">
         <p>Elixir is free, made by one person in my spare time. If it makes your FM-1 more fun:</p>
         <a class="btn sm kofi" href="https://ko-fi.com/ghosttropic" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13v5a6 6 0 0 1-6 6H10a6 6 0 0 1-6-6z"/><path d="M17 9h1.5a2.5 2.5 0 0 1 0 5H17"/><path d="M8 3v2M12 3v2"/></svg>Tip me on Ko-fi</a>
@@ -184,7 +188,7 @@
         <img src="shots/wander.png" width="240" height="240" alt="WANDER: the wizard walking up a mountain road" data-cap="WANDER: the beat sets out on a journey">
         <img src="shots/rain.png" width="240" height="240" alt="The MODEL page: RAIN" data-cap="RAIN: grains falling on tuned bells">
         <img src="shots/delay.png" width="240" height="240" alt="The DELAY page: ping-pong echoes" data-cap="The ping-pong delay, its echoes drawn">
-        <img src="shots/ring.png" width="240" height="240" alt="The DJ FILTER page on RING" data-cap="RING: the whole beat rings in a chord">
+        <img src="shots/ring.png" width="240" height="240" alt="The MASTER FILTER page on RING" data-cap="RING: the whole beat rings in a chord">
         <img src="shots/perform.png" width="240" height="240" alt="PERFORM 2: the performance keys" data-cap="PERFORM: the keys become effects">
         <img src="shots/ensemble.png" width="240" height="240" alt="The MODEL page: ENSEMBLE" data-cap="ENSEMBLE: eight stacked sines">
         <div class="mascot" aria-hidden="true"><svg class="pixel" viewBox="0 0 22 18" aria-hidden="true"><path class="px-s" d="M5 0h1v1h-1zM19 1h1v1h-1zM18 2h3v1h-3zM19 3h1v1h-1zM1 5h1v1h-1zM0 6h3v1h-3zM1 7h1v1h-1zM21 11h1v1h-1z"/><path class="px-c" d="M9 0h4v1h-4zM9 1h4v1h-4z"/><path class="px-o" d="M8 2h6v1h-6zM9 3h1v1h-1zM12 3h1v1h-1zM9 4h1v1h-1zM12 4h1v1h-1zM9 5h1v1h-1zM12 5h1v1h-1zM8 6h1v1h-1zM13 6h1v1h-1zM7 7h1v1h-1zM14 7h1v1h-1zM6 8h1v1h-1zM15 8h1v1h-1zM5 9h1v1h-1zM16 9h1v1h-1zM4 10h1v1h-1zM17 10h1v1h-1zM4 11h1v1h-1zM17 11h1v1h-1zM4 12h1v1h-1zM17 12h1v1h-1zM4 13h1v1h-1zM17 13h1v1h-1zM4 14h1v1h-1zM17 14h1v1h-1zM5 15h1v1h-1zM16 15h1v1h-1zM6 16h1v1h-1zM15 16h1v1h-1zM7 17h8v1h-8z"/><path class="px-h" d="M10 3h1v1h-1zM10 4h1v1h-1zM7 10h1v1h-1zM6 11h1v1h-1zM6 12h1v1h-1zM6 13h1v1h-1z"/><path class="px-g" d="M11 3h1v1h-1zM11 4h1v1h-1zM10 5h2v1h-2zM9 6h4v1h-4zM8 7h6v1h-6zM7 8h8v1h-8z"/><path class="px-L" d="M6 9h10v1h-10zM14 11h1v1h-1zM11 13h1v1h-1zM15 14h1v1h-1z"/><path class="px-l" d="M5 10h2v1h-2zM8 10h9v1h-9zM5 11h1v1h-1zM7 11h7v1h-7zM15 11h2v1h-2zM5 12h1v1h-1zM7 12h10v1h-10zM5 13h1v1h-1zM7 13h4v1h-4zM12 13h5v1h-5zM5 14h10v1h-10zM16 14h1v1h-1zM6 15h1v1h-1z"/><path class="px-d" d="M7 15h9v1h-9zM7 16h8v1h-8z"/></svg></div>
@@ -252,7 +256,7 @@
           <li>Delay: mono, ping-pong, tape (wobble and glitches) or granular, with a dub feedback howl</li>
           <li>Four reverbs: room, spring, hall and Clouds' plate</li>
           <li>Phaser, flanger, frequency shifter, ring mod or compressor on the bus</li>
-          <li>Master saturation, a sidechain compressor and a DJ filter</li>
+          <li>Master saturation, a sidechain compressor and a master filter</li>
         </ul></div>
       <div class="card fcard"><h3><i></i>Sequencing</h3>
         <p class="say">An Elektron-style step sequencer with a few tricks of its own.</p>
@@ -341,7 +345,7 @@
       <figure class="screen"><img src="shots/cloud.png" alt="The MODEL page: CLOUD, a cloud of grains, with Scatter, Size and Density" width="240" height="240" loading="lazy"></figure>
       <div>
         <p class="tag">Sound engines</p>
-        <h3>Swap a drum's engine</h3>
+        <h3>Swap a drum's engine<a class="ml" href="manual/#models-rings-and-plaits-drum-13-experimental" aria-label="Read more in the manual" title="In the manual"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M6.8 9.2a3 3 0 0 0 4.2 0l2.2-2.2a3 3 0 0 0-4.2-4.2l-1 1M9.2 6.8a3 3 0 0 0-4.2 0L2.8 9a3 3 0 0 0 4.2 4.2l1-1"/></svg></a></h3>
         <p>Every track can trade its LXR-02 voice for something else. On the three drum tracks that includes
           Mutable Instruments' Rings and Plaits (struck bells and strings, FM, chords, even speech), two granular
           voices and an eight-sine drone. Any track can play colored noise or tiny glitchy clicks. Every engine
@@ -350,10 +354,10 @@
     </div>
 
     <div class="feature">
-      <figure class="screen"><img src="shots/ring.png" alt="The DJ FILTER page on RING: eight bands tuned to a D major chord" width="240" height="240" loading="lazy"></figure>
+      <figure class="screen"><img src="shots/ring.png" alt="The MASTER FILTER page on RING: eight bands tuned to a D major chord" width="240" height="240" loading="lazy"></figure>
       <div>
         <p class="tag">Effects</p>
-        <h3>A filter that rings in key</h3>
+        <h3>A filter that rings in key<a class="ml" href="manual/#the-master-filter-and-the-global-character-filter-from-10" aria-label="Read more in the manual" title="In the manual"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M6.8 9.2a3 3 0 0 0 4.2 0l2.2-2.2a3 3 0 0 0-4.2-4.2l-1 1M9.2 6.8a3 3 0 0 0-4.2 0L2.8 9a3 3 0 0 0 4.2 4.2l1-1"/></svg></a></h3>
         <p>Switch the master filter to RING and the whole beat rings through eight resonators tuned to a chord: major,
           minor, fifths, octaves, a pentatonic and more. The kick and snare start to sing, hats turn into shimmering
           tones, and sweeping the knob glides through the chord in tune. Short decays give a woody knock; long ones a
@@ -366,10 +370,10 @@
       <figure class="screen"><img src="shots/perform.png" alt="The PERFORM 2 page: keys for drill, cuts, pump, comb, crush and reverse" width="240" height="240" loading="lazy"></figure>
       <div>
         <p class="tag">Performance</p>
-        <h3>Made for playing live</h3>
+        <h3>Made for playing live<a class="ml" href="manual/#13-performance-mode-perf" aria-label="Read more in the manual" title="In the manual"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M6.8 9.2a3 3 0 0 0 4.2 0l2.2-2.2a3 3 0 0 0-4.2-4.2l-1 1M9.2 6.8a3 3 0 0 0-4.2 0L2.8 9a3 3 0 0 0 4.2 4.2l1-1"/></svg></a></h3>
         <p>Press PERF and the sixteen white keys become effects you hold down: rolls, fills, beat repeat, delay
           freeze, reverb throws, tape stop and filter sweeps, and a second bank with drill, half time, cuts, pump,
-          crush and reverse. Let go and the beat is back as it was. The knobs carry a DJ filter, four macros and a
+          crush and reverse. Let go and the beat is back as it was. The knobs carry a master filter, four macros and a
           mixer.</p>
       </div>
     </div>
@@ -378,7 +382,7 @@
       <figure class="screen"><img src="shots/spells.png" alt="SPELLS: the wizard, Whispering Motes cast on all seven tracks, the twelve-sided die showing 8" width="240" height="240" loading="lazy"></figure>
       <div>
         <p class="tag">Randomizing</p>
-        <h3>Spells: randomizing with a sense of direction</h3>
+        <h3>Spells: randomizing with a sense of direction<a class="ml" href="manual/#spells-from-019" aria-label="Read more in the manual" title="In the manual"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M6.8 9.2a3 3 0 0 0 4.2 0l2.2-2.2a3 3 0 0 0-4.2-4.2l-1 1M9.2 6.8a3 3 0 0 0-4.2 0L2.8 9a3 3 0 0 0 4.2 4.2l1-1"/></svg></a></h3>
         <p>Plain randomizing tends to give you mush. A spell is a randomizer with a goal: Poltergeist makes metallic
           rattles, Skeleton strips a groove back to its bones, Haunted Dub darkens everything and adds echoes. Choose
           which tracks to touch and whether it may change the sound, the steps or both, then cast. Don't like it?
@@ -390,7 +394,7 @@
       <figure class="screen"><img src="shots/wander.png" alt="WANDER: The Spire, the wizard walking up the mountain road from his cottage, chapter Foothills, bar 6 of 32" width="240" height="240" loading="lazy"></figure>
       <div>
         <p class="tag">Generative</p>
-        <h3>Wander: a beat that slowly goes somewhere</h3>
+        <h3>Wander: a beat that slowly goes somewhere<a class="ml" href="manual/#wander-from-023" aria-label="Read more in the manual" title="In the manual"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M6.8 9.2a3 3 0 0 0 4.2 0l2.2-2.2a3 3 0 0 0-4.2-4.2l-1 1M9.2 6.8a3 3 0 0 0-4.2 0L2.8 9a3 3 0 0 0 4.2 4.2l1-1"/></svg></a></h3>
         <p>Pick a mood (Elixir calls them quests) and press go. Over the next few minutes the pattern changes a
           little at a time: one track gets darker, another wetter, hits thin out or fill in, new figures appear that
           sound like they belong. It's made for long jams and ambient sets. Press one button and it walks back home;
@@ -402,7 +406,7 @@
       <figure class="screen"><img src="shots/grids.png" alt="The GRIDS MAP page over a pattern of seven tracks" width="240" height="240" loading="lazy"></figure>
       <div>
         <p class="tag">Sequencing</p>
-        <h3>Parts that write themselves, if you want</h3>
+        <h3>Parts that write themselves, if you want<a class="ml" href="manual/#generators" aria-label="Read more in the manual" title="In the manual"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M6.8 9.2a3 3 0 0 0 4.2 0l2.2-2.2a3 3 0 0 0-4.2-4.2l-1 1M9.2 6.8a3 3 0 0 0-4.2 0L2.8 9a3 3 0 0 0 4.2 4.2l1-1"/></svg></a></h3>
         <p>Give any track a generator, such as a Euclidean rhythm, Mutable Instruments' Grids drum map or a Turing
           machine, and it plays a live part you can steer with the knobs. When you hear something you like, commit it
           to the steps. Give each track its own length, speed and direction and a simple pattern turns into
@@ -418,7 +422,7 @@
       <figure class="screen"><img src="shots/links.png" alt="The LINKS page: when D1 hits, CH chance −60% on the next step" width="240" height="240" loading="lazy"></figure>
       <div>
         <p class="tag">Modulation</p>
-        <h3>Tracks that react to each other</h3>
+        <h3>Tracks that react to each other<a class="ml" href="manual/#links-track-coupling" aria-label="Read more in the manual" title="In the manual"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M6.8 9.2a3 3 0 0 0 4.2 0l2.2-2.2a3 3 0 0 0-4.2-4.2l-1 1M9.2 6.8a3 3 0 0 0-4.2 0L2.8 9a3 3 0 0 0 4.2 4.2l1-1"/></svg></a></h3>
         <p>Links read like a sentence: <em>when D1 hits, CH chance −60%, on the next step.</em> The kick ducks the
           hats, the open hat answers only when the closed hat rests, a snare hit makes the next hat rattle. A few
           links turn a loop into something that feels played.</p>
@@ -471,7 +475,7 @@
           undone.</p></div>
       <div class="card"><h3>Mix, effects and settings</h3>
         <dl>
-          <dt><span class="cap">FX</span></dt><dd><b>Reverb</b>, effects bus, delay, routing, dirt, DJ filter, compressor and
+          <dt><span class="cap">FX</span></dt><dd><b>Reverb</b>, effects bus, delay, routing, dirt, master filter, compressor and
             the sends, one page after another</dd>
           <dt><span class="cap">GLO</span></dt><dd><b>Mixer</b> → settings (MIDI, USB audio, colors …)</dd>
           <dt><span class="cap">OCT−</span></dt><dd><b>SHIFT</b>: hold it and the screen lists what each key does with it</dd>
@@ -525,6 +529,13 @@
   <section class="band" id="updates">
     <div class="intro"><h2>Updates</h2><p>What each release added and fixed.</p></div>
     <div class="updates">
+      <div class="card"><h3>1.0.1<span>November 9, 2026</span></h3>
+        <ul>
+          <li>The DJ filter is now called the <b>master filter</b>, which says better what it does: the whole mix
+            through one filter, from a plain low-pass or high-pass to ACID, MS-20 and RING. Nothing else about it
+            has changed, and projects load as before.</li>
+        </ul>
+      </div>
       <div class="card"><h3>1.0<span>November 9, 2026</span></h3>
         <p>The biggest update yet: new sound engines, a rebuilt effects section, recording over USB, and a lot of
           small things that make Elixir easier to find your way around. Kits and projects from 0.25 load and
@@ -553,7 +564,7 @@
             self-oscillating whistle at a pitch you choose.</li>
           <li><b>Frequency shifter</b> on the effects bus: drums turn into gongs and bells, small shifts give an
             endless rising or falling phase.</li>
-          <li><b>The DJ filter has character types</b>: ACID, MS-20 and RING (eight resonant bands tuned to a chord,
+          <li><b>The master filter has character types</b>: ACID, MS-20 and RING (eight resonant bands tuned to a chord,
             so the whole beat rings in a key).</li>
           <li>A <b>master volume</b> after everything, on CC 124.</li>
         </ul>
@@ -631,7 +642,7 @@
           <li>35 KB more memory recovered for new features.</li>
           <li>The two processor cores now work side by side instead of waiting on each other, so more engines and
             effects fit at once. The output is 1.45 ms later as a whole.</li>
-          <li>The DJ filter, phaser, Rings and several Plaits engines are cheaper to run, with the same sound.</li>
+          <li>The master filter, phaser, Rings and several Plaits engines are cheaper to run, with the same sound.</li>
         </ul>
       </div>
     </div>
@@ -646,7 +657,7 @@
               its group (FILTER, Frequency; MOD EG / VELO, Velocity amount), as the MODEL page shows a model, and a global
               LFO's Dest shows its full name over the page for a few seconds while you turn it.</li>
             <li>The Dest knobs turn through their destinations in groups, in the order EDIT shows the pages (the signal
-              path), each group by name; the global LFOs' by sequencer, kit, delay, reverb, master FX, DJ filter and
+              path), each group by name; the global LFOs' by sequencer, kit, delay, reverb, master FX, master filter and
               macros. The velocity's destination follows the same order.</li>
             <li>One name for one knob: the track LFOs' DstParam (LFO 1) and Target (LFO 2) are now Dest, as on the
               global LFOs.</li>
@@ -659,7 +670,7 @@
               what the button sends as the mute (on mutes, off unmutes), so a Launch Control XL's pads in Toggle mode
               stay in step, and with the feedback looped back they light with the mutes. PRESS (the default, for momentary
               buttons) is as before: each press flips it.</li>
-            <li>DJ reso: the DJ filter's resonance, on the FX bus's DIRT page (KNOB 2) and the remote's GLOBAL CC 47.
+            <li>Filter reso: the master filter's resonance, on the FX bus's DIRT page (KNOB 2) and the remote's GLOBAL CC 47.
               At 0 the filter is as before; turned up it rings and screams as you sweep it. Saved with the project; no
               extra CPU.</li>
           </ul>
