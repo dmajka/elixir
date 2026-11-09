@@ -2464,6 +2464,113 @@ static void phase9_keys(void)
         check(ui.track == 3 && trig_count[3] == c3, "Audition NO: the key only selects");
         vp_set(VP_AUDITION, 1);
         check(!kset.caout, "Audition YES again");
+        {   /* 1.3: under REC (playing) a track key records its hit, a pad; CLEAR held erases as the steps play */
+            pattern_t *rp = &pat[sq.active], keep = *rp;
+            uint32_t i, n0 = 0, n1 = 0;
+            for (i = 0; i < 64u; i++)
+                main_set(rp, 4, i, 0);
+            press(B_PLAY);
+            press(B_REC);
+            run_ms(100);
+            black(4);
+            run_ms(10);
+            for (i = 0; i < 64u; i++)
+                n0 += main_on(rp, 4, i);
+            check(sq.rec && sq.running && ui.track == 4 && n0 == 1u, "REC: a track key records its hit (CY)");
+            hold(B_OCTDN);
+            hold(B_OCTUP);
+            check(sq.erase, "REC: SHIFT + OCT+ held: erasing");
+            run_ms(4500);
+            release(B_OCTUP);
+            release(B_OCTDN);
+            for (i = 0; i < 64u; i++)
+                n1 += main_on(rp, 4, i);
+            check(!sq.erase && n1 == 0u, "REC: erased as it played, stopped when let go");
+            press(B_REC);
+            press(B_PLAY);
+            black(4);
+            run_ms(10);
+            for (i = n0 = 0; i < 64u; i++)
+                n0 += main_on(rp, 4, i);
+            check(!sq.rec && n0 == 0u, "no REC: a track key isn't recorded");
+            *rp = keep;
+        }
+        {   /* 1.3: REC's Quantize OFF: a hit keeps how late or early it was, as its step's shift; not played twice */
+            pattern_t *rp = &pat[sq.active], keep = *rp;
+            uint32_t i, k, c, late, early, n;
+            for (i = 0; i < 64u; i++) {
+                main_set(rp, 4, i, 0);
+                rp->timing[4][i] = 7u << 4;
+            }
+            rp->len[4] = 16;
+            rp->groove = 0;
+            rp->ghum = 0;
+            check(P_RECOPT[1] == VP_RQUANT && vp_get(VP_RQUANT) == 1u, "REC options: KNOB 2 Quantize, ON at first");
+            vp_set(VP_RQUANT, 0);
+            press(B_PLAY);
+            press(B_REC);
+            for (k = 0; k < 4000u && !(sq.idx[4] == 2 && sq.tph[4] == 8u); k++)
+                run_ms(1);
+            c = trig_count[4];
+            key_note_post(4, tb_note(4), 100, KF_REC);  /* (a third of step 3 late) */
+            run_ms(4);
+            late = rp->timing[4][2] >> 4;
+            check(main_on(rp, 4, 2) && late >= 9u && late <= 11u, "Quantize OFF: a late hit, step 3 shifted late");
+            for (k = 0; k < 4000u && !(sq.idx[4] == 6 && sq.tph[4] == 20u); k++)
+                run_ms(1);
+            key_note_post(4, tb_note(4), 100, KF_REC);  /* (a sixth of a step before step 8) */
+            run_ms(4);
+            early = rp->timing[4][7] >> 4;
+            check(main_on(rp, 4, 7) && early >= 5u && early <= 6u, "Quantize OFF: an early hit, step 8 shifted early");
+            for (k = 0; k < 4000u && sq.idx[4] != 10; k++)
+                run_ms(1);
+            check(trig_count[4] == c + 2u, "Quantize OFF: each hit sounded once, not again from its step");
+            c = trig_count[4];
+            for (k = 0; k < 4000u && sq.idx[4] != 9; k++)  /* (round once more) */
+                run_ms(1);
+            n = trig_count[4] - c;
+            printf("  Quantize OFF: late shift %u, early %u, next pass %u hits\n", late, early, n);
+            check(n == 2u, "Quantize OFF: the next pass plays both");
+            vp_set(VP_RQUANT, 1);
+            check(!sq.rfree, "Quantize ON again");
+            press(B_REC);
+            press(B_PLAY);
+            *rp = keep;
+        }
+        {   /* 1.3: NUDGE: no generator, the GENERATOR page's KNOB 4 turns the track; OCT+ keeps it, leaving: back */
+            pattern_t *rp = &pat[sq.active], keep = *rp;
+            uint16_t q[4];
+            uint32_t i;
+            for (i = 0; i < 64u; i++)
+                main_set(rp, 4, i, 0);
+            rp->len[4] = 16;
+            rp->gen[4][0] = GEN_OFF;
+            main_set(rp, 4, 0, 1);
+            main_set(rp, 4, 5, 1);
+            rp->step[4][5].volume = 0x80u | 33u;
+            rp->timing[4][5] = 9u << 4;
+            black(4);
+            seq_goto(PG_GEN);
+            page_params(q);
+            check(q[3] == VP_NUDGE && vp_get(VP_NUDGE) == 16u, "NUDGE: no generator, KNOB 4 Nudge at 0");
+            turn(EN_K4, 2);
+            check(ui.nudge == 2 && main_on(rp, 4, 2) && main_on(rp, 4, 7) && !main_on(rp, 4, 0) && !main_on(rp, 4, 5) &&
+                  (rp->step[4][7].volume & 0x7Fu) == 33u && rp->timing[4][7] >> 4 == 9u,
+                  "NUDGE +2: the steps 2 later, each with what it has");
+            turn(EN_K4, -3);
+            check(ui.nudge == -1 && main_on(rp, 4, 15) && main_on(rp, 4, 4), "NUDGE -1: round the track's end");
+            press(B_OCTUP);
+            check(!ui.nudge && main_on(rp, 4, 15) && main_on(rp, 4, 4) && !ui.copy, "NUDGE: OCT+ keeps it");
+            turn(EN_K4, 3);
+            check(ui.nudge == 3 && main_on(rp, 4, 2) && main_on(rp, 4, 7), "NUDGE +3");
+            goto_mode(B_HOME, M_HOME);
+            check(!ui.nudge && main_on(rp, 4, 15) && main_on(rp, 4, 4) && !main_on(rp, 4, 2),
+                  "NUDGE: leaving without OCT+ puts it back");
+            *rp = keep;
+        }
+        {
+            check(P_STEP[0][3] == PAR_STEP_SHIFT, "STEP page: KNOB 4 Shift (1.3)");
+        }
         goto_mode(B_GLO, M_CONFIG);
         turn(EN_SELECT, (int32_t)CF_LOAD - 1 - (int32_t)ui.page);
         {

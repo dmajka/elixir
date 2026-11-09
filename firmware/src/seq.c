@@ -221,8 +221,10 @@ static struct {
     uint8_t muted, roll, roll_rate, last_on;
     uint8_t solo;                                /* 0.10: the soloed tracks (any: only they play; seq_mutes) */
     uint8_t rec, erase, lane;                    /* recording, erasing (SHIFT CLEAR while recording), automation lane */
+    uint8_t rfree;                               /* 1.3: REC's Quantize OFF: a hit keeps its timing (the step's shift) */
     int8_t armed_step, armed_track;              /* a step held while a knob turns: its lock */
-    int8_t skip[NTRACK];                         /* a note just recorded into the next step: not triggered again */
+    int8_t skip[NTRACK];                         /* a note just recorded into a step still to play: not again */
+    uint16_t skipc[NTRACK];                      /* 1.3: the skip's ticks left (a step that doesn't play: let go) */
     uint8_t rnd[NTRACK][3];                      /* probability draws: the previous, this and the next step */
     uint8_t sync_ext;                            /* MIDI sync (BPM at MIDI) */
     uint8_t mclk_n;                              /* ticks since the last MIDI clock out */
@@ -1827,6 +1829,8 @@ static void seq_flam(uint32_t mk)                   /* (1.0: mk, the tracks this
         int has_prv = 1;
         if (!(mk >> t & 1u))
             continue;
+        if (sq.skipc[t] && !--sq.skipc[t])           /* (1.3: a skip not met in two steps: gone) */
+            sq.skip[t] = -1;
         lo = sq.tph[t] * 24u / L;
         hi = (sq.tph[t] + 1u) * 24u / L;
         bits = hi > lo ? ((1u << (hi - lo)) - 1u) << (24u - hi) : 0u;
@@ -1854,10 +1858,6 @@ static void seq_flam(uint32_t mk)                   /* (1.0: mk, the tracks this
             hl[t] = nlp;
             hp[t] = 1;
         } else if (shift_flam(p, t, cur, POS_CUR, lp) & bits) {
-            if (sq.skip[t] == (int8_t)cur) {         /* recorded into this step a moment ago: it sounded already */
-                sq.skip[t] = -1;
-                continue;
-            }
             hs[t] = (uint8_t)cur;
             hl[t] = lp;
             hp[t] = 0;
@@ -1871,6 +1871,11 @@ static void seq_flam(uint32_t mk)                   /* (1.0: mk, the tracks this
                 if (!(((sq.gmidi | sq.tie) >> t) & 1u))   /* (19b: a length set: its own note-off) */
                     midi_out_note_off(t);
             }
+            continue;
+        }
+        if (sq.skip[t] == (int8_t)hs[t]) {          /* recorded into this step a moment ago: it sounded already */
+            sq.skip[t] = -1;
+            sq.skipc[t] = 0;
             continue;
         }
         hm |= 1u << t;
@@ -1928,6 +1933,47 @@ static void live_step_sync(const pattern_t *p, uint32_t t, uint32_t s)
     gpat.lhi[t][s] = p->lhi[t][s];
     gpat.cond[t][s] = p->cond[t][s];
     gpat.rat[t][s] = p->rat[t][s];
+}
+/* 1.3: NUDGE: track t's first len steps rotated n later (negative: earlier), each with all it has; in place */
+static void rot_rev(uint8_t *a, uint32_t sz, uint32_t i, uint32_t j)   /* (elements i .. j - 1 reversed) */
+{
+    uint32_t k;
+    while (i + 1u < j) {
+        j--;
+        for (k = 0; k < sz; k++) {
+            uint8_t x = a[i * sz + k];
+            a[i * sz + k] = a[j * sz + k];
+            a[j * sz + k] = x;
+        }
+        i++;
+    }
+}
+static void rot_el(uint8_t *a, uint32_t sz, uint32_t len, uint32_t n)
+{
+    rot_rev(a, sz, 0, len);
+    rot_rev(a, sz, 0, n);
+    rot_rev(a, sz, n, len);
+}
+static void trk_rotate(pattern_t *p, uint32_t t, int32_t n, uint32_t len)
+{
+    uint64_t m = 0, r, mask;
+    uint32_t k;
+    if (t >= NTRACK || !len || len > NUM_STEPS)
+        return;
+    n = (n % (int32_t)len + (int32_t)len) % (int32_t)len;
+    if (!n)
+        return;
+    rot_el((uint8_t *)p->step[t], sizeof p->step[t][0], len, (uint32_t)n);
+    rot_el(p->timing[t], 1, len, (uint32_t)n);
+    rot_el(p->lhi[t], 1, len, (uint32_t)n);
+    rot_el(p->cond[t], 1, len, (uint32_t)n);
+    rot_el(p->rat[t], 1, len, (uint32_t)n);
+    for (k = 0; k < len; k++)
+        m |= (uint64_t)main_on(p, t, k) << k;
+    mask = len >= 64u ? ~(uint64_t)0 : ((uint64_t)1 << len) - 1u;
+    r = ((m << n) | (m >> (len - (uint32_t)n))) & mask;
+    for (k = 0; k < len; k++)
+        main_set(p, t, k, (int)((r >> k) & 1u));
 }
 static void trk_copy(pattern_t *d, const pattern_t *s, uint32_t t)
 {
@@ -2539,29 +2585,48 @@ static void seq_ext_transport(uint32_t st)
 static void seq_add_note(uint32_t t, uint32_t vel, uint32_t note)
 {
     pattern_t *p;
-    uint32_t step, len, q;
+    uint32_t step, len, q, L, pos, lp;
+    int32_t o, g, f;
     if (!sq.running || !sq.rec || t >= NTRACK)
         return;
     p = &pat[sq.active];
     len = track_len(p, t);
     step = sq.idx[t] < 0 ? 0u : (uint32_t)sq.idx[t];
-    q = sq.tph[t] * 2u >= trk_ticks(t) ? step + 1u : step;
-    if (q >= len)
+    L = trk_ticks(t);
+    pos = sq.idx[t] < 0 ? 0u : sq.tph[t] ? sq.tph[t] : L;   /* (1.3: tph is the tick to come; 0: the step's end) */
+    q = sq.idx[t] >= 0 && pos * 2u >= L ? step + 1u : step;
+    o = (int32_t)(pos * 24u / L) - (q != step ? 24 : 0);   /* (now, in 24ths of step q from its start) */
+    lp = sq.loops[t];
+    if (q >= len) {
         q = 0;
+        lp++;
+    }
     if (q != step) {
         if (q == 0u && sq.active == sq.pending && sq.song_mode) {
             uint32_t n = seq_next_in_song(0);
             if (n < NUM_PATTERN)
                 p = &pat[n];
         }
-        sq.skip[t] = (int8_t)q;
     }
     p->step[t][q].note = note_keep(t, note);       /* (0.23-t7: as BASE plays it back) */
     p->step[t][q].volume = (uint8_t)(vel | STEP_ACTIVE_MASK);
     p->step[t][q].prob = (uint8_t)((p->step[t][q].prob & ~PROB_MASK) | 100u);   /* (19b: its length kept) */
+    g = groove_at(t, q, lp, 0);
+    if (sq.rfree) {                                  /* 1.3: Quantize OFF: how early or late, as the step's shift */
+        int32_t e = o - g;
+        e = e >= 0 ? (e + 1) / 3 : -((1 - e) / 3);   /* (eighths of a step, rounded: 3 24ths each) */
+        e = clamp32(e, -7, 7);
+        p->timing[t][q] = (uint8_t)((p->timing[t][q] & 0x0Fu) | (uint32_t)(e + 7) << 4);
+    }
     main_set(p, t, q, 1);
+    f = clamp32(((int32_t)(p->timing[t][q] >> 4) - 7) * 3 + g, -23, 23);   /* (where the step plays) */
+    if (f >= o) {                                    /* still to come: it sounded now, not again */
+        sq.skip[t] = (int8_t)q;
+        sq.skipc[t] = (uint16_t)(2u * L);
+    }
     if (p == &pat[sq.active] && gen_live(p, t)) {   /* (a generator's track: its live copy too) */
         gpat.step[t][q] = p->step[t][q];
+        gpat.timing[t][q] = p->timing[t][q];
         main_set(&gpat, t, q, 1);
     }
 }

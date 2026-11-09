@@ -210,7 +210,7 @@ static void proj_write_payload(void)
     pw_byte(sq.active);
     pw_byte(sq.song);
     pw_byte(sq.roll_rate);
-    pw_byte(sq.lane);
+    pw_byte((uint8_t)(sq.lane | sq.rfree << 1));   /* (1.3: bit 1, REC's Quantize OFF; before: 0) */
     for (k = 0; k < 3u * NTRACK; k++)               /* (0.10: unused, the Euclid settings before: now the pattern's) */
         pw_byte(0);
     pw_byte(NUM_KITS);
@@ -480,7 +480,11 @@ static int proj_read_payload(uint32_t ver)
     sq.pending = sq.active;
     sq.song = (uint8_t)(pr_byte() % NUM_SONGS);
     sq.roll_rate = (uint8_t)(pr_byte() % 14u);
-    sq.lane = (uint8_t)(pr_byte() & 1u);
+    {
+        uint8_t b = pr_byte();
+        sq.lane = (uint8_t)(b & 1u);
+        sq.rfree = (uint8_t)(b >> 1 & 1u);
+    }
     for (k = 0; k < 3u * NTRACK; k++)               /* (the Euclid settings before 0.10: the pattern's now) */
         (void)pr_byte();
     n = ver < 2u ? NUM_KITS : pr_byte();

@@ -268,13 +268,14 @@ static void draw_title(void)
     ovl_poll();
     ovl = ovl_on;
     blink = ovl && (fm1_ms / 250u) & 1u;
-    mo = !ovl && msg_on();
+    mo = !ovl && (sq.erase || msg_on());             /* (1.3: erasing under REC: said while held) */
     title_text(b, sizeof b, &pg, &np);
     s = sig_add(ui.mode, t);
     for (i = 0; b[i]; i++)                           /* (the text itself: a title that changes on its page) */
         s = sig_add(s, (uint8_t)b[i]);
     s = sig_add(s, pg | np << 8 | mo << 16 | ui.step << 20);
     s = sig_add(s, mo ? (uint32_t)ui.msg[0] | (uint32_t)ui.msg[2] << 8 | ui.msg_ms : 0u);
+    s = sig_add(s, sq.erase);
     s = sig_add(s, ovl | blink << 1 | (uint32_t)(uint8_t)ovl_why[14] << 8 | (uint32_t)(uint8_t)ovl_why[16] << 16);
     if (!region(R_TITLE, s))
         return;
@@ -284,7 +285,9 @@ static void draw_title(void)
     if (ovl) {                                       /* (flashing: red, then on red) */
         cv_rrect(31, 1, 206, 18, 4, blink ? T_REC : T_BG, T_BG);
         cv_text_fit(34, CAP_IN(S, 20), &AF_S, ovl_why, blink ? T_BG : T_REC, blink ? T_REC : T_BG, 200);
-    } else if (mo)
+    } else if (mo && sq.erase)                       /* 1.3: CLEAR held under REC: the track's steps going */
+        cv_text_fit(34, CAP_IN(S, 20), &AF_S, "ERASING AS IT PLAYS", T_REC, T_BG, 200);
+    else if (mo)
         cv_text_fit(34, CAP_IN(S, 20), &AF_S, ui.msg, T_ACCENT, T_BG, 200);
     else
         cv_text_fit(34, CAP_IN(S, 20), &AF_S, b, T_TEXT, T_BG, np > 8u ? 158 : 236 - 34 - (int32_t)np * 7 - 4);
@@ -1934,6 +1937,8 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_PMEM: put_str(b, "Last page", n); return;
     case VP_KBSLOTS: put_str(b, "Kits first", n); return;
     case VP_AUDITION: put_str(b, "Audition", n); return;
+    case VP_RQUANT: put_str(b, "Quantize", n); return;
+    case VP_NUDGE: put_str(b, "Nudge", n); return;
     case VP_GTAKES: put_str(b, "Global in", n); return;
     case VP_EH2: put_str(b, "Hits 2", n); return;
     case VP_ER2: put_str(b, "Rotate 2", n); return;
@@ -2484,6 +2489,15 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
     case VP_CAKIT: put_str(b, v ? "KIT ONLY" : "BOTH KITS", n); return;
     case VP_MEDIT: put_str(b, v == 1u ? "KIT ONLY" : v ? "BOTH KITS" : "SPLIT", n); return;   /* (1.0: SPLIT) */
     case VP_PMEM: case VP_AUDITION: put_str(b, v ? "YES" : "NO", n); return;
+    case VP_RQUANT: put_str(b, v ? "ON" : "OFF", n); return;
+    case VP_NUDGE:                                    /* (1.3: steps, + later) */
+        if (v > 16u) {
+            b[0] = '+';
+            put_int(b + 1, (int32_t)v - 16);
+        } else {
+            put_int(b, (int32_t)v - 16);
+        }
+        return;
     case VP_GL ... VP_GL_LAST:
         if (gls[(p - VP_GL) / NGLSET].wave == GW_FOLLOW) {   /* (1.0 Phase 11: FOLLOW's SOURCE, THRESHOLD, RELEASE) */
             uint32_t k = (p - VP_GL) % NGLSET;

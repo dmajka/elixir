@@ -173,7 +173,7 @@ A pattern has seven tracks of up to 64 steps (four bars of 16). Each track has i
 
 ### The grid (HOME)
 
-- **Select a track** with its black key (or ALGORITHM). From 1.2 the key also plays the track's voice once, at the keys' velocity, so you can tap the seven keys to hear the kit together. The hit isn't recorded. To turn it off, set CONFIG → BUTTONS & KITS → **Audition** to NO.
+- **Select a track** with its black key (or ALGORITHM). From 1.2 the key also plays the track's voice once, at the keys' velocity, so you can tap the seven keys to hear the kit together. Under REC, while playing, the hit is recorded (from 1.3): tap the keys like pads and watch the steps appear ([Recording live](#7-recording-live)). To turn it off, set CONFIG → BUTTONS & KITS → **Audition** to NO.
 - **Tap a white key** to turn that step on or off.
 - **Bar keys** (black 8–11) show bars 1–4. With FOLLOW on (CONFIG), the screen follows the playhead.
 - **Knobs:** tempo, shuffle, the track's length, the track's volume.
@@ -227,7 +227,7 @@ Press **SEQ** twice (the first press opens the track's pages, [section 12](#12-g
 
 | Page | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
-| STEP | Note | Length | Velocity | – |
+| STEP | Note | Length | Velocity | Shift (from 1.3) |
 | TRIG | Chance | Condition | Shift | Flam |
 | LOCKS | Lock 1 parameter | its value | Lock 2 parameter | its value |
 | RATCHET | Hits | Shape | Rate (bouncing: Curve) | Fade |
@@ -235,7 +235,7 @@ Press **SEQ** twice (the first press opens the track's pages, [section 12](#12-g
 - **Note:** the pitch the voice plays at (C4 = as set). From 0.23-test7 a step plays relative to its track's **Base** (the SCALE page, [Scale](#scale-from-016)): change Base and every step moves with it. Turning Note here **locks** the step's note (the label reads **Locked**): Base leaves it where you put it. Turn a locked note back to the Base note and it follows Base again. Notes played in from the keys, melodies and spells all follow Base.
 - **Chance:** the probability the step plays (PERF's FILL key plays it anyway).
 - **Flam:** OFF, x2, x3, x4, x6, x8: the step repeats evenly inside its length.
-- **Shift:** −7 … +7 eighths of a step, early or late.
+- **Shift:** −7 … +7 eighths of a step, early or late: a hit's microtiming. It is on the STEP page (KNOB 4, from 1.3) and on TRIG (KNOB 3), so you can pick a step and nudge it on the first page. Recording with Quantize OFF sets it for you ([Recording live](#7-recording-live)).
 - **Length** (from 0.16): how long the note lasts. **AUTO** (the default) is the LXR's: the voice's own envelope, and MIDI's note-off at the next tick. **1/32, 1/16, 1/8, 1/8., 1/4, 1/2**, and from 0.23-test11 **3/4, 1 BAR, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64 BARS** hold the note that long: a voice with **Gate** on (the amp EG's next page, see [section 9](#elixirs-sound-pages)) holds its attack's top until then, and MIDI out sends the note-off at the end, so a synth over USB plays real lengths. **INF** holds it until the track's next note (or STOP): a drone. **TIE** (the knob's last) slides into the next note: its pitch changes, nothing is struck again (MIDI: the new note on, then the old one off). A tied step shows a line into the next one on the grid. A new note on the track always cuts a long one short, as on the Elektrons. A length uses none of the step's two locks.
 - **Ratchet:** the step plays Hits times, evenly at Rate (1/32, 1/48, 1/64, 1/24). Fade: FLAT, DOWN or UP.
 
@@ -290,12 +290,26 @@ For a roll you play with a knob, see [Rush](#rush-from-023): it can be recorded 
 
 ## 7. Recording live
 
-Press **REC** (it lights), then **PLAY**.
+Press **REC** (it lights), then **PLAY**. Everything you play goes into the nearest step and stays there when the pattern loops, so you can build a beat one pass at a time.
 
-- **Notes** you play (MIDI notes on a track's channel, or rolls in PERF) are written into the nearest step.
+**Tapping in a beat** (from 1.3): stay on the grid (or any SEQ or sound page) and tap the **black keys 1–7** like drum pads: D1 D2 D3 SN CY CH OH. Each tap plays the track's voice at the KEYS velocity, writes the hit into the nearest step and selects that track, so the grid shows the new step appearing. Tap the kick on one pass, the snare on the next, the hats on the next. (This needs CONFIG → BUTTONS & KITS → **Audition** on YES, the default.)
+
+**Erasing:** hold **OCT−** and **OCT+** together (that's CLEAR). As long as both are held, the selected track's steps are erased as the playhead passes them, and the screen says **ERASING AS IT PLAYS**. Let go to stop. To erase another track, select it first (its black key, or ALGORITHM).
+
+Other things that record:
+
+- **KEYS** (SHIFT (OCT−) + EDIT): the whole keyboard plays the selected track's voice chromatically, and each note is written with its pitch ([below](#keys-playing-a-voice)). For melodies.
+- **PERF rolls** (ARP, white keys 1–7): a held key records a roll, one hit per repeat. With **Roll** (KNOB 2) on **ONE**, a key is a single hit.
+- **MIDI notes** on a track's channel.
 - **Knob moves** on sound pages are written as locks onto the step that is playing, if that step is on.
-- **SHIFT (OCT−) + CLEAR while recording** erases the selected track's steps as they pass.
-- **SHIFT (OCT−) + REC** opens the record options: the lock lane (1 or 2) knob moves record into.
+
+**SHIFT (OCT−) + REC** opens the record options:
+
+| KNOB 1 | KNOB 2 |
+|---|---|
+| **Lock lane**: the lane (1 or 2) knob moves record into | **Quantize** (from 1.3): ON or OFF |
+
+**Quantize** ON (the default) puts every hit exactly on its step. With OFF, a hit still goes into the nearest step, but it keeps how early or late you played it: the step's **Shift** is set to match, in eighths of a step (on 16ths, a 128th note). You keep your feel, and you can tidy any hit afterwards in step edit. If the pattern has a groove, the shift is measured from where the groove puts the step, so a hit plays back where you played it. Quantize is saved with the project.
 
 ### KEYS: playing a voice
 
@@ -951,6 +965,8 @@ The links, which belong to the pattern, are on ARP's GLOBAL MOD pages from 0.19 
 
 KNOB 1 on the GENERATOR page picks how the track is made: **OFF**, **EUCLID**, **MUTATE**, **TURING**, **CELLULAR** or **GRIDS**. As you turn it, the generator's name and a line on what it does show over the page for 3 seconds (from 1.0). KNOBS 2–4 are that generator's settings, and change with it.
 
+**Nudge** (from 1.3): with the generator on **OFF**, KNOB 4 is **Nudge**. It starts at 0; turn it right to move the whole track later, left to move it earlier, up to 16 steps either way (on a shorter track, up to its length less one). You hear and see the move as you turn, and steps that go past the track's end come round to its start, each with everything it has (velocity, note, locks, shift, condition, ratchet). OCT+ breathes: press it to keep the move. Leaving the page, choosing another track or turning a generator on puts the track back where it was. With a generator on, Nudge isn't there: COMMIT the generator (ACTION) first, then nudge. For a single hit, use its **Shift** in step edit.
+
 | Generator | Settings | What it does |
 |---|---|---|
 | **EUCLID** | Length, Hits, Rotate | Writes the track's steps: that many hits spread as evenly as possible over that length, rotated. |
@@ -978,7 +994,7 @@ Steps you tap on a generator's track change both the pattern and the live copy.
 
 ### Actions
 
-On the ACTION page, turn **Action** (KNOB 1) to pick one; the title then reads **PRESS OCT+ TO …**. Press **OCT+** to do it. The actions are the generator's:
+On the ACTION page, turn **Action** (KNOB 1) to pick one; the title then reads **PRESS OCT+ TO …** and OCT+ breathes. Press **OCT+** to do it. The actions are the generator's:
 
 | Action | Generator | Does |
 |---|---|---|
@@ -1810,7 +1826,7 @@ GLO twice (past the mixer) opens CONFIG. Turn SELECT for its pages:
 | DEVICE | LEDs (OFF / LOW / HIGH glow), Autosave, Accel (fast knob turns move further), Colors (screen palette: GRAY, GREEN, AMBER, ICE, VIOLET, ROSE, PAPER, HI-CON, NIGHT, MONO, HYRULE (forest green and Triforce gold) or SAND (the default: amber on true black, near-black cards) |
 | REMOTE | Tracks (the TRACKS channel: OFF, 1–16; 15 by default), Global (the GLOBAL channel; 16 by default; never the same as Tracks), Knobs (PICKUP / ABS / REL), Mute/solo (PRESS / TOGGLE): see [the remote map](#the-remote-map) |
 | MORPH | Edits: SPLIT (the default from 1.0: at morph 100% the knobs edit the morph kit, below it the kit), BOTH KITS (a knob's edit moves the morph target too) or KIT ONLY (the kit alone, the LXR's way). Ctrl all: BOTH KITS (the default: Control All moves the morph target too) or KIT ONLY; see [Kits and morph](#11-kits-and-morph) and [Control All](#control-all-every-track-at-once) |
-| BUTTONS & KITS | **Audition** (KNOB 3, from 1.2): YES (the default) or NO. With YES, a track's black key plays its voice as it selects the track (on the grid, the sound and SEQ pages and every page but PERF's). With NO, the key only selects. **Kits first** (KNOB 2, from 0.19): FACTORY (the default) or SLOTS, the kit browser's order (see [Kits and morph](#11-kits-and-morph)). **Last page**: NO (the default) or YES. With YES, a button opens the page it showed when you left it: on CONFIG's BUTTONS & KITS page, press FX, then GLO, and you're back on BUTTONS & KITS. It works for SEQ (the track's pages or step edit, whichever you were on), FX, ARP (and each of its two sets), GLO (the mixer or CONFIG) and the sound buttons (the section and row). Pressed again, a button moves on as always. HOME still goes to the grid. |
+| BUTTONS & KITS | **Audition** (KNOB 3, from 1.2): YES (the default) or NO. With YES, a track's black key plays its voice as it selects the track (on the grid, the sound and SEQ pages and every page but PERF's), and from 1.3 records it under REC. With NO, the key only selects. **Kits first** (KNOB 2, from 0.19): FACTORY (the default) or SLOTS, the kit browser's order (see [Kits and morph](#11-kits-and-morph)). **Last page**: NO (the default) or YES. With YES, a button opens the page it showed when you left it: on CONFIG's BUTTONS & KITS page, press FX, then GLO, and you're back on BUTTONS & KITS. It works for SEQ (the track's pages or step edit, whichever you were on), FX, ARP (and each of its two sets), GLO (the mixer or CONFIG) and the sound buttons (the section and row). Pressed again, a button moves on as always. HOME still goes to the grid. |
 | LOAD | No knobs: where the processor's time goes, and the cores; see [the LOAD page](#the-load-page) |
 | ELIXIR | No knobs: the potion, the version, each core's load and the CPU line with the battery |
 

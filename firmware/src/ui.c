@@ -4,7 +4,8 @@
  *
  *   white keys 1..16   the 16 step buttons (steps of the shown bar; patterns; in PERF 1..7 rolls, 8 FILL, 9..16
  *                      the effects of perform.c; SHIFT + key latches it)
- *   black keys 1..7    the 7 voice buttons (D1 D2 D3 SN CY CH OH): select (1.2: and play it, CONFIG Audition);
+ *   black keys 1..7    the 7 voice buttons (D1 D2 D3 SN CY CH OH): select (1.2: and play it, CONFIG Audition;
+ *                      1.3: recorded under REC);
  *                      with SHIFT mute (PERF: mute)
  *   black keys 8..11   the 4 bar buttons: show bar 1..4 (patterns: the bank, 2 of 16; kits and songs: 4);
  *                      SHIFT: the track's length; COPY: copy
@@ -73,7 +74,8 @@ enum { VP_BASE = 0x400, VP_NONE = VP_BASE, VP_IO_TYPE, VP_IO_SLOT, VP_NAME_POS, 
        VP_DJTUNE,                                    /* (1.0: RING's chord, perform.c RC_*) */
        VP_UMIX, VP_UMIX_LAST = VP_UMIX + NVOICE - 1,   /* (1.0: a voice IN / OUT of the stereo mix while USB records) */
        VP_DJSPREAD, VP_DJSLOPE, VP_DJTONE, VP_DJWET,   /* (1.0 Phase 18: RING (2/2), perform.c pfs.dj_spread ..) */
-       VP_AUDITION };                                /* (1.2: a track key plays the voice too; project.c KS_QUIET) */
+       VP_AUDITION,                                  /* (1.2: a track key plays the voice too; project.c KS_QUIET) */
+       VP_RQUANT, VP_NUDGE };                        /* (1.3: REC's Quantize; the GENERATOR page's Nudge, OFF) */
 _Static_assert(NPAR <= VP_BASE, "the virtual parameters after the parameters (25b + 27a: NPAR 525, past 0x200)");
 /* the ACTION page's action (OCT+ does it); 0.10: those of the track's generator (gen_acts) */
 enum { ACT_NONE, ACT_DICE, ACT_COMMIT, ACT_UNDO, ACT_RESET, NACT };
@@ -95,6 +97,8 @@ static struct {
     uint8_t msel;                    /* MACRO SETUP: the macro */
     uint8_t action;                  /* the GENERATOR's ACTION OCT+ does (ACT_*) */
     uint8_t eu_undo;                 /* the Euclid knobs' UNDO saved (track + 1): turned again, it keeps that one */
+    int8_t nudge;                    /* 1.3: NUDGE: the track turned this many steps, OCT+ keeps it (0: none) */
+    uint8_t nudge_t, nudge_p, nudge_len;   /* (its track, pattern and length, to put it back) */
     uint8_t link;                    /* LINKS: the link shown (0..7) */
     uint8_t shift, copy, shift_used, copy_used;
     int8_t held_step;                /* a step key held (its locks), -1 none */
@@ -407,7 +411,7 @@ static void sound_fix(void)                          /* a section this track has
 }
 
 static const uint16_t P_HOME[4] = {PAR_BPM, PAR_SHUFFLE, PAR_TRACK_LENGTH, VP_TRACK_VOL};
-static const uint16_t P_STEP[4][4] = {{PAR_STEP_NOTE, VP_LEN, PAR_STEP_VOLUME, VP_NONE},   /* (0.23-t11: as the */
+static const uint16_t P_STEP[4][4] = {{PAR_STEP_NOTE, VP_LEN, PAR_STEP_VOLUME, PAR_STEP_SHIFT},   /* (0.23-t11: as the */
                                       {PAR_STEP_PROB, VP_COND, PAR_STEP_SHIFT, PAR_STEP_FLAM},   /* Elektrons') */
                                       {PAR_P1_DEST, PAR_P1_VAL, PAR_P2_DEST, PAR_P2_VAL},
                                       {VP_RAT_N, VP_RAT_SHAPE, VP_RAT_RATE, VP_RAT_FADE}};   /* (29: SHAPE names
@@ -653,7 +657,7 @@ static const uint16_t P_SONG[NSONGPG][4] = {{VP_SONG_NUM, VP_SONG_ROW, VP_SONG_P
                                             {VP_SONG_NUM, VP_ROADS, VP_RSUR, VP_RHOME}};
 enum { SE_INSERT, SE_DELETE, NSE };
 static const uint16_t P_PATTERN[4] = {VP_VOICES, PAR_SHUFFLE, VP_PKEEP, VP_PLAY};   /* (37: Voices, Play) */
-static const uint16_t P_RECOPT[4] = {PAR_AUTOM_TRACK, VP_NONE, VP_NONE, VP_NONE};
+static const uint16_t P_RECOPT[4] = {PAR_AUTOM_TRACK, VP_RQUANT, VP_NONE, VP_NONE};   /* (1.3: Quantize) */
 static const uint16_t P_KEYS[4] = {VP_KOCT, VP_KVEL, VP_KACC, VP_NONE};
 
 static uint32_t mode_pages(void)
@@ -702,7 +706,8 @@ static void page_params(uint16_t out[4])
             out[2] = PAR_EUKLID_STEPS;
             out[3] = PAR_EUKLID_ROTATION;
         } else if (ui.page % NEUCLID == PG_GEN && g == GEN_OFF) {
-            out[1] = out[2] = out[3] = VP_NONE;
+            out[1] = out[2] = VP_NONE;
+            out[3] = VP_NUDGE;                       /* (1.3: no generator: the track nudged) */
         } else if (ui.page % NEUCLID == PG_ACTION && g == GEN_GRIDS) {   /* (the map: only with GRIDS) */
             out[1] = VP_GX;
             out[2] = VP_GY;
@@ -1226,6 +1231,35 @@ static int morph_side(uint32_t p)
 {
     return kset.medit == 0u && par[PAR_MORPH] >= 255u && p < NPAR && par_sound(p) && !morph_excluded(p);
 }
+/* 1.3: NUDGE (the GENERATOR page, no generator): the track turned n steps later (earlier: negative) as the knob
+ * turns, heard and seen at once; OCT+ keeps it, leaving the page (another track, a generator) puts it back */
+static void nudge_to(int32_t n)
+{
+    pattern_t *pt = shown_pat();
+    int32_t m;
+    if (!ui.nudge) {
+        ui.nudge_t = ui.track;
+        ui.nudge_p = (uint8_t)ui_pattern();
+        ui.nudge_len = (uint8_t)track_len(pt, ui.track);
+    }
+    m = ui.nudge_len > 16u ? 16 : (int32_t)ui.nudge_len - 1;
+    n = clamp32(n, -m, m);
+    trk_rotate(&pat[ui.nudge_p], ui.nudge_t, n - ui.nudge, ui.nudge_len);
+    ui.nudge = (int8_t)n;
+    if (n)
+        ui_message("OCT+ KEEPS THE NUDGE");
+    ui.force = 1;
+}
+static void nudge_end(int keep)
+{
+    if (!ui.nudge)
+        return;
+    if (!keep)
+        trk_rotate(&pat[ui.nudge_p], ui.nudge_t, -ui.nudge, ui.nudge_len);
+    ui_message(keep ? "NUDGED" : "NUDGE PUT BACK");
+    ui.nudge = 0;
+    ui.force = 1;
+}
 static uint32_t vp_get(uint32_t p)
 {
     pattern_t *pt = shown_pat();
@@ -1292,6 +1326,8 @@ static uint32_t vp_get(uint32_t p)
     case VP_PMEM: return kset.pmem;
     case VP_KBSLOTS: return kset.kbslots;
     case VP_AUDITION: return !(kset.caout & KS_QUIET);
+    case VP_RQUANT: return !sq.rfree;
+    case VP_NUDGE: return (uint32_t)(ui.nudge + 16);
     case VP_GTAKES: return kset.gtakes;
     case VP_MVOL: return out_vol;
     case VP_MOUT ... VP_MOUT_LAST: return (kset.mout >> (p - VP_MOUT)) & 1u;
@@ -1487,7 +1523,8 @@ static uint32_t vp_max(uint32_t p)
     case VP_RCH: case VP_RCH2: return 16;
     case VP_RKNOBS: return NRK - 1u;
     case VP_MEDIT: return 2;
-    case VP_CAKIT: case VP_PMEM: case VP_AUDITION: case VP_RMUTE: case VP_MOUT ... VP_MOUT_LAST: case VP_UMIX ... VP_UMIX_LAST: return 1;
+    case VP_NUDGE: return 32;
+    case VP_CAKIT: case VP_PMEM: case VP_AUDITION: case VP_RQUANT: case VP_RMUTE: case VP_MOUT ... VP_MOUT_LAST: case VP_UMIX ... VP_UMIX_LAST: return 1;
     case VP_MVOL: case VP_TD ... VP_TD_LAST: return 127;
     case VP_STRETCH: return TSTR_MAX;
     case VP_REALIGN: return 1;
@@ -1738,6 +1775,8 @@ static void vp_set(uint32_t p, uint32_t v)
     case VP_PMEM: kset.pmem = (uint8_t)v; settings_later(); return;
     case VP_KBSLOTS: kset.kbslots = (uint8_t)v; ui.kb_at = 0; settings_later(); return;
     case VP_AUDITION: kset.caout = (uint8_t)(v ? kset.caout & ~KS_QUIET : kset.caout | KS_QUIET); settings_later(); return;
+    case VP_RQUANT: sq.rfree = (uint8_t)!v; return;
+    case VP_NUDGE: nudge_to((int32_t)v - 16); return;
     case VP_GTAKES: kset.gtakes = midi_gtakes = (uint8_t)v; settings_later(); return;
     case VP_MVOL: kset.mvol = out_vol = (uint8_t)v; settings_later(); return;
     case VP_MOUT ... VP_MOUT_LAST: {
@@ -3131,8 +3170,8 @@ static void black_down(uint32_t k)
             return;
         }
         track_select(t);
-        if (!(kset.caout & KS_QUIET))                /* 1.2: CONFIG Audition: the voice plays too, as SHIFT + 1..7 */
-            key_note_post(t, tb_note(t), key_vel, 0);
+        if (!(kset.caout & KS_QUIET))                /* 1.2: CONFIG Audition: the voice plays too, as SHIFT + 1..7; */
+            key_note_post(t, tb_note(t), key_vel, KF_REC);   /* 1.3: recorded under REC (playing), a pad */
         return;
     }
     k -= NTRACK;                                      /* the bars */
@@ -3340,6 +3379,10 @@ static void button_down(uint32_t b)
             return;
         }
 
+        if (ui.mode == M_EUCLID && ui.page % NEUCLID == PG_GEN && ui.nudge) {   /* 1.3: OCT+ keeps the NUDGE */
+            nudge_end(1);
+            return;
+        }
         if (ui.mode == M_EUCLID && ui.page % NEUCLID == PG_ACTION && ui.action) {   /* OCT+ does the ACTION */
             static const char *const M[NACT] = {"", "DICED", "COMMITTED", "UNDONE", "RESET"};
             static const char *const NO[NACT] = {"", "", "NO GENERATOR ON", "NOTHING TO UNDO", ""};
@@ -3571,6 +3614,9 @@ static void ui_input(void)
     uint32_t down = keys & ~ui.keys, up = ui.keys & ~keys;
     int32_t n;
     glfo_morph();                                    /* (0.13: the global LFOs' morph) */
+    if (ui.nudge && (ui.mode != M_EUCLID || ui.page % NEUCLID != PG_GEN || ui.track != ui.nudge_t ||
+                     ui_pattern() != ui.nudge_p || pat[ui.nudge_p].gen[ui.nudge_t][0] != GEN_OFF))
+        nudge_end(0);                                /* (1.3: the NUDGE left without OCT+: put back) */
     glfo_macros();                                   /* (19c: .. and the macros) */
     if (fx_found && !ui.dx_seen) {                   /* 0.24.1: another app's data: asked once a power-on */
         ui.dx_seen = 1;
@@ -3873,7 +3919,8 @@ static void ui_leds(void)
         led_put(nb, panel.btn[B_OCTUP], wd_course());
         led_put(nb, panel.btn[B_OCTDN], wd.state != WS_IDLE);
     }
-    if ((ui.mode == M_EUCLID && ui.page % NEUCLID == PG_ACTION && ui.action) ||   /* (1.0: ACTION's "PRESS OCT+ TO",
+    if ((ui.mode == M_EUCLID && ui.page % NEUCLID == PG_ACTION && ui.action) ||
+        (ui.mode == M_EUCLID && ui.page % NEUCLID == PG_GEN && ui.nudge) ||   /* (1.3: a NUDGE to keep) */   /* (1.0: ACTION's "PRESS OCT+ TO",
                                                       * the song's ROWS: OCT+ breathing, as the dialogs') */
         (ui.mode == M_SONG && ui.page % NSONGPG == 1u))
         led_put(nb, panel.btn[B_OCTUP], 1);
