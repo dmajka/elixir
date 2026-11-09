@@ -19,17 +19,20 @@
  *     24  reverb level, size, damping, master dirt, density, ghost velocity, build, density vary
  *     32  macros 1..4, DRILL, JITTER, CUTS, PUMP (PERFORM 2's settings)
  *     40  COMB note, COMB feedback, CRUSH, REVERSE length, global LFO 1, 2, 3 depth, DJ filter resonance (0.24.3)
- *   1.0: CC 3 (undefined in MIDI, off the grid) the delay's BAND
+ *   1.0: off the grid (RM_XK): CC 2 global LFO 4's depth; RING (the DJ filter's) CC 3 Wet, 4 Slope, 5 Tone, 7 Tune
+ *   (its chord), 63 Spread; the delay CC 96 Time (GRAIN: Position), 97 Feedback, 98 Tone, 99 Band, 100 Wow (Size),
+ *   101 Glitch (Density), 102 Route, 103 Rev>FX (63 and 96 .. 103 were buttons: CONTROL ALL and the effects latched)
  *   buttons, 48 + 8 x row + column:
  *     48  PLAY / STOP, REC, FILL, REPEAT, FREEZE, THROW REV, THROW FX, FB PUSH (held)
- *     56  TAPE STOP, LP sweep, HP sweep, REVERSE (held), the previous pattern, the next, CONTROL ALL held, latched
+ *     56  TAPE STOP, LP sweep, HP sweep, REVERSE (held), the previous pattern, the next, CONTROL ALL (tap or held)
  *     64  select D1 .. OH, CONTROL ALL's revert    72 roll D1 .. OH, the selected track    80 DRILL, the same
- *     88  HALF JITTER CUTS SHORT PUMP COMB SPACE CRUSH, held    96 the same, latched
+ *     88  HALF JITTER CUTS SHORT PUMP COMB SPACE CRUSH: 1.0: a tap (under RM_TAP_MS) latches (a press again: off),
+ *         a longer press holds; with Mute/solo at TOGGLE the button's state is the latch (a controller's toggle pads)
  *     104 DENSITY: D1 .. OH left out (again: back in), all back in
  *   1.0: CC 112 + column: roll D1 .. OH, the selected track (as it was when the CC left 0), held by the CC's value
  *   (0 off; seq.c croll_grid: a small turn 1/4 .. 1/16 on the grid, the rest 1/32 .. 1/256 off it), several at once
  *   from a controller's faders.
- * 1.0 Phase 17: CONTROL ALL by MIDI (62 held, 63 latched; midi.c ca_rm): the panel's knobs on a sound page as with
+ * 1.0 Phase 17: CONTROL ALL by MIDI (62: a tap latches, a press held or one that moved something holds; midi.c ca_rm): the panel's knobs on a sound page as with
  *   OCT+ held, and a voice's parameter from TRACKS' rows, a CC or an NRPN moves it on every track in Control All by
  *   the step it made on its own (ui.c ca_take); the select buttons 64 .. 70 (and the panel's track keys) leave a track
  *   out or put it back (lit: in). Off: kept, no dialog. 71 reverts the kit to before the last Control All (until a
@@ -45,10 +48,11 @@
 #define RM_NTK 96u                                   /* TRACKS' knobs: CC 8 .. 103 */
 #define RM_TB0 104u                                  /* .. its buttons: 104 .. 119 */
 #define RM_NTB 16u
-#define RM_NGK 42u                                   /* GLOBAL's knobs: CC 8 .. 47, then CC 3, CC 2 */
-#define RM_XCC 3u                                    /* 1.0: GLOBAL's 41st knob, off the grid: the delay's band */
-#define RM_XCC2 2u                                   /* 1.0 Phase 11: its 42nd: LFO 4's depth */
-#define RM_GCC(i) ((i) < 40u ? RM_CC0 + (i) : (i) == 40u ? RM_XCC : RM_XCC2)   /* GLOBAL's knob i as its CC */
+#define RM_NXK 14u                                   /* 1.0: GLOBAL's knobs off the grid (RM_XK) */
+#define RM_NGK (40u + RM_NXK)                        /* GLOBAL's knobs: CC 8 .. 47, then RM_XK's */
+static const uint8_t RM_XK[RM_NXK] = {3, 2, 4, 5, 7, 63, 96, 97, 98, 99, 100, 101, 102, 103};
+#define RM_GCC(i) ((i) < 40u ? RM_CC0 + (i) : (uint32_t)RM_XK[(i) - 40u])   /* GLOBAL's knob i as its CC */
+#define RM_TAP_MS 250u                               /* 1.0: a press shorter than this latches (88 .. 95, 62) */
 #define RM_GB0 48u                                   /* .. its buttons: 48 .. 111 */
 #define RM_NGB 64u
 #define RM_ROLL0 112u                                /* 1.0: GLOBAL's rolls a track: 112 .. 119 */
@@ -63,16 +67,16 @@ static const uint16_t RM_GK[RM_NGK] = {
     PAR_REV_LEVEL, PAR_REV_SIZE, PAR_REV_DAMP, PAR_MDIRT_AMT, VP_DENS, VP_GHOST, VP_BUILD, VP_DVARY,
     VP_M1, VP_M1 + 1, VP_M1 + 2, VP_M1 + 3, VP_P2, VP_P2 + 1, VP_P2 + 2, VP_P2 + 3,
     VP_P2 + 4, VP_P2 + 5, VP_P2 + 6, VP_P2 + 7, GLV(0, 1), GLV(1, 1), GLV(2, 1), VP_DJRESO,
-    PAR_DLY_BAND, GLV(3, 1)};
+    VP_DJWET, GLV(3, 1), VP_DJSLOPE, VP_DJTONE, VP_DJTUNE, VP_DJSPREAD,
+    PAR_DLY_TIME, PAR_DLY_FB, PAR_DLY_TONE, PAR_DLY_BAND, PAR_DLY_WOW, PAR_GLITCH, PAR_DLY_ROUTE, PAR_REV_FX};
 #define RM_PLAY 0xFEu
 #define RM_REC 0xFDu
 #define RM_PREV 0xFCu
 #define RM_NEXT 0xFBu
-#define RM_CAH 0xFAu                                 /* (1.0 Phase 17: CONTROL ALL held, latched) */
-#define RM_CAL 0xF9u
+#define RM_CAH 0xFAu                                 /* (1.0 Phase 17: CONTROL ALL, tapped or held) */
 #define RM_NONE 0xFFu
 static const uint8_t RM_PF[16] = {RM_PLAY, RM_REC, PF_FILL, PF_STUT, PF_FREEZE, PF_THROW_R, PF_THROW_F, PF_PUSH,
-                                  PF_TAPE, PF_SWEEP_LP, PF_SWEEP_HP, PF_REVERSE, RM_PREV, RM_NEXT, RM_CAH, RM_CAL};
+                                  PF_TAPE, PF_SWEEP_LP, PF_SWEEP_HP, PF_REVERSE, RM_PREV, RM_NEXT, RM_CAH, RM_NONE};
 static const uint8_t RM_FX[8] = {PF_HALF, PF_JITTER, PF_CUTS, PF_SHORT, PF_PUMP, PF_COMB, PF_SPACE, PF_CRUSH};
 
 static struct {
@@ -85,6 +89,9 @@ static struct {
     uint32_t as_cc[(RM_NB + 31u) / 32u];
     uint8_t roll_t[8];                               /* the track a roll button rolls (the selected one, at the press) */
     uint8_t croll_t;                                 /* 1.0: the track CC 119 rolls (the selected one as it left 0) */
+    uint32_t tap_ms[9];                              /* 1.0: when 88 .. 95 (8: 62) were pressed */
+    uint16_t tap_off;                                /* .. the press let a latch go: its release does nothing */
+    uint8_t ca_was;                                  /* .. 62: ui.ca at the press (moved since: held, not latched) */
     uint8_t cur;                                     /* feedback: where the scan goes on */
     uint8_t init, usb_on;                            /* (USB configured again: everything sent again) */
     uint32_t ms;
@@ -213,6 +220,51 @@ static void ca_revert(void)                          /* (button 71) */
     else
         ui_message("CONTROL ALL: NOTHING TO REVERT");
 }
+/* 1.0: GLOBAL's 63 and 96 .. 103 are knobs now (RM_XK), not buttons: no state sent for them */
+static int rm_nobtn(uint32_t j)
+{
+    uint32_t d = j - RM_NTB + RM_GB0;
+    return j >= RM_NTB && (d == 63u || (d >= 96u && d <= 103u));
+}
+/* 1.0: an effect's button (88 .. 95): a tap latches it, a longer press holds it; pressed while latched, off (its
+ * release then nothing). Mute/solo TOGGLE: the button's state is the latch */
+static void rm_fx(uint32_t c, int down)
+{
+    uint32_t f = RM_FX[c], b = 1u << f, cb = 1u << c;
+    if (kset.rknobs & RK_TOGGLE) {
+        ui.rm_latch = down ? ui.rm_latch | b : ui.rm_latch & ~b;
+        perf_apply();
+    } else if (down) {
+        rm.tap_ms[c] = fm1_ms;
+        if (ui.rm_latch & b) {
+            rm.tap_off |= (uint16_t)cb;
+            ui.rm_latch &= ~b;
+            perf_apply();
+        } else {
+            rm.tap_off &= (uint16_t)~cb;
+            rm_held(f, 1);
+        }
+    } else if (rm.tap_off & cb) {
+        rm.tap_off &= (uint16_t)~cb;
+    } else if (ui.rm_held & b) {
+        if (fm1_ms - rm.tap_ms[c] < RM_TAP_MS)
+            ui.rm_latch |= b;
+        rm_held(f, 0);
+    }
+}
+/* .. CONTROL ALL's (62) the same: ca_rm 1 held, 2 latched. A short press that moved something is a hold */
+static void rm_ca(int down)
+{
+    if (kset.rknobs & RK_TOGGLE) {
+        ca_rm_set(down ? 2u : 0u);
+    } else if (down) {
+        rm.tap_ms[8] = fm1_ms;
+        rm.ca_was = ui.ca;
+        ca_rm_set(ca_rm & 2u ? 0u : 1u);
+    } else if (ca_rm & 1u) {
+        ca_rm_set(fm1_ms - rm.tap_ms[8] < RM_TAP_MS && !(ui.ca && !rm.ca_was) ? 2u : 0u);
+    }
+}
 static void rm_button(uint32_t j, int down)          /* button j (TRACKS' 0 .., then GLOBAL's) */
 {
     uint32_t r = (j < RM_NTB ? j : j - RM_NTB) / 8u, c = j % 8u, t = rm_track(c), b = 1u << t;
@@ -235,9 +287,7 @@ static void rm_button(uint32_t j, int down)          /* button j (TRACKS' 0 .., 
         } else if (f == RM_REC && down) {
             sq.rec ^= 1u;
         } else if (f == RM_CAH) {
-            ca_rm_set(down ? ca_rm | 1u : ca_rm & ~1u);
-        } else if (f == RM_CAL && down) {
-            ca_rm_set(ca_rm ^ 2u);
+            rm_ca(down);
         } else if ((f == RM_PREV || f == RM_NEXT) && down) {
             seq_set_next_pattern((sq.active + (f == RM_NEXT ? 1u : NUM_PATTERN - 1u)) % NUM_PATTERN);
         } else if (f < NPF2) {
@@ -262,12 +312,8 @@ static void rm_button(uint32_t j, int down)          /* button j (TRACKS' 0 .., 
         ui.rm_drill = (uint8_t)(down ? ui.rm_drill | b : ui.rm_drill & ~b);
         perf_apply();
     } else if (r == RG_HOLD) {
-        rm_held(RM_FX[c], down);
-    } else if (r == RG_LATCH) {
-        if (down) {
-            ui.rm_latch ^= 1u << RM_FX[c];
-            perf_apply();
-        }
+        rm_fx(c, down);
+    } else if (r == RG_LATCH) {                      /* (1.0: knobs now, RM_XK) */
     } else if (down) {                               /* RG_DENS: a track left out of DENSITY, or all back in */
         pfs.dex = (uint8_t)(c < 7u ? pfs.dex ^ (1u << c) : 0u);
     }
@@ -284,8 +330,8 @@ static int rm_state(uint32_t j)
     case RG_PERF:
     case RG_PERF2: {
         uint32_t f = RM_PF[(r - RG_PERF) * 8u + c];
-        return f == RM_PLAY ? sq.running != 0 : f == RM_REC ? sq.rec != 0 : f == RM_CAH ? ca_rm & 1u :
-               f == RM_CAL ? (ca_rm >> 1) & 1u : f < NPF2 ? (pf.on >> f) & 1u : 0;
+        return f == RM_PLAY ? sq.running != 0 : f == RM_REC ? sq.rec != 0 : f == RM_CAH ? ca_rm != 0 :
+               f < NPF2 ? (pf.on >> f) & 1u : 0;
     }
     case RG_SELECT:                                  /* (Phase 17: Control All on: lit, the tracks in it; 71 lit while
                                                       * there is a Control All to revert) */
@@ -295,7 +341,7 @@ static int rm_state(uint32_t j)
     case RG_ROLL: return (sq.roll >> t) & 1u;
     case RG_DRILL: return (sq.drill >> t) & 1u;
     case RG_HOLD: return (pf.on >> RM_FX[c]) & 1u;
-    case RG_LATCH: return (ui.rm_latch >> RM_FX[c]) & 1u;
+    case RG_LATCH: return 0;                         /* (1.0: knobs now) */
     default: return c < 7u ? (pfs.dex >> c) & 1u : 0;
     }
 }
@@ -305,8 +351,10 @@ static void rm_in(uint32_t ch, uint32_t st, uint32_t d1, uint32_t d2)
 {
     int glob = ch == remote_gch, cc = st == 0xB0u;
     uint32_t nk = glob ? RM_NGK : RM_NTK, b0 = glob ? RM_GB0 : RM_TB0, nb = glob ? RM_NGB : RM_NTB, j;
-    if (glob && cc && (d1 == RM_XCC || d1 == RM_XCC2)) {
-        rm_knob(RM_NTK + (d1 == RM_XCC ? 40u : 41u), d2);
+    for (j = 0; glob && cc && j < RM_NXK && RM_XK[j] != d1; j++)
+        ;
+    if (glob && cc && j < RM_NXK) {                  /* (1.0: off the grid; before the buttons: 63, 96 .. 103) */
+        rm_knob(RM_NTK + 40u + j, d2);
     } else if (cc && d1 >= RM_CC0 && d1 < RM_CC0 + (glob ? 40u : nk)) {
         rm_knob(d1 - RM_CC0 + (glob ? RM_NTK : 0u), d2);
     } else if (glob && cc && d1 >= RM_ROLL0 && d1 < RM_ROLL0 + 8u) {   /* 1.0: a track's roll, by the CC's value */
@@ -317,7 +365,7 @@ static void rm_in(uint32_t ch, uint32_t st, uint32_t d1, uint32_t d2)
             t = rm.croll_t % NTRACK;
         }
         sq.croll[t] = (uint8_t)d2;
-    } else if (d1 >= b0 && d1 < b0 + nb) {
+    } else if (d1 >= b0 && d1 < b0 + nb && !rm_nobtn(d1 - b0 + (glob ? RM_NTB : 0u))) {
         j = d1 - b0 + (glob ? RM_NTB : 0u);
         rm_put(rm.heard, j, 1);
         rm_put(rm.as_cc, j, cc);
@@ -373,7 +421,7 @@ static void remote_service(void)
         } else {
             uint32_t j = k - RM_NK, ch = j < RM_NTB ? remote_ch : remote_gch, on = rm_state(j) != 0;
             uint32_t d1 = j < RM_NTB ? RM_TB0 + j : RM_GB0 + j - RM_NTB;
-            if (ch > 15u || (rm_bit(rm.nknown, j) && rm_bit(rm.nsent, j) == (int)on))
+            if (ch > 15u || rm_nobtn(j) || (rm_bit(rm.nknown, j) && rm_bit(rm.nsent, j) == (int)on))
                 continue;
             if ((!rm_bit(rm.heard, j) || rm_bit(rm.as_cc, j)) && !remote_out_post(0xB0u | ch, d1, on ? 127u : 0u))
                 break;

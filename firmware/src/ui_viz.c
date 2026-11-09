@@ -56,6 +56,8 @@ static void vz_panel(const char *cap)
     if (cap && cap[0])
         cv_text_fit(VX0, VZ_Y + 4, &AF_S, cap, T_MID, vz_bg(), VX1 - VX0);
 }
+/* 1.0: an effect's name, big, at the panel's top (the delay's, the FX bus's, the insert's) */
+static void vz_title(const char *t) { cv_text(VX0, VZ_Y + 3, &AF_M, t, T_THEME); }
 /* a dashed guide line across the plot */
 static void vz_hguide(int32_t y, uint16_t c)
 {
@@ -427,7 +429,7 @@ static void ic_model(uint32_t m, uint32_t v, uint32_t a, uint32_t b, uint32_t c)
 }
 
 /* text in w px from (x, y), broken at spaces, at most n lines h px apart (the last cut short); the lines it took */
-static int32_t vz_wrap(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t n, const char *s, uint16_t fg)
+static int32_t vz_wrap(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t n, const aafont_t *f, const char *s, uint16_t fg)
 {
     char ln[64];
     uint32_t used = 0;
@@ -436,7 +438,7 @@ static int32_t vz_wrap(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t n, c
         while (s[k] && k < sizeof ln - 1u) {         /* (the longest run that fits, cut at its last space) */
             ln[k] = s[k];
             ln[k + 1u] = 0;
-            if (text_w(&AF_S, ln) > w)
+            if (text_w(f, ln) > w)
                 break;
             k++;
             if (!s[k] || s[k] == ' ')
@@ -446,9 +448,9 @@ static int32_t vz_wrap(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t n, c
             cut = k;
         ln[cut] = 0;
         if (used + 1u == n && s[cut])
-            cv_text_fit(x, y, &AF_S, s, fg, vz_bg(), w);
+            cv_text_fit(x, y, f, s, fg, vz_bg(), w);
         else
-            cv_text(x, y, &AF_S, ln, fg);
+            cv_text(x, y, f, ln, fg);
         s += cut;
         while (*s == ' ')
             s++;
@@ -458,22 +460,21 @@ static int32_t vz_wrap(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t n, c
     return (int32_t)used;
 }
 
-/* what the voice is: a line for each model and for the LXR's own voices */
+/* what the voice is: a line for each model and for the LXR's own voices (1.0: short, in AF_M: two lines at most) */
 static const char *model_line(uint32_t m, uint32_t v)
 {
     static const char *const D[NMODEL] = {
-        "", "A struck resonator: bells, bars and plates", "A plucked or struck string", "Glassy, metallic FM",
-        "Two analog oscillators", "A wave folded and shaped", "Two-operator FM", "",
-        "Additive: a sum of harmonics", "Wavetables, row by column", "A four-note chord", "A speaking voice",
-        "A swarm of eight saws", "Brown, pink, white or blue noise", "Dust ringing through resonators",
+        "", "Bells, bars, plates", "A plucked string", "Glassy, metallic FM",
+        "Two analog oscillators", "A folded wave", "Two-operator FM", "",
+        "A sum of harmonics", "Wavetables", "A four-note chord", "A speaking voice",
+        "Eight saws", "Coloured noise", "Dust through resonators",
         "An inharmonic string", "", "An analog kick", "An analog snare", "An analog hat",
-        "A square click, or a doublet", "A train of clicks", "Crunchy, held noise", "An LFSR's bits",
-        "A burst of noise", "A snap: noise and a click", "A resonant grain", "A crackle of dust",
-        "A pop that slides back", "A sine swept four octaves",
-        "Eight sines stacked on a scale"};   /* (0.25: ENSEMBLE) */
-    static const char *const LXR[4] = {"The LXR's drum: OSC, FM, a transient",
-                                       "The LXR's snare: OSC, noise, a transient", "The LXR's cymbal: 3 OSCs in FM",
-                                       "The LXR's hats: 3 OSCs in FM"};
+        "A click or a doublet", "A train of clicks", "Crunchy, held noise", "LFSR bits",
+        "A burst of noise", "Noise and a click", "A resonant grain", "A crackle of dust",
+        "A sliding pop", "A 4-octave sine sweep",
+        "Eight sines on a scale"};   /* (0.25: ENSEMBLE) */
+    static const char *const LXR[4] = {"OSC > FM > Transient", "OSC > Noise > Transient", "3 OSCs in FM",
+                                       "3 OSCs in FM"};
     if (m && m < NMODEL)
         return D[m];
     return LXR[v <= 2u ? 0 : v == 3u ? 1 : v == 4u ? 2 : 3];
@@ -730,7 +731,7 @@ static void viz_model(void)
     m = m < NMODEL ? m : 0u;
     vz_panel(over ? "" : m ? (m <= 3u ? "RINGS RESONATOR" : m == MD_NOISE ? "NOISE SOURCE" : m <= 19u ? "PLAITS ENGINE"
                               : m == MD_EN ? "ENSEMBLE OSCILLATOR" : "MICROSOUND")
-                           : "THE LXR-02'S VOICE");
+                           : "LXR-02 VOICE");
     if (over)
         cv_text_fit(VX0, VZ_Y + 4, &AF_S, model_cap == 1u ? "1 MODEL ON ONE CORE: PLAYS AS LXR"
                                                           : "OVER 2 MODELS: PLAYS AS LXR", T_REC, vz_bg(), VX1 - VX0);
@@ -739,7 +740,8 @@ static void viz_model(void)
         b = sv(S_MODEL, 0, 2);
         c = sv(S_MODEL, 0, 3);
     }
-    cv_text(VX0, 22, &AF_M, m ? L_MODEL[m] : "LXR", T_THEME);
+    cv_text(VX0, 22, &AF_M, m ? L_MODEL[m] : v <= 2u ? "LXR DRUM" : v == 3u ? "LXR SNARE" : v == 4u ? "LXR CYMBAL"
+                                                 : "LXR HATS", T_THEME);
 #if ELIXIR_WTABLE
     if (m == MD_PL0 + PE_WTBL) {            /* (0.23-t7: the waves themselves) */
         viz_wtable(a, b, c);
@@ -750,29 +752,7 @@ static void viz_model(void)
         viz_chordwave(c);
         return;
     }
-    if (m == MD_EN) {                                /* (0.25: ENSEMBLE: its WARP and TWIST in full) */
-        static const char *const W[3] = {"Fold", "Cheby", "Segment"}, *const T[3] = {"Feedback", "Pulsar", "Crush"};
-        int32_t y = 44 + 14 * vz_wrap(VX0, 44, IX - VX0 - 12, 14, 2u, model_line(m, v), T_TEXT) + 6;
-        uint32_t i, amt, z;
-        for (i = 0; i < 2u; i++, y += 14) {
-            char ln[32], *q = ln;
-            z = en_zone(i ? eno[v].twist : eno[v].warp, &amt);
-            put_str(q, i ? "Twist " : "Warp ", 8);
-            q += str_len(q);
-            if (amt) {
-                put_str(q, (i ? T : W)[z], 10);
-                q += str_len(q);
-                *q++ = ' ';
-                put_str(put_int(q, (int32_t)((amt * 100u + 32768u) >> 16)), "%", 2);
-            } else {
-                put_str(q, "off", 4);
-            }
-            cv_text(VX0, y, &AF_S, ln, T_MID);
-        }
-        ic_model(m, v, a, b, c);
-        return;
-    }
-    vz_wrap(VX0, 44, IX - VX0 - 12, 14, 3u, model_line(m, v), T_TEXT);
+    vz_wrap(VX0, 46, IX - VX0 - 12, 18, 3u, &AF_M, model_line(m, v), T_TEXT);
     ic_model(m, v, a, b, c);
 }
 
@@ -979,7 +959,7 @@ static void viz_env(int gate)
         card_value(b + str_len(b), sizeof b - str_len(b), sect_par(ui.track, S_AEG, 0, 0), a);
     put_str(b + str_len(b), "   DECAY ", sizeof b - str_len(b));
     card_value(b + str_len(b), sizeof b - str_len(b), sect_par(ui.track, S_AEG, 0, 1), d);
-    vz_panel(gate ? (held ? "GATE ON: HELD FOR THE STEP'S LENGTH" : "GATE OFF: ONE SHOT, ITS DECAY") : b);
+    vz_panel(gate ? (held ? "GATE ON: HELD FOR THE STEP" : "GATE OFF: ONE SHOT") : b);
     vz_hguide(VY1, vz_faint());
     for (i = 0; i < VN; i++) {
         int32_t tm = (int32_t)((uint32_t)i * (uint32_t)tot * 25u / 54u), y;   /* (hundredths of a ms) */
@@ -1298,7 +1278,8 @@ static void viz_insert(void)
     uint32_t ty = ins_live(sv(S_INSERT, 0, 0)), a = sv(S_INSERT, 0, 1), pb = sv(S_INSERT, 0, 2), pc = sv(S_INSERT, 0, 3), i;
     char b[40];
     put_str(b, ty < NINS ? L_INS[ty] : "", sizeof b);
-    vz_panel(ty ? b : "NO INSERT: THE VOICE AS IT IS");
+    vz_panel("");
+    vz_title(ty ? b : "NO INSERT");
     if (!ty) {                                       /* (the voice untouched: a plain wave) */
         for (i = 0; i < VN; i++)
             vz_y[i] = vz_yq15(vz_sin(i * (0xFFFFFFFFu / VN) * 2u), VMID, 24);
@@ -1313,7 +1294,6 @@ static void viz_insert(void)
             cv_rect(x, VY1 - h, 2, h, vz_faint());
             cv_rect(x + sh * (int32_t)a / 127, VY1 - h, 2, h, T_THEME);
         }
-        cv_text(VX0, VY0, &AF_S, sh >= 0 ? "EVERY PARTIAL UP BY THE SAME HZ" : "EVERY PARTIAL DOWN BY THE SAME HZ", T_MID);
         return;
     }
     default: {                                       /* RING: the wave times a sine (AM: the sine lifted) */
@@ -1461,33 +1441,32 @@ static void viz_random(void)
 {
     static const char *const N[4] = {"PITCH", "DECAY", "FILTER", "PAN"};
     uint32_t k, i, h = 0x2545F491u;
-    vz_panel("EACH HIT DRAWS ITS OWN");
+    vz_panel("");                                    /* (1.0: no caption; the rows bigger) */
     for (k = 0; k < 4u; k++) {
-        int32_t y = VY0 + 4 + (int32_t)k * 18, a = (int32_t)sv(S_RANDOM, 0, k), w = a * 70 / 127;
-        cv_text(VX0, y - 5, &AF_S, N[k], a ? T_TEXT : T_DIM);
+        int32_t y = VZ_Y + 16 + (int32_t)k * 24, a = (int32_t)sv(S_RANDOM, 0, k), w = a * 70 / 127;
+        cv_text(VX0, y - 7, &AF_M, N[k], a ? T_TEXT : T_DIM);
         cv_rect(76, y, 140, 1, vz_faint());
-        cv_rect(146, y - 4, 1, 9, ux_mix(vz_bg(), T_TEXT, 40));
+        cv_rect(146, y - 6, 1, 13, ux_mix(vz_bg(), T_TEXT, 40));
         if (a)
-            cv_rect(146 - w, y - 1, 2 * w + 1, 3, ux_mix(vz_bg(), T_THEME, 30));
+            cv_rect(146 - w, y - 2, 2 * w + 1, 5, ux_mix(vz_bg(), T_THEME, 30));
         for (i = 0; i < 9u; i++) {                   /* (nine hits' draws) */
             int32_t r;
             h ^= h << 13;
             h ^= h >> 17;
             h ^= h << 5;
             r = (int32_t)((h >> 8) & 255u) - 128;
-            cv_rrect(146 + r * w / 128 - 2, y - 2, 5, 5, 2, a ? T_THEME : T_DIM, vz_bg());
+            cv_rrect(146 + r * w / 128 - 3, y - 3, 7, 7, 3, a ? T_THEME : T_DIM, vz_bg());
         }
         if (a == 127)
             vz_sparkle(146 + w, y, 3);
     }
 }
 
-/* 1.0 Phase 16: FX TRACK SENDS: the voice's three sends as bars in its colour, each return's level a tick on its
- * line; the caption, how the bus and the delay are joined (ROUTING) */
+/* 1.0 Phase 16: FX TRACK SENDS: the voice's three sends as bars in its colour; the caption, how the bus and the
+ * delay are joined (ROUTING) */
 static void viz_sends(void)
 {
     static const char *const N[3] = {"FX", "DELAY", "REVERB"};
-    static const uint16_t R[3] = {PAR_FX_DRY_WET, PAR_DLY_LEVEL, PAR_REV_LEVEL};
     uint32_t v = track_voice(ui.track), k;
     char b[24], c[32];
     card_value(b, sizeof b, PAR_DLY_ROUTE, par[PAR_DLY_ROUTE]);
@@ -1497,12 +1476,10 @@ static void viz_sends(void)
     for (k = 0; k < 3u; k++) {
         static const uint16_t S[3] = {PAR_FX_SEND1, PAR_DSEND1, PAR_REV_SEND1};
         int32_t y = VY0 + 10 + (int32_t)k * 24, a = par[S[k] + v], w = a * 140 / 127;
-        int32_t r = (int32_t)vp_get(R[k]) * 140 / (int32_t)(vp_max(R[k]) ? vp_max(R[k]) : 1u);
         cv_text(VX0, y - 5, &AF_S, N[k], a ? T_TEXT : T_DIM);
         cv_rect(76, y, 140, 1, vz_faint());
         if (w)
             cv_rect(76, y - 3, w, 7, ux_mix(vz_bg(), TRACK_COL[ui.track], 70));
-        cv_rect(76 + (r > 139 ? 139 : r), y - 6, 1, 13, ux_mix(vz_bg(), T_TEXT, 50));   /* (the return's level) */
     }
 }
 /* CROSS MOD / CHOKE: the source's voice into this one (its mode, by the amount); the voices that choke each other */
@@ -1513,7 +1490,17 @@ static void viz_xmod(void)
     uint32_t ch = sv(S_XMOD, 0, 3), i;
     char b[32];
     vz_panel(src ? "CROSS MOD" : "CROSS MOD OFF");
-    if (src && src <= NVOICE) {                      /* (the source chip, the arrow, this voice) */
+    if (!src || src > NVOICE) {                      /* (1.0: no source: an empty chip, the arrow faint) */
+        uint16_t f = ux_mix(vz_bg(), T_TEXT, 10);
+        cv_rrect(VX0 + 4, 30, 40, 20, 4, f, vz_bg());
+        text_c(VX0 + 4, 30 + CAP_IN(S, 20), 40, &AF_S, "-", T_DIM, f);
+        cv_rect(VX0 + 48, 40, 108, 1, vz_faint());
+        for (i = 0; i < 6u; i++)
+            cv_rect(VX0 + 150 + (int32_t)i, 40 - 6 + (int32_t)i, 1, 13 - 2 * (int32_t)i, vz_faint());
+        cv_rrect(VX0 + 160, 30, 40, 20, 4, TRACK_COL[ui.track], vz_bg());
+        text_c(VX0 + 160, 30 + CAP_IN(S, 20), 40, &AF_S, VS[v], RGB(12, 12, 12), TRACK_COL[ui.track]);
+        text_c(VX0 + 48, 24, 108, &AF_S, "PICK A SOURCE", T_MID, vz_bg());
+    } else {                      /* (the source chip, the arrow, this voice) */
         uint32_t s = src - 1u;
         int32_t w = 1 + (int32_t)amt * 5 / 127;
         cv_rrect(VX0 + 4, 30, 40, 20, 4, TRACK_COL[s], vz_bg());
@@ -1527,8 +1514,6 @@ static void viz_xmod(void)
         text_c(VX0 + 48, 24, 108, &AF_S, b, T_TEXT, vz_bg());
         if (amt)
             vz_sparkle(VX0 + 102, 40, 3);
-    } else {
-        cv_text(VX0, 34, &AF_S, "SOURCE: ANOTHER VOICE MOVES THIS ONE", T_MID);
     }
     cv_text(VX0, 64, &AF_S, ch ? "CHOKE" : "CHOKE OFF", ch ? T_TEXT : T_MID);
     for (i = 0; i < NVOICE; i++) {                   /* (the voices in this one's choke group lit) */
@@ -1547,7 +1532,7 @@ static void viz_pitch(void)
     uint32_t v = track_voice(ui.track), m = sv(S_MODEL, 0, 0);
     vz_panel("PITCH");
     cv_text(VX0, 22, &AF_M, L_MODEL[m], T_THEME);
-    vz_wrap(VX0, 44, IX - VX0 - 12, 14, 3u, "COARSE and FINE tune it. Its sound is on the MODEL page", T_TEXT);
+    vz_wrap(VX0, 46, IX - VX0 - 12, 18, 3u, &AF_M, "Coarse and Fine tune it", T_TEXT);
     ic_model(m, v, sv(S_MODEL, 0, 1), sv(S_MODEL, 0, 2), sv(S_MODEL, 0, 3));
 }
 static void draw_sound_viz(void)
@@ -1648,58 +1633,67 @@ static void viz_bounce(void)
 
 /* MELODY: the notes the track has played in the shown bar, on the scale's lanes (STEPS' degrees brighter), the
  * band SPREAD and BIAS draw from */
-static int32_t mel_row_y(int32_t semi) { return VY1 - 2 - (clamp32(semi, -24, 24) + 24) * (VY1 - VY0 - 6) / 48; }
+/* MELODY (1/2): 1.0: what the Shape does, drawn abstractly: sixteen notes as dots joined by a faint line, high to low.
+ * RANDOM scattered, WALK a degree or two from the last, the ARPs their order over four chord tones (arp_idx), MOTIF
+ * four notes then transposed, inverted, backwards to the root; OFF a flat, dim row. SPREAD the height they span, BIAS
+ * where it sits; the note playing lit */
+static int32_t mel_shape_at(uint32_t sh, uint32_t k)    /* note k's height, 0 .. 1024 */
+{
+    static const uint8_t MOTIF[16] = {0, 2, 1, 3, 1, 3, 2, 4, 4, 2, 3, 1, 3, 1, 2, 0};   /* (0 .. 4) */
+    uint32_t h = 0x9E3779B9u * (k + 1u) ^ 0x2545F491u, i;
+    int32_t w = 512;
+    switch (sh) {
+    case MEL_OFF: return 512;
+    case MEL_RANDOM:
+        h ^= h >> 15;
+        h *= 0x2C1B3C6Du;
+        h ^= h >> 12;
+        return (int32_t)(h & 1023u);
+    case MEL_WALK:
+        for (i = 0; i <= k; i++) {                   /* (a degree or two up or down each time, kept in range) */
+            uint32_t r = (0x6D2B79F5u * (i + 7u)) >> 27;
+            w += (int32_t)(r % 5u) * 128 - 256;
+            w = w < 64 ? 192 : w > 960 ? 832 : w;
+        }
+        return w;
+    case MEL_MOTIF: return MOTIF[k & 15u] * 256;
+    default: {
+        int32_t per = arp_per(sh, 4);
+        return arp_idx(sh, (int32_t)k % per, 4, per) * 1024 / 3;
+    }
+    }
+}
 static void viz_melody(void)
 {
     const pattern_t *pt = shown_pat();
     const uint8_t *g = pt->mel[ui.track];
-    uint32_t m = SCALE_MASK[pt->scale < NSCALE ? pt->scale : SC_CHROM], th = g[ML_STEPS] * 4u / 128u, s, any = 0;
-    static const uint8_t W[12] = {4, 0, 0, 2, 2, 0, 0, 3, 0, 0, 1, 1};
-    int32_t semi, n = 0, c, r, lo, hi, a;
-    uint8_t set[12];
+    uint32_t sh = g[ML_SHAPE] < NMEL ? g[ML_SHAPE] : 0u, k, play = 99u;
+    int32_t span = VY1 - VY0 - 16, hh = 18 + (int32_t)g[ML_SPREAD] * (span / 2 - 18) / 127;
+    int32_t cy = VMID + 2 - ((int32_t)g[ML_BIAS] - 64) * (span / 2 - hh) / 64, px = 0, py = 0;
+    uint16_t col = sh ? TRACK_COL[ui.track] : ux_mix(vz_bg(), T_TEXT, 25);
     char b[40];
     static const char *const S[NMEL] = {"MELODY OFF", "RANDOM", "WALK", "ARP UP", "ARP DOWN", "ARP UP/DOWN", "MOTIF",
                                         "ARP CONVERGE", "ARP DIVERGE", "ARP CON/DIV", "ARP LEAPFROG", "ARP SPIRAL",
                                         "ARP ALTERNATE", "ARP PAIRS", "ARP ROTATE", "ARP INVERT", "ARP PEDAL"};
-    for (s = 0; s < 12u; s++)
-        if (((m >> s) & 1u) && W[s] >= th)
-            set[n++] = (uint8_t)s;
-    n = n ? n : 1;
-    put_str(b, S[g[ML_SHAPE] < NMEL ? g[ML_SHAPE] : 0], sizeof b);
-    put_str(b + str_len(b), "  IN ", sizeof b - str_len(b));
-    put_str(b + str_len(b), SCALE_NAME[pt->scale < NSCALE ? pt->scale : 0], sizeof b - str_len(b));
+    put_str(b, S[sh], sizeof b);
+    if (sh) {
+        put_str(b + str_len(b), "  IN ", sizeof b - str_len(b));
+        put_str(b + str_len(b), SCALE_NAME[pt->scale < NSCALE ? pt->scale : 0], sizeof b - str_len(b));
+    }
     vz_panel(b);
-    c = ((int32_t)g[ML_BIAS] - 64) * n / 64;          /* (mel_fresh's centre and reach, in degrees) */
-    r = (int32_t)g[ML_SPREAD] * 2 * n / 127;
-    lo = mel_semi(set, n, c - r);
-    hi = mel_semi(set, n, c + r);
-    cv_rect(VX0, mel_row_y(hi) - 1, VN, mel_row_y(lo) - mel_row_y(hi) + 3, ux_mix(vz_bg(), T_THEME, 12));
-    for (semi = -24; semi <= 24; semi++) {           /* (the lanes: the scale's notes; STEPS' allowed ones brighter) */
-        uint32_t d = (uint32_t)((semi % 12 + 12) % 12);
-        if ((m >> d) & 1u)
-            cv_rect(VX0, mel_row_y(semi), VN, 1, d == 0u ? ux_mix(vz_bg(), T_TEXT, 30)
-                                                 : W[d] >= th ? ux_mix(vz_bg(), T_TEXT, 16) : ux_mix(vz_bg(), T_TEXT, 7));
+    if (sh && sq.running && sq.idx[ui.track] >= 0 && (uint32_t)sq.idx[ui.track] / 16u == ui.bar)
+        play = (uint32_t)sq.idx[ui.track] % 16u;
+    for (k = 0; k < 16u; k++) {                      /* (the line first, the dots over it) */
+        int32_t x = VX0 + 7 + (int32_t)k * (VN - 14) / 15, y = cy + hh - mel_shape_at(sh, k) * 2 * hh / 1024;
+        if (k)
+            cv_line(px, py, x, y, ux_mix(vz_bg(), col, 35));
+        px = x;
+        py = y;
     }
-    {                                                /* (the root at the voice's tune, as mel_note) */
-        int32_t vt = (int32_t)(vc[ui.track < V_HAT ? ui.track : V_HAT].osc.midi_freq >> 8);
-        a = ((int32_t)(pt->sroot % 12u) - vt) % 12;
-        a = a < 0 ? a + 12 : a;
-        a = a > 6 ? a - 12 : a;
+    for (k = 0; k < 16u; k++) {
+        int32_t x = VX0 + 7 + (int32_t)k * (VN - 14) / 15, y = cy + hh - mel_shape_at(sh, k) * 2 * hh / 1024;
+        ic_disc(x, y, k == play ? 5 : 4, k == play ? 5 : 4, k == play ? T_ACCENT : col);
     }
-    for (s = 0; s < 16u; s++) {
-        uint32_t st = ui.bar * 16u + s;
-        int32_t x = VX0 + (int32_t)s * (VN / 16), y;
-        if (!(mel_n[ui.track][st] & 0x80u) || !main_on(pt, ui.track, st))
-            continue;
-        y = mel_row_y((int32_t)(mel_n[ui.track][st] & 127u) - SEQ_DEFAULT_NOTE - a);
-        cv_rrect(x + 1, y - 2, VN / 16 - 2, 5, 2, TRACK_COL[ui.track], vz_bg());
-        any = 1;
-    }
-    if (!any)
-        text_c(VX0, VMID - 6, VN, &AF_S, !mel_on(pt, ui.track) ? "SHAPE: TURN IT ON" : sq.running ? "NO HITS IN THIS BAR"
-                                                        : mel_on(pt, ui.track) ? "PLAY: THE NOTES SHOW AS THEY ARE PICKED"
-                                                        : "SHAPE: TURN IT ON", T_MID, ux_mix(vz_bg(), T_THEME, 12));
-    vz_sparkle(VX1 - 4, mel_row_y(hi), 2);
 }
 /* MELODY (2/2): DEJA VU's loop: its LOOP places, the notes they hold, where it is; the dice to the lock */
 static void viz_melody_loop(void)
@@ -1711,7 +1705,7 @@ static void viz_melody_loop(void)
     int32_t gx;
     vz_panel(!g[ML_SHAPE] ? "MELODY OFF" : loops ? (dv == 127u ? "DEJA VU: THE LOOP LOCKED" : dv ? "DEJA VU: A LOOP THAT CHANGES"
                                                                                                   : "DEJA VU 0: NEW NOTES")
-                                   : g[ML_SHAPE] == MEL_MOTIF ? "MOTIF: DEJA VU SETS HOW OFTEN IT CHANGES"
+                                   : g[ML_SHAPE] == MEL_MOTIF ? "MOTIF: DEJA VU CHANGES IT"
                                                               : "ARP: THE LOOP IS ITS OWN");
     for (p = 0; p < 16u; p++) {
         int32_t x = VX0 + (int32_t)p * (VN / 16), in = p < loop && loops;
@@ -1802,9 +1796,8 @@ static uint32_t track_viz_sig(void)
     for (k = 0; k < 8u; k++)
         s = sig_add(s, pt->mel[ui.track][k]);
     s = sig_add(s, pt->main[ui.track][ui.bar & 3u]);
-    if (ui.page % NEUCLID == PG_MELODY)              /* (the notes as they are picked) */
-        for (k = 0; k < 16u; k++)
-            s = sig_add(s, mel_n[ui.track][ui.bar * 16u + k]);
+    if (ui.page % NEUCLID == PG_MELODY)              /* (1.0: the note playing) */
+        s = sig_add(s, sq.running ? (uint32_t)(sq.idx[ui.track] + 1) : 0u);
     if (ui.page % NEUCLID == PG_MELODY + 1u) {
         s = sig_add(s, sq.mfull[ui.track][0] | sq.mfull[ui.track][1] << 8 | (sq.running ? sq.mpos[ui.track] : 99u) << 16);
         for (k = 0; k < 16u; k++)
@@ -1839,15 +1832,15 @@ static void vz_cone(int32_t cx, int32_t top, int32_t hw, int32_t h, uint16_t c) 
 }
 static void viz_reverb(void)
 {
-    static const char *const D[NREV] = {"A little hut: close walls, quick echoes", "A bare spring: twangy, bright",
-                                        "A castle hall: a long, slow swell", "A steel shield: dense and smooth"};
+    static const char *const D[NREV] = {"Close walls, quick echoes", "Twangy, bright", "Long, slow swell",
+                                        "Dense and smooth"};
     uint32_t ty = par[PAR_REV_TYPE] % NREV, sz = par[PAR_REV_SIZE], dp = par[PAR_REV_DAMP], lv = par[PAR_REV_LEVEL];
     int32_t f = 55 + (int32_t)sz * 45 / 127, gy = VY1 - 4, cx = 166, cy, rx, i, n = 2 + (int32_t)sz * 4 / 127;
     uint16_t line = ux_mix(vz_bg(), T_THEME, 90), fill = ux_mix(vz_bg(), T_THEME, 30), dark = ux_mix(vz_bg(), T_TEXT, 8);
     uint16_t roof = ux_mix(vz_bg(), T_THEME, 70);
     vz_panel("REVERB");
     cv_text(VX0, 26, &AF_M, L_REVMODEL[ty], T_THEME);
-    vz_wrap(VX0, 50, 92, 14, 3u, D[ty], T_TEXT);
+    vz_wrap(VX0, 52, 96, 18, 3u, &AF_M, D[ty], T_TEXT);
     if (ty == 0u) {                                  /* ROOM: a hut, its thatched roof, a door, a window */
         int32_t w = 58 * f / 100, h = 32 * f / 100, x0 = cx - w / 2, rh = h + 4;
         cv_rect(112, gy, VX1 - 112, 1, vz_faint());
@@ -1930,49 +1923,53 @@ static void viz_reverb(void)
             vz_arc(cx, cy, rx + i * 5, ux_mix(vz_bg(), T_THEME, al));
     }
 }
-/* 1.0 Phase 13: GRAIN's cloud, particles as Plaits' P PARTCL draws them: the line across, now at the right (a faint
- * mark); the cloud centred POSITION back, as wide as SIZE and SCATTER, as tall as SCATTER's pan, as many dots as
- * DENSITY (bunched to the middle: three randoms averaged); PITCH's shifted grains brighter, above (+12, +7) or below
- * (-12); FEEDBACK a fainter cloud further back */
+/* 1.0 Phase 13: GRAIN's cloud. 1.0: simpler and moving: 8 .. 20 grains (DENSITY), each a dot that swells and fades
+ * over its life (SIZE: longer lives, bigger dots), drifting on toward now (the faint mark at the right); the cloud
+ * centred POSITION back, as wide and tall as SCATTER; PITCH's shifted grains (half of them) climbing (+12, +7) or
+ * sinking (-12) as they play, DETUNE's wobbling; FEEDBACK a fainter cloud further back. vz_frame: 20 a second (the
+ * FX page's signature moves it while GRAIN is shown) */
+static uint32_t vz_frame;
 static void vz_grains(void)
 {
-    uint32_t h = 0x2545F491u, k, n = par[PAR_GLITCH] ? 14u + par[PAR_GLITCH] * 70u / 127u : 0u, nf;
-    int32_t sc = (int32_t)par[PAR_DSAT], fb = (int32_t)par[PAR_DLY_FB];
-    int32_t hw = 12 + (int32_t)par[PAR_DLY_WOW] * 34 / 127 + sc * 20 / 127, hh = 8 + sc * 30 / 127;
-    int32_t cx = VX1 - 8 - hw - (int32_t)(par[PAR_DLY_TIME] * par[PAR_DLY_TIME]) * (VN - 40 - 2 * hw) / (127 * 127);
-    cv_rect(VX1 - 2, VMID - 26, 1, 52, vz_faint());  /* (now) */
+    uint32_t k, n = par[PAR_GLITCH] ? 8u + par[PAR_GLITCH] * 12u / 127u : 0u, nf, life, t = vz_frame * 50u;
+    int32_t sc = (int32_t)par[PAR_DSAT], fb = (int32_t)par[PAR_DLY_FB], sz = (int32_t)par[PAR_DLY_WOW];
+    int32_t hw = 14 + sc * 46 / 127, hh = 8 + sc * 28 / 127, rmax = 4 + sz * 5 / 127;
+    int32_t cx = VX1 - 30 - hw - (int32_t)(par[PAR_DLY_TIME] * par[PAR_DLY_TIME]) * (VN - 70 - 2 * hw) / (127 * 127);
+    uint32_t dp = par[PAR_DPITCH];
+    cv_rect(VX1 - 2, VMID - 30, 1, 60, vz_faint());  /* (now) */
+    if (!n) {
+        cv_text(VX0 + 4, VMID - 4, &AF_S, "DENSITY OFF: NO GRAINS", T_MID);
+        return;
+    }
+    life = 500u + (uint32_t)sz * 900u / 127u;        /* (ms) */
     nf = fb > 30 ? n * (uint32_t)fb / 254u : 0u;
     for (k = 0; k < n + nf; k++) {
-        int32_t x, y, ccx = cx, al = 45, sz = 2;
-        uint32_t r[4], i;
-        for (i = 0; i < 4u; i++) {
+        uint32_t tt = t + k * life / n + k * 137u, c = tt / life, f = (tt % life) * 256u / life, h, i, r[3];
+        int32_t tri = 256 - iabs((int32_t)f * 2 - 256), x, y, rad, al, ccx = cx, shifted;
+        h = (k * 0x9E3779B9u) ^ (c * 0x85EBCA6Bu) ^ 0x2545F491u;
+        for (i = 0; i < 3u; i++) {                   /* (this life's place: a fresh draw each time round) */
             h ^= h << 13;
             h ^= h >> 17;
             h ^= h << 5;
             r[i] = h;
         }
-        if (k >= n) {                                /* (FEEDBACK: round again, further back, fainter) */
-            ccx = cx - 2 * hw - 10;
-            al = 25;
-        }
-        x = ccx + (int32_t)(((r[0] & 255u) + (r[1] & 255u) + (r[2] & 255u)) * 2u * (uint32_t)hw / 765u) - hw;
-        y = VMID + (int32_t)((((r[0] >> 8) & 255u) + ((r[1] >> 8) & 255u) + ((r[2] >> 8) & 255u)) * 2u * (uint32_t)hh / 765u) - hh;
-        if (par[PAR_DPITCH] && par[PAR_DPITCH] != 4u && (r[3] & 1u) && k < n) {   /* (a shifted grain) */
-            y += par[PAR_DPITCH] == 3u ? hh / 2 + 8 : -hh / 2 - 8;
-            al = 90;
-        } else {
-            al += (int32_t)((r[3] >> 4) % 45u);
-        }
-        if ((r[3] >> 12) % 5u == 0u)
-            sz = 3;
-        if (x < VX0 || x > VX1 - 4 || y < VY0 || y > VY1 - 3)
+        if (k >= n)                                  /* (FEEDBACK: round again, further back) */
+            ccx = cx - 2 * hw - 16;
+        x = ccx + (int32_t)((r[0] & 255u) * 2u * (uint32_t)hw / 255u) - hw - 16 + (int32_t)f * 32 / 256;
+        y = VMID + (int32_t)((r[1] & 255u) * 2u * (uint32_t)hh / 255u) - hh;
+        shifted = dp && (r[2] & 1u) && k < n;
+        if (shifted && dp == 4u)                     /* (DETUNE: a wobble) */
+            y += (vz_sin(f << 25) * 4) >> 15;
+        else if (shifted)                            /* (an octave: further than a fifth) */
+            y += (dp == 3u ? 1 : -1) * (int32_t)f * (dp == 2u ? 18 : 30) / 256;
+        rad = 1 + (rmax - 1) * tri / 256;
+        if (k >= n)
+            rad = rad * 2 / 3;
+        if (tri < 24 || x - rad < VX0 || x + rad > VX1 - 4 || y - rad < VY0 || y + rad > VY1)
             continue;
-        cv_rect(x, y, sz, sz, ux_mix(vz_bg(), T_THEME, al));
-        if (k < n && (r[3] >> 20) % 11u == 0u)
-            vz_sparkle(x, y, 2);
+        al = (k >= n ? 15 : 35) + tri * (k >= n ? 25 : 65) / 256;
+        ic_disc(x, y, rad, rad, ux_mix(vz_bg(), shifted ? T_ACCENT : T_THEME, al));
     }
-    if (!n)
-        cv_text(VX0 + 4, VMID - 4, &AF_S, "DENSITY OFF: NO GRAINS", T_MID);
 }
 /* the delay's echoes: each a bar, FEEDBACK's power of the first; PING PONG left above, right below; TAPE wobbles;
  * TONE darkens the later ones; (DUB) the pitch climbing or falling, GLITCH breaking some; (SEND) the echoes into a wash */
@@ -1986,8 +1983,8 @@ static void viz_echoes(int dub, int send)
     static const char *const NM[DELAY_GRAIN + 1u] = {"MONO DELAY", "PING PONG", "TAPE DELAY", "TAPE PING PONG", "",
                                                      "GRAIN DELAY"};
     char b[24];
-    vz_panel(dub ? (ty == DELAY_GRAIN ? "DELAY: GRAIN" : "DELAY: TAPE") : !send ? "" : par[PAR_FX_DELAY_TYPE] == DELAY_OFF ? "DELAY: OFF"
-             : par[PAR_DLY_LEVEL] ? "DELAY: ECHOES INTO THE REVERB" : "DELAY: OFF (LEVEL 0)");
+    vz_panel(dub || !send ? "" : par[PAR_FX_DELAY_TYPE] == DELAY_OFF ? "DELAY OFF" : par[PAR_DLY_LEVEL] ? ""
+             : "LEVEL 0: SILENT");      /* (1.0: no caption but why it is silent) */
     if (!dub && !send) {                             /* (its type spelled out, big; SYNC's division beside it, or why
                                                       * it is silent) */
         b[0] = 0;
@@ -2151,13 +2148,14 @@ static void viz_fxbus(void)
     case FX_DRIVE:
         put_str(b, "DRIVE: ", sizeof b);
         put_str(b + 7, L_DIST[fx.dist_type % 3u], sizeof b - 7u);
-        vz_panel(b);
+        vz_panel("");
+        vz_title(b);
         vz_hguide(VMID, vz_faint());
         vz_drive_curve(fx.dist_type % 3u, (int32_t)par[PAR_FX_P1] * 65536 / 127, VMID, 32, T_THEME, 1);
         break;
     case FX_RING:
-        vz_panel("RING MOD");                        /* (its name, then what it does under it: as a track's pages) */
-        cv_text(VX0, VY0, &AF_S, "THE BUS TIMES A SINE", T_MID);
+        vz_panel("");                                /* (1.0: its name alone, big: as the delay's) */
+        vz_title("RING MOD");
         vz_hguide(VMID, vz_faint());
         for (i = 0; i < VN; i++) {
             int32_t w = vz_sin(i * (0xFFFFFFFFu / VN) * 2u), m = vz_sin(i * (0xFFFFFFFFu / VN) * (3u + par[PAR_FX_P1] / 8u));
@@ -2170,14 +2168,15 @@ static void viz_fxbus(void)
         static const uint8_t R10[6] = {10, 20, 30, 40, 60, 80};
         put_str(b, "COMPRESSOR ", sizeof b);
         put_str(b + str_len(b), L_RATIO[fx.ratio % 6u], sizeof b - str_len(b));
-        vz_panel(b);
+        vz_panel("");
+        vz_title(b);
         vz_comp_curve(-(int32_t)(127u - par[PAR_FX_P3]) * 48 / 127, R10[fx.ratio % 6u], 0, 0);
         break;
     }
     case FX_PHASER: case FX_FLANGER: {
         uint32_t k, nn = ty == FX_PHASER ? 2u : 9u;
-        vz_panel(ty == FX_PHASER ? "PHASER" : "FLANGER");
-        cv_text(VX0, VY0, &AF_S, ty == FX_PHASER ? "NOTCHES SWEEPING" : "A COMB SWEEPING", T_MID);
+        vz_panel("");
+        vz_title(ty == FX_PHASER ? "PHASER" : "FLANGER");
         for (k = 0; k < 3u; k++) {
             for (i = 0; i < VN; i++) {
                 uint32_t ph = (i + k * (6u + par[PAR_FX_P1] / 8u)) * (0x80000000u / VN) * nn;
@@ -2197,9 +2196,8 @@ static void viz_fxbus(void)
     case FX_SHIFT: {                                 /* (Phase 12: a tone's harmonics (faint) and where SHIFT moves them:
                                                       * by the same Hz each, no longer in a row; SPREAD: down too) */
         int32_t d = (int32_t)par[PAR_FX_P1] - 64, f0 = (int32_t)VN / 7, sh = d * f0 * 3 / 4 / 64, h;
-        vz_panel("SHIFT");
-        cv_text(VX0, VY0, &AF_S, d ? (d > 0 ? "EVERY PARTIAL UP BY THE SAME HZ" : "EVERY PARTIAL DOWN BY THE SAME HZ")
-                                   : "CENTRED: NO SHIFT", T_MID);
+        vz_panel("");
+        vz_title("FREQ SHIFT");
         for (h = 1; h <= 6; h++) {
             int32_t x = VX0 + h * f0, ht = (VY1 - VY0 - 14) * (8 - h) / 8;
             cv_rect(x, VY1 - ht, 1, ht, vz_faint());
@@ -2213,8 +2211,8 @@ static void viz_fxbus(void)
 #if FX_CHORUS_ON
     case FX_CHORUS: {                                /* (1.0: the voices drifting about the dry, their lows cut) */
         uint32_t k;
-        vz_panel("CHORUS");
-        cv_text(VX0, VY0, &AF_S, "VOICES DRIFTING", T_MID);
+        vz_panel("");
+        vz_title("CHORUS");
         vz_hguide(VMID, vz_faint());
         for (k = 0; k < 3u; k++) {
             for (i = 0; i < VN; i++) {
@@ -2231,7 +2229,8 @@ static void viz_fxbus(void)
     }
 #endif
     default:
-        vz_panel("THE FX BUS IS OFF");
+        vz_panel("");
+        vz_title("FX BUS OFF");
         for (i = 0; i < VN; i++)
             vz_y[i] = vz_yq15(vz_sin(i * (0xFFFFFFFFu / VN) * 2u), VMID, 24);
         vz_trace(VX0, VN, VMID, vz_faint(), vz_bg());
@@ -2242,17 +2241,9 @@ static void viz_fxbus(void)
 static void viz_dirt(void)
 {
     static const uint8_t K[5] = {5, 0, 3, 4, 1};     /* (L_DIRT: TAPE TUBE FUZZ DIODE FOLD as vz_drive_curve's) */
-    uint32_t t = par[PAR_MDIRT] % 5u, a = par[PAR_MDIRT_AMT], bus = par[PAR_FXDIRT];
-    char b[40];
-    put_str(b, "MASTER: ", sizeof b);
-    put_str(b + 8, a ? L_DIRT[t] : "CLEAN", sizeof b - 8u);
-    vz_panel(b);
+    uint32_t t = par[PAR_MDIRT] % 5u, a = par[PAR_MDIRT_AMT];
+    vz_panel("");                                    /* (1.0: no captions: the knobs name the type and the drives) */
     vz_hguide(VMID, vz_faint());
-    if (bus) {                                       /* (the bus's drive: its own, before its type) */
-        put_str(b, "BUS DRIVE ", sizeof b);
-        put_int(b + 10, (int32_t)bus);
-        cv_text_r(VX1, VZ_Y + 4 + 14, &AF_S, b, T_MID, vz_bg());
-    }
     vz_drive_curve(K[t], (int32_t)a * 65536 / 127, VMID, 32, T_THEME, 1);
 }
 /* the master COMPRESSOR: its curve, the gain it takes; SIDECHAIN: the key's hits ducking the mix */
@@ -2269,7 +2260,7 @@ static void viz_mcomp(int side)
     } else {
         uint32_t s, src = mc.src <= NVOICE ? mc.src : 0u;
         const pattern_t *pt = shown_pat();
-        vz_panel(src ? "THE KEY'S HITS DUCK THE MIX" : "KEYED BY THE MIX ITSELF");
+        vz_panel(src ? "" : "KEYED BY THE MIX ITSELF");
         vz_hguide(VY0 + 8, vz_faint());
         for (s = 0; s < 16u; s++) {                  /* (the key's hits; the gain dipping after each) */
             int32_t x = VX0 + (int32_t)s * (VN / 16), k;

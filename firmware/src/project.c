@@ -688,7 +688,7 @@ static int proj_read_payload(uint32_t ver)
     if (!pr.err && pr.pos + 4u <= pr.end) {
         pr_bytes(tag, 4);
         if (!memcmp(tag, "KSC1", 4)) {               /* 19: the scale last chosen, DENSITY; STUTTER */
-            uint8_t b[26] = {0, 0, 0, 40, DB_GHOSTS, 0, 0, 1, 2, SV_OFF, 0, 0, 0, 12, 75, 80, RT_256, 60, 8, 0, DJT_LXR, RC_MAJ,
+            uint8_t b[26] = {0, 0, 0, 40, DB_GHOSTS, 0, 0, 1, 2, SV_OFF, 0, 0, 0, 12, 10, 80, RT_256, 60, 8, 0, DJT_LXR, RC_MAJ,
                              64, 64, 64, 64};
             n = pr_byte();                           /* (31: VARY 0 before; 39: RUSH's; 0.24.3: Reso 0; Phase 18: 64s) */
             pr_bytes(b, n < 26u ? n : 26u);

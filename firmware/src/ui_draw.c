@@ -22,7 +22,7 @@
 
 enum { R_HDR, R_TITLE, R_LABELS, R_BARS, R_BODY, R_STRIP, R_CARD0, R_COL0 = R_CARD0 + 4, NREG = R_COL0 + 16 };
 static uint32_t rsig[NREG];
-static uint8_t body_full;                            /* the body takes the cards' place too (CONFIG > LOAD) */
+static uint8_t body_full;                            /* the body takes the cards' place too (CONFIG > LOAD, ABOUT) */
 static uint8_t body_is_grid;                        /* what the body showed last (a change redraws it all) */
 
 static const uint16_t TRACK_COL[NTRACK] = {RGB(255, 112, 56), RGB(255, 166, 44), RGB(244, 208, 74), RGB(124, 210, 92),
@@ -1715,6 +1715,11 @@ static void draw_body(void)
                                (uint32_t)par[PAR_DLY_LEVEL] << 24);   /* (1.0: the delay's) */
             s = sig_add(s, (uint32_t)par[PAR_DLY_WOW] | (uint32_t)par[PAR_DSAT] << 8 | fx_bpm_x10 << 16 |
                                (uint32_t)par[PAR_DLY_BAND] << 24);
+            if (par[PAR_FX_DELAY_TYPE] == DELAY_GRAIN && par[PAR_GLITCH] &&
+                (fx_page() == FXPG_DLY || fx_page() == FXPG_DUB || fx_page() == FXPG_DLY2)) {
+                vz_frame = fm1_ms / 50u;                 /* (1.0: GRAIN's cloud moves, 20 frames a second) */
+                s = sig_add(s, vz_frame);
+            }
             if (fx_page() >= FXPG_FSEND)                 /* (the send pages: the mixer's bars) */
                 s = sig_add(s, mixer_sig());
             if (fx_page() == FXPG_DJ || fx_page() == FXPG_DJ2)   /* (1.0: the DJ filter as it moves, its type and Reso) */
@@ -1790,7 +1795,8 @@ static void draw_body(void)
         draw_sound_strip();
         return;
     }
-    body_full = fn == draw_config_help && ui.page % NCONFIG == CF_LOAD;
+    body_full = fn == draw_config_help && (ui.page % NCONFIG == CF_LOAD || ui.page % NCONFIG == CF_ABOUT);   /* (1.0:
+                                                      * ABOUT too: no knobs, no empty cards' row) */
     if (!region(R_BODY, s))
         return;
     if (body_full)                                   /* (CONFIG > LOAD: no knobs, so the cards' place too) */
@@ -1803,8 +1809,7 @@ static void draw_body(void)
 static void card_name(char *b, uint32_t n, uint32_t p)
 {
     if (ui.mode == M_SOUND && ui.sect == S_SENDS) {  /* 1.0 Phase 16: FX TRACK SENDS: short, to fit */
-        const char *t = p == PAR_FX_DRY_WET ? "FX D/W" : p == PAR_DLY_LEVEL ? "Dly lvl" : p == PAR_REV_LEVEL ? "Rev lvl"
-                      : p >= PAR_DSEND1 && p < PAR_DSEND1 + 6u ? "Delay" : p >= PAR_REV_SEND1 && p < PAR_REV_SEND1 + 6u
+        const char *t = p >= PAR_DSEND1 && p < PAR_DSEND1 + 6u ? "Delay" : p >= PAR_REV_SEND1 && p < PAR_REV_SEND1 + 6u
                       ? "Reverb" : p >= PAR_FX_SEND1 && p < PAR_FX_SEND1 + 6u ? "FX" : 0;
         if (t) {
             put_str(b, t, n);
@@ -2449,7 +2454,8 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
             static const char *const D[NGD] = {"OFF", "MORPH", "FILTER", "LP", "HP", "FB PUSH", "COMB", "CRUSH",
                                                "JITTER", "CUTS", "PUMP", "DENSITY", "TRANSPOSE", "MEL CHANGE",
                                                "MEL SPREAD", "DELAY FB", "DELAY TIME", "REV SEND", "MACRO 1",
-                                               "MACRO 2", "MACRO 3", "MACRO 4", "STUTTER", "DIRT", "DELAY BAND"};
+                                               "MACRO 2", "MACRO 3", "MACRO 4", "STUTTER", "DIRT", "DELAY BAND",
+                                               "RING WET", "RING TONE"};
             put_str(b, D[v < NGD ? v : 0], n);
             return;
         }
@@ -2519,7 +2525,7 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
     }
     case VP_REALIGN: put_str(b, v ? "PATTERN" : "STOP", n); return;
     case VP_DJTYPE: {
-        static const char *const T[NDJT] = {"LXR", "ACID", "MS20", "RING"};
+        static const char *const T[NDJT] = {"LXR", "RING", "ACID", "MS20"};   /* (the knob's order: DJT_AT) */
         put_str(b, T[v < NDJT ? v : 0u], n);
         return;
     }
@@ -3017,5 +3023,5 @@ static void draw_about(void)
     }
     cv_text(82, 40, &AF_S, ELIXIR_VERSION, T_THEME);
     cv_text(82, 54, &AF_S, "the LXR-02 on the FM-1", T_MID);
-    draw_cpu(110, "CPU ");
+    draw_cpu(178, "CPU ");                           /* (1.0: at the bottom, as LOAD's) */
 }

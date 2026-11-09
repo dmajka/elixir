@@ -39,7 +39,7 @@
  * spell reversed; coming home, the voices go home from the copy anyway (a cast still to reverse: its pattern back
  * too). Included by ui.c after spells.c. */
 
-#define NQUEST 13u
+#define NQUEST 14u
 #define NWJ 8u                                      /* JOURNEY: 16 .. 1024 bars, ENDLESS (1.0: 1024) */
 #define WJ_ENDLESS 7u
 #define NWP 7u                                       /* SOUND, RHYTHM: OFF, 1 .. 16 bars, PHRASE */
@@ -58,7 +58,7 @@ enum { WS_IDLE, WS_ROAD, WS_RETURN };
 enum { WV_QUEST, WV_JOURNEY, WV_FATE, WV_GOAL, WV_SOUND, WV_RHYTHM, WV_RANGE, WV_STRIDE, WV_RETURN, WV_MEMORY,
        WV_ORDER, WV_SWAY, NWV };                     /* the cards (VP_WD + n) */
 enum { Q_LONG, Q_HOMECOMING, Q_SPIRE, Q_HOLLOW, Q_TIDE, Q_SIDE, Q_LOST, Q_MAZE, Q_ROSARY, Q_POND, Q_WHEEL, Q_FROG,
-       Q_CANYON };
+       Q_CANYON, Q_CHASM };
 #define QF_SHORT 1u                                  /* (a quest's ways: legs of 2-4 notches) */
 #define QF_ANY 2u                                    /* (any gesture, whatever the land) */
 #define QF_ONE 4u                                    /* (one thread, long legs, the smallest notches) */
@@ -175,6 +175,26 @@ static const uint8_t CY_SEND[5][2] = {{16, 32}, {24, 64}, {30, 90}, {20, 105}, {
                                                       * to (at least home's)) */
 static const uint16_t CY_PAN[NVOICE] = {PAR_PAN1, PAR_PAN2, PAR_PAN3, PAR_PAN4, PAR_PAN5, PAR_PAN6};
 static const uint8_t CY_TIME[5][4] = {{8, 8, 8, 8}, {7, 8, 7, 5}, {4, 5, 6, 7}, {3, 4, 6, 7}, {8, 8, 8, 8}};
+/* 1.0: HOWLING CHASM: THE CANYON's darker twin, lost and not alone. The same machinery (the delay and the reverb a
+ * step every 2 bars, the voices' pans and DELAY SENDs wandering, the echo's note values) by its own tables, and:
+ * the delay's Band howling (Feedback pushed to it, Band swept), the echo's time jumping to triplets and dotted values
+ * (the tape bends its pitch), the delay rung out and switched between TAPE PP and GRAIN (its sends down, a few bars of
+ * tail, then the mode), the repeats falling an octave, and the DJ filter's RING tuned low (VOICES IN THE ROCK, THE
+ * DARK), its root sliding by semitones and tritones. A FALSE LIGHT: a breath, brighter, then deeper. THE WAY OUT:
+ * home's, the ring faded out and the DJ filter as it was. ENDLESS: never out */
+static const chap_t CH_CHASM[6] = {{"THE DESCENT", {-15, -30, 45, 10}, 3, {1, 1}, 128},
+                                   {"THE HOWL", {-25, -45, 70, 35}, 3, {2, 3}, 64},
+                                   {"A FALSE LIGHT", {10, 35, 30, 0}, 2, {3, 3}, 128},
+                                   {"VOICES IN THE ROCK", {-40, -60, 90, 20}, 3, {4, 4}, 128},
+                                   {"THE DARK", {-60, -80, 100, 35}, 4, {5, 5}, 128},
+                                   {"THE WAY OUT", {10, 25, 0, 0}, 3, {CH_END, CH_END}, 128}};
+#define HX_OUT 5u
+static const uint8_t HX_T[6][NCY] = {{56, 55, 20, 8, 10}, {72, 96, 45, 15, 25}, {40, 40, 15, 0, 0},
+                                     {70, 70, 70, 25, 40}, {80, 82, 90, 30, 50}, {0, 0, 0, 0, 0}};
+static const uint8_t HX_SPREAD[6] = {10, 40, 15, 50, 62, 0};
+static const uint8_t HX_SEND[6][2] = {{20, 48}, {30, 90}, {10, 30}, {40, 100}, {30, 110}, {0, 0}};
+static const uint8_t HX_TIME[6][4] = {{5, 7, 5, 8}, {3, 4, 6, 7}, {8, 8, 5, 8}, {4, 6, 7, 10}, {3, 6, 9, 10}, {8, 8, 8, 8}};
+static const uint8_t HX_ROOT[4] = {36, 30, 41, 33};  /* (RING's first root: C2, F#1, F2, A1) */
 #define QCH(a) sizeof a / sizeof a[0], a
 static const quest_t QUEST[NQUEST] = {
     {"THE LONG ROAD", "A steady walk, one way", WF_LOST, 3, 0, QCH(CH_LONG)},
@@ -189,7 +209,8 @@ static const quest_t QUEST[NQUEST] = {
     {"THE STILL POND", "Barely moving, for a long time", WF_LOST, 5, QF_ONE, QCH(CH_POND)},
     {"TURNING WHEEL", "An endless beat, turning", WF_LOST, WJ_ENDLESS, QF_WHEEL, QCH(CH_WHEEL)},
     {"BOILING FROG", "So slowly you never notice", WF_LOST, 5, 0, QCH(CH_FROG)},
-    {"THE CANYON", "Echoes on echoes, then out", WF_HOME, 4, 0, QCH(CH_CANYON)}};
+    {"THE CANYON", "Echoes on echoes, then out", WF_HOME, 4, 0, QCH(CH_CANYON)},
+    {"HOWLING CHASM", "Lost below, and the rock answers", WF_HOME, 4, 0, QCH(CH_CHASM)}};
 /* THE LONG ROAD's ways (one is picked as it sets out) */
 #define WAY(n, e, l, s, g) {n, {e, l, s, g}, 4, {CH_END, CH_END}, 128}
 static const chap_t WD_WAY[6] = {WAY("TO DUSK", -30, -60, 40, 0), WAY("TO DAWN", 30, 60, -20, 0),
@@ -264,7 +285,14 @@ static struct {
     uint8_t cy_pan[NVOICE], cy_snd[NVOICE], cy_wait[NVOICE], cy_rate[NVOICE];   /* (each voice's pan and send aims,
                                                       * the bars before its send moves, how fast) */
     uint8_t cy_ms, cy_mtg, cy_lvl;                   /* (the delay's mode changing: 1 its level going, 2 a bar of
-                                                      * quiet; the mode; the level to come back to) */
+                                                      * quiet; the mode; the level to come back to; 1.0 HOWLING
+                                                      * CHASM: 3 its sends down, ringing out) */
+    uint8_t hx_rb, hx_half;                          /* (CHASM: the bars left ringing out; THE DARK's turn back to
+                                                      * tape taken) */
+    uint8_t djh[8], djon, djoff;                     /* (CHASM: the DJ filter at home (HX_DJV); RING ours; going
+                                                      * home: its wet down, then home's) */
+    uint8_t djtg[4], djl[4];                         /* (.. the root, wet, tone, slope: aims, the values last set) */
+    uint32_t djt[4];
 } wd POOL;
 static glide_t wgl[NGLIDE] POOL;
 static uint8_t wd_home[KIT_LEN] POOL, wd_mhome[KIT_LEN] POOL;   /* the voices at home (the kit, the morph target) */
@@ -1385,9 +1413,12 @@ static void wd_chapter(void)                         /* a chapter begins: its mo
     wd.fcs = wd.bars;
     wd_quest_chapter();
 }
-static uint32_t wd_cy_in(uint32_t c)                 /* (1.0: THE CANYON, ENDLESS: never out; the narrows .. lost) */
+static uint32_t wd_cy_in(uint32_t c)                 /* (1.0: THE CANYON, ENDLESS: never out; the narrows .. lost;
+                                                      * HOWLING CHASM: the howl .. the dark) */
 {
-    return wd.quest == Q_CANYON && c == 4u && !wd_journey() && !wd.goal ? 1u + wd_rnd(3) : c;
+    if (wd_journey() || wd.goal)
+        return c;
+    return wd.quest == Q_CANYON && c == 4u ? 1u + wd_rnd(3) : wd.quest == Q_CHASM && c == HX_OUT ? 1u + wd_rnd(4) : c;
 }
 static void wd_plan(uint32_t from)                   /* the path's chapters, from chapter from */
 {
@@ -1438,6 +1469,10 @@ static uint32_t wd_chap_f(void)                      /* how far through the chap
     return b >= l ? 256u : b * 256u / l;
 }
 static uint32_t wd_cht(void) { return wd.path[wd.chap % NCHAP] % QUEST[wd.quest % NQUEST].nch; }   /* (its table's) */
+static int wd_hx(void) { return wd.quest == Q_CHASM; }   /* (1.0: HOWLING CHASM: THE CANYON's ways, its own tables) */
+static uint32_t wd_cyc(void) { return wd_cht() % (wd_hx() ? 6u : 5u); }
+static int wd_cyout(uint32_t c) { return c == (wd_hx() ? HX_OUT : 4u); }   /* (THE WAY OUT) */
+static uint32_t wd_cyt(uint32_t c, uint32_t i) { return wd_hx() ? HX_T[c % 6u][i] : CY_T[c % 5u][i]; }
 static void wd_frog_tempo(void)                      /* a bar: the tempo with the heat (turned by hand: it lets go) */
 {
     int32_t hc = FROG_HEAT[wd_cht() % 5u], amt, b;
@@ -1504,8 +1539,8 @@ static void wd_drift_bar(void)                       /* a bar: slower (faster) t
 }
 static void wd_cy_time(void)                         /* THE CANYON: the echo another note value (SYNC) */
 {
-    uint32_t i = CY_TIME[wd_cht() % 5u][wd_rnd(4)], v = (2u * i + 1u) * 127u / 24u;
-    if (wd_cht() == 4u) {                            /* (THE WAY OUT: home's) */
+    uint32_t c = wd_cyc(), i = wd_hx() ? HX_TIME[c][wd_rnd(4)] : CY_TIME[c][wd_rnd(4)], v = (2u * i + 1u) * 127u / 24u;
+    if (wd_cyout(c)) {                               /* (THE WAY OUT: home's) */
         v = wd_home[kit_idx(PAR_DLY_TIME)];
         if (par[PAR_DSYNC] != wd_home[kit_idx(PAR_DSYNC)])
             par_set(PAR_DSYNC, wd_home[kit_idx(PAR_DSYNC)]);
@@ -1532,19 +1567,20 @@ static uint32_t wd_cy_base(uint32_t v)               /* a voice's pan drawn a th
 }
 static void wd_cy_aim(uint32_t v, int pan)           /* a voice's next aim: its pan, or its DELAY SEND (and when) */
 {
-    uint32_t c = wd_cht() % 5u;
+    uint32_t c = wd_cyc(), out = wd_cyout(c);
     if (pan) {
-        int32_t sp = CY_SPREAD[c], b = (int32_t)wd_cy_base(v);
-        wd.cy_pan[v] = (uint8_t)(c == 4u ? wd_home[kit_idx(CY_PAN[v])]
+        int32_t sp = wd_hx() ? HX_SPREAD[c] : CY_SPREAD[c], b = (int32_t)wd_cy_base(v);
+        wd.cy_pan[v] = (uint8_t)(out ? wd_home[kit_idx(CY_PAN[v])]
                                          : clamp32(b + (sp ? (int32_t)wd_rnd(2u * (uint32_t)sp + 1u) - sp : 0), 0, 127));
         return;
     }
     {
-        uint32_t h = wd_home[kit_idx(PAR_DSEND1 + v)], lo = CY_SEND[c][0], hi = CY_SEND[c][1];
+        const uint8_t *S = wd_hx() ? HX_SEND[c] : CY_SEND[c];
+        uint32_t h = wd_home[kit_idx(PAR_DSEND1 + v)], lo = S[0], hi = S[1];
         uint32_t x = lo + wd_rnd(hi - lo + 1u);
-        wd.cy_snd[v] = (uint8_t)(c == 4u ? h : x > h ? x : h);
-        wd.cy_wait[v] = (uint8_t)(c == 4u ? 0u : wd_rnd(c ? 8u : 4u));   /* (each in its own time) */
-        wd.cy_rate[v] = (uint8_t)(c == 4u ? 2u : 1u + wd_rnd(3));
+        wd.cy_snd[v] = (uint8_t)(out ? h : x > h ? x : h);
+        wd.cy_wait[v] = (uint8_t)(out ? 0u : wd_rnd(c ? 8u : 4u));   /* (each in its own time) */
+        wd.cy_rate[v] = (uint8_t)(out ? 2u : 1u + wd_rnd(3));
     }
 }
 static int wd_cy_near(uint32_t p, uint32_t tg, uint32_t r)   /* p a step towards tg (r at most), at once */
@@ -1558,17 +1594,19 @@ static int wd_cy_near(uint32_t p, uint32_t tg, uint32_t r)   /* p a step towards
 }
 static void wd_cy_voices_bar(void)                   /* a bar: each voice's pan and DELAY SEND a little on its way */
 {
-    uint32_t v, m = wd_cy_voices(), c = wd_cht() % 5u, r = 1u + wd.k[WV_STRIDE] / 64u;
+    uint32_t v, m = wd_cy_voices(), c = wd_cyc(), out = wd_cyout(c), r = 1u + wd.k[WV_STRIDE] / 64u + (wd_hx() && c == 4u);
+    int call = wd_hx() ? c && c != 2u && !out && wd.cy_ms != 3u : c >= 2u && c < 4u;   /* (CHASM: not while ringing
+                                                      * out: the sends stay down) */
     for (v = 0; v < NVOICE; v++) {
         if (!(m >> v & 1u))
             continue;
-        if (wd_cy_near(CY_PAN[v], wd.cy_pan[v], c == 4u ? 2u : r) && c && c < 4u)
+        if (wd_cy_near(CY_PAN[v], wd.cy_pan[v], out ? 2u : r) && c && !out)
             wd_cy_aim(v, 1);                         /* (there: somewhere else) */
         if (wd.cy_wait[v]) {
             wd.cy_wait[v]--;
             continue;
         }
-        if (wd_cy_near(PAR_DSEND1 + v, wd.cy_snd[v], wd.cy_rate[v]) && c >= 2u && c < 4u)
+        if (wd_cy_near(PAR_DSEND1 + v, wd.cy_snd[v], wd.cy_rate[v]) && call)
             wd_cy_aim(v, 0);                         /* (a voice calling out, then quieter, then again) */
     }
 }
@@ -1587,6 +1625,8 @@ static int wd_glide_on(uint32_t p)                   /* p gliding now */
             return 1;
     return 0;
 }
+static void wd_hx_mode_set(void);
+static void wd_hx_sends(void);
 static void wd_cy_mode(uint32_t m)                   /* .. to mode m: its echoes fade out over a bar, the mode (the line
                                                       * from silence: sound.c), a bar, they come back */
 {
@@ -1594,6 +1634,7 @@ static void wd_cy_mode(uint32_t m)                   /* .. to mode m: its echoes
         return;
     if (!par[PAR_DLY_LEVEL]) {
         par_set(PAR_FX_DELAY_TYPE, m);
+        wd_hx_mode_set();
         return;
     }
     wd.cy_mtg = (uint8_t)m;
@@ -1606,29 +1647,236 @@ static void wd_cy_mode_bar(void)
     if (wd.cy_ms == 1u && (!par[PAR_DLY_LEVEL] || !wd_glide_on(PAR_DLY_LEVEL))) {   /* (quiet, or the knob turned
                                                       * by hand: the mode now) */
         par_set(PAR_FX_DELAY_TYPE, wd.cy_mtg);
+        wd_hx_mode_set();
         wd.cy_ms = par[PAR_DLY_LEVEL] ? 0u : 2u;
     } else if (wd.cy_ms == 2u) {
         wd_glide(PAR_DLY_LEVEL, wd.cy_lvl, 0);
         wd.cy_ms = 0;
+        wd_hx_sends();
+    } else if (wd.cy_ms == 3u && (!wd.hx_rb || !--wd.hx_rb)) {   /* (CHASM: rung out: the mode as THE CANYON's) */
+        wd.cy_ms = 0;
+        wd_cy_mode(wd.cy_mtg);
+        if (!wd.cy_ms)                               /* (no level to fade: switched at once) */
+            wd_hx_sends();
     }
 }
 static void wd_cy_step(void)                         /* .. every 2 bars: the delay and the reverb a step towards the
                                                       * chapter's */
 {
-    uint32_t c = wd_cht() % 5u, i, st = 4u + wd.k[WV_STRIDE] / 16u, f = wd_chap_f();
+    uint32_t c = wd_cyc(), i, st = 4u + wd.k[WV_STRIDE] / 16u, f = wd_chap_f();
     for (i = 0; i < NCY; i++) {
-        uint32_t p = CY_P[i], h = wd_home[kit_idx(p)], tg, s = st;
+        uint32_t p = CY_P[i], h = wd_home[kit_idx(p)], tg, s = st, t = wd_cyt(c, i);
         int32_t d;
-        if (p == PAR_DLY_LEVEL && wd.cy_ms)
+        if ((p == PAR_DLY_LEVEL && wd.cy_ms) || (p == PAR_DLY_FB && wd.cy_ms == 3u))
             continue;
-        tg = c == 4u ? h : i < 3u ? (h > CY_T[c][i] ? h : CY_T[c][i]) : (h + CY_T[c][i] < 127u ? h + CY_T[c][i] : 127u);
-        if (p == PAR_DLY_FB && c == 3u && f >= 80u && f < 176u) {   /* (lost: it rings, then falls back) */
+        tg = wd_cyout(c) ? h : i < 3u ? (h > t ? h : t) : (h + t < 127u ? h + t : 127u);
+        if (p == PAR_DLY_FB && !wd_hx() && c == 3u && f >= 80u && f < 176u) {   /* (lost: it rings, then falls back) */
             tg = f < 128u ? 126u : 127u;
+            s = 2u * st;
+        }
+        if (p == PAR_DLY_FB && wd_hx() && ((c == 1u && f >= 80u && f < 176u) || (c == 4u && f >= 160u && f < 224u))) {
+            tg = 120u;                               /* (CHASM: pushed into the howl, then back) */
             s = 2u * st;
         }
         d = clamp32((int32_t)tg - (int32_t)par[p], -(int32_t)s, (int32_t)s);
         if (d)
             wd_glide(p, (int32_t)par[p] + d, 0);
+    }
+}
+/* ------------------------------------------------- 1.0: HOWLING CHASM --- */
+static const uint16_t HX_DJV[8] = {VP_DJ, VP_DJWET, VP_DJTONE, VP_DJSLOPE, VP_DJTYPE, VP_DJRESO, VP_DJTUNE, VP_DJSPREAD};
+static const uint8_t HX_DJMS[4] = {90, 30, 45, 45};  /* (ms a step: the root slides slowly, a semitone ~0.25 s) */
+static void wd_dj_snap(void)                         /* the DJ filter as it is: home's */
+{
+    uint32_t i;
+    for (i = 0; i < 8u; i++)
+        wd.djh[i] = (uint8_t)vp_get(HX_DJV[i]);
+}
+static void wd_dj_home(void)                         /* home's DJ filter, at once */
+{
+    uint32_t i;
+    if (!wd.djon)
+        return;
+    for (i = 0; i < 8u; i++)
+        vp_set(HX_DJV[i], wd.djh[i]);
+    wd.djon = wd.djoff = 0;
+}
+static uint32_t wd_dj_at(uint32_t n)                 /* the DJ filter's position for RING's root at note n (below C3) */
+{
+    return (uint32_t)clamp32(64 - ((48 - (int32_t)n) * 65536 + 12480) / 24960, 0, 56);   /* (24 x 1040 a semitone) */
+}
+static void wd_dj_aim(uint32_t i, uint32_t v) { wd.djtg[i] = (uint8_t)v; }
+static void wd_dj_on(uint32_t tune, uint32_t wet) /* RING in: from silence (its wet 0), then up to wet */
+{
+    uint32_t i;
+    if (!wd.djon) {
+        vp_set(VP_DJWET, 0);
+        vp_set(VP_DJTYPE, djt_place(DJT_RING));
+        vp_set(VP_DJ, wd_dj_at(HX_ROOT[wd_rnd(4)]));
+        vp_set(VP_DJSPREAD, 112);
+        vp_set(VP_DJSLOPE, 64);
+        vp_set(VP_DJTONE, 64);
+        for (i = 0; i < 4u; i++)
+            wd.djtg[i] = wd.djl[i] = (uint8_t)vp_get(HX_DJV[i]);
+        wd.djon = 1;
+    }
+    wd.djoff = 0;
+    vp_set(VP_DJTUNE, tune);
+    vp_set(VP_DJRESO, 96u + wd_rnd(20));             /* (a long ring) */
+    wd_dj_aim(1, wet);
+}
+static void wd_dj_off(void)                          /* RING out: its wet down, then home's */
+{
+    if (wd.djon) {
+        wd.djoff = 1;
+        wd_dj_aim(1, 0);
+    }
+}
+static void wd_dj_root(void)                         /* the root somewhere worse: a semitone, a tritone */
+{
+    static const int8_t M[6] = {-1, 1, -6, 6, -1, -2};
+    uint32_t n = ring_root(((int32_t)wd.djtg[0] - 64) * 1040);
+    n = (uint32_t)((int32_t)n + M[wd_rnd(6)]);
+    wd_dj_aim(0, wd_dj_at(n < 26u ? n + 12u : n > 44u ? n - 12u : n));
+}
+static void wd_dj_ms(void)                           /* each ms: the root, wet, tone, slope a step towards their aims
+                                                      * (a knob turned by hand: it wins) */
+{
+    uint32_t i;
+    if (!wd.djon)
+        return;
+    for (i = 0; i < 4u; i++) {
+        uint32_t c = vp_get(HX_DJV[i]);
+        if (c != wd.djl[i])
+            wd.djtg[i] = wd.djl[i] = (uint8_t)c;
+        if (c != wd.djtg[i] && fm1_ms - wd.djt[i] >= HX_DJMS[i]) {
+            c = c < wd.djtg[i] ? c + 1u : c - 1u;
+            vp_set(HX_DJV[i], c);
+            wd.djl[i] = (uint8_t)c;
+            wd.djt[i] = fm1_ms;
+        }
+    }
+    if (wd.djoff && !vp_get(VP_DJWET))
+        wd_dj_home();
+}
+static void wd_hx_sends(void)                        /* the sends' aims again (after ringing out) */
+{
+    uint32_t v;
+    if (wd_hx())
+        for (v = 0; v < NVOICE; v++)
+            wd_cy_aim(v, 0);
+}
+static void wd_hx_mode_set(void)                     /* the delay's mode just changed: its knobs for it (silent now) */
+{
+    uint32_t c = wd_cyc(), g = par[PAR_FX_DELAY_TYPE] == DELAY_GRAIN, i;
+    static const uint16_t P[3] = {PAR_DLY_WOW, PAR_DSAT, PAR_GLITCH};
+    static const uint8_t V[2][3] = {{70, 72, 30}, {100, 96, 66}};   /* (TAPE: wow, saturate, glitch; GRAIN: size,
+                                                      * scatter, density) */
+    if (!wd_hx())
+        return;
+    if (wd_cyout(c)) {                               /* (THE WAY OUT: home's) */
+        for (i = 0; i < 3u; i++)
+            wd_glide(P[i], wd_home[kit_idx(P[i])], 0);
+        par_set(PAR_DPITCH, wd_home[kit_idx(PAR_DPITCH)]);
+        return;
+    }
+    for (i = 0; i < 3u; i++)
+        if (par[P[i]] != V[g][i]) {
+            morph_follow(P[i], (int32_t)V[g][i] - (int32_t)par[P[i]]);
+            par_set(P[i], V[g][i]);
+        }
+    par_set(PAR_DPITCH, c == 4u ? DP_DOWN12 : c == 1u || c == 3u ? DP_DETUNE : wd_home[kit_idx(PAR_DPITCH)]);
+}
+static void wd_hx_mode(uint32_t m)                   /* .. to mode m: the sends down, the tail rung out over a few bars,
+                                                      * then THE CANYON's switch */
+{
+    uint32_t v;
+    if (par[PAR_FX_DELAY_TYPE] == m || wd.cy_ms)
+        return;
+    if (!par[PAR_DLY_LEVEL] || par[PAR_FX_DELAY_TYPE] == DELAY_OFF) {
+        par_set(PAR_FX_DELAY_TYPE, m);
+        wd_hx_mode_set();
+        return;
+    }
+    wd.cy_mtg = (uint8_t)m;
+    wd.cy_ms = 3;
+    wd.hx_rb = 4;
+    for (v = 0; v < NVOICE; v++) {
+        wd.cy_snd[v] = 0;
+        wd.cy_wait[v] = 0;
+        wd.cy_rate[v] = 24;
+    }
+    if (par[PAR_DLY_FB] > 72u)                       /* (out of the howl: a tail that dies) */
+        wd_glide(PAR_DLY_FB, 72, 0);
+}
+static void wd_hx_band(uint32_t lo, uint32_t hi)     /* the howl's pitch somewhere else, over a bar */
+{
+    wd_glide(PAR_DLY_BAND, (int32_t)(lo + wd_rnd(hi - lo + 1u)), 0);
+}
+static void wd_hx_chapter(void)
+{
+    uint32_t v, c = wd_cyc();
+    wd.cyb = 0;
+    wd.hx_half = 0;
+    wd_cy_time();
+    for (v = 0; v < NVOICE; v++) {
+        wd_cy_aim(v, 1);
+        wd_cy_aim(v, 0);
+    }
+    if (wd_cyout(c)) {                               /* (THE WAY OUT: home's delay, its band; the ring out) */
+        uint32_t h = wd_home[kit_idx(PAR_FX_DELAY_TYPE)];
+        wd_hx_mode(h);
+        if (h == DELAY_OFF && par[PAR_FX_DELAY_TYPE] != DELAY_OFF)
+            wd_cy_mode(h);
+        wd_glide(PAR_DLY_BAND, wd_home[kit_idx(PAR_DLY_BAND)], 0);
+        if (par[PAR_FX_DELAY_TYPE] == h)
+            wd_hx_mode_set();
+        wd_dj_off();
+        return;
+    }
+    wd_hx_mode(c >= 3u ? DELAY_GRAIN : DELAY_TAPEPP);   /* (stereo tape, then the grains) */
+    if (c == 0u || c == 2u) {                        /* (no howl yet; the false light: none) */
+        wd_glide(PAR_DLY_BAND, 0, 0);
+    } else {
+        wd_hx_band(c == 3u ? 15u : 20u, c == 3u ? 45u : 75u);
+    }
+    if (c >= 3u)                                     /* (the voices in the rock: a string's harmonics; the dark: MIN7) */
+        wd_dj_on(c == 3u ? RC_NOTE : RC_MIN7, c == 3u ? 80u : 96u);
+    else
+        wd_dj_off();
+    if (c == 3u)
+        wd_dj_aim(3, 92);                            /* (the high bands hang on) */
+}
+static void wd_hx_bar(void)
+{
+    uint32_t c = wd_cyc(), f = wd_chap_f();
+    wd_cy_mode_bar();
+    wd_cy_voices_bar();
+    if (!(++wd.cyb & 1u))
+        wd_cy_step();
+    if (wd_cyout(c))
+        return;
+    if ((c == 1u || c == 4u) && !(wd.cyb & 3u) && !wd.cy_ms)   /* (the echo another value: the tape lurches) */
+        wd_cy_time();
+    else if (c == 3u && !(wd.cyb & 7u) && !wd.cy_ms)
+        wd_cy_time();
+    if (c == 1u && !(wd.cyb & 1u))                   /* (the howl's pitch moving) */
+        wd_hx_band(20, 75);
+    else if (c == 4u)
+        wd_hx_band(10, 90);
+    else if (c == 3u && !(wd.cyb & 3u))
+        wd_hx_band(15, 45);
+    if (c == 3u && !(wd.cyb & 7u))                   /* (the ring's root sliding somewhere worse) */
+        wd_dj_root();
+    if (c == 4u && !(wd.cyb & 3u)) {
+        wd_dj_root();
+        wd_dj_aim(2, 20u + wd_rnd(60));              /* (darker, brighter) */
+        wd_dj_aim(3, 40u + wd_rnd(80));
+    }
+    if (c == 4u && f >= 128u && !wd.hx_half && !wd.cy_ms) {   /* (THE DARK, halfway: the grains rung out, the tape
+                                                      * howling again) */
+        wd.hx_half = 1;
+        wd_hx_mode(DELAY_TAPEPP);
     }
 }
 static void wd_quest_chapter(void)                   /* a chapter begins (BOILING FROG, THE CANYON) */
@@ -1637,6 +1885,8 @@ static void wd_quest_chapter(void)                   /* a chapter begins (BOILIN
         wd.fh0 = wd.fh;
         if (wd.state == WS_ROAD)
             wd_drift_start();
+    } else if (wd.quest == Q_CHASM && wd.state == WS_ROAD) {
+        wd_hx_chapter();
     } else if (wd.quest == Q_CANYON && wd.state == WS_ROAD) {
         uint32_t v, c = wd_cht() % 5u;
         wd.cyb = 0;
@@ -1654,6 +1904,8 @@ static void wd_quest_bar(void)                       /* .. a bar of it */
     if (wd.quest == Q_FROG) {
         wd_frog_tempo();
         wd_drift_bar();
+    } else if (wd.quest == Q_CHASM) {
+        wd_hx_bar();
     } else if (wd.quest == Q_CANYON) {
         wd_cy_mode_bar();
         wd_cy_voices_bar();
@@ -1701,10 +1953,15 @@ static void wd_set_out(void)                         /* COPY (OCT+): from here (
         wd.fb0 = (uint8_t)seq_bpm();                 /* (1.0: BOILING FROG's home tempo) */
         wd.fh = wd.fh0 = 0;
         wd.dmask = 0;
+        wd_dj_snap();                                /* (1.0: HOWLING CHASM: the DJ filter at home) */
+        wd.djon = wd.djoff = 0;
     }
+    wd.cy_ms = 0;                                    /* (a delay mode change left half done: let go) */
     wd_x ^= fm1_ms * 2654435761u ^ sq.ticks;
     wd_rnd(2);
     wd.quest = (uint8_t)(wd.k[WV_QUEST] % NQUEST);
+    if (wd.quest != Q_CHASM)                         /* (1.0: from HOWLING CHASM: its ring out) */
+        wd_dj_off();
     if (wd.quest != Q_FROG)                          /* (1.0: another course: the drift back in time) */
         wd_drift_home();
     wd.fbpm = (uint8_t)(wd.quest == Q_FROG && par[PAR_BPM] >= 20u ? par[PAR_BPM] : 0u);
@@ -1799,6 +2056,11 @@ static void wd_home_go(uint32_t fate, int instant)
         fate = WF_HOME;
     }
     wd.fate = (uint8_t)fate;
+    wd.cy_ms = 0;
+    if (bars)                                        /* (1.0: HOWLING CHASM: the ring faded out, then home's) */
+        wd_dj_off();
+    else
+        wd_dj_home();
     wd_drift_home();                                 /* (1.0: BOILING FROG: in time again; the tempo with the voices) */
     if (!bars)
         wd_frog_home_bar(1);
@@ -1844,6 +2106,7 @@ static void wd_keep(void)                            /* here is home: the voices
     wd.fb0 = (uint8_t)seq_bpm();                     /* (1.0: BOILING FROG: this tempo home, the heat from here) */
     wd.fh = wd.fh0 = 0;
     wd.fcs = wd.bars;
+    wd_dj_snap();                                    /* (1.0: the DJ filter here is home's too) */
     if (wd.quest == Q_FROG && wd.state == WS_ROAD)
         wd_drift_start();
 }
@@ -1858,6 +2121,7 @@ static void wd_end(void)                             /* the JOURNEY's end: its F
         wd_keep();
         wd.dmask = 0;
         wd_glides_off();
+        wd.djon = wd.djoff = 0;                      /* (1.0: HOWLING CHASM: the ring stays, home now) */
         wd.state = WS_IDLE;
         wd_message("LOST: ", "HERE IS HOME NOW");
         return;
@@ -1958,6 +2222,7 @@ static void wd_home_done(void)                       /* the voices home: the rhy
     }
     memset(sq.wdens, 0, sizeof sq.wdens);
     wd_frog_home_bar(1);                             /* (1.0: BOILING FROG: the tempo home) */
+    wd_dj_home();
     wd.fbpm = 0;
     wd.state = WS_IDLE;
     sq.mre = (1u << NTRACK) - 1u;                    /* (0.23-t11: the melodies from their top at each loop's start) */
@@ -1967,6 +2232,7 @@ static void wd_service(void)                         /* each ms: the bars, the g
 {
     if (wd.state == WS_IDLE)
         return;
+    wd_dj_ms();                                      /* (1.0: HOWLING CHASM's ring) */
     if (sq.active != wd.slot)                        /* (41: another pattern: the footprints back in the one left) */
         wd_moved();
     if (!wd_home_loads_ok() && wd.state == WS_ROAD) {   /* (a kit loaded: its voices are home now) */
@@ -2186,7 +2452,8 @@ static void wd_bar_key(uint32_t k)                   /* 1 ALL / NONE, 2 KEEP, 3 
 }
 
 /* ------------------------------------------------------------ knobs --- */
-static int wd_vdead(uint32_t i) { (void)i; return 0; }   /* (a knob not in use yet: none since 42) */
+static int wd_vdead(uint32_t i) { (void)i; return 0; }
+static int wd_goal_song(void) { return wd.k[WV_GOAL] == WG_SONG; }   /* (1.0: Order and Sway shown only then) */   /* (a knob not in use yet: none since 42) */
 static uint32_t wd_vget(uint32_t i) { return wd.k[i % NWV]; }
 static uint32_t wd_vmax(uint32_t i)
 {

@@ -1397,9 +1397,9 @@ static void seq_croll_free(void)                     /* (a block) */
  * A step's RUSH lock (the lock code of the LXR's roll parameter, 247: no sound takes it) sets the amount for its
  * step, gliding to the next step's; the first track with one leads. The knob, while up, overrides them */
 #define RUSH_CODE 247u
-static void rush_defaults(void)                      /* (Elixir Desktop's: START 75, FREE 80, TOP 1/256, 40 ms) */
-{
-    sq.ru_start = 75;
+static void rush_defaults(void)                      /* (Elixir Desktop's: FREE 80, TOP 1/256, 40 ms; 1.0: START 10, */
+{                                                    /* .. the roll from early on: the user, 2026-11-08; was 75) */
+    sq.ru_start = 10;
     sq.ru_free_at = 80;
     sq.ru_top = 2;
     sq.ru_flam = 0;

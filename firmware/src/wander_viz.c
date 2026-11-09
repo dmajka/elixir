@@ -30,7 +30,7 @@ static void wd_bars_text(char *b, uint32_t n, uint32_t bars)
 static void wd_card_value(char *b, uint32_t n, uint32_t i, uint32_t v)
 {
     static const char *const QC[NQUEST] = {"ROAD", "ROUND", "SPIRE", "HOLLOW", "TIDE", "DETOUR", "ASTRAY", "MAZE",
-                                           "ROSARY", "POND", "WHEEL", "FROG", "CANYON"};
+                                           "ROSARY", "POND", "WHEEL", "FROG", "CANYON", "CHASM"};
     switch (i) {
     case WV_QUEST: put_str(b, QC[v % NQUEST], n); return;
     case WV_JOURNEY:
@@ -207,7 +207,9 @@ static const uint8_t WD_ROAD[NQUEST][WD_NPT][2] = {
     {{0, 92}, {18, 100}, {40, 104}, {62, 102}, {82, 94}, {96, 78}, {100, 60}, {94, 44}, {80, 34}, {62, 30}},   /* the pond */
     {{0, 60}, {8, 28}, {30, 6}, {58, 4}, {82, 20}, {94, 50}, {84, 82}, {58, 100}, {28, 98}, {4, 78}},      /* a wheel */
     {{0, 92}, {12, 91}, {24, 89}, {36, 86}, {48, 82}, {60, 77}, {70, 71}, {80, 64}, {90, 56}, {100, 47}},   /* a slow rise */
-    {{0, 92}, {16, 70}, {30, 86}, {44, 58}, {56, 78}, {66, 50}, {76, 68}, {84, 40}, {92, 52}, {100, 26}}};   /* a gorge */
+    {{0, 92}, {16, 70}, {30, 86}, {44, 58}, {56, 78}, {66, 50}, {76, 68}, {84, 40}, {92, 52}, {100, 26}},   /* a gorge */
+    {{0, 88}, {14, 70}, {28, 58}, {42, 78}, {30, 92}, {52, 98}, {66, 82}, {58, 104}, {82, 106}, {100, 98}}};   /* over
+                                                      * the rim, down, doubling back (1.0: HOWLING CHASM) */
 #define WD_X0 40
 #define WD_W 160
 #define WD_Y0 44
@@ -280,6 +282,21 @@ static void wd_scenery(uint32_t q)                   /* behind the road: the mou
             int32_t w = 10 + y / 3;
             cv_rect(WD_X0 - 4, WD_Y0 - 4 + y, w, 1, hill);
             cv_rect(WD_X0 + WD_W + 4 - w, WD_Y0 - 4 + y, w, 1, hill);
+        }
+    } else if (q == Q_CHASM) {                       /* (1.0: the walls closing in, and eyes in them, deeper down) */
+        uint32_t c = wd.state == WS_ROAD && wd.quest == Q_CHASM ? wd_cht() : 0u, n = c >= 3u && c < 5u ? 2u + c : c;
+        uint16_t dark = ux_mix(T_BG, T_SURF, 45);
+        for (y = 0; y < 66; y++) {
+            int32_t w = 14 + y / 2;
+            cv_rect(WD_X0 - 4, WD_Y0 - 8 + y, w, 1, dark);
+            cv_rect(WD_X0 + WD_W + 4 - w, WD_Y0 - 8 + y, w, 1, dark);
+        }
+        for (y = 0; y < (int32_t)n; y++) {           /* (they blink: a new place every 4 bars) */
+            uint32_t h = (wd.bars / 4u + (uint32_t)y) * 2654435761u;
+            int32_t ex = (h >> 8) & 1u ? WD_X0 + (int32_t)((h >> 12) % 18u) : WD_X0 + WD_W - 20 + (int32_t)((h >> 12) % 18u);
+            int32_t ey = WD_Y0 + (int32_t)((h >> 20) % 50u);
+            cv_rect(ex, ey, 2, 2, RGB(230, 60, 40));
+            cv_rect(ex + 5, ey, 2, 2, RGB(230, 60, 40));
         }
     } else if (q == Q_WHEEL) {                       /* (the spokes) */
         for (y = 1; y < (int32_t)WD_NPT; y += 2)

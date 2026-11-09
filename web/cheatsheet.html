@@ -91,7 +91,7 @@
       <tr><td>LFO</td><td>LFO 1 → LFO 2 → random per hit → cross mod / choke</td></tr>
       <tr><td>GLO</td><td>Mixer → config</td></tr>
       <tr><td>FX</td><td>FX bus → reverb (SELECT for the pages)</td></tr>
-      <tr><td>SEQ</td><td>Track pages (track, generator, action, groove, bounce, melody, scale) → step edit</td></tr>
+      <tr><td>SEQ</td><td>Track pages (track, generator, action, melody, scale, groove, bounce) → step edit</td></tr>
       <tr><td>ARP</td><td>PERF: PERFORM → SPELLS → WANDER → GLOBAL MOD</td></tr>
       <tr><td>SAVE</td><td>Save → load</td></tr>
       <tr><td>PLAY · REC</td><td>Start / stop · record on / off</td></tr>
@@ -190,11 +190,11 @@
       <tr><td>TRACK</td><td>Length</td><td>Clock</td><td>Direction</td><td>Follow</td></tr>
       <tr><td>GENERATOR</td><td>Generator</td><td colspan="3">its settings</td></tr>
       <tr><td>ACTION</td><td>Action</td><td colspan="3">Grids map X / Y, chaos · Euclid's second pulse</td></tr>
-      <tr><td>GROOVE</td><td>Groove</td><td>Amount</td><td>Humanize</td><td>Follow</td></tr>
-      <tr><td>BOUNCE</td><td>Bounce</td><td>Bnc pitch</td><td>–</td><td>–</td></tr>
       <tr><td>MELODY 1</td><td>Shape</td><td>Spread</td><td>Bias</td><td>Steps</td></tr>
       <tr><td>MELODY 2</td><td>Deja vu</td><td>Loop</td><td>Length</td><td>Len var</td></tr>
       <tr><td>SCALE</td><td>Root</td><td>Scale</td><td>Follow</td><td>Base</td></tr>
+      <tr><td>GROOVE</td><td>Groove</td><td>Amount</td><td>Humanize</td><td>Follow</td></tr>
+      <tr><td>BOUNCE</td><td>Bounce</td><td>Bnc pitch</td><td>–</td><td>–</td></tr>
     </table>
 
     <h2>Each track on its own clock</h2>
@@ -662,22 +662,28 @@
       <tr><td>32–39</td><td><b>32</b>Macro 1</td><td><b>33</b>Macro 2</td><td><b>34</b>Macro 3</td><td><b>35</b>Macro 4</td><td><b>36</b>DRILL</td><td><b>37</b>JITTER</td><td><b>38</b>CUTS</td><td><b>39</b>PUMP</td></tr>
       <tr><td>40–47</td><td><b>40</b>COMB note</td><td><b>41</b>COMB fb</td><td><b>42</b>CRUSH</td><td><b>43</b>REV len</td><td><b>44</b>LFO1 dep</td><td><b>45</b>LFO2 dep</td><td><b>46</b>LFO3 dep</td><td><b>47</b>DJ reso</td></tr>
     </table>
-    <p class="note">Off the grid: <b>CC 3</b> the delay's Band (0 off).</p>
+    <h2>GLOBAL (channel 16): knobs off the grid</h2>
+    <table class="grid cells">
+      <tr><td>Delay</td><td><b>96</b>Time</td><td><b>97</b>Feedback</td><td><b>98</b>Tone</td><td><b>99</b>Band</td><td><b>100</b>Wow</td><td><b>101</b>Glitch</td><td><b>102</b>Route</td><td><b>103</b>Rev>FX</td></tr>
+      <tr><td>RING · LFO 4</td><td><b>3</b>Wet</td><td><b>4</b>Slope</td><td><b>5</b>Tone</td><td><b>7</b>Tune</td><td><b>63</b>Spread</td><td><b>2</b>LFO4 dep</td><td></td><td></td></tr>
+    </table>
+    <p class="note">GRAIN: Time is Position, Wow Size, Glitch Density (Saturate, 23, Scatter). Band 0: off. RING's root
+      is the DJ filter (12), its Decay DJ reso (47).</p>
     <h2>GLOBAL (channel 16): buttons, CC or note</h2>
     <table class="grid cells">
       <tr><td>Transport · held</td><td><b>48</b>PLAY/STOP</td><td><b>49</b>REC</td><td><b>50</b>FILL</td><td><b>51</b>REPEAT</td><td><b>52</b>FREEZE</td><td><b>53</b>THROW REV</td><td><b>54</b>THROW FX</td><td><b>55</b>FB PUSH</td></tr>
-      <tr><td>Held · patterns</td><td><b>56</b>TAPE STOP</td><td><b>57</b>LP sweep</td><td><b>58</b>HP sweep</td><td><b>59</b>REVERSE</td><td><b>60</b><b>◀ pattern</b></td><td><b>61</b><b>pattern ▶</b></td><td><b>62</b>CTRL ALL</td><td><b>63</b>CTRL ALL ⇄</td></tr>
+      <tr><td>Held · patterns</td><td><b>56</b>TAPE STOP</td><td><b>57</b>LP sweep</td><td><b>58</b>HP sweep</td><td><b>59</b>REVERSE</td><td><b>60</b><b>◀ pattern</b></td><td><b>61</b><b>pattern ▶</b></td><td><b>62</b>CTRL ALL tap/hold</td><td><b>63</b><i>knob</i></td></tr>
       <tr><td>Select</td><td><b>64</b>D1</td><td><b>65</b>D2</td><td><b>66</b>D3</td><td><b>67</b>SN</td><td><b>68</b>CY</td><td><b>69</b>CH</td><td><b>70</b>OH</td><td><b>71</b>CA revert</td></tr>
       <tr><td>Roll (held)</td><td><b>72</b>D1</td><td><b>73</b>D2</td><td><b>74</b>D3</td><td><b>75</b>SN</td><td><b>76</b>CY</td><td><b>77</b>CH</td><td><b>78</b>OH</td><td><b>79</b>sel</td></tr>
       <tr><td>DRILL (held)</td><td><b>80</b>D1</td><td><b>81</b>D2</td><td><b>82</b>D3</td><td><b>83</b>SN</td><td><b>84</b>CY</td><td><b>85</b>CH</td><td><b>86</b>OH</td><td><b>87</b>sel</td></tr>
-      <tr><td>Effects, held</td><td><b>88</b>HALF</td><td><b>89</b>JITTER</td><td><b>90</b>CUTS</td><td><b>91</b>SHORT</td><td><b>92</b>PUMP</td><td><b>93</b>COMB</td><td><b>94</b>SPACE</td><td><b>95</b>CRUSH</td></tr>
-      <tr><td>Effects ⇄</td><td><b>96</b>HALF</td><td><b>97</b>JITTER</td><td><b>98</b>CUTS</td><td><b>99</b>SHORT</td><td><b>100</b>PUMP</td><td><b>101</b>COMB</td><td><b>102</b>SPACE</td><td><b>103</b>CRUSH</td></tr>
+      <tr><td>Effects: tap latches, hold holds</td><td><b>88</b>HALF</td><td><b>89</b>JITTER</td><td><b>90</b>CUTS</td><td><b>91</b>SHORT</td><td><b>92</b>PUMP</td><td><b>93</b>COMB</td><td><b>94</b>SPACE</td><td><b>95</b>CRUSH</td></tr>
       <tr><td>DENSITY out ⇄</td><td><b>104</b>D1</td><td><b>105</b>D2</td><td><b>106</b>D3</td><td><b>107</b>SN</td><td><b>108</b>CY</td><td><b>109</b>CH</td><td><b>110</b>OH</td><td><b>111</b>all in</td></tr>
       <tr><td>Roll (fader)</td><td><b>112</b>D1</td><td><b>113</b>D2</td><td><b>114</b>D3</td><td><b>115</b>SN</td><td><b>116</b>CY</td><td><b>117</b>CH</td><td><b>118</b>OH</td><td><b>119</b>sel</td></tr>
     </table>
     <p class="note">The effects are PERF's and work from any page. DENSITY out: 104–110 leave a track out of DENSITY
       (again: back in), 111 puts them all back. Roll faders: the value is the rate, 1–32 on the grid (1/4 … 1/32),
-      33–127 free (1/32 … 1/256), 0 off; several at once, while playing. CONTROL ALL (62 held, 63 latched): a voice's
+      33–127 free (1/32 … 1/256), 0 off; several at once, while playing. Effects and CONTROL ALL: a tap (under ¼ s) latches, again off; a longer press holds (TOGGLE pads: the
+      button's state). CONTROL ALL (62): a voice's
       CC / NRPN / TRACKS knob moves every track in it by its step, the panel's knobs too; 64–70 leave a track out (again:
       in); off keeps; 71 reverts.</p>
   </div>

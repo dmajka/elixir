@@ -799,6 +799,7 @@ static void phase4(void)
         check(ui.page == PG_ACTION && vp_max(VP_ACTION) == 3, "ACTION: a live generator's COMMIT, UNDO, RESET");
         turn(EN_K1, 1);
         check(ui.action == ACT_COMMIT, "ACTION: COMMIT");
+        check((web_breath_buttons() >> B_OCTUP) & 1u, "ACTION: COMMIT chosen, OCT+ breathes (1.0)");
         shot("action-commit");
         press(B_OCTUP);
         check(p->main[0][0] == live, "COMMIT: the live track into the pattern");
@@ -3135,10 +3136,10 @@ static void phase12_remote(void)
     for (i = 0; i < RM_NGK; i++)
         seen[RM_GCC(i)]++;
     for (i = 0; i < RM_NGB; i++)
-        seen[RM_GB0 + i]++;
+        seen[RM_GB0 + i] += !rm_nobtn(RM_NTB + i);
     for (i = 0; i < 128u; i++)
-        ok |= seen[i] > 1u || (seen[i] && ((i < 8u && i != RM_XCC && i != RM_XCC2) || i >= 120u));
-    check(!ok, "the remote map: each number once a channel, within 8..119 (and GLOBAL's CC 3, 1.0 Phase 11: CC 2)");
+        ok |= seen[i] > 1u || (seen[i] && ((i < 8u && i != 2u && i != 3u && i != 4u && i != 5u && i != 7u) || i >= 120u));
+    check(!ok, "the remote map: each number once a channel, within 8..119 (and GLOBAL's CC 2..5, 7: never 0, 1, 6)");
     vp_set(VP_RKNOBS, RK_ABS);
     goto_mode(B_GLO, M_CONFIG);
     while (ui.page != CF_REMOTE)
@@ -3264,16 +3265,70 @@ static void phase12_remote(void)
     ok &= (sq.drill >> 2) & 1u;
     gcc(80 + 2, 0);
     check(ok && !(sq.roll & 1u) && !sq.drill, "a roll and a DRILL while held");
+    /* 1.0: one row for both: a press held past RM_TAP_MS holds, a tap latches, a press again lets it go */
     gcc(88, 127);
     ok = (pf.on >> PF_HALF) & 1u;
+    run_ms(400);
     gcc(88, 0);
-    gbtn(96 + 7);
+    gbtn(88 + 7);
     ok &= !((pf.on >> PF_HALF) & 1u) && ((pf.on >> PF_CRUSH) & 1u);
     goto_mode(B_ARP, M_PERF);
     goto_mode(B_HOME, M_HOME);                       /* (leaving PERF lets the panel's latches go, not the remote's) */
     ok &= (pf.on >> PF_CRUSH) & 1u;
-    gbtn(96 + 7);
-    check(ok && !((pf.on >> PF_CRUSH) & 1u), "HALF held; CRUSH latched (past PERF), then off");
+    gcc(88 + 7, 127);
+    ok &= !((pf.on >> PF_CRUSH) & 1u);
+    run_ms(400);
+    gcc(88 + 7, 0);
+    check(ok && !((pf.on >> PF_CRUSH) & 1u) && !ui.rm_latch && !ui.rm_held,
+          "HALF held (a long press); CRUSH tapped: latched (past PERF), a press again: off, its release nothing");
+    gnote(88 + 1, 1);
+    gnote(88 + 1, 0);
+    ok = (pf.on >> PF_JITTER) & 1u;
+    gnote(88 + 1, 1);
+    gnote(88 + 1, 0);
+    check(ok && !((pf.on >> PF_JITTER) & 1u), "JITTER tapped as notes: latched, then off");
+    vp_set(VP_RMUTE, 1);                             /* (TOGGLE: the button's state is the latch) */
+    gcc(88 + 2, 127);
+    run_ms(400);
+    ok = (pf.on >> PF_CUTS) & 1u;
+    gcc(88 + 2, 0);
+    vp_set(VP_RMUTE, 0);
+    check(ok && !((pf.on >> PF_CUTS) & 1u), "Mute/solo TOGGLE: an effect's button state is its latch");
+    gcc(96 + 7, 127);
+    check(!((pf.on >> PF_CRUSH) & 1u) && pf.on == 0u, "96..103: no longer the effects latched");
+    /* 1.0: the knobs off the grid: RING on 3, 4, 5, 7, 63; the delay on 96 .. 103 */
+    vp_set(VP_RKNOBS, RK_ABS);
+    gcc(3, 127);
+    gcc(4, 0);
+    gcc(5, 127);
+    gcc(7, 127);
+    gcc(63, 0);
+    check(pfs.dj_wet == 127u && pfs.dj_slope == 0u && pfs.dj_tone == 127u && pfs.dj_tune == NRTUNE - 1u &&
+              pfs.dj_spread == 0u, "GLOBAL CC 3, 4, 5, 7, 63: RING's Wet, Slope, Tone, Tune, Spread");
+    gcc(96, 0);
+    gcc(97, 127);
+    gcc(98, 0);
+    gcc(99, 0);
+    gcc(100, 127);
+    gcc(101, 127);
+    gcc(102, 0);
+    gcc(103, 127);
+    check(par[PAR_DLY_TIME] == vp_min(PAR_DLY_TIME) && par[PAR_DLY_FB] == vp_max(PAR_DLY_FB) &&
+              par[PAR_DLY_TONE] == vp_min(PAR_DLY_TONE) && par[PAR_DLY_BAND] == 0u &&
+              par[PAR_DLY_WOW] == vp_max(PAR_DLY_WOW) && par[PAR_GLITCH] == vp_max(PAR_GLITCH) &&
+              par[PAR_DLY_ROUTE] == vp_min(PAR_DLY_ROUTE) && par[PAR_REV_FX] == vp_max(PAR_REV_FX),
+          "GLOBAL CC 96..103: the delay's Time, Feedback, Tone, Band, Wow, Glitch, Route, Rev>FX");
+    web_midi_out_take();
+    pfs.dj_wet = 40;
+    par_set(PAR_DLY_FB, 33);
+    run_ms(200);
+    ok = fb_seen(0xB0u | remote_gch, 3, rm_to_cc(VP_DJWET));
+    check(ok && !fb_seen(0xB0u | remote_gch, 97, 0), "feedback: RING Wet on CC 3; 97 a knob's value, no button's");
+    pfs.dj_wet = pfs.dj_slope = pfs.dj_tone = pfs.dj_spread = 64;
+    pfs.dj_tune = RC_MAJ;
+    kit_init_par();
+    snd_post_all();
+    vp_set(VP_RKNOBS, RK_PICKUP);
     pfs.dex = 0;
     gbtn(104);
     gbtn(104 + 3);
@@ -9249,12 +9304,8 @@ static void phase_100_16(void)
         ui.force = 1;
         run_ms(100);
         shot("sends-track");
-        ui.half = 1;
-        page_params(pp);
-        ok &= pp[0] == PAR_FX_DRY_WET && pp[1] == PAR_DLY_LEVEL && pp[2] == PAR_REV_LEVEL;
-        card_name(b, sizeof b, pp[1]);
-        ok &= !strcmp(b, "Dly lvl");
-        check(ok, "FX TRACK SENDS: the last page, FX / Delay / Reverb, the returns under them");
+        ok &= l[n - 2u][0] != S_SENDS;               /* (1.0: one page; the returns are global, on FX and MIXER) */
+        check(ok, "FX TRACK SENDS: the last page, one page: FX / Delay / Reverb");
         /* Control All on it: every track's delay send */
         ui.half = 0;
         par_set(PAR_FX_SEND1 + 1, 40);
@@ -9549,9 +9600,53 @@ static void phase_100_13(void)
         check(!strcmp(t, "GRAIN (2/3)"), "GRAIN: its page titled GRAIN (2/3)");
     }
     shot("fx-grain-2");
+    /* 1.0 (the user, 2026-11-08): MODE into GRAIN with Density OFF starts a cloud; MODE doesn't morph, so at 100%
+     * (SPLIT) the knob moves the kit's MODE and GRAIN's page shows */
+    {
+        uint32_t i;
+        uint8_t ms[KIT_LEN];
+        memcpy(ms, morph_par, KIT_LEN);
+        par_set(PAR_FX_DELAY_TYPE, DELAY_NORMAL);
+        par_set(PAR_GLITCH, 0);
+        par_set(PAR_DLY_LEVEL, 0);
+        for (i = 0; i < NVOICE; i++)
+            par_set(PAR_DSEND1 + i, 0);
+        snd_service();
+        fx_goto(FXPG_DLY);
+        ui.msg_ms = 0;
+        turn(EN_K1, 10);
+        check(par[PAR_FX_DELAY_TYPE] == DELAY_GRAIN && par[PAR_GLITCH] == 84u && par[PAR_DLY_WOW] == 88u &&
+                  par[PAR_DSAT] == 50u && par[PAR_DLY_LEVEL] == 100u && !strcmp(ui.msg, "GRAIN: TURN UP A DELAY SEND"),
+              "GRAIN from Density OFF: Size, Scatter, Density, Level set; no delay send: said");
+        par_set(PAR_GLITCH, 20);
+        turn(EN_K1, -1);
+        turn(EN_K1, 1);
+        check(par[PAR_GLITCH] == 20u, "GRAIN with Density up: kept");
+        turn(EN_K1, -10);
+        for (i = 0; i < KIT_LEN; i++)
+            morph_par[i] = par[kit_par(i)];
+        kit_set_morph(255);
+        snd_service();
+        turn(EN_K1, 10);
+        run_ms(300);
+        turn(EN_SELECT, 1);
+        check(par[PAR_FX_DELAY_TYPE] == DELAY_GRAIN && fx.delay_type == DELAY_GRAIN && fx_page() == FXPG_DUB,
+              "morph 100% (SPLIT): MODE is the kit's, GRAIN's page second");
+        morph_par[kit_idx(PAR_FX_DELAY_TYPE)] = DELAY_TAPE;
+        par_set(PAR_FX_DELAY_TYPE, DELAY_NORMAL);
+        kit_set_morph(180);
+        snd_service();
+        run_ms(300);
+        check(fx.delay_type == DELAY_NORMAL, "MODE doesn't morph (the morph kit's TAPE not reached)");
+        kit_set_morph(0);
+        memcpy(morph_par, ms, KIT_LEN);
+    }
     par_set(PAR_FX_DELAY_TYPE, DELAY_OFF);
     par_set(PAR_DLY_LEVEL, 0);
     par_set(PAR_DPITCH, DP_OFF);
+    par_set(PAR_GLITCH, 0);
+    par_set(PAR_DLY_WOW, 0);
+    par_set(PAR_DSAT, 0);
     snd_service();
     goto_mode(B_HOME, M_HOME);
     /* 1.0: the pattern page: CLEAR (SHIFT + COPY), a pattern, then COPY deletes it (SHIFT keeps it) */
@@ -9732,9 +9827,9 @@ static void phase_100_11(void)
     turn(EN_K1, 1);
     gls[3].trig = GF_ALL;
     /* the remote: CC 2 on GLOBAL's channel, LFO 4's depth */
-    rm_in(remote_gch, 0xB0u, RM_XCC2, 0);
+    rm_in(remote_gch, 0xB0u, 2u, 0);
     lo = gls[3].depth;
-    rm_in(remote_gch, 0xB0u, RM_XCC2, 127);
+    rm_in(remote_gch, 0xB0u, 2u, 127);
     check(lo == -127 && gls[3].depth == 127, "the remote: GLOBAL's CC 2, LFO 4's depth");
     /* the project: the 4th, FOLLOW's settings */
     gls[3].phase = 50;
@@ -9858,10 +9953,36 @@ static void phase_100_6b(void)
     memset(gls, 0, sizeof gls);
     run_ms(20);
     check(fx.lfo_band == 0, "BAND: back with the LFO off");
-    gcc(3, 127);
-    check(par[PAR_DLY_BAND] == 127, "GLOBAL CC 3: BAND");
-    gcc(3, 0);
-    check(par[PAR_DLY_BAND] == 0 && fx.band == 0, "GLOBAL CC 3 at 0: BAND OFF");
+    gcc(99, 127);
+    check(par[PAR_DLY_BAND] == 127, "GLOBAL CC 99: BAND (1.0: the delay's row, 96 .. 103)");
+    gcc(99, 0);
+    check(par[PAR_DLY_BAND] == 0 && fx.band == 0, "GLOBAL CC 99 at 0: BAND OFF");
+    /* 1.0: the global LFOs on RING's WET and TONE, either way from the knob's */
+    gls[0].dest = GD_RWET;
+    gls[0].depth = 127;
+    gls[0].len = 0;
+    gls[0].wave = LFO_TRI;
+    gls[1] = gls[0];
+    gls[1].dest = GD_RTONE;
+    gls[1].depth = -64;
+    {
+        int32_t lo = 127, hi = 0, tlo = 127, thi = 0, w, t;
+        for (i = 0; i < 300u; i++) {
+            run_ms(1);
+            w = ring_mod(pfs.dj_wet, GD_RWET);
+            t = ring_mod(pfs.dj_tone, GD_RTONE);
+            lo = w < lo ? w : lo;
+            hi = w > hi ? w : hi;
+            tlo = t < tlo ? t : tlo;
+            thi = t > thi ? t : thi;
+        }
+        check(lo <= 4 && hi >= 123 && tlo <= 36 && tlo >= 30 && thi >= 92 && thi <= 98,
+              "GLOBAL LFO RING WET (depth 127: the whole range), RING TONE (-64: +-32 about the middle)");
+    }
+    check(gd_turn(GD_LP, 1) == GD_RTONE && gd_turn(GD_RTONE, 1) == GD_RWET, "RING TONE, RING WET after the DJ filter's, by name");
+    memset(gls, 0, sizeof gls);
+    run_ms(20);
+    check(ring_mod(64, GD_RWET) == 64 && ring_mod(64, GD_RTONE) == 64, "RING: the knobs' with the LFOs off");
     check(morph_mix(PAR_DLY_BAND, 0, 90, 100) == 0 && morph_mix(PAR_DLY_BAND, 0, 90, 140) == 90 &&
               morph_mix(PAR_DLY_BAND, 30, 90, 128) > 30u && morph_mix(PAR_DLY_BAND, 30, 90, 128) < 90u,
           "morph: BAND on or off halfway, between two settings smoothly");
@@ -9880,6 +10001,8 @@ static void phase_100_6(void)
     run_ms(40);
     page_params(pp);
     check(fx_page() == FXPG_DJ && pp[0] == VP_DJTYPE && pp[1] == VP_DJ && pp[2] == VP_DJRESO, "FX: DJ FILTER: Type, the knob, Reso");
+    turn(EN_K1, 1);
+    check(pfs.dj_ftype == DJT_RING, "Type: RING second (1.0)");
     turn(EN_K1, 1);
     check(pfs.dj_ftype == DJT_ACID, "Type: ACID");
     vp_set(VP_DJRESO, 110);
@@ -9900,8 +10023,10 @@ static void phase_100_6(void)
     page_params(pp);
     check(pp[3] == VP_NONE, "Tune: not for MS20");
     turn(EN_K1, 5);
+    check(pfs.dj_ftype == DJT_MS20, "Type: MS20 the last (1.0)");
+    turn(EN_K1, -2);
     page_params(pp);
-    check(pfs.dj_ftype == DJT_RING && pp[3] == VP_DJTUNE, "Type: RING the last, with Tune");
+    check(pfs.dj_ftype == DJT_RING && pp[3] == VP_DJTUNE, "Type: RING, with Tune");
     {                                                /* 1.0: RING: the chord's notes ring, the others don't */
         char nm[16];
         uint32_t k, j, root;
@@ -10202,6 +10327,87 @@ static void phase_100_5(void)
     press(B_PLAY);
     wd_defaults();
     p4_reset();
+    /* 1.0: HOWLING CHASM: stereo tape, the howl (Band on, Feedback pushed), the tape rung out (sends down) into GRAIN,
+     * RING tuned low with its root sliding, back to tape halfway through THE DARK; home: the delay and the DJ filter */
+    for (i = 0; i < 16u; i += 2u)
+        main_set(&pat[0], 1, i, 1), main_set(&pat[0], 4, i + 1u, 1);
+    pat_backup = pat[0];
+    par_set(PAR_DLY_LEVEL, 0);
+    par_set(PAR_FX_DELAY_TYPE, DELAY_NORMAL);
+    par_set(PAR_DLY_BAND, 0);
+    for (t = 0; t < NVOICE; t++)
+        par_set(PAR_DSEND1 + t, 0);
+    vp_set(VP_DJTYPE, DJT_LXR);
+    vp_set(VP_DJ, 64);
+    vp_set(VP_DJWET, 64);
+    vp_set(VP_DJRESO, 0);
+    perf_goto(PG_WANDER);
+    wd_vset(WV_QUEST, Q_CHASM);
+    check(wd.k[WV_FATE] == WF_HOME && wd.k[WV_JOURNEY] == 4u, "HOWLING CHASM: FATE HOME, 256 bars at first");
+    wd.k[WV_JOURNEY] = 3;                            /* (128 bars) */
+    wd.k[WV_RETURN] = 2;                             /* (2 bars: the ring fades out on the way) */
+    wd.k[WV_STRIDE] = 127;
+    press(B_PLAY);
+    press(B_OCTUP);
+    {
+        uint32_t mode = par[PAR_FX_DELAY_TYPE], tpp = 0, grain = 0, back = 0, clean = 1, band = 0, fbmax = 0, ring = 0;
+        uint32_t wet = 0, roots = 0, lastdj = 64, chs = 0, dark = 0;
+        uint8_t snd[NVOICE];
+        for (i = 0; i < 150u && wd.state == WS_ROAD; i++) {
+            for (t = 0; t < NVOICE; t++)
+                snd[t] = par[PAR_DSEND1 + t];
+            run_ms(240000u / seq_bpm());
+            if (par[PAR_FX_DELAY_TYPE] != mode) {
+                if (par[PAR_FX_DELAY_TYPE] == DELAY_GRAIN) {
+                    grain = 1;
+                    for (t = 0; t < NVOICE; t++)     /* (rung out: nothing went in for the last bars) */
+                        clean &= snd[t] == 0u;
+                } else if (par[PAR_FX_DELAY_TYPE] == DELAY_TAPEPP) {
+                    tpp = 1;
+                    back |= grain;
+                }
+                mode = par[PAR_FX_DELAY_TYPE];
+            }
+            band |= par[PAR_DLY_BAND] > 0u;
+            fbmax = par[PAR_DLY_FB] > fbmax ? par[PAR_DLY_FB] : fbmax;
+            ring |= pfs.dj_ftype == DJT_RING;
+            wet = pfs.dj_ftype == DJT_RING && pfs.dj_wet > wet ? pfs.dj_wet : wet;
+            if (pfs.dj_ftype == DJT_RING && pf.dj != lastdj && pf.dj < 64u && !(wd.djtg[0] == pf.dj && lastdj == 64u))
+                roots++;
+            lastdj = pf.dj;
+            chs |= 1u << wd_cht();
+            dark |= wd_cht() == 4u;
+            if (wd_cht() == 3u && pfs.dj_wet > 60u && !(chs & 0x100u)) {
+                chs |= 0x100u;
+                shot("wander-chasm");
+            }
+        }
+        printf("  HOWLING CHASM, %u bars: chapters %02x, feedback to %u, RING wet to %u, %u root steps\n", (unsigned)i,
+               (unsigned)(chs & 0xFFu), (unsigned)fbmax, (unsigned)wet, (unsigned)roots);
+        check(tpp && band && fbmax >= 110u, "HOWLING CHASM: TAPE PP, Band on, Feedback pushed into the howl");
+        check(grain && clean, ".. the tape rung out (the delay sends at 0) before GRAIN");
+        check(ring && wet >= 70u && roots >= 3u, ".. RING on the mix, tuned low, its root sliding");
+        check(dark && back, ".. THE DARK: halfway, the grains rung out and the tape again");
+        run_ms(4u * 240000u / seq_bpm());
+        check(wd.state == WS_IDLE && par[PAR_FX_DELAY_TYPE] == DELAY_NORMAL && par[PAR_DLY_LEVEL] == 0u &&
+                  par[PAR_DLY_BAND] == 0u && par[PAR_DSEND1 + 1u] == 0u && par[PAR_DPITCH] == DP_OFF,
+              "out of the chasm (HOME): the delay as it was");
+        check(pfs.dj_ftype == DJT_LXR && pf.dj == 64u && pfs.dj_wet == 64u && pfs.dj_reso == 0u && !wd.djon,
+              ".. and the DJ filter: RING faded out, then home's type, position, wet and decay");
+    }
+    wd.k[WV_JOURNEY] = WJ_ENDLESS;                   /* (ENDLESS: never out) */
+    wd.quest = Q_CHASM;
+    for (i = 0, ok = 1; i < 50u; i++) {
+        wd_plan(wd_rnd(6));
+        for (t = 0; t < wd.npath; t++)
+            ok &= wd.path[t] != HX_OUT;
+    }
+    check(ok, "HOWLING CHASM, ENDLESS: the way out never comes");
+    check(wd_dj_at(36) < 56u && ring_root(((int32_t)wd_dj_at(36) - 64) * 1040) == 36u &&
+              ring_root(((int32_t)wd_dj_at(30) - 64) * 1040) == 30u, "RING's root: C2, F#1 where they should be");
+    press(B_PLAY);
+    wd_defaults();
+    p4_reset();
 }
 
 /* 1.0 Phase 17: Control All by MIDI (GLOBAL's 62 held, 63 latched, 71 revert), tracks left out of it */
@@ -10222,20 +10428,20 @@ static void phase_100_17(void)
         par[PAR_FILTER_FREQ_1 + v] = (uint8_t)(20u + 15u * v);
     for (i = 0; i < KIT_LEN; i++)
         k0[i] = par[kit_par(i)];
-    /* latched by 63: the remote's filter knob on D2 moves every track's filter by its step */
+    /* latched by a tap on 62 (1.0: 63 is RING Spread now): the remote's filter knob on D2 moves every track's filter by its step */
     for (i = 0; i < 40u; i++) {                      /* (the feedback settled; the out queue drained as it goes) */
         run_ms(10);
         (void)fb_seen(0, 0, 0);
     }
-    gcc(63, 127);
-    ok = fb_seen(0xB0u | remote_gch, 63, 127);
-    gcc(63, 0);
-    check(ca_rm == 2u && !ui.ca, "63: Control All latched, nothing moved yet");
+    gcc(62, 127);
+    ok = fb_seen(0xB0u | remote_gch, 62, 127);
+    gcc(62, 0);
+    check(ca_rm == 2u && !ui.ca, "62 tapped: Control All latched, nothing moved yet");
     for (i = 0; i < 30u; i++) {                 /* (the out queue drained as it goes) */
         run_ms(10);
-        ok |= fb_seen(0xB0u | remote_gch, 63, 127);
+        ok |= fb_seen(0xB0u | remote_gch, 62, 127);
     }
-    check(ok, "63's light on");
+    check(ok, "62's light on");
     rcc(24 + 1, 50);                                 /* (TRACKS' filter row, D2: 35 -> ABS 50) */
     for (v = 0, ok = 1; v < NVOICE; v++)
         ok &= par[PAR_FILTER_FREQ_1 + v] == 20u + 15u * v + 15u;
@@ -10287,8 +10493,8 @@ static void phase_100_17(void)
     run_ms(60);
     shot("ca-midi-sound");
     /* off: kept, no dialog; 71 reverts until a kit loads */
-    gbtn(63);
-    check(!ca_rm && !ui.ca && !ui.ca_ask && par[PAR_FILTER_FREQ_1] == 39u, "63 again: off, kept, no dialog");
+    gbtn(62);
+    check(!ca_rm && !ui.ca && !ui.ca_ask && par[PAR_FILTER_FREQ_1] == 39u, "62 again: off, kept, no dialog");
     for (i = ok = 0; i < 30u; i++) {
         run_ms(10);
         ok |= fb_seen(0xB0u | remote_gch, 71, 127);
@@ -10310,16 +10516,20 @@ static void phase_100_17(void)
     rcc(24 + 0, 40);
     gcc(62, 0);
     check(!ca_rm && !ui.ca && par[PAR_FILTER_FREQ_1 + 3] == k0[kit_idx(PAR_FILTER_FREQ_1 + 3)] + 20u,
-          "62 let go: off, kept");
+          "62 let go after a move (a short press): off, kept");
+    gcc(62, 127);
+    run_ms(400);
+    gcc(62, 0);
+    check(!ca_rm, "62 held long, nothing moved: off at the release");
     /* as a note, and a kit load ends the revert */
-    gnote(63, 1);
-    gnote(63, 0);
-    check(ca_rm == 2u, "63 as a note: latched");
+    gnote(62, 1);
+    gnote(62, 0);
+    check(ca_rm == 2u, "62 tapped as a note: latched");
     rcc(24 + 0, 50);
     check(ui.ca_kept && par[PAR_FILTER_FREQ_1 + 3] == k0[kit_idx(PAR_FILTER_FREQ_1 + 3)] + 30u, "a move by note's latch");
-    gnote(63, 1);
-    gnote(63, 0);
-    check(!ca_rm, "63 as a note again: off");
+    gnote(62, 1);
+    gnote(62, 0);
+    check(!ca_rm, "62 as a note again: off");
     kit_load_ram(0);
     run_ms(20);
     v = par[PAR_FILTER_FREQ_1];
@@ -10484,6 +10694,73 @@ static void phase_100_18(void)
     goto_mode(B_HOME, M_HOME);
 }
 
+/* 1.0: the copy and picture pass's screens: a long attack */
+static void copy_pass(void)
+{
+    ui.mode = M_SOUND;
+    ui.track = 0;
+    ui.sect = S_AEG;
+    ui.half = 0;
+    par_set(PAR_VELOA1, 90);                         /* (a long attack: rising slowly, then into the decay) */
+    ui.force = 1;
+    run_ms(60);
+    shot("aeg-attack");
+    ui.sect = S_XMOD;                                /* (cross mod with no source: a short line, an empty chip) */
+    par_set(PAR_XSRC1, 0);
+    ui.force = 1;
+    run_ms(60);
+    shot("xmod-off");
+    {                                                /* (MELODY: each Shape drawn abstractly) */
+        static const uint8_t SH[6] = {MEL_OFF, MEL_RANDOM, MEL_WALK, MEL_ARP_UP, MEL_MOTIF, MEL_PEDAL};
+        pattern_t *mp = shown_pat();
+        uint8_t sh0 = mp->mel[0][ML_SHAPE];
+        uint32_t i;
+        ui.mode = M_EUCLID;
+        ui.page = PG_MELODY;
+        ui.track = 0;
+        for (i = 0; i < 6u; i++) {
+            mp->mel[0][ML_SHAPE] = SH[i];
+            ui.force = 1;
+            run_ms(40);
+            shot("melody-shape");
+        }
+        mp->mel[0][ML_SHAPE] = sh0;
+    }
+    ui.mode = M_PERF;                                /* (WANDER's HOME: Order and Sway only with Goal SONG) */
+    {
+        uint16_t pp[4];
+        uint32_t g0 = wd.k[WV_GOAL];
+        ui.page = PG_WANDER + 2u;
+        wd.k[WV_GOAL] = 0;
+        page_params(pp);
+        check(pp[0] == VP_WD + WV_RETURN && pp[2] == VP_NONE && pp[3] == VP_NONE, "WANDER HOME: no Order, Sway off a song");
+        wd.k[WV_GOAL] = WG_SONG;
+        page_params(pp);
+        check(pp[2] == VP_WD + WV_ORDER && pp[3] == VP_WD + WV_SWAY, ".. Goal SONG: Order and Sway (1.0)");
+        wd.k[WV_GOAL] = (uint8_t)g0;
+    }
+    {                                                /* (GRAIN's cloud, moving: frames apart) */
+        uint32_t i;
+        uint32_t f0;
+        par_set(PAR_FX_DELAY_TYPE, DELAY_GRAIN);
+        par_set(PAR_DLY_TIME, 70);
+        par_set(PAR_DLY_WOW, 70);
+        par_set(PAR_GLITCH, 90);
+        par_set(PAR_DSAT, 80);
+        par_set(PAR_DLY_FB, 60);
+        par_set(PAR_DPITCH, DP_UP12);
+        ui.mode = M_FX;
+        fx_goto(FXPG_DLY);
+        ui.force = 1;
+        run_ms(100);
+        f0 = vz_frame;
+        for (i = 0; i < 4u; i++) {
+            run_ms(150);
+            shot("grain-anim");
+        }
+        check(vz_frame >= f0 + 10u, "GRAIN: its cloud moves on its own (1.0)");
+    }
+}
 int main(int argc, char **argv)
 {
     uint32_t t;
@@ -11001,6 +11278,7 @@ int main(int argc, char **argv)
     phase_100_16();
     phase_100_17();
     phase_100_18();
+    copy_pass();                                     /* (1.0's copy and picture pass: last, as it runs time) */
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;
 }

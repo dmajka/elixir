@@ -125,7 +125,10 @@ static struct {
 } pfs;
 /* 1.0: the DJ filter's type, the global character filter: the LXR's SVF (LP, HP), ACID (its LP; the LXR's HP) or MS20
  * (its LP, HP) */
-enum { DJT_LXR, DJT_ACID, DJT_MS20, DJT_RING, NDJT };
+enum { DJT_LXR, DJT_ACID, DJT_MS20, DJT_RING, NDJT };   /* (saved: the numbers stay) */
+/* 1.0: the Type knob's order: LXR, RING, ACID, MS20 (RING second: the user, 2026-11-08). Its place <-> the type */
+static const uint8_t DJT_AT[NDJT] = {DJT_LXR, DJT_RING, DJT_ACID, DJT_MS20};
+static uint32_t djt_place(uint32_t t) { return t == DJT_RING ? 1u : t == DJT_ACID ? 2u : t == DJT_MS20 ? 3u : 0u; }
 /* 1.0: RING, a tuned resonator (after the Torso S-4's RING, as Rings' strings are): NRB band-passes at a chord over a
  * root the DJ knob sweeps in semitones (C1 at the left end, C3 in the middle, C6 at the right: darker one way,
  * brighter the other), Reso their ring time (T60 0.08 .. 2.6 s), TUNE the chord. On the mix summed to mono, the bands
@@ -165,12 +168,14 @@ static const uint8_t REPEAT_TICKS[4] = {96, 48, 24, 12};
 /* 0.13: the global LFOs */
 enum { GD_OFF, GD_MORPH, GD_FILTER, GD_LP, GD_HP, GD_PUSH, GD_COMB, GD_CRUSH, GD_JITTER, GD_CUTS, GD_PUMP,
        GD_DENSITY, GD_TRANSPOSE, GD_MCHANGE, GD_MSPREAD, GD_DFB, GD_DTIME, GD_RSEND, GD_MACRO1,
-       GD_STUT = GD_MACRO1 + NMACRO, GD_DIRT, GD_DBAND, NGD };   /* (0.16: STUTTER's chance, from 0 as the effects;
-                                                      * 1.0: the master DIRT's amount, the delay's BAND, either way) */
-#define NGBI (GD_STUT - GD_DENSITY + 2)              /* (19c: the ones moved either way, gl.bi; GD_DIRT's, GD_DBAND's last) */
+       GD_STUT = GD_MACRO1 + NMACRO, GD_DIRT, GD_DBAND, GD_RWET, GD_RTONE, NGD };   /* (0.16: STUTTER's chance, from 0
+                                                      * as the effects; 1.0: the master DIRT's amount, the delay's BAND,
+                                                      * RING's WET and TONE, either way) */
+#define GB_DIRT (GD_STUT - GD_DENSITY)               /* (19c: the ones moved either way, gl.bi: GD_DENSITY .. GD_STUT, */
+#define NGBI (GB_DIRT + 4)                           /* then GD_DIRT .. GD_RTONE's) */
 static uint32_t gd_bi(uint32_t g)                    /* (its place in gl.bi, NGBI none) */
 {
-    return g >= GD_DENSITY && g < GD_STUT ? g - GD_DENSITY : g == GD_DIRT ? NGBI - 2u : g == GD_DBAND ? NGBI - 1u : NGBI;
+    return g >= GD_DENSITY && g < GD_STUT ? g - GD_DENSITY : g >= GD_DIRT && g <= GD_RTONE ? GB_DIRT + g - GD_DIRT : NGBI;
 }
 enum { GM_FREE, GM_TRIG, GM_HOLD, GM_ONE, GM_HALF, NGM };
 enum { GT_PLAY, GT_PATTERN, GT_BAR, NGT };
@@ -380,8 +385,8 @@ static void perf_block(void)
         fx.lfo_fb = gl.bi[GD_DFB - GD_DENSITY];
         fx.lfo_time = gl.bi[GD_DTIME - GD_DENSITY];
         rev_g = (uint32_t)(65536 + gl.bi[GD_RSEND - GD_DENSITY]);
-        dirt.lfo = gl.bi[NGBI - 2];                  /* (1.0: the master DIRT's amount) */
-        fx.lfo_band = gl.bi[NGBI - 1];               /* (1.0: the delay's BAND, +-2 octaves; OFF stays off) */
+        dirt.lfo = gl.bi[gd_bi(GD_DIRT)];            /* (1.0: the master DIRT's amount) */
+        fx.lfo_band = gl.bi[gd_bi(GD_DBAND)];        /* (1.0: the delay's BAND, +-2 octaves; OFF stays off) */
     }
     sq.fill = (on >> PF_FILL) & 1u;
     sq.half = (on >> PF_HALF) & 1u;
@@ -678,11 +683,16 @@ static inline __attribute__((always_inline)) int32_t rg_up(const int32_t *y)   /
     return (int32_t)(((int64_t)(y[2] + y[3]) * (2 * RG_H0) + (int64_t)(y[1] + y[4]) * (2 * RG_H1) +
                       (int64_t)(y[0] + y[5]) * (2 * RG_H2) + 32768) >> 16);
 }
+/* 1.0: RING's WET and TONE as the global LFOs move them, 0 .. 127 (depth 127: +-64, either way from the knob) */
+static int32_t ring_mod(uint32_t v, uint32_t g)
+{
+    return clamp32((int32_t)(v & 127u) + gl.bi[gd_bi(g)] / 1024, 0, 127);
+}
 static void ring_block(int16_t *l, int16_t *r, int32_t d, int32_t w)
 {
     int32_t c[NRB], q[NRB], g[NRB], ts, top = 0, gn, gf, gd, gw;
-    const int32_t sl = (int32_t)(pfs.dj_slope & 127u) - 64, tn = (int32_t)(pfs.dj_tone & 127u) - 64,
-                  sp = (int32_t)(pfs.dj_spread & 127u), wt = (int32_t)(pfs.dj_wet & 127u);
+    const int32_t sl = (int32_t)(pfs.dj_slope & 127u) - 64, tn = ring_mod(pfs.dj_tone, GD_RTONE) - 64,
+                  sp = (int32_t)(pfs.dj_spread & 127u), wt = ring_mod(pfs.dj_wet, GD_RWET);
     uint32_t root = ring_root(d), nb = 0, k, i, b;
     const int8_t *sh = RING_SH[pfs.dj_tune < NRTUNE ? pfs.dj_tune : 0u];
     ts = (int32_t)(((int64_t)1764 * exp2_q16((int32_t)((int64_t)pf.dj_rs * 5 * 65536 / 32512))) >> 16);   /* T60,

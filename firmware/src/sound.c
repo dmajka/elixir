@@ -301,12 +301,13 @@ static uint32_t morph_mix(uint32_t p, uint32_t a, uint32_t b, uint32_t x)
         return x < 128u ? (a * (128u - x) + 64u) / 128u : (b * (x - 128u) + 63u) / 127u;
     return morph_lerp(a, b, x);
 }
-static int morph_excluded(uint32_t p)            /* the outputs and the modulation targets stay the kit's */
+static int morph_excluded(uint32_t p)            /* the outputs and the modulation targets stay the kit's (1.0: and
+                                                  * the delay's MODE: it lerped through the modes between) */
 {
     return (p >= PAR_AUDIO_OUT1 && p <= PAR_AUDIO_OUT6) || (p >= PAR_VEL_DEST_1 && p <= PAR_VEL_DEST_6) ||
            (p >= PAR_VOICE_LFO1 && p <= PAR_TARGET_LFO6) || p == PAR_FX_TYPE || p == PAR_MORPH_KIT_DEST ||
            p == PAR_REV_TYPE || (p >= PAR_MODEL1 && p < PAR_MODEL1 + 6u) || (p >= PAR_LFOMODE1 && p <= PAR_DSYNC) ||
-           p == PAR_DPITCH || p == PAR_MDIRT || p == PAR_MC_RATIO || p == PAR_MC_SRC;
+           p == PAR_DPITCH || p == PAR_FX_DELAY_TYPE || p == PAR_MDIRT || p == PAR_MC_RATIO || p == PAR_MC_SRC;
 }
 
 /* the value a parameter sounds with: an automation lock, else the kit's (morphed) */

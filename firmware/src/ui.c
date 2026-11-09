@@ -255,8 +255,8 @@ static const uint16_t K_PAGES[NSECT - S_SHAPE][8] = {{PAR_SHAPE1, PAR_DRIVE1, PA
                                        {PAR_GATE1},       /* (19b) */
                                        {0},               /* (25b: LFO 2: lfo_par) */
                                        {PAR_INS1, PAR_INSA1, PAR_INSB1, PAR_INSC1},          /* (27a) */
-                                       {PAR_FX_SEND1, PAR_DSEND1, PAR_REV_SEND1}};   /* (1.0 Phase 16: the second
-                                                      * row, the kit's returns: sect_par_raw) */
+                                       {PAR_FX_SEND1, PAR_DSEND1, PAR_REV_SEND1}};   /* (1.0 Phase 16; one page:
+                                                      * the returns are global, on the FX and mixer pages) */
 /* 1.0: every LFO's knobs in one order (LP_*: page 1 Dest, Depth, Sync, Rate; page 2 Wave, Phase, Mode, Retrigger;
  * the global LFOs' too, ui.c P_PERF). LFO 1's Voice is no knob: its Dest turns through every voice's (lfo1_dest_turn) */
 enum { LP_DEST, LP_DEPTH, LP_SYNC, LP_RATE, LP_WAVE, LP_PHASE, LP_MODE, LP_RETRIG, NLP };
@@ -283,10 +283,6 @@ static uint32_t sect_par_raw(uint32_t t, uint32_t s, uint32_t h, uint32_t k)
         return lfo_par(t, s == S_LFO2, h * 4u + k);
     if (s == S_FILTER && h == 1u)                    /* 1.0: FILTER X, the second page's first knob */
         return k == 0u ? PAR_FLTX1 + track_voice(t) : 0u;
-    if (s == S_SENDS && h == 1u) {                   /* 1.0 Phase 16: under each send its return's level (the kit's) */
-        static const uint16_t R[4] = {PAR_FX_DRY_WET, PAR_DLY_LEVEL, PAR_REV_LEVEL, 0};
-        return k < 4u ? R[k] : 0u;
-    }
     if (s < S_SHAPE)
         return LXR_PAGES[track_page(t)][s][8u + lxr_knob(s, h, k)];
     q = K_PAGES[s - S_SHAPE][h * 4u + k];
@@ -352,6 +348,7 @@ static uint32_t sect_group(uint32_t s)
 /* ------------------------------------------------------------ pages --- */
 /* the four parameters a page puts on the knobs */
 static void page_params(uint16_t out[4]);
+static int wd_goal_song(void);
 static uint32_t mode_pages(void);
 static pattern_t *shown_pat(void);
 
@@ -506,22 +503,22 @@ static int perf_bank2(void) { return ui.mode == M_PERF && ui.page % NPERF >= PG_
 #define PG_TRACK 0u
 #define PG_GEN 1u
 #define PG_ACTION 2u
-#define PG_GROOVE 3u
-#define PG_BOUNCE 4u
-#define PG_MELODY 5u
-#define PG_SCALE 7u
+#define PG_MELODY 3u                                 /* (1.0: MELODY and SCALE before GROOVE and BOUNCE: the */
+#define PG_SCALE 5u                                  /* .. more used, and easy to miss after them) */
+#define PG_GROOVE 6u
+#define PG_BOUNCE 7u
 #define PG_TIME 8u                                   /* (1.0: TIME STRETCH) */
 static const uint16_t P_EUCLID[NEUCLID][4] = {{PAR_TRACK_LENGTH, VP_CLOCK, VP_DIR, VP_SFOLLOW},
                                               {VP_GMODE, VP_GA, VP_GB, VP_GC},
                                               {VP_ACTION, VP_NONE, VP_NONE, VP_NONE},
-                                              {VP_GROOVE, VP_GAMT, VP_GHUM, VP_GFOLLOW},
-                                              {VP_BSTART, VP_BPITCH, VP_NONE, VP_NONE},
                                               {VP_MEL + ML_SHAPE, VP_MEL + ML_SPREAD, VP_MEL + ML_BIAS, VP_MEL + ML_STEPS},
                                               {VP_MEL + ML_DEJA, VP_MEL + ML_LOOP, VP_MEL + ML_LEN, VP_MEL + ML_LVAR},
                                               {VP_SROOT, VP_SCALE, VP_SFOLLOW, VP_TBASE},
+                                              {VP_GROOVE, VP_GAMT, VP_GHUM, VP_GFOLLOW},
+                                              {VP_BSTART, VP_BPITCH, VP_NONE, VP_NONE},
                                               {VP_STRETCH, VP_REALIGN, VP_NONE, VP_NONE}};
-static const char *const EUCLID_TITLE[NEUCLID] = {"TRACK", "GENERATOR", "ACTION", "GROOVE", "BOUNCE", "MELODY (1/2)",
-                                                  "MELODY (2/2)", "SCALE", "TIME STRETCH"};
+static const char *const EUCLID_TITLE[NEUCLID] = {"TRACK", "GENERATOR", "ACTION", "MELODY (1/2)", "MELODY (2/2)",
+                                                  "SCALE", "GROOVE", "BOUNCE", "TIME STRETCH"};
 /* the GENERATOR knob's order (KNOB 1: the value's index here) */
 static const uint8_t GEN_ORDER[NGEN] = {GEN_OFF, GEN_EUCLID, GEN_MUTATE, GEN_TURING, GEN_CA, GEN_GRIDS};
 /* the actions a track's generator has (the ACTION knob's 1..; 0: none): EUCLID's steps diced, a live generator's
@@ -754,6 +751,8 @@ static void page_params(uint16_t out[4])
     }                                                /* (1.0 Phase 11: FOLLOW: no SYNC, no MODE) */
     if (out[3] == VP_DJTUNE && pfs.dj_ftype != DJT_RING)
         out[3] = VP_NONE;                            /* (1.0: Tune: RING's alone) */
+    if (out[2] == VP_WD + 10u && !wd_goal_song())
+        out[2] = out[3] = VP_NONE;                   /* (1.0: WANDER's Order, Sway: Goal SONG's alone) */
     if (ui.mode == M_PERF && ui.page % NPERF == 0u && (sq.roll & ~ui.roll_latch))
         out[1] = ui.shift ? PAR_ROLL : VP_ROLL;      /* 0.6: a roll held: the roll knob sweeps its rate (SHIFT: the grid's) */
 }
@@ -1136,7 +1135,7 @@ static void lfo1_dest_turn(uint32_t l, int32_t n)
 /* 0.25.2: the global LFOs' destinations the same way: by group in the signal's order, each group by name */
 static const uint8_t GD_ORDER[NGD] = {GD_OFF, GD_DENSITY, GD_JITTER, GD_MCHANGE, GD_MSPREAD, GD_STUT, GD_TRANSPOSE,
                                       GD_MORPH, GD_DBAND, GD_DFB, GD_DTIME, GD_PUSH, GD_RSEND, GD_COMB, GD_CRUSH, GD_CUTS,
-                                      GD_DIRT, GD_PUMP, GD_FILTER, GD_HP, GD_LP, GD_MACRO1, GD_MACRO1 + 1,
+                                      GD_DIRT, GD_PUMP, GD_FILTER, GD_HP, GD_LP, GD_RTONE, GD_RWET, GD_MACRO1, GD_MACRO1 + 1,
                                       GD_MACRO1 + 2, GD_MACRO1 + 3};
 static const char *const GD_FULL[NGD][2] = {
     {"", "Off"}, {"KIT", "Morph"}, {"DJ FILTER", "DJ filter"}, {"DJ FILTER", "Low-pass sweep"},
@@ -1145,8 +1144,8 @@ static const char *const GD_FULL[NGD][2] = {
     {"SEQUENCER", "Transpose"}, {"SEQUENCER", "Melody change"}, {"SEQUENCER", "Melody spread"},
     {"DELAY", "Delay feedback"}, {"DELAY", "Delay time"}, {"REVERB", "Reverb sends"}, {"MACROS", "Macro 1"},
     {"MACROS", "Macro 2"}, {"MACROS", "Macro 3"}, {"MACROS", "Macro 4"}, {"SEQUENCER", "Stutter chance"},
-    {"MASTER FX", "Dirt amount"}, {"DELAY", "Delay band"}};
-_Static_assert(NMACRO == 4u && NGD == 25u, "GD_ORDER, GD_FULL: every destination");
+    {"MASTER FX", "Dirt amount"}, {"DELAY", "Delay band"}, {"DJ FILTER", "Ring wet"}, {"DJ FILTER", "Ring tone"}};
+_Static_assert(NMACRO == 4u && NGD == 27u, "GD_ORDER, GD_FULL: every destination");
 static int is_gl_dest(uint32_t p) { return p >= VP_GL && p <= VP_GL_LAST && (p - VP_GL) % NGLSET == 0u; }
 static uint32_t order_turn(const uint8_t *o, uint32_t c, uint32_t v, int32_t n)   /* (v n places on in order o) */
 {
@@ -1309,7 +1308,7 @@ static uint32_t vp_get(uint32_t p)
     case VP_REPEAT: return pfs.repeat;
     case VP_TAPE: return pfs.tape;
     case VP_DJRESO: return pfs.dj_reso;
-    case VP_DJTYPE: return pfs.dj_ftype;
+    case VP_DJTYPE: return djt_place(pfs.dj_ftype);   /* (1.0: the knob's order) */
     case VP_DJTUNE: return pfs.dj_tune;
     case VP_DJSPREAD: return pfs.dj_spread;          /* (1.0 Phase 18) */
     case VP_DJSLOPE: return pfs.dj_slope;
@@ -1778,7 +1777,7 @@ static void vp_set(uint32_t p, uint32_t v)
     case VP_REPEAT: pfs.repeat = (uint8_t)v; return;
     case VP_TAPE: pfs.tape = (uint8_t)v; return;
     case VP_DJRESO: pfs.dj_reso = (uint8_t)v; return;
-    case VP_DJTYPE: pfs.dj_ftype = (uint8_t)(v < NDJT ? v : 0u); return;
+    case VP_DJTYPE: pfs.dj_ftype = DJT_AT[v < NDJT ? v : 0u]; return;
     case VP_DJTUNE: pfs.dj_tune = (uint8_t)(v < NRTUNE ? v : 0u); return;
     case VP_DJSPREAD: pfs.dj_spread = (uint8_t)(v & 127u); return;   /* (1.0 Phase 18) */
     case VP_DJSLOPE: pfs.dj_slope = (uint8_t)(v & 127u); return;
@@ -2197,6 +2196,25 @@ static void control_all_undo(void)
 /* 31: with morph on, a knob's edit moves the morph target by as much (CONFIG: MORPH, Edits BOTH KITS, the default), as
  * Control All does: heard at any morph amount, and it stays as morph turns. KIT ONLY: the kit alone (the LXR's way:
  * at full morph, nothing heard) */
+/* 1.0: the MODE knob into GRAIN with Density OFF (no grains: a new kit's, or TAPE's Glitch at 0) starts a cloud you
+ * hear: Size 129 ms, Scatter 40%, Density 16/s (about two grains at once), Level 100 if it was 0; Position, Pitch,
+ * Feedback as they were. With no delay send up, a message says where the sound goes in */
+static void grain_start(void)
+{
+    static const uint16_t P[3] = {PAR_DLY_WOW, PAR_DSAT, PAR_GLITCH};
+    static const uint8_t V[3] = {88, 50, 84};
+    uint32_t i, any = 0;
+    if (vp_get(PAR_GLITCH))
+        return;
+    for (i = 0; i < 3u; i++)
+        vp_set(P[i], V[i]);
+    if (!vp_get(PAR_DLY_LEVEL))
+        vp_set(PAR_DLY_LEVEL, 100);
+    for (i = 0; i < NVOICE; i++)
+        any |= par[PAR_DSEND1 + i] | (par[PAR_DLY_ROUTE] > 64u ? par[PAR_FX_SEND1 + i] : 0u);
+    if (!any)
+        ui_message("GRAIN: TURN UP A DELAY SEND");
+}
 static void morph_follow(uint32_t p, int32_t d)
 {
     if (d && morph_amt && kset.medit == 2u && p < NPAR && par_sound(p) && !morph_excluded(p)) {
@@ -2328,6 +2346,8 @@ static void knob_turn(uint32_t k, int32_t n)
         ui.dest_p = (uint16_t)p;
     }
     v = (int32_t)model_step(p, vp_get(p), (uint32_t)v);
+    if (p == PAR_FX_DELAY_TYPE && v == DELAY_GRAIN && vp_get(p) != DELAY_GRAIN)
+        grain_start();
     morph_follow(p, (int32_t)v - (int32_t)vp_get(p));
     vp_set(p, (uint32_t)v);
     if (ui.mode == M_STEP)                           /* (a generator's track: what plays takes the step's edit) */
@@ -3805,6 +3825,10 @@ static void ui_leds(void)
         led_put(nb, panel.btn[B_OCTUP], wd_course());
         led_put(nb, panel.btn[B_OCTDN], wd.state != WS_IDLE);
     }
+    if ((ui.mode == M_EUCLID && ui.page % NEUCLID == PG_ACTION && ui.action) ||   /* (1.0: ACTION's "PRESS OCT+ TO",
+                                                      * the song's ROWS: OCT+ breathing, as the dialogs') */
+        (ui.mode == M_SONG && ui.page % NSONGPG == 1u))
+        led_put(nb, panel.btn[B_OCTUP], 1);
     led_put(nb, panel.btn[B_OCTUP], ui.ca || ui.ca_ask || ui.dx_ask || ui.pdel || ui.clear_open || ui.kb_open || ui.sb_open || ui.copy_src || ((ui.mode == M_SAVE ||
                                                                                      ui.mode == M_LOAD) && !ui.copy));
     for (k = 0; k < NB; k++)
