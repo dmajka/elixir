@@ -1553,7 +1553,8 @@ static void draw_config_help(int32_t y0)
         break;
     case CF_REMOTE + 2:                              /* 0.13: page memory; 0.19: the kit list's order */
         y = help_item(y, "LAST PAGE", "a button opens the page it showed when you left it; pressed again, it moves on");
-        help_item(y, "KITS FIRST", "where PRESETS' kit list starts: FACTORY or your SLOTS");
+        y = help_item(y, "KITS FIRST", "where PRESETS' kit list starts: FACTORY or your SLOTS");
+        help_item(y, "AUDITION", "a track key (black 1..7) plays its voice as it selects the track");
         break;
     default:
         y = help_item(y, "LEDS", "off, low or high glow");
@@ -1932,6 +1933,7 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_MEDIT: put_str(b, "Edits", n); return;
     case VP_PMEM: put_str(b, "Last page", n); return;
     case VP_KBSLOTS: put_str(b, "Kits first", n); return;
+    case VP_AUDITION: put_str(b, "Audition", n); return;
     case VP_GTAKES: put_str(b, "Global in", n); return;
     case VP_EH2: put_str(b, "Hits 2", n); return;
     case VP_ER2: put_str(b, "Rotate 2", n); return;
@@ -2481,7 +2483,7 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
     case VP_RMUTE: put_str(b, v ? "TOGGLE" : "PRESS", n); return;
     case VP_CAKIT: put_str(b, v ? "KIT ONLY" : "BOTH KITS", n); return;
     case VP_MEDIT: put_str(b, v == 1u ? "KIT ONLY" : v ? "BOTH KITS" : "SPLIT", n); return;   /* (1.0: SPLIT) */
-    case VP_PMEM: put_str(b, v ? "YES" : "NO", n); return;
+    case VP_PMEM: case VP_AUDITION: put_str(b, v ? "YES" : "NO", n); return;
     case VP_GL ... VP_GL_LAST:
         if (gls[(p - VP_GL) / NGLSET].wave == GW_FOLLOW) {   /* (1.0 Phase 11: FOLLOW's SOURCE, THRESHOLD, RELEASE) */
             uint32_t k = (p - VP_GL) % NGLSET;

@@ -4,7 +4,8 @@
  *
  *   white keys 1..16   the 16 step buttons (steps of the shown bar; patterns; in PERF 1..7 rolls, 8 FILL, 9..16
  *                      the effects of perform.c; SHIFT + key latches it)
- *   black keys 1..7    the 7 voice buttons (D1 D2 D3 SN CY CH OH): select; with SHIFT mute (PERF: mute)
+ *   black keys 1..7    the 7 voice buttons (D1 D2 D3 SN CY CH OH): select (1.2: and play it, CONFIG Audition);
+ *                      with SHIFT mute (PERF: mute)
  *   black keys 8..11   the 4 bar buttons: show bar 1..4 (patterns: the bank, 2 of 16; kits and songs: 4);
  *                      SHIFT: the track's length; COPY: copy
  *   OCT-               SHIFT (held; the screen shows the menu, what SHIFT + a key does, on every page but PERF's;
@@ -71,7 +72,8 @@ enum { VP_BASE = 0x400, VP_NONE = VP_BASE, VP_IO_TYPE, VP_IO_SLOT, VP_NAME_POS, 
        VP_DJTYPE,                                    /* (1.0: the DJ filter's type, perform.c DJT_*) */
        VP_DJTUNE,                                    /* (1.0: RING's chord, perform.c RC_*) */
        VP_UMIX, VP_UMIX_LAST = VP_UMIX + NVOICE - 1,   /* (1.0: a voice IN / OUT of the stereo mix while USB records) */
-       VP_DJSPREAD, VP_DJSLOPE, VP_DJTONE, VP_DJWET };   /* (1.0 Phase 18: RING (2/2), perform.c pfs.dj_spread ..) */
+       VP_DJSPREAD, VP_DJSLOPE, VP_DJTONE, VP_DJWET,   /* (1.0 Phase 18: RING (2/2), perform.c pfs.dj_spread ..) */
+       VP_AUDITION };                                /* (1.2: a track key plays the voice too; project.c KS_QUIET) */
 _Static_assert(NPAR <= VP_BASE, "the virtual parameters after the parameters (25b + 27a: NPAR 525, past 0x200)");
 /* the ACTION page's action (OCT+ does it); 0.10: those of the track's generator (gen_acts) */
 enum { ACT_NONE, ACT_DICE, ACT_COMMIT, ACT_UNDO, ACT_RESET, NACT };
@@ -629,7 +631,7 @@ static const uint16_t P_CONFIG[NCONFIG][4] = {
     {VP_LEDS, VP_AUTOSAVE, VP_ACCEL, VP_PALETTE},
     {VP_RCH, VP_RCH2, VP_RKNOBS, VP_RMUTE},
     {VP_MEDIT, VP_CAKIT, VP_NONE, VP_NONE},
-    {VP_PMEM, VP_KBSLOTS, VP_NONE, VP_NONE},
+    {VP_PMEM, VP_KBSLOTS, VP_AUDITION, VP_NONE},   /* (1.2: Audition) */
     {VP_NONE, VP_NONE, VP_NONE, VP_NONE},
     {VP_NONE, VP_NONE, VP_NONE, VP_NONE}};
 static const char *const CONFIG_TITLE[NCONFIG] = {"SEQUENCER", "MIDI", "MIDI CHANNELS", "MIDI CHANNELS", "MIDI NOTES",
@@ -1289,6 +1291,7 @@ static uint32_t vp_get(uint32_t p)
     case VP_MEDIT: return kset.medit < 3u ? kset.medit : 0u;
     case VP_PMEM: return kset.pmem;
     case VP_KBSLOTS: return kset.kbslots;
+    case VP_AUDITION: return !(kset.caout & KS_QUIET);
     case VP_GTAKES: return kset.gtakes;
     case VP_MVOL: return out_vol;
     case VP_MOUT ... VP_MOUT_LAST: return (kset.mout >> (p - VP_MOUT)) & 1u;
@@ -1484,7 +1487,7 @@ static uint32_t vp_max(uint32_t p)
     case VP_RCH: case VP_RCH2: return 16;
     case VP_RKNOBS: return NRK - 1u;
     case VP_MEDIT: return 2;
-    case VP_CAKIT: case VP_PMEM: case VP_RMUTE: case VP_MOUT ... VP_MOUT_LAST: case VP_UMIX ... VP_UMIX_LAST: return 1;
+    case VP_CAKIT: case VP_PMEM: case VP_AUDITION: case VP_RMUTE: case VP_MOUT ... VP_MOUT_LAST: case VP_UMIX ... VP_UMIX_LAST: return 1;
     case VP_MVOL: case VP_TD ... VP_TD_LAST: return 127;
     case VP_STRETCH: return TSTR_MAX;
     case VP_REALIGN: return 1;
@@ -1734,6 +1737,7 @@ static void vp_set(uint32_t p, uint32_t v)
     case VP_MEDIT: kset.medit = (uint8_t)v; settings_later(); return;
     case VP_PMEM: kset.pmem = (uint8_t)v; settings_later(); return;
     case VP_KBSLOTS: kset.kbslots = (uint8_t)v; ui.kb_at = 0; settings_later(); return;
+    case VP_AUDITION: kset.caout = (uint8_t)(v ? kset.caout & ~KS_QUIET : kset.caout | KS_QUIET); settings_later(); return;
     case VP_GTAKES: kset.gtakes = midi_gtakes = (uint8_t)v; settings_later(); return;
     case VP_MVOL: kset.mvol = out_vol = (uint8_t)v; settings_later(); return;
     case VP_MOUT ... VP_MOUT_LAST: {
@@ -3127,6 +3131,8 @@ static void black_down(uint32_t k)
             return;
         }
         track_select(t);
+        if (!(kset.caout & KS_QUIET))                /* 1.2: CONFIG Audition: the voice plays too, as SHIFT + 1..7 */
+            key_note_post(t, tb_note(t), key_vel, 0);
         return;
     }
     k -= NTRACK;                                      /* the bars */

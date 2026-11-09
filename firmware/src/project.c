@@ -984,8 +984,13 @@ typedef struct {
                                                       * out of the stereo mix while a computer records; the padding
                                                       * before: 0, all in) */
     uint8_t caout;                                   /* (1.0 Phase 17: the tracks left out of Control All, bit t; ui.c
-                                                      * ca_out_key. Settings from before are shorter: 0, all in) */
+                                                      * ca_out_key. Settings from before are shorter: 0, all in.
+                                                      * 1.2: bit 7, KS_QUIET, CONFIG Audition NO: 0, the default and
+                                                      * what settings from before hold, YES. In a spare bit, not a new
+                                                      * byte: an Elixir 1.0 or 1.1 takes these settings, its mask
+                                                      * (127) clearing it) */
 } elixir_settings_t;
+#define KS_QUIET 0x80u
 _Static_assert(sizeof(elixir_settings_t) == 284u, "settings: caout after mixout");
 _Static_assert(__builtin_offsetof(elixir_settings_t, ccmap) == SET_LEN_016, "settings: the map after 0.16's 20 bytes");
 static elixir_settings_t kset = {SET_MAGIC, 11, 1, 1, 1, 0xFF, 100, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, {0}, 127, 0};   /* (palette 11: SAND) */
@@ -1158,7 +1163,7 @@ static void persist_boot(void)                      /* power-on: the flash, the 
     midi_mout = kset.mout;
     sq.realign_pat = kset.realign != 0;
     kset.mixout &= 63u;
-    kset.caout &= 127u;
+    kset.caout &= 127u | KS_QUIET;
     mix_out = kset.mixout;
     data_locked = fx_scan() != 0;                    /* (0.24.1: before kl_scan, which may erase a sector) */
     proj_scan();

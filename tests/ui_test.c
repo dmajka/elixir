@@ -2450,6 +2450,30 @@ static void phase9_keys(void)
     release(B_OCTDN);
     run_ms(10);
     check(trig_count[0] == c + 1u, "SHIFT + 1: the voice plays");
+    {   /* 1.2: CONFIG Audition: a track key plays its voice as it selects the track (YES, the default) */
+        uint32_t c2 = trig_count[2], c3 = trig_count[3];
+        check(vp_get(VP_AUDITION) == 1u, "Audition: YES by default");
+        black(2);
+        run_ms(10);
+        check(ui.track == 2 && trig_count[2] == c2 + 1u && trig_count[0] == c + 1u,
+              "Audition YES: a track key selects the track and plays its voice");
+        vp_set(VP_AUDITION, 0);
+        check((kset.caout & KS_QUIET) && !(kset.caout & 0x7Fu), "Audition NO: the settings' spare bit");
+        black(3);
+        run_ms(10);
+        check(ui.track == 3 && trig_count[3] == c3, "Audition NO: the key only selects");
+        vp_set(VP_AUDITION, 1);
+        check(!kset.caout, "Audition YES again");
+        goto_mode(B_GLO, M_CONFIG);
+        turn(EN_SELECT, (int32_t)CF_LOAD - 1 - (int32_t)ui.page);
+        {
+            uint16_t q[4];
+            page_params(q);
+            check(q[2] == VP_AUDITION, "CONFIG: BUTTONS & KITS, KNOB 3 Audition");
+        }
+        black(0);
+        goto_mode(B_HOME, M_HOME);
+    }
     vp_set(VP_KVEL, 100);
     kset.accel = 1;
     p4_reset();
