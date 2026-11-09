@@ -427,7 +427,11 @@ Every LFO has the same knobs in the same places, the global LFOs (PERF, GLOBAL M
 
 - **Dest:** what it moves. **Depth:** how far (the LXR's Amount).
 - **Sync:** OFF, or one cycle's length at the tempo. With Sync OFF the LFO runs at **Rate** (in Hz); with a sync value Rate reads SYNC and does nothing. Turning right makes the cycle longer. The track LFOs' sync values, fast to slow: 1/32, 1/16, 1/8T, 1/8, 1/4T, 3/16, 1/4, 5/16, 1/2T, 3/8, 1/2, 3/4, 1/1, 2/1, 4/1 (four bars). T is a triplet; 3/4, 3/8 and 3/16 are the dotted half, quarter and eighth. (1/2T, 1/4T and 1/8T are the LXR's 1/3, 1/6 and 1/12, renamed; 3/4, 3/8, 5/16 and 3/16 are new in 1.0.)
-- **Wave:** SINE, TRI, SAW UP, SAW DN, SQUARE, RANDOM, EXP UP, EXP DN.
+- **Wave:** SINE, TRI, SAW UP, SAW DN, SQUARE, RANDOM, EXP UP, EXP DN, SMOOTH, DRIFT.
+  - **RANDOM** is a sample and hold: a new random value each cycle, held until the next, in steps.
+  - **SMOOTH** (from 1.1) is RANDOM with the steps taken out: each cycle it glides on a curve from one random value to the next, so a filter or pitch wanders instead of jumping. There is no separate slew control; SMOOTH is the smooth random.
+  - **DRIFT** (from 1.1) glides the same way, but each new value is a small step (up to a quarter of the range) from where it is, so it wanders without ever leaping across. Slow, at a long Sync or a low Rate, it's an analog-style drift on tuning or cutoff.
+  - In TRIG, ONE and HALF, a hit starts SMOOTH and DRIFT on a new glide from where they are, without a jump. A kit sent to an LXR-02 as a .SND gets RANDOM for both; an older Elixir doesn't have them.
 - **Phase:** where in its cycle a restart starts it (the LXR's Offset).
 - **Mode:** how a hit starts it (below).
 - **Retrigger:** whose hits restart it: OFF, or a voice (D1 … HH). A kick's LFO with Retrigger D1 starts its cycle again on every kick, so a filter sweep lands the same way on each hit. With OFF it runs free (in TRIG; in HOLD, ONE and HALF OFF means the LFO's own voice's hits).
@@ -445,7 +449,7 @@ Turning Sync goes by length, so the new values sit between the LXR's; kits store
 | **ONE** | One-shot: each hit starts it from its Phase, it runs one cycle and stops at the end. Until the first hit it waits at its Phase. A saw becomes an envelope; a sine a single swell. |
 | **HALF** | The same, half a cycle: a triangle or sine rises and stays up. |
 
-In HOLD, ONE and HALF, Retrigger OFF means the LFO's own voice's hits. A RANDOM wave draws a new value at each one-shot. The mode is part of the kit and can be locked per step; it doesn't morph.
+In HOLD, ONE and HALF, Retrigger OFF means the LFO's own voice's hits. A RANDOM wave draws a new value at each one-shot; SMOOTH and DRIFT glide to one. The mode is part of the kit and can be locked per step; it doesn't morph.
 
 ### Track LFO 2 (from 0.18)
 
@@ -1261,7 +1265,7 @@ Four LFOs (the third from 0.16, the fourth from 1.0) that move the whole kit's p
 | **Depth** | −127 to +127. How far it moves it; negative turns it the other way |
 | **Sync** | OFF, or one cycle's length at the tempo; turning right makes it longer: 1/32, 1/16T, 1/16, 1/8T, 1/8, 3/16, 1/4T, 1/4, 5/16, 1/2T, 3/8, 1/2, 3/4, 1 bar, then 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128 and 256 bars (T a triplet; 3/4, 3/8, 3/16 dotted). At 120 BPM, 256 bars is about 8½ minutes. |
 | **Rate** | With Sync OFF (from 1.0): the speed in Hz, from one cycle in 100 s (shown as its time below 0.1 Hz) to 20 Hz, not following the tempo. With a sync value it reads SYNC. |
-| **Wave** | The LFO waves: SINE, TRI, SAW UP, SAW DN, SQUARE, RANDOM, EXP UP, EXP DN, then **FOLLOW** (from 1.0: [below](#follow-a-voices-level-from-10)) |
+| **Wave** | The LFO waves: SINE, TRI, SAW UP, SAW DN, SQUARE, RANDOM, EXP UP, EXP DN, SMOOTH, DRIFT (from 1.1), then **FOLLOW** (from 1.0: [below](#follow-a-voices-level-from-10)) |
 | **Phase** | Where in its cycle a trigger starts it |
 | **Mode** | **FREE** (runs on its own; the default), **TRIG** (starts again at each trigger), **HOLD** (runs, its value held at each trigger), **ONE** (one cycle from a trigger, then still at its end), **HALF** (half a cycle) |
 | **Trig** | What triggers it: **PLAY** (the sequencer starting), **PATTERN** (PLAY and each pattern change), **BAR** (PLAY and each bar) |
