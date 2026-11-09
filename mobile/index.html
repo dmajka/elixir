@@ -57,7 +57,7 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
   .btns { margin-top: 10px; }                    /* (0.25: tight: the screen and the buttons one block, by the thumbs) */
   .blacks, .steps { margin-top: 2px; }
   .standalone .steps { margin-bottom: auto; }   /* (from the home screen, no Safari bars: the room left over shared
-                                                    above and below, so the panel sits centred under the bar) */
+                                                    above and below, so the panel sits centered under the bar) */
 }
 /* 0.25: the stage at the top: PRESET, ALGO and SELECT as slim strips down the left of the screen (top to bottom: the
    most used lowest, by the thumb); the screen as large as the rest leaves. KNOB 1-4: drag a parameter on the screen up or down */
@@ -157,7 +157,7 @@ body { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Helvetica Neue", A
 </head>
 <body>
 <div class="app" id="app">
-  <div class="bar"><a class="home" href="../" title="Elixir's home page"><b>ELIXIR</b></a><small>v0.25.2</small><span class="sp"></span>
+  <div class="bar"><a class="home" href="../" title="Elixir's home page"><b>ELIXIR</b></a><small>v1.0</small><span class="sp"></span>
     <label class="vol">VOL<input id="vol" type="range" min="0" max="1023" step="1" aria-label="Volume"></label>
     <button id="sharebtn" type="button">Share</button>
     <button id="kitsbtn" type="button">Kits</button></div>
@@ -513,7 +513,7 @@ async function switchOn() {
     await ac.resume();
     document.getElementById("start").hidden = true;
     send({ type: "visible", on: !document.hidden });
-    send({ type: "surf", c: 0x18c3 });              // (0.25: the screen's cards and beat columns the keys' grey, #1a1a1d)
+    send({ type: "surf", c: 0x18c3 });              // (0.25: the screen's cards and beat columns the keys' gray, #1a1a1d)
     keepAwake();
     packsOnce();
     loadLinked();

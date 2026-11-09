@@ -1,8 +1,8 @@
 # Elixir manual
 
-Elixir is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 0.23: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Elixir adds.
+Elixir is the firmware of the Erica Synths LXR-02 drum machine, ported to the M-VAVE FM-1 and extended. This manual covers version 1.0: the LXR's sound engine and sequencer as they map onto the FM-1's keys, buttons and knobs, and everything Elixir adds.
 
-Elixir is **unofficial**. It is not affiliated with or endorsed by Erica Synths, M-VAVE or Hügelton Instruments. It is free software under the GPL-3.0 (see *Licence and credits* at the end).
+Elixir is **unofficial**. It is not affiliated with or endorsed by Erica Synths or M-VAVE. It is free software under the GPL-3.0 (see *License and credits* at the end).
 
 ---
 
@@ -27,7 +27,7 @@ Elixir is **unofficial**. It is not affiliated with or endorsed by Erica Synths,
 17. [Reference tables](#17-reference-tables)
 18. [How Elixir differs from the LXR-02](#18-how-elixir-differs-from-the-lxr-02)
 19. [Troubleshooting](#19-troubleshooting)
-20. [Licence and credits](#20-licence-and-credits)
+20. [License and credits](#20-license-and-credits)
 
 ---
 
@@ -68,7 +68,7 @@ Elixir keeps its projects and settings in the same flash area Felucca uses for i
 - **SHIFT (OCT−): keep.** Elixir runs but saves nothing this time: no projects, kits, settings or autosave ("WYRD'S DATA: NOT SAVED"). It asks again at the next power-on, so you can go back to Wyrd and back its data up on Wyrd's library page.
 - **COPY (OCT+) twice: erase.** Only Wyrd's records go: its project slots, its settings and its library entries. Elixir's own projects and kits stay, including kits that shared a library sector with Wyrd's. Then Elixir saves normally.
 
-PLAY and REC still work while the question is on screen. Grimoire can't be recognised yet, because it still saves with Elixir's own marks: back up Grimoire's data before installing Elixir.
+PLAY and REC still work while the question is on screen. Grimoire can't be recognized yet, because it still saves with Elixir's own marks: back up Grimoire's data before installing Elixir.
 
 ### If something goes wrong
 
@@ -110,17 +110,17 @@ The FM-1's keyboard has 16 white keys and 11 black keys, numbered left to right 
 | **White keys 1–16** | The 16 steps of the bar on screen. On the pattern page: patterns. In PERF: rolls and effects. |
 | **Black keys 1–7** | Select a track: D1 D2 D3 SN CY CH OH. SHIFT (OCT−) + key: mute / unmute it. |
 | **Black keys 8–11** | Show bar 1–4. On pattern, song, save and load pages: the bank of 16. SHIFT (OCT−) + key: track length (16, 32, 48, 64). COPY (OCT+) + key: copy the shown bar into it. In PERF: the repeat length. |
-| **OCT−** | **SHIFT** (hold). While held, the screen shows what SHIFT (OCT−) + each key does. |
+| **OCT−** | **SHIFT** (hold). While held, the screen shows the menu: what SHIFT (OCT−) + each key does ([table](#shift-oct--white-keys-outside-perf)). On PERF's pages SHIFT keeps PERF's own jobs (latching, SPELLS, WANDER). **Held while turning a knob: fine adjust**, one step a detent with no acceleration; the page stays on screen so you can see the value (from 1.0). |
 | **OCT+** | **COPY** (hold). SHIFT (OCT−) + OCT+ = **CLEAR**. OK in the save, load and action dialogs. Held on a sound page, a knob turned is **Control All**. |
-| **EDIT** | Sound: model → oscillator → FM → transient (press again to step through; SELECT goes through every sound page). SHIFT (OCT−) + EDIT: **KEYS** (the keys play the track's voice, on every page until SHIFT (OCT−) + EDIT again) |
+| **EDIT** | Sound: model → oscillator → FM → transient (press again: the next section; SELECT goes through every sound page). SHIFT (OCT−) + EDIT: **KEYS** (the keys play the track's voice, on every page until SHIFT (OCT−) + EDIT again) |
 | **ENV** | Sound: amp envelope → gate → mod envelope / velocity |
 | **SCL** | Sound: filter → shape → insert FX |
-| **LFO** | Sound: LFO 1 → LFO 2 → random per hit → cross mod / choke |
+| **LFO** | Sound: LFO 1 → LFO 2 → random per hit → cross mod / choke → FX track sends |
 | **GLO** | Mixer → config |
 | **FX** | FX bus → reverb (turn SELECT for the pages) |
-| **SEQ** | The track's pages (track, generator, action, groove, bounce, melody, scale) → step edit (press again: back; SELECT for the pages). SHIFT (OCT−) + SEQ: the links |
+| **SEQ** | The track's pages (track, generator, action, melody, scale, groove, bounce) → step edit (press again: back; SELECT for the pages). SHIFT (OCT−) + SEQ: the links |
 | **ARP** | PERF: PERFORM → SPELLS → WANDER → GLOBAL MOD (the global LFOs, macros, links); press again for the next set, SELECT for its pages |
-| **HOME** | Grid → patterns → song |
+| **HOME** | Grid → patterns → [load](#loading-and-saving) → song |
 | **SAVE** | Save → load (SHIFT (OCT−) + SAVE: load) |
 | **PLAY** | Start / stop: the pattern or the song, as **Play** says (the pattern page). SHIFT (OCT−) + PLAY: play the song from its start. |
 | **REC** | Record on / off. SHIFT (OCT−) + REC: record options. |
@@ -137,9 +137,9 @@ The FM-1's keyboard has 16 white keys and 11 black keys, numbered left to right 
 | Area | Shows |
 |---|---|
 | Header (top line) | The playing pattern (P01), the queued one (>02), the kit's name or SONG nn, M when morph is on, MIDI when synced to MIDI clock, the tempo, play (triangle, bright on the beat) and record (red dot) |
-| Title | The selected track (coloured tag), the page's name, page dots (or "3/14" when there are many pages), or a message |
+| Title | The selected track (colored tag), the page's name, page dots (or "3/14" when there are many pages), or a message |
 | Body | The grid, or the page's own display |
-| Cards (bottom) | The four knobs: each parameter's name, value and position. The card of the last knob turned is highlighted. A locked value shows in the accent colour. |
+| Cards (bottom) | The four knobs: each parameter's name, value and position. The card of the last knob turned is highlighted. A locked value shows in the accent color. |
 
 ### LEDs
 
@@ -184,7 +184,7 @@ On the grid, a step's height shows its velocity, an outline means a chance below
 
 - **SHIFT (OCT−) + bar key:** the selected track becomes 1, 2, 3 or 4 bars long.
 - **Length knob** on the grid (KNOB 3): any length from 1 to 64.
-- **LAST** (SHIFT (OCT−) + white key 14): tap the step that should be the track's last. Press SHIFT (OCT−) + 14 again to set all tracks at once.
+- **Every track at once** (from 1.0): hold **OCT+** and turn the length knob (on the grid or SEQ's TRACK page). Every track takes the selected track's length as you turn, so you can shorten and lengthen the whole pattern live. When you let go, **REVERT THE LENGTHS?**: **OCT+** puts each track's own length back, **OCT−** keeps the new one.
 
 The pattern lasts as long as its longest track (in time, counting [track clocks](#track-length-clock-direction)). Shorter tracks keep looping on their own across the pattern's end.
 
@@ -193,6 +193,7 @@ The pattern lasts as long as its longest track (in time, counting [track clocks]
 - **Copy a bar to another bar:** on the grid, hold **COPY** (OCT+) and press a bar key. The shown bar is copied, *every track*, into that bar, with each step's velocity, locks, timing, conditions and ratchets. A track that ended before the target bar grows to include it, unless its length isn't a whole number of bars (a 12-step track stays at 12). On other pages (sound pages, step edit), COPY (OCT+) + bar key copies the selected track only.
 - **Copy a track:** hold COPY (OCT+), press the source track's black key, then the target's.
 - **Copy a pattern:** on the pattern page, hold COPY (OCT+), press the source pattern's white key, then the target's.
+- **Delete a pattern** (from 1.0): on the pattern page, hold SHIFT (OCT−) and press the pattern's white key; the screen asks DELETE PATTERN P05?: COPY (OCT+) deletes it, SHIFT keeps it.
 
 ### Clearing
 
@@ -259,7 +260,7 @@ MIDI notes played while in step edit set the selected step's note.
 
 A lock sets one parameter to a different value on one step, for example a higher filter cutoff on the last kick of the bar. Each step can hold **two** locks.
 
-- **The quick way:** on any sound page (EDIT, ENV, SCL, LFO, GLO, the mixer), hold a step key and turn a knob. The step turns on if it was off, and the knob's card shows the locked value in the accent colour.
+- **The quick way:** on any sound page (EDIT, ENV, SCL, LFO, GLO, the mixer), hold a step key and turn a knob. The step turns on if it was off, and the knob's card shows the locked value in the accent color.
 - **On the LOCKS page:** choose any lockable parameter (any voice's sound parameter, the FX bus, the sends, the reverb, Elixir's shaping parameters) and its value.
 
 Every sound parameter can be locked except the reverb's model.
@@ -300,9 +301,9 @@ Press **REC** (it lights), then **PLAY**.
 
 **SHIFT (OCT−) + EDIT** turns the keyboard into an instrument for the selected track (ALGORITHM picks the track): the white and black keys play its voice chromatically, as on a piano, from F at the octave set (KNOB 1, **Octave**: F3 by default). Under REC each note is written into the nearest step with its note and velocity, as a MIDI note would be, and it goes out on USB MIDI too. PRESETS opens the [sound browser](#the-sound-browser).
 
-**KEYS stays on** (from 0.19) as you change pages, so you can play and turn knobs anywhere: the sound pages, FX, the mixer, SEQ's track pages, HOME. The header shows **KEYS** while the keys play notes. On the pages whose keys are their own (the patterns, the song, SAVE and LOAD, step edit, LAST and PERF) the keys do that page's job, and play again when you leave. **SHIFT (OCT−) + EDIT** on the KEYS page goes back to the grid; on any other page it turns KEYS off and stays there.
+**KEYS stays on** (from 0.19) as you change pages, so you can play and turn knobs anywhere: the sound pages, FX, the mixer, SEQ's track pages, HOME. The header shows **KEYS** while the keys play notes. On the pages whose keys are their own (the patterns, the song, SAVE and LOAD, step edit and PERF) the keys do that page's job, and play again when you leave. **SHIFT (OCT−) + EDIT** on the KEYS page goes back to the grid; on any other page it turns KEYS off and stays there.
 
-**In a scale:** when the pattern has a scale (SEQ → SCALE, [section 12](#scale)) and the track follows it, the white keys play the scale's degrees upwards from the root at or below F3, so every white key is in key; the black keys stay chromatic.
+**In a scale:** when the pattern has a scale (SEQ → SCALE, [section 12](#scale-from-016)) and the track follows it, the white keys play the scale's degrees upwards from the root at or below F3, so every white key is in key; the black keys stay chromatic.
 
 The FM-1's keys have no velocity, so KEYS sets it: **Velocity** (KNOB 2) is the velocity of a key, and of PERF's rolls and SHIFT (OCT−) + white keys 1–7. **Accent** (KNOB 3) is the velocity of a key played with SHIFT (OCT−) held. Both are kept in the settings.
 
@@ -316,10 +317,11 @@ Elixir has **32 patterns** in two banks of 16, and **64 songs**.
 
 - **White key:** queue that pattern. While playing, it starts when the current pattern ends (the header shows >nn); while stopped, at once.
 - **Bar keys 8–9:** bank 1 (patterns 1–16) or bank 2 (17–32).
-- **Knobs:** **Voices** (FREE, LOCKED or KIT, below), shuffle, Edits (KEEP or DROP, below), **Play** (PATTERN or SONG: what PLAY plays, see [Songs](#songs-home-press-a-third-time)).
-- **Copy a pattern:** hold **COPY (OCT+)** and tap the pattern, then hold COPY again and tap the target. The page shows both steps (COPY, PASTE). A LOCKED pattern's voices go with it.
+- **Knobs:** **Voices** (FREE, LOCKED or KIT, below), shuffle, Edits (KEEP or DROP, below), **Play** (PATTERN or SONG: what PLAY plays, see [Songs](#songs-home-a-fourth-press)).
+- **Copy a pattern:** hold **COPY (OCT+)** and tap the pattern, then hold COPY again and tap the target. A LOCKED pattern's voices go with it.
+- **Delete a pattern** (from 1.0): hold **SHIFT (OCT−)** and tap the pattern (or CLEAR, SHIFT + COPY, then the pattern). On this page SHIFT doesn't show its menu. The screen asks **DELETE PATTERN P05?**: **COPY (OCT+)** deletes it (its steps, generators, links, scale, groove and shuffle, as a new project's empty pattern), **SHIFT (OCT−)** keeps it; any other button, or COPY alone before you pick, cancels. Deleting the playing pattern empties it as it plays (a LOCKED pattern's voices are left in its slot). A song row that played it plays the empty pattern.
 
-**Voices** (from 0.20) sets where a pattern's sounds come from. The page shows a lock: open for FREE, shut for LOCKED and KIT.
+**Voices** (from 0.20) sets where a pattern's sounds come from; its card shows FREE, LOCKED or KIT (and the kit slot). Below the patterns the page lists COPY, PASTE and DELETE.
 
 | Voices | |
 |---|---|
@@ -333,7 +335,7 @@ Projects from before 0.20 that had CONFIG's Kit change on AUTO load with every p
 
 With **Edits** on DROP, the LXR's way, changes to the playing pattern that haven't been saved (SAVE → PATTERN) are lost when another pattern starts. Edits is a setting: it stays through power-off.
 
-### Songs (HOME, press a third time)
+### Songs (HOME, a fourth press)
 
 A song is up to 64 rows, each a pattern (or END / LOOP).
 
@@ -356,9 +358,9 @@ A ROADS song never stops at END or LOOP: the row after the last is the first. Th
 
 ## 9. Shaping the sound
 
-Select a track, then press a sound button. Pressing the same button again moves to the next section; turning SELECT steps through every page, in a synth's order: **model, oscillator, FM, transient, filter, shape, insert FX, amp EG, gate, mod EG / velocity**, then the modulation: **LFO 1, LFO 2, random per hit, cross mod / choke**. EDIT opens the first (MODEL), ENV the amp EG, SCL the filter and LFO the LFOs. Each page shows eight parameters (two rows of four); the lit row is on the knobs, and pressing the button again (or SELECT) gives the other row. A section with more than one page has its page in the title: MOD EG / VELO (1/2), (2/2).
+Select a track, then press a sound button. Pressing the same button again moves to the next section; turning SELECT steps through every page, in a synth's order: **model, oscillator, FM, transient, filter, shape, insert FX, amp EG, gate, mod EG / velocity**, then the modulation: **LFO 1, LFO 2, random per hit, cross mod / choke, FX track sends** (1.0). EDIT opens the first (MODEL), ENV the amp EG, SCL the filter and LFO the LFOs. Each page shows eight parameters (two rows of four); the lit row is on the knobs, and SELECT gives the other row. From 1.0 pressing a sound button again only moves to its next section, never to a section's second page. A section with more than one page has its page in the title: MOD EG / VELO (1/2), (2/2).
 
-From 0.19 the top of each page is a picture of what its knobs do rather than a list of their values (the knob cards below already show those): the oscillator's wave, the envelope's curve with its times, the filter's response with its cutoff in Hz, an LFO over a bar at the tempo with the track's retriggers, a model's description with its knobs as vials, and so on. It changes as you turn a knob. The FX pages (the reverb's tail, the delay's echoes, the compressors' curves and gain reduction, DIRT) and the SEQ pages Groove, Bounce, Melody, Melody loop and Scale have pictures too; Track, Generator and Action keep the grid. The MODEL page names the model, says what it is and draws it. A Rings, Plaits, MICRO or ENSEMBLE model makes its own sound, so on that voice the FM and TRANSIENT pages are hidden and the OSC page keeps only Coarse and Fine (the model's pitch); its other knobs show -- and don't turn. The AMP EG page stays where the amp EG shapes the model (from 0.25: ENSEMBLE, and the Plaits engines that don't make their own envelope: all but P STRING, P MODAL, P BD, P SD and P HH); for Rings and MICRO it is hidden. Rings with Exciter turned up keeps every page, since the voice's own sound strikes it. If Exciter is down in the kit but up in the morph kit, those pages stay, greyed and locked, until you morph. The reverb page draws what makes its sound (from 0.20: ROOM a hut, HALL a castle, PLATE a steel shield, SPRING a bare spring), growing with Size, its echoes going out as arcs (Level, Damping); P SPEECH's MODEL page is a wizard whose lips move as you turn its knobs; the delay page spells out its mode (Tape ping pong and so on). Knobs read in their own units where those say more than 0–127: the filter's cutoff in Hz, its resonance as Q, the envelopes' times in ms, the LFOs' rates in Hz, the sample rate in kHz.
+From 0.19 the top of each page is a picture of what its knobs do rather than a list of their values (the knob cards below already show those): the oscillator's wave, the envelope's curve with its times, the filter's response with its cutoff in Hz, an LFO over a bar at the tempo with the track's retriggers, a model's description with its knobs as vials, and so on. It changes as you turn a knob. The FX pages (the reverb's tail, the delay's echoes, the compressors' curves and gain reduction, DIRT) and the SEQ pages Groove, Bounce, Melody, Melody loop and Scale have pictures too; Track, Generator and Action keep the grid. The MODEL page names the model, says what it is and draws it. A Rings, Plaits, MICRO or ENSEMBLE model makes its own sound, so on that voice the FM and TRANSIENT pages are hidden and the OSC page keeps only Coarse and Fine (the model's pitch); its other knobs show -- and don't turn. The AMP EG page stays where the amp EG shapes the model (from 0.25: ENSEMBLE, and the Plaits engines that don't make their own envelope: all but P STRING, P MODAL, P BD, P SD and P HH); for Rings and MICRO it is hidden. Rings with Exciter turned up keeps every page, since the voice's own sound strikes it. If Exciter is down in the kit but up in the morph kit, those pages stay, grayed and locked, until you morph. The reverb page draws what makes its sound (from 0.20: ROOM a hut, HALL a castle, PLATE a steel shield, SPRING a bare spring), growing with Size, its echoes going out as arcs (Level, Damping); P SPEECH's MODEL page is a wizard whose lips move as you turn its knobs; the delay page spells out its mode (Tape ping pong and so on). Knobs read in their own units where those say more than 0–127: the filter's cutoff in Hz, its resonance as Q, the envelopes' times in ms, the LFOs' rates in Hz, the sample rate in kHz.
 
 ### The LXR's sound pages
 
@@ -370,21 +372,23 @@ From 0.19 the top of each page is a picture of what its knobs do rather than a l
 | **Transient** (EDIT) | Waveform, Volume, Frequency | same | same |
 | **Amp EG** (ENV; then Elixir's GATE page) | Attack, Decay, Slope | Attack, Decay, Repeat count (claps), Slope | Attack, Decay (CH: closed; OH: open), Repeat (cymbal), Slope |
 | **Mod EG / velocity** (ENV) | Pitch EG: Decay, Slope, Amount / Velocity: destination, amount, volume mod | same | Velocity: destination, amount, volume mod |
-| **Filter** (SCL) | Frequency, Resonance, Type (LP HP BP UNITY BP NOTCH PEAK LP2 OFF; then Elixir's, below), Overdrive | same | same |
-| **LFO 1** (LFO, 3 pages) | Frequency, Amount, Waveform, Dest (destination parameter) / Destination voice, Clock sync, Retrigger, Offset / Mode (TRIG, HOLD, ONE, HALF: Elixir's, see below) | same | same |
-| **LFO 2** (LFO, Elixir's) | Rate, Amount, Wave, Dest / Mode, Sync, Retrigger, Offset (see below) | same | same |
+| **Filter** (SCL) | Type (LP HP BP UNITY BP NOTCH PEAK LP2 OFF; then Elixir's, below), Freq, Reso, Drive (from 1.0 in this order; the LXR's: Frequency, Resonance, Type, Overdrive) | same | same |
+| **LFO 1** (LFO, 2 pages) | Dest, Depth, Sync, Rate / Wave, Phase, Mode, Retrigger ([the LFO pages](#the-lfo-pages-from-10)) | same | same |
+| **LFO 2** (LFO, Elixir's) | the same knobs as LFO 1 | same | same |
 
 The LXR's Mix page is gone from 0.19: volume and pan are on the mixer (GLO), the sample rate on SHAPE, the drive on SHAPE, the length on SEQ's TRACK page, the MIDI channel and note on CONFIG. The LXR's output setting is the FX send (see [section 10](#10-mixer-sends-fx-bus-and-reverb)).
 
 The LXR's waveforms are SINE, TRI, SAW, SQUARE, NOISE and PWM; its transients SNAP, OFFSET, CLICK, CLICK 2, TICK, KICK, RIM, DRIP, HAT, CLAP, KICK 2, SNARE, TOM and SNAP 2. Each voice has one LFO, which can modulate any parameter of any voice; the velocity destination can be any of the voice's own parameters.
 
-**Elixir's LFO and velocity targets** (from 0.18). Besides the LXR's parameters, the LFO's **Dest** and the velocity's destination reach Elixir's own: the voice's **FX** and **Rev** sends, **Tilt**, **Bits**, the random-per-hit amounts (**RndPitch**, **RndDecay**, **RndFiltr**, **RndPan**), the cross mod's **XAmount**, and the six MODEL knobs (named for the voice's model: Rings', Plaits' or MICRO's, e.g. Length, Colour, Jitter), then the kit's **Rev size**, **Rev damp**, **Rev level**, **Echo>Rev**, **Glitch**, **Bus dirt** and **Dirt amt**, then the voice's LFO 2 **Rate** and **Amount** and its insert's **Amount** and two knobs. The per-voice ones belong to the LFO's **DstVoice** (and move with it if you change the voice), or for velocity to the voice itself. Switches (the model, the filter type, choke, the output) aren't targets: a moving one would click. Each voice's LFO can already move another voice's LFO rate or amount (the LXR's targets), for a wobble of a wobble. A kit sent to an LXR-02 as a .SND file has OFF in place of these targets.
+**Elixir's LFO and velocity targets** (from 0.18). Besides the LXR's parameters, the LFO's **Dest** and the velocity's destination reach Elixir's own: the voice's **FX** and **Rev** sends, **Tilt**, **Bits**, the random-per-hit amounts (**RndPitch**, **RndDecay**, **RndFiltr**, **RndPan**), the cross mod's **XAmount**, and the six MODEL knobs (named for the voice's model: Rings', Plaits' or MICRO's, e.g. Length, Color, Jitter), then the kit's **Rev size**, **Rev damp**, **Rev level**, **Echo>Rev**, **Glitch**, **Bus dirt** and **Dirt amt**, then the voice's LFO 2 **Rate** and **Depth** and its insert's **Amount** and two knobs. The per-voice ones belong to the voice LFO 1's Dest is on, or for velocity to the voice itself. Switches (the model, the filter type, choke, the output) aren't targets: a moving one would click. Each voice's LFO can already move another voice's LFO rate or amount (the LXR's targets), for a wobble of a wobble. A kit sent to an LXR-02 as a .SND file has OFF in place of these targets.
 
 **The Dest list** (from 0.25.2). Turning Dest goes from OFF through the targets in groups, in the order EDIT shows the pages (the signal path): MODEL, OSCILLATOR, FM, TRANSIENT, FILTER, SHAPE, INSERT FX, AMP EG, MOD EG / VELO, LFO 1, LFO 2, RANDOM PER HIT, CROSS MOD, then the ones on no sound page: MIX & SENDS (volume, pan, the FX and reverb sends), FX BUS, REVERB and MASTER. Within a group they go by name. The LFO's page shows the group above the target's full name (FILTER, Frequency; MOD EG / VELO, Velocity amount); when LFO 1 moves another voice, the group starts with that voice. The velocity's destination turns through the same order.
 
+**LFO 1 reaches every voice** (from 1.0). LFO 1's Dest goes on past its own voice's targets into the other voices': its own voice first, then the others in order (D1, D2, D3, SN, CY, HH), each in the order above, so one knob picks both the voice and the parameter. The Dest card names the voice when it isn't the LFO's own (SN Frequncy). The LXR's separate destination voice knob is gone; kits keep it, and it follows Dest. Control All (OCT+ held) turns every track's LFO 1 Dest the same number of places through its own list.
+
 ### Elixir's filter types
 
-After the LXR's eight (OFF stays where it was), the filter's **Type** goes on to seven of Elixir's (from 0.18). They use the same knobs: **Frequency**, **Resonance** and **Overdrive** (the drive into the filter, as on the LXR's types). The LFO, velocity, locks and the random cutoff move them as they move the others.
+After the LXR's eight (OFF stays where it was), the filter's **Type** goes on to seven of Elixir's (from 0.18) and four character filters (from 1.0). They use the same knobs: **Frequency**, **Resonance** and **Overdrive** (the drive into the filter, as on the LXR's types). The LFO, velocity, locks and the random cutoff move them as they move the others.
 
 | Type | Sound | Frequency | Resonance |
 |---|---|---|---|
@@ -395,43 +399,62 @@ After the LXR's eight (OFF stays where it was), the filter's **Type** goes on to
 | **VOWEL** | Two band-passes at a voice's formants: talking toms and snares | the vowel, from A through E, I, O to U | how sharp the formants are |
 | **DUB BP** | The LXR's BP into a saturator: the ringing band of a dub chord stab | the band | as the BP's; Overdrive drives the saturator as well (2× to 15×) |
 | **CHORD** | Three band-passes at a root, its fifth and its octave: a chord out of a hat, a noise burst or a click | the root, as the combs' pitch (and the note moves it) | how long they ring (high values ring like a bell) |
+| **ACID** (1.0) | A TB-303-style diode ladder: four stages that load each other, so the slope is softer (about 18 dB an octave) and the resonance is glassy. As on the 303 the resonance thins out the bass and fades at low cutoffs | the cutoff (the peak sits about two octaves over it; at 0 resonance it is open at the top) | up to just under a whistle; it squelches through the output's saturation |
+| **MS20 LP** (1.0) | A Korg MS-20-style two-pole low-pass: the resonance goes through a lopsided diode clip in the loop, so it gets rougher, not louder, as you turn it up | the cutoff | up to a scream that stays bounded |
+| **MS20 HP** (1.0) | The same filter's two-pole high-pass (12 dB an octave) | the cutoff | the same |
+| **LADDER** (1.0) | A Moog-style transistor ladder: LP4 with the first stage saturating too, and **Bass comp** to bring back the bass the resonance takes away | the cutoff | as LP4's |
+
+**FILTER X** (from 1.0): the four character types have a second FILTER page (SELECT, or SCL again) with one knob:
+
+- **Env amt** (ACID, MS20 LP, MS20 HP): opens the cutoff with the voice's amp envelope, up to the whole range at 127: a hit starts bright and closes as it decays. This is the 303's squelch on any voice, the accent of an acid line on a kick or a tom. At 0 the cutoff stays where Frequency puts it. The envelope is followed smoothly, so a fast decay doesn't step.
+- **Bass comp** (LADDER): 0 is LP4's balance; up, the bass the resonance takes away comes back (about +10 dB of low end at full resonance), so a resonant ladder keeps its body.
+
+The Resonance knob of the four character types is curved: more of it sits where the filter starts to sing (halfway is three quarters of the way to the top). FILTER X is part of the kit, morphs and can be locked per step. The character types cost about as much as LP4 (ACID, LADDER) or a little more than LP (the MS20s); see CONFIG → LOAD.
 
 - The combs and CHORD follow the note a step, KEYS or the melody generator plays (a scale, SEQ → SCALE, keeps them in key); at the track's default note they stay where Frequency puts them. The voice's own tuning and random pitch don't move them.
 - A drum voice (D1–D3) starts its filter from rest at each hit, as on the LXR: a comb's ringing doesn't carry over to the next hit. On the snare, cymbal and hats it carries on.
 - **Morph:** between two of the LXR's types the type moves through the values between, as the LXR does. If either kit uses one of Elixir's, the type switches at the halfway point.
 - A kit sent to an LXR-02 as a .SND file (the library page) has LP in place of Elixir's types, which the LXR doesn't have.
 
+### The LFO pages (from 1.0)
+
+Every LFO has the same knobs in the same places, the global LFOs (PERF, GLOBAL MOD) included:
+
+| | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
+|---|---|---|---|---|
+| Page 1 | **Dest** | **Depth** | **Sync** | **Rate** |
+| Page 2 | **Wave** | **Phase** | **Mode** | **Retrigger** (the global LFOs: **Trig**) |
+
+- **Dest:** what it moves. **Depth:** how far (the LXR's Amount).
+- **Sync:** OFF, or one cycle's length at the tempo. With Sync OFF the LFO runs at **Rate** (in Hz); with a sync value Rate reads SYNC and does nothing. Turning right makes the cycle longer. The track LFOs' sync values, fast to slow: 1/32, 1/16, 1/8T, 1/8, 1/4T, 3/16, 1/4, 5/16, 1/2T, 3/8, 1/2, 3/4, 1/1, 2/1, 4/1 (four bars). T is a triplet; 3/4, 3/8 and 3/16 are the dotted half, quarter and eighth. (1/2T, 1/4T and 1/8T are the LXR's 1/3, 1/6 and 1/12, renamed; 3/4, 3/8, 5/16 and 3/16 are new in 1.0.)
+- **Wave:** SINE, TRI, SAW UP, SAW DN, SQUARE, RANDOM, EXP UP, EXP DN.
+- **Phase:** where in its cycle a restart starts it (the LXR's Offset).
+- **Mode:** how a hit starts it (below).
+- **Retrigger:** whose hits restart it: OFF, or a voice (D1 … HH). A kick's LFO with Retrigger D1 starts its cycle again on every kick, so a filter sweep lands the same way on each hit. With OFF it runs free (in TRIG; in HOLD, ONE and HALF OFF means the LFO's own voice's hits).
+
+Turning Sync goes by length, so the new values sit between the LXR's; kits store them as before (an older Elixir reads 3/4, 3/8, 5/16 and 3/16 as free running; a kit sent to an LXR-02 as a .SND gets the LXR's nearest: 1/1, 1/3, 1/3, 1/6). When the kit and the morph kit have different syncs and either is one of the new ones, morph switches it at the halfway point.
+
 ### The LFO's mode
 
-**Mode** (LFO 1's third page, LFO 2's second) sets how a hit starts the LFO, as on Elektron's machines. Retrigger still picks whose hits those are.
+**Mode** (page 2, KNOB 3, on every LFO) sets how a hit starts the LFO, as on Elektron's machines. Retrigger still picks whose hits those are.
 
 | Mode | Does |
 |---|---|
-| **TRIG** | The LXR's way (the default): each hit starts the cycle again from the Offset. With Retrigger OFF, the LFO runs free. |
+| **TRIG** | The LXR's way (the default): each hit starts the cycle again from its Phase. With Retrigger OFF, the LFO runs free. |
 | **HOLD** | The LFO runs free; each hit takes its value at that moment and holds it until the next hit. A random sample and hold per hit, or a "where was the sweep when it hit" value. |
-| **ONE** | One-shot: each hit starts it from the Offset, it runs one cycle and stops at the end. Until the first hit it waits at the Offset. A saw becomes an envelope; a sine a single swell. |
+| **ONE** | One-shot: each hit starts it from its Phase, it runs one cycle and stops at the end. Until the first hit it waits at its Phase. A saw becomes an envelope; a sine a single swell. |
 | **HALF** | The same, half a cycle: a triangle or sine rises and stays up. |
 
 In HOLD, ONE and HALF, Retrigger OFF means the LFO's own voice's hits. A RANDOM wave draws a new value at each one-shot. The mode is part of the kit and can be locked per step; it doesn't morph.
 
 ### Track LFO 2 (from 0.18)
 
-Every track has a second LFO: **LFO 2** (LFO, after LFO 1). It has LFO 1's waves, clock sync, retrigger, offset and modes, with the knobs where LFO 1 has them:
+Every track has a second LFO: **LFO 2** (LFO, after LFO 1). It has LFO 1's knobs in the same places ([the LFO pages](#the-lfo-pages-from-10)).
 
-| | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
-|---|---|---|---|---|
-| LFO 1 (1/3) | Rate | Amount | Wave | Dest |
-| LFO 1 (2/3) | Voice | Sync | Retrig | Offset |
-| LFO 1 (3/3) | Mode | – | – | – |
-| LFO 2 (1/2) | Rate | Amount | Wave | Dest |
-| LFO 2 (2/2) | Mode | Sync | Retrig | Offset |
-
-LFO 1 has one page more because it can move another voice (Voice: the voice its target belongs to, as on the LXR).
-
-- **Dest:** OFF, then the track's own parameters, the LXR's and Elixir's, in the Dest list's order (above). Unlike LFO 1 it has no destination voice: it always moves its own track. Kits start with its Amount at 0.
+- **Dest:** OFF, then the track's own parameters, the LXR's and Elixir's, in the Dest list's order (above). Unlike LFO 1 it doesn't reach the other voices: it always moves its own track. Kits start with its Depth at 0.
 - **On the same target as LFO 1** (or as the velocity), LFO 2 adds to it: LFO 1 sweeping the cutoff slowly and LFO 2 wobbling it fast give both movements. (LFO 1 and velocity on one target don't add: the LFO wins, as on the LXR.)
-- Every setting is part of the kit, can be locked per step, and LFO 1 (or another track's LFO 1) can move LFO 2's Rate or Amount.
-- **Morph:** Rate, Amount and Offset glide. Dest, Wave, Mode, Sync and Retrigger switch at the halfway point; when they differ between the two kits, the Amount goes down to 0 at the halfway point and up to the other kit's after it, so nothing jumps.
+- Every setting is part of the kit, can be locked per step, and LFO 1 (or another track's LFO 1) can move LFO 2's Rate or Depth.
+- **Morph:** Rate, Depth and Phase glide. Dest, Wave, Mode, Sync and Retrigger switch at the halfway point; when they differ between the two kits, the Depth goes down to 0 at the halfway point and up to the other kit's after it, so nothing jumps.
 - A sound moved to another drum takes LFO 2 with it, its target and retrigger following the new voice. A kit sent to an LXR-02 leaves it out.
 
 ### Elixir's sound pages
@@ -458,18 +481,14 @@ LFO 1 has one page more because it can move another voice (Voice: the voice its 
 
 | Type | Sound | Knob 3 | Knob 4 |
 |---|---|---|---|
-| **PHASER** | Four allpasses swept from 150 Hz to 4.8 kHz: the classic swirl, per drum | Rate | Feedback (0 none, + or −) |
-| **FLANGER** | A short delay (0.2–4.7 ms) swept: jet, metallic | Rate | Feedback (0 none, + or −) |
-| **CHORUS** | Two voices of the sound around 6 ms, swept opposite ways: width and shimmer (mono until the pan) | Rate | Depth |
-| **TREMOLO** | The level moved | Rate | Shape (sine to square) |
-| **AUTOPAN** | The pan moved: one side turned down at a time | Rate | Shape (sine to square) |
 | **SHIFTER** | A frequency shifter: every partial moved by the same Hz, so the sound goes inharmonic and metallic (dub techno's smear). Feedback makes the barber-pole rising or falling sweep | Shift (−500 to +500 Hz; middle none) | Feedback (0 none, + or −) |
 | **RING** | Ring modulation against a sine | Pitch (20 Hz to 2.6 kHz) | AM (0: ring, the sound's own pitch gone; up: amplitude modulation, which keeps it) |
 
-- The rates go from one cycle in 20 s to about 13 Hz. The insert's LFO runs free (it doesn't restart at hits); for a synced sweep, put LFO 2 on the insert's knobs.
+- From 1.0 the types are OFF, SHIFTER and RING. PHASER, FLANGER, CHORUS, TREMOLO and AUTOPAN (up to 0.25) are gone: they didn't sound good enough for what they cost. A kit or a lock that used one plays with the insert OFF, and the page shows OFF. The FX bus still has a phaser and a flanger.
+- For a sweep, put LFO 2 on the insert's knobs (the shift or the pitch).
 - **Morph:** the knobs glide; the type switches at the halfway point, and when the two kits' types differ the Amount goes down to 0 there and up again, so the switch is silent.
 - All the knobs can be locked per step and moved by the LFOs and velocity (the type can't: a moving one would click).
-- **CPU** (estimated, not yet measured on the FM-1): a phaser, flanger, chorus or ring should cost well under 1% a track, the shifter about 1%. Six shifters on a busy kit can push the CPU meter up: see CONFIG's CPU meter.
+- **CPU** (estimated): RING costs well under 1% a track, the shifter about 1%. Six shifters on a busy kit can push the CPU meter up: see CONFIG → LOAD.
 - A comb is in the filter (COMB+ and COMB−), not here.
 
 **Gate** (ENV, after the amp EG; from 0.16): **OFF** (the LXR's: a hit runs the attack and the decay, whatever the step) or **ON**: the voice holds the top of its attack for the step's **Length** (step edit's STEP page), then decays. With Length AUTO a gated voice plays as before. Part of the kit; it doesn't morph. A Plaits model's low-pass gate stays open while it holds, so P VA or P WTABLE can play a held bass note or a pad.
@@ -480,7 +499,7 @@ LFO 1 has one page more because it can move another voice (Voice: the voice its 
 |---|---|---|---|
 | Pitch | Decay | Filter | Pan |
 
-Each hit varies by up to the amount set: pitch up to an octave either way at 127 (on a track that follows a scale, whole degrees of it, up to 7 either way) (small amounts are subtle, for humanising), decay from half to double, filter cutoff up to half its range either way, pan across the field.
+Each hit varies by up to the amount set: pitch up to an octave either way at 127 (on a track that follows a scale, whole degrees of it, up to 7 either way) (small amounts are subtle, for humanizing), decay from half to double, filter cutoff up to half its range either way, pan across the field.
 
 **Cross mod / choke** (LFO, next):
 
@@ -492,11 +511,15 @@ Each hit varies by up to the amount set: pitch up to an octave either way at 127
 - **Mode:** **DUCK** (this voice drops while the source sounds: sidechain), **FILTER** (the source's level opens this voice's filter), **RING** (the two multiplied).
 - **Choke:** a group 1–4. A hit on any voice in the group fades the others in that group out (within 1.5 ms). The hats already choke each other, since they share a voice.
 
+**FX track sends** (LFO, last; from 1.0): the track's three sends in one place, one page: **FX**, **Delay**, **Reverb** on KNOBs 1–3.
+
+The page draws the three sends as bars in the track's color and names the delay's routing (below, [Routing](#routing-from-10)). The returns they feed (FX Dry/Wet, the delay's and the reverb's Level) are the kit's, shared by every track, so they are on the FX pages and the mixer, not here. Control All works here as on any sound page: hold it and turn FX to raise every track's FX send.
+
 ### Models: Rings and Plaits (Drum 1–3, experimental)
 
 **Experimental.** The models are not part of the LXR-02: they are Elixir's own addition, ported from two Mutable Instruments Eurorack modules, **Rings** (from 0.9) and **Plaits** (from 0.15). They are still being tested on the FM-1, they use far more of the processor than the LXR's voices, and their sound and settings may change in later versions, so a kit that uses them may sound different after an update. Everything else in Elixir works without them.
 
-The three DRUM voices have more engines than the LXR's own. They are set in the **MODEL** section (EDIT's first page). Model **LXR** is the LXR's engine (the default); **MODAL**, **STRING** and **FM** are Rings' resonators, struck by the voice; the sixteen **P …** models are Plaits' engines (below). After them come the **MICRO** types, which every track has ([MICRO](#micro-microsound-voices-every-track)).
+The three DRUM voices have more engines than the LXR's own. They are set in the **MODEL** section (EDIT's first page). Model **LXR** is the LXR's engine (the default); **MODAL**, **STRING** and **FM** are Rings' resonators, struck by the voice; the **P …** models are Plaits' engines (below). After them come the **MICRO** types, **CLOUD** (Elixir's own granular voice, D1–D3: [below](#cloud-a-granular-voice-d1d3-from-10)), **RAIN** (CLOUD's grains ringing a chord of tuned bands, D1–D3: [below](#rain-clouds-grains-on-tuned-bells-d1d3-from-10)), **NOISE** and **ENSEMBLE**; MICRO, NOISE and ENSEMBLE every track has ([MICRO](#micro-microsound-voices-every-track), [NOISE](#noise-brown-to-blue-every-track), [ENSEMBLE](#ensemble-eight-stacked-sines-every-track)).
 
 #### Rings
 
@@ -522,16 +545,16 @@ The modes a MODAL voice runs drop as more drums use MODAL: 32 with one, 24 with 
 
 #### Plaits
 
-A port of the original engines of Mutable Instruments' **Plaits** (its first two banks; the six engines Plaits added in its 1.2 firmware aren't ported): fifteen of its sixteen. Its wavetable engine (P WTABLE, in 0.23) was taken out in 0.24 to free 48 KB of flash for new features; a kit that used it loads on P ADDTV. The voice strikes the engine at each hit, as Plaits plays with its TRIGGER patched; velocity is the hit's accent. On a P model the MODEL section's knobs become Plaits':
+A port of the original engines of Mutable Instruments' **Plaits** (its first two banks; the six engines Plaits added in its 1.2 firmware aren't ported): twelve of its sixteen. Its wavetable engine (P WTABLE, in 0.23) was taken out in 0.24 to free 48 KB of flash for new features; a kit that used it loads on P ADDTV. From 1.0, three more are gone: **P MODAL** (Rings' MODAL is the same idea and plays better; a kit or a lock with P MODAL plays MODAL), **P NOISE** (replaced by Elixir's own [NOISE](#noise-brown-to-blue-every-track), at a small part of its CPU; a kit with P NOISE loads NOISE, its knobs now NOISE's, so it sounds different) and **P GRAIN** (its number is now [CLOUD](#cloud-a-granular-voice-d1d3-from-10), Elixir's own granular voice: a kit with P GRAIN loads CLOUD, its knobs now CLOUD's, so it sounds different). The voice strikes the engine at each hit, as Plaits plays with its TRIGGER patched; velocity is the hit's accent. On a P model the MODEL section's knobs become Plaits':
 
 | | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
 | Row 1 | Model | Harmonic | Timbre | Morph |
-| Row 2 | Colour | Aux | Env | |
+| Row 2 | Color | Aux | Env | |
 
 - **Harmonic, Timbre, Morph:** Plaits' three main knobs. What they do depends on the engine (the table below). They can be locked per step, which is how Plaits is often sequenced with CV.
 - **Pitch:** the voice's Coarse and Fine, the step's note, the pitch EG and KEYS, as on the other models.
-- **Colour:** Plaits' low-pass gate. At 0 (the default) the engine goes through the voice's amp EG as through a plain VCA; turned up, its filter also closes as the amp EG falls, the sound darkening as it dies away, as a vactrol does. The drum, string and modal engines shape their own decay (Morph), so the amp EG and Colour don't apply to them.
+- **Color:** Plaits' low-pass gate. At 0 (the default) the engine goes through the voice's amp EG as through a plain VCA; turned up, its filter also closes as the amp EG falls, the sound darkening as it dies away, as a vactrol does. The drum, string and modal engines shape their own decay (Morph), so the amp EG and Color don't apply to them.
 - **Aux:** Plaits has two outputs, OUT and AUX (a variant of the sound, listed below). Aux blends from OUT (0) to AUX (127).
 - **Env:** how far the amp EG opens Timbre and Morph at each hit (Plaits' internal envelope, patched to its TIMBRE and MORPH inputs).
 
@@ -540,28 +563,59 @@ A port of the original engines of Mutable Instruments' **Plaits** (its first two
 | P VA | Two virtual-analog oscillators | detune between them | pulse width, then sync | saw shape | the two, synced |
 | P WSHAPE | Waveshaper and wavefolder | shaper curve | fold amount | asymmetry | another folder |
 | P FM | Two-operator FM | ratio | FM index | feedback | sub-oscillator |
-| P GRAIN | Formant / grains | formant ratio | formant frequency | formant width | windowed sines |
 | P ADDTV | Additive (harmonics) | bumps in the spectrum | most prominent harmonic | bump shape | organ harmonics only |
 | P CHORD | Chords | chord type (the knob is named **Chord** and shows it: OCTAVE, FIFTH, SUS4, MINOR, MINOR 7, MINOR 9, MINOR 11, 6/9, MAJOR 9, MAJOR 7, MAJOR) | inversion (**Invert**) | waveform (**Wave**: ORGAN up to half, then WAVE 1–15 from the wavetable) | the chord's root |
 | P SPEECH | Speech | vowels, then word banks | species (formant shift) | phoneme or word | raw vocal cords |
 | P SWARM | Eight sawtooth swarm | pitch spread | grain density | grain length | sine swarm |
-| P NOISE | Clocked filtered noise | filter LP → BP → HP | clock rate | resonance | two band-passes |
-| P PARTCL | Particle noise | frequency spread | density | filter: diffuse, then resonant | raw dust |
 | P STRING | Inharmonic string | inharmonicity, material | brightness | decay | raw exciter |
-| P MODAL | Modal resonator | material | brightness | decay | raw exciter |
 | P BD | Analog bass drum | attack, drive | brightness | decay | a synthetic kick |
 | P SD | Analog snare | tone against noise | the head's modes | decay | a synthetic snare |
 | P HH | Analog hi-hat | metal against noise | high-pass | decay | a synthetic hat |
 
 **The wave on the MODEL page** (from 0.23-test7). On P CHORD the picture shows the Wave knob's waveform: up to half, the organ (octave-apart saws, as its registration), past half, the wavetable's 15 waves. The pictures follow the knobs, not ENV's movement.
 
-Where the port differs from Plaits: P STRING plays one string a voice (Plaits overlaps three); P PARTCL's diffuser (its reverb-like smear) belongs to the first drum voice on P PARTCL, and the others play it dry; P SPEECH has no prosody or speed control; Plaits' sustain modes (with nothing patched to TRIGGER) and its user wavetables aren't ported. In the first measurements on an FM-1, P NOISE, P ADDTV and P PARTCL cost the most (each about three LXR voices), P VA a little less; Rings' MODAL is heavier than any of them, STRING and FM lighter.
+Where the port differs from Plaits: P STRING plays one string a voice (Plaits overlaps three); P PARTCL is left out from 1.0 (its number is now [RAIN](#rain-clouds-grains-on-tuned-bells-d1d3-from-10), Elixir's own dust through resonators: a kit with P PARTCL loads RAIN, its knobs now RAIN's, so it sounds different); P SPEECH has no prosody or speed control; Plaits' sustain modes (with nothing patched to TRIGGER) and its user wavetables aren't ported. On an FM-1 (the LOAD page's D1-D3 line, 1.0) P SD and P ADDTV cost the most of Plaits' engines (each about a quarter of the second core), P BD and P VA a little less, P SPEECH and P STRING the least; Rings' MODAL is heavier than any of them, STRING and FM lighter. Two heavy models together can be more than the second core has: the screen then flashes **CPU OVERLOAD** with the two models' names (see [the CPU meter](#the-cpu-meter)).
+
+**Lighter from 1.0** (the sound unchanged, checked against Plaits' and Rings' own code): MODAL's resonators take about a quarter less of the second core. **P BD**, **P SD** and **P HH** are each two drums (OUT the analog one, AUX the synthetic one): with **Aux** at 0 or 127 only the one you hear is computed, about half the engine's cost; anywhere between, both are. **P ADDTV** at Aux 0 leaves out its organ (a third of it). **P SD** below Timbre 85 (its 808 range) runs two of its five resonators (the other three are silent there anyway). So the heavy pairs have more room, especially with Aux at an end; what fits on your FM-1 is on the LOAD page. Moving Aux away from an end mid-note brings the other drum in at the next hit.
+
+#### CLOUD: a granular voice (D1–D3, from 1.0)
+
+**CLOUD** is Elixir's own granular voice: a cloud of short sine grains around the voice's pitch. Short grains give clicks, crackle and dust; long ones a shimmering tone; scattered pitches a chorus, a smear, or octaves and fifths. It comes after the MICRO types in Model (D1–D3 only), in the number P GRAIN had. It plays like Plaits' oscillator engines: a grain lands on each hit, the voice's amp EG shapes it (its page is shown), **Color** turns that into the low-pass gate and **Env** opens Size and Density with the EG (a burst at the hit that thins out).
+
+| | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
+|---|---|---|---|---|
+| Row 1 | Model | Scatter | Size | Density |
+| Row 2 | Color | Texture | Env | |
+
+- **Scatter:** the grains' pitches. At 0 all on the note. Up to the middle, a widening detune (a chorus, then a smear up to ±12 semitones); past the middle, more and more of them an octave or a fifth away (±12, +7, +19, +24), a chord of grains.
+- **Size:** each grain from 2 ms (a click) to 150 ms (a tone).
+- **Density:** 3 to 400 grains a second, at slightly uneven times. Up to 8 sound at once; the level is evened out as they overlap, so a dense cloud isn't louder than a sparse one.
+- **Texture** (Plaits' Aux): from clean sine grains (0) to grains whose phase is shaken by a slow noise (127): each one a band of noise at its pitch, like rain, sand or breath. Between, a mix.
+
+**Cost:** about a sixth of the old P PARTCL's at its busiest (8 grains at once), next to nothing when sparse. So CLOUD is **not one of the two models**: any of D1–D3 can play it beside two Rings or Plaits models.
+
+#### RAIN: CLOUD's grains on tuned bells (D1–D3, from 1.0)
+
+**RAIN** sends CLOUD's grains into a chord of tuned resonators (as people patch Plaits' particle engine into a resonator). Each grain lands on one of the chord's notes at random and rings that note's band. Sparse, the grains are clicks (about 3 ms) and every band answers: rain on a bell. Dense, they grow to about 30 ms and each one mostly rings its own band: a bowed shimmer, or a marimba roll with a short Ring. It comes after CLOUD in Model (D1–D3 only), in the number P PARTCL had. A hit puts a grain on the root at once, louder with the velocity.
+
+| | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
+|---|---|---|---|---|
+| Row 1 | Model | Chord | Ring | Density |
+| Row 2 | Color | Dry | Env | |
+
+- **Chord:** the bands' tuning over the voice's pitch, the DJ filter RING's eight, shown by name: NOTE (the harmonics 1–8, a string), OCTAVES, FIFTHS, MAJOR, MINOR, SUS4, MIN7, PENTA. Up to eight bands; those above about 6 kHz are left out.
+- **Ring:** how long the bands ring, as RING's Reso (short and woody at 0, a long bell at 127). Long rings are evened out, so they aren't much louder than short ones.
+- **Density:** CLOUD's 3 to 400 grains a second, at uneven times; the grains get longer as it goes up.
+- **Dry** (Plaits' Aux): from the bells alone (0) to the dry grains alone (127). At 127 the bands aren't run (almost no CPU).
+- **The amp EG** (its page is shown) shapes the **grains**, not the bells: Decay sets how long the rain falls after a hit, and the bands ring on through Ring. **Color** turns it into the low-pass gate on the grains; **Env** opens Ring and Density with the EG.
+
+**Cost:** at its busiest (eight bands, full Density, Dry 0) about twice CLOUD's, an estimated tenth of the second core; when the grains have stopped and the bells have died away, nothing. So RAIN is **not one of the two models** either: any of D1–D3 can play it beside two Rings or Plaits models. The LOAD page shows what it takes on your FM-1.
 
 #### Both
 
-**Two models at once.** The models are much heavier than the LXR's voices, so at most two of D1–D3 play a model at a time (from 0.15). They play on the FM-1's second core. A third, counted in D1, D2, D3 order, plays as an LXR voice, and its MODEL page says **OVER 2 MODELS: PLAYS AS LXR** in red. It keeps its setting and plays its model again as soon as another drum goes back to LXR. On an FM-1 running on one core (see [the LOAD page](#the-load-page)), only one model plays.
+**Two models at once.** The Rings and Plaits models are much heavier than the LXR's voices, so at most two of D1–D3 play one at a time (from 0.15). They play on the FM-1's second core (CLOUD, RAIN, MICRO, NOISE and ENSEMBLE aren't counted). From 1.0, while two other drums have the two, a drum's **Model** knob steps past Rings' and Plaits' models (the others stay) and the title says which drums have them (**D2+D3 HAVE THE 2 MODELS**): set one of those back first. So picking a model never moves another drum to the LXR. A kit or a lock that asks for three (from an earlier version, or a step lock) still plays the first two in D1, D2, D3 order; the third plays as an LXR voice and its MODEL page says **OVER 2 MODELS: PLAYS AS LXR** in red, and it plays its model again as soon as another drum goes back to LXR. On an FM-1 running on one core (see [the LOAD page](#the-load-page)), only one model plays.
 
-The model replaces the oscillators, transient and amp EG in the output: the model's own Decay sets how long the voice sounds. Plaits' engines that don't envelope themselves are the exception: the voice's amp EG (Attack, Decay, Slope, Gate) shapes them, and from 0.25 its page is shown for them (P VA, P WSHAPE, P FM, P GRAIN, P ADDTV, P CHORD, P SPEECH, P SWARM, P NOISE, P PARTCL); Colour turns it into Plaits' low-pass gate and Env sends it to Timbre and Morph. Everything after the oscillator still applies: the filter, drive and shape, bits, tilt, sends, LFO, random per hit and cross modulation. The model's settings are part of the kit and can be locked per step; Model itself doesn't morph: the voice keeps its own kit's engine while the other knobs morph.
+The model replaces the oscillators, transient and amp EG in the output: the model's own Decay sets how long the voice sounds. Plaits' engines that don't envelope themselves are the exception: the voice's amp EG (Attack, Decay, Slope, Gate) shapes them, and from 0.25 its page is shown for them (P VA, P WSHAPE, P FM, P ADDTV, P CHORD, P SPEECH, P SWARM, CLOUD; on RAIN it shapes the grains alone); Color turns it into Plaits' low-pass gate and Env sends it to Timbre and Morph. Everything after the oscillator still applies: the filter, drive and shape, bits, tilt, sends, LFO, random per hit and cross modulation. The model's settings are part of the kit and can be locked per step; Model itself doesn't morph: the voice keeps its own kit's engine while the other knobs morph.
 
 **From 0.8 and earlier:** the old models (SKIN, BAR, BELL, PLATE, TUBE) are gone. A project or kit that used them loads with MODAL in place of SKIN, BAR, BELL and PLATE, and STRING in place of TUBE; the knobs keep their values, so they sound different. Check those sounds after updating.
 
@@ -573,7 +627,7 @@ Pick one with **Model** on the MODEL page (EDIT's first page). On the snare, cym
 
 The type replaces the voice's oscillators, FM and transient. There is nothing else to turn off.
 
-| Type | The sound | Colour |
+| Type | The sound | Color |
 |---|---|---|
 | **CLICK** | one square pulse, 0.1–1.5 ms | a single click → a doublet (a second, opposite half) |
 | **TRAIN** | 3–20 clicks in a row, alternating and fading: a short rasp | speeding up (low) → slowing down (high) |
@@ -590,12 +644,12 @@ The knobs:
 
 | | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
-| Row 1 | Model | Length | Colour | Jitter |
+| Row 1 | Model | Length | Color | Jitter |
 | Row 2 | Reverse | Tension | | |
 
 - **Length:** how long the sound lasts: a click's width, how many clicks a train has, a grain's window, a crackle's duration.
-- **Colour:** the type's own character (the table above).
-- **Jitter:** each hit a little different: its length and colour vary, and a train's gaps go uneven. At 0 every hit is the same.
+- **Color:** the type's own character (the table above).
+- **Jitter:** each hit a little different: its length and color vary, and a train's gaps go uneven. At 0 every hit is the same.
 - **Reverse:** the chance that a hit plays backwards: a swell that stops with a cut, a train that grows louder and faster and a sweep the other way. At 127 every hit is backwards.
 - **Tension:** each hit's pitch is thrown up and falls back (an octave at 127 and full velocity), as on Rings' and Plaits' models.
 
@@ -605,13 +659,27 @@ The knobs:
 
 Each type's level is matched to the others, so changing the type doesn't jump in volume. MICRO costs less processor than the LXR voice it replaces, and it isn't one of the [two models at once](#both): every track can play MICRO together with two Rings or Plaits models.
 
-**Locks:** Model can be locked per step, so one track can play a click on one step, a grain on the next and the LXR's snare after. Length, Colour, Jitter, Reverse and Tension lock and morph like any knob; Model itself doesn't morph.
+**Locks:** Model can be locked per step, so one track can play a click on one step, a grain on the next and the LXR's snare after. Length, Color, Jitter, Reverse and Tension lock and morph like any knob; Model itself doesn't morph.
 
 **Compatibility:** MICRO uses the MODEL parameters a kit already stores for every voice, so kits and projects keep their format. An earlier Elixir plays a MICRO voice as LXR.
 
+### NOISE: brown to blue (every track)
+
+From 1.0, any track can play **NOISE**: noise in four colors, through the voice's filter and amp EG. With a short decay it is a hat, a shaker or a snare's rattle; with a long one, a wash, wind or a riser. It comes after the MICRO types in Model (before ENSEMBLE), and replaces Plaits' P NOISE, at a small part of its CPU.
+
+| | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
+|---|---|---|---|---|
+| Row 1 | Model | Color | Rate | Env |
+
+- **Color:** the noise's tilt, from **BROWN** (dark, −6 dB an octave: rumble, surf) through **PINK** (−3 dB: rain, an even wash) and **WHITE** (flat: hiss, hats) to **BLUE** (+3 dB: thin and sizzling). It blends smoothly between neighbors; the card shows the color, or the two it is between (PNK-WHT). Every color plays at the same level, so turning it doesn't jump in volume.
+- **Rate:** at 127 (**OFF**) the noise is fresh every sample. Below, it is held in steps clocked at the voice's pitch, from ×64 down to ×1/4 (the card shows the multiple): grainy, then pitched, 8-bit-style noise that follows the note, the pitch EG, KEYS and the melody generator. The steps go through Color after, so brown softens them and blue sharpens them.
+- **Env:** how far the amp EG moves Color up: bright at the hit, darker as it dies away, as a struck cymbal or a snare's wires do.
+
+**The amp EG** shapes NOISE on every voice (its page stays), and everything after it applies: the filter (its resonance gives a pitched band of noise), drive and shape, bits, tilt, sends, choke, cross modulation, LFO and random per hit. On the hats, CH and OH share one NOISE as they share the voice. Like MICRO and ENSEMBLE, NOISE isn't one of the [two models at once](#both), and it costs about as much as an LXR voice's oscillators. Color, Rate and Env lock and morph like any knob.
+
 ### ENSEMBLE: eight stacked sines (every track)
 
-From 0.25, any track can play **ENSEMBLE**, after 4ms' Ensemble Oscillator (Matthias Puech and Dan Green): eight sine oscillators stacked up from the voice's pitch, quantized to a scale, each one twisted and warped. Through the voice's amp EG it gives gongs, chimes, organ stabs, clusters and drones. It is the last entry of Model (after CHIRP); on the snare, cymbal and hats Model steps from LXR to the MICRO types and then ENSEMBLE.
+From 0.25, any track can play **ENSEMBLE**, after 4ms' Ensemble Oscillator (Matthias Puech and Dan Green): eight sine oscillators stacked up from the voice's pitch, quantized to a scale, each one twisted and warped. Through the voice's amp EG it gives gongs, chimes, organ stabs, clusters and drones. It is the last entry of Model (after NOISE); on the snare, cymbal and hats Model steps from LXR to the MICRO types, NOISE and then ENSEMBLE.
 
 | | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
@@ -625,7 +693,7 @@ From 0.25, any track can play **ENSEMBLE**, after 4ms' Ensemble Oscillator (Matt
 - **Detune:** spreads them alternately sharp and flat, more the higher they are (up to 1.25 semitones): beating, chorus.
 - **Scale:** FREE (no quantizing), OCTAVE, FIFTH, MAJOR, MINOR, PENTA, HARMONIC (harmonics 8–16) or SEMI.
 
-The MODEL page draws the eight oscillators as bars at their pitches, as tall as their levels, and spells out Warp and Twist. **The pitch** is the voice's: Coarse and Fine on the OSC page, the pitch EG (on D1–D3: a sweep for gongs and drops), the scale, KEYS, random pitch. The cymbal and the hats sit high by default, so on them turn Coarse down first, or every oscillator is above the audible range and the voice is silent. Each hit restarts the oscillators together, so hits sound the same. **The amp EG** shapes it on every voice (its page stays), with the filter, drive, shape and the rest after it.
+The MODEL page draws the eight oscillators as bars at their pitches, as tall as their levels (Warp and Twist are on its cards). **The pitch** is the voice's: Coarse and Fine on the OSC page, the pitch EG (on D1–D3: a sweep for gongs and drops), the scale, KEYS, random pitch. The cymbal and the hats sit high by default, so on them turn Coarse down first, or every oscillator is above the audible range and the voice is silent. Each hit restarts the oscillators together, so hits sound the same. **The amp EG** shapes it on every voice (its page stays), with the filter, drive, shape and the rest after it.
 
 **Cost:** ENSEMBLE isn't one of the [two models at once](#both) and can be on any voice, but each one takes about 10% of the CPU (see the LOAD page): D1–D3 run on the second core, SN, CY and the hats on the first. Its cost depends mostly on Twist: FEEDBACK is the heaviest. One Rings model, one Plaits engine and three ENSEMBLE voices play together without trouble.
 
@@ -641,7 +709,9 @@ As on Elektron's boxes: hold **OCT+** on a sound page and turn a knob, and that 
 - **The same parameter** is the one with the same name in the same section: the filter's frequency on each voice, the amp EG's decay (the closed hat's and the open hat's decay both). A voice without it is left alone: FM moves only Drum 1–3, a model only the drums. Elixir's own pages (shape, random, cross mod) move every voice. The hats share a voice, so it moves once.
 - **Page while you hold.** The sound buttons and SELECT still page: hold OCT+, turn the filter, press ENV, turn the decay. Everything you change during the hold is one move.
 - **Keep or revert.** When you let go of OCT+, a dialog asks **REVERT THE KIT?** and the changes keep sounding until you answer. Press **OCT+** again (the default) to put the whole kit back as it was before the first turn (**CONTROL ALL REVERTED**), or **OCT−** to keep the changes (**CONTROL ALL KEPT**). So a thumb slipping off OCT+ doesn't keep anything by accident. While the dialog is open, the knobs, keys and other buttons do nothing, except PLAY and REC. You can also press OCT− while still holding OCT+ to revert at once, then turn again to start a new one. As on Elektron, the kit is the working copy: RELOAD (SHIFT (OCT−) + key 13) or loading the kit goes back further.
-- **COPY (OCT+) still works.** Until a knob turns, OCT+ is COPY as before (track, bar). Once a knob has turned, the voice keys select a track and the bar keys show a bar; nothing is copied on release.
+- **COPY (OCT+) still works.** Until a knob turns, OCT+ is COPY as before (track, bar). Once a knob has turned, the bar keys show a bar and the voice keys leave tracks out (below); nothing is copied on release.
+- **Leave tracks out** (from 1.0). Once a knob has turned (OCT+ still held), a voice key leaves that track out of Control All: it goes back to how it was before the first turn, and the knobs no longer move it. Press it again to put it back in (it rejoins from where it is). The strip under the picture shows the tracks, the left-out ones dim, and the voice keys light for the tracks in it. The choice is kept in the settings, so the same tracks stay out next time. CH and OH share the hat voice: it is left out only when both are. Turning a knob on a left-out track's own page moves that track alone.
+- **From MIDI** (from 1.0). The remote's GLOBAL button **62** (tap to latch, or hold) turns Control All on without OCT+; **71** reverts. See [Control All by MIDI](#control-all-by-midi-from-10).
 - **With morph.** What you hear is a mix of the kit and the morph target, so a change to the kit alone fades out as morph goes up: at full morph you'd hear nothing. So with morph turned up, Control All moves the morph target's value by the same steps too, and the change is heard at any morph amount and stays as you turn morph. Reverting puts the target back as well. CONFIG → MORPH → **Ctrl all: KIT ONLY** moves the kit alone instead (the LXR's way); **BOTH KITS** is the default. The kit slot the target was loaded from isn't changed. Single knob edits work the same way (below).
 - **Not recorded.** Under REC, Control All writes no locks: it changes the kit. A kit loaded during the hold or the dialog (a pattern change, MIDI) ends it, kept.
 
@@ -651,77 +721,137 @@ As on Elektron's boxes: hold **OCT+** on a sound page and turn a knob, and that 
 
 ### Signal flow
 
-Each voice runs through the same chain, in this order. The page button that holds each stage is on its right; the modulation (LFOs, envelopes, velocity, locks, morph) moves the knobs of any stage. At the end the voice splits three ways: dry, the FX send and the reverb send.
+Each voice runs through the same chain, in this order. The page button that holds each stage is on its right; the modulation (LFOs, envelopes, velocity, locks, morph) moves the knobs of any stage. At the end the voice splits four ways: dry, the FX send, the delay send (1.0) and the reverb send.
 
 ![Signal flow of one track](docs/img/flow-track.svg)
 
-The six voices meet in the mix: their dry sound, the FX bus (which the FX sends feed in place of dry) and the reverb's return. The whole mix then goes through the master's chain to the outputs.
+The six voices meet in the mix: their dry sound, the FX bus (which the FX sends feed in place of dry), the delay (as ROUTING sets it) and the reverb's return. The whole mix then goes through the master's chain to the outputs.
 
 ![Signal flow of the whole mix](docs/img/flow-master.svg)
 
 ### The mixer (GLO)
 
-Turn SELECT for eight pages:
+Turn SELECT for ten pages. Each page draws four bars, one above each knob (from 1.0): a voice's bar in its track color, with its level as a tick on the volume pages; pan bars grow from the middle.
 
 | Pages | Knobs |
 |---|---|
 | VOLUME (2 pages) | each voice's volume; FX dry/wet; the master level (shown, set by the MASTER pot) |
 | PAN (2 pages) | each voice's pan; the reverb's level and size |
 | FX SEND (2 pages) | each voice's FX send; FX dry/wet |
-| REVERB SEND (2 pages) | each voice's reverb send; the reverb's level |
+| DLY SEND (2 pages, 1.0) | each voice's delay send; the delay's level |
+| REV SEND (2 pages) | each voice's reverb send; the reverb's level |
 
 The bars show the current page's values, with each voice's level on the volume pages.
 
 ### Sends
 
 - **FX send** sets how much of the voice goes *through* the FX bus instead of straight to its output. At 127 all of it does. (This is the LXR's "Out = FX BUS"; kits from the LXR or from older Elixir versions that used it load as FX send 127.)
+- **Delay send** (from 1.0) feeds the voice into the delay, on top of its output, without the FX bus. A voice with its FX send up and its delay send at 0 isn't delayed (unless ROUTING sends the bus into the delay).
 - **Reverb send** feeds the voice into the reverb, on top of its output.
 
 ### The FX bus (FX)
 
-One effect at a time. The pages come in order: the reverb first, then the bus and the selected effect's pages together, then DIRT, then the master compressor's two pages, then (from 0.19) the voices' FX and reverb sends, the mixer's four send pages, so you can set them while you shape the effects. Only the pages that apply are shown: with the bus OFF there are no parameters, and the two DELAY pages are there only when the bus is a DELAY.
+One effect at a time, then **the delay, always there after it** (from 1.0). The pages come in order: the reverb first, then the bus and the selected effect's page, then the delay's pages, then ROUTING (1.0), then DIRT, then the DJ FILTER (from 1.0), then the master compressor's two pages, then the voices' FX, delay and reverb sends, the mixer's six send pages, so you can set them while you shape the effects. Only the pages that apply are shown: with the bus OFF there are no effect parameters, DELAY: TAPE is there only in the TAPE modes and GRAIN only in GRAIN (where it comes second: DELAY (1/3), GRAIN (2/3), DELAY (3/3)).
 
 | Page | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
 | REVERB | Model | Size | Damping | Level |
 | FX BUS | Type | Dry/Wet | the type's mode | – |
 | FX BUS: *type* | P1 | P2 | P3 | P4 |
-| DELAY: DUB (DELAY only) | Sync | Saturate | Glitch | Pitch |
-| DELAY: SEND (DELAY only) | Echo>Rev | – | – | – |
-| DIRT | Bus dirt | DJ reso | Master | Amount |
+| DELAY (1/2) | Mode | Sync | Time (GRAIN: Position) | Level |
+| DELAY (2/2) | Tone | Echo>Rev | Feedback | Band |
+| DELAY: TAPE (TAPE modes) | Wow | Saturate | Glitch | Pitch |
+| GRAIN (GRAIN, 1.0; second, before DELAY (2/2)) | Size | Scatter | Density | Pitch |
+| ROUTING (1.0) | Route | Rev>FX | Echo>Rev | – |
+| DIRT | Bus dirt | – | Master | Amount |
+| DJ FILTER (1.0) | Type | Filt | Reso | – |
 | MASTER COMP | Thresh | Ratio | Attack | Release |
 | COMP: SIDECHAIN | Sidechain | Makeup | Mix | – |
 | FX SEND (1/2) | D1 fx | D2 fx | D3 fx | SN fx |
 | FX SEND (2/2) | CY fx | HH fx | Dry/Wet | – |
-| REVERB SEND (1/2) | D1 rev | D2 rev | D3 rev | SN rev |
-| REVERB SEND (2/2) | CY rev | HH rev | Rev level | – |
+| DELAY SEND (1/2) (1.0) | D1 dly | D2 dly | D3 dly | SN dly |
+| DELAY SEND (2/2) (1.0) | CY dly | HH dly | Dly level | – |
+| REV SEND (1/2) | D1 rev | D2 rev | D3 rev | SN rev |
+| REV SEND (2/2) | CY rev | HH rev | Rev level | Volume (1.0) |
 
 | Type | Mode | P1 | P2 | P3 | P4 |
 |---|---|---|---|---|---|
-| DRIVE | TUBE / FOLD / CLIP | Drive | Color | Tone | Volume |
 | RING | the carrier waveform | Frequency | – | – | – |
 | COMP | ratio 1:1 … 8:1 | Attack | Release | Threshold | Gain |
-| DELAY | MONO / PING PONG | Time | Range | Tone | Feedback |
-| DELAY | TAPE / TAPE PP | Time | Wow | Tone | Feedback (to 115%) |
-| PHASER | – | Rate | Depth | Feedback | Centre |
+| PHASER | – | Rate | Depth | Feedback | Center |
 | FLANGER | – | Rate | Depth | Feedback (below the middle: negative) | Delay |
+| SHIFT (1.0) | – | Shift | Fdbk | Delay | Spread |
 
-The phaser and flanger sound strongest at DRY/WET 50%. The bus always plays in stereo (the FM-1 has one stereo output).
+From 1.0 the bus has no **DRIVE**: the DIRT page's Master does the same job across the whole mix, with more types. A kit or a CC that picks DRIVE plays with the bus OFF, and the page shows OFF. The phaser and flanger sound strongest at DRY/WET 50%. From 1.0 the **PHASER** has four stages (two notches, the classic sound) rather than six, and one chain for both sides: the left hears the dry sound plus the phased one, the right the dry sound minus it, so the right's notches fall between the left's (the classic stereo phaser) and it sweeps wide across the speakers. It costs well under half what it did. Summed to mono, the two sides cancel back to the dry sound, so the phaser is a stereo effect: listen in stereo. **SHIFT** (from 1.0) is a frequency shifter, the classic Bode effect. Where a pitch shifter multiplies every frequency, SHIFT adds the same number of hertz to each, so a drum's overtones stop lining up as harmonics: a kick turns to a gong, a snare to a clanging bell, hats to metal. **Shift** is centered: 0 Hz in the middle, then up (right) or down (left) from 0.1 Hz to 1 kHz, finer near the middle. A shift of a fraction of a hertz to a few hertz is a slow barber-pole phasing at DRY/WET 50%: the shifted copy drifts against the dry one. **Fdbk** sends the output back in through a short line (**Delay**, 1.5 to 20 ms), so each pass is shifted again: a falling or rising spiral of copies, endless at the top (FB PUSH takes it there at once; a soft clip keeps it in bounds). **Spread** sends the left up and the right down by the same amount, wide in stereo. The bus sums its input to mono first. It is one of the heavier bus types: about 5% of the first core on the unit (CONFIG → LOAD, as FX BUS). **COMP** (the LXR's bus compressor) now works out its gain every 8 samples, as the master compressor does, for less than half the CPU; kits that use it sound as before. The bus always plays in stereo (the FM-1 has one stereo output).
+
+### The delay (from 1.0: always on)
+
+The FX sends feed the bus and the delay sends feed the delay; the ROUTING page sets how the two meet ([below](#routing-from-10)). With Route at FX > DLY 100% (every kit from before 1.0 Phase 16), the delay hears what comes out of the bus: **BUS DIRT → the bus's effect → the delay → the mix**. So you can have a phaser *and* echoes, a flanged ring *and* a dub delay. The delay adds its echoes on top of the bus's sound at **Level**; with Mode OFF or at Level 0 it is off (the echoes fade out in a few milliseconds, then it sleeps and costs nothing). With the bus type OFF and Level up, it is the plain delay of before.
+
+**DELAY (1/2):**
+
+- **Mode:** OFF (the first, and a new kit's), MONO, PING PONG, TAPE, TAPE PP or GRAIN ([below](#the-grain-delay-from-10)). Changing it fades the echoes out over a few milliseconds, clears the line and fades its input back in, so the switch doesn't click; the new mode's first echoes come about 20 ms after the turn. OFF keeps every other setting: pick a mode again and the delay is as it was. A saved kit keeps its mode; the init kit, and an LXR or factory kit without a delay, load with OFF.
+- **Sync** ON turns Time into note values at the tempo: 1/32, 1/16T, 1/16, 1/8T, 1/16., 1/8, 1/4T, 1/8., 1/4, 1/2T, 1/4., 1/2 (each detent of Time the next one; a value too long for the line plays at half, the card shows /2 or /4; a tempo change follows).
+- **Time:** from 0.6 ms to the line's most (0.74 s; half a side in PING PONG; twice in the TAPE modes), finer at the short end. The card shows milliseconds, or the note value with Sync on.
+- **Level:** how loud the echoes are. 0: the delay is off.
+
+**The picture** (from 1.0) is the hit as a dot at the left and its echoes as a row of dots after it: Time their spacing, Level the first one's size, Feedback how slowly they shrink, Tone how soon they dim. They light up in turn, the one sounding swelling with a ring going out, then the row rests and plays again. PING PONG bounces them, L above the line and R below; the TAPE modes let them drift (Wow), blur (Saturate), step up or down (Pitch) and break apart (Glitch).
+
+**DELAY (2/2):**
+
+- **Tone:** darkens the repeats.
+- **Echo>Rev** feeds the echoes into the reverb, the classic dub chain (echo, then spring or plate). PERF's **THROW REV** key also throws the echoes into the reverb while held.
+- **Feedback:** how long the echoes go on (TAPE modes: up to 115%, a roar that stays bounded). It sits beside Band, which works with it.
+- **Band:** below.
+
+**Band** (from 1.0) puts a resonant peak in the delay's loop, the dub engineer's mid boost on the echo return: OFF (the default), or a frequency from 150 Hz to 5 kHz (TAPE and TAPE PP to about 3.3 kHz). That band goes round a little louder than the rest of the echo on every pass, so it colors the repeats halfway up **Feedback** and, pushed near the top, builds into a self-oscillating howl at its pitch while the rest of the echo dies away. TAPE howls from about Feedback 80, PING PONG and TAPE PP from about 100, MONO builds slowly at the very top. Turn Band while it howls to sweep the scream; FB PUSH (held) gets there at once. The howl is held by a soft clip in the loop (TAPE's saturation, which MONO and PING PONG use too while Band is on), so it saturates rather than running away; it can still be loud, so keep Level in mind. It is part of the kit; a morph turns it on or off halfway. A global LFO's **DELAY BAND** sweeps it up to two octaves either way (OFF stays off), and the remote's GLOBAL **CC 99** turns it (with the rest of the delay on 96–103). Off, it costs nothing; on, a little CPU (well under 1%).
+
+### Routing (from 1.0)
+
+The FX page's **ROUTING** page sets how the FX bus, the delay and the reverb feed each other. It draws the three as boxes feeding the mix, each line as thick as what it sends.
+
+- **Route** (KNOB 1) is one knob with three ways. In the middle, **PARALLEL** (a new kit's): the bus hears the FX sends, the delay hears the delay sends, side by side. Turned right, **FX > DLY**: that much of the bus's output goes into the delay too, up to 100% at the end (the chain from before, which older kits load with). Turned left, **DLY > FX**: that much of the echoes goes through the bus (phased, ring-modulated or frequency-shifted echoes) instead of straight to the mix. The card shows **F>D** or **D>F** and the amount.
+- **Rev>FX** (KNOB 2): the reverb's return through the FX bus as well as straight out: a shifted or phased reverb. The bus must be on for it to do anything. With Route at FX > DLY it also reaches the delay.
+- **Echo>Rev** (KNOB 3) is the delay page's, here too. With Rev>FX up and Route at FX > DLY, the echoes into the reverb would make a loop (reverb → bus → delay → reverb), so Echo>Rev is held at 0 and its card reads **LOOP**; the diagram strikes the link through.
+
+All three are part of the kit, morph and can be locked. Rev>FX costs nothing until it's turned up; the routing itself costs nothing.
+
+Its Time, Feedback, Tone and Level are **LFO and velocity destinations** (a track's DEST list ends with Delay time, Delay feedback, Delay tone, Delay level), so a kick can open the echoes or an LFO can sweep their time.
+
+**Older kits:** a kit whose bus was DELAY loads with the delay on at its old dry/wet, the same time, tone and feedback, and the bus OFF. A kit without the delay loads with Level 0 and Mode OFF. MIDI's LXR FX type DELAY turns the delay on the same way. The delay's RANGE knob is gone: its time is one curve now, and older kits' times are converted. (An LFO that was on D2's FX P1–P4 moves to D1's: those slots are the delay's now.)
 
 ### The tape delay (from 0.16)
 
-DELAY has two more modes beside the LXR's MONO and PING PONG (which sound as before): **TAPE** and **TAPE PP** (ping-pong, left then right). They keep the line at half the sample rate, so it holds twice as long (1.49 s, 0.74 s a side in PP) and the repeats are darker, as a tape echo's are. **Wow** drifts the tape's speed slowly and adds a little flutter. In the feedback loop the lows are cut (the repeats thin out instead of booming), **Tone** darkens them, and a soft clip keeps them in check, so **Feedback** past 100% grows into a roar that stays bounded: dub. Changing the time bends the pitch as the tape's motor catches up, instead of the crossfade MONO and PING PONG use.
+The **TAPE** and **TAPE PP** (ping-pong, left then right) modes keep the line at half the sample rate, so it holds twice as long (1.49 s, 0.74 s a side in PP) and the repeats are darker, as a tape echo's are. In the feedback loop the lows are cut (the repeats thin out instead of booming), **Tone** darkens them, and a soft clip keeps them in check, so **Feedback** past 100% grows into a roar that stays bounded: dub. Changing the time bends the pitch as the tape's motor catches up, instead of the crossfade MONO and PING PONG use.
 
-The **DELAY: DUB** page (all four modes unless noted):
+The **DELAY: TAPE** page:
 
-- **Sync:** ON turns Time into note values at the tempo: 1/32, 1/16T, 1/16, 1/8T, 1/16., 1/8, 1/4T, 1/8., 1/4, 1/2T, 1/4., 1/2. Each detent of the Time knob moves to the next value. A value too long for the line plays at half (the card shows /2 or /4). A tempo change follows.
-- **Saturate** (TAPE modes): how hard the loop's soft clip bites: from clean to a quarter of full scale.
-- **Glitch** (TAPE modes): the chance that each repeat is changed: **STUTTER** (its first 1/32 or 1/64 looped), **REVERSE** (played backwards), **SKIP** (an earlier slice instead), or **HALF** (half speed: an octave down).
-- **Pitch** (TAPE modes): each repeat shifted again: **+12**, **+7**, **−12** or **DETUNE** (a few cents), so the echoes climb or fall. Into the plate it shimmers.
+- **Wow** drifts the tape's speed slowly and adds a little flutter.
+- **Saturate:** how hard the loop's soft clip bites: from clean to a quarter of full scale.
+- **Glitch:** the chance that each repeat is changed: **STUTTER** (its first 1/32 or 1/64 looped), **REVERSE** (played backwards), **SKIP** (an earlier slice instead), or **HALF** (half speed: an octave down).
+- **Pitch:** each repeat shifted again: **+12**, **+7**, **−12** or **DETUNE** (a few cents), so the echoes climb or fall. Into the plate it shimmers.
 
-**DELAY: SEND** has **Echo>Rev**: the echoes fed into the reverb, the classic dub chain (echo, then spring or plate). PERF's **THROW REV** key also throws the echoes into the reverb while held, when the bus is on DELAY.
+The delay's settings are part of the kit; Mode, Sync and Pitch don't morph.
 
-The new settings are part of the kit; Sync and Pitch don't morph.
+### The grain delay (from 1.0)
+
+**GRAIN**, the delay's last mode, is a granular delay: instead of echoes it plays **grains**, short slices of what went into the delay, each faded in and out, from somewhere in the last 0.74 s, at its own pitch and place in the stereo field. Few and long, it smears a hit into a cloud; many and short, it breaks a beat into a fizz; frozen, it holds a texture you can keep playing. The line is MONO's (full rate, 0.74 s); up to 8 grains sound at once.
+
+**GRAIN's knobs and the tape's are kept apart.** GRAIN's Size, Scatter, Density and Pitch are the knobs the tape modes call Wow, Saturate, Glitch and Pitch. From 1.0 each side keeps its own: turning Mode into GRAIN puts GRAIN's four back as you left them, and turning it out of GRAIN puts the tape's back, so TAPE PP never comes back with GRAIN's numbers on its Glitch. The first time after a kit is loaded, GRAIN starts from **a cloud**: Size 129 ms, Scatter 40%, Density 16/s (about two grains at once), Pitch OFF, and Level 100 if it was 0; the tape's side starts from 0 (Pitch OFF). Position, Feedback and the rest are shared and stay. If no voice's delay send is up, the screen says so (FX TRACK SENDS, or the mixer's DELAY SEND pages): nothing reaches the delay until one is.
+
+The delay's knobs take new names in GRAIN (the cards show them):
+
+- **Position** (Time's knob): how far back the grains read, from just behind the input to 0.74 s, finer at the short end. With **Sync** on, a note value at the tempo, as Time. A global LFO's DELAY TIME moves it.
+- **Size** (the GRAIN page, the delay's second in GRAIN; Wow's knob): each grain's length, 10 to 400 ms.
+- **Scatter** (Saturate's knob): how much the grains wander. At 0 they start at regular times from one point, in the center: a steady, buzzy stream. Turned up, each starts somewhere further back (up to a Size and 50 ms), at an uneven time, and panned wider, until at 100% they fly anywhere across the speakers: the cloud.
+- **Density** (Glitch's knob): grains a second, OFF (no new grains: the cloud dies away), then 0.5 to 100. Their level is evened out as they overlap, so more grains don't just mean louder. Past what Size lets overlap (8 at once), more Density only fills the gaps.
+- **Pitch:** **OFF**, or each grain at random either as it is or **+12**, **+7** or **−12**: a chord of the sound with itself. **DETUNE** sets each grain a little off (up to ±20 cents): a chorus-like thickening.
+- **Feedback** puts the grains back into the line, through **Tone**, **Band** and the tape's soft clip, so they come round again and blur further; with Pitch at +12 the octaves climb on every pass (a shimmer). FB PUSH takes it to the top.
+- **Level**, **Echo>Rev** as for the echoes: with Echo>Rev up, the grains into a long reverb are the classic granular wash.
+
+PERF's **FREEZE** stops the line: nothing new is written and the grains keep playing what it holds (move Position, Size and Pitch over the frozen sound). Release it and the line takes in the sound again.
+
+GRAIN costs more CPU the more grains overlap (Size × Density): about 3–5% of the first core (5% with Feedback up), plus about 1% for each grain sounding at once (1.5% with Pitch at +7, −12 or DETUNE): with 8 at once, about 13% (CONFIG → LOAD, FX BUS). When the first core nears its limit (from about 83% busy) it plays fewer grains at once rather than breaking up. A kit with GRAIN plays as MONO on firmware before 1.0's GRAIN.
 
 ### Dirt (from 0.16)
 
@@ -732,7 +862,27 @@ The **DIRT** page (the FX bus's last) has two drives, both off at 0:
 
 They are part of the kit; the amounts morph and can be locked per step, the Master type doesn't morph. The per-voice shapes (SCL → Shape) are the third kind of dirt.
 
-**DJ reso** (from 0.24.3, KNOB 2) is the [DJ filter](#perf-pages-arp-select)'s resonance. At 0 it is the gentle bump it always had; turned up, the filter whistles at its cutoff and rings on every hit, and near 127 it screams as you sweep it (the knob, the LP~ / HP~ keys, a global LFO). It gets louder as it rises, and with Master dirt in front of it, nastier. It costs no extra CPU: the filter is the same, only its damping changes. Unlike the drives it belongs to the project, not the kit (as the tape time does), so loading a kit doesn't change it. At the very top of the low-pass's range (the knob just left of the middle) the filter keeps its resonance low, so the bump comes in as you sweep down. The remote's GLOBAL CC 47 turns it too.
+### The DJ filter and the global character filter (from 1.0)
+
+The **DJ FILTER** page (after DIRT) holds the [DJ filter](#perf-pages-arp-select) on the whole mix (its cards: Type, Filt, Reso, and Tune for RING): **DJ filter** (the same knob as PERFORM: MORE's: left a low-pass, right a high-pass, off in the middle), **DJ reso** (its resonance; it was on the DIRT page before 1.0) and **DJ type**, which filter it is (in the knob's order; from 1.0 RING comes second):
+
+- **LXR** (the default): the LXR's SVF, as it always was.
+- **RING** (from 1.0): a tuned resonator, after the Torso S-4's RING: eight band-pass filters tuned to a chord, so the whole beat rings in key. **Filt** sets the chord's root, in semitones (the card names it): C3 just off the middle, down to C1 at the left end, up to C6 at the right; off in the middle as always. **Decay** (Reso's place) is how long the bands ring, from a short knock (0.08 s) to a long shimmer (2.6 s). **Tune** picks the chord: **NOTE** (one pitch and its harmonics, like a struck string), **OCTAVES**, **FIFTHS**, **MAJOR** (the default), **MINOR**, **SUS4**, **MIN7** and **PENTA** (minor pentatonic). The bands are spread across the stereo field, the root in the middle; half the dry mix stays under them so the drums keep their hit. Sweep Filt (or a global LFO on FILTER) for stepped, in-tune glides; set Decay long and the hats become a drone. It costs about what the LXR's filter does (OCTAVES, four bands, less); bands above about 6 kHz are left out. Tune is saved with the project.
+
+  From 1.0 RING has a second page, **RING (2/2)** (after the first while the type is RING; the first page's title reads RING (1/2)). Each knob's middle (64, the default) is RING's sound before this page existed:
+  - **Spread:** how wide the bands are panned. 0 (MONO) all in the middle; the middle, every other band mostly left or mostly right; 127 hard left and right. The root stays in the middle.
+  - **Slope:** how the ring time changes up the chord. Left, the higher bands ring shorter than the root (a plucked, woody ring); right, longer (they hang on after the root dies). At full, the top of a three-octave chord rings about 8 times shorter or longer. The bands have a longest ring, so with Decay near the top, Slope right adds little to the high bands.
+  - **Tone:** the bands' levels tilted by pitch. Left, the root loudest and the high bands quieter (dark); right, the top band loudest and the low ones quieter (bright); up to 6 dB an octave.
+  - **Wet:** how much of the dry mix stays under the bands. 0% all dry (the bands silent), 50% half the dry (as before), 100% no dry at all, only the ring.
+
+  The picture shows Slope as the bars' heights and Tone as their brightness. The four are saved with the project; a project from before keeps the middle.
+
+- **ACID**: the ACID diode ladder on the low-pass side, for a 303 sweep over the whole beat; the high-pass side stays the LXR's.
+- **MS20**: the MS20 low-pass on the left, its high-pass on the right.
+
+Everything that moves the DJ filter moves the character filter the same way: the knob, the LP~ and HP~ sweeps, a global LFO on FILTER, LP or HP, RUSH's high-pass. DJ type is saved with the project (as DJ reso), not the kit. The filter runs on the first core only while the DJ filter is off the middle: the LXR's about 9% of it, MS20 about 11%, ACID about 18%, RING about 3% more than the LXR's (its bands run at half the sample rate; OCTAVES, 4 notes, less; RING (2/2)'s knobs about 1% more) (estimates; the LOAD page shows them under MIXER). The page draws the filter's curve where it is.
+
+**DJ reso** (from 0.24.3, on the DJ FILTER page from 1.0) is the DJ filter's resonance. At 0 it is the gentle bump it always had; turned up, the filter whistles at its cutoff and rings on every hit, and near 127 it screams as you sweep it (the knob, the LP~ / HP~ keys, a global LFO). It gets louder as it rises, and with Master dirt in front of it, nastier. It costs no extra CPU: the filter is the same, only its damping changes. Turning it glides the filter there over a few milliseconds (from 1.0), so a sweep doesn't click. Unlike the drives it belongs to the project, not the kit (as the tape time does), so loading a kit doesn't change it. At the very top of the low-pass's range (the knob just left of the middle) the filter keeps its resonance low, so the bump comes in as you sweep down. The remote's GLOBAL CC 47 turns it too.
 
 ### Master compressor and sidechain (from 0.16)
 
@@ -762,42 +912,48 @@ A kit is every sound parameter of all six voices (including the sends, the rever
   **Kits first** (CONFIG → BUTTONS & KITS, KNOB 2): **FACTORY** (the default) lists the factory kits first; **SLOTS** turns the list around (slots, library, factory), for working within a project's kits.
 - **Load / save:** SHIFT (OCT−) + white key 8 opens LOAD KIT; SAVE opens SAVE KIT (see [saving](#14-saving)).
 - **LXR-02 kits:** kits from an LXR-02 SD card (.SND files) come in through the [library page](#backing-up-restoring-and-lxr-02-kits). A voice the LXR routed to its FX bus comes in with FX SEND 127, which sounds the same. Elixir's own settings (sends, reverb, shaping, models) start at their defaults. A whole LXR project (kits, patterns, songs) comes in the same way.
-- **The kit library:** besides the 64 slots, the FM-1 keeps **128 kits and 128 single sounds** in its flash, apart from the projects: loading another project leaves them. SAVE → KIT with **To: LIBRARY** (KNOB 3) saves there; LOAD → KIT with **From: LIBRARY** loads one into the sound being edited (SAVE → KIT keeps it in a slot). SAVE / LOAD → SOUND does the same for one track's sound (KNOB 3: the track). The library page backs the library up.
+- **The kit library:** besides the 64 slots, the FM-1 keeps **128 kits and 128 single sounds** in its flash, apart from the projects: loading another project leaves them. SAVE → KIT with **To: LIBRARY** (KNOB 2, before the Slot) saves there; LOAD → KIT with **From: LIBRARY** loads one into the sound being edited (SAVE → KIT keeps it in a slot). SAVE / LOAD → SOUND does the same for one track's sound (KNOB 3: the track). The library page backs the library up.
 
-  **Slots or library?** The slots are the project's kits, as on the LXR-02: patterns name their kit by slot number (a pattern whose Voices are KIT loads it), and loading another project brings its own 64. The library is a collection that stays whatever project is loaded: the place for kits you want everywhere, such as your favourites or Hrtl's kit packs. If you don't switch kits per pattern, you never need the slots: load kits from the factory list or the library and save the project. Browse it with PRESETS, use a kit from it as the morph target directly, or take single voices from it with the sound browser. To give a pattern a library kit, load it and save it into a slot (SAVE → KIT, To SLOTS).
+  **Slots or library?** The slots are the project's kits, as on the LXR-02: patterns name their kit by slot number (a pattern whose Voices are KIT loads it), and loading another project brings its own 64. The library is a collection that stays whatever project is loaded: the place for kits you want everywhere, such as your favorites or Hrtl's kit packs. If you don't switch kits per pattern, you never need the slots: load kits from the factory list or the library and save the project. Browse it with PRESETS, use a kit from it as the morph target directly, or take single voices from it with the sound browser. To give a pattern a library kit, load it and save it into a slot (SAVE → KIT, To SLOTS).
 - **Morph:** load a second kit as the *morph target* (SHIFT (OCT−) + white key 9: LOAD MORPH; KNOB 3 picks the slots or the library), then turn **Morph** (PERF's first page, KNOB 3) from 0 to 100%. Every sound parameter crossfades towards the target (outputs, LFO 1's and the velocity's targets and the reverb model stay; switches such as Elixir's filter types, LFO 2's target and wave and the insert's type change at the halfway point). The header shows M while morph is above 0. SAVE → MORPH saves the mixture you hear as a new kit.
-- **Editing with morph on** (from 0.19): turning a sound knob while morph is above 0 moves the morph target's value by the same amount too, so the edit is heard at any morph amount (at 100% you hear only the target, so an edit to the kit alone would do nothing) and stays as you turn morph. Locks are not affected. CONFIG → MORPH → **Edits: KIT ONLY** changes the kit alone, the LXR's way; **BOTH KITS** is the default. The remote's knobs follow the same setting.
+- **Editing with morph on.** CONFIG → MORPH → **Edits** sets what a sound knob changes while morph is up:
+  - **SPLIT** (the default from 1.0): with the morph knob at **100%**, the knobs edit the **morph kit** (the cards show its values), so you hear every change; below 100% they edit the **kit**. To build a morph between two related kits: load kit 1 as the kit and as the morph target, turn morph to 100%, reshape it, then SAVE → MORPH (at 100% that saves the morph kit as you edited it) to a new slot or the library. Turn morph back down to edit the kit itself (SAVE → KIT keeps it).
+  - **BOTH KITS** (the default up to 0.25): an edit moves the kit and the morph target by the same amount, so it is heard at any morph amount and stays as you turn morph.
+  - **KIT ONLY**: the kit alone, the LXR's way (at 100% you hear nothing change).
+
+  Locks are not affected. The remote's knobs and Control All follow the same setting (Control All's own Ctrl all: KIT ONLY still keeps it to the kit).
 
 ---
 
 ## 12. Generating tracks
 
-Press **SEQ** (once; twice is step edit). Turn SELECT for eight pages. Most are for the selected track; SCALE's root and scale and GROOVE's groove, amount and humanize are for the pattern. The grid stays on screen, so you see what a generator writes:
+Press **SEQ** (once; twice is step edit). Turn SELECT for nine pages. Most are for the selected track; SCALE's root and scale and GROOVE's groove, amount and humanize are for the pattern. The grid stays on screen, so you see what a generator writes:
 
 | Page | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
 | TRACK | Length | Clock | Direction | Follow |
 | GENERATOR | Generator | the generator's settings … | | |
 | ACTION | Action | GRIDS: Map X · EUCLID: Hits 2 | Map Y · Rotate 2 | Chaos · Join |
-| GROOVE | Groove | Amount | Humanize | Follow |
-| BOUNCE | Bounce | Bnc pitch | – | – |
 | MELODY (1/2) | Shape | Spread | Bias | Steps |
 | MELODY (2/2) | Deja vu | Loop | Length | Len var |
 | SCALE | Root | Scale | Follow | Base |
+| GROOVE | Groove | Amount | Humanize | Follow |
+| BOUNCE | Bounce | Bnc pitch | – | – |
+| TIME STRETCH (1.0) | Stretch | Realign | – | – |
 
 The links, which belong to the pattern, are on ARP's GLOBAL MOD pages from 0.19 ([links](#links-track-coupling)).
 
 ### Generators
 
-KNOB 1 on the GENERATOR page picks how the track is made: **OFF**, **EUCLID**, **MUTATE**, **TURING**, **CELLULAR** or **GRIDS**. KNOBS 2–4 are that generator's settings, and change with it.
+KNOB 1 on the GENERATOR page picks how the track is made: **OFF**, **EUCLID**, **MUTATE**, **TURING**, **CELLULAR** or **GRIDS**. As you turn it, the generator's name and a line on what it does show over the page for 3 seconds (from 1.0). KNOBS 2–4 are that generator's settings, and change with it.
 
 | Generator | Settings | What it does |
 |---|---|---|
 | **EUCLID** | Length, Hits, Rotate | Writes the track's steps: that many hits spread as evenly as possible over that length, rotated. |
-| **MUTATE** | Amount, –, Freeze | Each time round, up to two changes at the Amount's chance: a step flipped, a step moved to a free neighbour, a lock's (or the velocity's) value drifted. Freeze stops it. |
+| **MUTATE** | Amount, –, Freeze | Each time round, up to two changes at the Amount's chance: a step flipped, a step moved to a free neighbor, a lock's (or the velocity's) value drifted. Freeze stops it. |
 | **TURING** | Length, Lock, Density | A shift register (2–16 bits), as in a Turing Machine module. Lock 127: the loop repeats exactly; lower, its bits flip at random more often. Density: how many steps play. The velocity follows the register. |
 | **CELLULAR** | Rule, –, Freeze | Each time round the steps become the next row of a cellular automaton (rule 0–255, Wolfram's numbering: 30, 90, 110 …). An empty row starts again from the pattern. |
-| **GRIDS** | Part, Density, Accent | Emilie Gillet's Grids drum map: see below. |
+| **GRIDS** | Part, Density, Accent | Mutable Instruments' Grids drum sequencer's map: see below. |
 
 **EUCLID** is the LXR's Euclid: it rewrites the pattern's steps directly. It starts with no hits over the track's length and leaves the track alone until you turn **Hits**; from then on every turn of Length, Hits or Rotate rewrites the track at once (Hits back to 0 clears it). Its settings are saved with the pattern.
 
@@ -835,11 +991,13 @@ The rhythm generators decide *when* a track plays; MELODY decides *which note*. 
 
 The notes are degrees of the pattern's scale (SCALE page, below; with CHROMATIC, every semitone), the root at the voice's tune.
 
+The MELODY (1/2) page draws what the Shape does (from 1.0): sixteen notes as dots, high to low, in that Shape's pattern (scattered, a walk, an arp's order, the motif), as tall as Spread and placed by Bias. While it plays, the note sounding is lit.
+
 | Knob | Does |
 |---|---|
 | **Shape** | **OFF** (the default: the steps' own notes), **RANDOM** (a bell round Bias), **WALK** (one or two degrees up or down from the last: smooth lines, good for bass), **ARP UP**, **ARP DN**, **ARP U/D** (the chord tones), **MOTIF** (a 4-note motif, then moved up two degrees, inverted, played backwards ending on the root; a new motif now and then), and from 0.23-test11 more arp orders over the chord tones (shown for 4 notes): **CONVERGE** 1-4-2-3 (outside in), **DIVERGE** 2-3-1-4 (the middle out), **CON/DIV** one then the other, **LEAPFROG** 1-3-2-4-3-5 (up two, back one), **SPIRAL** 1-2-4-3, **ALTERNATE** (the low half and the high half interleaved), **PAIRS** 2-1-4-3, **ROTATE** 1234 2341 3412 4123, **INVERT** 1234 4321, **PEDAL** 1-2-1-3-1-4 (the lowest note between the others) |
 | **Spread** | The range, up to an octave either side (wider for the arpeggios) |
-| **Bias** | The centre, up to an octave down or up |
+| **Bias** | The center, up to an octave down or up |
 | **Steps** | Which degrees: low, all of them; then the chord tones (root, third, fifth, seventh), the triad, and at the top only the root and fifth |
 | **Deja vu** | 0: a new note every time. The middle: a loop of Loop notes that changes now and then. 127: the loop locked |
 | **Loop** | The loop's length, 1–16 notes |
@@ -850,7 +1008,7 @@ Turning Steps up while a loop plays simplifies the phrase as it is. The global L
 
 ### Scale (from 0.16)
 
-Each pattern has a **Root** (C … B) and a **Scale**: CHROM (off: every semitone; the default), MAJOR, MINOR, DORIAN, PHRYG (Phrygian), MIXOLYD (Mixolydian), LYDIAN, H MINOR (harmonic minor), MIN PNT, MAJ PNT (the pentatonics), BLUES, MINOR 7 (1 ♭3 5 ♭7), FIFTHS (1 5), PHR DOM (Phrygian dominant, Hijaz), HIRAJO (Hirajoshi), PELOG and WHOLE T (whole tone).
+Each pattern has a **Root** (C … B) and a **Scale**: CHROM (off: every semitone; the default), MAJOR, MINOR, DORIAN, PHRYG (Phrygian), MIXOLYD (Mixolydian), LYDIAN, H MINOR (harmonic minor), MIN PNT, MAJ PNT (the pentatonics), BLUES, MINOR 7 (1 ♭3 5 ♭7), FIFTHS (1 5), PHR DOM (Phrygian dominant, Hijaz), HIRAJO (Hirajoshi), PELOG and WHOLE T (whole tone), then from 1.0 LOCRIAN, MEL MIN (melodic minor), HUN MIN (Hungarian minor), DBL HRM (double harmonic, Byzantine), DIM H-W and DIM W-H (the diminished scales, half-whole and whole-half), LYD DOM (Lydian dominant), ALTERED (super Locrian), IN SEN, IWATO, KUMOI and EGYPT (Egyptian, the suspended pentatonic): 28 scales and CHROM. Older firmware plays a pattern with one of the new ones as CHROM.
 
 **Follow** (on SCALE and on TRACK) sets which tracks keep to it: D1–D3 by default. On a track that follows, every note it plays goes to the nearest note of the scale (a tie: the lower), counted from what the voice actually sounds (its coarse tune plus the note), so every following voice is in key whatever its tuning; fine tune is kept. That covers the steps' notes, the links' PITCH, ratchets and bounces, random pitch per hit (whole degrees), DENSITY's ghost notes, KEYS (the white keys play the scale) and MIDI notes in. An empty or cleared pattern starts with the scale chosen last. Copying a pattern copies its scale. The global LFOs' **TRANSPOSE** moves the notes by up to 7 degrees.
 
@@ -901,6 +1059,14 @@ Each track can run at its own rate against the pattern: **/4, /3, /2, 2/3, 3/4, 
 | **WALK** | one step forward or back, at random |
 
 A time round is still the track's length in steps, whatever the direction, so the track keeps its place in the pattern, and conditions (1:2 …) and generators count rounds as before. Flams and shifts follow the direction: a step shifted early sounds early before whichever step comes before it.
+
+### Time stretch (from 1.0)
+
+The **TIME STRETCH** page (SEQ's last) plays the selected track faster or slower than the tempo, from **50% to 200%**, on top of its clock. Each detent of **Stretch** moves 1%; hold **OCT−** while you turn it for **0.01%** steps. A hat at 99.9% against the rest slowly falls behind the beat, a whole step and round again, the way phasing music does (Steve Reich's); at 150% a track plays three steps for every two. Its gates, ratchets and flams play at its own speed. At 100% it is exactly as before.
+
+**Realign** says when stretched tracks come back into line with the rest: **STOP** (the default: they drift for as long as the music plays) or **PATTERN** (at every pattern change too). It is a setting, kept for all projects. The tracks' stretches are saved with the project (not the kit); older firmware ignores them.
+
+Wander's bars and the global LFOs follow the tempo, not a stretched track. Links act on the track's own steps.
 
 ### Bounce
 
@@ -958,8 +1124,8 @@ Press **ARP**. The white keys act **while held**; **SHIFT (OCT−) + key latches
 | 1–7 | rolls | Roll the track at the roll rate (PERFORM page, KNOB 2). While a roll is held, KNOB 2 sweeps its rate (below). On the PERFORM 2 pages these keys are DRILL (below). |
 | 8 | **FILL** | Every step plays whatever its chance; FILL conditions play |
 | 9 | **RPT** | **Repeat:** the sequencer loops its position at the repeat length (1/4, 1/8, 1/16, 1/32), starting on that grid. When you let go, the pattern carries on where it would have been. |
-| 10 | **FRZ** | **Freeze:** the FX bus's delay loops what it holds (input off, feedback 100%). Needs the FX bus on DELAY; the longest loop is about 0.74 s. |
-| 11 | **T.RV** | **Throw:** the selected track's reverb send goes to full while held; its tail rings out after. With the FX bus on DELAY, the echoes are thrown into the reverb too |
+| 10 | **FRZ** | **Freeze:** the delay loops what it holds (input off, feedback 100%). Needs the delay's Level above 0; the longest loop is about 0.74 s. |
+| 11 | **T.RV** | **Throw:** the selected track's reverb send goes to full while held; its tail rings out after. With the delay on, the echoes are thrown into the reverb too |
 | 12 | **T.FX** | **Throw** to the FX bus (FX send full) |
 | 13 | **FB+** | **Feedback push:** delay feedback to 0.95 (phaser, flanger: their most) |
 | 14 | **STP** | **Tape stop:** tempo and every voice's pitch slow to a stop over the tape time, then silence. Let go: they spin back up in 0.25 s. |
@@ -996,12 +1162,14 @@ The pages are in four sets. ARP opens **PERFORM** (the performance pages, PERFOR
 | *WANDER:* QUEST | Quest | Journey | Fate | Goal |
 | WANDER: PACE | Sound | Rhythm | Range | Stride |
 | WANDER: HOME | Return | Memory | Order | Sway |
-| *GLOBAL MOD:* GLOBAL LFO 1 (1/2) | Dest | Depth | Speed | Wave |
-| GLOBAL LFO 1 (2/2) | Mode | Trig | Phase | – |
-| GLOBAL LFO 2 (1/2) | Dest | Depth | Speed | Wave |
-| GLOBAL LFO 2 (2/2) | Mode | Trig | Phase | – |
-| GLOBAL LFO 3 (1/2) | Dest | Depth | Speed | Wave |
-| GLOBAL LFO 3 (2/2) | Mode | Trig | Phase | – |
+| *GLOBAL MOD:* GLOBAL LFO 1 (1/2) | Dest | Depth | Sync | Rate |
+| GLOBAL LFO 1 (2/2) | Wave | Phase | Mode | Trig |
+| GLOBAL LFO 2 (1/2) | Dest | Depth | Sync | Rate |
+| GLOBAL LFO 2 (2/2) | Wave | Phase | Mode | Trig |
+| GLOBAL LFO 3 (1/2) | Dest | Depth | Sync | Rate |
+| GLOBAL LFO 3 (2/2) | Wave | Phase | Mode | Trig |
+| GLOBAL LFO 4 (1/2) | Dest | Depth | Sync | Rate (FOLLOW: Dest, Depth, –, Release) |
+| GLOBAL LFO 4 (2/2) | Wave | Phase | Mode | Trig (FOLLOW: Wave, Thresh, –, Source) |
 | MACROS | Macro 1 | Macro 2 | Macro 3 | Macro 4 |
 | MACRO SETUP | Macro (1–4) | Target | Min | Max |
 | LINKS | Link (1–8) | Start | Amount | Depth |
@@ -1010,7 +1178,7 @@ The pages are in four sets. ARP opens **PERFORM** (the performance pages, PERFOR
 - **PERFORM** is the LXR's own PERFORMANCE page: tempo, roll rate, morph and the global sample-rate reducer.
 - **SRate:** the LXR's global sample rate: every voice's own rate (SHAPE page) times this one, before the mix. Lower is grittier. It is part of the kit, so a kit can bring its own crush; it can be a macro's target and is recorded as locks under REC.
 - The voices' levels (the LXR's faders) are on the mixer (GLO); before 0.19 PERF had them too.
-- **DJ filter:** off in the middle; left a low-pass on the whole output, right a high-pass. Its resonance is **DJ reso** on the FX bus's DIRT page (from 0.24.3).
+- **DJ filter:** off in the middle; left a low-pass on the whole output, right a high-pass. Its resonance (**DJ reso**) and its type (**DJ type**: the LXR's, RING, ACID or MS20) are on FX's DJ FILTER page (from 1.0).
 - **Macros:** each macro knob moves one parameter between its Min and Max (Max below Min turns it the other way). Set them up on MACRO SETUP: pick the macro, its target (any lockable parameter), Min and Max. Turning a macro while recording writes locks, as any knob does.
 - **Tape time:** 0.2 to 4 seconds.
 - **Roll sweep:** while a roll key is held (or latched) on the PERFORM page, KNOB 2 turns from the roll rate into a smooth sweep from 1/4 to 1/192, off the grid. Turn it up while holding a kick for a drum-and-bass build, or down for a stutter that slows to a stop. SHIFT (OCT−) + KNOB 2 sets the gridded roll rate instead, which puts rolls back on the grid. The swept rate is not saved.
@@ -1024,8 +1192,8 @@ Macros, the repeat length and the tape time are saved with the project. The DJ f
 
 - **Density:** −100% … +100% (0: as programmed). Down, steps drop out in a fixed order, weakest first: off-beat 16ths before 8ths before beats, quiet before loud, then a set order per pattern. So turning it down thins the groove steadily instead of flickering at random, and at −100% only each bar's first step is left. Up, the steps' chances rise towards 100% first; then, depending on **Build**, ghost notes fill the empty steps (the strongest places first) and ratchets of 2 are added to the strongest hits. Locks, conditions and ratchets of the steps that play are untouched. GRIDS and TURING tracks get their own density pushed instead.
 - **Ghost vel:** the velocity of the added notes (40 by default). They play the track's last note, or the melody's.
-- **Build:** what the positive side adds: **CHANCE** (only the chances), **GHOSTS** (then the ghost notes), **RATCHETS** (then the ratchets too).
-- **Vary** (from 0.19): how predictable it is. At **OFF** the same steps go first every time. Turned up, the order is drawn again each time round the track: a little swaps neighbours (which 16th drops, where a ghost lands), more lets an off-beat outlast a beat, so a thinned or built-up groove keeps changing from bar to bar while staying close to its shape. The ghosts' velocities vary with it too, by up to a third. Each bar's first step is never moved: at −100% it alone is left.
+- **Build:** what the positive side adds: **CHANCE** (only the chances), **GHOSTS** (then the ghost notes), **RATCH** (then the ratchets too).
+- **Vary** (from 0.19): how predictable it is. At **OFF** the same steps go first every time. Turned up, the order is drawn again each time round the track: a little swaps neighbors (which 16th drops, where a ghost lands), more lets an off-beat outlast a beat, so a thinned or built-up groove keeps changing from bar to bar while staying close to its shape. The ghosts' velocities vary with it too, by up to a third. Each bar's first step is never moved: at −100% it alone is left.
 - **Leaving tracks out:** on this page the black track keys don't select tracks; each one leaves its track out (struck through on the screen), so D1 can keep the kick as programmed. None by default.
 - **COMMIT** (from 0.19): press **OCT+** on this page to write what DENSITY is doing into the playing pattern: the dropped steps are turned off, the chances raised, the ghosts become ordinary steps (the track's last note, at their velocity, no locks) and the ratchets are set, as this time round plays them (with Vary, this bar's draw). DENSITY then goes back to 0, so the sound doesn't change, and the result is an ordinary pattern to edit, save and build on. **OCT+ again**, with DENSITY still at 0, undoes it: the pattern and DENSITY as they were. Tracks left out, and GRIDS and TURING tracks, are untouched.
 
@@ -1048,8 +1216,8 @@ It records the last quarter second of the master in mono at half the sample rate
 
 **PERFORM: RUSH** turns the whole kit into a snare rush with one knob, the way Aphex Twin and Venetian Snares do it. Pick a track with a **black key** (the snare, usually), then turn **Rush** up from OFF:
 
-- **0 to Roll at (75%):** the other drums' hits go over to the rush track, a few at first, then more and more. The same hits go first every time, so it builds instead of flickering. The hats go fastest (all of them by 80%). The kick keeps its four beats until 90%, then only the bar's first, then none from 95%.
-- **Roll at to Free at (75–80%):** the track plays only a roll, on the grid: 16ths, then 32nds halfway. Every hit is at one level that swells from 60% to full as you turn, so the pattern's own snares don't poke out. An accent it took plays on the step's first hit.
+- **From 0:** the other drums' hits go over to the rush track, a few at first, then more and more (below **Roll at**, it plays the hits it took, once a step). The same hits go first every time, so it builds instead of flickering. The hats go fastest (all of them by 80%). The kick keeps its four beats until 90%, then only the bar's first, then none from 95%.
+- **Roll at to Free at (10–80%):** the track plays only a roll, on the grid: 16ths, then 32nds halfway. Every hit is at one level that swells from 60% to full as you turn, so the pattern's own snares don't poke out. An accent it took plays on the step's first hit.
 - **Free at to 100%:** a free roll off the grid, from 32nds up to **Top** (1/64, 1/128 or 1/256) at 100%. Its rate glides (**Glide**, 40 ms at first), so turning the knob never makes it jump.
 - **90 to 100%:** the DJ filter's high-pass opens on the whole mix, up to **Filter** at 100% (OFF: no filter).
 
@@ -1085,19 +1253,20 @@ Each track keeps its own move, so the bass can go up a fifth while the lead stay
 
 ### Global LFOs
 
-Three LFOs (the third from 0.16) that move the whole kit's performance controls, not a voice's sound. Slow one down to many bars and it plays the set for you: a kit morphing into the next over 64 bars, a filter opening over 16, comb resonance drifting in and out.
+Four LFOs (the third from 0.16, the fourth from 1.0) that move the whole kit's performance controls, not a voice's sound. Slow one down to many bars and it plays the set for you: a kit morphing into the next over 64 bars, a filter opening over 16, comb resonance drifting in and out.
 
 | Knob | Does |
 |---|---|
 | **Dest** | What it moves (below), or OFF. Turning it shows the destination's full name and group over the page for a few seconds (from 0.25.2) |
 | **Depth** | −127 to +127. How far it moves it; negative turns it the other way |
-| **Speed** | One cycle's length at the tempo: 1/16, 1/8, 1/4, 1/2, 1 bar, then 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128 and 256 bars. At 120 BPM, 256 bars is about 8½ minutes. |
-| **Wave** | The LFO waves: SINE, TRI, SAW UP, SAW DN, SQUARE, RANDOM, EXP UP, EXP DN |
+| **Sync** | OFF, or one cycle's length at the tempo; turning right makes it longer: 1/32, 1/16T, 1/16, 1/8T, 1/8, 3/16, 1/4T, 1/4, 5/16, 1/2T, 3/8, 1/2, 3/4, 1 bar, then 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128 and 256 bars (T a triplet; 3/4, 3/8, 3/16 dotted). At 120 BPM, 256 bars is about 8½ minutes. |
+| **Rate** | With Sync OFF (from 1.0): the speed in Hz, from one cycle in 100 s (shown as its time below 0.1 Hz) to 20 Hz, not following the tempo. With a sync value it reads SYNC. |
+| **Wave** | The LFO waves: SINE, TRI, SAW UP, SAW DN, SQUARE, RANDOM, EXP UP, EXP DN, then **FOLLOW** (from 1.0: [below](#follow-a-voices-level-from-10)) |
+| **Phase** | Where in its cycle a trigger starts it |
 | **Mode** | **FREE** (runs on its own; the default), **TRIG** (starts again at each trigger), **HOLD** (runs, its value held at each trigger), **ONE** (one cycle from a trigger, then still at its end), **HALF** (half a cycle) |
 | **Trig** | What triggers it: **PLAY** (the sequencer starting), **PATTERN** (PLAY and each pattern change), **BAR** (PLAY and each bar) |
-| **Phase** | Where in its cycle a trigger starts it |
 
-Dest turns through them in groups, in the signal's order and each group by name: OFF; SEQUENCER (DENSITY, JITTER, MEL CHANGE, MEL SPREAD, STUTTER, TRANSPOSE); KIT (MORPH); DELAY (DELAY FB, DELAY TIME, FB PUSH); REVERB (REV SEND); MASTER FX (COMB, CRUSH, CUTS, PUMP); DJ FILTER (FILTER, HP, LP); MACROS (MACRO 1–4; the popup names the macro's parameter).
+Dest turns through them in groups, in the signal's order and each group by name: OFF; SEQUENCER (DENSITY, JITTER, MEL CHANGE, MEL SPREAD, STUTTER, TRANSPOSE); KIT (MORPH); DELAY (DELAY BAND, DELAY FB, DELAY TIME, FB PUSH); REVERB (REV SEND); MASTER FX (COMB, CRUSH, CUTS, DIRT, PUMP); DJ FILTER (FILTER, HP, LP, RING TONE, RING WET); MACROS (MACRO 1–4; the popup names the macro's parameter).
 
 | Dest | Moves |
 |---|---|
@@ -1109,17 +1278,36 @@ Dest turns through them in groups, in the signal's order and each group by name:
 | **TRANSPOSE** | The tracks that follow the scale, up to 7 degrees either way |
 | **MEL CHANGE**, **MEL SPREAD** | The melodies' Deja vu (down: more new notes) and Spread, either way |
 | **DELAY FB**, **DELAY TIME** | The delay's feedback, and its time by up to a quarter of its range |
+| **DELAY BAND** | The delay's Band frequency, up to two octaves either way (from 1.0; with Band OFF it does nothing) |
+| **RING WET**, **RING TONE** | RING's Wet and Tone (FX → DJ FILTER, RING (2/2)), either way from their knobs (from 1.0): at depth 127 the whole range from the middle. They act only while the DJ filter's type is RING and its knob is off the middle. WET with the LFO's wave at the tempo swells the ring in and out of the beat; TONE tilts it dark to bright |
 | **REV SEND** | Every voice's reverb send, either way |
+| **DIRT** | The master DIRT's amount (FX → DIRT), either way from its knob (from 1.0). From 0 it fades the dirt in with the wave: a set that roughens over 16 bars and cleans up again |
 | **MACRO 1–4** | A macro, so an LFO reaches any parameter a step can lock |
 | **STUTTER** | The stutter's chance, from 0 by the depth (see [Stutter](#stutter-from-016)) |
 
 - **The knobs stay put.** The LFO moves the sound, not the setting: the Morph knob, the DJ filter and the effects' settings read as you left them, and that is what the project saves.
-- **Synced to the clock:** the speed follows the tempo, MIDI clock, HALF and TAPE STOP. The LFOs run when stopped too (FREE, or after a trigger).
+- **Synced to the clock:** a sync value follows the tempo, MIDI clock, HALF and TAPE STOP (a free Rate only TAPE STOP). The LFOs run when stopped too (FREE, or after a trigger).
 - **OCT+** on a global LFO's page triggers it by hand (a FREE LFO has no trigger: set its Mode first).
-- The screen shows the LFOs moving (L1, L2, L3) on their pages. LFOs on the same destination add up.
+- The screen shows the LFOs moving (L1–L4) on their pages. LFOs on the same destination add up.
+- The remote's GLOBAL channel turns their depths: CC 44–46 for LFOs 1–3, **CC 2** for LFO 4 (off the grid).
 - They are saved with the project.
 
-**A kit morphing into another over 64 bars:** LOAD → MORPH the second kit; GLOBAL LFO 1: Dest MORPH, Depth +127, Speed 64 BARS, Wave SAW UP; MODE page: Mode ONE, Trig PLAY. Press PLAY: morph goes from the knob's value to full over 64 bars and stays there. With Mode FREE and Wave TRI instead, it morphs there and back for as long as you play.
+#### FOLLOW: a voice's level (from 1.0)
+
+Wave **FOLLOW** turns a global LFO into an envelope follower: instead of a wave it follows how loud a voice plays, so a kick can duck the reverb, pump the master or open the DJ filter on every hit. Its knobs change names:
+
+| Knob | With FOLLOW |
+|---|---|
+| **Source** (Trig's place) | The voice it listens to: D1, D2, D3, SN, CY, HH, or **ALL** (the loudest of them at each moment). It hears the voice before the mixer: its volume and mutes don't change what it follows |
+| **Thresh** (Phase's place) | OFF (the default: every level), or −60 to −12 dB: only what goes over it moves the destination, and the follower reaches full halfway from the threshold to the top. If L4's bar doesn't move, the threshold is above the voice's level |
+| **Release** (Rate's place) | How fast it lets go after the sound falls: 10 ms to 2 s (the time to fall to a tenth). The attack is instant |
+| Sync, Mode | Unused (blank) |
+
+**Depth's sign:** + pushes the destination up with the level, − ducks it. Unlike a wave, the follower moves only one way from where the knob is: at rest it doesn't move the destination at all. (On the effects that fade in, PUMP, COMB, CRUSH and the rest, a negative depth plays them fully at rest and takes them out on each hit.) OCT+ has nothing to trigger. The L bar shows the level it follows.
+
+**The reverb ducked by the kick:** GLOBAL LFO 4: Dest REV SEND, Depth −127, Release about 150 ms; page 2: Wave FOLLOW, Source D1. The reverb's sends drop on each kick and swell back between them, the room breathing with the beat while the kick stays dry. With Dest FILTER and Depth +60 instead, every kick opens the DJ filter towards its high-pass side.
+
+**A kit morphing into another over 64 bars:** LOAD → MORPH the second kit; GLOBAL LFO 1: Dest MORPH, Depth +127, Sync 64 BARS; page 2: Wave SAW UP, Mode ONE, Trig PLAY. Press PLAY: morph goes from the knob's value to full over 64 bars and stays there. With Mode FREE and Wave TRI instead, it morphs there and back for as long as you play.
 
 ### PERFORM 2: the second bank
 
@@ -1160,9 +1348,9 @@ A spell changes the sound and the pattern of the tracks you pick, at random but 
    | 7 FX | sends, pan, insert, the shared FX | 15 LEN | track length, clock, direction |
    | 8 MOD | random per hit, LFO 2, cross-mod | 16 LNK | links and generators |
 
-   SHIFT (OCT−) + a white key leaves only that one in. The **Scope** knob sets them all at once (ALL, SOUND, PATTERN, VOICE, SHAPE, SPACE, RHYTHM, NOTES; CUSTOM when they match none). A part the spell never touches is grey; one left out is an outline.
+   SHIFT (OCT−) + a white key leaves only that one in. The **Scope** knob sets them all at once (ALL, SOUND, PATTERN, VOICE, SHAPE, SPACE, RHYTHM, NOTES; CUSTOM when they match none). A part the spell never touches is gray; one left out is an outline.
 3. **Pick a spell** with KNOB 1 on GRIMOIRE. The first, **NONE**, is no spell: plain chance on whatever the white keys let in. Its **Sound** knob sets how far: low, a nudge of a step or two; around 70%, up to half of each knob's range; at 100%, anywhere at all (and waveforms, filter types, shapers and inserts switch more often as you turn it up). **Spread** (CHARACTER, KNOB 1) sets how many of the knobs move, **Motion** how far the random-per-hit amounts go, **Protect** how much the pitch, the decay and the beat are kept. It starts at moderate settings (bar key 4 brings them back). Nothing else needs setting: every spell starts with settings that work.
-4. **Cast** with **COPY (OCT+)**. It breathes when a cast is possible. A twelve-sided die rolls for a moment, and when it stops the spell is cast. Beside the die: how many sounds and steps it changed.
+4. **Cast** with **COPY (OCT+)**. It breathes when a cast is possible. A twelve-sided die rolls for a moment, and when it stops the spell is cast. Beside the die: how many sounds and steps it changed. After two seconds (or as soon as you turn the Spell knob) the die gives way to the spell's description again; the cast is still yours to keep or take back.
 5. **Listen.** Don't like it? **COPY (OCT+)** again rolls again, from where you were before the first roll (not on top of it). **SHIFT (OCT−)** alone takes the spell back: the pattern and the kit exactly as before. Bar key 2 **keeps** it, and so does leaving SPELLS or loading a pattern or a kit. Bar key 4 puts the spell's knobs back as they were at first.
 
 Only the targets' steps change. A spell changes the shared FX (the delay, the reverb, the FX bus) only when every track is a target.
@@ -1213,7 +1401,7 @@ Only the targets' steps change. A spell changes the shared FX (the delay, the re
 | 1 LXR | the LXR's own voices |
 | 2 RNG | Rings' models (D1–D3) |
 | 3 PLT | Plaits' engines (D1–D3) |
-| 4 MIC | MICRO's types (any voice) |
+| 4 MIC | MICRO's types and NOISE (any voice) |
 | 5 KCK | (on: D1 always the LXR's kick) |
 
 All four lit (the default): each spell picks engines its own way. Some lit: a cast gives the targets only those, moving a voice on an engine left out to one let in, and now and then switching between them (NONE: more often with Sound and Spread up). None lit: every voice keeps its engine. SHIFT (OCT−) + a key leaves only that engine. Rings and Plaits play on D1–D3 only, two models at most, so a voice they can't go on keeps what it has. Some examples: **LXR + MIC** a mix of the two, the kick the LXR's; **MIC + KCK** the LXR's kick and MICRO on everything else; **MIC** alone MICRO everywhere, the kick a POP or a CHIRP; **PLT + KCK** the LXR's kick, Plaits on the toms. The OSC white key must be in (on the other pages) for engines to change at all.
@@ -1242,7 +1430,7 @@ WANDER changes a pattern slowly, over minutes, so that after a while you are som
 
 **How it moves.** Each chapter of a quest has a mood in four directions: **Energy** (how busy), **Light** (dark or bright), **Space** (dry or wet) and **Grit** (clean or dirty). The road moves towards it with **threads**: one track and one **gesture**, a few knobs that agree (DARKER: the cutoff and the tilt down, a little resonance; WETTER: the reverb and FX sends up; LONGER, SHORTER, DIRTIER, CLEANER, METALLIC, ROUNDER, SNAPPIER, SOFTER, RINGING, WIDER, RESTLESS, STILLER, HIGHER, LOWER, CRUSHED, WARMER, BRIGHTER, DRIER). A thread keeps going the same way for three to eight notches, so you hear it as a line, then the next one is picked by what still fits the mood and what tends to follow (darker leads to wetter or longer more than to brighter), sometimes handing the gesture to the next track (the hats open, then the snare). One to three threads move at once (Stride). The gestures come from the land of the spell picked on SPELLS' GRIMOIRE: wandering through Haunted Dub's land darkens and drips, NONE lets in every gesture. Turn a knob a thread is moving and it lets go (you win); it still goes home with the rest.
 
-**Energy** moves the hits through each track's own density (as [Density](#density-from-016) does, on top of it): thinning drops the weakest steps first, filling adds chances, then ghosts, then ratchets. The hats go first and the other tracks follow, overlapping; the kick and the snare (the backbone) only gain or lose a ghost or two. At the very bottom, with Range near the top, the hats and the other colour tracks fall silent (their keys go dim) until only the pulse and the reverb are left. Nothing jumps: a track's density moves a little each bar.
+**Energy** moves the hits through each track's own density (as [Density](#density-from-016) does, on top of it): thinning drops the weakest steps first, filling adds chances, then ghosts, then ratchets. The hats go first and the other tracks follow, overlapping; the kick and the snare (the backbone) only gain or lose a ghost or two. At the very bottom, with Range near the top, the hats and the other color tracks fall silent (their keys go dim) until only the pulse and the reverb are left. Nothing jumps: a track's density moves a little each bar.
 
 **The rhythm** (from 0.23-test4). With no Goal, each Rhythm step also changes the steps themselves, one change at a time (two at a high Stride), so you hear each version before the next. Wander tries six possible changes and keeps the one that fits best:
 - a hit **grows** on a rest: it comes in as a ghost and rises over the next steps to the track's own level;
@@ -1254,11 +1442,11 @@ WANDER changes a pattern slowly, over minutes, so that after a while you are som
 
 What fits best: what the track already does at that place in the bar after the same few steps (a new hat sounds like the hats, a new kick lands where kicks go), the number of hits staying near home's (Energy leans it), the kick and snare not on the same step, a new hat not on the snare, and not a version you heard a moment ago. Stride is how freely it picks among them. The kick and the snare's own rhythm stays as it is except on The Lost Wizard, The Rosary and The Turning Wheel (and there the kick's beats and the backbeat stay). PACE shows the last change ("CH +HIT", "OH BORROWS", "D3 ANSWERS").
 
-Every few changes the road leaves a **waymark**. With **Memory** up, now and then the road turns back to one: a version from a minute ago comes back (the screen says A PLACE I KNOW), and you recognise it.
+Every few changes the road leaves a **waymark**. With **Memory** up, now and then the road turns back to one: a version from a minute ago comes back (the screen says A PLACE I KNOW), and you recognize it.
 
-**Footprints.** The road writes its changes into the pattern playing, but first notes how each step was. When another pattern plays (you change it, the song does, or the road arrives somewhere), the pattern you left gets its steps back exactly. So travelling never changes a pattern for good; only KEEP (and LOST) does, and POSTCARD copies where you are into an empty pattern. A road can change about 80 steps of a pattern; past that, only steps it already changed move.
+**Footprints.** The road writes its changes into the pattern playing, but first notes how each step was. When another pattern plays (you change it, the song does, or the road arrives somewhere), the pattern you left gets its steps back exactly. So traveling never changes a pattern for good; only KEEP (and LOST) does, and POSTCARD copies where you are into an empty pattern. A road can change about 80 steps of a pattern; past that, only steps it already changed move.
 
-**Destinations.** Set **Goal** to a pattern (P01 to P32) before you press COPY (OCT+), and the road goes there: at the start of each pattern, the steps that differ from the goal's change to the goal's, the hats and colour first, the kick and snare last, paced to arrive by the end of the Journey (an ENDLESS Journey takes 128 bars). The top line counts the steps still to go ("7 TO P04") and the castle at the road's end flies the goal's flag. Then the goal pattern plays, the one you left is exactly as it was, Goal reads **--** and nothing more moves: the rhythm is the goal's, the voices are where the road left them. Turn Goal and press COPY (OCT+) to go on (to another pattern, or back home by the road), or SHIFT (OCT−) to come home. A goal with its own voices (LOCKED or KIT) draws the voices towards them a bar at a time, so they don't jump when it starts. Changing the pattern by hand on the way counts as arriving there.
+**Destinations.** Set **Goal** to a pattern (P01 to P32) before you press COPY (OCT+), and the road goes there: at the start of each pattern, the steps that differ from the goal's change to the goal's, the hats and color first, the kick and snare last, paced to arrive by the end of the Journey (an ENDLESS Journey takes 128 bars). The top line counts the steps still to go ("7 TO P04") and the castle at the road's end flies the goal's flag. Then the goal pattern plays, the one you left is exactly as it was, Goal reads **--** and nothing more moves: the rhythm is the goal's, the voices are where the road left them. Turn Goal and press COPY (OCT+) to go on (to another pattern, or back home by the road), or SHIFT (OCT−) to come home. A goal with its own voices (LOCKED or KIT) draws the voices towards them a bar at a time, so they don't jump when it starts. Changing the pattern by hand on the way counts as arriving there.
 
 **Following a song** (from 0.23-test6). Set **Goal** to **SONG** (past P32) and the road follows the song's rows (the song on the SONG page): each row is a destination in turn, reached as above, and when it plays the road sets out at once for the next. The voices keep wandering all the way, and it never arrives: SHIFT (OCT−) brings you home, with the Fate. **Order** (HOME page) says which row comes next: **IN ORDER** (the rows as written, from the row with the pattern you set out from), **ROADS** (by the song's chances, as ROADS on the SONG page, with the song's Surprise) or **ANY** (any row). Rows with the pattern already playing are skipped. The **Journey** is the time between rows (ENDLESS: 128 bars), and **Sway** how much it varies: EVEN, every row the Journey; turned up, from a quarter of it to four times it, by chance. The top line counts the bars of this row's leg ("8/16"), the castle flies the next row's pattern. Setting out turns Play to PATTERN: Wander plays the song's rows itself.
 
@@ -1277,12 +1465,15 @@ Every few changes the road leaves a **waymark**. With **Memory** up, now and the
 | **The Rosary** | The hits leave one by one, the hats first and the weakest first, until one is left halfway; then they come back in the order they left. Energy stays put | HOME |
 | **The Still Pond** | One thread at a time, very long legs, the smallest notches: you only notice it has changed (Journey 512 bars) | LOST |
 | **Turning Wheel** | An endless beat: rhythm only (Sound OFF, Rhythm every 4 bars), Memory high, the backbone kept. It turns through versions of itself and now and then comes back to one you remember | LOST |
+| **Boiling Frog** (1.0) | The tempo creeps, a beat a minute or so, too slowly to notice: up through WARMING to THE BOIL, or down through THE CHILL to THE FROST, or one and then the other. **Range** sets how far (5% to 25% from your tempo at full heat). And each chapter one or two of the hats and color tracks drift out of time (a [time stretch](#time-stretch-from-10) slower, then faster) and back into it by the chapter's end: **Stride** sets how far (up to two beats apart; 0: no drift). The kick and snare never drift. A thermometer shows the heat. Turn the tempo or a stretch by hand and the road lets go of it (Journey 512 bars at first) | LOST: the tempo stays |
+| **The Canyon** (1.0) | The voices get lost in a canyon and find their way out together. At **the mouth** they gather: each voice's pan drawn a third of the way in towards the middle (from wherever it was), the [delay](#the-delay-from-10-always-on) comes in (mono, Sync on), and each voice's FX send starts to rise in its own time. In **the narrows** and **the echo chamber** they drift apart: each voice wanders in space on its own, wider each chapter, its send calling out and falling back at its own pace; the delay turns PING PONG (its echoes fade out over a bar first, so the switch is clean), and its feedback, the echoes into the reverb and the reverb's size and level build on each other. **Lost in echoes**, the echo jumps to another note value every four bars and the feedback swells to 126–127, ringing, before it falls back. **The way out** brings everything home: the voices together, the delay back to its own mode. An ENDLESS canyon never finds the way out: it keeps wandering through the narrows, the echo chamber and the echoes. **Stride** sets how quickly the voices move | HOME |
+| **Howling Chasm** (1.0) | The Canyon's darker twin: lost further down, and not alone. It moves the voices' pans and delay sends as The Canyon does, wider and faster, and builds the delay and reverb the same way. **The descent**: the delay turns to stereo tape (TAPE PP) and the echo takes odd note values. **The howl**: the delay's [Band](#the-delay-from-10-always-on) comes on and wanders, and the feedback is pushed into the howl and back, while the echo lurches between triplet and dotted values every four bars (the tape bends its pitch as it changes), each repeat a few cents off. **Voices in the rock**: the tape is rung out (every delay send turned down, a few bars of tail, then the echoes faded) and the delay turns to [GRAIN](#the-grain-delay-from-10), a wide scattered cloud; the [DJ filter](#the-dj-filter-and-the-global-character-filter-from-10) becomes RING, faded in from silence, tuned low (F#1 to F2) to a string's harmonics with a long decay, its high bands hanging on, and its root slides a semitone or a tritone every eight bars. **The dark**: RING on a minor seventh, almost all ring, its root, tone and slope moving every four bars; the grains fall an octave each pass; halfway through, the grains are rung out and the tape comes back, howling, its repeats falling an octave. Sometimes **a false light** comes after the howl: brighter and drier for a while, then deeper. **The way out**: the delay back to its own mode, the ring faded out and the DJ filter as you left it (type, position, Reso, Tune and RING's knobs), the voices home. ENDLESS never gets out. Turn the DJ filter, Band or a send by hand and the road lets go of it. RING and GRAIN together are heavy: watch CONFIG → LOAD | HOME |
 
-A quest's chapters are chosen as it sets out, so it has a shape but never quite the same path. The screen shows the road in the quest's shape (straight, a loop home, a mountain, a dip into a cave, a wavy shore, detours, a path fading into fog, corridors, a string of beads, round a pond, a wheel), the cottage you set out from, the wizard walking it bar by bar with his footprints behind him, the chapter on a signboard and the Fate at the road's end.
+A quest's chapters are chosen as it sets out, so it has a shape but never quite the same path. The screen shows the road in the quest's shape (straight, a loop home, a mountain, a dip into a cave, a wavy shore, detours, a path fading into fog, corridors, a string of beads, round a pond, a wheel, a slow rise past a thermometer, a gorge between canyon walls, over the rim and down between walls where eyes open as it gets deeper), the cottage you set out from, the wizard walking it bar by bar with his footprints behind him, the chapter on a signboard and the Fate at the road's end.
 
 **QUEST**
 - **Quest:** the eleven above (ROAD, ROUND, SPIRE, HOLLOW, TIDE, DETOUR, ASTRAY, MAZE, ROSARY, POND, WHEEL on the card). Picking one sets its Fate and Journey (the Turning Wheel also Sound, Rhythm and Memory; leaving it puts those back).
-- **Journey:** 16, 32, 64, 128, 256 or 512 bars, or ENDLESS. Turn it and the top line says how long that is at the tempo.
+- **Journey:** 16, 32, 64, 128, 256, 512 or 1024 bars (**1K BARS** on the card, from 1.0), or ENDLESS. Turn it and the top line says how long that is at the tempo.
 - **Fate:** what happens when the Journey ends: **HOME** everything back as it was; **TREASURE** (CHEST on the card) home, but the thread that moved most stays as it is; **WOUND** home, but one track comes back darker or thinner; **LOST** never back: where the road ends is the new home (as KEEP), and an ENDLESS road never ends; **DICE** the d12 picks one of the four. Coming home with SHIFT (OCT−) brings the Fate too, LOST aside (you asked to come home).
 - **Goal:** NONE (an open road), a destination, P01 to P32 (see Destinations), or SONG (see Following a song). It reads -- once you've arrived.
 
@@ -1300,6 +1491,8 @@ The PACE page draws a compass of the four moods: the shape is where the road has
 - **Order:** with Goal SONG, the next row: IN ORDER, ROADS (by the song's chances) or ANY.
 - **Sway:** with Goal SONG, how much the time between rows varies: EVEN, or up to a quarter to four times the Journey.
 
+Order and Sway show only while Goal is SONG (from 1.0); otherwise their cards are empty.
+
 The page draws the cottage, the home pattern and how far away you are.
 
 **The keys on WANDER**
@@ -1313,36 +1506,42 @@ The page draws the cottage, the home pattern and how far away you are.
 | bar key 1 (black key 8) | Every track, or none |
 | bar key 2 (black key 9) | **KEEP**: here is home now. The voices are copied again, and the road's steps and the hits as Energy has them stay in the playing pattern (a track Wander silenced stays muted); the road goes on from here |
 | bar key 3 (black key 10) | **REST**: the road waits (a fire beside the wizard); again, on |
-| hold SHIFT (OCT−), press black key 10 (bar key 3) | **POSTCARD**: the screen says POSTCARD SAVED TO Pnn. Where you are (the steps and Energy as you hear them) copied into the first empty pattern, without stopping. From 0.23-test11 its Voices are **LOCKED** to the sound as it was then (its own kit slot), so later travelling doesn't change it; SAVE the project to keep it |
+| hold SHIFT (OCT−), press black key 10 (bar key 3) | **POSTCARD**: the screen says POSTCARD SAVED TO Pnn. Where you are (the steps and Energy as you hear them) copied into the first empty pattern, without stopping. From 0.23-test11 its Voices are **LOCKED** to the sound as it was then (its own kit slot), so later traveling doesn't change it; SAVE the project to keep it |
 | bar key 4 (black key 11) | Wander's knobs and keys as at first |
 
-**Spells on the road.** A spell cast while travelling is a side journey: the road waits (the screen says ASIDE: A SPELL). Reverse the spell (SHIFT (OCT−) on SPELLS) and you are back on the road where you were, and it goes on; or press COPY (OCT+) on WANDER to go on with the spell's sound. Coming home after a spell, the voices still go home from the copy. A cast you kept (bar key 2 on SPELLS, or by leaving the page) keeps its steps in the pattern.
+**Spells on the road.** A spell cast while traveling is a side journey: the road waits (the screen says ASIDE: A SPELL). Reverse the spell (SHIFT (OCT−) on SPELLS) and you are back on the road where you were, and it goes on; or press COPY (OCT+) on WANDER to go on with the spell's sound. Coming home after a spell, the voices still go home from the copy. A cast you kept (bar key 2 on SPELLS, or by leaving the page) keeps its steps in the pattern.
 
 **Good to know**
 - The bar keys are the four black keys on the right (8–11). Holding SHIFT (OCT−) on WANDER says so on the screen, and POSTCARD's key breathes. SHIFT + a *white* key is something else here: only that part travels.
 - Coming home, each track's melody (an arp, a motif, a Deja vu loop) starts again from its top at the start of the track's next loop, as it did from PLAY.
 - **Rhythm with a morph between two kits:** set PACE's Sound to OFF (or pick THE TURNING WHEEL) and leave OSC/MODELS out on the white keys, and the road changes only the steps and Energy; a global LFO with Dest MORPH can sweep between the kit and the morph target meanwhile. Neither kit is touched, and coming home leaves the LFO running. With Sound on, the road's changes move both kits alike (unless CONFIG's morph **Edits** is KIT ONLY), so the morph still works.
 - The road only moves while the sequencer plays; it counts bars at 16 steps each.
-- Loading a kit (or a pattern with its own voices) while travelling makes that kit home.
+- Loading a kit (or a pattern with its own voices) while traveling makes that kit home.
 - A project saves Wander's knobs and keys, not the road: the voices are saved as they are when you save.
-- Changing the pattern by hand while travelling is fine: the pattern you left gets its steps back, the road goes on in the new one (with a Goal: you've arrived), and coming home walks back to the home pattern.
+- Changing the pattern by hand while traveling is fine: the pattern you left gets its steps back, the road goes on in the new one (with a Goal: you've arrived), and coming home walks back to the home pattern.
 - In song mode, coming home stays in the pattern the song is playing: its steps walk back, the song goes on.
 
 ---
 
 ## 14. Saving
 
-Press **SAVE** for the save page, SAVE again for the load page (SHIFT (OCT−) + SAVE opens load directly). KNOB 1 chooses the type, KNOB 2 (or SELECT, PRESETS, or a white key in the bank on screen) the slot.
+### Loading and saving
 
-| Type | Slots | Save | Load |
+**LOAD** is HOME's third page (grid → patterns → **load** → song; from 1.0), and SAVE's second: press **SAVE** for the save page, SAVE again for the load page (SHIFT (OCT−) + SAVE opens load directly). **KNOB 1 (Type)** chooses what, most used first; the knobs after it say where from and which **Slot** (or SELECT, PRESETS, or a white key in the bank on screen).
+
+- **LOAD's types:** KIT, MORPH, SOUND, PROJECT. Patterns and songs are picked on their own pages (the pattern page, the song's Song knob), so they aren't here.
+- **SAVE's types:** KIT, MORPH, SOUND, PROJECT, then PATTERN and SONG.
+- **Kits and morph kits** come **From** (KNOB 2): **SLOTS**, the 64 kits kept in this project; **LIBRARY**, the 128 kits you saved to the FM-1 for every project; or, when loading, **FACTORY**, the 85 built-in factory kits. Saving goes **To** SLOTS or LIBRARY.
+- **Sounds** live in the library (128, shared by every project, not only this one). The knobs are Type, **Track** (which track's sound to save, or which track to load into), then the Slot.
+
+| Type | Where | Save | Load |
 |---|---|---|---|
-| KIT | 64 slots, or the library's 128 (KNOB 3: To / From SLOTS or LIBRARY) | OCT+, name it, OCT+ | OCT+ (from the library: into the sound being edited) |
-| PATTERN | 32 | a white key saves to that pattern at once | white key / OCT+: queue it |
-| SONG | 64 | OCT+ | OCT+ |
-| MORPH | 64, or the library's 128 (KNOB 3) | OCT+, name it, OCT+ (saves the morph mixture you hear) | OCT+: load as the morph target |
-| SOUND | the library's 128 (KNOB 3: the track) | OCT+, name it, OCT+: the track's sound | OCT+: into the track (a drum's sound into any drum track; the others into their own) |
+| KIT | From / To: 64 SLOTS, the LIBRARY's 128, or (load) the 85 FACTORY kits | OCT+, name it, OCT+ | OCT+ (from the library or factory: into the sound being edited). FACTORY's last entry, **ALL > SLOTS**, puts the first 64 into the slots |
+| MORPH | From / To: SLOTS or LIBRARY, or (load) the 85 FACTORY kits | OCT+, name it, OCT+ (saves the morph mixture you hear) | OCT+: load as the morph target |
+| SOUND | the library's 128; KNOB 2 the track | OCT+, name it, OCT+: the track's sound | OCT+: into the track (a drum's sound into any drum track; the others into their own) |
 | PROJECT | 4 | OCT+, name it, OCT+ | OCT+ |
-| FACTORY | the 85 factory kits | – | OCT+: into the sound being edited; ALL > SLOTS: the first 64 into the kit slots |
+| PATTERN (save only) | 32 | a white key saves to that pattern at once | (the pattern page) |
+| SONG (save only) | 64 | OCT+ | (the song page) |
 
 **Naming:** KNOB 1 the letter's position, KNOB 2 the letter, KNOB 3 upper / lower case. OCT+ saves, OCT− alone goes back.
 
@@ -1375,7 +1574,7 @@ While a restore is being written, the output is silent and saving is held off. I
 
 The emulator has the same functions under **Library**, below the panel, so you can try kits before they go on the FM-1: import them into the emulator's kit library, browse them with PRESETS, then download the kit library (`.ktlb`) and restore it onto the FM-1 from the library page. The emulator holds what the FM-1 holds (the factory kits, 64 slots, 128 library kits, with Hrtl's packs put into the library the first time it starts); to try more, import the next batch over them.
 
-**The factory kits** (from 0.19). The LXR-02's 85 factory kits (its factory SD image's, Init kits and repeats left out) are built into Elixir with Erica Synths' permission, so they take none of the library's space. Browse them with PRESETS, or LOAD → **FACTORY**: OCT+ loads the chosen kit into the sound you're editing (SAVE → KIT keeps it), and the last entry, **ALL > SLOTS**, puts the first 64 into the slots. (Up to 0.18 they were only in private builds, which also filled a new unit's slots with them; now the slots start as Init kits.) The originals: [LXR-02](https://www.ericasynths.lv/drum-synthesizer-lxr-02-1132/), [factory content](https://www.ericasynths.lv/service/file/download/product_id/754/file_id/418/), [Hrtl DLC](https://www.ericasynths.lv/service/file/download/product_id/754/file_id/462/), [Hrtl UNTZ](https://www.ericasynths.lv/service/file/download/product_id/754/file_id/625/).
+**The factory kits** (from 0.19). The LXR-02's 85 factory kits (its factory SD image's, Init kits and repeats left out) are built into Elixir with Erica Synths' permission, so they take none of the library's space. Browse them with PRESETS, or LOAD → KIT From **FACTORY**: OCT+ loads the chosen kit into the sound you're editing (SAVE → KIT keeps it); LOAD → MORPH From **FACTORY** loads one as the morph target. KIT's last entry, **ALL > SLOTS**, puts the first 64 into the slots. (Up to 0.18 they were only in private builds, which also filled a new unit's slots with them; now the slots start as Init kits.) The originals: [LXR-02](https://www.ericasynths.lv/drum-synthesizer-lxr-02-1132/), [factory content](https://www.ericasynths.lv/service/file/download/product_id/754/file_id/418/), [Hrtl DLC](https://www.ericasynths.lv/service/file/download/product_id/754/file_id/462/), [Hrtl UNTZ](https://www.ericasynths.lv/service/file/download/product_id/754/file_id/625/).
 
 ---
 
@@ -1400,15 +1599,20 @@ CC 102 and 103 are numbers the MIDI standard leaves undefined, so a keyboard doe
 
 **The basics on one channel** (from 0.24.2): the remote channels (15 and 16 by default) also take **program change 0–31** (patterns 1–32), **CC 126** (slot kits 1–64) and **CC 127** (factory kits 1–85). A controller already on a remote channel can launch patterns and kits without a third channel. The remote map itself doesn't use program changes or CCs 120–127.
 
+**Volume and the morph kit** (from 1.0), on the same channels as CC 126 and 127 (both remote channels, and the global channel at KEYS or PAT+KIT):
+- **CC 124: the master volume**, 0–127 (127, the default, is full level). It comes after everything, MASTER included, on a curve like the pot's, and glides so a fader doesn't step. It belongs to the FM-1, not the kit or the project: it is saved with the settings (CONFIG: MIDI OUT, VOLUME, KNOB 4, and the FX bus's last page, KNOB 4, set it too).
+- **CC 125: the morph kit**, slot 1–64 (values 0–63), loaded as the morph target as LOAD → MORPH does. The kit you're playing stays; turn morph to hear it.
+
 | Channel (default) | Notes | CCs | Also |
 |---|---|---|---|
-| **Track** D1 … OH (1–7) | Play that track | The LXR's map, for the track's voice ([the sound by CC](#the-sound-by-cc)) | Its hits go out on it |
-| **Global** (10) | Play the selected track (KEYS, ALL) | **CC 102 / 126 a slot kit, CC 103 / 127 a factory kit**, CC 1 MACRO 1 (KEYS); with ALL, the LXR's map | **Program change 0–31 launches patterns 1–32** |
-| **Remote TRACKS** (15) | Buttons (mute, solo) | Volume, pan, filter … per track, 8 columns; **CC 126 a slot kit, CC 127 a factory kit** | [The remote map](#the-remote-map); **program change 0–31 launches patterns 1–32** |
-| **Remote GLOBAL** (16) | Buttons (transport, effects, rolls, select, patterns) | Tempo, morph, FX, reverb, macros …; **CC 126 a slot kit, CC 127 a factory kit** | [The remote map](#the-remote-map); **program change 0–31 launches patterns 1–32** |
+| **Track** D1 … OH (1–7) | Play that track | The LXR's map, for the track's voice ([the sound by CC](#the-sound-by-cc)) | Its hits go out on it, with its MIDI OUT on (1.0) |
+| **Global** (10) | Play the selected track (KEYS, ALL) | **CC 102 / 126 a slot kit, CC 103 / 127 a factory kit, CC 125 the morph kit, CC 124 the volume**, CC 1 MACRO 1 (KEYS); with ALL, the LXR's map | **Program change 0–31 launches patterns 1–32** |
+| **Remote TRACKS** (15) | Buttons (mute, solo) | Volume, pan, filter … DENSITY per track, 8 columns; **CC 124 the volume, 125 the morph kit, 126 a slot kit, 127 a factory kit** | [The remote map](#the-remote-map); **program change 0–31 launches patterns 1–32** |
+| **Remote GLOBAL** (16) | Buttons (transport, effects, rolls, select, patterns) | Tempo, morph, FX, reverb, macros …, a roll per track (112–119); **CC 124 the volume, 125 the morph kit, 126 a slot kit, 127 a factory kit** | [The remote map](#the-remote-map); **program change 0–31 launches patterns 1–32** |
 
 - **One channel for all the tracks** (as on a TR-8S or an Elektron): set every track's channel to the same one (CONFIG: MIDI CHANNELS) and give each track its own note (CONFIG: MIDI NOTES). Left at ANY, every track on that channel plays every note. The sound CCs then all work on that channel too.
-- **Notes:** a note on a track's channel plays it. With the track's MIDI note set to ANY, it plays at the note's pitch; with a note set, only that note triggers it. With **Global in** at KEYS (the default) or ALL, notes on the global channel play the selected track. The sequencer sends each track's hits on its channel.
+- **Notes:** a note on a track's channel plays it. With the track's MIDI note set to ANY, it plays at the note's pitch; with a note set, only that note triggers it. With **Global in** at KEYS (the default) or ALL, notes on the global channel play the selected track.
+- **Notes out** (from 1.0): each track chooses whether its hits go out on its channel: CONFIG → **MIDI OUT** (two pages, a knob a track, OFF by default). The TX filter's N still switches all of them off at once. The sequencer's hits, KEYS, the rolls and notes played in all go out on a track that has it on.
 - **CC:** CC *n* sets parameter *n* − 1, as on the LXR. **NRPN** (CC 99 / 98, data entry CC 6) reaches every parameter: NRPN *n* sets parameter *n* + 128. The tables are in [the reference](#the-sound-by-cc): the LXR's sound by CC, the rest by NRPN, and Elixir's own parameters. CC 1 (the mod wheel) is nothing on the track channels; on the global channel at KEYS it moves MACRO 1. Pitch bend does nothing.
 - **Your own CC numbers** (from 0.24): if your controller sends other numbers, the [library page](#backing-up-restoring-and-lxr-02-kits) remaps them. Each CC can set any parameter in [the reference tables](#the-sound-by-cc) (by name: search for a voice, "decay" or "NRPN 174"), or nothing. A CC aimed at a short list (a waveform, a filter type, a model) sweeps the whole list over the knob's travel; the channel rules stay the parameter's. CC 6, 98 and 99 stay NRPN's. The map belongs to the FM-1, not to a project, and is saved with the settings a second after the sequencer stops. Download it as a CSV to keep or share it, or load one (`cc,sets,name`, e.g. `1,CC 9,D1 Coarse`).
 - **Clock out:** always on, 24 PPQ, with start and stop.
@@ -1421,7 +1625,7 @@ CC 102 and 103 are numbers the MIDI standard leaves undefined, so a keyboard doe
 - **Program change 0–31 on the global channel** (10 by default) queues pattern 1–32, as a white key on the pattern page does: while playing it starts when the current pattern ends (the header shows >nn), while stopped at once. Elixir sends a program change on the global channel whenever its pattern changes, so a controller or DAW can follow. From 0.24.2 the remote channels (15 and 16) take them the same way. Program changes on the track channels do nothing.
 - **Remote GLOBAL buttons 60 and 61** (CC or note): the previous and the next pattern, queued the same way.
 - **CC 102 on the global channel** loads slot kit 1–64 (values 0–63) at once (Global in KEYS or PAT+KIT).
-- **CC 103 on the global channel** loads factory kit 1–85 (values 0–84) at once, as LOAD → FACTORY does: into the sound; the slot shown as loaded stays.
+- **CC 103 on the global channel** loads factory kit 1–85 (values 0–84) at once, as LOAD → KIT From FACTORY does: into the sound; the slot shown as loaded stays.
 - **CC 126 and CC 127** (from 0.24.2) do the same as CC 102 and 103, on the global channel (KEYS, PAT+KIT) and on both remote channels, so one controller setup works on any of them.
 - **CC 0** loads slot kit 1–64 on a track's channel, as on the LXR, and on the global channel at ALL. At KEYS and PAT+KIT it is a keyboard's bank select there, and does nothing.
 - A pattern can bring its own kit (its Voices at KIT): send the kit after the program change, or it is replaced when the pattern starts.
@@ -1439,6 +1643,8 @@ Worth knowing in a bigger setup (a Hapax, several controllers): what a message o
 | CC 103 (0–84) | Factory kit 1–85 | Factory kit 1–85 | D1 drive (the LXR's) |
 | CC 126 (0–63) | Slot kit 1–64 | Slot kit 1–64 | CY LFO amount (the LXR's) |
 | CC 127 (0–84) | Factory kit 1–85 | Factory kit 1–85 | HH LFO amount (the LXR's) |
+| CC 125 (0–63, 1.0) | Morph kit: slot 1–64 | Morph kit: slot 1–64 | SN LFO amount (the LXR's) |
+| CC 124 (1.0) | Master volume | Master volume | D3 LFO amount (the LXR's) |
 | Note | Plays the **selected** track (recorded under REC) | – | Plays the selected track |
 | CC 1 (mod wheel) | MACRO 1 | – | – |
 | CC 0, 32 (bank select) | – | – | CC 0: slot kit 1–64 |
@@ -1457,10 +1663,9 @@ With OFF, none of these do anything. Clock, start, continue and stop have no cha
 | TRACKS: filter frequency, resonance | CC 38–43, 44–49 |
 | TRACKS: decay | CC 51 53 55 57 59; 61 (CH), 62 (OH) |
 | TRACKS: pitch | CC 9 11 13 15 17 19 |
-| TRACKS: drive | CC 103–108 |
 | TRACKS: sample rate | CC 109–114 |
 | TRACKS: LFO amount | CC 122–127 |
-| TRACKS: FX send, reverb send, random pitch | NRPN 174–179, 180–185, 214–219 |
+| TRACKS: FX send, delay send, reverb send | NRPN 174–179, 403–408, 180–185 |
 | GLOBAL: SRate (11) | CC 115 |
 | GLOBAL: shuffle, morph, roll rate (9, 10, 13) | NRPN 133, 120, 119 |
 | GLOBAL: FX dry/wet, P1–P4 (16–20) | NRPN 108, 110–113 |
@@ -1468,7 +1673,7 @@ With OFF, none of these do anything. Clock, start, continue and stop have no cha
 | GLOBAL: reverb level, size, damping, master dirt (24–27) | NRPN 188, 186, 187, 317 |
 | GLOBAL: previous / next pattern (60, 61) | Program change (any pattern) |
 
-The remote's transport, mutes, solo, select, rolls, DRILL, the performance effects, DENSITY and the macros have no twin on the global channel.
+The remote's transport, mutes, solo, select, rolls, DRILL, the performance effects, DENSITY (the knob and each track's) and the macros have no twin on the global channel.
 
 ### The remote map
 
@@ -1477,7 +1682,7 @@ The remote map has **two channels** of its own, made for an 8-column controller 
 - **TRACKS** (channel 15 by default): what belongs to a track. Columns 1–7 are the tracks **D1 D2 D3 SN CY CH OH**, column 8 the **selected track**. CH and OH both act on the hat voice, except their decays.
 - **GLOBAL** (channel 16 by default): the transport, the performance, the effects, the tempo, morph and the rest.
 
-Knobs and faders are CCs. Every number is used once on its channel, so a knob and a button never share one. A button can be a **CC or a note** of its number, whichever the controller sends: a CC above 0 or a note on is a press, CC 0 or a note off (or velocity 0) a release. Mute, solo, the latched effects and the DENSITY tracks toggle (for mute and solo that is the **PRESS** setting below); the held ones act while held; select, PLAY / STOP, REC and the patterns act on the press. Their lights follow the state. On a Launch Control XL, give one template the TRACKS channel and another the GLOBAL channel (or one template's knobs one channel and its buttons the other). The cheat sheet has this map on one page.
+Knobs and faders are CCs. Every number is used once on its channel, so a knob and a button never share one. A button can be a **CC or a note** of its number, whichever the controller sends: a CC above 0 or a note on is a press, CC 0 or a note off (or velocity 0) a release. Mute, solo and the DENSITY tracks toggle (for mute and solo that is the **PRESS** setting below); the effects (88–95) and CONTROL ALL (62) latch on a tap and act while held on a longer press ([below](#the-effects-tap-or-hold-from-10)); the other held ones act while held; select, PLAY / STOP, REC and the patterns act on the press. Their lights follow the state. On a Launch Control XL, give one template the TRACKS channel and another the GLOBAL channel (or one template's knobs one channel and its buttons the other). The cheat sheet has this map on one page.
 
 **TRACKS (channel 15): knobs CC 8–103, buttons 104–119.** The number is 8 + 8 × row + column − 1.
 
@@ -1490,12 +1695,12 @@ Knobs and faders are CCs. Every number is used once on its channel, so a knob an
 | Resonance | **32** | **33** | **34** | **35** | **36** | **37** | **38** | **39** |
 | Decay | **40** | **41** | **42** | **43** | **44** | **45** closed | **46** open | **47** |
 | Pitch (coarse) | **48** | **49** | **50** | **51** | **52** | **53** | **54** | **55** |
-| Drive | **56** | **57** | **58** | **59** | **60** | **61** | **62** | **63** |
+| Delay send (1.0) | **56** | **57** | **58** | **59** | **60** | **61** | **62** | **63** |
 | FX send | **64** | **65** | **66** | **67** | **68** | **69** | **70** | **71** |
 | Reverb send | **72** | **73** | **74** | **75** | **76** | **77** | **78** | **79** |
 | Sample rate | **80** | **81** | **82** | **83** | **84** | **85** | **86** | **87** |
 | LFO amount | **88** | **89** | **90** | **91** | **92** | **93** | **94** | **95** |
-| Random pitch | **96** | **97** | **98** | **99** | **100** | **101** | **102** | **103** |
+| DENSITY (1.0) | **96** | **97** | **98** | **99** | **100** | **101** | **102** | **103** |
 | Mute | **104** | **105** | **106** | **107** | **108** | **109** | **110** | **111** |
 | Solo | **112** | **113** | **114** | **115** | **116** | **117** | **118** | **119** |
 
@@ -1510,21 +1715,66 @@ Knobs and faders are CCs. Every number is used once on its channel, so a knob an
 | 32–39 | **32** Macro 1 | **33** Macro 2 | **34** Macro 3 | **35** Macro 4 | **36** DRILL | **37** JITTER | **38** CUTS | **39** PUMP |
 | 40–47 | **40** COMB note | **41** COMB fb | **42** CRUSH | **43** REV length | **44** LFO 1 depth | **45** LFO 2 depth | **46** LFO 3 depth | **47** DJ reso |
 
+**GLOBAL (channel 16): more knobs, off the grid** (from 1.0). 63 and 96–103 were buttons before 1.0 (CONTROL ALL latched, the effects latched): a tap on 62 or 88–95 does that now.
+
+| CC | Sets | | CC | Sets |
+|---|---|---|---|---|
+| **96** | Delay Time (GRAIN: Position) | | **3** | RING Wet |
+| **97** | Delay Feedback | | **4** | RING Slope |
+| **98** | Delay Tone | | **5** | RING Tone |
+| **99** | Delay Band (0 OFF) | | **7** | RING Tune (the chord) |
+| **100** | Delay Wow (GRAIN: Size) | | **63** | RING Spread |
+| **101** | Delay Glitch (GRAIN: Density) | | **2** | LFO 4's depth |
+| **102** | Route (the middle PARALLEL, left DLY > FX, right FX > DLY) | | | |
+| **103** | Rev>FX | | | |
+
+The delay's row is a strip of eight for a controller's knob row: Feedback and Band side by side for the howl, Time to bend the tape's pitch or move GRAIN's grains over a FREEZE. Saturate (CC 23) is GRAIN's Scatter. RING's Filt (the root) is the DJ filter (CC 12), its Decay DJ reso (CC 47); the RING knobs set their values whatever the DJ type, and are heard while it is RING. CC 0, 1 and 6 stay free (bank select, the mod wheel, data entry), as do 120–123 (MIDI's channel messages).
+
 **GLOBAL (channel 16): buttons, CC or note 48–111**
 
 <!-- grid -->
 | | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
 |---|---|---|---|---|---|---|---|---|
 | Transport, held | **48** PLAY / STOP | **49** REC | **50** FILL | **51** REPEAT | **52** FREEZE | **53** THROW REV | **54** THROW FX | **55** FB PUSH |
-| Held · patterns | **56** TAPE STOP | **57** LP sweep | **58** HP sweep | **59** REVERSE | **60** previous | **61** next |  |  |
-| Select | **64** D1 | **65** D2 | **66** D3 | **67** SN | **68** CY | **69** CH | **70** OH |  |
+| Held · patterns | **56** TAPE STOP | **57** LP sweep | **58** HP sweep | **59** REVERSE | **60** previous | **61** next | **62** CONTROL ALL (tap or hold) | **63** (a knob: RING Spread) |
+| Select | **64** D1 | **65** D2 | **66** D3 | **67** SN | **68** CY | **69** CH | **70** OH | **71** CONTROL ALL revert |
 | Roll (held) | **72** D1 | **73** D2 | **74** D3 | **75** SN | **76** CY | **77** CH | **78** OH | **79** selected |
 | DRILL (held) | **80** D1 | **81** D2 | **82** D3 | **83** SN | **84** CY | **85** CH | **86** OH | **87** selected |
-| Effects, held | **88** HALF | **89** JITTER | **90** CUTS | **91** SHORT | **92** PUMP | **93** COMB | **94** SPACE | **95** CRUSH |
-| Effects, latched | **96** HALF | **97** JITTER | **98** CUTS | **99** SHORT | **100** PUMP | **101** COMB | **102** SPACE | **103** CRUSH |
+| Effects, tap or hold | **88** HALF | **89** JITTER | **90** CUTS | **91** SHORT | **92** PUMP | **93** COMB | **94** SPACE | **95** CRUSH |
+| (knobs: the delay) | **96** Time | **97** Feedback | **98** Tone | **99** Band | **100** Wow | **101** Glitch | **102** Route | **103** Rev>FX |
 | DENSITY out | **104** D1 | **105** D2 | **106** D3 | **107** SN | **108** CY | **109** CH | **110** OH | **111** all in |
 
-The effects are PERF's (see [Performance mode](#13-performance-mode-perf)); they work from any page, and leaving PERF doesn't turn off what the remote latched. DENSITY's knob (CC 28) thins or builds the pattern as on the DENSITY page; its buttons are the page's track toggles, and their lights show the tracks left out.
+**GLOBAL (channel 16): a roll per track, CC 112–119** (from 1.0; a fader each)
+
+<!-- grid -->
+| | D1 | D2 | D3 | SN | CY | CH | OH | Selected |
+|---|---|---|---|---|---|---|---|---|
+| Roll (by value) | **112** | **113** | **114** | **115** | **116** | **117** | **118** | **119** |
+
+#### The effects: tap or hold (from 1.0)
+
+The effects are PERF's (see [Performance mode](#13-performance-mode-perf)); they work from any page, and leaving PERF doesn't turn off what the remote latched. One button each does both jobs:
+
+- **Tap** (let go within a quarter of a second): latched, on until you press it again. The press that turns it off does nothing when let go.
+- **Hold** (longer): on while held, off when let go. The effect starts at the press either way, so a hold doesn't come in late.
+- **Mute/solo at TOGGLE** (REMOTE page, KNOB 4): for buttons that keep their own state, what the button sends is the latch: on latches, off lets go.
+
+The light is on while the effect is, however it was turned on. CONTROL ALL's button **62** works the same way, except that a short press during which a knob moved something counts as a hold, so a quick grab-and-turn doesn't stay on.
+
+ DENSITY's knob (CC 28) thins or builds the pattern as on the DENSITY page; its buttons are the page's track toggles, and their lights show the tracks left out.
+
+**DENSITY a track** (TRACKS row 12, CC 96–103, from 1.0; random pitch was there before): each track's own DENSITY, centered (64) by default: below thins the track, above builds it (chances, then ghosts, then ratchets, as BUILD says), on top of the DENSITY knob's. A track the DENSITY buttons leave out still takes its own. DENSITY's COMMIT writes only the knob's into the pattern; RESET PERF centers them all.
+
+**A roll per track** (GLOBAL CC 112–119, from 1.0): each fader rolls its track at its own rate while it is up, so several tracks can roll at once, each on its own hits (its step's note). The curve is steep: the first turn is on the grid, 1/4 (1–4), 1/8 (5–8), 1/16 (9–16), 1/32 (17–32); from 33 the roll goes free, off the grid, from 1/32 up to 1/256 at the top, like RUSH's end. Down to 0 stops it. They play only while the sequencer runs, and under REC the hits are recorded. CC 119 rolls the track selected when the fader left 0, and keeps rolling it if you select another. RESET PERF stops them all. The buttons 72–79 (Roll, held) stay as they were: the selected roll rate, all tracks together.
+
+#### Control All by MIDI (from 1.0)
+
+Hold GLOBAL's button **62**, or tap it to latch it (again: off), and [Control All](#control-all-every-track-at-once) is on without OCT+; the buttons light while it is. While it is on:
+
+- **A voice's parameter from MIDI moves on every track in it** by the step it made on its own track, so the tracks keep their differences, as the panel's knob does. That covers the TRACKS rows (any column), the LXR's per-voice CCs on a track's channel (filter CC 38–43 and the rest of [the sound by CC](#the-sound-by-cc)) and the per-voice NRPNs (the sends, the delay sends …). An absolute knob's step is the new value minus the track's current one (after PICKUP), a relative one's as sent. Lists where a step means nothing (a model, an LFO's sync or destination) still move their own track alone. Nothing is recorded under REC.
+- **The panel's knobs** on a sound page act as with OCT+ held, and the title reads CONTROL ALL.
+- **Tracks left out:** the Select buttons **64–70** (and the panel's voice keys) leave a track out or put it back, instead of selecting it; their lights show the tracks in it. The left-out tracks are the same set as the panel's and kept in the settings.
+- **Off** (62 let go after a hold, or pressed again after a tap): the changes are kept, with no dialog (no thumb to slip). **71** (or OCT− on the panel while it is on) puts every track back as it was before the first Control All move. 71 works during it and after it, until the next Control All or a kit load, and lights while there is something to revert; it reverts the panel's Control All too.
 
 **Knobs** (REMOTE page, KNOB 2):
 - **PICKUP** (the default): a knob or fader does nothing until it reaches or passes the current value, then follows. If the value changes elsewhere (the panel, a kit), it waits again. Nothing jumps.
@@ -1551,12 +1801,40 @@ GLO twice (past the mixer) opens CONFIG. Turn SELECT for its pages:
 | MIDI | Global channel, TX filter, RX filter, Route |
 | MIDI CHANNELS (2 pages) | Each track's channel; page 2's KNOB 4, **Global in**: what the global channel takes (KEYS, the default; PAT+KIT; ALL; OFF: see [MIDI at a glance](#midi-at-a-glance)) |
 | MIDI NOTES (2 pages) | Each track's note (ANY or a note) |
-| DEVICE | LEDs (OFF / LOW / HIGH glow), Autosave, Accel (fast knob turns move further), Colours (screen palette: GREY, GREEN, AMBER, ICE, VIOLET, ROSE, PAPER, HI-CON, NIGHT, MONO or HYRULE, forest green and Triforce gold) |
+| MIDI OUT (2 pages, from 1.0) | Each track's notes out over USB MIDI on its channel: OFF (the default) or ON; the TX filter's N must be on too. Page 2's KNOB 4, **Volume**: the master volume, 0–127 (127 the default), after MASTER, saved with the settings; CC 124 sets it (see [MIDI at a glance](#midi-at-a-glance)) |
+| USB MIX (2 pages, from 1.0) | Each voice's place in the stereo mix while a computer records the FM-1 over USB: **IN** (the default) or **OUT**, a knob a voice (D1 D2 D3 SN, then CY HH). The six stems always play; see [USB audio](#usb-audio-the-mix-and-six-stems) |
+| DEVICE | LEDs (OFF / LOW / HIGH glow), Autosave, Accel (fast knob turns move further), Colors (screen palette: GRAY, GREEN, AMBER, ICE, VIOLET, ROSE, PAPER, HI-CON, NIGHT, MONO, HYRULE (forest green and Triforce gold) or SAND (the default: amber on true black, near-black cards) |
 | REMOTE | Tracks (the TRACKS channel: OFF, 1–16; 15 by default), Global (the GLOBAL channel; 16 by default; never the same as Tracks), Knobs (PICKUP / ABS / REL), Mute/solo (PRESS / TOGGLE): see [the remote map](#the-remote-map) |
-| MORPH | Edits, Ctrl all: BOTH KITS (the default: with morph on, a knob's edit or Control All moves the morph target too, so it is heard) or KIT ONLY (the kit alone, the LXR's way); see [Kits and morph](#11-kits-and-morph) and [Control All](#control-all-every-track-at-once) |
+| MORPH | Edits: SPLIT (the default from 1.0: at morph 100% the knobs edit the morph kit, below it the kit), BOTH KITS (a knob's edit moves the morph target too) or KIT ONLY (the kit alone, the LXR's way). Ctrl all: BOTH KITS (the default: Control All moves the morph target too) or KIT ONLY; see [Kits and morph](#11-kits-and-morph) and [Control All](#control-all-every-track-at-once) |
 | BUTTONS & KITS | **Kits first** (KNOB 2, from 0.19): FACTORY (the default) or SLOTS, the kit browser's order (see [Kits and morph](#11-kits-and-morph)). **Last page**: NO (the default) or YES. With YES, a button opens the page it showed when you left it: on CONFIG's BUTTONS & KITS page, press FX, then GLO, and you're back on BUTTONS & KITS. It works for SEQ (the track's pages or step edit, whichever you were on), FX, ARP (and each of its two sets), GLO (the mixer or CONFIG) and the sound buttons (the section and row). Pressed again, a button moves on as always. HOME still goes to the grid. |
 | LOAD | No knobs: where the processor's time goes, and the cores; see [the LOAD page](#the-load-page) |
 | ELIXIR | No knobs: the potion, the version, each core's load and the CPU line with the battery |
+
+### USB audio: the mix and six stems
+
+From 1.0 the FM-1 is also a **USB audio input** with eight channels (16-bit, 44.1 kHz, USB Audio Class 1: no driver needed). Connect it to a computer with the USB cable and choose **Elixir** as the input in your recording software:
+
+| USB channel | What |
+|---|---|
+| 1, 2 | The stereo mix, left and right: what the FM-1's outputs play, before the MASTER pot and the master volume (so recordings don't change with the pot) |
+| 3 | D1 |
+| 4 | D2 |
+| 5 | D3 |
+| 6 | SN |
+| 7 | CY |
+| 8 | HH (both hi-hat tracks: closed and open play the one voice) |
+
+Each **stem** (3–8) is one voice in mono, as the mixer takes it: after the voice's own processing (its filter, drive, bit reduction, its INSERT, cross modulation, choke and PERF's PUMP), before its pan, its FX and reverb sends, the FX bus, the reverb, the master compressor, DIRT and the DJ filter. A stem is at the voice's own level (VOLUME), on the same scale as the mix (full scale is the same in both), unpanned. A muted track gives a silent stem (its voice isn't struck).
+
+**USB MIX** (CONFIG, two pages: D1 D2 D3 SN, then CY HH) takes a voice **OUT** of the stereo mix, so you can process it apart in the computer: the kick out of the mix, say, through its own compressor. OUT removes the voice from the mix completely, its dry sound and its sends to the FX bus and the reverb alike, so no echo or reverb of it is left in channels 1–2; its stem still plays. OUT applies **only while a computer records** (the USB MIX page says RECORDING): the FM-1's own outputs follow the mix, so while recording you hear the mix without that voice; unplugged, or with no app reading the input, every voice plays as usual, so a forgotten OUT never silences a voice. The setting belongs to the FM-1 (saved with the settings), not to a kit or project.
+
+Things to know:
+
+- Recording software sees one eight-channel device; most label the channels 1–8 (USB audio 1 has no way to name them), so name the tracks as in the table.
+- The latency is about 5.5 ms on top of your computer's own. The FM-1's clock runs the stream (it is an *asynchronous* device), so there is no drift against the computer.
+- Only 44.1 kHz. If your project runs at 48 kHz, let the software convert the input, or use 44.1 kHz.
+- CONFIG → LOAD shows the stream's own share of the processor (**USB AUDIO**) and its **glitches** since power-on: a packet repeated or dropped (heard as a click in the recording only, not on the FM-1's outputs). Please report glitches with the pattern that caused them.
+- USB MIDI and installs over USB work as before. Windows may take a moment to set the device up again the first time, since the FM-1 now presents an audio function too.
 
 ### The CPU meter
 
@@ -1564,11 +1842,13 @@ The bottom of the LOAD and ELIXIR pages (the last two) shows the audio engine's 
 
 To measure, open CONFIG while a dense pattern plays with the FX bus and reverb on, and note the numbers. The browser emulator always shows 0%, because it doesn't model CPU time.
 
+**CPU OVERLOAD** (from 1.0): when buffers run late (two within 2 seconds: a lone late one, a peak with an interrupt on top, isn't a dropout you hear), on any page, the title bar flashes **CPU OVERLOAD** in red until 2 seconds after the last, with what was heaviest. It follows the **Late** count, not the percentages: Block is an average and Peak leaves out the interrupts (USB, MIDI) that land on top of the busiest buffer, so a run of lates can come with Peak in the 90s. If the second core was the one behind, it names the drum voices' models (**CPU OVERLOAD: MODAL + P SD**): a lighter model on one of them, or Aux at an end on P BD, P SD or P HH, helps. Otherwise it names the first core's biggest part as the LOAD page does (**FX BUS**, **REVERB**, **SN-HH**, **MIXER**, **SEQ, MOD**). The LOAD page has the numbers.
+
 ### The LOAD page
 
 The LOAD page (CONFIG's second-to-last) splits the CPU figure by part, each as a share of the time an audio buffer lasts (2.9 ms): **D1-D3** (the three drum voices, with their models), **SN-HH** (snare, cymbal, hi-hat), **MIXER** (cross modulation, choke, the mixer and the master), **FX BUS**, **REVERB**, and **SEQ, MOD** (the sequencer, MIDI, PERF, the LFOs and the rest). The first number is the average, the second the peak since CONFIG was opened; the bar shows the average with the peak as a tick. On one core the parts add up to about the CPU figure. The emulator shows 0 everywhere.
 
-Below them, the cores. The FM-1's processor has two cores, and from 0.15 Elixir uses both: the second renders D1–D3 (with their models) while the first renders SN, CY and HH, then mixes everything and runs the effects. With two cores, **D1-D3** is the second core's time, so the parts no longer add up to CPU. **CORE 0** is the first core's time, less its wait for the second, and **CORE 1** the second's (D1–D3; OFF on one core). Under them, **WAIT** is the time the first core waits for the second (if it grows, D1–D3 are the slower half), and **STACK** the memory the second core has used for its work (red past 3.5 KB of 4 KB). On one core, **1 CORE** says why the second core isn't running; D1–D3 then render on the first core, and only one model plays:
+Below them, the cores. The FM-1's processor has two cores, and from 0.15 Elixir uses both: the second renders D1–D3 (with their models) while the first renders SN, CY and HH and runs the rest. From 1.0 the voices work **a block ahead of the mixer**: while the second core renders D1–D3 for the next block, the first renders SN, CY and HH for it too, then mixes the block both cores finished last time and runs the FX bus, the reverb's return and the master. Neither core waits for the other in the middle of a block, so the block takes as long as the busier core, rather than the second core's time plus everything after it. That is what lets two models play beside the effects. The cost is that the output comes out one block (1.45 ms) later, all of it together: the tracks stay in time with each other, and against an external clock it is about as much as MIDI clock moves anyway. Either core can run the reverb (on the mix's last send, so it needn't wait for anything): each block it goes to the core that leaves the block shortest, worked out from the last block's times. While the second core has it, the first line reads **D1-D3, REV**: the second core's time, so the parts no longer add up to CPU (REVERB then only counts adding its return). **CORE 0 WORK** is the first core's time, less its wait for the second, and **CORE 1** the second's (D1–D3; OFF on one core). What counts is the first core's work *plus* its wait, the **BLOCK** line at the bottom (the CPU figure of the other CONFIG pages): past 100% at a peak, the buffer is late (LATE counts them) and you hear a dropout. Under them, **WAIT** is the time the first core waits at the end of a block for the second to finish (if it grows, D1–D3 are the busier side: a lighter model, or the reverb's sends at 0, helps), and **STACK** the memory the second core has used for its work (red past 3.5 KB of 4 KB). On one core, **1 CORE** says why the second core isn't running; D1–D3 then render on the first core, and only one model plays:
 
 | Reason | |
 |---|---|
@@ -1579,7 +1859,7 @@ Below them, the cores. The FM-1's processor has two cores, and from 0.15 Elixir 
 
 The last page, **ELIXIR**, shows the version (the cores' line moved to LOAD in 0.20).
 
-From 0.16 the first core also runs the reverb and reads the delay's echoes while it waits for the second, on the last buffer's sends (one block, 1.45 ms, late: inaudible), so the effects no longer add to the slower core's time. Right of WAIT, **STACKS** shows the deepest use of the two main stacks since power-on (red past three quarters): worth a look after a busy session, and worth reporting if it is red.
+The reverb works on the mix's last send, so its return comes two blocks (2.9 ms) after its send: inaudible on a reverb. Under the cores, one reading a line: **CORE 0 WAITS** (with two cores), **CORE 1 STACK**, **USER STACK** and **SYS STACK**, the deepest use of each stack since power-on out of its size (red past three quarters). If one turns red after a busy session, please report it. From 1.0, **USB AUDIO**: the [USB audio](#usb-audio-the-mix-and-six-stems) stream's share of the first core while a computer records (OFF when nothing does; it isn't counted in CPU or the parts above) and its glitches since power-on (red when there are any).
 
 ### The battery
 
@@ -1596,15 +1876,13 @@ At the right end of the CPU line: the battery's charge as three bars (as the sto
 | 1–7 | Play that track's voice |
 | 8 | KIT: load a kit |
 | 9 | MORPH: load the morph target |
-| 10 | SONG page |
-| 11 | PROJECT: load a project |
-| 12 | CONFIG |
+| 10 | RESET SOUND: the selected track's voice back to how the loaded kit has it (your edits to that one sound undone; CLEAR → SOUND is the init sound) |
+| 11 | RESET PERF: every performance effect off (as SHIFT (OCT−) + HOME); from 1.0 also the remote's DENSITY a track (centered) and its rolls a track |
+| 12 | SOLO the selected track (again: not; as SHIFT (OCT−) + GLO) |
 | 13 | RELOAD the kit and pattern as saved |
-| 14 | LAST: set the track's last step (again: all tracks) |
-| 15 | FX |
-| 16 | PATTERN page |
+| 14–16 | (free) |
 
-In PERF, SHIFT (OCT−) + a white key latches it instead.
+In PERF, SHIFT (OCT−) + a white key latches it instead. From 1.0 that is on PERF's own pages only: a sound page you opened from PERF shows the menu. The song, project, CONFIG, FX and pattern pages that were on keys 10–16 before 1.0 are on their own buttons, and every load is on the [load page](#loading-and-saving) (HOME's third); LAST is the length knob (with OCT+ held, every track's).
 
 ### Other combinations
 
@@ -1618,6 +1896,9 @@ In PERF, SHIFT (OCT−) + a white key latches it instead.
 | COPY (OCT+) + pattern, pattern | Copy a pattern (pattern page) |
 | SHIFT (OCT−) + COPY (OCT+) | CLEAR (again to confirm) |
 | COPY (OCT+) held + knob (sound page) | Control All: the parameter on every track; let go, then OCT+ reverts or OCT− keeps |
+| COPY (OCT+) held, after a knob turn + voice key | Control All: the track left out (again: back in; kept in the settings) |
+| SHIFT (OCT−) held + knob | Fine adjust: one step a detent, no acceleration (1.0) |
+| COPY (OCT+) held + length knob (grid, TRACK) | Every track's length; let go, then OCT+ reverts or OCT− keeps (1.0) |
 | SHIFT (OCT−) + PLAY | Play the song from the start |
 | SHIFT (OCT−) + REC | Record options |
 | SHIFT (OCT−) + SAVE | Load page |
@@ -1629,12 +1910,12 @@ In PERF, SHIFT (OCT−) + a white key latches it instead.
 
 ### The sound by CC
 
-Each CC is received on its voice's track channel, or on the global channel (10 by default) with Global in at ALL. A CC with no voice (FX bus, global sample rate) is received on any of Elixir's track channels (and the global one at ALL). To control everything from one channel, set Global in to ALL and send every CC on the global channel. The values go in as they are, so set list-type controls (waveform, filter type) to the range shown and pans to 0–127 with 63/64 as the centre. CH and OH share the HH voice: a CC for HH acts on both, except the two decays. CY and HH have three oscillators: Wave 2 and 3 are their FM oscillators' waveforms.
+Each CC is received on its voice's track channel, or on the global channel (10 by default) with Global in at ALL. A CC with no voice (FX bus, global sample rate) is received on any of Elixir's track channels (and the global one at ALL). To control everything from one channel, set Global in to ALL and send every CC on the global channel. The values go in as they are, so set list-type controls (waveform, filter type) to the range shown and pans to 0–127 with 63/64 as the center. CH and OH share the HH voice: a CC for HH acts on both, except the two decays. CY and HH have three oscillators: Wave 2 and 3 are their FM oscillators' waveforms.
 
 | Parameter | D1 | D2 | D3 | SN | CY | HH |
 |---|---|---|---|---|---|---|
 | Volume | 89 | 90 | 91 | 92 | 93 | 94 |
-| Pan (63/64 centre) | 95 | 96 | 97 | 100 | 101 | 102 |
+| Pan (63/64 center) | 95 | 96 | 97 | 100 | 101 | 102 |
 | Drive | 103 | 104 | 105 | 106 | 107 | 108 |
 | Sample rate | 109 | 110 | 111 | 112 | 113 | 114 |
 | Coarse (pitch) | 9 | 11 | 13 | 15 | 17 | 19 |
@@ -1675,21 +1956,21 @@ NRPN *n* sets parameter *n* + 128: send CC 99 = *n* ÷ 128, CC 98 = *n* mod 128,
 | 6–8 | D1–D3 FM mode (0 FM, 1 mix) |
 | 15–20 | Velocity amount |
 | 27–32 | LFO waveform (0–7) |
-| 51–56 | LFO clock sync (0–11) |
-| 57–62 | LFO offset |
+| 51–56 | LFO clock sync (0–15, as LFO 2's below) |
+| 57–62 | LFO phase (the LXR's offset) |
 | 63–68 | Filter type (0–7: LP HP BP UNITY BP NOTCH PEAK LP2 OFF; 8–14: LP4 COMB+ COMB− ALLPASS VOWEL DUB BP CHORD) |
 | 69–74 | Transient volume |
 | 75–80 | Transient waveform (0–13) |
 | 81–86 | Transient frequency |
 | 100–105 | Pulse width |
-| 106 | FX bus type (0 off, 1 drive, 2 ring, 3 comp, 4 delay, 5 phaser, 6 flanger) |
+| 106 | FX bus type (0 off, 2 ring, 3 comp, 5 phaser, 6 flanger, 8 shift (1.0); 1 drive, 4 delay and 7 (chorus) play as off: drive is gone from 1.0, the delay is always there) |
 | 108 | FX bus dry/wet (0–100) |
 | 107 | FX bus output (0–5) |
 | 109 | Drive curve (0 tube, 1 fold, 2 clip) |
 | 110–113 | FX bus P1–P4 (see [the FX bus](#the-fx-bus-fx)) |
 | 114 | Comp ratio (0–5) |
 | 115 | Ring carrier waveform (0–5) |
-| 117 | Delay mode (0 mono, 1 ping pong) |
+| 117 | Delay mode (0 mono, 1 ping pong, 2 tape, 3 tape pp, 4 off, 5 grain (1.0)) |
 | 133 | Shuffle |
 
 NRPN 120 (morph, 0–127 for 0–255) and 119 (roll rate, 0–13) act as the panel's knobs do (from 0.12). The DJ filter, repeat, tape, the PERFORM 2 effects, mutes and solo aren't in this map: use [the remote map](#the-remote-map).
@@ -1700,6 +1981,7 @@ Six numbers per voice-based setting, in the order D1 D2 D3 SN CY HH.
 
 | NRPN | Parameter |
 |---|---|
+| 93–98 | The delay (1.0): Time, Feedback, Tone, Level, Wow, Band (0 off) |
 | 174–179 | FX send |
 | 180–185 | Reverb send |
 | 186, 187, 188, 189 | Reverb size, damping, level, model (0 room, 1 spring, 2 hall, 3 plate) |
@@ -1731,13 +2013,17 @@ Six numbers per voice-based setting, in the order D1 D2 D3 SN CY HH.
 | 337–342 | LFO 2 target (as LFO 1's: 0 off) |
 | 343–348 | LFO 2 wave (0 sine, 1 tri, 2 saw up, 3 saw down, 4 square, 5 random, 6 exp up, 7 exp down) |
 | 349–354 | LFO 2 mode (0 trig, 1 hold, 2 one, 3 half) |
-| 355–360 | LFO 2 sync (0 off, 1 4/1 … 11 1/32) |
+| 355–360 | LFO 2 sync (0 off, 1 4/1, 2 2/1, 3 1/1, 4 1/2, 5 1/2T, 6 1/4, 7 1/4T, 8 1/8, 9 1/8T, 10 1/16, 11 1/32, 12 3/4, 13 3/8, 14 5/16, 15 3/16) |
 | 361–366 | LFO 2 retrigger (0 off, 1–6 D1 … HH) |
-| 367–372 | LFO 2 offset |
-| 373–378 | Insert type (0 off, 1 phaser, 2 flanger, 3 chorus, 4 tremolo, 5 autopan, 6 shifter, 7 ring) |
+| 367–372 | LFO 2 phase |
+| 373–378 | Insert type (0 off, 6 shifter, 7 ring; 1–5, dropped in 1.0, play as off) |
 | 379–384 | Insert amount |
-| 385–390 | Insert knob 3 (rate, shift or pitch) |
-| 391–396 | Insert knob 4 (feedback, depth, shape or AM) |
+| 385–390 | Insert knob 3 (shift or pitch) |
+| 391–396 | Insert knob 4 (feedback or AM) |
+| 397–402 | Filter X: the character filters' ENV AMT, LADDER's BASS COMP (1.0) |
+| 403–408 | Delay send (1.0) |
+| 409 | Delay route (0 DLY > FX 100%, 64 PARALLEL, 127 FX > DLY 100%) (1.0) |
+| 410 | Rev > FX (1.0) |
 
 The LXR's own parameters keep their CC and NRPN numbers.
 
@@ -1769,7 +2055,7 @@ What changed in the port:
 
 What Elixir adds:
 
-- **Sound:** Control All (OCT+ held, a knob: every track); LFO modes (hold, one-shot, half); a second LFO and an insert effect (phaser, flanger, chorus, tremolo, autopan, frequency shifter, ring) on every track; seven more filter types; FX and reverb sends per voice; four reverbs (Clouds' plate among them); nine waveshapers; bits; tilt EQ; random per hit; choke groups; cross modulation; a gate per voice; phaser and flanger; a tape delay with sync, glitches and pitch-shifted repeats, its echoes into the reverb; dirt on the FX bus and the master; a sound browser and a kit library.
+- **Sound:** Control All (OCT+ held, a knob: every track); LFO modes (hold, one-shot, half); a second LFO and an insert effect (frequency shifter, ring) on every track; seven more filter types; FX and reverb sends per voice; four reverbs (Clouds' plate among them); nine waveshapers; bits; tilt EQ; random per hit; choke groups; cross modulation; a gate per voice; phaser and flanger; a tape delay with sync, glitches and pitch-shifted repeats, its echoes into the reverb; dirt on the FX bus and the master; a sound browser and a kit library.
 - **Models (experimental):** Rings' resonators and fifteen of Plaits' engines on the drum voices, two at a time. Not in the LXR-02.
 - **MICRO:** ten microsound types (clicks, click trains, crunch, bits, noise bursts, snaps, resonant grains, dust, pops, chirps, after GLITCH) on every track.
 - **Performance:** PERF with fill, repeat, freeze, throws, feedback push, tape stop, filter sweeps, a DJ filter, four macros, the voices' volumes on two pages, PERFORM 2, DENSITY (thinning or building the whole pattern) and three global LFOs (morph, the DJ filter, the effects, density, transpose, the delay, macros, down to 256 bars a cycle); KEYS, to play a voice from the keyboard.
@@ -1785,18 +2071,67 @@ What Elixir adds:
 |---|---|
 | A change to the pattern disappeared after switching patterns | The pattern page's Edits is on DROP (the LXR's way): unsaved changes go on a switch. Set it to KEEP (the default), or save with SAVE → PATTERN first. RELOAD also undoes a pattern's changes. |
 | No sound from a voice | Is it muted (dark key)? Its volume (mixer)? FX send at 127 with the FX bus on a quiet setting? A choke group cutting it? Cross mod DUCK? |
-| FREEZE does nothing | The FX bus must be set to DELAY, and something must be sent to it (FX send or THROW FX). |
+| FREEZE does nothing | FREEZE holds the delay (from 1.0 the delay is separate from the FX bus): its Mode must not be OFF, its Level above 0, and something must reach it (a delay send, or THROW). |
 | Tempo shows MIDI and nothing plays | Tempo is turned to MIDI: Elixir waits for MIDI clock. Turn the tempo up. |
 | A generator's track keeps changing | That's the generator. Freeze it, COMMIT what you like, or set it to OFF. |
 | AUTOSAVE: PROJECT TOO BIG | The session doesn't fit a project slot. Clear unused patterns or tracks. |
+| Crackles, dropouts or a red **CPU OVERLOAD** with Rings or Plaits models on the drums | Too many heavy models at once: see [below](#crackles-and-cpu-overload-heavy-drum-models). |
 | Clicks or LATE on the CPU meter | If PEAK is well below 100%, something else held the processor; please report what you were doing. If PEAK nears 100%, the engine is out of time: turn off the reverb (sends to 0), use a simpler FX type, or fewer cross-mods, and please report the CPU numbers. |
 | A burst of noise a few seconds after stopping | Fixed in 0.5.1 (the autosave chopped the reverb tail). If you still hear it, turn AUTOSAVE off and please report it. |
 | An install stopped half way | Plug the FM-1 in and press Install again: it finishes the write ([section 1](#if-something-goes-wrong)). |
 | The FM-1 doesn't start Elixir | After two failed starts the boot guard puts it in UBOOT. Recovery from there needs the FM-1-transporter ([section 1](#if-something-goes-wrong)). Please report it. |
 
+### Crackles and CPU OVERLOAD: heavy drum models
+
+The FM-1 has two processor cores. The second one plays the three drum tracks, D1–D3, and the first does everything
+else. The LXR-02's own voices barely use it, but the engines ported from Mutable Instruments' Rings and Plaits are a
+lot of work for a small chip. That's why Elixir lets **at most two of D1–D3 play a Rings or Plaits model** at a time.
+
+Two is a limit, not a promise. The models differ a lot in cost, and Elixir's own lighter engines (RAIN, ENSEMBLE,
+CLOUD) can play on the third drum track on top of the two, using the same core. Put two of the heaviest models
+together, add RAIN or ENSEMBLE on the third drum, and the second core can run out of time. You hear crackles, dropouts
+or static, and the screen's title flashes **CPU OVERLOAD** in red, naming the models it's struggling with.
+
+**How heavy each model is,** heaviest first. These are rough figures for one model on one drum track, measured on an
+FM-1 (RAIN is an estimate), as a share of the second core:
+
+| Model | What it is | Cost (% of the second core) | | Counts as one of the two |
+|---|---|---|---|---|
+| **P SD** | Plaits' analog snare | 24 (about 12 with Aux at 0 or 127) | ████████████ | yes |
+| **P ADDTV** | Plaits' additive | 23 (about 15 with Aux at 0) | ████████████ | yes |
+| **MODAL** | Rings' bells and plates | 20 | ██████████ | yes |
+| **P BD** | Plaits' analog kick | 20 (about 10 with Aux at 0 or 127) | ██████████ | yes |
+| **P VA** | Plaits' analog oscillators | 19 | ██████████ | yes |
+| **P HH** | Plaits' analog hi-hat | 17 (about 9 with Aux at 0 or 127) | █████████ | yes |
+| **P WSHAPE** | Plaits' wavefolder | 16 | ████████ | yes |
+| **P SWARM** | Plaits' swarm | 15 | ████████ | yes |
+| **P CHORD** | Plaits' chords | 14 | ███████ | yes |
+| **STRING** | Rings' string | 13 | ███████ | yes |
+| **P FM** | Plaits' FM | 13 | ███████ | yes |
+| **ENSEMBLE** | eight stacked sines | 13 | ███████ | no |
+| **RAIN** | grains on tuned bells | 10 (an estimate; less when sparse) | █████ | no |
+| **FM** | Rings' FM resonator | 10 | █████ | yes |
+| **P STRING** | Plaits' string | 9 | █████ | yes |
+| **P SPEECH** | Plaits' speech | 7 | ████ | yes |
+| **CLOUD** | granular | 5 | ███ | no |
+| **NOISE, MICRO, LXR** |  | 0–1 | █ | no |
+
+**A rule of thumb:** add up the numbers for the models on D1–D3. Up to about **45** is comfortable. Past about
+**50**, expect trouble, sooner when the delay, the reverb and the RING filter are busy too.
+
+For example, MODAL (20) + P SD (24) + RAIN (10) adds up to 54: too much. Any one of these brings it back:
+
+- **Set P SD's Aux to 0 or 127.** Only one of its two snares is then computed (54 → 42). The same goes for P BD and P HH.
+- **Swap the heaviest model for a lighter one** that does a similar job: Rings' STRING or FM in place of MODAL, or CLOUD in place of RAIN.
+- **Move the third voice back to LXR**, or to NOISE or a MICRO type, which cost next to nothing.
+
+To see where you stand, open CONFIG → LOAD while the pattern plays: the **D1-D3** line is the second core's work. If
+it stays under about 70% with peaks under 90%, you're fine (see [the LOAD page](#the-load-page)). The
+emulator in the browser doesn't model CPU time, so it never overloads: check heavy combinations on the FM-1.
+
 ---
 
-## 20. Licence and credits
+## 20. License and credits
 
 Elixir is free software under the **GNU General Public License, version 3** (GPL-3.0-only). See `LICENSE` and `NOTICE.md`.
 
@@ -1805,10 +2140,10 @@ It is built from:
 - **The LXR-02 firmware**, © 2012–2026 Erica Synths, GPL-3.0, itself built on Julian Schmidt's original Sonic Potions LXR: the sound engine, parameters, kit format, sequencer, MIDI and front-panel functions.
 - **Felucca**, © 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments, GPL-3.0: the FM-1 hardware layer, boot, screen, graphics, USB, storage, updater, browser emulator and the reverb.
 - **Grids**, © 2011–2012 Emilie Gillet, GPL-3.0-or-later (used under GPL-3.0): the drum map and its reading.
-- **Rings** and **stmlib**, © 2012–2015 Emilie Gillet, MIT licence: the drum voices' Rings models (a fixed-point port).
-- **Plaits**, © 2016–2023 Emilie Gillet, MIT licence: the drum voices' P models (a fixed-point port).
-- **Clouds**, © 2014 Emilie Gillet, MIT licence: the reverb's PLATE (a fixed-point port).
-- **Marbles**, © 2015 Emilie Gillet, MIT licence: the melody generator follows the design of its X section (no code copied).
+- **Rings** and **stmlib**, © 2012–2015 Emilie Gillet, MIT license: the drum voices' Rings models (a fixed-point port).
+- **Plaits**, © 2016–2023 Emilie Gillet, MIT license: the drum voices' P models (a fixed-point port).
+- **Clouds**, © 2014 Emilie Gillet, MIT license: the reverb's PLATE (a fixed-point port).
+- **Marbles**, © 2015 Emilie Gillet, MIT license: the melody generator follows the design of its X section (no code copied).
 - **GLITCH** (ttreu, github.com/ttreu/fm1-glitch), GPL-3.0: the MICRO types follow the design of its microsound sources (written for Elixir in fixed point).
 - **X0X** (Charles Vestal), **Melodee** (keremimo) and **Jangada** (zednaked), GPL-3.0: starting the FM-1's second core and guarding against units that misread (through Felucca's hardware layer).
 - **Inter Tight** (the screen's font) and **DotGothic16** (the emulator page), SIL Open Font License 1.1.

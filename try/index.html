@@ -13,12 +13,30 @@
 <style>
 /* DotGothic16 (SIL OFL 1.1, fonts/OFL.txt), cut to printable ASCII, for the knob labels */
 @font-face { font-family: "DotGothic16"; src: url("fonts/DotGothic16-subset.woff") format("woff"); font-display: swap; }
-:root { --bg: #8e8e93; --fg: #111; --dim: #2c2c2e; --rule: #5a5a5e;
+:root { --bg: #ece8e0; --fg: #1d1b18; --dim: #5f594f; --rule: #cfc8bb; --card: #f8f6f1; --accent: #a85f00;
         --body: #1d1d1f; --tray: #141415; --part: #2a2a2d; --edge: #3a3a3e; --label: #d6d6d8;
         --lit: #fff4d6; --green: #5fe08a; color-scheme: light; }
 html, body { background: var(--bg); }
-body { margin: 0; color: var(--fg); font: 13px/1.6 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; }
-main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 32px; }
+body { margin: 0; color: var(--fg); font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; }
+main { max-width: 1040px; margin: 0 auto; padding: 20px 16px 32px; }
+.lead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 24px; flex-wrap: wrap;
+        margin: 0 0 14px; }
+.lead h1 { font-size: 22px; font-weight: 650; margin: 0; letter-spacing: -.01em; }
+.lead p { margin: 0; color: var(--dim); }
+.help { display: grid; grid-template-columns: 1fr 1.25fr 1fr; gap: 14px; margin: 20px 0 0; }
+@media (max-width: 860px) { .help { grid-template-columns: 1fr; } }
+.help section, .lib { background: var(--card); border: 1px solid var(--rule); border-radius: 10px; padding: 16px 18px; }
+.help h2 { font-size: 15px; font-weight: 650; margin: 0 0 8px; }
+.help ol { margin: 0; padding-left: 20px; }
+.help li { margin-bottom: 4px; }
+.help p { margin: 8px 0 0; color: var(--dim); }
+.help table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.help td { padding: 4px 0; border-top: 1px solid var(--rule); vertical-align: top; }
+.help tr:first-child td { border-top: 0; }
+.help td:first-child { white-space: nowrap; padding-right: 12px; }
+.help .midi { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--rule); font-size: 14px; }
+.help .midi label { display: block; margin: 2px 0; }
+.help a, .lead a { color: var(--accent); }
 @media (orientation: portrait) and (max-width: 700px) { main { padding: 8px 8px 24px; } }
 a { color: inherit; }
 .device { position: relative; width: 100%; aspect-ratio: 1000 / 624; user-select: none; -webkit-user-select: none;
@@ -65,17 +83,17 @@ a { color: inherit; }
 .start button { font: inherit; font-size: 18px; padding: 12px 28px; background: #fff; color: #000; border: 0; cursor: pointer; }
 .start button:disabled { opacity: .4; cursor: progress; }
 .start p { margin: 0; max-width: 32em; text-align: center; color: #fff; }
-.keys, footer { margin: 16px 0 0; color: var(--dim); text-align: center; }
+footer { margin: 16px 0 0; color: var(--dim); text-align: center; }
 .keys span { white-space: nowrap; margin: 0 8px; }
 .keys select { font: inherit; font-size: 12px; }
-.lib { max-width: 640px; margin-left: auto; margin-right: auto; }
-.lib summary { cursor: pointer; }
+.lib { margin: 14px 0 0; color: var(--dim); font-size: 14px; }
+.lib summary { cursor: pointer; color: var(--fg); }
 .lib p { margin: 8px 0; }
 .lib label { white-space: nowrap; margin: 0 6px; }
 .lib input[type=file] { font-size: 12px; max-width: 220px; }
 .lib button { font: inherit; font-size: 12px; }
 #libstatus { color: var(--fg); min-height: 1.4em; }
-kbd { font: 600 11px ui-monospace, Menlo, monospace; border: 1px solid var(--rule); padding: 0 4px; color: var(--fg); }
+kbd { font: 600 12px ui-monospace, Menlo, monospace; border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; color: var(--fg); background: #fff; }
 footer { margin-top: 12px; font-size: 12px; }
 footer nav a { margin: 0 6px; }
 footer small { font-size: 11px; opacity: .8; }
@@ -124,13 +142,48 @@ header.site .px-d { fill: #a8640f; }
 })();
 </script>
 <main>
+<div class="lead"><h1>Try Elixir in your browser</h1>
+  <p>The real firmware, running on this page: what you hear is what the FM-1 plays.</p></div>
 <div class="device" id="device">
   <svg id="panel" viewBox="0 0 1000 624" aria-hidden="true"></svg>
   <canvas id="screen" width="240" height="240" role="img" aria-label="The screen"></canvas>
   <div class="start" id="start"><button id="go" type="button">Switch on</button><p id="status" hidden></p></div>
 </div>
 
-<details class="keys lib"><summary><b>Library</b>: try LXR-02 kits, backup and restore</summary>
+<div class="help">
+  <section><h2>Your first beat</h2>
+    <ol>
+      <li>Press <b>Switch on</b>.</li>
+      <li>Black key <b>1</b> picks the kick. Click white keys <b>1, 5, 9, 13</b>.</li>
+      <li>Black key <b>4</b> is the snare: white keys <b>5</b> and <b>13</b>.</li>
+      <li>Press <b>PLAY</b>. Turn <b>PRESETS</b> to hear other kits; <b>OCT+</b> loads one.</li>
+    </ol>
+    <p>Then try <a href="../manual/#2-quick-start-a-beat-in-two-minutes">the quick start</a> or the
+      <a href="../cheatsheet.pdf">cheat sheet</a>.</p></section>
+  <section><h2>Your computer keyboard</h2>
+    <table>
+      <tr><td><kbd>Z</kbd>–<kbd>/</kbd> <kbd>Q</kbd>–<kbd>O</kbd></td><td>The FM-1's keys, laid out like a piano</td></tr>
+      <tr><td><kbd>S</kbd> <kbd>D</kbd> <kbd>F</kbd> <kbd>H</kbd> <kbd>J</kbd> <kbd>L</kbd> <kbd>;</kbd></td><td>Black keys 1–7: the tracks D1 to OH</td></tr>
+      <tr><td><kbd>1</kbd>–<kbd>0</kbd> <kbd>-</kbd> <kbd>=</kbd></td><td>FX, SCL, ENV, LFO, EDIT, GLO, HOME, SAVE, ARP, SEQ, PLAY, REC</td></tr>
+      <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>OCT− (SHIFT) and OCT+ (COPY / OK)</td></tr>
+      <tr><td><kbd>↑</kbd> <kbd>↓</kbd> / <kbd>←</kbd> <kbd>→</kbd></td><td>SELECT / ALGORITHM</td></tr>
+      <tr><td>Drag a knob</td><td>Up and down to turn it</td></tr>
+      <tr><td><kbd>Shift</kbd>-click</td><td>Holds a button down</td></tr>
+    </table></section>
+  <section><h2>The panel</h2>
+    <p style="margin:0">White keys are the steps 1–16. Black keys pick the track (D1 to OH) and the bar (1–4).
+      <b>OCT−</b> is SHIFT: hold it to see what it does. <b>OCT+</b> is COPY and OK.</p>
+    <div class="midi" id="midiknobs" hidden><label><input type="checkbox" id="knobson"> MIDI CC 20–27 turn the panel's knobs</label>
+  <select id="knobmode" aria-label="How the controller sends CC 20–26" hidden>
+    <option value="abs">absolute</option>
+    <option value="bin">relative 64±n</option>
+    <option value="twos">relative 2's complement</option>
+    <option value="sign">relative sign bit</option>
+  </select>
+  <label title="Off by default: the emulator's clock, notes and CC feedback would reach every MIDI port, a real FM-1 too (directly or through a hub such as the mioXL)"><input type="checkbox" id="midiouton"> Send MIDI out (to every port but an FM-1's own)</label></div></section>
+</div>
+
+<details class="lib"><summary><b>Library</b>: try LXR-02 kits, backup and restore</summary>
   <p>Try kits here before putting them on your FM-1. The emulator holds what the FM-1 does: the LXR-02's <b>85 factory
     kits</b> built in, <b>64 kit slots</b> (the project's: patterns load them by number) and the <b>kit library</b> of
     128 more (kept apart from the projects; Hrtl's DLC and UNTZ kit packs are put in its slots 97–128 the first time
@@ -157,27 +210,11 @@ header.site .px-d { fill: #a8640f; }
       <option value="3">Project 4</option></select> <input id="librestore" type="file" accept=".ktbk,.ktp"></label></p>
   <p id="libstatus"></p>
 </details>
-<p class="keys"><b>Elixir</b>: white keys = steps 1-16, black keys = tracks D1-OH and bars 1-4. OCT- = SHIFT (hold it to see what it does), OCT+ = COPY / OK.</p>
-<p class="keys">
-  <span><kbd>Z</kbd>–<kbd>'</kbd> <kbd>Q</kbd>–<kbd>O</kbd> keys</span>
-  <span><kbd>1</kbd>–<kbd>=</kbd> FX … REC</span>
-  <span><kbd>[</kbd> <kbd>]</kbd> OCT</span>
-  <span><kbd>↑</kbd> <kbd>↓</kbd> SELECT</span>
-  <span><kbd>←</kbd> <kbd>→</kbd> ALGORITHM</span>
-  <span><kbd>Shift</kbd>-click holds a button</span>
-  <span id="midiknobs" hidden><label><input type="checkbox" id="knobson"> MIDI CC 20–27 turn the panel's knobs</label>
-  <select id="knobmode" aria-label="How the controller sends CC 20–26" hidden>
-    <option value="abs">absolute</option>
-    <option value="bin">relative 64±n</option>
-    <option value="twos">relative 2's complement</option>
-    <option value="sign">relative sign bit</option>
-  </select></span>
-</p>
 
 <footer>
-  <small class="version">v0.25.2</small><br>
-  Elixir: the Erica Synths LXR-02 firmware (GPL-3.0) ported to the FM-1 on Felucca's hardware layer (Leo Kuroshita, Hügelton Instruments) · <a href="https://www.gnu.org/licenses/gpl-3.0.html">GPL-3.0</a> · emulator page after Felucca's and charlesvestal's <a href="https://github.com/charlesvestal/fm1-x0x">X0X</a> · DotGothic16 font, <a href="fonts/OFL.txt">SIL OFL 1.1</a><br>
-  <small>An unofficial port, not affiliated with or endorsed by Erica Synths, M-VAVE or Hügelton Instruments. "LXR-02" and "Erica Synths" are trademarks of Erica Synths; M-VAVE and FM-1 of their owners.</small>
+  <small class="version">v1.0</small><br>
+  Elixir: the Erica Synths LXR-02 firmware (GPL-3.0) ported to the FM-1 on Felucca's hardware layer (Leo Kuroshita) · <a href="https://www.gnu.org/licenses/gpl-3.0.html">GPL-3.0</a> · emulator page after Felucca's and charlesvestal's <a href="https://github.com/charlesvestal/fm1-x0x">X0X</a> · DotGothic16 font, <a href="fonts/OFL.txt">SIL OFL 1.1</a><br>
+  <small>An unofficial port, not affiliated with or endorsed by Erica Synths or M-VAVE. "LXR-02" and "Erica Synths" are trademarks of Erica Synths; M-VAVE and FM-1 of their owners.</small>
 </footer>
 </main>
 
@@ -488,7 +525,7 @@ function drawScreen(fb) {
   ctx.drawImage(dbl, 0, 0, canvas.width, canvas.height);
 }
 // the power-on sweep (hal/fm1_led_anim.h): a level per LED, lit frames /64 (| 128: the glow under them), drawn as the
-// LED's share of lit between its dark (or glowing) colour and the lit one, mixed in linear light
+// LED's share of lit between its dark (or glowing) color and the lit one, mixed in linear light
 const lin = (h) => [1, 3, 5].map((i) => (parseInt(h.slice(i, i + 2), 16) / 255) ** 2.2);
 const ANIM = { btn: [lin("#3a3934"), lin("#3a3934"), lin("#fff4d6")], slit: [lin("#3a3a3c"), lin("#77777b"), lin("#ececee")] };
 function animFill(kind, q) {
@@ -565,12 +602,22 @@ knobSelect.addEventListener("change", () => {
 });
 document.getElementById("midiknobs").hidden = !navigator.requestMIDIAccess;
 let midiOutputs = null;
+// 1.0: MIDI out is off until asked for. On, every output gets it but a port named like an FM-1 (a unit behind a hub has the
+// hub's port names: then only this switch keeps the emulator from playing it, clock and CC feedback, and echoing it back)
+const MIDI_OUT_ON = "elixir-emu-midiout", FM1_PORT = /elixir|kettle|fm-1|felucca/i, outBox = document.getElementById("midiouton");
+let midiOutOn = false;
+try { midiOutOn = localStorage.getItem(MIDI_OUT_ON) === "1"; } catch {}
+outBox.checked = midiOutOn;
+outBox.addEventListener("change", () => {
+  midiOutOn = outBox.checked;
+  try { localStorage.setItem(MIDI_OUT_ON, midiOutOn ? "1" : "0"); } catch {}
+});
 function midiOut(pkts) {                                          // the firmware's USB-MIDI packets -> Web MIDI outputs
-  if (!midiOutputs) return;
+  if (!midiOutputs || !midiOutOn) return;
   for (const p of pkts) {
     const st = (p >>> 8) & 255, cin = p & 15, n = st >= 0xF0 ? 1 : (cin === 0xC || cin === 0xD) ? 2 : 3;
     const msg = [st, (p >>> 16) & 127, (p >>> 24) & 127].slice(0, n);
-    for (const o of midiOutputs.values()) { try { o.send(msg); } catch {} }
+    for (const o of midiOutputs.values()) { if (!FM1_PORT.test(o.name || "")) try { o.send(msg); } catch {} }
   }
 }
 async function midiOn() {
@@ -579,6 +626,7 @@ async function midiOn() {
     const access = await navigator.requestMIDIAccess();
     const bind = () => {
       for (const input of access.inputs.values()) {
+        if (FM1_PORT.test(input.name || "")) { input.onmidimessage = null; continue; }   // (a real FM-1's own: not played from)
         input.onmidimessage = (e) => {
           const d = e.data;
           if (d[0] >= 0xF8) { send({ type: "midi", data: [d[0], 0, 0] }); return; }   // clock, start, stop

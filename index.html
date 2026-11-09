@@ -1,41 +1,97 @@
 <!doctype html>
 <!-- SPDX-License-Identifier: GPL-3.0-only
-     Elixir's front page (0.14). web/make_site.py fills in the header (NAV), the pixel art (POTION, WORD), the
-     version (VERSION) and the source link (REPO), and copies site.css and shots/ beside it. -->
+     Elixir's front page (0.14; rewritten for 1.0). web/make_site.py fills in the header (NAV), the pixel art (POTION,
+     WORD), the version (VERSION) and the source link (REPO), and copies site.css and shots/ beside it. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Elixir - drum machine firmware for M-VAVE FM-1</title>
-<meta name="description" content="Elixir: free drum machine firmware for the M-VAVE FM-1. The Erica Synths LXR-02's sound engine and sequencer, ported and extended.">
+<title>Elixir - drum synth and sequencer for the M-VAVE FM-1</title>
+<meta name="description" content="Elixir: free, open-source drum synth and sequencer firmware for the M-VAVE FM-1. It started as a port of the Erica Synths LXR-02 and kept going: 29 sound engines, deep effects, generative sequencing, performance controls, MIDI and 8-channel USB audio.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="site.css">
 <style>
-  .hero { display: grid; grid-template-columns: 1fr 300px; gap: 48px; align-items: center; padding: 64px 0 56px; }
+  .hero { display: grid; grid-template-columns: 1fr 384px; gap: 48px; align-items: center; padding: 56px 0 48px; }
   .hero .word { width: 100%; max-width: 420px; margin: 0 0 6px; }
   .hero .word svg { width: 100%; height: auto; }
   .hero .kicker { font-size: 15px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase;
                   color: var(--dim); margin: 0 0 22px; }
-  .hero .lede { font-size: 22px; line-height: 1.45; margin: 0 0 14px; max-width: 34em; }
+  .hero .lede { font-size: 23px; line-height: 1.4; margin: 0 0 14px; max-width: 30em; font-weight: 500; }
   .hero .lede + p { color: var(--dim); max-width: 36em; }
-  .hero .art svg { width: 100%; max-width: 300px; height: auto; margin: 0 auto; }
+  /* the screens up front: the firmware's own pages, one after another, the potion by the screen's corner */
+  .show { margin: 0; position: relative; }
+  .show .frame { position: relative; aspect-ratio: 1; border-radius: 10px; background: #000; border: 12px solid #0b0b0a;
+                 box-shadow: 0 1px 0 var(--line), 0 24px 48px -24px rgba(0,0,0,.6); }
+  .show .frame img { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 3px; opacity: 0;
+                     transition: opacity .35s ease; image-rendering: auto; }
+  .show .frame img.on { opacity: 1; }
+  .show .mascot { position: absolute; left: -46px; bottom: -34px; width: 92px; pointer-events: none;
+                  filter: drop-shadow(0 6px 10px rgba(0,0,0,.35)); }
+  .show .mascot svg { width: 100%; height: auto; }
+  .show figcaption { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px;
+                     padding-left: 48px; font-size: 14px; color: var(--dim); min-height: 2.8em; }
+  .show .dots { display: flex; gap: 6px; flex: none; }
+  .show .dots button { width: 8px; height: 8px; padding: 0; border: 0; border-radius: 50%; background: var(--line);
+                       cursor: pointer; }
+  .show .dots button[aria-current="true"] { background: var(--accent-fill); }
   .actions { display: flex; gap: 12px; flex-wrap: wrap; margin: 26px 0 16px; }
   .meta { font-size: 14px; color: var(--dim); }
-  .meta.tip { margin-top: 6px; }
-  .meta.tip a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
-  .pill { display: inline-block; font-size: 12px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase;
-          padding: 2px 8px; border-radius: 99px; border: 1px solid var(--accent); color: var(--accent);
-          margin-right: 8px; vertical-align: 1px; }
+  .support { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 18px; padding-top: 18px;
+             border-top: 1px dashed var(--line); }
+  .support p { margin: 0 6px 0 0; font-size: 15px; color: var(--dim); flex-basis: 100%; }
+  .btn.sm { font-size: 15px; padding: 8px 14px; display: inline-flex; align-items: center; gap: 8px; }
+  .btn.sm svg { width: 17px; height: 17px; flex: none; }
   @media (max-width: 760px) {
-    .hero { grid-template-columns: 1fr; gap: 24px; padding: 36px 0 40px; }
-    .hero .art { order: -1; }
-    .hero .art svg { max-width: 180px; margin: 0; }
-    .hero .lede { font-size: 19px; }
+    .hero { grid-template-columns: 1fr; gap: 24px; padding: 36px 0 36px; }
+    .show { order: -1; width: 100%; max-width: 340px; margin: 0 auto 12px; }
+    .show .mascot { left: -18px; bottom: -26px; width: 64px; }
+    .show figcaption { padding-left: 44px; }
+    .hero .lede { font-size: 20px; }
   }
 
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin: 0 0 8px; padding: 0; list-style: none;
+           border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
+  .stats li { padding: 16px 18px; border-left: 1px solid var(--line); }
+  .stats li:nth-child(4n+1) { border-left: 0; }
+  .stats li:nth-child(n+5) { border-top: 1px solid var(--line); }
+  .stats b { display: block; font-size: 26px; font-weight: 700; line-height: 1.1; color: var(--accent);
+             font-variant-numeric: tabular-nums; }
+  .stats span { display: block; font-size: 14px; color: var(--dim); line-height: 1.35; margin-top: 4px; }
+  @media (max-width: 640px) { .stats { grid-template-columns: repeat(2, 1fr); }
+    .stats li { border-left: 0; border-top: 1px solid var(--line); }
+    .stats li:nth-child(even) { border-left: 1px solid var(--line); }
+    .stats li:nth-child(-n+2) { border-top: 0; } }
+
   section.band { padding: 56px 0; border-top: 1px solid var(--line); }
-  .intro { max-width: 720px; margin-bottom: 36px; }
+  .intro { max-width: 720px; margin-bottom: 32px; }
   .intro p { color: var(--dim); font-size: 18px; }
+
+  .depth { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .depth .card { position: relative; }
+  .depth .when { font-size: 13px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase;
+                 color: var(--accent); margin: 0 0 6px; }
+  @media (max-width: 760px) { .depth { grid-template-columns: 1fr; } }
+
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 900px) { .grid3 { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 600px) { .grid3 { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 22px; }
+  .card p { margin: 0 0 10px; color: var(--dim); font-size: 15px; }
+  .card p:last-child { margin: 0; }
+  .fcard h3 { display: flex; align-items: center; gap: 10px; font-size: 19px; margin-bottom: 8px; }
+  .fcard h3 i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--accent-fill);
+                flex: none; }
+  .fcard .say { color: var(--fg); font-size: 15px; margin-bottom: 10px; }
+  .fcard ul { margin: 0; padding-left: 18px; color: var(--dim); font-size: 15px; }
+  .fcard li { margin-bottom: 5px; }
+  .fcard li::marker { color: var(--accent); }
+
+  .lxr { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 40px; }
+  .lxr ul { margin: 0; padding: 0; list-style: none; }
+  .lxr li { padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .lxr li b { display: block; font-weight: 600; }
+  .lxr li span { color: var(--dim); font-size: 15px; }
+  @media (max-width: 760px) { .lxr { grid-template-columns: 1fr; } }
 
   .feature { display: grid; grid-template-columns: 300px 1fr; gap: 40px; align-items: center; margin: 0 0 48px; }
   .feature:last-child { margin-bottom: 0; }
@@ -43,26 +99,13 @@
   .feature:nth-child(odd) .screen { order: 2; }
   .feature h3 { font-size: 22px; margin-bottom: 10px; }
   .feature p { color: var(--dim); max-width: 36em; }
-  .feature ul { margin: 0; padding-left: 20px; color: var(--dim); }
-  .feature li { margin-bottom: 4px; }
+  .feature .tag { font-size: 13px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase;
+                  color: var(--accent); margin: 0 0 6px; }
   @media (max-width: 760px) {
     .feature, .feature:nth-child(odd) { grid-template-columns: 1fr; gap: 16px; }
     .feature:nth-child(odd) .screen { order: 0; }
     .feature .screen img { max-width: 280px; }
   }
-
-  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 16px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 22px; }
-  .card p { margin: 0; color: var(--dim); font-size: 15px; }
-
-  .specs { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 4px 40px; padding: 0;
-           margin: 0; list-style: none; }
-  .specs li { padding: 12px 0; border-bottom: 1px solid var(--line); }
-  .specs b { display: block; font-weight: 600; }
-  .specs span { color: var(--dim); font-size: 15px; }
-  .proof { margin-top: 28px; padding: 18px 22px; border-radius: var(--radius); background: var(--well);
-           font-size: 15px; color: var(--dim); }
-  .proof strong { color: var(--fg); }
 
   .strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
   @media (max-width: 760px) { .strip { grid-template-columns: repeat(2, 1fr); } }
@@ -75,16 +118,37 @@
                       width: 26px; height: 26px; margin-right: 10px; border-radius: 50%; font-size: 14px;
                       background: var(--accent-fill); color: var(--accent-ink); vertical-align: 1px; }
   @media (max-width: 760px) { .steps { grid-template-columns: 1fr; } }
-  .note { margin-top: 20px; padding: 16px 20px; border-left: 3px solid var(--accent-fill); background: var(--well);
-          border-radius: 0 var(--radius) var(--radius) 0; font-size: 15px; }
-  .note p { margin: 0; }
 
   .updates { display: grid; gap: 16px; }
   .updates .card h3 { font-size: 18px; margin-bottom: 8px; }
   .updates .card h3 span { color: var(--dim); font-weight: 400; font-size: 15px; margin-left: 8px; }
-  .updates h4 { font-size: 14px; margin: 12px 0 4px; color: var(--dim); text-transform: uppercase; letter-spacing: .04em; }
+  .updates h4 { font-size: 14px; margin: 16px 0 4px; color: var(--dim); text-transform: uppercase; letter-spacing: .04em; }
   .updates ul { margin: 0; padding-left: 20px; color: var(--dim); font-size: 15px; }
-  .updates li { margin-bottom: 4px; }
+  .updates li { margin-bottom: 5px; }
+  .updates li b { color: var(--fg); font-weight: 600; }
+  .updates .card > p { font-size: 16px; color: var(--fg); }
+  .moves { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; }
+  .moves .n { display: inline-grid; place-items: center; width: 26px; height: 26px; margin-right: 10px; border-radius: 50%;
+              font-size: 14px; font-weight: 650; background: var(--accent-fill); color: var(--accent-ink); vertical-align: 1px; }
+  @media (max-width: 760px) { .moves { grid-template-columns: 1fr; } }
+  .map { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  @media (max-width: 760px) { .map { grid-template-columns: 1fr; } }
+  .map h3 { font-size: 13px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--accent);
+            margin: 0 0 6px; }
+  .map dl { display: grid; grid-template-columns: auto 1fr; gap: 0 14px; margin: 0; align-items: baseline; }
+  .map dt, .map dd { padding: 8px 0; border-top: 1px solid var(--line); margin: 0; }
+  .map dt:first-of-type, .map dd:first-of-type { border-top: 0; }
+  .map dd { color: var(--dim); font-size: 15px; }
+  .map dd b { color: var(--fg); font-weight: 550; }
+  .cap { display: inline-block; min-width: 54px; text-align: center; font: 650 12px/1 -apple-system, BlinkMacSystemFont,
+         "Segoe UI", sans-serif; letter-spacing: .04em; padding: 7px 8px; border-radius: 6px; background: #2a2a2d;
+         color: #ececee; box-shadow: inset 0 -2px 0 rgba(0,0,0,.45); white-space: nowrap; }
+  .card .cap { font-size: 11px; min-width: 0; padding: 4px 6px; vertical-align: 1px; }
+  .map .tip { margin-top: 12px; font-size: 14px; color: var(--dim); }
+  details.older { margin-top: 16px; }
+  details.older > summary { cursor: pointer; padding: 14px 22px; border: 1px solid var(--line); border-radius: var(--radius);
+                            background: var(--well); font-weight: 600; }
+  details.older[open] > summary { margin-bottom: 16px; }
 </style>
 </head>
 <body>
@@ -94,153 +158,347 @@
   <section class="hero">
     <div>
       <h1 class="word" aria-label="Elixir"><svg class="pixel" viewBox="0 0 37 8" role="img" aria-label="Elixir"><path transform="translate(0.6 0.6)" class="px-ws" d="M0 0h5v1h-5zM7 0h1v1h-1zM14 0h3v1h-3zM19 0h1v1h-1zM23 0h1v1h-1zM26 0h3v1h-3zM31 0h4v1h-4zM0 1h1v1h-1zM7 1h1v1h-1zM15 1h1v1h-1zM19 1h1v1h-1zM23 1h1v1h-1zM27 1h1v1h-1zM31 1h1v1h-1zM35 1h1v1h-1zM0 2h1v1h-1zM7 2h1v1h-1zM15 2h1v1h-1zM20 2h1v1h-1zM22 2h1v1h-1zM27 2h1v1h-1zM31 2h1v1h-1zM35 2h1v1h-1zM0 3h4v1h-4zM7 3h1v1h-1zM15 3h1v1h-1zM21 3h1v1h-1zM27 3h1v1h-1zM31 3h4v1h-4zM0 4h1v1h-1zM7 4h1v1h-1zM15 4h1v1h-1zM20 4h1v1h-1zM22 4h1v1h-1zM27 4h1v1h-1zM31 4h1v1h-1zM33 4h1v1h-1zM0 5h1v1h-1zM7 5h1v1h-1zM15 5h1v1h-1zM19 5h1v1h-1zM23 5h1v1h-1zM27 5h1v1h-1zM31 5h1v1h-1zM34 5h1v1h-1zM0 6h5v1h-5zM7 6h5v1h-5zM14 6h3v1h-3zM19 6h1v1h-1zM23 6h1v1h-1zM26 6h3v1h-3zM31 6h1v1h-1zM35 6h1v1h-1z"/><path class="px-w" d="M0 0h5v1h-5zM7 0h1v1h-1zM14 0h3v1h-3zM19 0h1v1h-1zM23 0h1v1h-1zM26 0h3v1h-3zM31 0h4v1h-4zM0 1h1v1h-1zM7 1h1v1h-1zM15 1h1v1h-1zM19 1h1v1h-1zM23 1h1v1h-1zM27 1h1v1h-1zM31 1h1v1h-1zM35 1h1v1h-1zM0 2h1v1h-1zM7 2h1v1h-1zM15 2h1v1h-1zM20 2h1v1h-1zM22 2h1v1h-1zM27 2h1v1h-1zM31 2h1v1h-1zM35 2h1v1h-1zM0 3h4v1h-4zM7 3h1v1h-1zM15 3h1v1h-1zM21 3h1v1h-1zM27 3h1v1h-1zM31 3h4v1h-4zM0 4h1v1h-1zM7 4h1v1h-1zM15 4h1v1h-1zM20 4h1v1h-1zM22 4h1v1h-1zM27 4h1v1h-1zM31 4h1v1h-1zM33 4h1v1h-1zM0 5h1v1h-1zM7 5h1v1h-1zM15 5h1v1h-1zM19 5h1v1h-1zM23 5h1v1h-1zM27 5h1v1h-1zM31 5h1v1h-1zM34 5h1v1h-1zM0 6h5v1h-5zM7 6h5v1h-5zM14 6h3v1h-3zM19 6h1v1h-1zM23 6h1v1h-1zM26 6h3v1h-3zM31 6h1v1h-1zM35 6h1v1h-1z"/></svg></h1>
-      <p class="kicker">Drum machine firmware for the M-VAVE FM-1</p>
-
-      <p>Elixir is free, open-source alternative firmware that ports the Erica Synths LXR-02's six-voice engine, FX bus and
-        sequencer to the FM-1, then adds sends and reverb, a sound browser, sequencing generators and a
-        performance mode made for playing live.</p>
+      <p class="kicker">Drum synth and sequencer for the M-VAVE FM-1</p>
+      <p class="lede">Free firmware that turns the FM-1 into a deep drum synth: simple enough to make a beat in two
+        minutes, with room to explore for months.</p>
+      <p>Elixir started as a port of the Erica Synths LXR-02 drum machine, and that's all still here. Then it kept
+        going: 29 sound engines, a full effects chain, sequencing tools that can write and evolve parts for you,
+        live performance controls, MIDI control of over 400 parameters and 8-channel USB audio. It brings together my favorite parts of my favorite drum
+        machines, all on a $60 synth that fits in your pocket.</p>
       <div class="actions">
         <a class="btn" href="try/">Try it in your browser</a>
         <a class="btn alt" href="install/">Install on your FM-1</a>
         <a class="btn alt" href="manual/">Read the manual</a>
-        <a class="btn alt" href="cheatsheet.pdf">Cheat sheet (PDF)</a>
       </div>
-      <p class="meta"><span class="pill">Test release</span>Version v0.25.2 · GPL-3.0 · unofficial, not
-        affiliated with Erica Synths or M-VAVE</p>
-      <p class="meta tip">Like my firmware? Help support its development by
-        <a href="https://ko-fi.com/ghosttropic" rel="noopener">tipping me on Ko-fi</a>!</p>
-      <p class="meta tip">Ideas or bugs? <a href="mailto:danmajka@gmail.com">Cast me a message</a>!</p>
+      <p class="meta">Version 1.0, released November 9, 2026 · <a href="#updates">what's new</a></p>
+      <div class="support">
+        <p>Elixir is free, made by one person in their spare time. If it makes your FM-1 more fun:</p>
+        <a class="btn sm kofi" href="https://ko-fi.com/ghosttropic" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13v5a6 6 0 0 1-6 6H10a6 6 0 0 1-6-6z"/><path d="M17 9h1.5a2.5 2.5 0 0 1 0 5H17"/><path d="M8 3v2M12 3v2"/></svg>Tip me on Ko-fi</a>
+        <a class="btn sm alt" href="mailto:danmajka@gmail.com?subject=Elixir"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>Send ideas or bugs</a>
+      </div>
     </div>
-    <div class="art" aria-hidden="true"><svg class="pixel" viewBox="0 0 22 18" aria-hidden="true"><path class="px-s" d="M5 0h1v1h-1zM19 1h1v1h-1zM18 2h3v1h-3zM19 3h1v1h-1zM1 5h1v1h-1zM0 6h3v1h-3zM1 7h1v1h-1zM21 11h1v1h-1z"/><path class="px-c" d="M9 0h4v1h-4zM9 1h4v1h-4z"/><path class="px-o" d="M8 2h6v1h-6zM9 3h1v1h-1zM12 3h1v1h-1zM9 4h1v1h-1zM12 4h1v1h-1zM9 5h1v1h-1zM12 5h1v1h-1zM8 6h1v1h-1zM13 6h1v1h-1zM7 7h1v1h-1zM14 7h1v1h-1zM6 8h1v1h-1zM15 8h1v1h-1zM5 9h1v1h-1zM16 9h1v1h-1zM4 10h1v1h-1zM17 10h1v1h-1zM4 11h1v1h-1zM17 11h1v1h-1zM4 12h1v1h-1zM17 12h1v1h-1zM4 13h1v1h-1zM17 13h1v1h-1zM4 14h1v1h-1zM17 14h1v1h-1zM5 15h1v1h-1zM16 15h1v1h-1zM6 16h1v1h-1zM15 16h1v1h-1zM7 17h8v1h-8z"/><path class="px-h" d="M10 3h1v1h-1zM10 4h1v1h-1zM7 10h1v1h-1zM6 11h1v1h-1zM6 12h1v1h-1zM6 13h1v1h-1z"/><path class="px-g" d="M11 3h1v1h-1zM11 4h1v1h-1zM10 5h2v1h-2zM9 6h4v1h-4zM8 7h6v1h-6zM7 8h8v1h-8z"/><path class="px-L" d="M6 9h10v1h-10zM14 11h1v1h-1zM11 13h1v1h-1zM15 14h1v1h-1z"/><path class="px-l" d="M5 10h2v1h-2zM8 10h9v1h-9zM5 11h1v1h-1zM7 11h7v1h-7zM15 11h2v1h-2zM5 12h1v1h-1zM7 12h10v1h-10zM5 13h1v1h-1zM7 13h4v1h-4zM12 13h5v1h-5zM5 14h10v1h-10zM16 14h1v1h-1zM6 15h1v1h-1z"/><path class="px-d" d="M7 15h9v1h-9zM7 16h8v1h-8z"/></svg></div>
+    <figure class="show" aria-roledescription="slideshow" aria-label="Elixir's screens on the FM-1">
+      <div class="frame">
+        <img class="on" src="shots/pattern.png" width="240" height="240" alt="The step grid: seven tracks playing" data-cap="The step grid, playing">
+        <img src="shots/spells.png" width="240" height="240" alt="SPELLS: the wizard casting, a twelve-sided die" data-cap="SPELLS: a roll of the die rewrites the sound">
+        <img src="shots/wander.png" width="240" height="240" alt="WANDER: the wizard walking up a mountain road" data-cap="WANDER: the beat sets out on a journey">
+        <img src="shots/rain.png" width="240" height="240" alt="The MODEL page: RAIN" data-cap="RAIN: grains falling on tuned bells">
+        <img src="shots/delay.png" width="240" height="240" alt="The DELAY page: ping-pong echoes" data-cap="The ping-pong delay, its echoes drawn">
+        <img src="shots/ring.png" width="240" height="240" alt="The DJ FILTER page on RING" data-cap="RING: the whole beat rings in a chord">
+        <img src="shots/perform.png" width="240" height="240" alt="PERFORM 2: the performance keys" data-cap="PERFORM: the keys become effects">
+        <img src="shots/ensemble.png" width="240" height="240" alt="The MODEL page: ENSEMBLE" data-cap="ENSEMBLE: eight stacked sines">
+        <div class="mascot" aria-hidden="true"><svg class="pixel" viewBox="0 0 22 18" aria-hidden="true"><path class="px-s" d="M5 0h1v1h-1zM19 1h1v1h-1zM18 2h3v1h-3zM19 3h1v1h-1zM1 5h1v1h-1zM0 6h3v1h-3zM1 7h1v1h-1zM21 11h1v1h-1z"/><path class="px-c" d="M9 0h4v1h-4zM9 1h4v1h-4z"/><path class="px-o" d="M8 2h6v1h-6zM9 3h1v1h-1zM12 3h1v1h-1zM9 4h1v1h-1zM12 4h1v1h-1zM9 5h1v1h-1zM12 5h1v1h-1zM8 6h1v1h-1zM13 6h1v1h-1zM7 7h1v1h-1zM14 7h1v1h-1zM6 8h1v1h-1zM15 8h1v1h-1zM5 9h1v1h-1zM16 9h1v1h-1zM4 10h1v1h-1zM17 10h1v1h-1zM4 11h1v1h-1zM17 11h1v1h-1zM4 12h1v1h-1zM17 12h1v1h-1zM4 13h1v1h-1zM17 13h1v1h-1zM4 14h1v1h-1zM17 14h1v1h-1zM5 15h1v1h-1zM16 15h1v1h-1zM6 16h1v1h-1zM15 16h1v1h-1zM7 17h8v1h-8z"/><path class="px-h" d="M10 3h1v1h-1zM10 4h1v1h-1zM7 10h1v1h-1zM6 11h1v1h-1zM6 12h1v1h-1zM6 13h1v1h-1z"/><path class="px-g" d="M11 3h1v1h-1zM11 4h1v1h-1zM10 5h2v1h-2zM9 6h4v1h-4zM8 7h6v1h-6zM7 8h8v1h-8z"/><path class="px-L" d="M6 9h10v1h-10zM14 11h1v1h-1zM11 13h1v1h-1zM15 14h1v1h-1z"/><path class="px-l" d="M5 10h2v1h-2zM8 10h9v1h-9zM5 11h1v1h-1zM7 11h7v1h-7zM15 11h2v1h-2zM5 12h1v1h-1zM7 12h10v1h-10zM5 13h1v1h-1zM7 13h4v1h-4zM12 13h5v1h-5zM5 14h10v1h-10zM16 14h1v1h-1zM6 15h1v1h-1z"/><path class="px-d" d="M7 15h9v1h-9zM7 16h8v1h-8z"/></svg></div>
+      </div>
+      <figcaption><span id="showcap" aria-live="polite">The step grid, playing</span><span class="dots"></span></figcaption>
+    </figure>
+  </section>
+
+  <ul class="stats" aria-label="Elixir in numbers">
+    <li><b>29</b><span>sound engines on the drum tracks</span></li>
+    <li><b>65</b><span>sound parameters a voice, on 18 pages</span></li>
+    <li><b>18</b><span>filter types on every track</span></li>
+    <li><b>28</b><span>scales, for melodies and the keys</span></li>
+    <li><b>16</b><span>melody shapes, 13 of them arpeggios</span></li>
+    <li><b>400+</b><span>parameters you can reach by MIDI</span></li>
+    <li><b>8</b><span>channels of USB audio: mix and stems</span></li>
+    <li><b>85</b><span>LXR-02 factory kits built in</span></li>
+  </ul>
+
+  <section class="band" style="border-top:0">
+    <div class="intro">
+      <h2>Simple to start. Deep when you want it.</h2>
+      <p>You don't need to learn it all at once. Everything past the basics waits until you go looking for it, and
+        anything that changes your beat for you can be undone.</p>
+    </div>
+    <div class="depth">
+      <div class="card"><p class="when">Minute one</p><h3>Pick a kit, tap a beat</h3><p>Turn PRESETS to choose one of
+        the LXR-02's factory kits, pick a drum, tap the white keys and press play. The manual's quick start is nine
+        short steps.</p></div>
+      <div class="card"><p class="when">Week one</p><h3>Make it yours</h3><p>Shape a kick, add delay and reverb, lock a
+        filter sweep to one step, give the hats a swing, and play the performance keys: rolls, stutters, tape
+        stops.</p></div>
+      <div class="card"><p class="when">Month one</p><h3>Let it surprise you</h3><p>Have a generator write the hats,
+        roll the dice on a sound, let the pattern drift somewhere new over ten minutes, and map it all to a
+        controller.</p></div>
+    </div>
+  </section>
+
+  <section class="band" id="features">
+    <div class="intro">
+      <h2>Everything in one place</h2>
+      <p>What's in the bottle, grouped by what it's for. The <a href="manual/">manual</a> has the details.</p>
+    </div>
+    <div class="grid3">
+      <div class="card fcard"><h3><i></i>Drum voices</h3>
+        <p class="say">Seven tracks with the LXR-02's six voices, and many more engines to swap in.</p>
+        <ul>
+          <li>The LXR-02's kick and toms, snare/clap, cymbal and hats</li>
+          <li>Rings' resonators and 11 of Plaits' engines (Mutable Instruments) on the three drum tracks</li>
+          <li>Granular voices: CLOUD, and RAIN (grains ringing tuned bells)</li>
+          <li>ENSEMBLE (eight stacked sines), colored NOISE and ten microsound clicks on any track</li>
+        </ul></div>
+      <div class="card fcard"><h3><i></i>Sound shaping</h3>
+        <p class="say">Plenty of ways to bend a drum out of shape.</p>
+        <ul>
+          <li>18 filter types: 303-style acid, MS-20, Moog-style ladder, combs, vowels, chords</li>
+          <li>A master filter that can ring the whole beat in a chord</li>
+          <li>Nine waveshapers, bitcrusher, sample-rate reducer, tilt EQ</li>
+          <li>A frequency shifter or ring modulator on every track</li>
+          <li>Random per hit, choke groups, one voice ducking or filtering another</li>
+        </ul></div>
+      <div class="card fcard"><h3><i></i>Effects</h3>
+        <p class="say">Delay, reverb and an effects bus, with sends from every track.</p>
+        <ul>
+          <li>Delay: mono, ping-pong, tape (wobble and glitches) or granular, with a dub feedback howl</li>
+          <li>Four reverbs: room, spring, hall and Clouds' plate</li>
+          <li>Phaser, flanger, frequency shifter, ring mod or compressor on the bus</li>
+          <li>Master saturation, a sidechain compressor and a DJ filter</li>
+        </ul></div>
+      <div class="card fcard"><h3><i></i>Sequencing</h3>
+        <p class="say">An Elektron-style step sequencer with a few tricks of its own.</p>
+        <ul>
+          <li>32 patterns of up to 64 steps, parameter locks, conditions, chance, ratchets, flams</li>
+          <li>Each track its own length, speed and direction, for polyrhythms</li>
+          <li>28 scales, and a melody generator with 16 shapes: walks, motifs and 13 arpeggio orders</li>
+          <li>12 groove templates, songs and chained patterns</li>
+        </ul></div>
+      <div class="card fcard"><h3><i></i>Modulation</h3>
+        <p class="say">Things that move the sound for you, in time or not.</p>
+        <ul>
+          <li>Two LFOs on every track; the first can reach any voice</li>
+          <li>Four global LFOs, from 1/32 note to 256 bars, or free in Hz</li>
+          <li>An envelope follower: let the kick pump the reverb or open a filter</li>
+          <li>Morph between two kits, and links between tracks (<em>when the kick hits, the hats drop</em>)</li>
+        </ul></div>
+      <div class="card fcard"><h3><i></i>Generative tools</h3>
+        <p class="say">Let Elixir write or evolve parts while you listen. Keep what you like; one button undoes the
+          rest.</p>
+        <ul>
+          <li>Generators on any track: Euclidean rhythms, Grids, a Turing machine, cellular patterns</li>
+          <li>One knob thins the whole beat out or fills it in</li>
+          <li>WANDER: the pattern changes slowly over minutes, then finds its way home</li>
+        </ul></div>
+      <div class="card fcard"><h3><i></i>Randomizing</h3>
+        <p class="say">Roll the dice on sound and steps, with a direction in mind.</p>
+        <ul>
+          <li>Eleven themed SPELLS: metallic rattles, stripped-back grooves, dark dub, everything in one key</li>
+          <li>Or plain chance, from a small nudge to anything goes</li>
+          <li>Choose which tracks and which parts may change; undo exactly; save the ones you like</li>
+        </ul></div>
+      <div class="card fcard"><h3><i></i>Performance</h3>
+        <p class="say">The sixteen white keys turn into live effects.</p>
+        <ul>
+          <li>Rolls, fills, beat repeat, stutter, tape stop, half time, reverse, delay freeze, reverb throws</li>
+          <li>RUSH turns the whole kit into a snare roll with one knob</li>
+          <li>Transpose tracks from the keys; play any voice like a synth</li>
+          <li>Move a knob on every track at once (Control All)</li>
+        </ul></div>
+      <div class="card fcard"><h3><i></i>MIDI and USB audio</h3>
+        <p class="say">Plays well with a computer and a controller.</p>
+        <ul>
+          <li>Record over USB-C: the stereo mix plus six separate drum stems, no driver needed</li>
+          <li>Over 400 parameters by MIDI CC or NRPN; remap any CC from the browser</li>
+          <li>A ready-made map for 8-column controllers like the Launch Control XL, with lights</li>
+          <li>Clock in and out, pattern changes, notes out per track</li>
+        </ul></div>
+    </div>
+  </section>
+
+  <section class="band" id="lxr">
+    <div class="intro">
+      <h2>Built on the LXR-02</h2>
+      <p>Elixir began as a port of the Erica Synths LXR-02's firmware, and it still is one: the sound engine,
+        sequencer and kits come straight across, rewritten to run on the FM-1. If you know the LXR-02, you know
+        where most things are.</p>
+    </div>
+    <div class="lxr">
+      <ul>
+        <li><b>The whole engine</b><span>All six voices with their oscillators, FM, transients, filters, envelopes
+          and LFOs, plus the original effects bus and sequencer.</span></li>
+        <li><b>The factory kits, built in</b><span>All 85 of the LXR-02's kits, with Erica Synths' permission, and
+          Hrtl's DLC and UNTZ packs one click away.</span></li>
+        <li><b>Bring your own</b><span>Import .SND kits or a whole LXR-02 project (kits, patterns and songs) from
+          the <a href="library/">library page</a>, and send kits back.</span></li>
+      </ul>
+      <ul>
+        <li><b>Its MIDI map</b><span>The same CCs and NRPNs as the LXR-02, so existing controller setups keep
+          working.</span></li>
+        <li><b>A sound browser and kit library</b><span>Audition every kick, snare or hat from all your kits on one
+          track, and keep 128 kits and 128 sounds beyond the project.</span></li>
+        <li><b>Back up over USB</b><span>Back up and restore projects and the kit library from the browser. No
+          drivers.</span></li>
+      </ul>
+    </div>
   </section>
 
   <section class="band">
     <div class="intro">
-      <h2>The LXR-02, all of it</h2>
-      <p>Everything that made the LXR-02 a favourite is here, laid out on the FM-1's keys, buttons and four knobs.
-        Kits and projects from an LXR-02 come across over USB.</p>
-    </div>
-    <ul class="specs">
-      <li><b>Six voices on seven tracks</b><span>Three drums, snare/clap, cymbal, closed and open hat, each with
-        its oscillator, FM, transient, filter, envelopes and LFO.</span></li>
-      <li><b>The FX bus</b><span>Drive (tube, fold, rat), ring mod, compressor and delay.</span></li>
-      <li><b>32 patterns of 4 bars</b><span>Parameter locks on any step, flams, shifts, rolls and probability.</span></li>
-      <li><b>Kits, morph and songs</b><span>64 kits per project, morphing between two kits, songs that chain
-        patterns.</span></li>
-      <li><b>MIDI in and out</b><span>USB and TRS in, USB out; clock sync both ways; the LXR's CC and NRPN map.</span></li>
-      <li><b>The LXR-02's kits</b><span>Its 85 factory kits built in, with Erica Synths' permission, plus Hrtl's
-        DLC and UNTZ packs to add. Import your own .SND kits or a whole LXR-02 project folder (kits, patterns and
-        songs) from the library page.</span></li>
-    </ul>
-    <p class="proof"><strong>Checked against the original.</strong> The FM-1 has no floating-point unit, so the
-      LXR's DSP is rewritten in fixed point. A test renders every voice with both engines: levels match to within
-      0.1 dB, and the tonal voices correlate at 0.99–1.00.</p>
-  </section>
-
-  <section class="band">
-    <div class="intro">
-      <h2>What Elixir adds</h2>
-      <p>New sound, sequencing and performance features, all of them saved with your kits and
-        projects, and most of them lockable per step.</p>
+      <h2>A closer look</h2>
+      <p>A few of the things that make Elixir different, in plain words.</p>
     </div>
 
     <div class="feature">
-      <figure class="screen"><img src="shots/grids.png" alt="The GRIDS MAP page over a pattern of seven tracks" width="240" height="240" loading="lazy"></figure>
+      <figure class="screen"><img src="shots/cloud.png" alt="The MODEL page: CLOUD, a cloud of grains, with Scatter, Size and Density" width="240" height="240" loading="lazy"></figure>
       <div>
-        <h3>Sequencing generators</h3>
-        <p>Every track can have a generator, playing a live copy you can commit, undo or reset:</p>
-        <ul>
-          <li>Euclid, with a second pulse joined by OR, XOR, AND or SUB</li>
-          <li>Mutate, a Turing machine, and cellular automata</li>
-          <li>Emilie Gillet's Grids drum map</li>
-        </ul>
-        <p>Each track also has its own length, clock (from /4 to x4) and direction: forward, reverse, ping-pong,
-          random or a random walk. Add step conditions and ratchets that bounce like a dropped ball, and a
-          pattern turns into polyrhythms.</p>
+        <p class="tag">Sound engines</p>
+        <h3>Swap a drum's engine</h3>
+        <p>Every track can trade its LXR-02 voice for something else. On the three drum tracks that includes
+          Mutable Instruments' Rings and Plaits (struck bells and strings, FM, chords, even speech), two granular
+          voices and an eight-sine drone. Any track can play colored noise or tiny glitchy clicks. Every engine
+          still goes through the track's filter, shaping, sends and modulation, so you can mix and match.</p>
+      </div>
+    </div>
+
+    <div class="feature">
+      <figure class="screen"><img src="shots/ring.png" alt="The DJ FILTER page on RING: eight bands tuned to a D major chord" width="240" height="240" loading="lazy"></figure>
+      <div>
+        <p class="tag">Effects</p>
+        <h3>A filter that rings in key</h3>
+        <p>Switch the master filter to RING and the whole beat rings through eight resonators tuned to a chord: major,
+          minor, fifths, octaves, a pentatonic and more. The kick and snare start to sing, hats turn into shimmering
+          tones, and sweeping the knob glides through the chord in tune. Short decays give a woody knock; long ones a
+          drone. Spread it across the stereo field, tilt it dark or bright, and choose how much of the dry beat stays
+          underneath.</p>
       </div>
     </div>
 
     <div class="feature">
       <figure class="screen"><img src="shots/perform.png" alt="The PERFORM 2 page: keys for drill, cuts, pump, comb, crush and reverse" width="240" height="240" loading="lazy"></figure>
       <div>
+        <p class="tag">Performance</p>
         <h3>Made for playing live</h3>
-        <p>PERF turns the sixteen white keys into performance controls. Hold for rolls, fills, beat repeat, delay
-          freeze, reverb and FX throws, tape stop and filter sweeps; a second bank adds drill, half time, cuts,
-          pump, comb, crush and reverse. RUSH turns the whole kit into a snare roll with one knob, TRANSPOSE moves
-          tracks up and down the scale from the keys, and a DJ filter, four macros and a mixer sit on the knobs.</p>
+        <p>Press PERF and the sixteen white keys become effects you hold down: rolls, fills, beat repeat, delay
+          freeze, reverb throws, tape stop and filter sweeps, and a second bank with drill, half time, cuts, pump,
+          crush and reverse. Let go and the beat is back as it was. The knobs carry a DJ filter, four macros and a
+          mixer.</p>
       </div>
     </div>
 
     <div class="feature">
       <figure class="screen"><img src="shots/spells.png" alt="SPELLS: the wizard, Whispering Motes cast on all seven tracks, the twelve-sided die showing 8" width="240" height="240" loading="lazy"></figure>
       <div>
-        <h3>Spells</h3>
-        <p>Pick tracks with the black keys and what may change with the white keys, pick one of eleven spells and press COPY (OCT+): a twelve-sided die rolls
-          and the spell rewrites the sound and the steps in its own direction. Poltergeist makes metallic rattles,
-          Skeleton strips a groove to its bones, Haunted Dub darkens and echoes, Glass Cathedral tunes everything
-          to one key. Or pick NONE for plain chance, from a nudge to anything at all, and choose which engines a cast may
-          give the voices: LXR, Rings, Plaits or MICRO. Roll again, take it back exactly with SHIFT (OCT−), or keep it
-          and save it as a recipe.</p>
+        <p class="tag">Randomizing</p>
+        <h3>Spells: randomizing with a sense of direction</h3>
+        <p>Plain randomizing tends to give you mush. A spell is a randomizer with a goal: Poltergeist makes metallic
+          rattles, Skeleton strips a groove back to its bones, Haunted Dub darkens everything and adds echoes. Choose
+          which tracks to touch and whether it may change the sound, the steps or both, then cast. Don't like it?
+          One button puts everything back exactly. Like it? Save it as a recipe.</p>
       </div>
     </div>
 
     <div class="feature">
       <figure class="screen"><img src="shots/wander.png" alt="WANDER: The Spire, the wizard walking up the mountain road from his cottage, chapter Foothills, bar 6 of 32" width="240" height="240" loading="lazy"></figure>
       <div>
-        <h3>Wander</h3>
-        <p>Set out on a quest and the pattern changes slowly, over minutes, until you are somewhere else. One track
-          at a time gets darker, wetter or more metallic, the hits thin out or fill in, and the rhythm grows new
-          figures that sound like its own. Walk to another pattern, follow a song's rows, or keep going forever;
-          SHIFT (OCT−) brings you home, and a POSTCARD keeps a place you stumbled on as a pattern of its own.</p>
+        <p class="tag">Generative</p>
+        <h3>Wander: a beat that slowly goes somewhere</h3>
+        <p>Pick a mood (Elixir calls them quests) and press go. Over the next few minutes the pattern changes a
+          little at a time: one track gets darker, another wetter, hits thin out or fill in, new figures appear that
+          sound like they belong. It's made for long jams and ambient sets. Press one button and it walks back home;
+          if you find somewhere you love on the way, save it as a new pattern.</p>
+      </div>
+    </div>
+
+    <div class="feature">
+      <figure class="screen"><img src="shots/grids.png" alt="The GRIDS MAP page over a pattern of seven tracks" width="240" height="240" loading="lazy"></figure>
+      <div>
+        <p class="tag">Sequencing</p>
+        <h3>Parts that write themselves, if you want</h3>
+        <p>Give any track a generator, such as a Euclidean rhythm, Mutable Instruments' Grids drum map or a Turing
+          machine, and it plays a live part you can steer with the knobs. When you hear something you like, commit it
+          to the steps. Give each track its own length, speed and direction and a simple pattern turns into
+          polyrhythms.</p>
+        <p>For the notes, a melody generator sits beside the rhythm: random notes, a walking bass line, a short motif
+          that develops, or one of 13 arpeggio orders. It plays in any of 28 scales (major and minor, the modes,
+          pentatonics, blues, Hirajoshi, pelog and more), can loop a phrase it likes, and the scale keeps every tuned
+          voice in key, from the toms to the keyboard.</p>
       </div>
     </div>
 
     <div class="feature">
       <figure class="screen"><img src="shots/links.png" alt="The LINKS page: when D1 hits, CH chance −60% on the next step" width="240" height="240" loading="lazy"></figure>
       <div>
+        <p class="tag">Modulation</p>
         <h3>Tracks that react to each other</h3>
         <p>Links read like a sentence: <em>when D1 hits, CH chance −60%, on the next step.</em> The kick ducks the
-          hats, the open hat answers only when the closed hat rests, a snare hit makes the next hat rattle. Up to
-          eight links per pattern turn a loop into a small system.</p>
+          hats, the open hat answers only when the closed hat rests, a snare hit makes the next hat rattle. A few
+          links turn a loop into something that feels played.</p>
       </div>
-    </div>
-
-    <div class="cards">
-      <div class="card"><h3>Sends and reverb</h3><p>An FX-bus send and a reverb send on every voice. Room,
-        spring, hall and plate reverb after the FX bus, plus a phaser, a flanger and a tape delay on the bus.</p></div>
-      <div class="card"><h3>Sound shaping</h3><p>Five waveshapers, a bit reducer and tilt EQ per voice;
-        random-per-hit pitch, decay, filter and pan; choke groups; duck, filter or ring modulation from another
-        voice.</p></div>
-      <div class="card"><h3>Global LFOs</h3><p>Three tempo-synced LFOs, up to 256 bars long, on morph, the DJ
-        filter, the effects, density, transpose or the melodies. A one-shot saw over 64 bars turns one kit into another while you play.</p></div>
-      <div class="card"><h3>Play it as an instrument</h3><p>KEYS plays any voice chromatically and records into the
-        steps. Control All moves a parameter on every track at once, as on Elektron boxes.</p></div>
-      <div class="card"><h3>Sound browser</h3><p>Browse presets for a single track: every kick, snare or hat
-        from your kits and the kit library, gathered in one list, each heard on the track as you go. Keep one and
-        the rest of the kit stays as it is. Plus a library of 128 kits and 128 sounds beyond the project.</p></div>
-      <div class="card"><h3>Back up over USB</h3><p>The library page backs up and restores projects and the kit
-        library, and brings in LXR-02 kits and projects. No drivers, just the browser.</p></div>
-      <div class="card"><h3>Controller map</h3><p>A ready-made map for eight-column controllers such as Novation's
-        Launch Control XL: mixer, sound and performance controls, with feedback.</p></div>
-      <div class="card"><h3>Try it first</h3><p>The emulator runs the firmware's own C code in your browser, with
-        Web MIDI in and out. What you hear there is what the FM-1 plays.</p></div>
-      <div class="card"><h3>Rings and Plaits models</h3><p>The three drum voices can ring through a fixed-point port of
-        Mutable Instruments Rings or play fifteen of Plaits' original engines, two at a time, on the FM-1's second core.
-        Not in the LXR-02. Experimental.</p></div>
     </div>
   </section>
 
+  <section class="band" id="how">
+    <div class="intro">
+      <h2>Finding your way around</h2>
+      <p>Every FM-1 firmware does this a little differently, so here's how Elixir works. There are three moves, and they
+        work the same everywhere. Pick a track with the black keys 1–7 first; the sound and sequencer pages are about
+        that track.</p>
+    </div>
+    <div class="moves">
+      <div class="card"><h3><span class="n">1</span>Press a button</h3><p>It opens that button's section: <span class="cap">EDIT</span>
+        opens the sound's model, <span class="cap">HOME</span> the step grid, <span class="cap">FX</span> the effects.</p></div>
+      <div class="card"><h3><span class="n">2</span>Press it again</h3><p>Most buttons hold a few sections. Each press goes to
+        the next one, in the order below, then back to the first.</p></div>
+      <div class="card"><h3><span class="n">3</span>Turn SELECT</h3><p>It turns the pages, one at a time; the title shows where
+        you are (<em>3/18</em>). The four knobs change the four values at the bottom of the screen.</p></div>
+    </div>
+    <div class="map">
+      <div class="card"><h3>The sound of the selected track</h3>
+        <dl>
+          <dt><span class="cap">EDIT</span></dt><dd><b>Model</b> → oscillator → FM → transient</dd>
+          <dt><span class="cap">SCL</span></dt><dd><b>Filter</b> → shape (drive, bits, tilt) → insert effect</dd>
+          <dt><span class="cap">ENV</span></dt><dd><b>Amp envelope</b> → gate → mod envelope and velocity</dd>
+          <dt><span class="cap">LFO</span></dt><dd><b>LFO 1</b> → LFO 2 → random per hit → cross mod and choke → sends</dd>
+        </dl>
+        <p class="tip">These four jump into one row of 18 sound pages, laid out like a synth's signal path. SELECT walks
+          the whole row.</p></div>
+      <div class="card"><h3>Patterns and sequencing</h3>
+        <dl>
+          <dt><span class="cap">HOME</span></dt><dd><b>Step grid</b> → patterns → load → song</dd>
+          <dt><span class="cap">SEQ</span></dt><dd><b>The track's pages</b> (length, generator, melody, scale, groove …) → step
+            edit</dd>
+          <dt><span class="cap">PLAY</span> <span class="cap">REC</span></dt><dd>Start and stop; record live from the keys</dd>
+          <dt><span class="cap">SAVE</span></dt><dd><b>Save</b> → load</dd>
+        </dl>
+        <p class="tip">Tap white keys to place steps. Hold a step and turn a knob to set that value for that step only.</p></div>
+      <div class="card"><h3>Playing live and the generative tools</h3>
+        <dl>
+          <dt><span class="cap">ARP</span></dt><dd><b>Perform</b> (the keys become effects) → spells → wander → global
+            modulation (LFOs, macros, links)</dd>
+          <dt><span class="cap">PRESETS</span></dt><dd>Turn it to browse kits. On a sound page, it browses single sounds for the
+            track</dd>
+        </dl>
+        <p class="tip">Performance effects stop when you let go of the key, and a spell or a wander can always be
+          undone.</p></div>
+      <div class="card"><h3>Mix, effects and settings</h3>
+        <dl>
+          <dt><span class="cap">FX</span></dt><dd><b>Reverb</b>, effects bus, delay, routing, dirt, DJ filter, compressor and
+            the sends, one page after another</dd>
+          <dt><span class="cap">GLO</span></dt><dd><b>Mixer</b> → settings (MIDI, USB audio, colors …)</dd>
+          <dt><span class="cap">OCT−</span></dt><dd><b>SHIFT</b>: hold it and the screen lists what each key does with it</dd>
+          <dt><span class="cap">OCT+</span></dt><dd><b>COPY</b> and OK. Hold it and turn a knob to change every track at once</dd>
+        </dl></div>
+    </div>
+    <p class="small" style="margin-top:16px">The <a href="cheatsheet.pdf">cheat sheet</a> has every page's knobs on four
+      pages, and the <a href="manual/#3-the-panel">manual</a> covers the panel in detail. In the
+      <a href="try/">emulator</a> you can try all of this with the mouse.</p>
+  </section>
+
   <section class="band">
-    <div class="intro"><h2>On the FM-1's screen</h2></div>
+    <div class="intro"><h2>On the FM-1's screen</h2><p>Every page draws what its knobs do. These are the firmware's
+      own screens.</p></div>
     <div class="strip">
       <figure class="screen"><img src="shots/pattern.png" alt="The pattern grid playing" width="240" height="240" loading="lazy"><figcaption>The pattern grid</figcaption></figure>
-      <figure class="screen"><img src="shots/global-lfo.png" alt="A global LFO's mode page" width="240" height="240" loading="lazy"><figcaption>A global LFO</figcaption></figure>
-      <figure class="screen"><img src="shots/mixer.png" alt="The mixer's volume page" width="240" height="240" loading="lazy"><figcaption>The mixer</figcaption></figure>
-      <figure class="screen"><img src="shots/keys.png" alt="KEYS: the keyboard playing a voice" width="240" height="240" loading="lazy"><figcaption>KEYS</figcaption></figure>
-      <figure class="screen"><img src="shots/rings.png" alt="The MODEL page: Rings' MODAL resonator, a struck bell" width="240" height="240" loading="lazy"><figcaption>Rings' resonator</figcaption></figure>
-      <figure class="screen"><img src="shots/plaits-speech.png" alt="The MODEL page: Plaits' P SPEECH, a wizard's face" width="240" height="240" loading="lazy"><figcaption>Plaits' speech</figcaption></figure>
-      <figure class="screen"><img src="shots/reverb-plate.png" alt="The REVERB page: PLATE, a steel shield" width="240" height="240" loading="lazy"><figcaption>The plate reverb</figcaption></figure>
+      <figure class="screen"><img src="shots/rain.png" alt="The MODEL page: RAIN, grains on tuned bells" width="240" height="240" loading="lazy"><figcaption>RAIN: grains on tuned bells</figcaption></figure>
+      <figure class="screen"><img src="shots/ensemble.png" alt="The MODEL page: ENSEMBLE's eight oscillators as bars" width="240" height="240" loading="lazy"><figcaption>ENSEMBLE: eight sines</figcaption></figure>
+      <figure class="screen"><img src="shots/delay.png" alt="The DELAY page: ping pong echoes bouncing left and right" width="240" height="240" loading="lazy"><figcaption>The ping-pong delay</figcaption></figure>
+      <figure class="screen"><img src="shots/grain-delay.png" alt="The DELAY page in GRAIN mode: a cloud of grains" width="240" height="240" loading="lazy"><figcaption>The granular delay</figcaption></figure>
+      <figure class="screen"><img src="shots/melody.png" alt="The MELODY page: a walk of notes" width="240" height="240" loading="lazy"><figcaption>The melody generator</figcaption></figure>
+      <figure class="screen"><img src="shots/groove.png" alt="The GROOVE page: the DILLA template" width="240" height="240" loading="lazy"><figcaption>Groove templates</figcaption></figure>
+      <figure class="screen"><img src="shots/chasm.png" alt="WANDER: the Howling Chasm quest" width="240" height="240" loading="lazy"><figcaption>A WANDER quest</figcaption></figure>
+      <figure class="screen"><img src="shots/routing.png" alt="The ROUTING page: bus, delay and reverb in parallel" width="240" height="240" loading="lazy"><figcaption>Effects routing</figcaption></figure>
+      <figure class="screen"><img src="shots/plaits-speech.png" alt="The MODEL page: Plaits' P SPEECH, a wizard's face" width="240" height="240" loading="lazy"><figcaption>Plaits' speech engine</figcaption></figure>
       <figure class="screen"><img src="shots/reverb-hall.png" alt="The REVERB page: HALL, a castle" width="240" height="240" loading="lazy"><figcaption>The hall reverb</figcaption></figure>
+      <figure class="screen"><img src="shots/rush.png" alt="PERFORM: RUSH, the snare roll" width="240" height="240" loading="lazy"><figcaption>RUSH</figcaption></figure>
     </div>
   </section>
 
@@ -250,411 +508,547 @@
       <p>You need an M-VAVE FM-1, a USB data cable, and Chrome or Edge on a computer.</p>
     </div>
     <div class="steps">
-      <div class="card"><h3>Try it</h3><p>Play Elixir in the browser with your computer keyboard, the mouse or a
-        MIDI controller. Nothing to install.</p><a class="btn alt" href="try/">Open the emulator</a>
-        <p><b>New, experimental:</b> a phone version of the emulator, with touch sliders for the knobs, the factory
-          and Hrtl kits, and links that share a pattern with its kit (and WANDER, if it's on). Open
-          <a href="mobile/">the mobile emulator</a> on your phone and tell us how it plays.</p></div>
+      <div class="card"><h3>Try it</h3><p>Play Elixir in your browser with the computer keyboard, the mouse or a
+        MIDI controller. It runs the real firmware, so what you hear is what the FM-1 plays. Nothing to install.
+        There's also a <a href="mobile/">phone version</a> (experimental).</p>
+        <a class="btn" href="try/">Open the emulator</a></div>
       <div class="card"><h3>Install it</h3><p>The install page checks your FM-1, puts the official V15 firmware on
-        first if needed, then installs Elixir. The way back to V15 is on the same page.</p>
-        <a class="btn" href="install/">Install Elixir</a></div>
+        first if needed, then installs Elixir. Going back to V15 is on the same page.</p>
+        <a class="btn alt" href="install/">Install Elixir</a></div>
       <div class="card"><h3>Learn it</h3><p>The manual starts with a beat in two minutes, then covers every page,
-        button and knob; the <a href="cheatsheet.pdf">cheat sheet</a> fits them on four pages.</p>
+        button and knob. The <a href="cheatsheet.pdf">cheat sheet</a> fits it all on four pages.</p>
         <a class="btn alt" href="manual/">Read the manual</a></div>
     </div>
-    <p class="small" style="margin-top:20px">This is a test release with little testing on real FM-1s so far.
-      Read the notes on the <a href="install/">install page</a> before you install; there is no warranty.</p>
   </section>
 
-  <!-- The updates log: one card per release, newest first. Add the new release's card at each site build. -->
+  <!-- The updates log: one card per release, newest first. Add the new release's card at each site build; older
+       releases go inside the details below. -->
   <section class="band" id="updates">
     <div class="intro"><h2>Updates</h2><p>What each release added and fixed.</p></div>
     <div class="updates">
-      <div class="card"><h3>0.25.2<span>3 November 2026</span></h3>
-        <h4>New</h4>
+      <div class="card"><h3>1.0<span>November 9, 2026</span></h3>
+        <p>The biggest update yet: new sound engines, a rebuilt effects section, recording over USB, and a lot of
+          small things that make Elixir easier to find your way around. Kits and projects from 0.25 load and
+          sound as before, except where noted under <em>Removed</em>.</p>
+        <h4>New sounds</h4>
         <ul>
-          <li>LFO destinations easier to read and find: the track LFOs' page shows the destination's full name under
-            its group (FILTER, Frequency; MOD EG / VELO, Velocity amount), as the MODEL page shows a model, and a global
-            LFO's Dest shows its full name over the page for a few seconds while you turn it.</li>
-          <li>The Dest knobs turn through their destinations in groups, in the order EDIT shows the pages (the signal
-            path), each group by name; the global LFOs' by sequencer, kit, delay, reverb, master FX, DJ filter and
-            macros. The velocity's destination follows the same order.</li>
-          <li>One name for one knob: the track LFOs' DstParam (LFO 1) and Target (LFO 2) are now Dest, as on the
-            global LFOs.</li>
+          <li><b>CLOUD</b>, a granular voice for the drum tracks: a swarm of tiny sine grains around the note. Short
+            grains crackle, long ones shimmer, scattered ones make chords. It's light on the processor, so it plays
+            alongside the heavier Rings and Plaits engines.</li>
+          <li><b>RAIN</b>: CLOUD's grains falling on a chord of tuned bells. Sparse, it sounds like rain on a bell;
+            dense, a bowed shimmer or a marimba roll.</li>
+          <li><b>NOISE</b>, for any track: brown, pink, white or blue noise on one knob, which can also be stepped
+            into pitched 8-bit noise. Good for hats, shakers, washes and risers.</li>
+          <li><b>Four new filters on every track</b>: ACID (in the style of the TB-303), MS-20 low-pass and
+            high-pass, and LADDER (Moog-style, with a bass-restoring knob). Each can be opened by the drum's
+            envelope, for that squelch on a kick or a tom.</li>
         </ul>
-      </div>
-      <div class="card"><h3>0.25.1<span>2 November 2026</span></h3>
-        <h4>New</h4>
+        <h4>Effects</h4>
         <ul>
-          <li>Mute and solo from a controller's toggle buttons: CONFIG: REMOTE's new Mute/solo setting, TOGGLE, takes
-            what the button sends as the mute (on mutes, off unmutes), so a Launch Control XL's pads in Toggle mode
-            stay in step, and with the feedback looped back they light with the mutes. PRESS (the default, for momentary
-            buttons) is as before: each press flips it.</li>
-          <li>DJ reso: the DJ filter's resonance, on the FX bus's DIRT page (KNOB 2) and the remote's GLOBAL CC 47.
-            At 0 the filter is as before; turned up it rings and screams as you sweep it. Saved with the project; no
-            extra CPU.</li>
+          <li><b>The delay is now its own effect</b>, always available after the effects bus, so you can have a
+            phaser <em>and</em> echoes. Every track has its own delay send, and a routing page sets whether the bus
+            feeds the delay, the delay feeds the bus, or they run side by side.</li>
+          <li><b>Granular delay</b>: a new delay mode that scatters the echoes into up to eight grains, each with its
+            own pitch and position. Freeze holds the sound while the grains keep playing.</li>
+          <li><b>Dub howl</b>: a resonant band inside the delay's feedback, so pushed echoes build into a
+            self-oscillating whistle at a pitch you choose.</li>
+          <li><b>Frequency shifter</b> on the effects bus: drums turn into gongs and bells, small shifts give an
+            endless rising or falling phase.</li>
+          <li><b>The DJ filter has character types</b>: ACID, MS-20 and RING (eight resonant bands tuned to a chord,
+            so the whole beat rings in a key).</li>
+          <li>A <b>master volume</b> after everything, on CC 124.</li>
         </ul>
-      </div>
-      <div class="card"><h3>0.25<span>2 November 2026</span></h3>
-        <h4>New</h4>
+        <h4>Recording</h4>
         <ul>
-          <li>ENSEMBLE, a new model on every track, after 4ms' Ensemble Oscillator: eight sines stacked up from the
-            voice's pitch, quantized to a scale (Spread, Scale), each one warped (FOLD, CHEBY, SEGMENT) and twisted
-            (FEEDBACK, PULSAR, CRUSH), with Balance and Detune. Through the amp EG it gives gongs, chimes, organ
-            stabs, clusters and drones. Its MODEL page draws the eight oscillators.</li>
-          <li>ENSEMBLE isn't limited like Rings and Plaits: each one takes about 10% of the CPU (one Rings, one
-            Plaits and three ENSEMBLE voices play together fine).</li>
-          <li>The AMP EG page now shows for the Plaits engines that don't make their own envelope (P VA, P WSHAPE,
-            P FM, P GRAIN, P ADDTV, P CHORD, P SPEECH, P SWARM, P NOISE, P PARTCL), since the amp EG shapes them.</li>
+          <li><b>8-channel USB audio.</b> Plug into a computer and record the stereo mix plus each of the six voices
+            on its own channel (D1, D2, D3, snare, cymbal, hats), class compliant, no driver. Any drum can be taken out of
+            the stereo mix while you record, to process it separately.</li>
         </ul>
-      </div>
-      <div class="card"><h3>0.24.2<span>2 November 2026</span></h3>
-        <h4>New</h4>
+        <h4>Sequencing and modulation</h4>
         <ul>
-          <li>The basics on one MIDI channel: the remote channels (15 and 16 by default) now also launch patterns
-            (program change 0–31), slot kits (CC 126) and factory kits (CC 127), so a controller already on a
-            remote channel needs no third channel for them.</li>
-          <li>CC 126 and CC 127 also work on the global channel (10) as CC 102 and 103 do (Global in KEYS or
-            PAT+KIT), so the same numbers work on all three.</li>
+          <li><b>Time stretch per track</b> (50–200% of the tempo): set one track to 99.9% and it slowly drifts
+            against the rest and comes back around, Steve Reich style.</li>
+          <li><b>A fourth global LFO</b>, and global LFOs can now run free in Hz as well as in time with the beat.</li>
+          <li><b>Envelope follower</b>: a global LFO can follow a drum's level instead, so the kick can duck the
+            reverb, pump the whole mix or open a filter on every hit.</li>
+          <li>Every LFO now has the same knobs in the same places, and a track's first LFO can reach any voice.</li>
+          <li><b>Twelve more scales</b>, 28 in all: Locrian, melodic minor, Hungarian minor, double harmonic, both
+            diminished scales, Lydian dominant, altered, In Sen, Iwato, Kumoi and Egyptian.</li>
+          <li><b>Delete a pattern</b>: hold SHIFT (OCT−) and tap it on the pattern page.</li>
+          <li>Set every track's length at once (Control All on track length).</li>
         </ul>
-      </div>
-      <div class="card"><h3>0.24.1<span>2 November 2026</span></h3>
-        <h4>New</h4>
+        <h4>Wander</h4>
         <ul>
-          <li>Elixir protects Wyrd's data. On a unit that still holds Wyrd's projects, kits or settings, Elixir asks
-            at power-on and saves nothing until you answer: SHIFT (OCT−) keeps it all (Elixir saves nothing until
-            the next power-on, so you can back it up), COPY (OCT+) twice erases only Wyrd's records. Elixir's own
-            projects and kits stay.</li>
+          <li>Three new quests: <b>Boiling Frog</b> (the tempo creeps until you're somewhere else),
+            <b>The Canyon</b> (delay and reverb pile up and pull the voices apart, then bring them back) and
+            <b>Howling Chasm</b> (its darker twin, with a howling delay and the whole beat ringing in a low chord).
+            Journeys can last up to 1024 bars.</li>
         </ul>
-      </div>
-      <div class="card"><h3>0.24<span>2 November 2026</span></h3>
-        <h4>New</h4>
+        <h4>MIDI and controllers</h4>
         <ul>
-          <li>Your own MIDI CC numbers: the library page has a CC map. Point each CC your controller sends at any
-            parameter Elixir takes by CC or NRPN (search by name), or at nothing. A CC aimed at a short list (a
-            waveform, a filter type, a model) sweeps the whole list. Save and load maps as CSV files.</li>
-          <li>The global MIDI channel (10) launches patterns (program change 0–31), slot kits (CC 102) and factory kits
-            (CC 103), and plays the selected track from a keyboard (its mod wheel on MACRO 1); bank select, pitch bend
-            and other CCs do nothing there. CONFIG → MIDI CHANNELS, Global in: KEYS (the default), PAT+KIT (no notes),
-            ALL (everything, as before) or OFF.</li>
-          <li>The install page finds an FM-1 running Wyrd or Grimoire, and says to back up its data before
-            installing Elixir.</li>
+          <li>Control All by MIDI: one button on your controller, then any knob moves that setting on every
+            track. Tracks can be left out.</li>
+          <li>Rolls per track and density per track by CC; load a morph kit by CC 125.</li>
+          <li>MIDI notes out, chosen per track.</li>
+          <li>The remote map's effect buttons latch on a tap and hold on a longer press, so one row of buttons does
+            both. The freed numbers now control the delay and the RING filter.</li>
         </ul>
-        <h4>Changed</h4>
+        <h4>Easier to use</h4>
         <ul>
-          <li>Sound CCs and CC 0 on the global channel are ignored unless Global in is ALL; the track channels are as
-            before. Set ALL to control everything from channel 10 as on the LXR.</li>
-          <li>The cheat sheet has two MIDI pages: the channels, launching, the sound by CC and the remote map.</li>
-          <li>P WTABLE is gone from the MODEL list, freeing 48 KB of flash for what comes next. A kit that used it
-            loads on P ADDTV. P CHORD is unchanged: it keeps its own waves.</li>
+          <li><b>A new default color scheme, SAND</b>: amber on true black, which reads better on the FM-1's
+            screen. Bigger, shorter text on most pages.</li>
+          <li><b>New pictures</b> for the delay (echoes that bounce, drift and break up), the granular delay, the
+            melody generator's shapes, the routing and every new engine.</li>
+          <li>Pressing a section's button again goes to the next section; SELECT turns pages within one.</li>
+          <li>Hold OCT− while turning any knob for fine adjustment.</li>
+          <li>HOME's third press is LOAD: kits, morph kits, single sounds and projects in one place. A factory kit
+            can now be the morph target.</li>
+          <li>A simpler SHIFT menu, and the generator knob briefly shows what each generator does.</li>
+          <li>If the processor runs out of time, the title flashes red and names what's using it, instead of
+            just glitching. The manual explains <a href="manual/#crackles-and-cpu-overload-heavy-drum-models">which
+            sound engines are heaviest and what to do</a>.</li>
+          <li>The MODEL knob skips Rings and Plaits engines when the two allowed are already in use, and says
+            which drums have them.</li>
+          <li>With morph at 100%, sound knobs edit the morph kit (new default).</li>
         </ul>
-        <h4>Fixed</h4>
+        <h4>Removed (to make room)</h4>
         <ul>
-          <li>Switching the delay from TAPE to TAPE PP while it was echoing could write past the delay's memory.</li>
-        </ul>
-      </div>
-      <div class="card"><h3>0.23<span>1 November 2026</span></h3>
-        <h4>New</h4>
-        <ul>
-          <li>WANDER (ARP three times): the pattern changes slowly, over minutes, until you are somewhere else. Pick
-            one of eleven quests, press COPY (OCT+) and listen: voices get darker, wetter, more metallic a notch at a
-            time, the hits thin out or fill in, and on an open road the rhythm itself changes one step at a time,
-            each change picked to sound like the track's own. SHIFT (OCT−) comes home, slowly or at once, and every
-            pattern you passed through gets its steps back exactly.</li>
-          <li>Destinations: set Goal to a pattern and the road walks there by the end of the Journey; set it to
-            SONG and it travels the song's rows. KEEP makes where you are home, REST waits, Memory brings back a
-            version you heard minutes ago, and Fate decides the road's end (home, treasure, wounded, lost or the
-            d12's choice).</li>
-          <li>POSTCARD (hold SHIFT (OCT−), press black key 10) saves where you are into the first empty pattern,
-            with its voices locked as they sounded, so you can come back to it or wander towards it later.</li>
-          <li>PERFORM: RUSH, after the snare rush in Elixir Desktop by johnnyhawk02: one knob turns the whole kit
-            into a roll. The other drums go over to the rush track (the hats first, the kick last), it rolls on the
-            grid, then free up to 1/256 while the high-pass opens. It follows how fast you turn, and rushes record
-            as locks.</li>
-          <li>PERFORM: TRANSPOSE moves chosen tracks up and down the pattern's scale live from the white keys,
-            now, on the beat or on the bar.</li>
-          <li>A track's Base note (SCALE page, KNOB 4), as an Elektron's track note: every note moves with it,
-            except steps whose Note you've set on the STEP page.</li>
-          <li>ROADS (the SONG page's third page): a song plays by its own chances, cutting between rows with the
-            same pattern, with Surprise and a way Home.</li>
-          <li>Long notes: a step's Length now goes to 1 BAR … 64 BARS and INF, a drone held until the track's next
-            note.</li>
-          <li>Ten more arp orders on MELODY's Shape: CONVERGE, DIVERGE, CON/DIV, LEAPFROG, SPIRAL, ALTERNATE, PAIRS,
-            ROTATE, INVERT and PEDAL.</li>
-          <li>P WTABLE and P CHORD draw their real waves on the MODEL page.</li>
-          <li>The <a href="cheatsheet.pdf">cheat sheet</a> has a fourth page: Wander, Rush, Transpose, Roads.</li>
-        </ul>
-        <h4>Changed</h4>
-        <ul>
-          <li>Step edit's pages, as on the Elektrons: STEP is Note, Length, Velocity; TRIG (was TIMING) is Chance,
-            Condition, Shift, Flam.</li>
-          <li>P WTABLE's knobs are named for what they do: Bank, Bright and Family, and its envelope moves Bright
-            only (a kit using P WTABLE with Env up sounds a little different).</li>
-          <li>The factory kits are stored packed in the firmware (the same 85 kits, bit for bit), to make room.</li>
-          <li>MICRO's PULSAR, WAVELET and SPLINTER are taken out for room; a kit that used one plays its LXR
-            voice.</li>
+          <li>Plaits' modal, noise, grain and particle engines. Kits that used them load on Rings' MODAL, NOISE,
+            the LXR voice and RAIN, so they sound different.</li>
+          <li>The track inserts PHASER, FLANGER, CHORUS, TREMOLO and AUTOPAN (the effects bus still has a phaser and
+            flanger), and the bus's DRIVE (the master DIRT does the job). Kits that used them load with that
+            effect off.</li>
         </ul>
         <h4>Fixed</h4>
         <ul>
-          <li>An arp whose cycle doesn't divide into 256 notes (6, 7, 10 …) no longer jumps to another place in its
-            cycle every 256 notes.</li>
+          <li>A spell (usually Concrete Drift) could leave the cymbal ringing forever as white noise, even after
+            STOP.</li>
+          <li>The spell's dice stayed over the description after a cast.</li>
+          <li>Switching the delay from mono to ping-pong could smear the echoes or corrupt memory.</li>
+          <li>Changing the delay's mode clicked; it now fades.</li>
         </ul>
-      </div>
-      <div class="card"><h3>0.22<span>31 October 2026</span></h3>
-        <h4>Changed</h4>
+        <h4>Under the hood</h4>
         <ul>
-          <li>Elixir has its own identity: the FM-1 now answers FM-1_359002200 (FM-1_359, then the version) instead
-            of FM-1_900, which Felucca and other firmwares share. Updating from 0.21 works as before, and your
-            projects and kit library are kept.</li>
-        </ul>
-        <h4>New</h4>
-        <ul>
-          <li>A three-page <a href="cheatsheet.pdf">cheat sheet</a> (PDF): keys, combinations, every page's knobs,
-            the performance keys and the spells.</li>
-        </ul>
-      </div>
-      <div class="card"><h3>0.21<span>31 October 2026</span></h3>
-        <h4>New</h4>
-        <ul>
-          <li>SPELLS → MOTION's page: VOICES. The top row of white keys picks the engines a cast may give (LXR,
-            Rings, Plaits, MICRO), and KCK keeps D1 the LXR's kick: MICRO + KCK gives an LXR kick and MICRO on
-            everything else.</li>
-          <li>Sound at 100% (FREE, any spell) lets the kick and the toms go too; 99% keeps them.</li>
-        </ul>
-        <h4>Changed</h4>
-        <ul>
-          <li>NONE is plain chance on everything the white keys let in: Sound sets how far, from a nudge to
-            anywhere at all; Spread (was Range) how many knobs move.</li>
-          <li>A spell that changes nothing says why: NOTHING IN SCOPE (the white keys leave none of its parts),
-            SOUND IS OFF or PATTERN IS OFF.</li>
-        </ul>
-      </div>
-      <div class="card"><h3>0.20<span>31 October 2026</span></h3>
-        <h4>New</h4>
-        <ul>
-          <li>Each pattern's Voices (the pattern page): FREE (the default) shares the voices with every FREE pattern;
-            LOCKED keeps the pattern's own voices, whatever you change elsewhere; KIT loads a saved kit slot, as
-            the LXR's Kit change did. A lock on the page shows which.</li>
-          <li>Play (PATTERN or SONG) sets what PLAY plays, on the pattern page, the song's ROWS page and
-            CONFIG → SEQUENCER.</li>
-          <li>The song's ROWS page (SELECT): insert or delete a row with OCT+.</li>
-          <li>Three more MICRO voices, after Curtis Roads' Microsound: PULSAR (pulses that speed up until they
-            become a pitch), WAVELET (a few cycles of a sine in a smooth window) and SPLINTER (an impulse breaking
-            into smaller and smaller fragments).</li>
-          <li>Pictures: the reverb's ROOM is a hut, HALL a castle, PLATE a steel shield and SPRING a bare spring;
-            P SPEECH is a wizard whose lips move as you turn its knobs.</li>
-          <li>The library page can empty the kit library (installing V15 doesn't clear it), backing it up first.</li>
-        </ul>
-        <h4>Changed</h4>
-        <ul>
-          <li>The song page's knobs: Song, Row, Pattern, Repeats (KNOB 2 moves the row).</li>
-          <li>CONFIG → SEQUENCER's Kit change is now each pattern's Voices (KIT); projects that had it on AUTO load
-            with their patterns on KIT.</li>
-          <li>The pattern page shows how to copy and paste a pattern.</li>
-          <li>Instructions on screen: the term in colour, then what it does, spaced alike on every page.</li>
-          <li>CONFIG → LOAD shows each core's load (moved from the ELIXIR page), spaced out.</li>
-          <li>About 24 KB of flash and 1 KB of RAM freed: wavetables that were never read, and two lookup tables
-            moved out of RAM.</li>
-        </ul>
-      </div>
-      <div class="card"><h3>0.19<span>31 October 2026</span></h3>
-        <h4>New</h4>
-        <ul>
-          <li>SPELLS (ARP, after PERFORM): NONE and eleven guided randomizers for the sound and the pattern, from
-            Poltergeist to Whispering Motes. The black keys pick the tracks, the white keys what may change (1–8 the
-            sound, 9–16 the pattern). COPY (OCT+) rolls a twelve-sided die and casts, again rerolls from before the
-            cast, and SHIFT (OCT−) takes it back exactly. Five pages: GRIMOIRE (spell, variation, scope, roll), CAST
-            (sound, pattern, density, chaos), CHARACTER (each spell's own four), LIMITS (the most a spell sets for
-            the sends, the reverb and the FX mix) and MOTION (how far the tracks' speed and direction part, from
-            SAME to FREE, and the lengths a cast may give). Bar key 3 saves a recipe (U1–U8) into the project.
-            D1 always stays a kick and D2 and D3 toms, and spells often give the toms a melody in the pattern's
-            scale.</li>
-          <li>The LXR-02's 85 factory kits are built in, with Erica Synths' permission. The kit browser (PRESETS)
-            lists them first (F1 …), then the library, then the slots; CONFIG → BUTTONS &amp; KITS can put the
-            slots first. The sound browser offers the factory kits' voices too.</li>
-          <li>Hrtl's DLC and UNTZ kit packs (16 kits each): tick them on the install page or add them on the library
-            page. They go into the library's first empty slots, never over your own kits. The emulators include them.</li>
-          <li>Songs: KNOB 3 (Repeats) plays a row's pattern x1, x2, x3, x4, x6, x8 or x16 times before moving on;
-            the row playing shows which time it is.</li>
-          <li>Pictures: each EDIT page's top shows its sound (the wave, FM, transient, envelopes, the filter's
-            response, the shaper, inserts, LFOs, random lanes); the MODEL page a picture of the model beside a plain
-            description; SEQ's groove, bounce, melody and scale; FX's reverb room, delay echoes, FX bus, DIRT and
-            the master compressor.</li>
-          <li>PERF RESET: SHIFT (OCT−) + HOME turns every performance effect off at once.</li>
-          <li>KEYS stays on as you change pages, so you can play while turning knobs; the header shows KEYS.</li>
-          <li>The FX pages end with the voices' FX and reverb sends.</li>
-          <li>Editing with morph on moves the morph target too, so an edit is heard at any morph amount (CONFIG →
-            MORPH → Edits; KIT ONLY for the LXR's way).</li>
-          <li>DENSITY's VARY redraws the order steps drop and ghosts land each time round; OCT+ on DENSITY commits
-            it into the pattern (again: undo).</li>
-        </ul>
-        <h4>Changed</h4>
-        <ul>
-          <li>The sound pages run in a synth's order: MODEL, oscillator, FM, transient, filter, shape, insert FX,
-            the envelopes, then the modulation. SELECT steps through them all; EDIT, ENV, SCL and LFO jump to their
-            sections. A section of several pages shows its page in the title.</li>
-          <li>SEQ opens the track's pages (TRACK, generator, action, groove, bounce, melody, scale), SEQ again step
-            edit. ARP cycles PERFORM → SPELLS → GLOBAL MOD (the global LFOs, macros and links).</li>
-          <li>LFO 1 and LFO 2 share a layout. The track's MIX pages are gone (the mixer, CONFIG and TRACK have
-            them); the sample rate is on SHAPE. CONFIG has a new last page, ELIXIR: the version and each core's
-            load.</li>
-          <li>Knob cards in real units: filter Hz and Q, envelope times in ms, LFO rates in Hz, delay time in ms and
-            so on.</li>
-          <li>On a model's own sound, the FM, TRANSIENT and AMP EG pages it doesn't use are hidden, and OSC keeps
-            only COARSE and FINE live.</li>
-          <li>The FX bus is always stereo (no Output knob).</li>
-          <li>Phone emulator: a smaller screen with PRESET, ALGO and SELECT beside it, larger knobs under the
-            parameters they turn (or drag a parameter on the screen), square pads and a volume slider. Both
-            emulators draw the screen smooth at your display's resolution.</li>
-          <li>A new unit no longer fills its kit slots with factory kits (LOAD → FACTORY, ALL &gt; SLOTS still
-            does).</li>
-        </ul>
-        <h4>Fixed</h4>
-        <ul>
-          <li>After a model change the knob cards kept the last model's names and values.</li>
-          <li>MODEL on LXR showed Rings' knobs, which do nothing there; the MODEL page lit GLO instead of EDIT.</li>
-          <li>Phone emulator: tapping buttons no longer zooms the page.</li>
-        </ul>
-      </div>
-      <div class="card"><h3>0.18<span>30 October 2026</span></h3>
-        <h4>New</h4>
-        <ul>
-          <li>P CHORD shows its chord by name (OCT, 5, sus4, m, m7, m9, m11, 69, M9, M7, M) on its first MODEL knob,
-            now called Chord; Timbre and Morph are named Invert and Wave.</li>
-          <li>TRK LFO 2 (LFO, after LFO MODE; from 0.19 LFO 2): a second LFO on every track, with LFO 1's waves, sync, retrigger,
-            offset and modes, on any of the track's own parameters. On the same target as LFO 1 it adds to it.</li>
-          <li>INSERT (SCL, after SHAPE): an effect on every track before its pan and sends: PHASER, FLANGER,
-            CHORUS, TREMOLO, AUTOPAN, SHIFTER (a frequency shifter with feedback) or RING, with an AMOUNT and two
-            knobs named for the type.</li>
-          <li>The LFO's and velocity's targets go on past the LXR's to Elixir's own: the sends, tilt, bits, the
-            random amounts, cross mod, the MODEL knobs, and the reverb, delay and dirt settings.</li>
-          <li>GROOVE (ARP, after SCALE): twelve timing and velocity templates per pattern (MPC-style swings, LAZY,
-            DILLA, 2-STEP, DUB, PUSH, TECHNO, BROKEN) with an amount, HUMANIZE, and which tracks follow.</li>
-          <li>Seven more filter types on every track: LP4 (a ladder low-pass), COMB+ and COMB− (tuned combs that
-            follow the note), ALLPASS (a phaser's notches), VOWEL (formants from A to U), DUB BP (a driven band-pass)
-            and CHORD (a root, fifth and octave rung out of any sound).</li>
-        </ul>
-        <h4>Changed</h4>
-        <ul>
-          <li>The 64 kit slots are stored more compactly in memory, which frees about 6 KB for the next features
-            (more LFOs, track inserts). Kits, projects and the library are unchanged, and kits sound the same.</li>
-        </ul>
-      </div>
-      <div class="card"><h3>0.17<span>28 October 2026</span></h3>
-        <h4>New</h4>
-        <ul>
-          <li>MICRO: ten microsound voices for any track, after GLITCH: CLICK, TRAIN, CRUNCH, BITS, BURST, SNAP,
-            GRAIN, DUST, POP and CHIRP, each with Length, Colour, Jitter, Reverse and Tension (the track's MODEL
-            page).</li>
-        </ul>
-        <h4>Fixed</h4>
-        <ul>
-          <li>Holding SHIFT (OCT−) and COPY (OCT+) together for a few seconds (to clear a selection, say) sent the
-            FM-1 to its UBOOT mode, which looked as if it had switched off. UBOOT now needs both keys held from
-            power-on.</li>
-          <li>Step edits (chance, velocity, note, condition, timing, ratchets, locks) on a track that a generator
-            plays did nothing after COMMIT; they now reach what plays.</li>
-        </ul>
-      </div>
-      <div class="card"><h3>0.16<span>28 October 2026</span></h3>
-        <h4>New</h4>
-        <ul>
-          <li>A scale per pattern (17, from major and minor to pentatonics, Hirajoshi and pelog) that the tracks you
-            choose follow: their notes, random pitch, KEYS and MIDI in stay in key.</li>
-          <li>Note lengths per step (1/32 to 1/2, and TIE) with a GATE per voice; MIDI out sends real note-offs.</li>
-          <li>A melody generator after Marbles: random, walk, arpeggios and motifs over the scale, with spread, bias,
-            steps and déjà vu loops, beside any rhythm generator. COMMIT writes the notes in.</li>
-          <li>DENSITY on PERF: one knob thins the whole pattern, weakest steps first, or builds it up with chances,
-            ghost notes and ratchets. Any tracks can be left out.</li>
-          <li>A third global LFO, and new destinations: density, transpose, the melody, the delay, the reverb sends
-            and the macros.</li>
-          <li>A tape delay: TAPE and TAPE PP with wow, saturation and feedback past 100%, note-value sync, glitches
-            (stutter, reverse, skip, half speed), pitch-shifted repeats, and the echoes into the reverb (THROW REV
-            throws them too).</li>
-          <li>PLATE, Mutable Instruments Clouds' reverb, as a fourth reverb model.</li>
-          <li>Dirt: four more shapes per voice (FUZZ, TAPE, SINE FOLD, BITE), a drive before the FX bus, and a
-            master DIRT (tape, tube, fuzz, diode, fold).</li>
-          <li>HYRULE, a colour theme: deep forest green, parchment text, Triforce gold values and a blue for what's
-            active (CONFIG → DEVICE → Colours).</li>
-          <li>DENSITY on the remote: its amount on a knob, and a row of buttons to leave tracks out of it (or put them
-            all back).</li>
-          <li>A master compressor (FX → MASTER COMP): threshold, ratio, attack, release, makeup and mix, with a
-            sidechain from the mix or any one track. Sidechained to the kick, it ducks everything else and leaves the
-            kick's own punch alone.</li>
-          <li>STUTTER (PERF → PERFORM: STUTTER): the master cut into slices and repeated in time, from 1/8 to 1/64,
-            with shrinking rolls, pitch drops and rises, and reversed repeats. A chance per beat, OCT+ held, or a global
-            LFO sets it off.</li>
-        </ul>
-        <h4>Changed</h4>
-        <ul>
-          <li>The reverb and the delay's echoes now run while the first core waits for the second, so the effects
-            cost less at the busiest moments.</li>
-          <li>ARP's generator pages: MELODY comes after ACTION and SCALE after TRACK. PERF has a DENSITY page after
-            MORE, and two pages for LFO 3. The FX bus has three more pages (DELAY: DUB, DELAY: SEND, DIRT).</li>
-          <li>CONFIG → LOAD shows how deep the stacks have gone.</li>
-          <li>The FX pages come in order: REVERB first, then the FX bus and the selected effect's pages together (the
-            two DELAY pages only when the bus is a DELAY), then DIRT.</li>
-          <li>The remote map is on two channels: TRACKS (15 by default) for each track's knobs, mutes and solos, and
-            GLOBAL (16) for the performance, the effects and the rest. No number is used twice on a channel, so mute
-            and solo no longer share a CC with a knob. Buttons work as CCs or notes, and their lights answer the way
-            they were sent. Settings from 0.15 move to the new defaults. The new map is in the manual (§15).</li>
-          <li>With the delay's SYNC on, each detent of TIME moves to the next note value.</li>
-        </ul>
-        <h4>Fixed</h4>
-        <ul>
-          <li>The site said two global LFOs; there are three.</li>
-        </ul>
-      </div>
-      <div class="card"><h3>0.15<span>27 October 2026</span></h3>
-        <h4>New</h4>
-        <ul>
-          <li>Plaits' sixteen original engines (virtual analog, waveshaping, FM, grain, additive, wavetable, chords,
-            speech, swarm, noise, particles, string, modal, bass drum, snare, hi-hat) as models on D1–D3, with
-            Harmonic, Timbre, Morph, Colour (a low-pass gate), Aux and Env. Experimental, as the Rings models are.</li>
-          <li>The FM-1's second core renders the three drum voices. The LXR-02's kits use about 27% of the first
-            core, down from about 45%. A unit whose second core misbehaves falls back to one core on its own.</li>
-          <li>Up to two models play at once (one on a unit running one core); a third plays as the LXR voice and its
-            MODEL page says so.</li>
-          <li>CONFIG → LOAD: the load by part (voices, mixer, FX bus, reverb, sequencer) and the state of both
-            cores.</li>
-        </ul>
-        <h4>Fixed</h4>
-        <ul>
-          <li>Morphing, or a global LFO on morph, no longer overloads the processor: the kit now changes over a few
-            blocks instead of all at once.</li>
-          <li>The second core no longer switches off the first time the SPEECH engine plays.</li>
-          <li>The LOAD page could show impossible numbers (over 1000%) while morphing.</li>
-        </ul>
-      </div>
-      <div class="card"><h3>0.14.1<span>26 October 2026</span></h3>
-        <h4>Changed</h4>
-        <ul>
-          <li>LFO MODE comes right after the LFO's two pages instead of last among the sound pages.</li>
-        </ul>
-      </div>
-      <div class="card"><h3>0.14<span>26 October 2026</span></h3>
-        <h4>New</h4>
-        <ul>
-          <li>The first release as Elixir: a new title screen and this site, with the install steps on their own
-            page, the manual as a page and the emulator.</li>
-          <li>The install and library pages check what your FM-1 runs before they write anything.</li>
+          <li>35 KB more memory recovered for new features.</li>
+          <li>The two processor cores now work side by side instead of waiting on each other, so more engines and
+            effects fit at once. The output is 1.45 ms later as a whole.</li>
+          <li>The DJ filter, phaser, Rings and several Plaits engines are cheaper to run, with the same sound.</li>
         </ul>
       </div>
     </div>
+
+    <details class="older">
+      <summary>Earlier releases (0.14 to 0.25.2)</summary>
+      <div class="updates">
+        <div class="card"><h3>0.25.2<span>November 3, 2026</span></h3>
+          <h4>New</h4>
+          <ul>
+            <li>LFO destinations easier to read and find: the track LFOs' page shows the destination's full name under
+              its group (FILTER, Frequency; MOD EG / VELO, Velocity amount), as the MODEL page shows a model, and a global
+              LFO's Dest shows its full name over the page for a few seconds while you turn it.</li>
+            <li>The Dest knobs turn through their destinations in groups, in the order EDIT shows the pages (the signal
+              path), each group by name; the global LFOs' by sequencer, kit, delay, reverb, master FX, DJ filter and
+              macros. The velocity's destination follows the same order.</li>
+            <li>One name for one knob: the track LFOs' DstParam (LFO 1) and Target (LFO 2) are now Dest, as on the
+              global LFOs.</li>
+          </ul>
+        </div>
+        <div class="card"><h3>0.25.1<span>November 2, 2026</span></h3>
+          <h4>New</h4>
+          <ul>
+            <li>Mute and solo from a controller's toggle buttons: CONFIG: REMOTE's new Mute/solo setting, TOGGLE, takes
+              what the button sends as the mute (on mutes, off unmutes), so a Launch Control XL's pads in Toggle mode
+              stay in step, and with the feedback looped back they light with the mutes. PRESS (the default, for momentary
+              buttons) is as before: each press flips it.</li>
+            <li>DJ reso: the DJ filter's resonance, on the FX bus's DIRT page (KNOB 2) and the remote's GLOBAL CC 47.
+              At 0 the filter is as before; turned up it rings and screams as you sweep it. Saved with the project; no
+              extra CPU.</li>
+          </ul>
+        </div>
+        <div class="card"><h3>0.25<span>November 2, 2026</span></h3>
+          <h4>New</h4>
+          <ul>
+            <li>ENSEMBLE, a new model on every track, after 4ms' Ensemble Oscillator: eight sines stacked up from the
+              voice's pitch, quantized to a scale (Spread, Scale), each one warped (FOLD, CHEBY, SEGMENT) and twisted
+              (FEEDBACK, PULSAR, CRUSH), with Balance and Detune. Through the amp EG it gives gongs, chimes, organ
+              stabs, clusters and drones. Its MODEL page draws the eight oscillators.</li>
+            <li>ENSEMBLE isn't limited like Rings and Plaits: each one takes about 10% of the CPU (one Rings, one
+              Plaits and three ENSEMBLE voices play together fine).</li>
+            <li>The AMP EG page now shows for the Plaits engines that don't make their own envelope (P VA, P WSHAPE,
+              P FM, P GRAIN, P ADDTV, P CHORD, P SPEECH, P SWARM, P NOISE, P PARTCL), since the amp EG shapes them.</li>
+          </ul>
+        </div>
+        <div class="card"><h3>0.24.2<span>November 2, 2026</span></h3>
+          <h4>New</h4>
+          <ul>
+            <li>The basics on one MIDI channel: the remote channels (15 and 16 by default) now also launch patterns
+              (program change 0–31), slot kits (CC 126) and factory kits (CC 127), so a controller already on a
+              remote channel needs no third channel for them.</li>
+            <li>CC 126 and CC 127 also work on the global channel (10) as CC 102 and 103 do (Global in KEYS or
+              PAT+KIT), so the same numbers work on all three.</li>
+          </ul>
+        </div>
+        <div class="card"><h3>0.24.1<span>November 2, 2026</span></h3>
+          <h4>New</h4>
+          <ul>
+            <li>Elixir protects Wyrd's data. On a unit that still holds Wyrd's projects, kits or settings, Elixir asks
+              at power-on and saves nothing until you answer: SHIFT (OCT−) keeps it all (Elixir saves nothing until
+              the next power-on, so you can back it up), COPY (OCT+) twice erases only Wyrd's records. Elixir's own
+              projects and kits stay.</li>
+          </ul>
+        </div>
+        <div class="card"><h3>0.24<span>November 2, 2026</span></h3>
+          <h4>New</h4>
+          <ul>
+            <li>Your own MIDI CC numbers: the library page has a CC map. Point each CC your controller sends at any
+              parameter Elixir takes by CC or NRPN (search by name), or at nothing. A CC aimed at a short list (a
+              waveform, a filter type, a model) sweeps the whole list. Save and load maps as CSV files.</li>
+            <li>The global MIDI channel (10) launches patterns (program change 0–31), slot kits (CC 102) and factory kits
+              (CC 103), and plays the selected track from a keyboard (its mod wheel on MACRO 1); bank select, pitch bend
+              and other CCs do nothing there. CONFIG → MIDI CHANNELS, Global in: KEYS (the default), PAT+KIT (no notes),
+              ALL (everything, as before) or OFF.</li>
+            <li>The install page finds an FM-1 running Wyrd or Grimoire, and says to back up its data before
+              installing Elixir.</li>
+          </ul>
+          <h4>Changed</h4>
+          <ul>
+            <li>Sound CCs and CC 0 on the global channel are ignored unless Global in is ALL; the track channels are as
+              before. Set ALL to control everything from channel 10 as on the LXR.</li>
+            <li>The cheat sheet has two MIDI pages: the channels, launching, the sound by CC and the remote map.</li>
+            <li>P WTABLE is gone from the MODEL list, freeing 48 KB of flash for what comes next. A kit that used it
+              loads on P ADDTV. P CHORD is unchanged: it keeps its own waves.</li>
+          </ul>
+          <h4>Fixed</h4>
+          <ul>
+            <li>Switching the delay from TAPE to TAPE PP while it was echoing could write past the delay's memory.</li>
+          </ul>
+        </div>
+        <div class="card"><h3>0.23<span>November 1, 2026</span></h3>
+          <h4>New</h4>
+          <ul>
+            <li>WANDER (ARP three times): the pattern changes slowly, over minutes, until you are somewhere else. Pick
+              one of eleven quests, press COPY (OCT+) and listen: voices get darker, wetter, more metallic a notch at a
+              time, the hits thin out or fill in, and on an open road the rhythm itself changes one step at a time,
+              each change picked to sound like the track's own. SHIFT (OCT−) comes home, slowly or at once, and every
+              pattern you passed through gets its steps back exactly.</li>
+            <li>Destinations: set Goal to a pattern and the road walks there by the end of the Journey; set it to
+              SONG and it travels the song's rows. KEEP makes where you are home, REST waits, Memory brings back a
+              version you heard minutes ago, and Fate decides the road's end (home, treasure, wounded, lost or the
+              d12's choice).</li>
+            <li>POSTCARD (hold SHIFT (OCT−), press black key 10) saves where you are into the first empty pattern,
+              with its voices locked as they sounded, so you can come back to it or wander towards it later.</li>
+            <li>PERFORM: RUSH, after the snare rush in Elixir Desktop by johnnyhawk02: one knob turns the whole kit
+              into a roll. The other drums go over to the rush track (the hats first, the kick last), it rolls on the
+              grid, then free up to 1/256 while the high-pass opens. It follows how fast you turn, and rushes record
+              as locks.</li>
+            <li>PERFORM: TRANSPOSE moves chosen tracks up and down the pattern's scale live from the white keys,
+              now, on the beat or on the bar.</li>
+            <li>A track's Base note (SCALE page, KNOB 4), as an Elektron's track note: every note moves with it,
+              except steps whose Note you've set on the STEP page.</li>
+            <li>ROADS (the SONG page's third page): a song plays by its own chances, cutting between rows with the
+              same pattern, with Surprise and a way Home.</li>
+            <li>Long notes: a step's Length now goes to 1 BAR … 64 BARS and INF, a drone held until the track's next
+              note.</li>
+            <li>Ten more arp orders on MELODY's Shape: CONVERGE, DIVERGE, CON/DIV, LEAPFROG, SPIRAL, ALTERNATE, PAIRS,
+              ROTATE, INVERT and PEDAL.</li>
+            <li>P WTABLE and P CHORD draw their real waves on the MODEL page.</li>
+            <li>The <a href="cheatsheet.pdf">cheat sheet</a> has a fourth page: Wander, Rush, Transpose, Roads.</li>
+          </ul>
+          <h4>Changed</h4>
+          <ul>
+            <li>Step edit's pages, as on the Elektrons: STEP is Note, Length, Velocity; TRIG (was TIMING) is Chance,
+              Condition, Shift, Flam.</li>
+            <li>P WTABLE's knobs are named for what they do: Bank, Bright and Family, and its envelope moves Bright
+              only (a kit using P WTABLE with Env up sounds a little different).</li>
+            <li>The factory kits are stored packed in the firmware (the same 85 kits, bit for bit), to make room.</li>
+            <li>MICRO's PULSAR, WAVELET and SPLINTER are taken out for room; a kit that used one plays its LXR
+              voice.</li>
+          </ul>
+          <h4>Fixed</h4>
+          <ul>
+            <li>An arp whose cycle doesn't divide into 256 notes (6, 7, 10 …) no longer jumps to another place in its
+              cycle every 256 notes.</li>
+          </ul>
+        </div>
+        <div class="card"><h3>0.22<span>October 31, 2026</span></h3>
+          <h4>Changed</h4>
+          <ul>
+            <li>Elixir has its own identity: the FM-1 now answers FM-1_359002200 (FM-1_359, then the version) instead
+              of FM-1_900, which Felucca and other firmwares share. Updating from 0.21 works as before, and your
+              projects and kit library are kept.</li>
+          </ul>
+          <h4>New</h4>
+          <ul>
+            <li>A three-page <a href="cheatsheet.pdf">cheat sheet</a> (PDF): keys, combinations, every page's knobs,
+              the performance keys and the spells.</li>
+          </ul>
+        </div>
+        <div class="card"><h3>0.21<span>October 31, 2026</span></h3>
+          <h4>New</h4>
+          <ul>
+            <li>SPELLS → MOTION's page: VOICES. The top row of white keys picks the engines a cast may give (LXR,
+              Rings, Plaits, MICRO), and KCK keeps D1 the LXR's kick: MICRO + KCK gives an LXR kick and MICRO on
+              everything else.</li>
+            <li>Sound at 100% (FREE, any spell) lets the kick and the toms go too; 99% keeps them.</li>
+          </ul>
+          <h4>Changed</h4>
+          <ul>
+            <li>NONE is plain chance on everything the white keys let in: Sound sets how far, from a nudge to
+              anywhere at all; Spread (was Range) how many knobs move.</li>
+            <li>A spell that changes nothing says why: NOTHING IN SCOPE (the white keys leave none of its parts),
+              SOUND IS OFF or PATTERN IS OFF.</li>
+          </ul>
+        </div>
+        <div class="card"><h3>0.20<span>October 31, 2026</span></h3>
+          <h4>New</h4>
+          <ul>
+            <li>Each pattern's Voices (the pattern page): FREE (the default) shares the voices with every FREE pattern;
+              LOCKED keeps the pattern's own voices, whatever you change elsewhere; KIT loads a saved kit slot, as
+              the LXR's Kit change did. A lock on the page shows which.</li>
+            <li>Play (PATTERN or SONG) sets what PLAY plays, on the pattern page, the song's ROWS page and
+              CONFIG → SEQUENCER.</li>
+            <li>The song's ROWS page (SELECT): insert or delete a row with OCT+.</li>
+            <li>Three more MICRO voices, after Curtis Roads' Microsound: PULSAR (pulses that speed up until they
+              become a pitch), WAVELET (a few cycles of a sine in a smooth window) and SPLINTER (an impulse breaking
+              into smaller and smaller fragments).</li>
+            <li>Pictures: the reverb's ROOM is a hut, HALL a castle, PLATE a steel shield and SPRING a bare spring;
+              P SPEECH is a wizard whose lips move as you turn its knobs.</li>
+            <li>The library page can empty the kit library (installing V15 doesn't clear it), backing it up first.</li>
+          </ul>
+          <h4>Changed</h4>
+          <ul>
+            <li>The song page's knobs: Song, Row, Pattern, Repeats (KNOB 2 moves the row).</li>
+            <li>CONFIG → SEQUENCER's Kit change is now each pattern's Voices (KIT); projects that had it on AUTO load
+              with their patterns on KIT.</li>
+            <li>The pattern page shows how to copy and paste a pattern.</li>
+            <li>Instructions on screen: the term in color, then what it does, spaced alike on every page.</li>
+            <li>CONFIG → LOAD shows each core's load (moved from the ELIXIR page), spaced out.</li>
+            <li>About 24 KB of flash and 1 KB of RAM freed: wavetables that were never read, and two lookup tables
+              moved out of RAM.</li>
+          </ul>
+        </div>
+        <div class="card"><h3>0.19<span>October 31, 2026</span></h3>
+          <h4>New</h4>
+          <ul>
+            <li>SPELLS (ARP, after PERFORM): NONE and eleven guided randomizers for the sound and the pattern, from
+              Poltergeist to Whispering Motes. The black keys pick the tracks, the white keys what may change (1–8 the
+              sound, 9–16 the pattern). COPY (OCT+) rolls a twelve-sided die and casts, again rerolls from before the
+              cast, and SHIFT (OCT−) takes it back exactly. Five pages: GRIMOIRE (spell, variation, scope, roll), CAST
+              (sound, pattern, density, chaos), CHARACTER (each spell's own four), LIMITS (the most a spell sets for
+              the sends, the reverb and the FX mix) and MOTION (how far the tracks' speed and direction part, from
+              SAME to FREE, and the lengths a cast may give). Bar key 3 saves a recipe (U1–U8) into the project.
+              D1 always stays a kick and D2 and D3 toms, and spells often give the toms a melody in the pattern's
+              scale.</li>
+            <li>The LXR-02's 85 factory kits are built in, with Erica Synths' permission. The kit browser (PRESETS)
+              lists them first (F1 …), then the library, then the slots; CONFIG → BUTTONS &amp; KITS can put the
+              slots first. The sound browser offers the factory kits' voices too.</li>
+            <li>Hrtl's DLC and UNTZ kit packs (16 kits each): tick them on the install page or add them on the library
+              page. They go into the library's first empty slots, never over your own kits. The emulators include them.</li>
+            <li>Songs: KNOB 3 (Repeats) plays a row's pattern x1, x2, x3, x4, x6, x8 or x16 times before moving on;
+              the row playing shows which time it is.</li>
+            <li>Pictures: each EDIT page's top shows its sound (the wave, FM, transient, envelopes, the filter's
+              response, the shaper, inserts, LFOs, random lanes); the MODEL page a picture of the model beside a plain
+              description; SEQ's groove, bounce, melody and scale; FX's reverb room, delay echoes, FX bus, DIRT and
+              the master compressor.</li>
+            <li>PERF RESET: SHIFT (OCT−) + HOME turns every performance effect off at once.</li>
+            <li>KEYS stays on as you change pages, so you can play while turning knobs; the header shows KEYS.</li>
+            <li>The FX pages end with the voices' FX and reverb sends.</li>
+            <li>Editing with morph on moves the morph target too, so an edit is heard at any morph amount (CONFIG →
+              MORPH → Edits; KIT ONLY for the LXR's way).</li>
+            <li>DENSITY's VARY redraws the order steps drop and ghosts land each time round; OCT+ on DENSITY commits
+              it into the pattern (again: undo).</li>
+          </ul>
+          <h4>Changed</h4>
+          <ul>
+            <li>The sound pages run in a synth's order: MODEL, oscillator, FM, transient, filter, shape, insert FX,
+              the envelopes, then the modulation. SELECT steps through them all; EDIT, ENV, SCL and LFO jump to their
+              sections. A section of several pages shows its page in the title.</li>
+            <li>SEQ opens the track's pages (TRACK, generator, action, groove, bounce, melody, scale), SEQ again step
+              edit. ARP cycles PERFORM → SPELLS → GLOBAL MOD (the global LFOs, macros and links).</li>
+            <li>LFO 1 and LFO 2 share a layout. The track's MIX pages are gone (the mixer, CONFIG and TRACK have
+              them); the sample rate is on SHAPE. CONFIG has a new last page, ELIXIR: the version and each core's
+              load.</li>
+            <li>Knob cards in real units: filter Hz and Q, envelope times in ms, LFO rates in Hz, delay time in ms and
+              so on.</li>
+            <li>On a model's own sound, the FM, TRANSIENT and AMP EG pages it doesn't use are hidden, and OSC keeps
+              only COARSE and FINE live.</li>
+            <li>The FX bus is always stereo (no Output knob).</li>
+            <li>Phone emulator: a smaller screen with PRESET, ALGO and SELECT beside it, larger knobs under the
+              parameters they turn (or drag a parameter on the screen), square pads and a volume slider. Both
+              emulators draw the screen smooth at your display's resolution.</li>
+            <li>A new unit no longer fills its kit slots with factory kits (LOAD → FACTORY, ALL &gt; SLOTS still
+              does).</li>
+          </ul>
+          <h4>Fixed</h4>
+          <ul>
+            <li>After a model change the knob cards kept the last model's names and values.</li>
+            <li>MODEL on LXR showed Rings' knobs, which do nothing there; the MODEL page lit GLO instead of EDIT.</li>
+            <li>Phone emulator: tapping buttons no longer zooms the page.</li>
+          </ul>
+        </div>
+        <div class="card"><h3>0.18<span>October 30, 2026</span></h3>
+          <h4>New</h4>
+          <ul>
+            <li>P CHORD shows its chord by name (OCT, 5, sus4, m, m7, m9, m11, 69, M9, M7, M) on its first MODEL knob,
+              now called Chord; Timbre and Morph are named Invert and Wave.</li>
+            <li>TRK LFO 2 (LFO, after LFO MODE; from 0.19 LFO 2): a second LFO on every track, with LFO 1's waves, sync, retrigger,
+              offset and modes, on any of the track's own parameters. On the same target as LFO 1 it adds to it.</li>
+            <li>INSERT (SCL, after SHAPE): an effect on every track before its pan and sends: PHASER, FLANGER,
+              CHORUS, TREMOLO, AUTOPAN, SHIFTER (a frequency shifter with feedback) or RING, with an AMOUNT and two
+              knobs named for the type.</li>
+            <li>The LFO's and velocity's targets go on past the LXR's to Elixir's own: the sends, tilt, bits, the
+              random amounts, cross mod, the MODEL knobs, and the reverb, delay and dirt settings.</li>
+            <li>GROOVE (ARP, after SCALE): twelve timing and velocity templates per pattern (MPC-style swings, LAZY,
+              DILLA, 2-STEP, DUB, PUSH, TECHNO, BROKEN) with an amount, HUMANIZE, and which tracks follow.</li>
+            <li>Seven more filter types on every track: LP4 (a ladder low-pass), COMB+ and COMB− (tuned combs that
+              follow the note), ALLPASS (a phaser's notches), VOWEL (formants from A to U), DUB BP (a driven band-pass)
+              and CHORD (a root, fifth and octave rung out of any sound).</li>
+          </ul>
+          <h4>Changed</h4>
+          <ul>
+            <li>The 64 kit slots are stored more compactly in memory, which frees about 6 KB for the next features
+              (more LFOs, track inserts). Kits, projects and the library are unchanged, and kits sound the same.</li>
+          </ul>
+        </div>
+        <div class="card"><h3>0.17<span>October 28, 2026</span></h3>
+          <h4>New</h4>
+          <ul>
+            <li>MICRO: ten microsound voices for any track, after GLITCH: CLICK, TRAIN, CRUNCH, BITS, BURST, SNAP,
+              GRAIN, DUST, POP and CHIRP, each with Length, Color, Jitter, Reverse and Tension (the track's MODEL
+              page).</li>
+          </ul>
+          <h4>Fixed</h4>
+          <ul>
+            <li>Holding SHIFT (OCT−) and COPY (OCT+) together for a few seconds (to clear a selection, say) sent the
+              FM-1 to its UBOOT mode, which looked as if it had switched off. UBOOT now needs both keys held from
+              power-on.</li>
+            <li>Step edits (chance, velocity, note, condition, timing, ratchets, locks) on a track that a generator
+              plays did nothing after COMMIT; they now reach what plays.</li>
+          </ul>
+        </div>
+        <div class="card"><h3>0.16<span>October 28, 2026</span></h3>
+          <h4>New</h4>
+          <ul>
+            <li>A scale per pattern (17, from major and minor to pentatonics, Hirajoshi and pelog) that the tracks you
+              choose follow: their notes, random pitch, KEYS and MIDI in stay in key.</li>
+            <li>Note lengths per step (1/32 to 1/2, and TIE) with a GATE per voice; MIDI out sends real note-offs.</li>
+            <li>A melody generator after Marbles: random, walk, arpeggios and motifs over the scale, with spread, bias,
+              steps and déjà vu loops, beside any rhythm generator. COMMIT writes the notes in.</li>
+            <li>DENSITY on PERF: one knob thins the whole pattern, weakest steps first, or builds it up with chances,
+              ghost notes and ratchets. Any tracks can be left out.</li>
+            <li>A third global LFO, and new destinations: density, transpose, the melody, the delay, the reverb sends
+              and the macros.</li>
+            <li>A tape delay: TAPE and TAPE PP with wow, saturation and feedback past 100%, note-value sync, glitches
+              (stutter, reverse, skip, half speed), pitch-shifted repeats, and the echoes into the reverb (THROW REV
+              throws them too).</li>
+            <li>PLATE, Mutable Instruments Clouds' reverb, as a fourth reverb model.</li>
+            <li>Dirt: four more shapes per voice (FUZZ, TAPE, SINE FOLD, BITE), a drive before the FX bus, and a
+              master DIRT (tape, tube, fuzz, diode, fold).</li>
+            <li>HYRULE, a color theme: deep forest green, parchment text, Triforce gold values and a blue for what's
+              active (CONFIG → DEVICE → Colors).</li>
+            <li>DENSITY on the remote: its amount on a knob, and a row of buttons to leave tracks out of it (or put them
+              all back).</li>
+            <li>A master compressor (FX → MASTER COMP): threshold, ratio, attack, release, makeup and mix, with a
+              sidechain from the mix or any one track. Sidechained to the kick, it ducks everything else and leaves the
+              kick's own punch alone.</li>
+            <li>STUTTER (PERF → PERFORM: STUTTER): the master cut into slices and repeated in time, from 1/8 to 1/64,
+              with shrinking rolls, pitch drops and rises, and reversed repeats. A chance per beat, OCT+ held, or a global
+              LFO sets it off.</li>
+          </ul>
+          <h4>Changed</h4>
+          <ul>
+            <li>The reverb and the delay's echoes now run while the first core waits for the second, so the effects
+              cost less at the busiest moments.</li>
+            <li>ARP's generator pages: MELODY comes after ACTION and SCALE after TRACK. PERF has a DENSITY page after
+              MORE, and two pages for LFO 3. The FX bus has three more pages (DELAY: DUB, DELAY: SEND, DIRT).</li>
+            <li>CONFIG → LOAD shows how deep the stacks have gone.</li>
+            <li>The FX pages come in order: REVERB first, then the FX bus and the selected effect's pages together (the
+              two DELAY pages only when the bus is a DELAY), then DIRT.</li>
+            <li>The remote map is on two channels: TRACKS (15 by default) for each track's knobs, mutes and solos, and
+              GLOBAL (16) for the performance, the effects and the rest. No number is used twice on a channel, so mute
+              and solo no longer share a CC with a knob. Buttons work as CCs or notes, and their lights answer the way
+              they were sent. Settings from 0.15 move to the new defaults. The new map is in the manual (§15).</li>
+            <li>With the delay's SYNC on, each detent of TIME moves to the next note value.</li>
+          </ul>
+          <h4>Fixed</h4>
+          <ul>
+            <li>The site said two global LFOs; there are three.</li>
+          </ul>
+        </div>
+        <div class="card"><h3>0.15<span>October 27, 2026</span></h3>
+          <h4>New</h4>
+          <ul>
+            <li>Plaits' sixteen original engines (virtual analog, waveshaping, FM, grain, additive, wavetable, chords,
+              speech, swarm, noise, particles, string, modal, bass drum, snare, hi-hat) as models on D1–D3, with
+              Harmonic, Timbre, Morph, Color (a low-pass gate), Aux and Env. Experimental, as the Rings models are.</li>
+            <li>The FM-1's second core renders the three drum voices. The LXR-02's kits use about 27% of the first
+              core, down from about 45%. A unit whose second core misbehaves falls back to one core on its own.</li>
+            <li>Up to two models play at once (one on a unit running one core); a third plays as the LXR voice and its
+              MODEL page says so.</li>
+            <li>CONFIG → LOAD: the load by part (voices, mixer, FX bus, reverb, sequencer) and the state of both
+              cores.</li>
+          </ul>
+          <h4>Fixed</h4>
+          <ul>
+            <li>Morphing, or a global LFO on morph, no longer overloads the processor: the kit now changes over a few
+              blocks instead of all at once.</li>
+            <li>The second core no longer switches off the first time the SPEECH engine plays.</li>
+            <li>The LOAD page could show impossible numbers (over 1000%) while morphing.</li>
+          </ul>
+        </div>
+        <div class="card"><h3>0.14.1<span>October 26, 2026</span></h3>
+          <h4>Changed</h4>
+          <ul>
+            <li>LFO MODE comes right after the LFO's two pages instead of last among the sound pages.</li>
+          </ul>
+        </div>
+        <div class="card"><h3>0.14<span>October 26, 2026</span></h3>
+          <h4>New</h4>
+          <ul>
+            <li>The first release as Elixir: a new title screen and this site, with the install steps on their own
+              page, the manual as a page and the emulator.</li>
+            <li>The install and library pages check what your FM-1 runs before they write anything.</li>
+          </ul>
+        </div>
+      </div>
+    </details>
   </section>
 </main>
+<script>
+/* the hero's screens: one every 3.5 s, paused while hovered or after a dot is picked; none of it with reduced motion */
+(() => {
+  const show = document.querySelector(".show"), imgs = [...show.querySelectorAll(".frame img")];
+  const cap = document.getElementById("showcap"), dots = show.querySelector(".dots");
+  let i = 0, timer = 0, hold = false;
+  const go = (n) => {
+    imgs[i].classList.remove("on"); dots.children[i].removeAttribute("aria-current");
+    i = (n + imgs.length) % imgs.length;
+    imgs[i].classList.add("on"); dots.children[i].setAttribute("aria-current", "true"); cap.textContent = imgs[i].dataset.cap;
+  };
+  imgs.forEach((im, k) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.setAttribute("aria-label", im.dataset.cap);
+    b.addEventListener("click", () => { hold = true; go(k); });
+    dots.append(b);
+  });
+  dots.children[0].setAttribute("aria-current", "true");
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  show.addEventListener("mouseenter", () => { hold = true; });
+  show.addEventListener("mouseleave", () => { hold = false; });
+  timer = setInterval(() => { if (!hold && !document.hidden) go(i + 1); }, 3500);
+})();
+</script>
 
 <footer class="site">
   <div class="wrap">
     <p>Elixir ports the LXR-02 firmware (Erica Synths, after Julian Schmidt's Sonic Potions LXR, GPL-3.0) to the FM-1
-      on Felucca's hardware layer, USB, updater and emulator (Leo Kuroshita, Hügelton Instruments, GPL-3.0), with
-      Grids' drum map (Emilie Gillet, GPL-3.0-or-later), ports of Rings, Plaits and Clouds' reverb, and a melody
-      generator after Marbles (Emilie Gillet, MIT).</p>
+      on Felucca's hardware layer, USB, updater and emulator (Leo Kuroshita, GPL-3.0), with Grids' drum map (Emilie
+      Gillet, GPL-3.0-or-later), ports of Rings, Plaits and Clouds' reverb, and a melody generator after Marbles
+      (Emilie Gillet, MIT).</p>
     <p><a href="firmware/LICENSE">GPL-3.0</a>, no warranty · <a href="firmware/NOTICE.md">Notice</a> ·
       <a href="firmware/">Files and source</a> · <a href="https://github.com/dmajka/elixir" target="_blank" rel="noopener">GitHub</a></p>
-    <p>Elixir is unofficial and not affiliated with or endorsed by Erica Synths, M-VAVE or Hügelton Instruments.
-      "Erica Synths" and "LXR-02" are trademarks of Erica Synths; "M-VAVE" and "FM-1" are trademarks of their
-      owner.</p>
+    <p>Elixir is unofficial and not affiliated with or endorsed by Erica Synths or M-VAVE. "Erica Synths" and "LXR-02"
+      are trademarks of Erica Synths; "M-VAVE" and "FM-1" are trademarks of their owner.</p>
   </div>
 </footer>
 </body>
