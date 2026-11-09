@@ -27,7 +27,8 @@ enum { XM_DUCK, XM_FILTER, XM_RING, NXMODE };                  /* the cross modu
 typedef struct {
     uint32_t phase, inc;         /* the free running increment (rate or sync) */
     uint32_t offset;             /* retrigger phase */
-    int32_t rnd;                 /* S&H, Q16 */
+    int32_t rnd;                 /* S&H, Q16; SMOOTH, DRIFT: the value it glides to */
+    int32_t rnd0;                /* .. SMOOTH, DRIFT: the value it glides from (1.1) */
     uint32_t rate;               /* the rate setting 0..1 (Q16), for a tempo change */
     uint8_t wave, retrig, sync;
     uint8_t mode, run;           /* 0.13: LM_* (Elixir's LFO MODE); ONE, HALF: still running since the hit */
@@ -117,7 +118,11 @@ static int32_t hit_rand(void)
 }
 
 /* -------------------------------------------------------------- LFO --- */
-enum { LFO_SINE, LFO_TRI, LFO_SAW_UP, LFO_SAW_DOWN, LFO_REC, LFO_NOISE, LFO_EXP_UP, LFO_EXP_DOWN, NLFO };
+/* 1.1: SMOOTH, RANDOM's draws joined by a half cosine; DRIFT, the same glide to a step of up to a quarter from where
+ * it is (a random walk, turned back at the ends). Past the LXR's eight: an LXR-02 .SND gets RANDOM (library.js) */
+enum { LFO_SINE, LFO_TRI, LFO_SAW_UP, LFO_SAW_DOWN, LFO_REC, LFO_NOISE, LFO_EXP_UP, LFO_EXP_DOWN, LFO_SMOOTH, LFO_DRIFT,
+       NLFO };
+static inline int lfo_glides(uint32_t w) { return w == LFO_SMOOTH || w == LFO_DRIFT; }
 /* 0.13: the LFO's mode, as Elektron's (Elixir's LFO MODE). What restarts it is the LXR's RETRIGGER voice; in HOLD,
  * ONE and HALF with RETRIGGER off, its own voice's hits.
  *   TRIG  the LXR's: a hit starts the cycle again from the offset (RETRIGGER off: it runs free)
@@ -157,6 +162,22 @@ static void lfo_recalc_sync(void)
         lfo_update_inc(&vc[i].lfo2);
     }
 }
+/* 1.1: SMOOTH, DRIFT: a new draw r (0..65535), the glide from 'from' to it (DRIFT: a step from 'from') */
+static void lfo_next(lfo_t *l, int32_t from, uint32_t r)
+{
+    int32_t t = (int32_t)(r & 0xFFFFu);
+    l->rnd0 = from;
+    if (l->wave == LFO_DRIFT) {
+        t = from + ((t - 32768) >> 1);
+        t = t < 0 ? -t : t > 65535 ? 131070 - t : t;
+    }
+    l->rnd = t;
+}
+static int32_t lfo_glide(const lfo_t *l)             /* .. at the phase: a half cosine, rnd0 at 0 .. rnd at the end */
+{
+    int32_t w = (int32_t)((uint32_t)(RG_SINE[((l->phase >> 21) + 3072u) & 4095u] + 32767) * 65536u / 65534u);
+    return l->rnd0 + (int32_t)(((int64_t)(l->rnd - l->rnd0) * w) >> 16);
+}
 static int32_t lfo_wave(lfo_t *l, uint32_t old)      /* the wave at the phase (from old: RANDOM's draw), 0..1, Q16 */
 {
     switch (l->wave) {
@@ -174,6 +195,11 @@ static int32_t lfo_wave(lfo_t *l, uint32_t old)      /* the wave at the phase (f
         if (old > l->phase)
             l->rnd = (int32_t)(noise_next() >> 16);
         return l->rnd;
+    case LFO_SMOOTH:
+    case LFO_DRIFT:
+        if (old > l->phase)
+            lfo_next(l, l->rnd, noise_next() >> 16);
+        return lfo_glide(l);
     case LFO_SAW_DOWN:
         return (int32_t)((0xFFFFFFFFu - l->phase) >> 16);
     case LFO_EXP_UP: {
@@ -223,6 +249,8 @@ static void lfo_hit(lfo_t *l)                        /* a trigger, as its mode t
         l->hold = lfo_wave(l, l->phase);
         return;
     }
+    if (lfo_glides(l->wave))                         /* (1.1: a new glide each hit, from where it is) */
+        lfo_next(l, lfo_wave(l, l->phase), noise_next() >> 16);
     l->phase = l->offset;
     if (l->mode >= LM_ONE) {
         l->gone = 0;

@@ -338,7 +338,8 @@ static void proj_write_payload(void)
         pw_byte(gls[i].dest);
         pw_byte((uint8_t)gls[i].depth);
         pw_byte(gls[i].len);
-        pw_byte(gls[i].wave);
+        pw_byte(gls[i].wave == GW_FOLLOW ? 8u : gls[i].wave < 8u ? gls[i].wave : gls[i].wave + 1u);   /* (1.1: FOLLOW
+                                                      * stays 8, as 1.0 wrote it; SMOOTH, DRIFT 9, 10) */
         pw_byte(gls[i].mode);
         pw_byte(gls[i].trig);
         pw_byte(gls[i].phase);
@@ -677,9 +678,10 @@ static int proj_read_payload(uint32_t ver)
                 gls[i].len = (uint8_t)(b[2] < NGLEN || b[2] == GL_FREE ? b[2] : 7u);
                 if (c > NGLKGL)
                     gls[i].rate = (uint8_t)(b[7] & 127u);
-                gls[i].wave = (uint8_t)(b[3] == GW_FOLLOW ? GW_FOLLOW : b[3] % NLFO);   /* (1.0 Phase 11: FOLLOW, */
+                gls[i].wave = (uint8_t)(b[3] == 8u ? GW_FOLLOW : b[3] < 8u ? b[3] : b[3] <= NLFO ? b[3] - 1u
+                                                                                       : b[3] % 8u);   /* (1.0 Phase 11: FOLLOW, */
                 gls[i].mode = (uint8_t)(b[4] < NGM ? b[4] : GM_FREE);
-                gls[i].trig = (uint8_t)(b[5] < (b[3] == GW_FOLLOW ? GF_ALL + 1u : NGT) ? b[5] : GT_PLAY);   /* .. its
+                gls[i].trig = (uint8_t)(b[5] < (b[3] == 8u ? GF_ALL + 1u : NGT) ? b[5] : GT_PLAY);   /* .. its
                                                       * SOURCE in TRIG) */
                 gls[i].phase = (uint8_t)(b[6] & 127u);
             }

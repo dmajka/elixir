@@ -439,6 +439,7 @@ export function sndBytes(name, data) {
     if (out[8 + 167 + v] >= 229) out[8 + 167 + v] = 0;
     const sy = out[8 + 179 + v];                        // (1.0: its LFO sync's 3/4 3/8 5/16 3/16: the LXR's nearest,
     if (sy > 11) out[8 + 179 + v] = [3, 5, 5, 7][sy - 12] ?? 0;   // 1/1 1/3 1/3 1/6)
+    if (out[8 + 155 + v] > 7) out[8 + 155 + v] = 5;    // (1.1: its LFO's SMOOTH, DRIFT: RANDOM)
   }
   return out;
 }

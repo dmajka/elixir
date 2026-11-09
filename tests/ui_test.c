@@ -10105,7 +10105,7 @@ static void phase_100_11(void)
     press(B_PLAY);
     turn(EN_SELECT, 1);
     turn(EN_K1, -1);
-    check(gls[3].wave == LFO_EXP_DOWN && gls[3].trig == GT_PLAY, "out of FOLLOW: its SOURCE back to a trigger (PLAY)");
+    check(gls[3].wave == LFO_DRIFT && gls[3].trig == GT_PLAY, "out of FOLLOW: its SOURCE back to a trigger (PLAY)");
     turn(EN_K1, 1);
     gls[3].trig = GF_ALL;
     /* the remote: CC 2 on GLOBAL's channel, LFO 4's depth */
@@ -11136,6 +11136,86 @@ static void copy_pass(void)
         par_set(PAR_FX_DELAY_TYPE, DELAY_OFF);
     }
 }
+/* 1.1: the LFO's SMOOTH (RANDOM's draws, glided) and DRIFT (a random walk, glided) */
+static void lfo_smooth_drift(void)
+{
+    lfo_t l;
+    uint32_t i, w, n, ok = 1, wraps = 0;
+    int32_t v, last, big[3] = {0}, tmax = 0;
+    for (w = 0; w < 3u; w++) {                       /* RANDOM, SMOOTH, DRIFT: the largest move a block */
+        memset(&l, 0, sizeof l);
+        l.wave = (uint8_t)(w == 0u ? LFO_NOISE : w == 1u ? LFO_SMOOTH : LFO_DRIFT);
+        l.inc = 0xFFFFFFFFu / 200u;                  /* (200 blocks a cycle) */
+        last = lfo_calc(&l);
+        for (i = 0; i < 200u * 40u; i++) {
+            uint32_t pr = l.rnd;
+            v = lfo_calc(&l);
+            ok &= v >= 0 && v <= 65536;
+            if (i > 400u)
+                big[w] = iabs(v - last) > big[w] ? iabs(v - last) : big[w];
+            if (w == 2u && (uint32_t)l.rnd != pr) {
+                tmax = iabs(l.rnd - (int32_t)pr) > tmax ? iabs(l.rnd - (int32_t)pr) : tmax;
+                wraps++;
+            }
+            last = v;
+        }
+    }
+    printf("  the largest move a block, 200 blocks a cycle: RANDOM %d, SMOOTH %d, DRIFT %d; DRIFT's largest step %d\n",
+           big[0], big[1], big[2], tmax);
+    check(ok, "SMOOTH, DRIFT: 0..1");
+    check(big[0] > 20000 && big[1] < 1200 && big[2] < 400, "SMOOTH, DRIFT: no steps (RANDOM's are)");
+    check(wraps >= 39u && tmax <= 16384, "DRIFT: a new value each cycle, a quarter at most from the last");
+    /* a hit (TRIG): a new glide from where it is, no jump */
+    memset(&l, 0, sizeof l);
+    l.wave = LFO_SMOOTH;
+    l.inc = 0xFFFFFFFFu / 200u;
+    for (i = 0; i < 333u; i++)
+        last = lfo_calc(&l);
+    n = 0;
+    for (i = 0; i < 20u; i++) {
+        int32_t was = l.rnd;
+        lfo_hit(&l);
+        v = lfo_calc(&l);
+        n += iabs(v - last) < 1200 && l.rnd != was;
+        last = v;
+        for (w = 0; w < 37u; w++)
+            last = lfo_calc(&l);
+    }
+    check(n == 20u, "SMOOTH: a hit starts a new glide from where it is");
+    /* the names fit the knob's card; the global LFOs' WAVE through a project, FOLLOW still 8 */
+    check(!strcmp(L_LFOW[LFO_SMOOTH], "SMOOTH") && !strcmp(L_LFOW[LFO_DRIFT], "DRIFT") &&
+          text_w(&AF_S, "SMOOTH") <= 52, "Wave: SMOOTH, DRIFT, on the card");
+    {
+        uint8_t keep[4];
+        int rc;
+        for (i = 0; i < 4u; i++)
+            keep[i] = gls[i].wave;
+        gls[0].wave = LFO_SMOOTH; gls[1].wave = GW_FOLLOW; gls[2].wave = LFO_DRIFT; gls[3].wave = LFO_EXP_DOWN;
+        rc = proj_save(1, "LFOW    ");
+        for (i = 0; i < 4u; i++)
+            gls[i].wave = LFO_SINE;
+        rc |= proj_load(1);
+        check(rc == 0 && gls[0].wave == LFO_SMOOTH && gls[1].wave == GW_FOLLOW && gls[2].wave == LFO_DRIFT &&
+              gls[3].wave == LFO_EXP_DOWN, "project: the global LFOs' SMOOTH, DRIFT, FOLLOW, EXP DN");
+        for (i = 0; i < 4u; i++)
+            gls[i].wave = keep[i];
+    }
+    /* the LFO page's picture */
+    p4_reset();
+    black(0);
+    press(B_LFO);
+    vp_set(PAR_WAVE_LFO1, LFO_SMOOTH);
+    vp_set(PAR_SYNC_LFO1, 6);                        /* (1/4: four cycles a bar) */
+    vp_set(PAR_AMOUNT_LFO1, 127);
+    run_ms(100);
+    shot("lfo-smooth");
+    vp_set(PAR_WAVE_LFO1, LFO_DRIFT);
+    vp_set(PAR_SYNC_LFO1, 10);                       /* (1/16) */
+    run_ms(100);
+    shot("lfo-drift");
+    vp_set(PAR_WAVE_LFO1, LFO_SINE);
+}
+
 int main(int argc, char **argv)
 {
     uint32_t t;
@@ -11655,6 +11735,7 @@ int main(int argc, char **argv)
     phase_100_16();
     phase_100_17();
     phase_100_18();
+    lfo_smooth_drift();
     copy_pass();                                     /* (1.0's copy and picture pass: last, as it runs time) */
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;

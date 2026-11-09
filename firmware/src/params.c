@@ -50,7 +50,8 @@ static const char *const L_ROLL[] = {"ONE", "1/1", "1/2", "1/4", "1/8", "1/16", 
 static const char *const L_SYNC[] = {"OFF", "4/1", "2/1", "1/1", "1/2", "1/2T", "1/4", "1/4T", "1/8", "1/8T",
                                      "1/16", "1/32", "3/4", "3/8", "5/16", "3/16"};   /* (voices.c SYNC_SCALE_X60) */
 _Static_assert(sizeof L_SYNC / sizeof L_SYNC[0] == NSYNC, "voices.c: the sync values");
-static const char *const L_LFOW[] = {"SINE", "TRI", "SAW UP", "SAW DN", "SQUARE", "RANDOM", "EXP UP", "EXP DN"};
+static const char *const L_LFOW[] = {"SINE", "TRI", "SAW UP", "SAW DN", "SQUARE", "RANDOM", "EXP UP", "EXP DN",
+                                    "SMOOTH", "DRIFT"};   /* (1.1: voices.c) */
 static const char *const L_RETRIG[] = {"OFF", "DRUM 1", "DRUM 2", "DRUM 3", "SNARE", "CYMBAL", "HIHAT"};
 static const char *const L_QUANT[] = {"OFF", "1/8", "1/16", "1/32", "1/64"};
 static const char *const L_TRANS[] = {"SNAP", "OFFSET", "CLICK", "CLICK 2", "TICK", "KICK", "RIM", "DRIP",

@@ -1416,8 +1416,19 @@ static void viz_lfo(int two)
     {
         uint32_t step = (uint32_t)((cyc_q16 << 16) / VN), prev = 0xFFFFu, rnd = 0x1234567u;
         int32_t held = 0, rk = 0;
+        lfo_t vl;                                    /* (1.1: SMOOTH, DRIFT: their glide, on the same draws) */
+        memset(&vl, 0, sizeof vl);
+        vl.wave = (uint8_t)wave;
         run = mode < LM_ONE;
         ph = ofs << 25;
+        if (lfo_glides(wave)) {
+            rnd = rnd * 1664525u + 1013904223u;
+            vl.rnd = (int32_t)((rnd >> 16) & 0xFFFFu);
+            rnd = rnd * 1664525u + 1013904223u;
+            lfo_next(&vl, vl.rnd, rnd >> 16);
+            vl.phase = ph;
+            lastv = lfo_glide(&vl);
+        }
         for (i = 0; i < VN; i++) {
             uint32_t col = i * 16u / VN, old;
             int32_t val;
@@ -1425,6 +1436,10 @@ static void viz_lfo(int two)
                 prev = col;
                 if ((hits >> col) & 1u) {
                     if (mode == LM_TRIG || mode >= LM_ONE) {
+                        if (lfo_glides(wave)) {      /* (a new glide each hit, from where it is) */
+                            rnd = rnd * 1664525u + 1013904223u;
+                            lfo_next(&vl, lastv, rnd >> 16);
+                        }
                         ph = ofs << 25;
                         gone = 0;
                         run = 1;
@@ -1450,6 +1465,13 @@ static void viz_lfo(int two)
                     rk = (int32_t)((rnd >> 16) & 0xFFFFu);
                 }
                 val = rk;
+            } else if (lfo_glides(wave)) {
+                if (old > ph) {
+                    rnd = rnd * 1664525u + 1013904223u;
+                    lfo_next(&vl, vl.rnd, rnd >> 16);
+                }
+                vl.phase = ph;
+                val = lfo_glide(&vl);
             } else {
                 lfo_t l;
                 l.wave = (uint8_t)wave;
