@@ -339,18 +339,24 @@ static void ic_wizard(uint32_t a, uint32_t b, uint32_t c)
         cv_rect(cx - 4, 70, 9, 1, dark);
     }
 }
-static void ic_particles(uint32_t c, int ring)
+/* 1.0 Phase 21: RAIN: drops falling (more with DENSITY, c) on a row of bars, one a tone of the chord (a), each as
+ * long as a glockenspiel's bar for its pitch; lit more with RING (b) */
+static void ic_rain(uint32_t a, uint32_t b, uint32_t c)
 {
-    uint32_t k, n = 8u + c / 3u;
-    if (ring)
-        ic_ellipse(IX + IW / 2, ICY, IW / 2 - 4, 26, ux_mix(vz_bg(), T_THEME, 30), 1);
-    for (k = 0; k < n; k++) {
-        int32_t x = IX + 4 + (int32_t)(((uint32_t)ic_noise(k * 2u) & 0xFFFFu) * (IW - 8) >> 16);
-        int32_t y = IY0 + 4 + (int32_t)(((uint32_t)ic_noise(k * 2u + 1u) & 0xFFFFu) * (IY1 - IY0 - 8) >> 16);
-        uint16_t col = ux_mix(vz_bg(), T_THEME, 40 + (int32_t)(k * 37u % 60u));
-        cv_rect(x, y, 2, 2, col);
-        if (k % 7u == 0u)
-            vz_sparkle(x, y, 2);
+    const int8_t *sh = RING_SH[rn_chord(pl_knob((uint8_t)a))];
+    int32_t k, nb, w, n = 4 + (int32_t)c / 8;
+    for (nb = 0; nb < (int32_t)NRB && sh[nb] >= 0; nb++)
+        ;
+    w = (IW - 2) / nb;
+    for (k = 0; k < nb; k++) {
+        int32_t h = (int32_t)(((int64_t)36 * exp2_q16(-sh[k] * 65536 / 24)) >> 16);
+        cv_rect(IX + 1 + k * w + w / 4, IY1 - h, w - w / 2 > 1 ? w - w / 2 : 2, h,
+                k ? ux_mix(vz_bg(), T_THEME, 35 + (int32_t)b / 3) : T_THEME);
+    }
+    for (k = 0; k < n; k++) {                          /* (the drops: short streaks above the bars) */
+        int32_t x = IX + 2 + (int32_t)(((uint32_t)ic_noise((uint32_t)k * 2u) & 0xFFFFu) * (IW - 4) >> 16);
+        int32_t y = IY0 + (int32_t)(((uint32_t)ic_noise((uint32_t)k * 2u + 1u) & 0xFFFFu) * 26u >> 16);
+        cv_rect(x, y, 1, 4, ux_mix(vz_bg(), T_THEME, 45 + (int32_t)(k * 37 % 50)));
     }
 }
 /* 1.0: CLOUD: its grains, more with DENSITY (c), bigger with SIZE (b), spread up and down by SCATTER (a): past its
@@ -438,7 +444,7 @@ static void ic_model(uint32_t m, uint32_t v, uint32_t a, uint32_t b, uint32_t c)
     case 8: ic_bars(b); return;
     case 11: ic_wizard(a, b, c); return;
     case 12: ic_swarm(b); return;
-    case 14: ic_particles(c, 1); return;
+    case MD_RAIN: ic_rain(a, b, c); return;
     case 17: ic_drum(0, a); return;
     case 18: ic_drum(1, a); return;
     case 19: ic_cymbal(1, a); return;
@@ -491,7 +497,7 @@ static const char *model_line(uint32_t m, uint32_t v)
         "", "Bells, bars, plates", "A plucked string", "Glassy, metallic FM",
         "Two analog oscillators", "A folded wave", "Two-operator FM", "A cloud of grains",
         "A sum of harmonics", "Wavetables", "A four-note chord", "A speaking voice",
-        "Eight saws", "Coloured noise", "Dust through resonators",
+        "Eight saws", "Coloured noise", ELIXIR_PARTICLE ? "Dust through resonators" : "Rain on tuned bells",
         "An inharmonic string", "", "An analog kick", "An analog snare", "An analog hat",
         "A click or a doublet", "A train of clicks", "Crunchy, held noise", "LFSR bits",
         "A burst of noise", "Noise and a click", "A resonant grain", "A crackle of dust",
@@ -731,6 +737,10 @@ static int pl_card(char *b, uint32_t n, uint32_t p, uint32_t v)
         return 1;
     }
 #endif
+    if (!ELIXIR_PARTICLE && mdl[vi].want == MD_RAIN && !r) {   /* (Phase 21: RAIN's Chord, RING's tunings) */
+        put_str(b, RING_NAME[rn_chord(pl_knob((uint8_t)v))], n);
+        return 1;
+    }
     if (mdl[vi].want == MD_PL0 + PE_CHORD && r != 1u) {
         int32_t h = pl_knob((uint8_t)v), w;
         if (!r) {
@@ -754,6 +764,7 @@ static void viz_model(void)
     int over = v <= 2u && mdl[v].want && !mdl[v].type;   /* 0.15: over the models' limit (rings.c model_limit) */
     m = m < NMODEL ? m : 0u;
     vz_panel(over ? "" : m ? (m <= 3u ? "RINGS RESONATOR" : m == MD_NOISE ? "NOISE SOURCE" : m == MD_CLOUD ? "GRANULAR"
+                              : !ELIXIR_PARTICLE && m == MD_RAIN ? "RESONATOR"
                               : m <= 19u ? "PLAITS ENGINE"
                               : m == MD_EN ? "ENSEMBLE OSCILLATOR" : "MICROSOUND")
                            : "LXR-02 VOICE");
@@ -1180,14 +1191,13 @@ static void viz_filter(void)
 /* 1.0: FX's DJ FILTER page: the master's filter where the DJ knob (and what moves it) has it */
 static void viz_ring(int32_t d)                     /* 1.0: RING: its bands where they ring, the root brightest */
 {
-    static const char *const T[NRTUNE] = {"NOTE", "OCTAVES", "FIFTHS", "MAJOR", "MINOR", "SUS4", "MIN7", "PENTA"};
     const int8_t *sh = RING_SH[pfs.dj_tune < NRTUNE ? pfs.dj_tune : 0u];
     uint32_t root = ring_root(d), k;
     int32_t h = 12 + (int32_t)pfs.dj_reso * (VY1 - VY0 - 16) / 127, o, top = 0;
     const int32_t sl = (int32_t)(pfs.dj_slope & 127u) - 64, tn = (int32_t)(pfs.dj_tone & 127u) - 64;
     char b[32];
     put_str(b, "RING ", sizeof b);
-    put_str(b + 5, T[pfs.dj_tune < NRTUNE ? pfs.dj_tune : 0u], sizeof b - 5u);
+    put_str(b + 5, RING_NAME[pfs.dj_tune < NRTUNE ? pfs.dj_tune : 0u], sizeof b - 5u);
     put_str(b + str_len(b), " ", sizeof b - str_len(b));
     if (d)
         note_name(b + str_len(b), root);

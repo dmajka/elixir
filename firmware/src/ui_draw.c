@@ -2592,8 +2592,7 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
         return;
     }
     case VP_DJTUNE: {
-        static const char *const T[NRTUNE] = {"NOTE", "OCTAVES", "FIFTHS", "MAJOR", "MINOR", "SUS4", "MIN7", "PENTA"};
-        put_str(b, T[v < NRTUNE ? v : 0u], n);
+        put_str(b, RING_NAME[v < NRTUNE ? v : 0u], n);
         return;
     }
     case VP_MOUT ... VP_MOUT_LAST: put_str(b, v ? "ON" : "OFF", n); return;

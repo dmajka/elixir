@@ -4909,8 +4909,8 @@ static void phase24(void)
     sound_fix();
     turn(EN_K1, 1);
     check(par[PAR_MODEL1] == MD_MODAL, "D1: K1 from LXR to MODAL");
-    turn(EN_K1, 14 + (ELIXIR_WTABLE ? 1 : 0) + ELIXIR_PARTICLE);   /* (STRING, FM, Plaits' 11 (1.0: past P GRAIN,
-                                                      * NOISE, P MODAL, P PARTCL; 0.24: P WTABLE), CLICK) */
+    turn(EN_K1, 14 + (ELIXIR_WTABLE ? 1 : 0));       /* (STRING, FM, Plaits' 11 (1.0: past P GRAIN, NOISE, P MODAL;
+                                                      * P PARTCL's number RAIN's, after CLOUD; 0.24: P WTABLE), CLICK) */
     check(par[PAR_MODEL1] == MD_MC0 && mi[0].type == 1u && mdl[0].want == 0u && mdl[0].type == 0u,
           "D1 on CLICK: MICRO, not a model the limit counts");
     page_params(pp);
@@ -6540,10 +6540,10 @@ static void phase30(void)
     viz_page(0, S_MODEL, 0);                          /* (30 rev: each model a picture, its pages marked) */
     shot("viz-model-lxr");
     {
-        static const uint8_t M[] = {15, 11, 10, 4, 17, 1, 9, 8, 14, 5, 6, 12, MD_CLOUD};
+        static const uint8_t M[] = {15, 11, 10, 4, 17, 1, 9, 8, MD_RAIN, 5, 6, 12, MD_CLOUD};
         static const char *const N[] = {"viz-model-pstring", "viz-model-pspeech", "viz-model-pchord", "viz-model-pva",
                                         "viz-model-pkick", "viz-model-modal", "viz-model-pwtable", "viz-model-paddtv",
-                                        "viz-model-pparticle", "viz-model-pwshape", "viz-model-pfm", "viz-model-pswarm",
+                                        "viz-model-rain", "viz-model-pwshape", "viz-model-pfm", "viz-model-pswarm",
                                         "viz-model-cloud"};
         uint32_t i;
         for (i = 0; i < sizeof M; i++) {
@@ -8710,6 +8710,51 @@ static void nz10c_measure(uint32_t vi, uint32_t col, uint32_t rate, uint32_t env
         *holds = ch;
     memset(&nzo[vi], 0, sizeof nzo[vi]);
 }
+/* Phase 21: RAIN's engine alone (plaits.c rn_render): struck at the start, the grains gated off after gate_s (0:
+ * never), Aux's side only; OUT and AUX as float into o, a; returns n (a multiple of PLSUB) */
+static uint32_t rn21_run(double note, double h, double ring, double dens, double unused, double gate_s, uint32_t n,
+                         uint32_t only, float *o, float *a)
+{
+    pl_t *v = &pl[0];
+    pl_par_t p;
+    int32_t ob[PLSUB], ab[PLSUB];
+    uint32_t k, i;
+    (void)unused;
+    pl_rng = 4242;
+    memset(v, 0, sizeof *v);
+    pl_engine_init(v, 0, PE_RAIN);
+    p.note = (int32_t)(note * 65536);
+    p.f0 = pl_note_f(p.note);
+    p.harm = (int32_t)(h * PL1);
+    p.timbre = ring >= 1.0 ? PL1 : (int32_t)(ring * PL1);
+    p.morph = dens >= 1.0 ? PL1 : (int32_t)(dens * PL1);
+    p.accent = PL1 / 2;
+    p.only = (uint8_t)only;
+    p.col = 0;
+    n -= n % PLSUB;
+    for (k = 0; k < n; k += PLSUB) {
+        int on = gate_s <= 0 || k < gate_s * FS;
+        p.trig = k == 0;
+        p.eg0 = p.eg1 = on ? PL1 : 0;
+        pl_engine_render(v, 0, &p, ob, ab, PLSUB);
+        for (i = 0; i < PLSUB; i++) {
+            o[k + i] = (float)ob[i] / PL1;
+            a[k + i] = (float)ab[i] / PL1;
+        }
+    }
+    return n;
+}
+static double rn21_goertzel(const float *x, uint32_t n, double hz)
+{
+    double w = 2.0 * 3.14159265358979 * hz / FS, c = 2.0 * cos(w), s1 = 0, s2 = 0, s0;
+    uint32_t i;
+    for (i = 0; i < n; i++) {
+        s0 = x[i] + c * s1 - s2;
+        s2 = s1;
+        s1 = s0;
+    }
+    return sqrt(s1 * s1 + s2 * s2 - c * s1 * s2) * 2.0 / n;
+}
 static void phase_100_10c(void)
 {
     static const uint32_t COL[4] = {0, 42, 85, 127};
@@ -8791,9 +8836,10 @@ static void phase_100_10c(void)
     par_set(PAR_MODEL1, MD_NOISE);
     run_ms(20);
     check(nzo[0].on && mdl[0].want == 0u && mdl[0].type == 0u, "D1 on NOISE: not a counted model");
-    par_set(PAR_MODEL1, MD_PPART);                   /* (1.0: a kit's P PARTCL, dropped, plays CLOUD) */
+    par_set(PAR_MODEL1, MD_PPART);                   /* (Phase 21: a kit's P PARTCL plays RAIN, in its number) */
     run_ms(20);
-    check(mdl[0].want == MD_CLOUD, "P PARTCL plays as CLOUD (1.0)");
+    check(mdl[0].want == MD_RAIN && mdl[0].type == MD_RAIN && !strcmp(L_MODEL[MD_PPART], "RAIN"),
+          "P PARTCL's number plays RAIN (Phase 21)");
     par_set(PAR_MODEL1, MD_NOISE);
     run_ms(20);
     shot("noise-d1");
@@ -8813,12 +8859,15 @@ static void phase_100_10c(void)
     turn(EN_K1, 1);
     ok &= par[PAR_MODEL1] == MD_CLOUD;
     turn(EN_K1, 1);
+    ok &= par[PAR_MODEL1] == MD_RAIN;
+    turn(EN_K1, 1);
     ok &= par[PAR_MODEL1] == MD_NOISE;
     turn(EN_K1, 1);
     ok &= par[PAR_MODEL1] == MD_EN;
-    turn(EN_K1, -3);
+    turn(EN_K1, -4);
     ok &= par[PAR_MODEL1] == MD_MC0 + 9u;
-    check(ok, "MODEL knob: past P MODAL; CLOUD, NOISE after CHIRP, before ENSEMBLE (1.0)");
+    check(ok, "MODEL knob: past P MODAL; CLOUD, RAIN, NOISE after CHIRP, before ENSEMBLE (1.0, Phase 21)");
+
     par_set(PAR_MODEL1, MD_LXR);
     run_ms(20);
     /* kits and locks: P MODAL plays MODAL (D1-D3), P GRAIN the LXR, P NOISE's number NOISE (every voice) */
@@ -8917,6 +8966,115 @@ static void phase_100_10c(void)
         par_set(PAR_MODEL1 + 2, MD_LXR);
         run_ms(20);
         ui.track = 0;
+    }
+    {   /* Phase 21: RAIN: not one of the two models, its knobs, a hit sounds on both sides; then the engine itself */
+        double r0, r1, ra, rb;
+        char b[24];
+        uint32_t dk;
+        par_set(PAR_MODEL1, MD_MODAL);
+        par_set(PAR_MODEL1 + 1, MD_PL0 + PE_SD);
+        par_set(PAR_MODEL1 + 2, MD_RAIN);
+        par_set(PAR_MDECAY1 + 2, 0);                 /* (Chord NOTE, Ring long, Density up) */
+        par_set(PAR_MDAMP1 + 2, 100);
+        par_set(PAR_MMAT1 + 2, 90);
+        par_set(PAR_MEXC1 + 2, 0);
+        run_ms(30);
+        check(mdl[0].type == MD_MODAL && mdl[1].type == MD_PL0 + PE_SD && mdl[2].type == MD_RAIN,
+              "RAIN: a third with two models on, not counted (plays)");
+        check(!strcmp(par_name(PAR_MDECAY1 + 2), "Chord") && !strcmp(par_name(PAR_MDAMP1 + 2), "Ring") &&
+              !strcmp(par_name(PAR_MMAT1 + 2), "Density") && !strcmp(par_name(PAR_MEXC1 + 2), "Dry") &&
+              !strcmp(par_name(PAR_MPOS1 + 2), "Colour"),
+              "RAIN: Chord, Ring, Density; Colour; Aux its Dry");
+        {
+            static const char *const T[8] = {"NOTE", "OCTAVES", "FIFTHS", "MAJOR", "MINOR", "SUS4", "MIN7", "PENTA"};
+            uint32_t k, ok = 1;
+            for (k = 0; k < 8u; k++) {
+                memset(b, 0, sizeof b);
+                par_format(b, PAR_MDECAY1 + 2, k * 16u + 8u, sizeof b);
+                ok &= !strcmp(b, T[k]);
+            }
+            memset(b, 0, sizeof b);
+            par_format(b, PAR_MDECAY1 + 2, 127, sizeof b);
+            check(ok && !strcmp(b, "PENTA"), "RAIN: Chord shows RING's tunings, eight across the knob");
+        }
+        ui.track = 2;
+        goto_mode(B_HOME, M_HOME);
+        run_ms(20);
+        r0 = out_rms(200);
+        voice_trigger(2, 120, 48);
+        r1 = out_rms(300);
+        par_set(PAR_MEXC1 + 2, 127);                 /* (Dry: the grains alone) */
+        run_ms(3000);
+        voice_trigger(2, 120, 48);
+        ra = out_rms(300);
+        printf("  RAIN: rms before %.1f, after a hit %.1f (bells), %.1f (Dry 127)\n", r0, r1, ra);
+        check(r1 > r0 + 50.0 && ra > 50.0, "RAIN: a hit sounds, the bells and the dry grains");
+        par_set(PAR_MEXC1 + 2, 0);
+        dk = par[PAR_VELOD3];
+        par_set(PAR_VELOD3, 10);                     /* (a short Decay: the grains stop, the bells ring on) */
+        voice_trigger(2, 120, 48);
+        run_ms(400);
+        rb = out_rms(200);
+        printf("  RAIN: 0.4 s after a hit with a short Decay, rms %.1f\n", rb);
+        check(rb > 20.0, "RAIN: the amp EG shapes the grains; the bands ring on past it");
+        par_set(PAR_VELOD3, dk);
+        par_set(PAR_MODEL1, MD_LXR);
+        par_set(PAR_MODEL1 + 1, MD_LXR);
+        par_set(PAR_MODEL1 + 2, MD_LXR);
+        run_ms(20);
+        ui.track = 0;
+    }
+    {   /* .. the engine: the sides, its tuning, its ring, no runaway, asleep when done */
+        static float o[44100 * 11], a[44100 * 11];
+        double e0, e1, en[2], g[3], gn[3], pk = 0;
+        uint32_t i, n;
+        int ok = 1;
+        check(sizeof(pl_rn_t) <= sizeof(pl_sw_t), "RAIN: its state no larger than P SWARM's (pl_t doesn't grow)");
+        n = rn21_run(48, 0.5 / 8, 0.6, 0.5, 0.5, 0, 44100, PLS_OUT, o, a);   /* (Aux 0: OUT alone, AUX 0) */
+        for (i = 0, en[0] = en[1] = 0; i < n; i++)
+            en[0] += o[i] * o[i], en[1] += a[i] * a[i];
+        ok &= en[0] > 0 && en[1] == 0;
+        rn21_run(48, 0.5 / 8, 0.6, 0.5, 0.5, 0, 44100, PLS_AUX, o, a);   /* (Aux 127: AUX alone, the bands not rung) */
+        for (i = 0, en[0] = en[1] = 0; i < n; i++)
+            en[0] += o[i] * o[i], en[1] += a[i] * a[i];
+        ok &= en[0] == 0 && en[1] > 0 && !pl[0].u.rn.live;
+        check(ok, "RAIN: Aux 0 the bands alone, Aux 127 the dry grains alone (the bands asleep)");
+        {   /* tuning at NOTE: the harmonics 1, 2, 3 against a semitone off; OCTAVES: 3 f0 low */
+            double f0 = 440.0 * pow(2.0, (48 - 69) / 12.0);
+            rn21_run(48, 0.5 / 8, 0.9, 0.5, 0, 2.0, 44100 * 3, PLS_OUT, o, a);
+            for (i = 0; i < 3u; i++) {
+                g[i] = rn21_goertzel(o + 22050, 88200, f0 * (i + 1));
+                gn[i] = rn21_goertzel(o + 22050, 88200, f0 * (i + 1) * 1.0594631) +
+                        rn21_goertzel(o + 22050, 88200, f0 * (i + 1) / 1.0594631);
+            }
+            printf("  RAIN NOTE: f0 %.4f (off %.4f), 2 f0 %.4f (%.4f), 3 f0 %.4f (%.4f)\n", g[0], gn[0], g[1], gn[1],
+                   g[2], gn[2]);
+            ok = g[0] > 3 * gn[0] && g[1] > 3 * gn[1] && g[2] > 3 * gn[2];
+            rn21_run(48, 1.5 / 8, 0.9, 0.5, 0, 2.0, 44100 * 3, PLS_OUT, o, a);
+            e0 = rn21_goertzel(o + 22050, 88200, f0 * 3);
+            e1 = rn21_goertzel(o + 22050, 88200, f0 * 2);
+            printf("  RAIN OCTAVES: 3 f0 %.4f, 2 f0 %.4f\n", e0, e1);
+            check(ok && e0 * 5 < e1, "RAIN: tuned to the chord (NOTE: f0, 2 f0, 3 f0; OCTAVES: no 3 f0)");
+        }
+        {   /* Ring: the energy 1 s after the grains stop, longer at 127 than at 0 */
+            uint32_t m = rn21_run(48, 3.5 / 8, 0.0, 0.5, 0, 1.0, 44100 * 2, PLS_OUT, o, a), j;
+            for (j = m - 4410, e0 = 0; j < m; j++)
+                e0 += o[j] * o[j];
+            rn21_run(48, 3.5 / 8, 1.0, 0.5, 0, 1.0, 44100 * 2, PLS_OUT, o, a);
+            for (j = m - 4410, e1 = 0; j < m; j++)
+                e1 += o[j] * o[j];
+            printf("  RAIN Ring: energy 0.9 .. 1 s after the grains, Ring 0 %.3g, Ring 127 %.3g\n", e0, e1);
+            check(e1 > 1000 * e0 && e1 > 0, "RAIN: Ring 127 rings far longer than Ring 0");
+        }
+        {   /* no runaway: Density 127, Ring 127, Aux 0, 10 s; then the grains stop: the bands die away, asleep */
+            n = rn21_run(36, 0.5 / 8, 1.0, 1.0, 0, 10.0, 44100 * 11, PLS_OUT, o, a);
+            for (i = 0; i < 44100u * 10u; i++)
+                pk = fabs(o[i]) > pk ? fabs(o[i]) : pk;
+            printf("  RAIN Density 127, Ring 127, 10 s: peak %.3f; live at the end %d\n", pk, pl[0].u.rn.live);
+            ok = pk < 2.0 && pk > 0.1;               /* (the engine's soft clip tops at 2; OUT's limiter after) */
+            n = rn21_run(36, 0.5 / 8, 0.6, 1.0, 0, 1.0, 44100 * 6, PLS_OUT, o, a);
+            check(ok && !pl[0].u.rn.live && o[n - 1] == 0.0f, "RAIN: bounded at its loudest; silent and asleep after");
+        }
     }
     par_set(PAR_MODEL1, MD_LXR);
     run_ms(20);

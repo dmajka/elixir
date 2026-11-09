@@ -585,9 +585,9 @@ int main(int argc, char **argv)
     }
     {   /* 0.15: each Plaits engine on DRUM 1, struck (the knobs at their middle, the amp EG as the kit's) */
         static const char *const PE_NAMES[16] = {"P VA", "P WSHAPE", "P FM", "P GRAIN", "P ADDTV", "P WTABLE",
-                                                 "P CHORD", "P SPEECH", "P SWARM", "NOISE", "P PARTCL", "P STRING",
+                                                 "P CHORD", "P SPEECH", "P SWARM", "NOISE", "RAIN", "P STRING",
                                                  "P MODAL", "P BD", "P SD", "P HH"};   /* (1.0: NOISE, noise.c, in
-                                                      * P NOISE's number) */
+                                                      * P NOISE's number; Phase 21: RAIN in P PARTCL's) */
         uint32_t e;
         par_set(PAR_MDECAY1, 64);
         par_set(PAR_MDAMP1, 64);

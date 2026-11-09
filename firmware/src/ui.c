@@ -2031,13 +2031,13 @@ static uint32_t ca_par_at(uint32_t tr, uint32_t s, uint32_t h, uint32_t k, uint3
 static int ca_isout(uint32_t u) { return u < 5u ? (kset.caout >> u) & 1u : (kset.caout & 0x60u) == 0x60u; }
 static int ca_keys(void) { return ca_rm || (ui.copy && ui.ca && !ui.ca_len); }   /* (a track key: out / in) */
 /* 1.0 (10c): the MODEL knob's order: the LXR's, Rings', Plaits', MICRO's, then Elixir's own (CLOUD, in P GRAIN's
- * number; NOISE, in P NOISE's; ENSEMBLE). The ones a voice hasn't (model_ok: Rings', Plaits' and CLOUD on SN-HH, the
+ * number; RAIN, in P PARTCL's; NOISE, in P NOISE's; ENSEMBLE). The ones a voice hasn't (model_ok: Rings', Plaits' and CLOUD on SN-HH, the
  * dropped ones) passed */
 static const uint8_t MODEL_ORDER[NMODEL] = {
     MD_LXR, MD_MODAL, MD_STRING, MD_FM, MD_PL0, MD_PL0 + 1, MD_PL0 + 2, MD_PL0 + 4, MD_PL0 + 5, MD_PL0 + 6,
-    MD_PL0 + 7, MD_PL0 + 8, MD_PL0 + 10, MD_PL0 + 11, MD_PMODAL, MD_PL0 + 13, MD_PL0 + 14, MD_PL0 + 15, MD_MC0,
+    MD_PL0 + 7, MD_PL0 + 8, MD_PL0 + 11, MD_PMODAL, MD_PL0 + 13, MD_PL0 + 14, MD_PL0 + 15, MD_MC0,
     MD_MC0 + 1, MD_MC0 + 2, MD_MC0 + 3, MD_MC0 + 4, MD_MC0 + 5, MD_MC0 + 6, MD_MC0 + 7, MD_MC0 + 8, MD_MC0 + 9,
-    MD_CLOUD, MD_NOISE, MD_EN};
+    MD_CLOUD, MD_RAIN, MD_NOISE, MD_EN};   /* (Phase 21: RAIN, in P PARTCL's number, after CLOUD) */
 /* 1.0: the drum voices other than vi with a Rings or Plaits model (the ones the limit counts): bit k for Dk+1 */
 static uint32_t models_elsewhere(uint32_t vi)
 {

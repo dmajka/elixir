@@ -136,17 +136,7 @@ static uint32_t djt_place(uint32_t t) { return t == DJT_RING ? 1u : t == DJT_ACI
  * 1.0 Phase 18: RING (2/2): SPREAD the side bands' pan (0 all in the middle, 64 as above, 127 hard), SLOPE their ring
  * time up the chord (left shorter, right longer: x 2^(+-1) an octave over the root), TONE their level tilted (left the
  * root loudest, right the top band: +-6 dB an octave), WET the dry under it (0 all dry, 64 as above, 127 none) */
-#define NRB 8u
-enum { RC_NOTE, RC_OCT, RC_FIFTH, RC_MAJ, RC_MIN, RC_SUS4, RC_MIN7, RC_PENTA, NRTUNE };
-static const int8_t RING_SH[NRTUNE][NRB] = {
-    {0, 12, 19, 24, 28, 31, 34, 36},                 /* NOTE: the harmonics 1..8 (a string, tempered) */
-    {0, 12, 24, 36, -1, -1, -1, -1},                 /* OCTAVES */
-    {0, 7, 12, 19, 24, 31, 36, -1},                  /* FIFTHS */
-    {0, 4, 7, 12, 16, 19, 24, 28},                   /* MAJOR */
-    {0, 3, 7, 12, 15, 19, 24, 27},                   /* MINOR */
-    {0, 5, 7, 12, 17, 19, 24, -1},                   /* SUS4 */
-    {0, 3, 7, 10, 12, 15, 19, 22},                   /* MIN7 */
-    {0, 3, 5, 7, 10, 12, 15, 17}};                   /* PENTA (minor) */
+/* (NRB, the tunings RC_*, RING_SH: plaits.c, RAIN plays them too) */
 static uint32_t ring_root(int32_t d)                 /* the root at the DJ filter's position d, a MIDI note */
 {
     int32_t q = 48 * 65536 + d * (d < 0 ? 24 : 36);

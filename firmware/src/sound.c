@@ -241,25 +241,24 @@ static uint32_t par_max_k(uint32_t p)
 }
 
 /* 24: the models a voice has: D1-D3 all, SN-HH the LXR's engine and MICRO's (one of Rings' or Plaits': the LXR's).
- * 0.24: P WTABLE none, unless built in (ELIXIR_WTABLE, rings.c). 1.0 (10c): P GRAIN, P MODAL none; NOISE every voice */
+ * 0.24: P WTABLE none, unless built in (ELIXIR_WTABLE, rings.c). 1.0 (10c): P GRAIN, P MODAL none; NOISE every voice.
+ * (Phase 21: P PARTCL's number RAIN's, when P PARTCL isn't built: D1-D3) */
 static inline int model_ok(uint32_t vi, uint32_t md)
 {
     return (ELIXIR_WTABLE || md != MD_PL0 + PE_WTBL) && md != MD_PMODAL &&
-           (ELIXIR_PARTICLE || md != MD_PPART) &&
            (vi <= 2u || md == 0u || md == MD_NOISE || (md >= MD_MC0 && md < NMODEL));
 }
-/* a Rings or Plaits model, the ones the models' limit counts (not MICRO, ENSEMBLE, NOISE, CLOUD: the light ones) */
-static inline int model_counted(uint32_t md) { return md && md < MD_MC0 && md != MD_NOISE && md != MD_CLOUD; }
+/* Elixir's light models on D1-D3 that play beside the two (CLOUD; Phase 21: RAIN, measured: plaits.c rn_render) */
+static inline int model_light(uint32_t md) { return md == MD_CLOUD || (!ELIXIR_PARTICLE && md == MD_RAIN); }
+/* a Rings or Plaits model, the ones the models' limit counts (not MICRO, ENSEMBLE, NOISE, CLOUD, RAIN: the light ones) */
+static inline int model_counted(uint32_t md) { return md && md < MD_MC0 && md != MD_NOISE && !model_light(md); }
 /* 1.0 (10c): Plaits' engines as they are (P GRAIN, P NOISE, P MODAL dropped; P WTABLE parked): the spells' and
  * WANDER's random picks */
-static const uint8_t PL_LIVE[] = {0, 1, 2, 3, 4, 6, 7, 8,
-#if ELIXIR_PARTICLE
-                                   10,
-#endif
-                                   11, 13, 14, 15};   /* (1.0: 3, CLOUD; 10, P PARTCL, dropped) */
+static const uint8_t PL_LIVE[] = {0, 1, 2, 3, 4, 6, 7, 8, 10, 11, 13, 14, 15};   /* (1.0: 3, CLOUD; 10, RAIN (or
+                                                      * P PARTCL, built in)) */
 #define NPL_LIVE (sizeof PL_LIVE / sizeof PL_LIVE[0])
 /* the model a voice plays for md (a kit's, a lock's, a modulation's): md if it has it, else the nearest it has
- * (10c: P MODAL as Rings' MODAL; 0.24: P WTABLE, not built in, as P ADD; 1.0: P PARTCL as CLOUD), else the LXR's */
+ * (10c: P MODAL as Rings' MODAL; 0.24: P WTABLE, not built in, as P ADD), else the LXR's */
 static uint32_t model_pick(uint32_t vi, uint32_t md)
 {
     if (model_ok(vi, md))
@@ -268,8 +267,6 @@ static uint32_t model_pick(uint32_t vi, uint32_t md)
         return MD_MODAL;
     if (vi <= 2u && md == MD_PL0 + PE_WTBL)
         return MD_PL0 + PE_ADD;
-    if (vi <= 2u && md == MD_PPART)                  /* (1.0: P PARTCL as CLOUD) */
-        return MD_CLOUD;
     return 0u;
 }
 
@@ -757,8 +754,8 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
         eno[vi].on = md == MD_EN;                     /* (0.25: ENSEMBLE, every voice, not counted either) */
         nzo[vi].on = md == MD_NOISE;                  /* (1.0: NOISE, the same) */
         if (vi <= V_DRUM3) {
-            mdl[vi].want = (uint8_t)(model_counted(md) || md == MD_CLOUD ? md : 0u);   /* (MICRO isn't one of the
-                                                      * models; 1.0: CLOUD plays as they do, not counted) */
+            mdl[vi].want = (uint8_t)(model_counted(md) || model_light(md) ? md : 0u);   /* (MICRO isn't one of
+                                                      * the models; 1.0: CLOUD, RAIN play as they do, not counted) */
             model_limit();
         }
         break;

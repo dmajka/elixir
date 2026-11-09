@@ -15,11 +15,11 @@
  * 44.1 kHz in blocks of PLSUB (16), four to Elixir's BLOCK. The random generator is stmlib's (an LCG), so a host test
  * (tests/plaits_compare.cc) holds each engine to Plaits' own float code sample by sample. Left out: Plaits' sustain
  * modes (no TRIGGER patched: the voice is always struck), its user data, its 1.2 engines. The string engine plays one
- * string a voice (Plaits: three, overlapping), in the memory a voice's Rings string has; the particle engine's diffuser
- * (16 KB) is one, for the first voice on PARTICLE; the others play it dry. 1.0 (10c): GRAIN, NOISE and MODAL dropped
- * (MODAL: Rings' plays better; NOISE: Elixir's own, noise.c, in its number; GRAIN's number CLOUD's, Elixir's granular
- * voice, below): their PE_ numbers stay, as the kits store them (rings.c MD_PGRAIN, MD_NOISE, MD_PMODAL; sound.c
- * model_pick). */
+ * string a voice (Plaits: three, overlapping), in the memory a voice's Rings string has. 1.0 (10c): GRAIN, NOISE and
+ * MODAL dropped (MODAL: Rings' plays better; NOISE: Elixir's own, noise.c, in its number; GRAIN's number CLOUD's,
+ * Elixir's granular voice, below): their PE_ numbers stay, as the kits store them (rings.c MD_PGRAIN, MD_NOISE,
+ * MD_PMODAL; sound.c model_pick). 1.0: PARTICLE left out too (ELIXIR_PARTICLE 0, rings.c; its diffuser 16 KB, one, for
+ * the first voice on it, the others dry); Phase 21: its number RAIN's, CLOUD's grains ringing tuned bands (below). */
 
 #include "plaits_tables.h"
 
@@ -32,11 +32,37 @@ enum {
 };
 /* Plaits' post-processing per engine: OUT's and AUX's gains (Q24; negative: through its limiter), and whether the
  * engine envelopes itself (voice.cc's RegisterInstance). (1.0: PE_GRAIN's number CLOUD's, its AUX as loud as OUT) */
+#define PE_RAIN PE_PART                              /* (1.0 Phase 21: RAIN, below, in P PARTCL's number, when */
+#if ELIXIR_PARTICLE                                  /* P PARTCL isn't built: its OUT the bells, AUX the rain) */
+#define PE_PARTG -33554432
+#else
+#define PE_PARTG -16777216
+#endif
 static const int32_t PE_OUTG[NPE] = {13421773, 11744051, 10066330, 11744051, 13421773, 10066330, 13421773, -11744051,
-                                     -50331648, -16777216, -33554432, -16777216, -16777216, 13421773, 13421773, 13421773};
+                                     -50331648, -16777216, PE_PARTG, -16777216, -16777216, 13421773, 13421773, 13421773};
+#undef PE_PARTG
+#if ELIXIR_PARTICLE
+#define PE_PARTG 16777216
+#else
+#define PE_PARTG 10066330
+#endif
 static const int32_t PE_AUXG[NPE] = {13421773, 10066330, 10066330, 11744051, 13421773, 10066330, 13421773, 13421773,
-                                     16777216, -16777216, 16777216, 13421773, 13421773, 13421773, 13421773, 13421773};
+                                     16777216, -16777216, PE_PARTG, 13421773, 13421773, 13421773, 13421773, 13421773};
+#undef PE_PARTG
 static const uint8_t PE_ENV[NPE] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
+/* 1.0: RING's tunings (the DJ filter's, perform.c) and RAIN's chords: the bands' semitones over the root, -1 none */
+#define NRB 8u
+enum { RC_NOTE, RC_OCT, RC_FIFTH, RC_MAJ, RC_MIN, RC_SUS4, RC_MIN7, RC_PENTA, NRTUNE };
+static const int8_t RING_SH[NRTUNE][NRB] = {
+    {0, 12, 19, 24, 28, 31, 34, 36},                 /* NOTE: the harmonics 1..8 (a string, tempered) */
+    {0, 12, 24, 36, -1, -1, -1, -1},                 /* OCTAVES */
+    {0, 7, 12, 19, 24, 31, 36, -1},                  /* FIFTHS */
+    {0, 4, 7, 12, 16, 19, 24, 28},                   /* MAJOR */
+    {0, 3, 7, 12, 15, 19, 24, 27},                   /* MINOR */
+    {0, 5, 7, 12, 17, 19, 24, -1},                   /* SUS4 */
+    {0, 3, 7, 10, 12, 15, 19, 22},                   /* MIN7 */
+    {0, 3, 5, 7, 10, 12, 15, 17}};                   /* PENTA (minor) */
+static const char *const RING_NAME[NRTUNE] = {"NOTE", "OCTAVES", "FIFTHS", "MAJOR", "MINOR", "SUS4", "MIN7", "PENTA"};
 
 /* ------------------------------------------------------------ helpers --- */
 static inline int32_t pm(int32_t a, int32_t b) { return (int32_t)(((int64_t)a * b) >> 24); }
@@ -234,6 +260,8 @@ typedef struct {
     uint8_t only;                                    /* 1.0: PLS_BOTH, or the one side heard (AUX at an end): the
                                                       * engines with two of their own (BD SD HH, ADDTV's organ)
                                                       * render that side alone, the other 0 */
+    int32_t eg0, eg1, col;                           /* 1.0 Phase 21: the amp EG over the sub-block (Q24, from, to)
+                                                      * and COLOUR, for an engine gating part of itself (RAIN) */
 } pl_par_t;
 enum { PLS_BOTH, PLS_OUT, PLS_AUX };
 
@@ -879,24 +907,17 @@ typedef struct {
     int32_t nlp;                                     /* AUX's noise, low-passed (Q24) */
 } pl_cl_t;
 static void cl_init(pl_cl_t *d) { memset(d, 0, sizeof *d); }
-static void cl_grain(pl_cl_t *d, uint32_t f0, int32_t scat, int32_t len, int32_t lvl)
+static int32_t cl_slot(const pl_cl_t *d)            /* a grain not sounding (-1: all are) */
 {
-    static const int8_t IV[6] = {12, -12, 7, 19, 24, 12};
-    int32_t k, st, r = pl_randf(), sl, cv;
-    uint64_t f;
+    int32_t k;
     for (k = 0; k < CL_N && d->left[k] > 0; k++)
         ;
-    if (k == CL_N)                                   /* (all sounding: this one dropped) */
-        return;
-    if (scat <= (PL1 >> 1)) {                        /* a detune, up to +-12 semitones at the middle */
-        int32_t w = pm(scat * 2, scat * 2);
-        st = (int32_t)(((int64_t)pm(2 * r - PL1, w) * 12) >> 8);   /* (Q16) */
-    } else {                                         /* past it: an interval, for more and more of them */
-        st = pm(2 * r - PL1, PL1 >> 3) >> 8;         /* (a breath of detune: +-0.12 st) */
-        if (pl_randf() < (scat - (PL1 >> 1)) * 2)
-            st += IV[pl_word() % 6u] << 16;
-    }
-    f = ((uint64_t)pl_semi(st, 16) * f0) >> 16;
+    return k < CL_N ? k : -1;
+}
+/* a grain in slot k: its frequency f (Q32), len samples, level lvl (Q24); its phase at random */
+static void cl_start(pl_cl_t *d, int32_t k, uint64_t f, int32_t len, int32_t lvl)
+{
+    int32_t sl, cv;
     d->inc[k] = f > 1932735283ull ? 1932735283u : (uint32_t)f;   /* (0.45) */
     d->ph[k] = pl_word();
     lvl = pm(lvl, 10066330 + pm(pl_randf(), 6710886));   /* (each 0.6 .. 1 of the cloud's level, Q24: Q30 x 2^6
@@ -910,12 +931,54 @@ static void cl_grain(pl_cl_t *d, uint32_t f0, int32_t scat, int32_t len, int32_t
     d->cv[k] = cv;
     d->left[k] = len;
 }
+static void cl_grain(pl_cl_t *d, uint32_t f0, int32_t scat, int32_t len, int32_t lvl)
+{
+    static const int8_t IV[6] = {12, -12, 7, 19, 24, 12};
+    int32_t k, st, r = pl_randf();
+    if ((k = cl_slot(d)) < 0)                        /* (all sounding: this one dropped) */
+        return;
+    if (scat <= (PL1 >> 1)) {                        /* a detune, up to +-12 semitones at the middle */
+        int32_t w = pm(scat * 2, scat * 2);
+        st = (int32_t)(((int64_t)pm(2 * r - PL1, w) * 12) >> 8);   /* (Q16) */
+    } else {                                         /* past it: an interval, for more and more of them */
+        st = pm(2 * r - PL1, PL1 >> 3) >> 8;         /* (a breath of detune: +-0.12 st) */
+        if (pl_randf() < (scat - (PL1 >> 1)) * 2)
+            st += IV[pl_word() % 6u] << 16;
+    }
+    cl_start(d, k, ((uint64_t)pl_semi(st, 16) * f0) >> 16, len, lvl);
+}
+/* the grains sounding, added into out (from 0); tex: and into aux on the noise-band phase nz (CLOUD's Texture) */
+static inline __attribute__((always_inline)) void cl_play(pl_cl_t *d, int32_t *out, int32_t *aux, const int32_t *nz,
+                                                          uint32_t n, const int tex)
+{
+    uint32_t i;
+    int32_t k;
+    for (k = 0; k < CL_N; k++) {
+        uint32_t ph = d->ph[k], inc = d->inc[k], m;
+        int32_t a = d->a[k], sl = d->sl[k], cv = d->cv[k];
+        if (d->left[k] <= 0)
+            continue;
+        m = d->left[k] < (int32_t)n ? (uint32_t)d->left[k] : n;
+        d->left[k] -= (int32_t)m;
+        for (i = 0; i < m; i++) {
+            out[i] += (int32_t)(((int64_t)RG_SINE[ph >> 20] * a) >> 21);
+            if (tex)
+                aux[i] += (int32_t)(((int64_t)RG_SINE[(ph + (uint32_t)nz[i]) >> 20] * a) >> 21);
+            ph += inc;
+            a += sl;
+            sl += cv;
+        }
+        d->ph[k] = ph;
+        d->a[k] = a;
+        d->sl[k] = sl;
+    }
+}
 static void cl_render(pl_cl_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
 {
     int32_t len = (int32_t)((88ull * pl_exp2(pm(p->timbre, 103179878), 16)) >> 16);   /* 88 x 2^(6.15 t): 2 .. 150 ms */
     uint32_t rate = pl_exp2(pm(p->morph, 119118234), 16);   /* 2^(7.1 m), Q16: 1 .. 137, x 3 a second */
     int32_t iv = (int32_t)(((uint32_t)FS << 16) / 3u / (rate ? rate : 1u));   /* samples between onsets */
-    int32_t ov, lvl, nz[PLSUB], k;
+    int32_t ov, lvl, nz[PLSUB];
     uint32_t i;
     iv = iv < 1 ? 1 : iv;
     ov = pclamp((len << 8) / iv, 256, CL_N * 256) << 16;   /* grains at once, Q24 */
@@ -932,25 +995,184 @@ static void cl_render(pl_cl_t *d, const pl_par_t *p, int32_t *out, int32_t *aux,
         d->nlp += pm(pl_randf() - (PL1 >> 1) - d->nlp, 1677722);   /* (0.1: ~700 Hz) */
         nz[i] = (int32_t)((uint32_t)d->nlp << 12);   /* (~1 cycle rms: a band of ~1.5 kHz) */
     }
-    for (k = 0; k < CL_N; k++) {
-        uint32_t ph = d->ph[k], inc = d->inc[k], m;
-        int32_t a = d->a[k], sl = d->sl[k], cv = d->cv[k];
-        if (d->left[k] <= 0)
-            continue;
-        m = d->left[k] < (int32_t)n ? (uint32_t)d->left[k] : n;
-        d->left[k] -= (int32_t)m;
-        for (i = 0; i < m; i++) {
-            out[i] += (int32_t)(((int64_t)RG_SINE[ph >> 20] * a) >> 21);
-            aux[i] += (int32_t)(((int64_t)RG_SINE[(ph + (uint32_t)nz[i]) >> 20] * a) >> 21);
-            ph += inc;
-            a += sl;
-            sl += cv;
+    cl_play(d, out, aux, nz, n, 1);
+}
+
+/* the low-pass gate on x (PLSUB samples): the amp EG's gain from gl to gk, and with COLOUR col Plaits' vactrol, its
+ * colour 1 - col (col 0: a plain VCA) */
+static void pl_lpg(pl_svf_t *f, int32_t *x, int32_t gl, int32_t gk, int32_t col)
+{
+    int32_t gst = (gk - gl) / (int32_t)PLSUB;
+    uint32_t i;
+    if (col) {
+        int32_t hf = PL1 - col, g2 = pm(gk, gk), g4 = pm(g2, g2), t = PL1 - gk, t2 = pm(t, t);
+        int32_t fr = 50332 + pm(5033165, g4) + pm(hf, 671089);   /* 0.003 + 0.3 g^4 + 0.04 hf */
+        int32_t bleed = pm(pm(t2 + pm(PL1 - t2, hf), hf), hf);
+        pl_svf_fq(f, pl_fq(fr), 102, TAN_DIRTY);    /* (Q 0.4) */
+        for (i = 0; i < PLSUB; i++) {
+            int32_t xi, lp;
+            gl += gst;
+            xi = pm(x[i], gl);
+            lp = pl_svf_lp(f, xi);
+            x[i] = lp + pm(xi - lp, bleed);
         }
-        d->ph[k] = ph;
-        d->a[k] = a;
-        d->sl[k] = sl;
+    } else {
+        for (i = 0; i < PLSUB; i++) {
+            gl += gst;
+            x[i] = pm(x[i], gl);
+        }
     }
 }
+
+static inline uint32_t rn_chord(int32_t h) { return (uint32_t)pclamp(h >> 21, 0, NRTUNE - 1); }   /* (RAIN's HARMONICS:
+                                                      * the eight across the knob) */
+#if !ELIXIR_PARTICLE
+/* -------------------------------------------------------------- RAIN --- */
+/* 1.0 Phase 21: RAIN, Elixir's own, in P PARTCL's number (its nearest cousin: dust through resonant filters). CLOUD's
+ * grains (above), each on one of a chord's tones at random, ring that tone's band: up to eight two-pole resonators at
+ * the full rate (zeros at DC and Nyquist: a band-pass), tuned as the DJ filter's RING is (RING_SH over the voice's
+ * note; those over ~6 kHz left out), ringing as long as RING's at the same Reso (its damping: the radius
+ * e^(-3.45 / T60), T60 0.08 .. 2.6 s as RING's Reso). Each band's peak gain is g / (1 - R) and its answer to a click
+ * 2 g whatever its pitch, so one input gain serves all: (1 - R)^0.4 (a long ring about as loud as a short one).
+ * Short grains when sparse (~3 ms: a click, every band speaks: rain on a bell), longer when dense (to ~30 ms: each
+ * mostly its own band, a bowed shimmer). A hit starts a grain on the root at once, louder with the velocity. The amp
+ * EG (and COLOUR's low-pass gate) shapes the grains alone, so the bands ring on past a short Decay. OUT the bands (a
+ * soft clip on their sum), AUX the dry grains. HARMONICS the chord (RING's tunings), TIMBRE the ring, MORPH the
+ * density (CLOUD's 3 .. 400 a second). A band costs ~11 instructions a sample (three 64-bit multiply-adds); they
+ * sleep when the grains have stopped and they have died away (under -78 dB) */
+#define RN_LIM (1 << 30)                             /* (a band's state over it, Q28 (4.0): the band halved: no runaway) */
+#define RN_SLEEP (1 << 15)                           /* (.. all under it (Q28): asleep) */
+#ifndef RN_GIN_L2
+#define RN_GIN_L2 13                                 /* (the bands' level, log2 in eighths: x 3.1 into Q28) */
+#endif
+typedef struct {
+    pl_cl_t g;
+    int32_t c[NRB], a1[NRB], y1[NRB], y2[NRB];      /* the bands: 1 - cos w (Q30), 2 R cos w (Q30), their states
+                                                      * (Q28: 16 x the signal's Q24, for the rounding's sake) */
+    int32_t na2, gin;                                /* -R^2 (Q30), the input's gain (Q30) */
+    int32_t x1, x2;                                  /* the grains' last two (the zeros') */
+    pl_svf_t lpg;                                    /* COLOUR's gate on the grains */
+    uint32_t kf, inc[NRB];                           /* the bands are for f0 kf; the tones' frequencies (Q32) */
+    int32_t kr;                                      /* .. ring kr (TIMBRE >> 17); -1: to set */
+    uint8_t kc, nb, live;                            /* .. chord kc; nb of them; live: they're sounding */
+} pl_rn_t;
+static void rn_init(pl_rn_t *d) { memset(d, 0, sizeof *d); d->kr = -1; }
+/* the bands for f0, the chord c, the ring r (0 .. 127): their tuning (when f0 or c moved), their radius */
+static void rn_tune(pl_rn_t *d, uint32_t f0, uint32_t c, int32_t r)
+{
+    const int8_t *sh = RING_SH[c];
+    uint32_t k;
+    int32_t lk, rr, kk;
+    if (f0 != d->kf || c != d->kc || d->kr < 0) {
+        d->nb = 0;
+        for (k = 0; k < NRB && sh[k] >= 0; k++) {
+            uint64_t f = ((uint64_t)pl_semi(sh[k] << 16, 16) * f0) >> 16;
+            int64_t w, u;
+            if (f > 584349292ull && k)               /* (over ~6 kHz: left out; the root kept) */
+                break;
+            d->inc[k] = f > 2143188436ull ? 2143188436u : (uint32_t)f;
+            w = ((int64_t)(d->inc[k] >> 2) * 1686629713) >> 28;   /* 2 pi f, Q30 */
+            u = (w * w) >> 30;                       /* 1 - cos w = u / 2 - u^2 / 24 + u^3 / 720 - u^4 / 40320 */
+            d->c[k] = (int32_t)((u * ((1 << 29) - ((u * (44739243 - ((u * (1491308 - ((u * 26631) >> 30))) >> 30))) >> 30))) >> 30);
+            d->nb++;
+        }
+        d->kf = f0;
+        d->kc = (uint8_t)c;
+    }
+    lk = -167739251 - r * 660520;                    /* log2 (1 - R) = log2(3.45 / (0.08 FS)) - 5 r / 127, Q24 */
+    kk = (int32_t)pl_exp2(lk, 30);
+    rr = (1 << 30) - kk + (int32_t)(((int64_t)kk * kk) >> 31);   /* R = e^-k (Q30) */
+    d->na2 = -(int32_t)(((int64_t)rr * rr) >> 30);
+    for (k = 0; k < d->nb; k++) {
+        int64_t a = ((int64_t)rr * ((1 << 30) - d->c[k])) >> 29;
+        d->a1[k] = a > 0x7FFFFFFF ? 0x7FFFFFFF : (int32_t)a;
+    }
+    d->gin = (int32_t)pl_exp2(pm(lk, 6710886) + RN_GIN_L2 * (1 << 21), 30);   /* (1 - R)^0.4 x the level (into
+                                                      * the bands' Q28) */
+    d->kr = r;
+}
+static void rn_render(pl_rn_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
+{
+    uint32_t c = rn_chord(p->harm), rate = pl_exp2(pm(p->morph, 119118234), 16), i, k;
+    int32_t r = p->timbre >> 17, x[PLSUB], len, iv, ov, lvl, peak = 0;
+    if (c != d->kc || p->f0 != d->kf || r != d->kr)
+        rn_tune(d, p->f0, c, r);
+    len = (int32_t)((132ull * pl_exp2(pm(p->morph, 55732705), 16)) >> 16);   /* 132 x 2^(3.32 m): 3 .. 30 ms */
+    iv = (int32_t)(((uint32_t)FS << 16) / 3u / (rate ? rate : 1u));   /* (CLOUD's: 3 .. 400 a second) */
+    iv = iv < 1 ? 1 : iv;
+    ov = pclamp((len << 8) / iv, 256, CL_N * 256) << 16;
+    lvl = pl_div(PL1, pl_sqrt(ov));
+    if (p->trig) {                                   /* (a hit: the root at once, louder with the velocity) */
+        int32_t s = cl_slot(&d->g);
+        if (s >= 0)
+            cl_start(&d->g, s, d->inc[0], len, (PL1 >> 1) + (p->accent >> 1));
+        d->g.next = iv / 2;
+    }
+    d->g.next -= (int32_t)n;
+    while (d->g.next <= 0) {                         /* (the onsets, jittered as CLOUD's) */
+        int32_t s = cl_slot(&d->g), l = len - (len >> 2) + (int32_t)(((int64_t)len * (pl_word() >> 17)) >> 16);
+        if (s >= 0)                                  /* (each 0.75 .. 1.25 of the size, on a tone at random) */
+            cl_start(&d->g, s, d->inc[(pl_word() >> 16) * d->nb >> 16], l, lvl);
+        d->g.next += iv / 2 + (int32_t)(((int64_t)iv * (pl_word() >> 16)) >> 16) + 1;
+    }
+    for (i = 0; i < n; i++)
+        x[i] = 0;
+    cl_play(&d->g, x, 0, 0, n, 0);
+    pl_lpg(&d->lpg, x, p->eg0, p->eg1, p->col);      /* (the EG on the grains alone) */
+    for (i = 0; i < n; i++) {
+        aux[i] = p->only == PLS_OUT ? 0 : x[i];
+        out[i] = 0;
+        peak |= x[i];
+    }
+    if (p->only == PLS_AUX)                          /* (the bells not heard: not rung) */
+        peak = 0, d->live = 1;
+    else if (peak)
+        d->live = 1;
+    if (!d->live)
+        return;
+    if (p->only == PLS_AUX || !peak) {               /* (asleep when quiet: the grains done, the bands -78 dB) */
+        int32_t q = 0;
+        for (k = 0; k < d->nb; k++)
+            q |= pabs(d->y1[k]) | pabs(d->y2[k]);
+        if (p->only == PLS_AUX || q < RN_SLEEP) {
+            for (k = 0; k < NRB; k++)
+                d->y1[k] = d->y2[k] = 0;
+            d->x1 = d->x2 = 0;
+            d->live = 0;
+            return;
+        }
+    }
+    {
+        int32_t xd[PLSUB], g = d->gin / len * 132, na2 = d->na2;   /* (a band's answer to a grain grows with its
+                                                      * size: the input / the size, as at 3 ms) */
+        xd[0] = x[0] - d->x2;                        /* (the zeros: x - x two back) */
+        xd[1] = x[1] - d->x1;
+        for (i = 2; i < n; i++)
+            xd[i] = x[i] - x[i - 2u];
+        d->x2 = x[n - 2u];
+        d->x1 = x[n - 1u];
+        for (k = 0; k < d->nb; k++) {                /* (a band at a time over the sub-block, as RING's) */
+            int32_t a1 = d->a1[k], y1 = d->y1[k], y2 = d->y2[k];
+            for (i = 0; i < n; i++) {
+                int32_t y0 = (int32_t)(((int64_t)xd[i] * g + (int64_t)a1 * y1 + (int64_t)na2 * y2 + (1 << 29)) >> 30);
+                y2 = y1;
+                y1 = y0;
+                out[i] += y0 >> 4;
+            }
+            if (pabs(y1) > RN_LIM || pabs(y2) > RN_LIM) {
+                y1 >>= 1;
+                y2 >>= 1;
+            }
+            d->y1[k] = y1;
+            d->y2[k] = y2;
+        }
+    }
+    for (i = 0; i < n; i++) {                        /* (a soft clip: x - x^3 / 27, to 2 at 3; then OUT's limiter) */
+        int32_t y = pclamp(out[i], -3 * PL1, 3 * PL1);
+        out[i] = y - pm(pm(pm(y, y), y), 621378);
+    }
+}
+#endif
 
 /* -------------------------------------------------- inharmonic string --- */
 /* StringVoice + String (one string; its lines: the voice's Rings string's, rg_line and rg_stretch) */
@@ -1241,6 +1463,8 @@ typedef struct {
         pl_hh_t hh;
 #if ELIXIR_PARTICLE
         pl_pt_t pt;
+#else
+        pl_rn_t rn;                                  /* (1.0 Phase 21: RAIN, in P PARTCL's number) */
 #endif
         pl_st_t st;
         pl_sw_t sw;
@@ -1273,6 +1497,8 @@ static void pl_engine_init(pl_t *v, uint32_t vi, uint32_t e)
     case PE_HH: hh_init(&v->u.hh); break;
 #if ELIXIR_PARTICLE
     case PE_PART: pt_init(&v->u.pt); break;
+#else
+    case PE_RAIN: rn_init(&v->u.rn); break;
 #endif
     case PE_STRING: st_init(&v->u.st, vi); break;
     case PE_SWARM: sw_init(&v->u.sw); break;
@@ -1297,6 +1523,8 @@ static void pl_engine_render(pl_t *v, uint32_t vi, const pl_par_t *p, int32_t *o
     case PE_HH: hh_render(&v->u.hh, p, out, aux, n); break;
 #if ELIXIR_PARTICLE
     case PE_PART: pt_render(&v->u.pt, vi, p, out, aux, n); break;
+#else
+    case PE_RAIN: rn_render(&v->u.rn, p, out, aux, n); break;
 #endif
     case PE_STRING: st_render(&v->u.st, vi, p, out, aux, n); break;
     case PE_SWARM: sw_render(&v->u.sw, p, out, aux, n); break;
@@ -1331,6 +1559,7 @@ static void pl_block(uint32_t vi, const voice_t *v, int16_t *buf)
     uint32_t e = m->type - MD_PL0, k, i, f = v->osc.inc;
     int32_t o[PLSUB], a[PLSUB], env = pl_knob(m->tens), col = pl_knob(m->pos), mix = pl_knob(m->exc);
     int32_t g0 = v->last_gain, g1 = v->gain, gs, og = PE_OUTG[e], ag = PE_AUXG[e], selfenv;
+    const int rain = !ELIXIR_PARTICLE && e == PE_RAIN;   /* (1.0 Phase 21: RAIN gates its grains itself) */
     pl_par_t p;
     if (!d->on || d->eng != e) {
         pl_engine_init(d, vi, e);
@@ -1351,39 +1580,22 @@ static void pl_block(uint32_t vi, const voice_t *v, int16_t *buf)
     p.accent = d->accent;
     p.only = (uint8_t)(mix <= 0 ? PLS_OUT : mix >= PL1 ? PLS_AUX : PLS_BOTH);   /* (1.0: the side not heard not
                                                       * rendered: about half a drum engine's cost) */
+    p.col = col;
     gs = (g1 - g0) / (int32_t)(BLOCK / PLSUB);
     for (k = 0; k < BLOCK / PLSUB; k++) {
-        int32_t gk = g0 + gs * (int32_t)(k + 1), gl, gst;
+        int32_t gk = g0 + gs * (int32_t)(k + 1);
         p.trig = d->trig;
         d->trig = 0;
+        p.eg0 = d->lpg_g;
+        p.eg1 = gk;
         pl_engine_render(d, vi, &p, o, a, PLSUB);
-        selfenv = PE_ENV[e] || (e == PE_SPEECH && d->u.sp.env);
-        if (!selfenv && col) {                       /* the low-pass gate: Plaits' vactrol, its colour 1 - COLOUR */
-            int32_t hf = PL1 - col, g2 = pm(gk, gk), g4 = pm(g2, g2), t = PL1 - gk, t2 = pm(t, t);
-            int32_t fr = 50332 + pm(5033165, g4) + pm(hf, 671089);   /* 0.003 + 0.3 g^4 + 0.04 hf */
-            int32_t bleed = pm(pm(t2 + pm(PL1 - t2, hf), hf), hf);
-            pl_svf_fq(&d->lpg, pl_fq(fr), 102, TAN_DIRTY);   /* (Q 0.4) */
-            gl = d->lpg_g;
-            gst = (gk - gl) / (int32_t)PLSUB;
-            for (i = 0; i < PLSUB; i++) {
-                int32_t x, lp;
-                gl += gst;
-                x = pl_post(o[i], og, &d->opeak);
-                x = pm(x + pm(mix, pl_post(a[i], ag, &d->apeak) - x), gl);
-                lp = pl_svf_lp(&d->lpg, x);
-                o[i] = lp + pm(x - lp, bleed);
-            }
-        } else {
-            gl = d->lpg_g;
-            gst = (gk - gl) / (int32_t)PLSUB;
-            for (i = 0; i < PLSUB; i++) {
-                int32_t x;
-                gl += gst;
-                x = pl_post(o[i], og, &d->opeak);
-                x += pm(mix, pl_post(a[i], ag, &d->apeak) - x);
-                o[i] = selfenv ? x : pm(x, gl);
-            }
+        selfenv = PE_ENV[e] || (e == PE_SPEECH && d->u.sp.env) || rain;
+        for (i = 0; i < PLSUB; i++) {
+            int32_t x = pl_post(o[i], og, &d->opeak);
+            o[i] = x + pm(mix, pl_post(a[i], ag, &d->apeak) - x);
         }
+        if (!selfenv)                                /* (the amp EG; COLOUR: Plaits' low-pass gate) */
+            pl_lpg(&d->lpg, o, d->lpg_g, gk, col);
         d->lpg_g = gk;
         for (i = 0; i < PLSUB; i++) {
             int32_t y = o[i] >> 9;                   /* (Q24 to Q15) */

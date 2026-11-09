@@ -78,10 +78,12 @@ static const char *const L_XMODE[] = {"DUCK", "FILTER", "RING"};
 static const char *const L_CHOKE[] = {"OFF", "1", "2", "3", "4"};
 static const char *const L_MODEL[] = {"LXR", "MODAL", "STRING", "FM",   /* (0.9: Rings' models, rings.c) */
                                       "P VA", "P WSHAPE", "P FM", "CLOUD", "P ADDTV", "P WTABLE", "P CHORD",
-                                      "P SPEECH", "P SWARM", "NOISE", "P PARTCL", "P STRING", "P MODAL", "P BD",
+                                      "P SPEECH", "P SWARM", "NOISE", ELIXIR_PARTICLE ? "P PARTCL" : "RAIN",
+                                      "P STRING", "P MODAL", "P BD",
                                       "P SD", "P HH",   /* (0.15: Plaits' engines, plaits.c; 1.0: P MODAL dropped,
                                                       * never shown; NOISE, noise.c, in P NOISE's number; CLOUD,
-                                                      * plaits.c's own granular voice, in P GRAIN's) */
+                                                      * plaits.c's own granular voice, in P GRAIN's; Phase 21:
+                                                      * RAIN, its grains on tuned bands, in P PARTCL's) */
                                       "CLICK", "TRAIN", "CRUNCH", "BITS", "BURST", "SNAP", "GRAIN", "DUST", "POP",
                                       "CHIRP",   /* (24: MICRO's, micro.c) */
                                       "ENSEMBLE"};   /* (0.25: ensemble.c) */
@@ -219,6 +221,13 @@ static const char *pl_knob_name(uint32_t p, uint32_t which)
                                             {"Density", "Cloud", "dns", "Density"}, {"-", "Cloud", "-", "-"},
                                             {"Texture", "Cloud", "tex", "Texture"}};
         return G[(p - PAR_MDECAY1) / 6u][which];
+    }
+    if (!ELIXIR_PARTICLE && mdl[vi].want == MD_RAIN && (p < PAR_MPOS1 || (p >= PAR_MEXC1 && p < PAR_MTENS1))) {
+        static const char *const R[5][4] = {{"Chord", "Rain", "chd", "Chord"}, {"Ring", "Rain", "rng", "Ring"},
+                                            {"Density", "Rain", "dns", "Density"}, {"-", "Rain", "-", "-"},
+                                            {"Dry", "Rain", "dry", "Dry"}};   /* (Phase 21: RAIN's; AUX the dry
+                                                      * grains) */
+        return R[(p - PAR_MDECAY1) / 6u][which];
     }
     if (mdl[vi].want == MD_PL0 + PE_CHORD && p < PAR_MPOS1) {   /* (P CHORD's: the chord, its inversion, the wave) */
         static const char *const C[3][4] = {{"Chord", "Plaits", "chd", "Chord"}, {"Invert", "Plaits", "inv", "Invert"},
@@ -503,6 +512,11 @@ static void par_format(char *b, uint32_t p, uint32_t v, uint32_t max)
                 b[0] = '+';
             return;
         }
+    }
+    if (!ELIXIR_PARTICLE && p >= PAR_MDECAY1 && p < PAR_MDECAY1 + 3u && mdl[p - PAR_MDECAY1].want == MD_RAIN &&
+        !mi[p - PAR_MDECAY1].type) {                 /* (Phase 21: RAIN's Chord: RING's tunings) */
+        put_str(b, RING_NAME[rn_chord(pl_knob((uint8_t)v))], max);
+        return;
     }
     if (p >= PAR_MDECAY1 && p < PAR_MDECAY1 + 3u && mdl[p - PAR_MDECAY1].want == MD_PL0 + PE_CHORD &&
         !mi[p - PAR_MDECAY1].type) {                 /* P CHORD's HARMONIC: the chord it plays (from the one playing) */

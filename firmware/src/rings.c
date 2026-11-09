@@ -30,15 +30,16 @@
                                                      * stays: a kit with it plays P ADD. docs/parked/README.md) */
 #endif
 #ifndef ELIXIR_PARTICLE                              /* (1.0: P PARTCL, Plaits' particle engine: dropped for CLOUD; 1 */
-#define ELIXIR_PARTICLE 0                            /* builds it in (its diffuser 16 KB of RAM). Its number stays: a */
-#endif                                               /* kit with it plays CLOUD, sound.c model_pick) */
+#define ELIXIR_PARTICLE 0                            /* builds it in (its diffuser 16 KB of RAM). Its number is */
+#endif                                               /* RAIN's when it isn't: plaits.c rn_render) */
 #define NMICRO 10                                    /* (Phase 24: MICRO's types, micro.c, on every voice) */
 enum { MD_LXR, MD_MODAL, MD_STRING, MD_FM, MD_PL0, MD_MC0 = MD_PL0 + 16, MD_EN = MD_MC0 + NMICRO, NMODEL };   /* (0.15:
                                                      * Plaits' 16, plaits.c; 0.25: ENSEMBLE, ensemble.c, last) */
 #define MD_PGRAIN (MD_PL0 + 3)                       /* (1.0, 10c: P GRAIN, P NOISE, P MODAL dropped; their numbers */
 #define MD_CLOUD MD_PGRAIN                           /* (1.0: CLOUD, Elixir's granular voice, plaits.c, in P GRAIN's) */
 #define MD_NOISE (MD_PL0 + 9)                        /* stay: NOISE, Elixir's own (noise.c, every voice), in P NOISE's; */
-#define MD_PPART (MD_PL0 + 10)                       /* (1.0: P PARTCL, dropped: CLOUD plays it) */
+#define MD_PPART (MD_PL0 + 10)                       /* (1.0: P PARTCL, dropped; Phase 21: RAIN, Elixir's own, in */
+#define MD_RAIN MD_PPART                             /* its number: a kit's P PARTCL plays RAIN) */
 #define MD_PMODAL (MD_PL0 + 12)                      /* a kit's P MODAL plays MODAL; P GRAIN's number is CLOUD's */
                                                      /* (Elixir's granular voice, plaits.c). sound.c model_pick) */
 #define RG_MODES 32u
@@ -605,7 +606,7 @@ static void model_limit(void)
     uint32_t k, n = 0;
     for (k = 0; k < 3u; k++) {
         uint8_t t = mdl[k].want;
-        if (model_counted(t)) {                      /* (1.0: CLOUD plays without counting) */
+        if (model_counted(t)) {                      /* (1.0: CLOUD, RAIN play without counting) */
             t = n < model_cap ? t : 0u;
             n += t != 0u;
         }
