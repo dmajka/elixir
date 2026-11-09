@@ -173,7 +173,7 @@ A pattern has seven tracks of up to 64 steps (four bars of 16). Each track has i
 
 ### The grid (HOME)
 
-- **Select a track** with its black key (or ALGORITHM).
+- **Select a track** with its black key (or ALGORITHM). From 1.2 the key also plays the track's voice once, at the keys' velocity, so you can tap the seven keys to hear the kit together. The hit isn't recorded. To turn it off, set CONFIG → BUTTONS & KITS → **Audition** to NO.
 - **Tap a white key** to turn that step on or off.
 - **Bar keys** (black 8–11) show bars 1–4. With FOLLOW on (CONFIG), the screen follows the playhead.
 - **Knobs:** tempo, shuffle, the track's length, the track's volume.
@@ -1810,7 +1810,7 @@ GLO twice (past the mixer) opens CONFIG. Turn SELECT for its pages:
 | DEVICE | LEDs (OFF / LOW / HIGH glow), Autosave, Accel (fast knob turns move further), Colors (screen palette: GRAY, GREEN, AMBER, ICE, VIOLET, ROSE, PAPER, HI-CON, NIGHT, MONO, HYRULE (forest green and Triforce gold) or SAND (the default: amber on true black, near-black cards) |
 | REMOTE | Tracks (the TRACKS channel: OFF, 1–16; 15 by default), Global (the GLOBAL channel; 16 by default; never the same as Tracks), Knobs (PICKUP / ABS / REL), Mute/solo (PRESS / TOGGLE): see [the remote map](#the-remote-map) |
 | MORPH | Edits: SPLIT (the default from 1.0: at morph 100% the knobs edit the morph kit, below it the kit), BOTH KITS (a knob's edit moves the morph target too) or KIT ONLY (the kit alone, the LXR's way). Ctrl all: BOTH KITS (the default: Control All moves the morph target too) or KIT ONLY; see [Kits and morph](#11-kits-and-morph) and [Control All](#control-all-every-track-at-once) |
-| BUTTONS & KITS | **Kits first** (KNOB 2, from 0.19): FACTORY (the default) or SLOTS, the kit browser's order (see [Kits and morph](#11-kits-and-morph)). **Last page**: NO (the default) or YES. With YES, a button opens the page it showed when you left it: on CONFIG's BUTTONS & KITS page, press FX, then GLO, and you're back on BUTTONS & KITS. It works for SEQ (the track's pages or step edit, whichever you were on), FX, ARP (and each of its two sets), GLO (the mixer or CONFIG) and the sound buttons (the section and row). Pressed again, a button moves on as always. HOME still goes to the grid. |
+| BUTTONS & KITS | **Audition** (KNOB 3, from 1.2): YES (the default) or NO. With YES, a track's black key plays its voice as it selects the track (on the grid, the sound and SEQ pages and every page but PERF's). With NO, the key only selects. **Kits first** (KNOB 2, from 0.19): FACTORY (the default) or SLOTS, the kit browser's order (see [Kits and morph](#11-kits-and-morph)). **Last page**: NO (the default) or YES. With YES, a button opens the page it showed when you left it: on CONFIG's BUTTONS & KITS page, press FX, then GLO, and you're back on BUTTONS & KITS. It works for SEQ (the track's pages or step edit, whichever you were on), FX, ARP (and each of its two sets), GLO (the mixer or CONFIG) and the sound buttons (the section and row). Pressed again, a button moves on as always. HOME still goes to the grid. |
 | LOAD | No knobs: where the processor's time goes, and the cores; see [the LOAD page](#the-load-page) |
 | ELIXIR | No knobs: the potion, the version, each core's load and the CPU line with the battery |
 
