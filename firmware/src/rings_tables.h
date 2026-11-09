@@ -82,7 +82,7 @@ static const int32_t RG_FM_RATIO[129] = {
     2113536, 2162688, 2211840, 2260992, 2310144, 2359296, 2359296, 2359296, 2359296,
 };
 
-/* sin(2 pi i / 4096) and the wrap point, x 32767 (the FM voice's; LXR_SINE is not quite a sine) */
+/* sin(2 pi i / 4096) and the wrap point, x 32767 (everyone's: 1.0 dropped LXR_SINE, dsp.c sine_at) */
 static const int16_t RG_SINE[4097] = {
     0, 50, 101, 151, 201, 251, 302, 352, 402, 452, 503, 553, 603, 653, 704, 754,
     804, 854, 905, 955, 1005, 1055, 1106, 1156, 1206, 1256, 1307, 1357, 1407, 1457, 1507, 1558,

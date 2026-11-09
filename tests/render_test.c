@@ -1062,14 +1062,14 @@ int main(int argc, char **argv)
     }
     {   /* 0.15 (17c): D1-D3 render on the second core while core 0 renders SN-HH. A voice must touch only its own
          * state, so the output is the same, bit for bit, whichever group renders first: the beat with MODAL on D1,
-         * P PARTCL on D2 (1.0: was P NOISE) and D3 on the noise wave (the generators that were shared), NOISE on CY
+         * P SWARM on D2 (1.0: was P NOISE, then P PARTCL) and D3 on the noise wave (the generators that were shared), NOISE on CY
          * (1.0: its own noise), in two processes */
         int fd[2];
         pid_t pid;
         uint64_t h[2] = {1469598103934665603ull, 1469598103934665603ull};
         uint32_t side, i;
         par_set(PAR_MODEL1, MD_MODAL);
-        par_set(PAR_MODEL1 + 1, MD_PL0 + 10);
+        par_set(PAR_MODEL1 + 1, MD_PL0 + 8);
         par_set(PAR_OSC_WAVE_DRUM3, W_NOISE);
         par_set(PAR_MODEL1 + 4, MD_NOISE);
         par_set(PAR_MODEL1 + 3, MD_MC0 + 2);             /* (24: MICRO on SN (CRUNCH) and the hats (DUST), with */
@@ -1116,7 +1116,7 @@ int main(int argc, char **argv)
         /* the models' limit: two play; a third plays as an LXR voice; on one core, one */
         par_set(PAR_MODEL1 + 2, MD_PL0);
         render(BLOCK);
-        if (mdl[0].type != MD_MODAL || mdl[1].type != MD_PL0 + 10 || mdl[2].type != 0 || mdl[2].want != MD_PL0) {
+        if (mdl[0].type != MD_MODAL || mdl[1].type != MD_PL0 + 8 || mdl[2].type != 0 || mdl[2].want != MD_PL0) {
             printf("FAIL: the third model plays\n");
             fails++;
         }
@@ -1128,7 +1128,7 @@ int main(int argc, char **argv)
         }
         model_cap = 1;
         render(BLOCK);
-        if (mdl[1].type != MD_PL0 + 10 || mdl[2].type != 0) {
+        if (mdl[1].type != MD_PL0 + 8 || mdl[2].type != 0) {
             printf("FAIL: one core: more than one model plays\n");
             fails++;
         }

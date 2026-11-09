@@ -495,11 +495,19 @@ static void add_render(pl_add_t *d, const pl_par_t *p, int32_t *out, int32_t *au
     static const uint8_t organ[8] = {0, 1, 2, 3, 5, 7, 9, 11};
     int32_t rb = p->harm, rs = pm(PL1 - pm(10066330, rb), p->morph);   /* (1 - 0.6 bumps) morph */
     int32_t slope = 167772 + pm(33386906, pm(pm(rs, rs), rs)), bumps = 16 * pm(rb, rb);   /* 0.01 + 1.99 s^3 */
-    add_amps(p->timbre, slope, bumps, d->amps, ints, 24);
-    hosc_render(&d->h[0], 1, p->f0, d->amps, out, 0, n);
-    hosc_render(&d->h[1], 13, p->f0, d->amps + 12, out, 1, n);
-    add_amps(p->timbre, slope, bumps, d->amps + 24, organ, 8);
-    hosc_render(&d->h[2], 1, p->f0, d->amps + 24, aux, 0, n);
+    if (p->only == PLS_AUX) {
+        memset(out, 0, n * sizeof out[0]);
+    } else {
+        add_amps(p->timbre, slope, bumps, d->amps, ints, 24);
+        hosc_render(&d->h[0], 1, p->f0, d->amps, out, 0, n);
+        hosc_render(&d->h[1], 13, p->f0, d->amps + 12, out, 1, n);
+    }
+    if (p->only == PLS_OUT) {
+        memset(aux, 0, n * sizeof aux[0]);
+    } else {
+        add_amps(p->timbre, slope, bumps, d->amps + 24, organ, 8);
+        hosc_render(&d->h[2], 1, p->f0, d->amps + 24, aux, 0, n);
+    }
 }
 
 #if ELIXIR_WTABLE                                    /* (0.24: parked, rings.c) */

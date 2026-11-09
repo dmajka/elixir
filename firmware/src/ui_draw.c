@@ -207,32 +207,94 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
     }
 }
 static int msg_on(void) { return ui.msg[0] && fm1_ms - ui.msg_ms < (ui.msg_long ? 6000u : 1500u); }
+/* 1.0: CPU OVERLOAD. Halves rendered late (audio.c audio_late), two within 2 s, flash the title red until 2 s after the
+ * last (a lone late, a peak with an interrupt on top, isn't a click you hear; a load over the limit is a run), with
+ * what was heaviest: when core 1 (D1-D3) was the one behind, its models ("MODAL + P SD"); else core 0's biggest part,
+ * as CONFIG > LOAD names it. (Not in the first 3 s: start-up's own) */
+#define OVL_MS 2000u
+static void cat(char *b, const char *s, uint32_t n);
+static uint32_t ovl_seen, ovl_ms, ovl_last;
+static uint8_t ovl_on;
+static char ovl_why[40];
+static void ovl_poll(void)
+{
+    static const char *const PART[NLD] = {"SEQ, MOD", "D1-D3", "SN-HH", "MIXER", "FX BUS", "REVERB", ""};
+    uint32_t late = audio_late, two = cores_why == CW_TWO, w = ld_q8[LD_WAIT], c0, c1, k, best = NLD, top = 0;
+    if (ovl_on && fm1_ms - ovl_ms >= OVL_MS)
+        ovl_on = 0;
+    if (late == ovl_seen)
+        return;
+    ovl_seen = late;
+    if (fm1_ms < 3000u)
+        return;
+    k = fm1_ms - ovl_last < OVL_MS;                  /* (the one before it, within 2 s) */
+    ovl_last = fm1_ms;
+    if (!k && !ovl_on)
+        return;
+    ovl_ms = fm1_ms;
+    ovl_on = 1;
+    put_str(ovl_why, "CPU OVERLOAD", sizeof ovl_why);
+    c1 = two ? ld_q8[LD_D13] : 0u;                   /* (core 1's time, and core 0's own beside it) */
+    c0 = cpu_q8 > w ? cpu_q8 - w : 0u;
+    if (two && c1 >= c0 && c1) {                     /* core 1 behind: the drum voices' models */
+        uint32_t n = 0;
+        cat(ovl_why, ": ", sizeof ovl_why);
+        for (k = 0; k < 3u; k++) {
+            uint32_t md = mdl[k].type ? mdl[k].type : eno[k].on ? (uint32_t)MD_EN : 0u;
+            if (!md)
+                continue;
+            if (n++)
+                cat(ovl_why, " + ", sizeof ovl_why);
+            cat(ovl_why, L_MODEL[md], sizeof ovl_why);
+        }
+        if (!n)
+            cat(ovl_why, "D1-D3", sizeof ovl_why);
+        return;
+    }
+    for (k = 0; k < NLD; k++)                        /* core 0: its biggest part (one core: D1-D3's too) */
+        if (k != LD_WAIT && (k != LD_D13 || !two) && ld_q8[k] > top) {
+            top = ld_q8[k];
+            best = k;
+        }
+    if (best < NLD) {
+        cat(ovl_why, ": ", sizeof ovl_why);
+        cat(ovl_why, PART[best], sizeof ovl_why);
+    }
+}
 static void draw_title(void)
 {
     char b[40];
-    uint32_t pg, np, s, t = ui.track, mo = msg_on(), i;
+    uint32_t pg, np, s, t = ui.track, mo, i, ovl, blink;
+    ovl_poll();
+    ovl = ovl_on;
+    blink = ovl && (fm1_ms / 250u) & 1u;
+    mo = !ovl && msg_on();
     title_text(b, sizeof b, &pg, &np);
     s = sig_add(ui.mode, t);
     for (i = 0; b[i]; i++)                           /* (the text itself: a title that changes on its page) */
         s = sig_add(s, (uint8_t)b[i]);
     s = sig_add(s, pg | np << 8 | mo << 16 | ui.step << 20);
     s = sig_add(s, mo ? (uint32_t)ui.msg[0] | (uint32_t)ui.msg[2] << 8 | ui.msg_ms : 0u);
+    s = sig_add(s, ovl | blink << 1 | (uint32_t)(uint8_t)ovl_why[14] << 8 | (uint32_t)(uint8_t)ovl_why[16] << 16);
     if (!region(R_TITLE, s))
         return;
     cv_begin(240, TITLE_H, T_BG);
     cv_rrect(4, 2, 24, 16, 4, TRACK_COL[t], T_BG);
     cv_text_in(4, CAP_IN(S, 16) + 2, 24, &AF_S, VOICE_SHORT[t], RGB(16, 16, 16), TRACK_COL[t]);
-    if (mo)
+    if (ovl) {                                       /* (flashing: red, then on red) */
+        cv_rrect(31, 1, 206, 18, 4, blink ? T_REC : T_BG, T_BG);
+        cv_text_fit(34, CAP_IN(S, 20), &AF_S, ovl_why, blink ? T_BG : T_REC, blink ? T_REC : T_BG, 200);
+    } else if (mo)
         cv_text_fit(34, CAP_IN(S, 20), &AF_S, ui.msg, T_ACCENT, T_BG, 200);
     else
         cv_text_fit(34, CAP_IN(S, 20), &AF_S, b, T_TEXT, T_BG, np > 8u ? 158 : 236 - 34 - (int32_t)np * 7 - 4);
-    if (np > 8u && !mo) {                            /* the page: n / pages (many: the sound pages) */
+    if (np > 8u && !mo && !ovl) {                    /* the page: n / pages (many: the sound pages) */
         char d[8];
         put_int(d, (int32_t)pg + 1);
         put_str(d + str_len(d), "/", sizeof d - str_len(d));
         put_int(d + str_len(d), (int32_t)np);
         cv_text_r(236, CAP_IN(S, 20), &AF_S, d, T_MID, T_BG);
-    } else if (np > 1u && !mo) {                     /* .. or dots */
+    } else if (np > 1u && !mo && !ovl) {             /* .. or dots */
         uint32_t i;
         int32_t x = 236 - (int32_t)np * 7;
         for (i = 0; i < np; i++)
@@ -1715,9 +1777,9 @@ static void draw_body(void)
                                (uint32_t)par[PAR_DLY_LEVEL] << 24);   /* (1.0: the delay's) */
             s = sig_add(s, (uint32_t)par[PAR_DLY_WOW] | (uint32_t)par[PAR_DSAT] << 8 | fx_bpm_x10 << 16 |
                                (uint32_t)par[PAR_DLY_BAND] << 24);
-            if (par[PAR_FX_DELAY_TYPE] == DELAY_GRAIN && par[PAR_GLITCH] &&
+            if (par[PAR_FX_DELAY_TYPE] != DELAY_OFF && (par[PAR_FX_DELAY_TYPE] != DELAY_GRAIN || par[PAR_GLITCH]) &&
                 (fx_page() == FXPG_DLY || fx_page() == FXPG_DUB || fx_page() == FXPG_DLY2)) {
-                vz_frame = fm1_ms / 50u;                 /* (1.0: GRAIN's cloud moves, 20 frames a second) */
+                vz_frame = fm1_ms / 50u;                 /* (1.0: the delay's picture moves, 20 frames a second) */
                 s = sig_add(s, vz_frame);
             }
             if (fx_page() >= FXPG_FSEND)                 /* (the send pages: the mixer's bars) */
@@ -2589,7 +2651,7 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
         return;
     }
     case VP_BUILD: {
-        static const char *const B[NDB] = {"CHANCE", "GHOSTS", "RATCHETS"};
+        static const char *const B[NDB] = {"CHANCE", "GHOSTS", "RATCH"};
         put_str(b, B[v < NDB ? v : 0], n);
         return;
     }

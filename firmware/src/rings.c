@@ -29,13 +29,18 @@
 #define ELIXIR_WTABLE 0                              /* ~47 KB of flash; parked for a unit with room. Its model number
                                                      * stays: a kit with it plays P ADD. docs/parked/README.md) */
 #endif
+#ifndef ELIXIR_PARTICLE                              /* (1.0: P PARTCL, Plaits' particle engine: dropped for CLOUD; 1 */
+#define ELIXIR_PARTICLE 0                            /* builds it in (its diffuser 16 KB of RAM). Its number stays: a */
+#endif                                               /* kit with it plays CLOUD, sound.c model_pick) */
 #define NMICRO 10                                    /* (Phase 24: MICRO's types, micro.c, on every voice) */
 enum { MD_LXR, MD_MODAL, MD_STRING, MD_FM, MD_PL0, MD_MC0 = MD_PL0 + 16, MD_EN = MD_MC0 + NMICRO, NMODEL };   /* (0.15:
                                                      * Plaits' 16, plaits.c; 0.25: ENSEMBLE, ensemble.c, last) */
 #define MD_PGRAIN (MD_PL0 + 3)                       /* (1.0, 10c: P GRAIN, P NOISE, P MODAL dropped; their numbers */
+#define MD_CLOUD MD_PGRAIN                           /* (1.0: CLOUD, Elixir's granular voice, plaits.c, in P GRAIN's) */
 #define MD_NOISE (MD_PL0 + 9)                        /* stay: NOISE, Elixir's own (noise.c, every voice), in P NOISE's; */
-#define MD_PMODAL (MD_PL0 + 12)                      /* a kit's P MODAL plays MODAL, P GRAIN the LXR (its number kept */
-                                                     /* for a granular model of Elixir's own). sound.c model_map) */
+#define MD_PPART (MD_PL0 + 10)                       /* (1.0: P PARTCL, dropped: CLOUD plays it) */
+#define MD_PMODAL (MD_PL0 + 12)                      /* a kit's P MODAL plays MODAL; P GRAIN's number is CLOUD's */
+                                                     /* (Elixir's granular voice, plaits.c). sound.c model_pick) */
 #define RG_MODES 32u
 #define RG_LINE 1024u                                /* the string (Rings: 2048 at 48 kHz; lower, it runs slower) */
 #define RG_STRETCH 512u                              /* .. its dispersion's all-pass */
@@ -254,24 +259,27 @@ static void modal_run(model_t *m, const int32_t *in, int32_t *out, uint32_t nm)
     m->x1 = x1;
     m->x2 = x2;
     for (k = 0; k < nm; k++) {
-        int32_t a1 = m->a1[k], a2 = m->a2[k], b = m->b[k], y1 = m->y1[k], y2 = m->y2[k];
-        int32_t e1 = m->e1[k], e2 = m->e2[k], c = a1 < 0 ? -2 : 2;
-        for (i = 0; i < BLOCK; i++) {
+        int32_t a1 = m->a1[k], a2 = m->a2[k], b = m->b[k], y1 = m->y1[k], y2 = m->y2[k], c = a1 < 0 ? -2 : 2;
+        uint32_t e1 = (uint32_t)m->e1[k], e2 = (uint32_t)m->e2[k];
+        const int32_t *xp = xd, *xe = xd + BLOCK;
+        int32_t *o = out;
+        do {    /* 1.0: walked by pointers, the error (0 .. 2^30) subtracted unsigned, the clamp a block's: 20
+                 * instructions a sample on the FM-1, from 33 (build/elixir.dis), the same numbers */
             /* the rounding's error fed back through (1 -+ z^-1)^2: the poles sit by z = 1 (or -1, above a quarter
              * of the rate), and a plain truncation there turns into a hum that never decays */
-            int64_t acc = (int64_t)b * xd[i] + (int64_t)a1 * y1 - (int64_t)a2 * y2 + (int64_t)c * e1 - e2;
-            int32_t y = (int32_t)(acc >> 30);
+            int64_t acc = (int64_t)b * *xp++ + (int64_t)a1 * y1 - (int64_t)a2 * y2 + (int64_t)c * (int32_t)e1 -
+                          (int64_t)(uint64_t)e2;
             e2 = e1;
-            e1 = (int32_t)(acc & 0x3FFFFFFF);
-            y = y > (1 << 29) ? 1 << 29 : y < -(1 << 29) ? -(1 << 29) : y;   /* (a mode run away: held) */
+            e1 = (uint32_t)acc & 0x3FFFFFFFu;
             y2 = y1;
-            y1 = y;
-            out[i] += y;
-        }
-        m->y1[k] = y1;
-        m->y2[k] = y2;
-        m->e1[k] = e1;
-        m->e2[k] = e2;
+            y1 = (int32_t)(acc >> 30);
+            *o++ += y1;
+        } while (xp != xe);
+        /* (a mode run away: held. Stable poles grow a state by the input's share alone, well under 2^31 in a block) */
+        m->y1[k] = clamp_hl(y1, -(1 << 29), 1 << 29);
+        m->y2[k] = clamp_hl(y2, -(1 << 29), 1 << 29);
+        m->e1[k] = (int32_t)e1;
+        m->e2[k] = (int32_t)e2;
     }
     for (; k < RG_MODES; k++)                        /* (modes out of use: quiet when they come back) */
         m->y1[k] = m->y2[k] = m->e1[k] = m->e2[k] = 0;
@@ -591,12 +599,16 @@ static void model_trigger(uint32_t vi, uint32_t vel, uint32_t inc)
 /* 0.15 (17c): at most model_cap models play at once, the first in D1, D2, D3 order; the others play as LXR voices.
  * 2 (D1-D3 render on the second core, voices.c); 1 on one core (main.c), where two can pass 100% */
 static uint8_t model_cap = 2;
+static int model_counted(uint32_t md);
 static void model_limit(void)
 {
     uint32_t k, n = 0;
     for (k = 0; k < 3u; k++) {
-        uint8_t t = n < model_cap ? mdl[k].want : 0u;
-        n += t != 0u;
+        uint8_t t = mdl[k].want;
+        if (model_counted(t)) {                      /* (1.0: CLOUD plays without counting) */
+            t = n < model_cap ? t : 0u;
+            n += t != 0u;
+        }
         mdl[k].type = t;
     }
 }

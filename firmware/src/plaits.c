@@ -17,8 +17,9 @@
  * modes (no TRIGGER patched: the voice is always struck), its user data, its 1.2 engines. The string engine plays one
  * string a voice (Plaits: three, overlapping), in the memory a voice's Rings string has; the particle engine's diffuser
  * (16 KB) is one, for the first voice on PARTICLE; the others play it dry. 1.0 (10c): GRAIN, NOISE and MODAL dropped
- * (MODAL: Rings' plays better; NOISE: Elixir's own, noise.c, in its number; GRAIN's number kept for a granular model):
- * their PE_ numbers stay, as the kits store them (rings.c MD_PGRAIN, MD_NOISE, MD_PMODAL; sound.c model_pick). */
+ * (MODAL: Rings' plays better; NOISE: Elixir's own, noise.c, in its number; GRAIN's number CLOUD's, Elixir's granular
+ * voice, below): their PE_ numbers stay, as the kits store them (rings.c MD_PGRAIN, MD_NOISE, MD_PMODAL; sound.c
+ * model_pick). */
 
 #include "plaits_tables.h"
 
@@ -30,10 +31,10 @@ enum {
     PE_SWARM, PE_NOISE, PE_PART, PE_STRING, PE_MODAL, PE_BD, PE_SD, PE_HH, NPE
 };
 /* Plaits' post-processing per engine: OUT's and AUX's gains (Q24; negative: through its limiter), and whether the
- * engine envelopes itself (voice.cc's RegisterInstance) */
+ * engine envelopes itself (voice.cc's RegisterInstance). (1.0: PE_GRAIN's number CLOUD's, its AUX as loud as OUT) */
 static const int32_t PE_OUTG[NPE] = {13421773, 11744051, 10066330, 11744051, 13421773, 10066330, 13421773, -11744051,
                                      -50331648, -16777216, -33554432, -16777216, -16777216, 13421773, 13421773, 13421773};
-static const int32_t PE_AUXG[NPE] = {13421773, 10066330, 10066330, 10066330, 13421773, 10066330, 13421773, 13421773,
+static const int32_t PE_AUXG[NPE] = {13421773, 10066330, 10066330, 11744051, 13421773, 10066330, 13421773, 13421773,
                                      16777216, -16777216, 16777216, 13421773, 13421773, 13421773, 13421773, 13421773};
 static const uint8_t PE_ENV[NPE] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
 
@@ -230,7 +231,11 @@ typedef struct {
     uint32_t f0;                                     /* NoteToFrequency(note), Q32 */
     int32_t harm, timbre, morph, accent;             /* Q24 0..1 */
     uint8_t trig;                                    /* a rising edge at this block */
+    uint8_t only;                                    /* 1.0: PLS_BOTH, or the one side heard (AUX at an end): the
+                                                      * engines with two of their own (BD SD HH, ADDTV's organ)
+                                                      * render that side alone, the other 0 */
 } pl_par_t;
+enum { PLS_BOTH, PLS_OUT, PLS_AUX };
 
 /* -------------------------------------------------- analog bass drum --- */
 static inline int32_t pl_diode(int32_t x)
@@ -283,59 +288,65 @@ static void bd_render(pl_bd_t *d, const pl_par_t *p, int32_t *out, int32_t *aux,
     tf = ((uint64_t)pl_semi(pm(p->timbre, 108 << 16), 16) * f0) >> 14;   /* 4 f0 2^(tone 9), Q32 */
     tone_f = tf >= (1ull << 32) ? PL1 : (int32_t)(tf >> 8);
     exl = pm(1342177, p->timbre + (PL1 >> 2));       /* 0.08 (tone + 0.25) */
-    if (p->trig) {
-        d->prem = 44;                                /* 1 ms */
-        d->frem = 264;                               /* 6 ms */
-        d->ph = 3 * PL1 + pm(7 * PL1, p->accent);
-        d->lp_out = 0;
-    }
-    for (i = 0; i < n; i++) {
-        int32_t pulse, fmp = 0, punch, ro, factor;
-        uint32_t fr;
-        if (d->prem) {
-            --d->prem;
-            pulse = d->prem ? d->ph : d->ph - PL1;
-            d->pulse = pulse;
-        } else {
-            d->pulse -= pm(d->pulse, 1902251);        /* 1 / (0.2 ms) */
-            pulse = d->pulse;
+    if (p->only == PLS_AUX) {
+        memset(out, 0, n * sizeof out[0]);
+    } else {
+        if (p->trig) {
+            d->prem = 44;                            /* 1 ms */
+            d->frem = 264;                           /* 6 ms */
+            d->ph = 3 * PL1 + pm(7 * PL1, p->accent);
+            d->lp_out = 0;
         }
-        PL_ONE_POLE(d->plp, pulse, 3804357);          /* 1 / (0.1 ms) */
-        pulse = pl_diode((pulse - d->plp) + pm(pulse, 738198));   /* x 0.044 */
-        if (d->frem) {
-            --d->frem;
-            fmp = PL1;
-            d->retrig = d->frem ? 0 : -13421773;      /* -0.8 */
-        } else {
-            d->retrig -= pm(d->retrig, 7609);         /* 1 / 50 ms */
-        }
-        PL_ONE_POLE(d->flp, fmp, 3804357);
-        punch = 11744051 + pl_diode(10 * d->lp_out - PL1);
-        factor = PL1 + pm(pm(d->flp, 28521267), afm) + pm(pm(punch, 1342177), sfm);   /* 1.7, 0.08 */
-        fr = (uint32_t)(((uint64_t)f0 * (uint32_t)pmax(factor, 0)) >> 24);
-        fr = fr > 1717986918u ? 1717986918u : fr;    /* 0.4 */
-        {
-            uint64_t qq = 256u + (((uint64_t)q8 * fr) >> 32);
-            pl_svf_fq(&d->res, fr, qq > 0xFFFFFFFFull ? 0xFFFFFFFFu : (uint32_t)qq, TAN_DIRTY);
-        }
-        pl_svf_run(&d->res, pm(pulse - pm(d->retrig, 3355443), scale), &d->lp_out, &ro, 0);
-        PL_ONE_POLE(d->tone_lp, pm(pulse, exl) + ro, tone_f);
-        out[i] = d->tone_lp;
-    }
-    {   /* Overdrive (0.5 + 0.5 drive) */
-        int32_t dr = (PL1 >> 1) + (drive >> 1), d2 = pm(dr, dr), pa = dr >> 1, pb = pm(pm(pm(d2, d2), dr), 24 * PL1);
-        int32_t pre = pa + pm(pb - pa, d2), sq = pm(dr, 2 * PL1 - dr);
-        int32_t post = pl_div(PL1, pl_softclip(5536481 + pm(sq, pre - 5536481)));   /* 0.33 */
-        int32_t pst = (pre - d->od_pre) / (int32_t)n, qst = (post - d->od_post) / (int32_t)n;
         for (i = 0; i < n; i++) {
-            d->od_pre += pst;
-            d->od_post += qst;
-            out[i] = pm(pl_softclip(pm(d->od_pre, out[i])), d->od_post);
+            int32_t pulse, fmp = 0, punch, ro, factor;
+            uint32_t fr;
+            if (d->prem) {
+                --d->prem;
+                pulse = d->prem ? d->ph : d->ph - PL1;
+                d->pulse = pulse;
+            } else {
+                d->pulse -= pm(d->pulse, 1902251);    /* 1 / (0.2 ms) */
+                pulse = d->pulse;
+            }
+            PL_ONE_POLE(d->plp, pulse, 3804357);      /* 1 / (0.1 ms) */
+            pulse = pl_diode((pulse - d->plp) + pm(pulse, 738198));   /* x 0.044 */
+            if (d->frem) {
+                --d->frem;
+                fmp = PL1;
+                d->retrig = d->frem ? 0 : -13421773;  /* -0.8 */
+            } else {
+                d->retrig -= pm(d->retrig, 7609);     /* 1 / 50 ms */
+            }
+            PL_ONE_POLE(d->flp, fmp, 3804357);
+            punch = 11744051 + pl_diode(10 * d->lp_out - PL1);
+            factor = PL1 + pm(pm(d->flp, 28521267), afm) + pm(pm(punch, 1342177), sfm);   /* 1.7, 0.08 */
+            fr = (uint32_t)(((uint64_t)f0 * (uint32_t)pmax(factor, 0)) >> 24);
+            fr = fr > 1717986918u ? 1717986918u : fr;    /* 0.4 */
+            {
+                uint64_t qq = 256u + (((uint64_t)q8 * fr) >> 32);
+                pl_svf_fq(&d->res, fr, qq > 0xFFFFFFFFull ? 0xFFFFFFFFu : (uint32_t)qq, TAN_DIRTY);
+            }
+            pl_svf_run(&d->res, pm(pulse - pm(d->retrig, 3355443), scale), &d->lp_out, &ro, 0);
+            PL_ONE_POLE(d->tone_lp, pm(pulse, exl) + ro, tone_f);
+            out[i] = d->tone_lp;
         }
-        d->od_pre = pre;
-        d->od_post = post;
+        {   /* Overdrive (0.5 + 0.5 drive) */
+            int32_t dr = (PL1 >> 1) + (drive >> 1), d2 = pm(dr, dr), pa = dr >> 1, pb = pm(pm(pm(d2, d2), dr), 24 * PL1);
+            int32_t pre = pa + pm(pb - pa, d2), sq = pm(dr, 2 * PL1 - dr);
+            int32_t post = pl_div(PL1, pl_softclip(5536481 + pm(sq, pre - 5536481)));   /* 0.33 */
+            int32_t pst = (pre - d->od_pre) / (int32_t)n, qst = (post - d->od_post) / (int32_t)n;
+            for (i = 0; i < n; i++) {
+                d->od_pre += pst;
+                d->od_post += qst;
+                out[i] = pm(pl_softclip(pm(d->od_pre, out[i])), d->od_post);
+            }
+            d->od_pre = pre;
+            d->od_post = post;
+        }
     }
-    {   /* the synthetic one */
+    if (p->only == PLS_OUT) {
+        memset(aux, 0, n * sizeof aux[0]);
+    } else {   /* the synthetic one */
         int32_t dec = pm(p->morph, p->morph), dirt, fmamt = pmin(p->harm * 2, PL1);
         int32_t fmd = pmax(p->harm * 2 - PL1, 0), f0step, tl = p->timbre;
         uint32_t kfm, kbody, ktr = pl_keepq(76087);  /* 1 / (5 ms) */
@@ -411,7 +422,7 @@ static inline int32_t sd_dsine(int32_t ph)
 static void sd_render(pl_sd_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
 {
     static const int32_t MF[5] = {16777216, 33554432, 53351547, 69793219, 94287954};   /* 1, 2, 3.18, 4.16, 5.62 */
-    uint32_t i, k, f0 = p->f0, f[5], q8;
+    uint32_t i, k, f0 = p->f0, f[5], q8, nk;
     int32_t dec = p->morph, sn = p->harm, tone = p->timbre, dxt, exl, gain[5];
     uint32_t knoise;
     dxt = pm(dec, PL1 + pm(dec, dec - PL1));
@@ -419,60 +430,68 @@ static void sd_render(pl_sd_t *d, const pl_par_t *p, int32_t *out, int32_t *aux,
     knoise = pl_keepq((int32_t)(((int64_t)28521 * pl_semi(-pm(dec, (50 << 16) + pm(sn, 10 << 16)), 24)) >> 24));   /* 0.0017 */
     exl = pm(pm(sn, 2 * PL1 - sn), 1677722);
     sn = pclamp(pm(sn, 18454938) - 838861, 0, PL1);  /* x 1.1 - 0.05 */
-    if (p->trig) {
-        d->prem = 44;
-        d->ph = 3 * PL1 + pm(7 * PL1, p->accent);
-        d->nenv = 1 << 30;                           /* 2.0 */
-    }
-    for (k = 0; k < 5; k++) {
-        uint64_t fk = ((uint64_t)f0 * (uint32_t)MF[k]) >> 24;
-        uint32_t qk = k ? q8 >> 2 : q8;
-        f[k] = fk > 2143188436u ? 2143188436u : (uint32_t)fk;
-        pl_svf_fq(&d->res[k], f[k], 256u + (uint32_t)(((uint64_t)qk * f[k]) >> 32), TAN_FAST);
-    }
-    if (tone < 11184811) {                           /* 808 (2 modes) */
-        int32_t t = pm(tone, 25165824), u = PL1 - t;
-        gain[0] = 25165824 + pm(pm(u, u), 75497472);
-        gain[1] = 2 * t + 2516582;
-        gain[2] = gain[3] = gain[4] = 0;
+    if (p->only == PLS_AUX) {
+        memset(out, 0, n * sizeof out[0]);
     } else {
-        int32_t t = (tone - 11184811) * 3;
-        gain[0] = 25165824 - (t >> 1);
-        gain[1] = 36071014 - pm(t, 11744051);
-        for (k = 2; k < 5; k++) {
-            gain[k] = t;
-            t = pm(t, t);
+        if (p->trig) {
+            d->prem = 44;
+            d->ph = 3 * PL1 + pm(7 * PL1, p->accent);
+            d->nenv = 1 << 30;                       /* 2.0 */
         }
-    }
-    {
-        uint64_t fn = (uint64_t)f0 * 16u;
-        uint32_t fnn = fn > 2143188436u ? 2143188436u : (uint32_t)fn;
-        pl_svf_fq(&d->nf, fnn, 256u + (uint32_t)(((uint64_t)fnn * 384u) >> 32), TAN_FAST);   /* 1 + 1.5 f */
-    }
-    for (i = 0; i < n; i++) {
-        int32_t pulse, shell = 0, noise;
-        if (d->prem) {
-            --d->prem;
-            pulse = d->prem ? d->ph : d->ph - PL1;
-            d->pulse = pulse;
-        } else {
-            d->pulse -= pm(d->pulse, 3804357);        /* 1 / (0.1 ms) */
-            pulse = d->pulse;
-        }
-        PL_ONE_POLE(d->plp, pulse, 12582912);         /* 0.75 */
         for (k = 0; k < 5; k++) {
-            int32_t ex = k == 0 ? (pulse - d->plp) + pm(pulse, 100663) : pm(pulse, 436208);   /* 0.006, 0.026 */
-            shell += pm(gain[k], pl_svf_bp(&d->res[k], ex) + pm(ex, exl));
+            uint64_t fk = ((uint64_t)f0 * (uint32_t)MF[k]) >> 24;
+            uint32_t qk = k ? q8 >> 2 : q8;
+            f[k] = fk > 2143188436u ? 2143188436u : (uint32_t)fk;
+            pl_svf_fq(&d->res[k], f[k], 256u + (uint32_t)(((uint64_t)qk * f[k]) >> 32), TAN_FAST);
         }
-        shell = pl_softclip(shell);
-        noise = 2 * pl_randf() - PL1;
-        noise = noise < 0 ? 0 : noise;
-        d->nenv = pl_keep(d->nenv, knoise);
-        noise = pm(pm(noise, d->nenv >> 5), sn) * 2;
-        noise = pl_svf_bp(&d->nf, noise);
-        out[i] = noise + pm(shell, PL1 - sn);
+        if (tone < 11184811) {                       /* 808 (2 modes) */
+            int32_t t = pm(tone, 25165824), u = PL1 - t;
+            gain[0] = 25165824 + pm(pm(u, u), 75497472);
+            gain[1] = 2 * t + 2516582;
+            gain[2] = gain[3] = gain[4] = 0;
+            nk = 2;
+        } else {
+            int32_t t = (tone - 11184811) * 3;
+            gain[0] = 25165824 - (t >> 1);
+            gain[1] = 36071014 - pm(t, 11744051);
+            for (k = 2; k < 5; k++) {
+                gain[k] = t;
+                t = pm(t, t);
+            }
+            nk = 5;
+        }
+        {
+            uint64_t fn = (uint64_t)f0 * 16u;
+            uint32_t fnn = fn > 2143188436u ? 2143188436u : (uint32_t)fn;
+            pl_svf_fq(&d->nf, fnn, 256u + (uint32_t)(((uint64_t)fnn * 384u) >> 32), TAN_FAST);   /* 1 + 1.5 f */
+        }
+        for (i = 0; i < n; i++) {
+            int32_t pulse, shell = 0, noise;
+            if (d->prem) {
+                --d->prem;
+                pulse = d->prem ? d->ph : d->ph - PL1;
+                d->pulse = pulse;
+            } else {
+                d->pulse -= pm(d->pulse, 3804357);    /* 1 / (0.1 ms) */
+                pulse = d->pulse;
+            }
+            PL_ONE_POLE(d->plp, pulse, 12582912);     /* 0.75 */
+            for (k = 0; k < nk; k++) {                /* (1.0: the 808's two alone: the others' gains are 0) */
+                int32_t ex = k == 0 ? (pulse - d->plp) + pm(pulse, 100663) : pm(pulse, 436208);   /* 0.006, 0.026 */
+                shell += pm(gain[k], pl_svf_bp(&d->res[k], ex) + pm(ex, exl));
+            }
+            shell = pl_softclip(shell);
+            noise = 2 * pl_randf() - PL1;
+            noise = noise < 0 ? 0 : noise;
+            d->nenv = pl_keep(d->nenv, knoise);
+            noise = pm(pm(noise, d->nenv >> 5), sn) * 2;
+            noise = pl_svf_bp(&d->nf, noise);
+            out[i] = noise + pm(shell, PL1 - sn);
+        }
     }
-    {   /* the synthetic one */
+    if (p->only == PLS_OUT) {
+        memset(aux, 0, n * sizeof aux[0]);
+    } else {   /* the synthetic one */
         int32_t fma = pm(p->timbre, p->timbre), sn2 = p->harm, dlev, slev, rna;
         uint32_t kd, ks, kf = pl_keepq(54347), fmin, fmax;   /* 1 / 7 ms */
         kd = pl_keepq((int32_t)(((int64_t)25365 * pl_semi(-pm(dxt, 72 << 16) - pm(fma, 12 << 16) + pm(sn2, 7 << 16), 24)) >> 24));
@@ -669,15 +688,23 @@ static void hh_render1(pl_hh1_t *h, int which, pl_hh_t *d, const pl_par_t *p, in
 }
 static void hh_render(pl_hh_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
 {
-    hh_render1(&d->h[0], 0, d, p, out, n);
-    hh_render1(&d->h[1], 1, d, p, aux, n);
+    if (p->only == PLS_AUX)
+        memset(out, 0, n * sizeof out[0]);
+    else
+        hh_render1(&d->h[0], 0, d, p, out, n);
+    if (p->only == PLS_OUT)
+        memset(aux, 0, n * sizeof aux[0]);
+    else
+        hh_render1(&d->h[1], 1, d, p, aux, n);
 }
 
+#if ELIXIR_PARTICLE
 /* -------------------------------------------------- particle noise --- */
 /* the diffuser (fx/diffuser.h on fx_engine.h, 12-bit samples): one, for the first voice on PARTICLE */
 #define DIF_LEN 8192u
 static int16_t pl_dif_buf[DIF_LEN];
-static struct { int32_t wp, lp, y0, y1, k, lfo; int8_t owner; } pl_dif = {0, 0, 0, 0, 0, 0, -1};   /* LFO Q30 */
+static struct { int32_t wp, lp, y0, y1, k, lfo; int8_t owner, idle; } pl_dif = {0, 0, 0, 0, 0, 0, -1, 0};   /* LFO Q30;
+                                                      * idle: 1.0, skipped at amount 0 (cleared when it's back) */
 static void dif_clear(void)
 {
     int64_t f = (((int64_t)1 << 30) * 3 * 32) / (10 * 48000) - (1 << 28);   /* 0.3 / 48000 x 32 - 0.25, Q30 */
@@ -815,8 +842,114 @@ static void pt_render(pl_pt_t *d, uint32_t vi, const pl_par_t *p, int32_t *out, 
         pl_dif.owner = (int8_t)vi;
         dif_clear();
     }
-    if (pl_dif.owner == (int8_t)vi)
-        dif_process(pm(13421773, pm(dif, dif)), (dif >> 1) + (PL1 >> 2), out, n);
+    if (pl_dif.owner == (int8_t)vi) {                /* (1.0: MORPH's top half dry: the diffuser not run, its output
+                                                      * unchanged; back, it starts empty: the amount comes in from 0) */
+        int32_t amt = pm(13421773, pm(dif, dif));
+        if (!amt) {
+            pl_dif.idle = 1;
+        } else {
+            if (pl_dif.idle)
+                dif_clear();
+            pl_dif.idle = 0;
+            dif_process(amt, (dif >> 1) + (PL1 >> 2), out, n);
+        }
+    }
+}
+#endif
+
+/* -------------------------------------------------- CLOUD (1.0) --- */
+/* Elixir's own granular voice, in P GRAIN's number (rings.c MD_PGRAIN: Plaits' granular formant engine, dropped in
+ * 10c): a cloud of short sine grains round the voice's pitch, struck at the hit (a grain lands on it) and played
+ * through the amp EG, COLOUR's low-pass gate and ENV (on SIZE and DENSITY) as Plaits' oscillators are.
+ *   HARMONICS  SCATTER: the grains' pitches. 0: all on the note; to the middle a widening detune (a chorus, then a
+ *              smear); past it, more and more of them an octave or a fifth away (+-12, +7, +19, +24)
+ *   TIMBRE     SIZE: each grain 2 .. 150 ms (short: clicks and crackle; long: a shimmering tone)
+ *   MORPH      DENSITY: 3 .. 400 grains a second, the onsets jittered (at most CL_N at once: a full cloud drops one)
+ *   OUT        the grains; AUX the same grains with their phase shaken by a slow noise, each one a band of noise at its
+ *              pitch (rain, sand, breath): the AUX knob is the texture
+ * The level follows the grains at once (1 / sqrt), so a cloud is as loud sparse as dense. Each grain: a phase, a level
+ * and Ross Bencina's parabolic window, made by two additions a sample (its slope, its curve), from Q30. A grain a
+ * sample costs about 10 instructions, so a full cloud is a fraction of P PARTCL's; it isn't one of the two models
+ * (sound.c model_counted). Onsets fall on the 16-sample sub-block (0.36 ms) */
+#define CL_N 8
+typedef struct {
+    uint32_t ph[CL_N], inc[CL_N];
+    int32_t a[CL_N], sl[CL_N], cv[CL_N], left[CL_N];   /* the window's level, slope, curve (Q30); samples left */
+    int32_t next;                                    /* samples to the next onset */
+    int32_t nlp;                                     /* AUX's noise, low-passed (Q24) */
+} pl_cl_t;
+static void cl_init(pl_cl_t *d) { memset(d, 0, sizeof *d); }
+static void cl_grain(pl_cl_t *d, uint32_t f0, int32_t scat, int32_t len, int32_t lvl)
+{
+    static const int8_t IV[6] = {12, -12, 7, 19, 24, 12};
+    int32_t k, st, r = pl_randf(), sl, cv;
+    uint64_t f;
+    for (k = 0; k < CL_N && d->left[k] > 0; k++)
+        ;
+    if (k == CL_N)                                   /* (all sounding: this one dropped) */
+        return;
+    if (scat <= (PL1 >> 1)) {                        /* a detune, up to +-12 semitones at the middle */
+        int32_t w = pm(scat * 2, scat * 2);
+        st = (int32_t)(((int64_t)pm(2 * r - PL1, w) * 12) >> 8);   /* (Q16) */
+    } else {                                         /* past it: an interval, for more and more of them */
+        st = pm(2 * r - PL1, PL1 >> 3) >> 8;         /* (a breath of detune: +-0.12 st) */
+        if (pl_randf() < (scat - (PL1 >> 1)) * 2)
+            st += IV[pl_word() % 6u] << 16;
+    }
+    f = ((uint64_t)pl_semi(st, 16) * f0) >> 16;
+    d->inc[k] = f > 1932735283ull ? 1932735283u : (uint32_t)f;   /* (0.45) */
+    d->ph[k] = pl_word();
+    lvl = pm(lvl, 10066330 + pm(pl_randf(), 6710886));   /* (each 0.6 .. 1 of the cloud's level, Q24: Q30 x 2^6
+                                                      * below) */
+    /* the parabola: a(len / 2) lvl (Q30). Its curve -8 lvl / len^2 first (in two 32-bit divisions: no 64-bit one on
+     * the FM-1), the slope from it, so it ends at 0 exactly: a(len) = len sl + cv len (len - 1) / 2 */
+    cv = -(((((lvl << 3) / len) << 6) + len / 2) / len);
+    sl = (int32_t)(((int64_t)-cv * (len - 1)) >> 1);
+    d->a[k] = 0;
+    d->sl[k] = sl;
+    d->cv[k] = cv;
+    d->left[k] = len;
+}
+static void cl_render(pl_cl_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
+{
+    int32_t len = (int32_t)((88ull * pl_exp2(pm(p->timbre, 103179878), 16)) >> 16);   /* 88 x 2^(6.15 t): 2 .. 150 ms */
+    uint32_t rate = pl_exp2(pm(p->morph, 119118234), 16);   /* 2^(7.1 m), Q16: 1 .. 137, x 3 a second */
+    int32_t iv = (int32_t)(((uint32_t)FS << 16) / 3u / (rate ? rate : 1u));   /* samples between onsets */
+    int32_t ov, lvl, nz[PLSUB], k;
+    uint32_t i;
+    iv = iv < 1 ? 1 : iv;
+    ov = pclamp((len << 8) / iv, 256, CL_N * 256) << 16;   /* grains at once, Q24 */
+    lvl = pl_div(PL1, pl_sqrt(ov));
+    if (p->trig)
+        d->next = 0;
+    d->next -= (int32_t)n;
+    while (d->next <= 0) {                           /* (the onsets, jittered: 0.5 .. 1.5 of the mean) */
+        cl_grain(d, p->f0, p->harm, len, lvl);
+        d->next += iv / 2 + (int32_t)(((int64_t)iv * (pl_word() >> 16)) >> 16) + 1;
+    }
+    for (i = 0; i < n; i++) {                        /* AUX's noise: low-passed white, a few cycles of phase */
+        out[i] = aux[i] = 0;
+        d->nlp += pm(pl_randf() - (PL1 >> 1) - d->nlp, 1677722);   /* (0.1: ~700 Hz) */
+        nz[i] = (int32_t)((uint32_t)d->nlp << 12);   /* (~1 cycle rms: a band of ~1.5 kHz) */
+    }
+    for (k = 0; k < CL_N; k++) {
+        uint32_t ph = d->ph[k], inc = d->inc[k], m;
+        int32_t a = d->a[k], sl = d->sl[k], cv = d->cv[k];
+        if (d->left[k] <= 0)
+            continue;
+        m = d->left[k] < (int32_t)n ? (uint32_t)d->left[k] : n;
+        d->left[k] -= (int32_t)m;
+        for (i = 0; i < m; i++) {
+            out[i] += (int32_t)(((int64_t)RG_SINE[ph >> 20] * a) >> 21);
+            aux[i] += (int32_t)(((int64_t)RG_SINE[(ph + (uint32_t)nz[i]) >> 20] * a) >> 21);
+            ph += inc;
+            a += sl;
+            sl += cv;
+        }
+        d->ph[k] = ph;
+        d->a[k] = a;
+        d->sl[k] = sl;
+    }
 }
 
 /* -------------------------------------------------- inharmonic string --- */
@@ -1106,7 +1239,9 @@ typedef struct {
         pl_bd_t bd;
         pl_sd_t sd;
         pl_hh_t hh;
+#if ELIXIR_PARTICLE
         pl_pt_t pt;
+#endif
         pl_st_t st;
         pl_sw_t sw;
         pl_va_t va;
@@ -1118,6 +1253,7 @@ typedef struct {
 #endif
         pl_ch_t ch;
         pl_sp_t sp;
+        pl_cl_t cl;                                  /* (1.0: CLOUD, in P GRAIN's number) */
     } u;
 } pl_t;
 static pl_t pl[3];
@@ -1127,19 +1263,24 @@ static void pl_engine_init(pl_t *v, uint32_t vi, uint32_t e)
     v->eng = (uint8_t)e;
     v->on = 1;
     v->opeak = v->apeak = PL1 >> 1;
+#if ELIXIR_PARTICLE
     if (pl_dif.owner == (int8_t)vi)
         pl_dif.owner = -1;
+#endif
     switch (e) {
     case PE_BD: bd_init(&v->u.bd); break;
     case PE_SD: sd_init(&v->u.sd); break;
     case PE_HH: hh_init(&v->u.hh); break;
+#if ELIXIR_PARTICLE
     case PE_PART: pt_init(&v->u.pt); break;
+#endif
     case PE_STRING: st_init(&v->u.st, vi); break;
     case PE_SWARM: sw_init(&v->u.sw); break;
     case PE_VA: va_init(&v->u.va); break;
     case PE_WSHP: ws_init(&v->u.ws); break;
     case PE_FM: fm_init(&v->u.fm); break;
     case PE_ADD: add_init(&v->u.add); break;
+    case PE_GRAIN: cl_init(&v->u.cl); break;
 #if ELIXIR_WTABLE
     case PE_WTBL: wt_init(&v->u.wt); break;
 #endif
@@ -1154,13 +1295,16 @@ static void pl_engine_render(pl_t *v, uint32_t vi, const pl_par_t *p, int32_t *o
     case PE_BD: bd_render(&v->u.bd, p, out, aux, n); break;
     case PE_SD: sd_render(&v->u.sd, p, out, aux, n); break;
     case PE_HH: hh_render(&v->u.hh, p, out, aux, n); break;
+#if ELIXIR_PARTICLE
     case PE_PART: pt_render(&v->u.pt, vi, p, out, aux, n); break;
+#endif
     case PE_STRING: st_render(&v->u.st, vi, p, out, aux, n); break;
     case PE_SWARM: sw_render(&v->u.sw, p, out, aux, n); break;
     case PE_VA: va_render(&v->u.va, p, out, aux, n); break;
     case PE_WSHP: ws_render(&v->u.ws, p, out, aux, n); break;
     case PE_FM: fm_render(&v->u.fm, p, out, aux, n); break;
     case PE_ADD: add_render(&v->u.add, p, out, aux, n); break;
+    case PE_GRAIN: cl_render(&v->u.cl, p, out, aux, n); break;
 #if ELIXIR_WTABLE
     case PE_WTBL: wt_render(&v->u.wt, p, out, aux, n); break;
 #endif
@@ -1205,6 +1349,8 @@ static void pl_block(uint32_t vi, const voice_t *v, int16_t *buf)
     p.morph = pclamp(pl_knob(m->mat) + (e == PE_WTBL ? 0 : pm(env, g1)), 0, PL1);   /* (0.23-t7: P WTABLE: ENV
                                                       * on its brightness alone, the family kept) */
     p.accent = d->accent;
+    p.only = (uint8_t)(mix <= 0 ? PLS_OUT : mix >= PL1 ? PLS_AUX : PLS_BOTH);   /* (1.0: the side not heard not
+                                                      * rendered: about half a drum engine's cost) */
     gs = (g1 - g0) / (int32_t)(BLOCK / PLSUB);
     for (k = 0; k < BLOCK / PLSUB; k++) {
         int32_t gk = g0 + gs * (int32_t)(k + 1), gl, gst;

@@ -129,10 +129,14 @@ static inline int32_t wt_at(const int16_t *t, uint32_t ph)      /* 1024-point ta
     int32_t a = t[i], b = t[(i + 1u) & 1023u];
     return a + (((b - a) * (int32_t)f) >> 15);
 }
+#include "rings_tables.h"                       /* (1.0: the one sine table, RG_SINE) */
 static inline int32_t sine_at(uint32_t ph)                      /* 4096-point table, 20-bit fraction */
 {
     uint32_t i = ph >> 20, f = (ph >> 5) & 0x7FFFu;
-    int32_t a = LXR_SINE[i], b = LXR_SINE[i + 1u];
+    int32_t a, b;
+    i = (i + 3072u) & 4095u;                         /* (1.0: RG_SINE, sin, a 3/4 cycle on: the LXR's -cos) */
+    a = RG_SINE[i];
+    b = RG_SINE[i + 1u];
     return a + (((b - a) * (int32_t)f) >> 15);
 }
 

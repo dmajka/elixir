@@ -161,7 +161,7 @@ static int32_t lfo_wave(lfo_t *l, uint32_t old)      /* the wave at the phase (f
 {
     switch (l->wave) {
     case LFO_SINE:
-        return (int32_t)((uint32_t)(LXR_SINE[l->phase >> 20] + 32767) * 65536u / 65534u);
+        return (int32_t)((uint32_t)(RG_SINE[((l->phase >> 20) + 3072u) & 4095u] + 32767) * 65536u / 65534u);
     case LFO_TRI: {
         uint32_t p = l->phase >> 15;                  /* 17 bits */
         return 65536 - iabs((int32_t)p - 65536);

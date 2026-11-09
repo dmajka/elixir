@@ -1692,6 +1692,28 @@ static void phase5d(void)
         run_ms(20);
         ui.track = 0;
     }
+    {   /* 1.0: D2 and D3 on models: D1's MODEL knob goes past Rings' and Plaits' (D3 never moved to the LXR's) */
+        par_set(PAR_MODEL1, 0);
+        par_set(PAR_MODEL1 + 1, MD_MODAL);
+        par_set(PAR_MODEL1 + 2, MD_PL0);
+        run_ms(20);
+        ui.track = 0;
+        run_ms(100);
+        turn(EN_K1, 1);
+        run_ms(20);
+        check(!model_counted(par[PAR_MODEL1]) && par[PAR_MODEL1] != 0u && mdl[2].type == MD_PL0 &&
+              !strcmp(ui.msg, "D2+D3 HAVE THE 2 MODELS"), "the models' limit: D1's knob past them, D3's kept, said why");
+        shot("model-limit-knob");
+        turn(EN_K1, -1);
+        check(par[PAR_MODEL1] == 0u, ".. and back to the LXR's");
+        par_set(PAR_MODEL1 + 2, 0);
+        run_ms(20);
+        turn(EN_K1, 1);
+        check(par[PAR_MODEL1] == MD_MODAL, ".. one free: D1's knob to MODAL");
+        par_set(PAR_MODEL1, MD_STRING);
+        par_set(PAR_MODEL1 + 1, 0);
+        run_ms(20);
+    }
     /* a project before 0.9 (version 6): its models MEMBRANE BAR BELL PLATE to MODAL, TUBE to STRING */
     {
         static uint8_t kb[KIT_LEN];
@@ -3635,6 +3657,10 @@ static void phase19(void)
     run_ms(10);
     check(pfs.dens == -20 && sq.dens == -20 && (pfs.dex & 4u) && sq.dex == pfs.dex, "DENSITY -20, D3 left out");
     shot("perf-density");
+    turn(EN_K3, 2);
+    check(pfs.build == DB_RATCHETS, "DENSITY: BUILD RATCHETS");
+    shot("perf-density-ratchets");
+    turn(EN_K3, -1);
     black(2);
     check(!(pfs.dex & 4u), "DENSITY: a black key again, D3 back in");
     /* 19c: LFO 3 on TRANSPOSE and DENSITY */
@@ -4883,8 +4909,8 @@ static void phase24(void)
     sound_fix();
     turn(EN_K1, 1);
     check(par[PAR_MODEL1] == MD_MODAL, "D1: K1 from LXR to MODAL");
-    turn(EN_K1, 15 + (ELIXIR_WTABLE ? 1 : 0));       /* (STRING, FM, Plaits' 12 (1.0: past P GRAIN, NOISE, P MODAL;
-                                                      * 0.24: P WTABLE), CLICK) */
+    turn(EN_K1, 14 + (ELIXIR_WTABLE ? 1 : 0) + ELIXIR_PARTICLE);   /* (STRING, FM, Plaits' 11 (1.0: past P GRAIN,
+                                                      * NOISE, P MODAL, P PARTCL; 0.24: P WTABLE), CLICK) */
     check(par[PAR_MODEL1] == MD_MC0 && mi[0].type == 1u && mdl[0].want == 0u && mdl[0].type == 0u,
           "D1 on CLICK: MICRO, not a model the limit counts");
     page_params(pp);
@@ -6514,10 +6540,11 @@ static void phase30(void)
     viz_page(0, S_MODEL, 0);                          /* (30 rev: each model a picture, its pages marked) */
     shot("viz-model-lxr");
     {
-        static const uint8_t M[] = {15, 11, 10, 4, 17, 1, 9, 8, 14, 5, 6, 12};
+        static const uint8_t M[] = {15, 11, 10, 4, 17, 1, 9, 8, 14, 5, 6, 12, MD_CLOUD};
         static const char *const N[] = {"viz-model-pstring", "viz-model-pspeech", "viz-model-pchord", "viz-model-pva",
                                         "viz-model-pkick", "viz-model-modal", "viz-model-pwtable", "viz-model-paddtv",
-                                        "viz-model-pparticle", "viz-model-pwshape", "viz-model-pfm", "viz-model-pswarm"};
+                                        "viz-model-pparticle", "viz-model-pwshape", "viz-model-pfm", "viz-model-pswarm",
+                                        "viz-model-cloud"};
         uint32_t i;
         for (i = 0; i < sizeof M; i++) {
             if (M[i] == MD_PL0 + PE_WTBL && !ELIXIR_WTABLE)   /* (0.24: parked) */
@@ -8764,6 +8791,11 @@ static void phase_100_10c(void)
     par_set(PAR_MODEL1, MD_NOISE);
     run_ms(20);
     check(nzo[0].on && mdl[0].want == 0u && mdl[0].type == 0u, "D1 on NOISE: not a counted model");
+    par_set(PAR_MODEL1, MD_PPART);                   /* (1.0: a kit's P PARTCL, dropped, plays CLOUD) */
+    run_ms(20);
+    check(mdl[0].want == MD_CLOUD, "P PARTCL plays as CLOUD (1.0)");
+    par_set(PAR_MODEL1, MD_NOISE);
+    run_ms(20);
     shot("noise-d1");
     /* the knob: past the dropped engines; NOISE after CHIRP */
     par_set(PAR_MODEL1, MD_PL0 + PE_FM);
@@ -8773,19 +8805,20 @@ static void phase_100_10c(void)
     par_set(PAR_MODEL1, MD_PL0 + PE_SWARM);
     run_ms(20);
     turn(EN_K1, 1);
-    ok &= par[PAR_MODEL1] == MD_PL0 + PE_PART;
-    turn(EN_K1, 1);
+    ok &= par[PAR_MODEL1] == MD_PL0 + PE_STRING;     /* (1.0: past P PARTCL, dropped) */
     turn(EN_K1, 1);
     ok &= par[PAR_MODEL1] == MD_PL0 + PE_BD;
     par_set(PAR_MODEL1, MD_MC0 + 9u);
     run_ms(20);
     turn(EN_K1, 1);
+    ok &= par[PAR_MODEL1] == MD_CLOUD;
+    turn(EN_K1, 1);
     ok &= par[PAR_MODEL1] == MD_NOISE;
     turn(EN_K1, 1);
     ok &= par[PAR_MODEL1] == MD_EN;
-    turn(EN_K1, -2);
+    turn(EN_K1, -3);
     ok &= par[PAR_MODEL1] == MD_MC0 + 9u;
-    check(ok, "MODEL knob: past P GRAIN, P MODAL; NOISE after CHIRP, before ENSEMBLE");
+    check(ok, "MODEL knob: past P MODAL; CLOUD, NOISE after CHIRP, before ENSEMBLE (1.0)");
     par_set(PAR_MODEL1, MD_LXR);
     run_ms(20);
     /* kits and locks: P MODAL plays MODAL (D1-D3), P GRAIN the LXR, P NOISE's number NOISE (every voice) */
@@ -8798,18 +8831,93 @@ static void phase_100_10c(void)
         kb[kit_idx(PAR_MODEL1 + 3)] = MD_PMODAL;
         kb[kit_idx(PAR_MODEL1 + 4)] = MD_NOISE;
         kit_sanitize(kb);
-        check(kb[kit_idx(PAR_MODEL1)] == MD_MODAL && kb[kit_idx(PAR_MODEL1 + 1)] == MD_LXR &&
+        check(kb[kit_idx(PAR_MODEL1)] == MD_MODAL && kb[kit_idx(PAR_MODEL1 + 1)] == MD_CLOUD &&
               kb[kit_idx(PAR_MODEL1 + 2)] == MD_NOISE && kb[kit_idx(PAR_MODEL1 + 3)] == MD_LXR &&
               kb[kit_idx(PAR_MODEL1 + 4)] == MD_NOISE,
-              "kit: P MODAL loads MODAL (SN: the LXR), P GRAIN the LXR, NOISE stays (on CY too)");
+              "kit: P MODAL loads MODAL (SN: the LXR), P GRAIN's number CLOUD, NOISE stays (on CY too)");
     }
     par_set(PAR_MODEL1, MD_PMODAL);                  /* (as a lock or a morph sets it) */
     run_ms(20);
     ok = mdl[0].want == MD_MODAL;
-    par_set(PAR_MODEL1, MD_PGRAIN);
+    par_set(PAR_MODEL1, MD_CLOUD);
     run_ms(20);
-    ok &= mdl[0].want == 0u && !nzo[0].on;
-    check(ok, "a lock on P MODAL plays MODAL, on P GRAIN the LXR");
+    ok &= mdl[0].want == MD_CLOUD && mdl[0].type == MD_CLOUD && !nzo[0].on;
+    check(ok, "a lock on P MODAL plays MODAL, on P GRAIN's number CLOUD");
+    {   /* 1.0: P BD SD HH ADDTV render the side Aux lets you hear alone: that side as with both, the other 0 */
+        static const uint8_t E[4] = {PE_BD, PE_SD, PE_HH, PE_ADD};
+        uint32_t e, side, k, i, ok = 1;
+        for (e = 0; e < 4u; e++) {
+            double en[3][2] = {{0}};
+            int exact = 1;
+            static int32_t keep[200 * PLSUB];
+            for (side = 0; side < 3u; side++) {      /* (PLS_BOTH, PLS_OUT, PLS_AUX) */
+                pl_t *v = &pl[0];
+                pl_par_t pp;
+                int32_t o[PLSUB], a[PLSUB];
+                pl_rng = 777;
+                memset(v, 0, sizeof *v);
+                pl_engine_init(v, 0, E[e]);
+                pp.note = 48 << 16;
+                pp.f0 = pl_note_f(pp.note);
+                pp.harm = PL1 / 2;
+                pp.timbre = E[e] == PE_SD ? PL1 / 4 : PL1 / 2;   /* (P SD's 808 range: two resonators) */
+                pp.morph = PL1 / 2;
+                pp.accent = PL1 * 3 / 4;
+                pp.only = (uint8_t)side;
+                for (k = 0; k < 200u; k++) {
+                    pp.trig = k == 0;
+                    pl_engine_render(v, 0, &pp, o, a, PLSUB);
+                    for (i = 0; i < PLSUB; i++) {
+                        en[side][0] += (double)o[i] * o[i];
+                        en[side][1] += (double)a[i] * a[i];
+                        if (side == PLS_BOTH)
+                            keep[k * PLSUB + i] = o[i];
+                        else if (side == PLS_OUT && keep[k * PLSUB + i] != o[i])
+                            exact = 0;
+                    }
+                }
+            }
+            ok &= en[PLS_OUT][1] == 0.0 && en[PLS_AUX][0] == 0.0 && en[PLS_BOTH][0] > 0.0 && en[PLS_BOTH][1] > 0.0;
+            ok &= en[PLS_OUT][0] > en[PLS_BOTH][0] * 0.6 && en[PLS_OUT][0] < en[PLS_BOTH][0] * 1.6;
+            ok &= en[PLS_AUX][1] > en[PLS_BOTH][1] * 0.6 && en[PLS_AUX][1] < en[PLS_BOTH][1] * 1.6;
+            if (E[e] == PE_BD || E[e] == PE_ADD)     /* (their OUT draws no random numbers: the same samples) */
+                ok &= exact;
+        }
+        check(ok, "P BD SD HH ADDTV: Aux at an end renders that side alone, as it sounds with both");
+    }
+    {   /* 1.0: CLOUD: sounds at the hit, isn't one of the two models, its knobs' names; quiet without a hit */
+        double r0, r1;
+        par_set(PAR_MODEL1, MD_MODAL);
+        par_set(PAR_MODEL1 + 1, MD_PL0 + PE_SD);
+        par_set(PAR_MODEL1 + 2, MD_CLOUD);
+        par_set(PAR_MMAT1 + 2, 100);                 /* (DENSITY up: a busy cloud) */
+        par_set(PAR_MDAMP1 + 2, 70);
+        par_set(PAR_MDECAY1 + 2, 90);
+        run_ms(30);
+        check(mdl[0].type == MD_MODAL && mdl[1].type == MD_PL0 + PE_SD && mdl[2].type == MD_CLOUD,
+              "CLOUD: a third with two models on, not counted (plays)");
+        check(!strcmp(par_name(PAR_MDECAY1 + 2), "Scatter") && !strcmp(par_name(PAR_MDAMP1 + 2), "Size") &&
+              !strcmp(par_name(PAR_MMAT1 + 2), "Density") && !strcmp(par_name(PAR_MEXC1 + 2), "Texture"),
+              "CLOUD: Scatter, Size, Density; Aux its Texture");
+        ui.track = 2;
+        goto_mode(B_HOME, M_HOME);
+        run_ms(20);
+        r0 = out_rms(200);
+        voice_trigger(2, 120, 48);
+        r1 = out_rms(150);
+        printf("  CLOUD: rms before %.1f, after a hit %.1f\n", r0, r1);
+        check(r1 > r0 + 50.0, "CLOUD: a hit sounds");
+        par_set(PAR_MEXC1 + 2, 127);                 /* (AUX: the texture) */
+        voice_trigger(2, 120, 48);
+        r1 = out_rms(150);
+        check(r1 > 50.0, "CLOUD: AUX (its noise-band grains) sounds too");
+        par_set(PAR_MEXC1 + 2, 0);
+        par_set(PAR_MODEL1, MD_LXR);
+        par_set(PAR_MODEL1 + 1, MD_LXR);
+        par_set(PAR_MODEL1 + 2, MD_LXR);
+        run_ms(20);
+        ui.track = 0;
+    }
     par_set(PAR_MODEL1, MD_LXR);
     run_ms(20);
     goto_mode(B_HOME, M_HOME);
@@ -10739,6 +10847,72 @@ static void copy_pass(void)
         check(pp[2] == VP_WD + WV_ORDER && pp[3] == VP_WD + WV_SWAY, ".. Goal SONG: Order and Sway (1.0)");
         wd.k[WV_GOAL] = (uint8_t)g0;
     }
+    {                                                /* (1.0: CPU OVERLOAD: flashing, with why) */
+        uint8_t cw = cores_why;
+        uint32_t c0 = cpu_q8;
+        uint16_t q[NLD];
+        memcpy(q, ld_q8, sizeof q);
+        par_set(PAR_MODEL1 + 1, MD_MODAL);
+        par_set(PAR_MODEL1 + 2, MD_PL0 + PE_SD);
+        run_ms(20);
+        cores_why = CW_TWO;                          /* (core 1 behind: its models) */
+        cpu_q8 = 230;
+        ld_q8[LD_WAIT] = 120;
+        ld_q8[LD_D13] = 250;
+        ui.mode = M_FX;
+        fx_goto(FXPG_DLY);
+        run_ms(OVL_MS + 100u);                       /* (lone lates, 2 s apart: no warning) */
+        audio_late++;
+        run_ms(OVL_MS + 100u);
+        check(!ovl_on, "CPU OVERLOAD: a lone late half isn't one");
+        audio_late++;
+        run_ms(40);
+        check(!ovl_on, "CPU OVERLOAD: nor one 2 s after another");
+        audio_late++;                                /* (a second within 2 s: the warning) */
+        run_ms(40);
+        check(ovl_on && !strcmp(ovl_why, "CPU OVERLOAD: MODAL + P SD"), "CPU OVERLOAD: core 1's models named (1.0)");
+        shot("cpu-overload");
+        run_ms(250);
+        shot("cpu-overload");
+        cores_why = CW_BUILD;                        /* (one core: its biggest part) */
+        memset(ld_q8, 0, sizeof ld_q8);
+        ld_q8[LD_FX] = 140;
+        ld_q8[LD_D13] = 90;
+        audio_late++;
+        run_ms(40);
+        check(!strcmp(ovl_why, "CPU OVERLOAD: FX BUS"), "CPU OVERLOAD: core 0's biggest part named");
+        run_ms(OVL_MS + 100u);
+        check(!ovl_on, "CPU OVERLOAD: gone 2 s after the last late half");
+        cores_why = cw;
+        cpu_q8 = c0;
+        memcpy(ld_q8, q, sizeof q);
+        par_set(PAR_MODEL1 + 1, 0);
+        par_set(PAR_MODEL1 + 2, 0);
+        run_ms(20);
+    }
+    {                                                /* (1.0: GRAIN's knobs and TAPE's kept apart) */
+        par_set(PAR_FX_DELAY_TYPE, DELAY_TAPEPP);
+        kit_loads++;                                 /* (as after a kit load: nothing kept yet) */
+        par_set(PAR_DLY_WOW, 40);
+        par_set(PAR_DSAT, 30);
+        par_set(PAR_GLITCH, 20);
+        par_set(PAR_DPITCH, DP_UP7);
+        ui.mode = M_FX;
+        fx_goto(FXPG_DLY);
+        turn(EN_K1, 1);
+        check(par[PAR_FX_DELAY_TYPE] == DELAY_GRAIN && par[PAR_DLY_WOW] == 88u && par[PAR_DSAT] == 50u &&
+              par[PAR_GLITCH] == 84u && par[PAR_DPITCH] == DP_OFF, "TAPE PP > GRAIN: GRAIN's starting cloud");
+        par_set(PAR_GLITCH, 100);
+        turn(EN_K1, -1);
+        check(par[PAR_FX_DELAY_TYPE] == DELAY_TAPEPP && par[PAR_DLY_WOW] == 40u && par[PAR_DSAT] == 30u &&
+              par[PAR_GLITCH] == 20u && par[PAR_DPITCH] == DP_UP7, ".. and back: TAPE PP's own numbers, not GRAIN's");
+        turn(EN_K1, 1);
+        check(par[PAR_GLITCH] == 100u, ".. GRAIN again: its own");
+        kit_loads++;
+        turn(EN_K1, -1);
+        check(par[PAR_DLY_WOW] == 0u && par[PAR_DSAT] == 0u && par[PAR_GLITCH] == 0u && par[PAR_DPITCH] == DP_OFF,
+              "GRAIN > TAPE PP after a kit load: the tape's zeros, not GRAIN's numbers");
+    }
     {                                                /* (GRAIN's cloud, moving: frames apart) */
         uint32_t i;
         uint32_t f0;
@@ -10759,6 +10933,33 @@ static void copy_pass(void)
             shot("grain-anim");
         }
         check(vz_frame >= f0 + 10u, "GRAIN: its cloud moves on its own (1.0)");
+    }
+    {                                                /* (the other delays' echoes, as simply, moving too) */
+        static const uint8_t M[3] = {DELAY_NORMAL, DELAY_PINGPONG, DELAY_TAPEPP};
+        uint32_t i, m, f0;
+        par_set(PAR_DLY_TIME, 50);
+        par_set(PAR_DLY_FB, 90);
+        par_set(PAR_DLY_LEVEL, 110);
+        par_set(PAR_DLY_TONE, 80);
+        for (m = 0; m < 3u; m++) {
+            par_set(PAR_FX_DELAY_TYPE, M[m]);
+            fx_goto(FXPG_DLY);
+            ui.force = 1;
+            run_ms(100);
+            f0 = vz_frame;
+            for (i = 0; i < 2u; i++) {
+                run_ms(170);
+                shot("echo-anim");
+            }
+            check(vz_frame >= f0 + 6u, "the delay's echoes move on their own (1.0)");
+        }
+        fx_goto(FXPG_DUB);                           /* (TAPE PP's WOW, SATURATE, GLITCH, PITCH) */
+        ui.force = 1;
+        run_ms(170);
+        shot("echo-anim-tape");
+        par_set(PAR_DPITCH, DP_OFF);
+        par_set(PAR_GLITCH, 0);
+        par_set(PAR_FX_DELAY_TYPE, DELAY_OFF);
     }
 }
 int main(int argc, char **argv)

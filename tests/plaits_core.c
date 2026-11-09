@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Elixir host test, the fixed-point side of tests/plaits_compare.cc: plaits.c's engines (the emulator's build of the
  * firmware), struck at the start, their OUT and AUX as float. */
+#define ELIXIR_PARTICLE 1                            /* (P PARTCL, dropped from 1.0's build: kept for the compare) */
 #include "../web/emu/elixir_web.c"
 
 /* eng: plaits.c's PE_*; note: MIDI; the knobs 0..1; n: a multiple of PLSUB; seed: stmlib's Random's */
@@ -21,6 +22,7 @@ void pl_core(int eng, double note, double harm, double timbre, double morph, dou
     p.timbre = (int32_t)(timbre * 16777216.0 + 0.5);
     p.morph = (int32_t)(morph * 16777216.0 + 0.5);
     p.accent = (int32_t)(accent * 16777216.0 + 0.5);
+    p.only = PLS_BOTH;
     for (k = 0; k + (int)PLSUB <= n; k += PLSUB) {
         p.trig = k == 0;
         pl_engine_render(v, 0, &p, o, a, PLSUB);

@@ -71,7 +71,7 @@ def main():
     lines += arr("RG_FM_RATIO", "int32_t", [round(s * 65536) for s in scale])
     lines.append("")
     # sin(2 pi i / 4096), 4096 points and the wrap one, Q15 (Rings' lut_sine; the LXR's table is a little off)
-    lines += ["/* sin(2 pi i / 4096) and the wrap point, x 32767 (the FM voice's; LXR_SINE is not quite a sine) */"]
+    lines += ["/* sin(2 pi i / 4096) and the wrap point, x 32767 (everyone's: 1.0 dropped LXR_SINE, dsp.c sine_at) */"]
     lines += arr("RG_SINE", "int16_t", [round(math.sin(2 * math.pi * i / 4096) * 32767) for i in range(4097)], 16)
     lines.append("")
     out_path.write_text("\n".join(lines))

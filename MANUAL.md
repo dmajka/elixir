@@ -519,7 +519,7 @@ The page draws the three sends as bars in the track's colour and names the delay
 
 **Experimental.** The models are not part of the LXR-02: they are Elixir's own addition, ported from two Mutable Instruments Eurorack modules, **Rings** (from 0.9) and **Plaits** (from 0.15). They are still being tested on the FM-1, they use far more of the processor than the LXR's voices, and their sound and settings may change in later versions, so a kit that uses them may sound different after an update. Everything else in Elixir works without them.
 
-The three DRUM voices have more engines than the LXR's own. They are set in the **MODEL** section (EDIT's first page). Model **LXR** is the LXR's engine (the default); **MODAL**, **STRING** and **FM** are Rings' resonators, struck by the voice; the **P …** models are Plaits' engines (below). After them come the **MICRO** types, **NOISE** and **ENSEMBLE**, which every track has ([MICRO](#micro-microsound-voices-every-track), [NOISE](#noise-brown-to-blue-every-track), [ENSEMBLE](#ensemble-eight-stacked-sines-every-track)).
+The three DRUM voices have more engines than the LXR's own. They are set in the **MODEL** section (EDIT's first page). Model **LXR** is the LXR's engine (the default); **MODAL**, **STRING** and **FM** are Rings' resonators, struck by the voice; the **P …** models are Plaits' engines (below). After them come the **MICRO** types, **CLOUD** (Elixir's own granular voice, D1–D3: [below](#cloud-a-granular-voice-d1d3-from-10)), **NOISE** and **ENSEMBLE**; MICRO, NOISE and ENSEMBLE every track has ([MICRO](#micro-microsound-voices-every-track), [NOISE](#noise-brown-to-blue-every-track), [ENSEMBLE](#ensemble-eight-stacked-sines-every-track)).
 
 #### Rings
 
@@ -545,7 +545,7 @@ The modes a MODAL voice runs drop as more drums use MODAL: 32 with one, 24 with 
 
 #### Plaits
 
-A port of the original engines of Mutable Instruments' **Plaits** (its first two banks; the six engines Plaits added in its 1.2 firmware aren't ported): twelve of its sixteen. Its wavetable engine (P WTABLE, in 0.23) was taken out in 0.24 to free 48 KB of flash for new features; a kit that used it loads on P ADDTV. From 1.0, three more are gone: **P MODAL** (Rings' MODAL is the same idea and plays better; a kit or a lock with P MODAL plays MODAL), **P NOISE** (replaced by Elixir's own [NOISE](#noise-brown-to-blue-every-track), at a small part of its CPU; a kit with P NOISE loads NOISE, its knobs now NOISE's, so it sounds different) and **P GRAIN** (it plays its LXR voice; a granular model of Elixir's own may take its place). The voice strikes the engine at each hit, as Plaits plays with its TRIGGER patched; velocity is the hit's accent. On a P model the MODEL section's knobs become Plaits':
+A port of the original engines of Mutable Instruments' **Plaits** (its first two banks; the six engines Plaits added in its 1.2 firmware aren't ported): twelve of its sixteen. Its wavetable engine (P WTABLE, in 0.23) was taken out in 0.24 to free 48 KB of flash for new features; a kit that used it loads on P ADDTV. From 1.0, three more are gone: **P MODAL** (Rings' MODAL is the same idea and plays better; a kit or a lock with P MODAL plays MODAL), **P NOISE** (replaced by Elixir's own [NOISE](#noise-brown-to-blue-every-track), at a small part of its CPU; a kit with P NOISE loads NOISE, its knobs now NOISE's, so it sounds different) and **P GRAIN** (its number is now [CLOUD](#cloud-a-granular-voice-d1d3-from-10), Elixir's own granular voice: a kit with P GRAIN loads CLOUD, its knobs now CLOUD's, so it sounds different). The voice strikes the engine at each hit, as Plaits plays with its TRIGGER patched; velocity is the hit's accent. On a P model the MODEL section's knobs become Plaits':
 
 | | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
@@ -567,7 +567,6 @@ A port of the original engines of Mutable Instruments' **Plaits** (its first two
 | P CHORD | Chords | chord type (the knob is named **Chord** and shows it: OCTAVE, FIFTH, SUS4, MINOR, MINOR 7, MINOR 9, MINOR 11, 6/9, MAJOR 9, MAJOR 7, MAJOR) | inversion (**Invert**) | waveform (**Wave**: ORGAN up to half, then WAVE 1–15 from the wavetable) | the chord's root |
 | P SPEECH | Speech | vowels, then word banks | species (formant shift) | phoneme or word | raw vocal cords |
 | P SWARM | Eight sawtooth swarm | pitch spread | grain density | grain length | sine swarm |
-| P PARTCL | Particle noise | frequency spread | density | filter: diffuse, then resonant | raw dust |
 | P STRING | Inharmonic string | inharmonicity, material | brightness | decay | raw exciter |
 | P BD | Analog bass drum | attack, drive | brightness | decay | a synthetic kick |
 | P SD | Analog snare | tone against noise | the head's modes | decay | a synthetic snare |
@@ -575,13 +574,31 @@ A port of the original engines of Mutable Instruments' **Plaits** (its first two
 
 **The wave on the MODEL page** (from 0.23-test7). On P CHORD the picture shows the Wave knob's waveform: up to half, the organ (octave-apart saws, as its registration), past half, the wavetable's 15 waves. The pictures follow the knobs, not ENV's movement.
 
-Where the port differs from Plaits: P STRING plays one string a voice (Plaits overlaps three); P PARTCL's diffuser (its reverb-like smear) belongs to the first drum voice on P PARTCL, and the others play it dry; P SPEECH has no prosody or speed control; Plaits' sustain modes (with nothing patched to TRIGGER) and its user wavetables aren't ported. On an FM-1 (the LOAD page's D1-D3 line, 1.0) P SD, P ADDTV and P PARTCL cost the most of Plaits' engines (each about a quarter of the second core), P BD and P VA a little less, P SPEECH and P STRING the least; Rings' MODAL is heavier than any of them, STRING and FM lighter. Two heavy models together can be more than the second core has: see [the LOAD page](#the-load-page).
+Where the port differs from Plaits: P STRING plays one string a voice (Plaits overlaps three); P PARTCL is left out from 1.0 (CLOUD does what it did, lighter; a kit with P PARTCL plays CLOUD); P SPEECH has no prosody or speed control; Plaits' sustain modes (with nothing patched to TRIGGER) and its user wavetables aren't ported. On an FM-1 (the LOAD page's D1-D3 line, 1.0) P SD and P ADDTV cost the most of Plaits' engines (each about a quarter of the second core), P BD and P VA a little less, P SPEECH and P STRING the least; Rings' MODAL is heavier than any of them, STRING and FM lighter. Two heavy models together can be more than the second core has: the screen then flashes **CPU OVERLOAD** with the two models' names (see [the CPU meter](#the-cpu-meter)).
+
+**Lighter from 1.0** (the sound unchanged, checked against Plaits' and Rings' own code): MODAL's resonators take about a quarter less of the second core. **P BD**, **P SD** and **P HH** are each two drums (OUT the analog one, AUX the synthetic one): with **Aux** at 0 or 127 only the one you hear is computed, about half the engine's cost; anywhere between, both are. **P ADDTV** at Aux 0 leaves out its organ (a third of it). **P SD** below Timbre 85 (its 808 range) runs two of its five resonators (the other three are silent there anyway). So the heavy pairs have more room, especially with Aux at an end; what fits on your FM-1 is on the LOAD page. Moving Aux away from an end mid-note brings the other drum in at the next hit.
+
+#### CLOUD: a granular voice (D1–D3, from 1.0)
+
+**CLOUD** is Elixir's own granular voice: a cloud of short sine grains around the voice's pitch. Short grains give clicks, crackle and dust; long ones a shimmering tone; scattered pitches a chorus, a smear, or octaves and fifths. It comes after the MICRO types in Model (D1–D3 only), in the number P GRAIN had. It plays like Plaits' oscillator engines: a grain lands on each hit, the voice's amp EG shapes it (its page is shown), **Colour** turns that into the low-pass gate and **Env** opens Size and Density with the EG (a burst at the hit that thins out).
+
+| | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
+|---|---|---|---|---|
+| Row 1 | Model | Scatter | Size | Density |
+| Row 2 | Colour | Texture | Env | |
+
+- **Scatter:** the grains' pitches. At 0 all on the note. Up to the middle, a widening detune (a chorus, then a smear up to ±12 semitones); past the middle, more and more of them an octave or a fifth away (±12, +7, +19, +24), a chord of grains.
+- **Size:** each grain from 2 ms (a click) to 150 ms (a tone).
+- **Density:** 3 to 400 grains a second, at slightly uneven times. Up to 8 sound at once; the level is evened out as they overlap, so a dense cloud isn't louder than a sparse one.
+- **Texture** (Plaits' Aux): from clean sine grains (0) to grains whose phase is shaken by a slow noise (127): each one a band of noise at its pitch, like rain, sand or breath. Between, a mix.
+
+**Cost:** about a sixth of the old P PARTCL's at its busiest (8 grains at once), next to nothing when sparse. So CLOUD is **not one of the two models**: any of D1–D3 can play it beside two Rings or Plaits models.
 
 #### Both
 
-**Two models at once.** The models are much heavier than the LXR's voices, so at most two of D1–D3 play a model at a time (from 0.15). They play on the FM-1's second core. A third, counted in D1, D2, D3 order, plays as an LXR voice, and its MODEL page says **OVER 2 MODELS: PLAYS AS LXR** in red. It keeps its setting and plays its model again as soon as another drum goes back to LXR. On an FM-1 running on one core (see [the LOAD page](#the-load-page)), only one model plays.
+**Two models at once.** The Rings and Plaits models are much heavier than the LXR's voices, so at most two of D1–D3 play one at a time (from 0.15). They play on the FM-1's second core (CLOUD, MICRO, NOISE and ENSEMBLE aren't counted). From 1.0, while two other drums have the two, a drum's **Model** knob steps past Rings' and Plaits' models (the others stay) and the title says which drums have them (**D2+D3 HAVE THE 2 MODELS**): set one of those back first. So picking a model never moves another drum to the LXR. A kit or a lock that asks for three (from an earlier version, or a step lock) still plays the first two in D1, D2, D3 order; the third plays as an LXR voice and its MODEL page says **OVER 2 MODELS: PLAYS AS LXR** in red, and it plays its model again as soon as another drum goes back to LXR. On an FM-1 running on one core (see [the LOAD page](#the-load-page)), only one model plays.
 
-The model replaces the oscillators, transient and amp EG in the output: the model's own Decay sets how long the voice sounds. Plaits' engines that don't envelope themselves are the exception: the voice's amp EG (Attack, Decay, Slope, Gate) shapes them, and from 0.25 its page is shown for them (P VA, P WSHAPE, P FM, P ADDTV, P CHORD, P SPEECH, P SWARM, P PARTCL); Colour turns it into Plaits' low-pass gate and Env sends it to Timbre and Morph. Everything after the oscillator still applies: the filter, drive and shape, bits, tilt, sends, LFO, random per hit and cross modulation. The model's settings are part of the kit and can be locked per step; Model itself doesn't morph: the voice keeps its own kit's engine while the other knobs morph.
+The model replaces the oscillators, transient and amp EG in the output: the model's own Decay sets how long the voice sounds. Plaits' engines that don't envelope themselves are the exception: the voice's amp EG (Attack, Decay, Slope, Gate) shapes them, and from 0.25 its page is shown for them (P VA, P WSHAPE, P FM, P ADDTV, P CHORD, P SPEECH, P SWARM, CLOUD); Colour turns it into Plaits' low-pass gate and Env sends it to Timbre and Morph. Everything after the oscillator still applies: the filter, drive and shape, bits, tilt, sends, LFO, random per hit and cross modulation. The model's settings are part of the kit and can be locked per step; Model itself doesn't morph: the voice keeps its own kit's engine while the other knobs morph.
 
 **From 0.8 and earlier:** the old models (SKIN, BAR, BELL, PLATE, TUBE) are gone. A project or kit that used them loads with MODAL in place of SKIN, BAR, BELL and PLATE, and STRING in place of TUBE; the knobs keep their values, so they sound different. Check those sounds after updating.
 
@@ -761,6 +778,8 @@ The FX sends feed the bus and the delay sends feed the delay; the ROUTING page s
 - **Time:** from 0.6 ms to the line's most (0.74 s; half a side in PING PONG; twice in the TAPE modes), finer at the short end. The card shows milliseconds, or the note value with Sync on.
 - **Level:** how loud the echoes are. 0: the delay is off.
 
+**The picture** (from 1.0) is the hit as a dot at the left and its echoes as a row of dots after it: Time their spacing, Level the first one's size, Feedback how slowly they shrink, Tone how soon they dim. They light up in turn, the one sounding swelling with a ring going out, then the row rests and plays again. PING PONG bounces them, L above the line and R below; the TAPE modes let them drift (Wow), blur (Saturate), step up or down (Pitch) and break apart (Glitch).
+
 **DELAY (2/2):**
 
 - **Tone:** darkens the repeats.
@@ -801,7 +820,7 @@ The delay's settings are part of the kit; Mode, Sync and Pitch don't morph.
 
 **GRAIN**, the delay's last mode, is a granular delay: instead of echoes it plays **grains**, short slices of what went into the delay, each faded in and out, from somewhere in the last 0.74 s, at its own pitch and place in the stereo field. Few and long, it smears a hit into a cloud; many and short, it breaks a beat into a fizz; frozen, it holds a texture you can keep playing. The line is MONO's (full rate, 0.74 s); up to 8 grains sound at once.
 
-**A cloud to start from:** turning Mode to GRAIN while Density is OFF (a new kit's, or TAPE's Glitch at 0) sets Size 129 ms, Scatter 40% and Density 16/s, about two grains at once, and Level 100 if it was 0; Position, Pitch and Feedback stay. If no voice's delay send is up, the screen says so (FX TRACK SENDS, or the mixer's DELAY SEND pages): nothing reaches the delay until one is. With Density already up, GRAIN keeps your settings.
+**GRAIN's knobs and the tape's are kept apart.** GRAIN's Size, Scatter, Density and Pitch are the knobs the tape modes call Wow, Saturate, Glitch and Pitch. From 1.0 each side keeps its own: turning Mode into GRAIN puts GRAIN's four back as you left them, and turning it out of GRAIN puts the tape's back, so TAPE PP never comes back with GRAIN's numbers on its Glitch. The first time after a kit is loaded, GRAIN starts from **a cloud**: Size 129 ms, Scatter 40%, Density 16/s (about two grains at once), Pitch OFF, and Level 100 if it was 0; the tape's side starts from 0 (Pitch OFF). Position, Feedback and the rest are shared and stay. If no voice's delay send is up, the screen says so (FX TRACK SENDS, or the mixer's DELAY SEND pages): nothing reaches the delay until one is.
 
 The delay's knobs take new names in GRAIN (the cards show them):
 
@@ -1156,7 +1175,7 @@ Macros, the repeat length and the tape time are saved with the project. The DJ f
 
 - **Density:** −100% … +100% (0: as programmed). Down, steps drop out in a fixed order, weakest first: off-beat 16ths before 8ths before beats, quiet before loud, then a set order per pattern. So turning it down thins the groove steadily instead of flickering at random, and at −100% only each bar's first step is left. Up, the steps' chances rise towards 100% first; then, depending on **Build**, ghost notes fill the empty steps (the strongest places first) and ratchets of 2 are added to the strongest hits. Locks, conditions and ratchets of the steps that play are untouched. GRIDS and TURING tracks get their own density pushed instead.
 - **Ghost vel:** the velocity of the added notes (40 by default). They play the track's last note, or the melody's.
-- **Build:** what the positive side adds: **CHANCE** (only the chances), **GHOSTS** (then the ghost notes), **RATCHETS** (then the ratchets too).
+- **Build:** what the positive side adds: **CHANCE** (only the chances), **GHOSTS** (then the ghost notes), **RATCH** (then the ratchets too).
 - **Vary** (from 0.19): how predictable it is. At **OFF** the same steps go first every time. Turned up, the order is drawn again each time round the track: a little swaps neighbours (which 16th drops, where a ghost lands), more lets an off-beat outlast a beat, so a thinned or built-up groove keeps changing from bar to bar while staying close to its shape. The ghosts' velocities vary with it too, by up to a third. Each bar's first step is never moved: at −100% it alone is left.
 - **Leaving tracks out:** on this page the black track keys don't select tracks; each one leaves its track out (struck through on the screen), so D1 can keep the kick as programmed. None by default.
 - **COMMIT** (from 0.19): press **OCT+** on this page to write what DENSITY is doing into the playing pattern: the dropped steps are turned off, the chances raised, the ghosts become ordinary steps (the track's last note, at their velocity, no locks) and the ratchets are set, as this time round plays them (with Vary, this bar's draw). DENSITY then goes back to 0, so the sound doesn't change, and the result is an ordinary pattern to edit, save and build on. **OCT+ again**, with DENSITY still at 0, undoes it: the pattern and DENSITY as they were. Tracks left out, and GRIDS and TURING tracks, are untouched.
@@ -1805,6 +1824,8 @@ Things to know:
 The bottom of the LOAD and ELIXIR pages (the last two) shows the audio engine's load: **CPU** (the average), **PEAK** (the highest since CONFIG was opened) and, if it ever happens, **LATE** (audio buffers that were computed too late, counted since power-on: these would be heard as clicks). The text turns red above 85%. A buffer can be late because the engine ran out of time, or because something else held the processor; saves to flash no longer count (0.5.1), since they are not the engine's load.
 
 To measure, open CONFIG while a dense pattern plays with the FX bus and reverb on, and note the numbers. The browser emulator always shows 0%, because it doesn't model CPU time.
+
+**CPU OVERLOAD** (from 1.0): when buffers run late (two within 2 seconds: a lone late one, a peak with an interrupt on top, isn't a dropout you hear), on any page, the title bar flashes **CPU OVERLOAD** in red until 2 seconds after the last, with what was heaviest. It follows the **Late** count, not the percentages: Block is an average and Peak leaves out the interrupts (USB, MIDI) that land on top of the busiest buffer, so a run of lates can come with Peak in the 90s. If the second core was the one behind, it names the drum voices' models (**CPU OVERLOAD: MODAL + P SD**): a lighter model on one of them, or Aux at an end on P BD, P SD or P HH, helps. Otherwise it names the first core's biggest part as the LOAD page does (**FX BUS**, **REVERB**, **SN-HH**, **MIXER**, **SEQ, MOD**). The LOAD page has the numbers.
 
 ### The LOAD page
 

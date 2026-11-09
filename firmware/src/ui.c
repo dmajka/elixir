@@ -2030,29 +2030,58 @@ static uint32_t ca_par_at(uint32_t tr, uint32_t s, uint32_t h, uint32_t k, uint3
 /* 1.0 Phase 17: a track left out of Control All (kset.caout; the hats' voice only when CH and OH both are) */
 static int ca_isout(uint32_t u) { return u < 5u ? (kset.caout >> u) & 1u : (kset.caout & 0x60u) == 0x60u; }
 static int ca_keys(void) { return ca_rm || (ui.copy && ui.ca && !ui.ca_len); }   /* (a track key: out / in) */
-/* 1.0 (10c): the MODEL knob's order: the LXR's, Rings', Plaits', MICRO's, then Elixir's own (NOISE, in P NOISE's
- * number, and ENSEMBLE). The ones a voice hasn't (model_ok: Rings' and Plaits' on SN-HH, the dropped ones) passed */
+/* 1.0 (10c): the MODEL knob's order: the LXR's, Rings', Plaits', MICRO's, then Elixir's own (CLOUD, in P GRAIN's
+ * number; NOISE, in P NOISE's; ENSEMBLE). The ones a voice hasn't (model_ok: Rings', Plaits' and CLOUD on SN-HH, the
+ * dropped ones) passed */
 static const uint8_t MODEL_ORDER[NMODEL] = {
-    MD_LXR, MD_MODAL, MD_STRING, MD_FM, MD_PL0, MD_PL0 + 1, MD_PL0 + 2, MD_PGRAIN, MD_PL0 + 4, MD_PL0 + 5, MD_PL0 + 6,
+    MD_LXR, MD_MODAL, MD_STRING, MD_FM, MD_PL0, MD_PL0 + 1, MD_PL0 + 2, MD_PL0 + 4, MD_PL0 + 5, MD_PL0 + 6,
     MD_PL0 + 7, MD_PL0 + 8, MD_PL0 + 10, MD_PL0 + 11, MD_PMODAL, MD_PL0 + 13, MD_PL0 + 14, MD_PL0 + 15, MD_MC0,
     MD_MC0 + 1, MD_MC0 + 2, MD_MC0 + 3, MD_MC0 + 4, MD_MC0 + 5, MD_MC0 + 6, MD_MC0 + 7, MD_MC0 + 8, MD_MC0 + 9,
-    MD_NOISE, MD_EN};
-/* voice vi's model n of its models on from md, in MODEL_ORDER (at an end: there) */
+    MD_CLOUD, MD_NOISE, MD_EN};
+/* 1.0: the drum voices other than vi with a Rings or Plaits model (the ones the limit counts): bit k for Dk+1 */
+static uint32_t models_elsewhere(uint32_t vi)
+{
+    uint32_t k, m = 0;
+    for (k = 0; k < 3u; k++)
+        if (k != vi && model_counted(model_pick(k, par[PAR_MODEL1 + k])))
+            m |= 1u << k;
+    return m;
+}
+/* voice vi's model n of its models on from md, in MODEL_ORDER (at an end: there). 1.0: while the other drum voices
+ * hold the models' limit (rings.c model_limit), past Rings' and Plaits' (and said why), so a model never moves
+ * another voice to the LXR's */
 static uint32_t model_turn(uint32_t vi, uint32_t md, int32_t n)
 {
     int32_t i, j;
+    uint32_t el = vi <= 2u ? models_elsewhere(vi) : 0u, full = (uint32_t)__builtin_popcount(el) >= model_cap, past = 0;
     for (i = 0; i < (int32_t)NMODEL && MODEL_ORDER[i] != md; i++)
         ;
     if (i >= (int32_t)NMODEL)
         i = 0;
     while (n) {
         int32_t d = n > 0 ? 1 : -1;
-        for (j = i + d; j >= 0 && j < (int32_t)NMODEL && !model_ok(vi, MODEL_ORDER[j]); j += d)
+        for (j = i + d; j >= 0 && j < (int32_t)NMODEL &&
+                        (!model_ok(vi, MODEL_ORDER[j]) || (full && model_counted(MODEL_ORDER[j]) && (past = 1)));
+             j += d)
             ;
         if (j < 0 || j >= (int32_t)NMODEL)
             break;
         i = j;
         n -= d;
+    }
+    if (past) {                                      /* (which voices have them: "D2 + D3 HAVE THE MODELS") */
+        char b[32];
+        uint32_t k, o = 0;
+        for (k = 0; k < 3u; k++)
+            if ((el >> k) & 1u) {
+                if (o)
+                    b[o++] = '+';
+                b[o++] = 'D';
+                b[o++] = (char)('1' + k);
+            }
+        b[o] = 0;
+        put_str(b + o, model_cap == 1u ? " HAS THE 1 MODEL" : " HAVE THE 2 MODELS", sizeof b - o);
+        ui_message(b);
     }
     return MODEL_ORDER[i];
 }
@@ -2199,15 +2228,28 @@ static void control_all_undo(void)
 /* 1.0: the MODE knob into GRAIN with Density OFF (no grains: a new kit's, or TAPE's Glitch at 0) starts a cloud you
  * hear: Size 129 ms, Scatter 40%, Density 16/s (about two grains at once), Level 100 if it was 0; Position, Pitch,
  * Feedback as they were. With no delay send up, a message says where the sound goes in */
-static void grain_start(void)
+/* 1.0: GRAIN's Size, Scatter, Density and Pitch are the tape modes' Wow, Saturate, Glitch and Pitch (the same four
+ * parameters). Crossing into GRAIN or out of it, the side being left is kept aside and the other's put back (until a
+ * kit is loaded: then GRAIN's starting cloud, or the tape's zeros), so neither shows the other's numbers */
+static void morph_follow(uint32_t p, int32_t d);
+static void dly_cross(uint32_t from, uint32_t to)
 {
-    static const uint16_t P[3] = {PAR_DLY_WOW, PAR_DSAT, PAR_GLITCH};
-    static const uint8_t V[3] = {88, 50, 84};
-    uint32_t i, any = 0;
-    if (vp_get(PAR_GLITCH))
+    static const uint16_t P[4] = {PAR_DLY_WOW, PAR_DSAT, PAR_GLITCH, PAR_DPITCH};
+    static const uint8_t G0[4] = {88, 50, 84, DP_OFF};   /* (GRAIN's starting cloud; the tape's: all 0) */
+    static uint8_t aside[2][4];
+    static uint32_t kept[2] = {~0u, ~0u};            /* (the kit load each side was kept in) */
+    uint32_t i, any = 0, f = from == DELAY_GRAIN, g = to == DELAY_GRAIN;
+    if (f == g)
         return;
-    for (i = 0; i < 3u; i++)
-        vp_set(P[i], V[i]);
+    for (i = 0; i < 4u; i++) {
+        uint32_t v = kept[g] == kit_loads ? aside[g][i] : g ? G0[i] : 0u;
+        aside[f][i] = (uint8_t)vp_get(P[i]);
+        morph_follow(P[i], (int32_t)v - (int32_t)vp_get(P[i]));
+        vp_set(P[i], v);
+    }
+    kept[f] = kit_loads;
+    if (!g)
+        return;
     if (!vp_get(PAR_DLY_LEVEL))
         vp_set(PAR_DLY_LEVEL, 100);
     for (i = 0; i < NVOICE; i++)
@@ -2346,8 +2388,8 @@ static void knob_turn(uint32_t k, int32_t n)
         ui.dest_p = (uint16_t)p;
     }
     v = (int32_t)model_step(p, vp_get(p), (uint32_t)v);
-    if (p == PAR_FX_DELAY_TYPE && v == DELAY_GRAIN && vp_get(p) != DELAY_GRAIN)
-        grain_start();
+    if (p == PAR_FX_DELAY_TYPE)
+        dly_cross(vp_get(p), (uint32_t)v);
     morph_follow(p, (int32_t)v - (int32_t)vp_get(p));
     vp_set(p, (uint32_t)v);
     if (ui.mode == M_STEP)                           /* (a generator's track: what plays takes the step's edit) */
