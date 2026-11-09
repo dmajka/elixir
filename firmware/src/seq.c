@@ -142,9 +142,14 @@ enum { DIR_FWD, DIR_REV, DIR_PING, DIR_PING2, DIR_RAND, DIR_WALK, NDIR };
  * follows the pattern's scale plays its notes there: the voice's sounding semitone (its tune + the note, absolute)
  * to the nearest degree (scale_fit) */
 enum { SC_CHROM, SC_MAJOR, SC_MINOR, SC_DORIAN, SC_PHRYG, SC_MIXO, SC_LYD, SC_HMINOR, SC_MINPENT, SC_MAJPENT, SC_BLUES,
-       SC_MIN7, SC_FIFTHS, SC_PHRDOM, SC_HIRA, SC_PELOG, SC_WHOLE, NSCALE };
+       SC_MIN7, SC_FIFTHS, SC_PHRDOM, SC_HIRA, SC_PELOG, SC_WHOLE,
+       /* 1.0: twelve more, after the others (saved numbers stay) */
+       SC_LOCRIAN, SC_MELMIN, SC_HUNMIN, SC_DBLHARM, SC_DIMHW, SC_DIMWH, SC_LYDDOM, SC_ALTERED, SC_INSEN, SC_IWATO,
+       SC_KUMOI, SC_EGYPT, NSCALE };
 static const uint16_t SCALE_MASK[NSCALE] = {0xFFF, 0xAB5, 0x5AD, 0x6AD, 0x5AB, 0x6B5, 0xAD5, 0x9AD, 0x4A9, 0x295, 0x4E9,
-                                            0x489, 0x081, 0x5B3, 0x18D, 0x18B, 0x555};
+                                            0x489, 0x081, 0x5B3, 0x18D, 0x18B, 0x555,
+                                            0x56B, 0xAAD, 0x9CD, 0x9B3, 0x6DB, 0xB6D, 0x6D5, 0x55B, 0x4A3, 0x463,
+                                            0x28D, 0x4A5};
 #define SFOLLOW_DEFAULT 0x07u                        /* (D1-D3 follow a new pattern's scale) */
 /* 19a: the scale a blank pattern starts with: the last one chosen (the project's) */
 static struct { uint8_t root, scale; } scl_last;

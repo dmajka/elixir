@@ -191,9 +191,9 @@ static uint32_t par_k_voice(uint32_t p)              /* a per-voice one's voice,
 static const char *pl_knob_name(uint32_t p, uint32_t which)
 {
     static const char *const N[6][4] = {{"Harmonic", "Plaits", "hrm", "Harmonic"}, {"Timbre", "Plaits", "tmb", "Timbre"},
-                                        {"Morph", "Plaits", "mrp", "Morph"}, {"Colour", "Plaits", "col", "LPGColor"},
+                                        {"Morph", "Plaits", "mrp", "Morph"}, {"Color", "Plaits", "col", "LPGColor"},
                                         {"Aux", "Plaits", "aux", "AuxMix"}, {"Env", "Plaits", "env", "EnvAmt"}};
-    static const char *const U[6][4] = {{"Length", "Micro", "len", "Length"}, {"Colour", "Micro", "col", "Colour"},
+    static const char *const U[6][4] = {{"Length", "Micro", "len", "Length"}, {"Color", "Micro", "col", "Color"},
                                         {"Jitter", "Micro", "jit", "Jitter"}, {"-", "Micro", "-", "-"},
                                         {"Reverse", "Micro", "rev", "Reverse"}, {"Tension", "Micro", "mtn", "Tension"}};
     uint32_t vi = (p - PAR_MDECAY1) % 6u;
@@ -208,7 +208,7 @@ static const char *pl_knob_name(uint32_t p, uint32_t which)
         return E[(p - PAR_MDECAY1) / 6u][which];
     }
     if (nzo[vi].on) {                                 /* (1.0: NOISE's) */
-        static const char *const Z[4][4] = {{"Colour", "Noise", "col", "Colour"}, {"Rate", "Noise", "rat", "Rate"},
+        static const char *const Z[4][4] = {{"Color", "Noise", "col", "Color"}, {"Rate", "Noise", "rat", "Rate"},
                                             {"Env", "Noise", "env", "EnvAmt"}, {"-", "Noise", "-", "-"}};
         uint32_t r = (p - PAR_MDECAY1) / 6u;
         return Z[r < 3u ? r : 3u][which];

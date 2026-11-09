@@ -37,7 +37,7 @@ from pathlib import Path
 
 # name, bg, surf, text, theme, accent (8-bit RGB; stored as RGB565)
 PALETTES = [
-    ("GREY",   (14, 14, 14),    (36, 36, 36),    (204, 204, 204), (232, 232, 232), (255, 255, 255)),
+    ("GRAY",   (14, 14, 14),    (36, 36, 36),    (204, 204, 204), (232, 232, 232), (255, 255, 255)),
     ("GREEN",  (6, 18, 10),     (16, 40, 26),    (226, 244, 230), (84, 214, 120),  (255, 214, 92)),
     ("AMBER",  (18, 14, 8),     (42, 32, 18),    (246, 236, 216), (255, 168, 40),  (96, 214, 230)),
     ("ICE",    (8, 16, 24),     (20, 36, 52),    (228, 240, 248), (80, 184, 236),  (255, 140, 100)),
@@ -64,7 +64,7 @@ BW_GREY = (82, 82, 82)             # MONO's one mid grey (RGB565 10/20/10): DIM 
 # the 20 palettes of the earlier firmware (index order) -> the new palette
 OLD = ["GREEN", "AMBER", "CYAN", "RED", "MONO", "VIOLET", "PINK", "ICE", "WARM", "OCEAN", "DUSK", "HI-CON",
        "LIGHT", "PAPER", "SKY", "MINT", "LILAC", "ROSE", "SAND", "L-HICON"]
-OLD_TO_NEW = {"GREEN": "GREEN", "AMBER": "AMBER", "CYAN": "ICE", "RED": "ROSE", "MONO": "GREY", "VIOLET": "VIOLET",
+OLD_TO_NEW = {"GREEN": "GREEN", "AMBER": "AMBER", "CYAN": "ICE", "RED": "ROSE", "MONO": "GRAY", "VIOLET": "VIOLET",
               "PINK": "ROSE", "ICE": "ICE", "WARM": "AMBER", "OCEAN": "ICE", "DUSK": "VIOLET", "HI-CON": "HI-CON",
               "LIGHT": "PAPER", "PAPER": "PAPER", "SKY": "PAPER", "MINT": "PAPER", "LILAC": "PAPER", "ROSE": "PAPER",
               "SAND": "PAPER", "L-HICON": "HI-CON"}
@@ -127,7 +127,7 @@ def contrast(a, b):
 def derive(p):
     name, *cols = p
     bg, surf, text, theme, accent = (to565(c, name == BW) for c in cols)
-    mono = name == "GREY"
+    mono = name == "GRAY"
     d = dict(bg=bg, surf=surf, text=text, theme=theme, accent=accent,
              mid=mix(bg, text, PCT["MID"], mono), dim=mix(bg, text, PCT["DIM"], mono),
              line=mix(bg, text, PCT["LINE"], mono), sel=mix(bg, theme, PCT["SEL"], mono),
@@ -162,7 +162,7 @@ def main():
     ap.add_argument("--report", action="store_true")
     a = ap.parse_args()
     fails = []
-    assert PALETTES[0][0] == "GREY" and len(OLD) == 20 and len(PALETTES) <= 63
+    assert PALETTES[0][0] == "GRAY" and len(OLD) == 20 and len(PALETTES) <= 63
     rows = [derive(p) for p in PALETTES]
     for name, d in rows:
         if name == "GREY":

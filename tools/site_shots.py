@@ -16,7 +16,12 @@ ROOT = Path(__file__).resolve().parents[1]
 SHOTS = {"playing": "pattern", "grids-map": "grids", "perform2": "perform",
          "global-lfo": "global-lfo", "links-duck-hats": "links", "spells-motes": "spells", "p40-wander-road": "wander", "mixer": "mixer", "keys": "keys",
          "viz-model-modal": "rings", "viz-model-pspeech": "plaits-speech", "viz-reverb-plate": "reverb-plate",
-         "viz-reverb-hall": "reverb-hall"}
+         "viz-reverb-hall": "reverb-hall",
+         # 1.0's front page: the new engines, the delay, the generators' pictures
+         "viz-model-cloud": "cloud", "viz-model-rain": "rain", "ensemble-d1": "ensemble", "viz-fx-delay-pp": "delay",
+         "fx-grain": "grain-delay", "viz-melody-playing": "melody", "viz-groove-dilla": "groove",
+         "wander-chasm": "chasm", "fx-routing": "routing", "rush": "rush",
+         "fx-dj-ring": "ring"}
 
 
 def read_ppm(path):

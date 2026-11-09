@@ -145,6 +145,15 @@ def product_of(raw):
     return "".join(chr((m - i - 1) & 0xFF) for i in range(BLOCKS) if (m := raw[i * BLK + KEEP]) != 0x7D)
 
 
+def released(ver):
+    """the release's date, for the front page: its git tag's (v1.0), else today's (a build not yet tagged)"""
+    import datetime
+    r = subprocess.run(["git", "log", "-1", "--format=%cs", ver, "--"], cwd=ROOT, capture_output=True, text=True)
+    d = (datetime.date.fromisoformat(r.stdout.strip()) if r.returncode == 0 and r.stdout.strip()
+         else datetime.date.today())
+    return f"{d:%B} {d.day}, {d.year}"
+
+
 def version():
     m = re.search(r'#define ELIXIR_VERSION "([^"]+)"', (ROOT / "firmware/src/elixir.c").read_text())
     return m[1]
@@ -726,7 +735,8 @@ def main(pkg, out):
     (out / "favicon.svg").write_text(favicon(), encoding="utf-8")
     front = (ROOT / "web/index.html").read_text(encoding="utf-8")
     for mark, text in (("<!--NAV-->", nav(0)), ("<!--WORD-->", word_svg()), ("<!--POTION-->", potion_svg()),
-                       ("<!--VERSION-->", html.escape(ver)), ("<!--REPO-->", repo)):
+                       ("<!--VERSION-->", html.escape(ver.lstrip("v"))), ("<!--RELEASED-->", released(ver)),
+                       ("<!--REPO-->", repo)):
         if front.count(mark) != 1:
             raise SystemExit(f"web/index.html must contain {mark} once")
         front = front.replace(mark, text)
@@ -786,7 +796,7 @@ def main(pkg, out):
     shutil.copytree(ROOT / "LICENSES", fw / "LICENSES")
     lic = sorted(p.name for p in (fw / "LICENSES").glob("*.txt"))
     (fw / "LICENSES/index.html").write_text(
-        '<!doctype html><meta charset="utf-8"><title>Elixir licences</title><h1>Licence texts</h1><ul>' +
+        '<!doctype html><meta charset="utf-8"><title>Elixir licenses</title><h1>License texts</h1><ul>' +
         "".join(f'<li><a href="{n}">{n}</a></li>' for n in lic) + '</ul><p><a href="../LICENSE">LICENSE (GPL-3.0)</a>'
         ' · <a href="../NOTICE.md">NOTICE.md</a></p>\n', encoding="utf-8")
     src = f"elixir-{ver}-src.tar.gz"
@@ -799,7 +809,7 @@ def main(pkg, out):
         (name, f"the firmware package ({len(raw)} B, identity {product})"),
         (src, "the complete source (GPL-3.0)"),
         ("MANUAL.md", "the manual as Markdown"),
-        ("LICENSE", "GPL-3.0"), ("NOTICE.md", "what Elixir is built from"), ("LICENSES/", "the other licence texts")]),
+        ("LICENSE", "GPL-3.0"), ("NOTICE.md", "what Elixir is built from"), ("LICENSES/", "the other license texts")]),
         encoding="utf-8")
     (out / ".nojekyll").write_text("")              # GitHub Pages: serve the files as they are
     print(f"site: {out}: index.html, install/, library/, try/, manual/, firmware/{name} ({len(raw)} B, {product}), firmware/{src}")

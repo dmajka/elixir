@@ -497,7 +497,7 @@ static const char *model_line(uint32_t m, uint32_t v)
         "", "Bells, bars, plates", "A plucked string", "Glassy, metallic FM",
         "Two analog oscillators", "A folded wave", "Two-operator FM", "A cloud of grains",
         "A sum of harmonics", "Wavetables", "A four-note chord", "A speaking voice",
-        "Eight saws", "Coloured noise", ELIXIR_PARTICLE ? "Dust through resonators" : "Rain on tuned bells",
+        "Eight saws", "Colored noise", ELIXIR_PARTICLE ? "Dust through resonators" : "Rain on tuned bells",
         "An inharmonic string", "", "An analog kick", "An analog snare", "An analog hat",
         "A click or a doublet", "A train of clicks", "Crunchy, held noise", "LFSR bits",
         "A burst of noise", "Noise and a click", "A resonant grain", "A crackle of dust",

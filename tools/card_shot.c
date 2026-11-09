@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Elixir: The Firmware Hub's card picture (docs/card.png, fmhub.json's "image"): the firmware's own screen, drawn by the
+ * Elixir: the cheat sheet's screen (web/shots/track.png; until 1.0 also the hub card, now tools/make_card.py): the firmware's own screen, drawn by the
  * browser build (web/emu/elixir_web.c) natively, as tests/ui_test.c does. A beat with the tracks on their own clocks
  * and lengths, playing, so each track's playhead sits on a different step; the selected track's TRACK page below.
- *   cc -O1 -I build/gen -I firmware/src tools/card_shot.c -o build/card_shot -lz && build/card_shot docs/card.png */
+ *   cc -O1 -I build/gen -I firmware/src tools/card_shot.c -o build/card_shot -lz && build/card_shot web/shots/track.png */
 #include <stdio.h>
 #include <stdlib.h>
 #include <zlib.h>
@@ -103,6 +103,6 @@ int main(int argc, char **argv)
         press(B_SEQ);
     turn(EN_SELECT, (int32_t)PG_TRACK - (int32_t)ui.page);
     run_ms(60);
-    save_png(argc > 1 ? argv[1] : "docs/card.png");
+    save_png(argc > 1 ? argv[1] : "web/shots/track.png");
     return 0;
 }

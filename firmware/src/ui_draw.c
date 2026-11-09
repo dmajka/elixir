@@ -457,7 +457,9 @@ static void draw_grid(void)
 /* 19a: the scales' names (seq.c SC_*) */
 static const char *const SCALE_NAME[NSCALE] = {"CHROM", "MAJOR", "MINOR", "DORIAN", "PHRYG", "MIXOLYD",
                                                "LYDIAN", "H MINOR", "MIN PNT", "MAJ PNT", "BLUES", "MINOR 7",
-                                               "FIFTHS", "PHR DOM", "HIRAJO", "PELOG", "WHOLE T"};   /* (52 px at most) */
+                                               "FIFTHS", "PHR DOM", "HIRAJO", "PELOG", "WHOLE T",
+                                               "LOCRIAN", "MEL MIN", "HUN MIN", "DBL HRM", "DIM H-W", "DIM W-H",
+                                               "LYD DOM", "ALTERED", "IN SEN", "IWATO", "KUMOI", "EGYPT"};   /* (52 px at most) */
 #include "ui_viz.c"                                  /* (30: the pages' pictures) */
 #include "spells_viz.c"                              /* (32: SPELLS' wizard and die) */
 #include "wander_viz.c"                              /* (40: WANDER's road, compass, cottage) */
@@ -1557,7 +1559,7 @@ static void draw_config_help(int32_t y0)
         y = help_item(y, "LEDS", "off, low or high glow");
         y = help_item(y, "AUTOSAVE", "keeps the session when stopped");
         y = help_item(y, "ACCEL", "fast turns move further");
-        help_item(y, "PALETTE", "the screen's colours");
+        help_item(y, "PALETTE", "the screen's colors");
         break;
     }
 }
@@ -1921,7 +1923,7 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_AUTOSAVE: put_str(b, "Autosave", n); return;
     case VP_PKEEP: put_str(b, "Edits", n); return;
     case VP_ACCEL: put_str(b, "Accel", n); return;
-    case VP_PALETTE: put_str(b, "Colours", n); return;
+    case VP_PALETTE: put_str(b, "Colors", n); return;
     case VP_RCH: put_str(b, "Tracks", n); return;
     case VP_RCH2: put_str(b, "Global", n); return;
     case VP_RKNOBS: put_str(b, "Knobs", n); return;
@@ -3047,6 +3049,7 @@ static uint16_t potion_col(char m)
     default: return 0;
     }
 }
+#define SPLASH_LINE "drum synth & sequencer"
 static void draw_splash(void)
 {
     uint32_t r, k;
@@ -3059,9 +3062,9 @@ static void draw_splash(void)
         }
     draw_word(33, 117, 5, ux_mix(T_THEME, T_BG, 45));           /* (36 columns: 180 px; a shadow, then the word) */
     draw_word(30, 114, 5, T_TEXT);
-    draw_text_box(0, 160, 240, &AF_M, "drum machine", T_TEXT, 1);
-    draw_text_box(0, 192, 240, &AF_S, "the LXR-02's engine on the FM-1", T_MID, 1);
-    draw_text_box(0, 209, 240, &AF_S, "unofficial port, " ELIXIR_VERSION, T_MID, 1);
+    draw_text_box(0, 160, 240, &AF_M, SPLASH_LINE, T_TEXT, 1);   /* (1.0: a drum synth, grown from the LXR-02) */
+    draw_text_box(0, 192, 240, &AF_S, "grown from the LXR-02's engine", T_MID, 1);
+    draw_text_box(0, 209, 240, &AF_S, "free and unofficial, " ELIXIR_VERSION, T_MID, 1);
 }
 /* 29: CONFIG's last page: the potion and the word small, the version, the CPU line with the battery (37: the load of
  * each core is on LOAD) */

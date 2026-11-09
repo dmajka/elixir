@@ -3492,6 +3492,20 @@ static void phase19(void)
           "scale_q: the nearest degree (a tie the lower), degrees on");
     check(scale_q(SC_CHROM, 0, 61, 0) == 61 && scale_q(SC_WHOLE, 0, 61, 0) == 60 && scale_q(SC_FIFTHS, 2, 62, 1) == 69,
           "scale_q: CHROMATIC as it is, WHOLE TONE, FIFTHS");
+    {   /* 1.0: the twelve scales after WHOLE T: each has its root, no name wider than the widest before them, and a
+         * note lands on a degree (Locrian on C: C# stays, D to C#; In Sen: E to F) */
+        int ok = 1;
+        int32_t wmax = 0;
+        uint32_t k;
+        for (k = 0; k <= SC_WHOLE; k++)
+            if (text_w(&AF_S, SCALE_NAME[k]) > wmax)
+                wmax = text_w(&AF_S, SCALE_NAME[k]);
+        for (k = SC_LOCRIAN; k < NSCALE; k++)
+            ok &= (SCALE_MASK[k] & 1u) && text_w(&AF_S, SCALE_NAME[k]) <= wmax;
+        check(ok && NSCALE == 29u && scale_q(SC_LOCRIAN, 0, 61, 0) == 61 && scale_q(SC_LOCRIAN, 0, 62, 0) == 61 &&
+                  scale_q(SC_INSEN, 0, 64, 0) == 65 && scale_q(SC_EGYPT, 0, 63, 0) == 62,
+              "scales: 28 and CHROM, the new ones rooted, named to fit, quantizing");
+    }
     check(p->scale == SC_CHROM && p->sfollow == SFOLLOW_DEFAULT, "a new pattern: CHROMATIC, D1-D3 follow");
     seq_goto(PG_SCALE);
     page_params(pp);
@@ -4180,6 +4194,7 @@ static double p23_h3(const int32_t *x, uint32_t n)   /* the 3rd harmonic's share
 }
 static void phase_016t2(void)                        /* 0.16-test2: FX's page order; the HYRULE palette */
 {
+    uint32_t pal0;
 #define FXSENDS FXPG_FSEND, FXPG_FSEND2, FXPG_DSEND, FXPG_DSEND2, FXPG_RSEND, FXPG_RSEND2   /* (31: the sends last;
                                                       * 1.0 Phase 16: the delay's between) */
     static const uint8_t OFF[] = {FXPG_REV, FXPG_BUS, FXPG_DLY, FXPG_DLY2, FXPG_ROUTE, FXPG_DIRT, FXPG_DJ, FXPG_COMP,
@@ -4245,6 +4260,7 @@ static void phase_016t2(void)                        /* 0.16-test2: FX's page or
     for (k = 0; k < NPALETTES && strcmp(UI_PALETTES[k].name, "HYRULE"); k++)
         ;
     check(k == 10u, "HYRULE: palette 10 (saved ids stay: palettes are appended)");
+    pal0 = kset.palette;                             /* (1.0: put back after, so later shots keep SAND's colours) */
     vp_set(VP_PALETTE, k);
     ui.page = 0;
     press(B_HOME);
@@ -4256,7 +4272,7 @@ static void phase_016t2(void)                        /* 0.16-test2: FX's page or
     ui.force = 1;
     run_ms(100);
     shot("palette-hyrule-fx");
-    vp_set(VP_PALETTE, 0);
+    vp_set(VP_PALETTE, pal0);
 }
 
 static void phase23(void)
@@ -4889,8 +4905,8 @@ static void phase24(void)
     turn(EN_K1, 1);
     check(par[PAR_MODEL1 + 3] == MD_MC0 && mi[3].type == 1u, "SN: K1 from LXR to CLICK (past Rings' and Plaits')");
     page_params(pp);
-    check(pp[1] == PAR_MDECAY1 + 3u && !strcmp(par_name(pp[1]), "Length") && !strcmp(par_name(pp[2]), "Colour") &&
-          !strcmp(par_name(pp[3]), "Jitter"), "MICRO: Length, Colour, Jitter");
+    check(pp[1] == PAR_MDECAY1 + 3u && !strcmp(par_name(pp[1]), "Length") && !strcmp(par_name(pp[2]), "Color") &&
+          !strcmp(par_name(pp[3]), "Jitter"), "MICRO: Length, Color, Jitter");
     check(sect_par(3, S_MODEL, 1, 0) == PAR_MEXC1 + 3u && sect_par(3, S_MODEL, 1, 1) == PAR_MTENS1 + 3u &&
           !sect_par(3, S_MODEL, 1, 2) && !strcmp(par_name(PAR_MEXC1 + 3u), "Reverse") &&
           !strcmp(par_name(PAR_MTENS1 + 3u), "Tension"), "MICRO's second page: Reverse, Tension (no POSITION)");
@@ -8804,7 +8820,7 @@ static void phase_100_10c(void)
     run_ms(20);
     check(nzo[3].on && !mi[3].type && !eno[3].on, "SN on NOISE");
     page_params(pp);
-    check(!strcmp(par_name(pp[1]), "Colour") && !strcmp(par_name(pp[2]), "Rate") && !strcmp(par_name(pp[3]), "Env") &&
+    check(!strcmp(par_name(pp[1]), "Color") && !strcmp(par_name(pp[2]), "Rate") && !strcmp(par_name(pp[3]), "Env") &&
           !sect_half_used(3, S_MODEL, 1) && sect_half_used(3, S_AEG, 0), "NOISE: COLOUR, RATE, ENV; one page; AMP EG");
     card_value(b, sizeof b, PAR_MDECAY1 + 3u, 0);
     ok = !strcmp(b, "BROWN");
@@ -8983,8 +8999,8 @@ static void phase_100_10c(void)
               "RAIN: a third with two models on, not counted (plays)");
         check(!strcmp(par_name(PAR_MDECAY1 + 2), "Chord") && !strcmp(par_name(PAR_MDAMP1 + 2), "Ring") &&
               !strcmp(par_name(PAR_MMAT1 + 2), "Density") && !strcmp(par_name(PAR_MEXC1 + 2), "Dry") &&
-              !strcmp(par_name(PAR_MPOS1 + 2), "Colour"),
-              "RAIN: Chord, Ring, Density; Colour; Aux its Dry");
+              !strcmp(par_name(PAR_MPOS1 + 2), "Color"),
+              "RAIN: Chord, Ring, Density; Color; Aux its Dry");
         {
             static const char *const T[8] = {"NOTE", "OCTAVES", "FIFTHS", "MAJOR", "MINOR", "SUS4", "MIN7", "PENTA"};
             uint32_t k, ok = 1;
@@ -11132,6 +11148,8 @@ int main(int argc, char **argv)
     midi_gtakes = GT_ALL;                            /* (the tests below send the LXR's CCs there: phase_024g) */
     run_ms(200);
     shot("splash");
+    check(text_w(&AF_M, SPLASH_LINE) <= 232 && text_w(&AF_S, "free and unofficial, " ELIXIR_VERSION) <= 232,
+          "splash: its lines fit the screen");
     run_ms(1400);
     shot("home");
     /* program a beat on the grid: kick 1 5 9 13 */

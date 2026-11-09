@@ -916,7 +916,7 @@ static uint32_t vp_max(uint32_t p);
 static const char *const FX_P_NAME[NFX][4] = {
     {"-", "-", "-", "-"}, {"Drive", "Color", "Tone", "Volume"}, {"Freq", "-", "-", "-"},
     {"Attack", "Release", "Threshld", "Gain"}, {"Time", "Range", "Tone", "Feedback"},
-    {"Rate", "Depth", "Feedback", "Centre"}, {"Rate", "Depth", "Feedback", "Delay"},
+    {"Rate", "Depth", "Feedback", "Center"}, {"Rate", "Depth", "Feedback", "Delay"},
     {"Rate", "Depth", "Delay", "Lo cut"}, {"Shift", "Fdbk", "Delay", "Spread"}};
 
 /* a mod target's voice range (VEL DEST: its own; LFO TARGET: the voice PAR_VOICE_LFO picks) */

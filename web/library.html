@@ -83,7 +83,7 @@
       (SAVE → PROJECT, or AUTOSAVE's session). Loading another project brings its own 64 kits. Put a project's
       working kits here.</li>
     <li><b>The kit library</b> (128 kits, and 128 single sounds) is a collection of its own, written to flash at once
-      and left as it is whatever project you load. Put kits you want in every project here, such as your favourites
+      and left as it is whatever project you load. Put kits you want in every project here, such as your favorites
       or Hrtl's kit packs (below). On the FM-1, turn <b>PRESETS</b> for the kit browser: it lists the factory kits
       (F1 …), then the library's (L1 …), then the slots; <b>KNOB 1</b> jumps between them and <b>OCT+</b> loads
       one. (CONFIG → BUTTONS &amp; KITS, Kits first, puts the slots first.) A library kit can also be the <b>morph target</b> (LOAD → MORPH, From
@@ -188,8 +188,7 @@
 </main>
 <footer class="site">
   <div class="wrap narrow">
-    Elixir is free software (GPL-3.0), unofficial and not affiliated with or endorsed by Erica Synths, M-VAVE or
-    Hügelton Instruments. "Erica Synths" and "LXR-02" are trademarks of Erica Synths; "M-VAVE" and "FM-1" are
+    Elixir is free software (GPL-3.0), unofficial and not affiliated with or endorsed by Erica Synths or M-VAVE. "Erica Synths" and "LXR-02" are trademarks of Erica Synths; "M-VAVE" and "FM-1" are
     trademarks of their owner. Kits you import are yours to use; this page sends them only to your FM-1.
   </div>
 </footer>
@@ -374,7 +373,7 @@ $("restore").addEventListener("change", (e) => {
     const into = $("into").value;
     const plan = into === "same" ? entries.map((en) => ({ ...en, slot: en.slot < 0 ? 0 : en.slot })) : [{ ...entries[0], slot: +into }];
     const over = plan.filter((p) => info.slots[p.slot].exists).map((p) => SLOT_NAMES[p.slot]);
-    if (over.length && !confirm(`Replace ${over.join(", ")} on the FM-1?`)) { say("Restore cancelled."); return; }
+    if (over.length && !confirm(`Replace ${over.join(", ")} on the FM-1?`)) { say("Restore canceled."); return; }
     for (const p of plan) {
       say(`Restoring ${SLOT_NAMES[p.slot]} …`);
       await lib.writeProject(p.slot, p.img, "", bar);
@@ -392,7 +391,7 @@ async function importKits(files, toLib) {
   const first = Math.max(1, Math.min(max, +$(toLib ? "libfirst" : "first").value || 1)) - 1;
   const n = Math.min(kits.length, max - first), more = kits.length > n ? ` (${kits.length - n} more didn't fit)` : "";
   if (!confirm(`Put ${n} kits into ${where} ${first + 1}–${first + n}${more}? The kits there now are replaced` +
-               `${toLib ? "" : " (until you load a project again without saving)"}.`)) { say("Import cancelled."); return; }
+               `${toLib ? "" : " (until you load a project again without saving)"}.`)) { say("Import canceled."); return; }
   for (let i = 0; i < n; i++) {
     say(`Importing ${kits[i].name} …`);
     if (toLib) await lib.libPut(KL_KIT, first + i, kits[i].name, kits[i].data);
@@ -413,7 +412,7 @@ $("lxrdir").addEventListener("change", (e) => {
     const proj = await lxrProject(files), first = +$("lxrhalf").value;
     if (!proj.kits.length && !proj.pats.length) throw new Error("No LXR-02 kits or patterns there.");
     if (!confirm(`Bring in ${proj.kits.length} kits, the patterns ${first + 1}–${first + 32} and the songs? What's ` +
-                 "playing now is replaced (until you load a project again without saving).")) { say("Import cancelled."); return; }
+                 "playing now is replaced (until you load a project again without saving).")) { say("Import canceled."); return; }
     say("Importing the project …");
     const r = await importLxrProject(lib, proj, first, bar);
     await refresh();
@@ -467,7 +466,7 @@ $("librestore").addEventListener("change", (e) => {
   job(async () => {
     const entries = unpackKitLib(await f.arrayBuffer());
     if (!confirm(`Put ${entries.length} kits and sounds back into the kit library? Those in their slots are replaced.`)) {
-      say("Restore cancelled.");
+      say("Restore canceled.");
       return;
     }
     await lib.libRestore(entries, bar);
