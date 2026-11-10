@@ -71,6 +71,7 @@ static struct {
     int32_t sweep;                                   /* the sweeps: -65536 (low-pass end) .. 65536 (high-pass) */
     int32_t dj_d;                                    /* the filter's position in use, -65536 .. 65536 */
     uint8_t dj_type;                                 /* the type the filter ran last (a change: its state reset) */
+    uint8_t dj_ft;                                   /* 1.3.1: the DJT_* Reso last glided for (a change: no glide) */
     int32_t dj_rs;                                   /* 1.0: Reso as the filter has it, Q8 (glides to the knob's) */
     svf_t dj_f[2];
     int32_t rg_s[8][2];                              /* 1.0: RING's bands (lp, bp; Q4 samples) */
@@ -122,6 +123,8 @@ static struct {
     uint8_t dj_ftype;                                /* 1.0: the DJ filter's type, DJT_* (KSC1) */
     uint8_t dj_tune;                                 /* 1.0: RING's chord, RC_* (KSC1) */
     uint8_t dj_spread, dj_slope, dj_tone, dj_wet;    /* 1.0 Phase 18: RING (2/2), 0..127, 64 as before (KSC1) */
+    uint8_t dj_decay;                                /* 1.3.1: RING's Decay, 0..127, its own (it shared Reso: a long
+                                                      * ring left the other filters screaming) (KSC1) */
 } pfs;
 /* 1.0: the DJ filter's type, the global character filter: the LXR's SVF (LP, HP), ACID (its LP; the LXR's HP) or MS20
  * (its LP, HP) */
@@ -129,6 +132,8 @@ enum { DJT_LXR, DJT_ACID, DJT_MS20, DJT_RING, NDJT };   /* (saved: the numbers s
 /* 1.0: the Type knob's order: LXR, RING, ACID, MS20 (RING second: the user, 2026-11-08). Its place <-> the type */
 static const uint8_t DJT_AT[NDJT] = {DJT_LXR, DJT_RING, DJT_ACID, DJT_MS20};
 static uint32_t djt_place(uint32_t t) { return t == DJT_RING ? 1u : t == DJT_ACID ? 2u : t == DJT_MS20 ? 3u : 0u; }
+static uint8_t *dj_q(void) { return pfs.dj_ftype == DJT_RING ? &pfs.dj_decay : &pfs.dj_reso; }   /* (1.3.1: the Reso
+                                                      * knob's value: RING's Decay, the others' Reso) */
 /* 1.0: RING, a tuned resonator (after the Torso S-4's RING, as Rings' strings are): NRB band-passes at a chord over a
  * root the DJ knob sweeps in semitones (C1 at the left end, C3 in the middle, C6 at the right: darker one way,
  * brighter the other), Reso their ring time (T60 0.08 .. 2.6 s), TUNE the chord. On the mix summed to mono, the bands
@@ -764,12 +769,14 @@ static void perf_master(int16_t *l, int16_t *r)
     uint32_t i, c, type;
     pf.dj_d = d;
     {                                                /* 0.24.3: Reso: the damping R from 0.6 (as before) to 0.03, */
-        int32_t t = (int32_t)(pfs.dj_reso & 127u) << 8, e = t - pf.dj_rs;   /* on a square law (most of the knob
+        int32_t t = (int32_t)(*dj_q() & 127u) << 8, e = t - pf.dj_rs;   /* on a square law (most of the knob
                                                       * where it bites). 1.0: it glides there (~10 ms): the knob's
                                                       * steps a block at a time clicked, ACID's (its makeup) most */
         uint32_t k, rk;
         int32_t q;
-        pf.dj_rs = !a || (e > -8 && e < 8) ? t : pf.dj_rs + e / 8;   /* (no filter: at once) */
+        pf.dj_rs = !a || (e > -8 && e < 8) || pf.dj_ft != pfs.dj_ftype ? t : pf.dj_rs + e / 8;   /* (no filter, a
+                                                      * new type: at once) */
+        pf.dj_ft = pfs.dj_ftype;
         k = (127u << 8) - (uint32_t)pf.dj_rs;        /* (Q8) */
         q = 1966 + (int32_t)((uint64_t)37356u * k * k / (16129u << 16));
         rk = (uint32_t)pf.dj_rs * 516u >> 8;         /* (1.0: ACID's, MS20's: their own curve, 0 .. 1) */

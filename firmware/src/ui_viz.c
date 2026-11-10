@@ -1193,7 +1193,7 @@ static void viz_ring(int32_t d)                     /* 1.0: RING: its bands wher
 {
     const int8_t *sh = RING_SH[pfs.dj_tune < NRTUNE ? pfs.dj_tune : 0u];
     uint32_t root = ring_root(d), k;
-    int32_t h = 12 + (int32_t)pfs.dj_reso * (VY1 - VY0 - 16) / 127, o, top = 0;
+    int32_t h = 12 + (int32_t)pfs.dj_decay * (VY1 - VY0 - 16) / 127, o, top = 0;
     const int32_t sl = (int32_t)(pfs.dj_slope & 127u) - 64, tn = (int32_t)(pfs.dj_tone & 127u) - 64;
     char b[32];
     put_str(b, "RING ", sizeof b);

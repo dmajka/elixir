@@ -1792,7 +1792,7 @@ static void draw_body(void)
                 s = sig_add(s, mixer_sig());
             if (fx_page() == FXPG_DJ || fx_page() == FXPG_DJ2)   /* (1.0: the DJ filter as it moves, its type and Reso) */
                 s = sig_add(sig_add(s, (uint32_t)(pf.dj_d + 65536) >> 9 | (uint32_t)pfs.dj_ftype << 20 |
-                                           (uint32_t)pfs.dj_reso << 24),
+                                           (uint32_t)*dj_q() << 24),
                             pfs.dj_tune | (uint32_t)pfs.dj_spread << 8 | (uint32_t)pfs.dj_slope << 16 |
                                 (uint32_t)pfs.dj_tone << 24 | (uint32_t)pfs.dj_wet << 3);   /* (RING's chord, its
                                                       * page 2: Phase 18) */

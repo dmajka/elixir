@@ -3847,7 +3847,19 @@ static void phase19(void)
             pfs.dj_reso = 0;
             rc |= proj_load(1);
             check(!rc && pfs.dj_reso == 99, "project: the DJ filter's Reso (KSC1)");
-            pfs.dj_reso = 0;
+            pfs.dj_ftype = DJT_RING;                 /* 1.3.1: RING's Decay its own: the others' Reso kept */
+            vp_set(VP_DJRESO, 120);
+            pfs.dj_ftype = DJT_ACID;
+            check(vp_get(VP_DJRESO) == 99 && pfs.dj_decay == 120, "RING's Decay leaves ACID's Reso alone");
+            vp_set(VP_DJRESO, 30);
+            pfs.dj_ftype = DJT_RING;
+            check(vp_get(VP_DJRESO) == 120, "ACID's Reso leaves RING's Decay alone");
+            rc = proj_save(1, "LFO3    ");
+            pfs.dj_decay = pfs.dj_reso = 0;
+            rc |= proj_load(1);
+            check(!rc && pfs.dj_decay == 120 && pfs.dj_reso == 30, "project: RING's Decay (KSC1)");
+            pfs.dj_reso = pfs.dj_decay = 0;
+            pfs.dj_ftype = DJT_LXR;
         }
         memset(gls, 0, sizeof gls);
         pfs.dens = 0;
@@ -10510,12 +10522,12 @@ static void phase_100_6(void)
         pfs.dj_ftype = DJT_LXR;
         pfs.dj_tune = RC_NOTE;
         rc |= proj_load(2);
-        check(rc == 0 && pfs.dj_ftype == DJT_RING && pfs.dj_reso == 100 && pfs.dj_tune == RC_MAJ,
+        check(rc == 0 && pfs.dj_ftype == DJT_RING && pfs.dj_decay == 100 && pfs.dj_tune == RC_MAJ,
               "a project keeps the DJ filter's type and RING's chord");
     }
     pf.dj = 64;
     pfs.dj_ftype = DJT_LXR;
-    pfs.dj_reso = 0;
+    pfs.dj_reso = pfs.dj_decay = 0;
     perf_master(l, r);
     goto_mode(B_HOME, M_HOME);
 }
@@ -10805,7 +10817,7 @@ static void phase_100_5(void)
         check(wd.state == WS_IDLE && par[PAR_FX_DELAY_TYPE] == DELAY_NORMAL && par[PAR_DLY_LEVEL] == 0u &&
                   par[PAR_DLY_BAND] == 0u && par[PAR_DSEND1 + 1u] == 0u && par[PAR_DPITCH] == DP_OFF,
               "out of the chasm (HOME): the delay as it was");
-        check(pfs.dj_ftype == DJT_LXR && pf.dj == 64u && pfs.dj_wet == 64u && pfs.dj_reso == 0u && !wd.djon,
+        check(pfs.dj_ftype == DJT_LXR && pf.dj == 64u && pfs.dj_wet == 64u && pfs.dj_reso == 0u && pfs.dj_decay == 0u && !wd.djon,
               ".. and the DJ filter: RING faded out, then home's type, position, wet and decay");
     }
     wd.k[WV_JOURNEY] = WJ_ENDLESS;                   /* (ENDLESS: never out) */
@@ -10970,7 +10982,7 @@ static uint32_t rg18_run(uint32_t in, float *yl, float *yr, uint32_t nb)   /* RI
     int16_t l[BLOCK], r[BLOCK];
     uint32_t k, j, h = 2166136261u, x = 12345u;
     pf.dj_type = 0;                                  /* (its state reset) */
-    pf.dj_rs = (int32_t)pfs.dj_reso << 8;            /* (Decay without its glide) */
+    pf.dj_rs = (int32_t)pfs.dj_decay << 8;            /* (Decay without its glide) */
     for (k = 0; k < nb; k++) {
         for (j = 0; j < BLOCK; j++) {
             x = x * 1103515245u + 12345u;
@@ -11026,7 +11038,7 @@ static void phase_100_18(void)
     }
     pfs.dj_wet = 64;
     pfs.dj_tune = RC_MAJ;
-    pfs.dj_reso = 100;
+    pfs.dj_decay = 100;
     pf.dj = 100;                                     /* (A4) */
     root = ring_root((100 - 64) * 1040);
     h = rg18_run(2u, NULL, NULL, 120u);
@@ -11053,7 +11065,7 @@ static void phase_100_18(void)
     printf("  RING Tone: the top band / the root: dark %.3f, bright %.3f\n", a0, a1);
     check(a1 > 16.0 * a0, "RING: Tone tilts the bands' level");
     pfs.dj_tone = 64;
-    pfs.dj_reso = 30;                                /* (Decay short: room above for Slope; the bands' damping has a
+    pfs.dj_decay = 30;                                /* (Decay short: room above for Slope; the bands' damping has a
                                                       * floor, ring_block's q >= 33) */
     for (k = 0; k < 3u; k++) {                       /* (Slope: the top band's ring late against early, the root's) */
         pfs.dj_slope = (uint8_t)(k * 127u / 2u);
@@ -11065,7 +11077,7 @@ static void phase_100_18(void)
     printf("  RING Slope: the top band's decay against the root's: left %.4f, middle %.3f, right %.2f\n", b[0], b[1], b[2]);
     check(b[0] < 0.1 * b[1] && b[2] > 2.0 * b[1], "RING: Slope shortens / lengthens the top bands' ring");
     pfs.dj_slope = 64;
-    pfs.dj_reso = 100;
+    pfs.dj_decay = 100;
     pfs.dj_spread = 0;                               /* (Spread 0: all in the middle) */
     rg18_run(0u, yl, yr, 60u);
     for (ok = 1, k = 0; k < 60u * BLOCK; k++)
@@ -11097,7 +11109,7 @@ static void phase_100_18(void)
               "a project keeps RING's Spread, Slope, Tone, Wet");
     }
     pfs.dj_spread = pfs.dj_slope = pfs.dj_tone = pfs.dj_wet = 64;
-    pfs.dj_reso = 0;
+    pfs.dj_decay = 0;
     pf.dj = 64;
     pfs.dj_ftype = DJT_LXR;
     {

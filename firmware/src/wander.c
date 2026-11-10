@@ -291,6 +291,7 @@ static struct {
                                                       * tape taken) */
     uint8_t djh[8], djon, djoff;                     /* (CHASM: the DJ filter at home (HX_DJV); RING ours; going
                                                       * home: its wet down, then home's) */
+    uint8_t djdk;                                    /* (1.3.1: .. and RING's Decay, its own) */
     uint8_t djtg[4], djl[4];                         /* (.. the root, wet, tone, slope: aims, the values last set) */
     uint32_t djt[4];
 } wd POOL;
@@ -1691,6 +1692,7 @@ static void wd_dj_snap(void)                         /* the DJ filter as it is: 
     uint32_t i;
     for (i = 0; i < 8u; i++)
         wd.djh[i] = (uint8_t)vp_get(HX_DJV[i]);
+    wd.djdk = pfs.dj_decay;
 }
 static void wd_dj_home(void)                         /* home's DJ filter, at once */
 {
@@ -1699,6 +1701,7 @@ static void wd_dj_home(void)                         /* home's DJ filter, at onc
         return;
     for (i = 0; i < 8u; i++)
         vp_set(HX_DJV[i], wd.djh[i]);
+    pfs.dj_decay = wd.djdk;
     wd.djon = wd.djoff = 0;
 }
 static uint32_t wd_dj_at(uint32_t n)                 /* the DJ filter's position for RING's root at note n (below C3) */

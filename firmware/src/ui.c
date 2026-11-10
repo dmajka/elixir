@@ -1346,7 +1346,7 @@ static uint32_t vp_get(uint32_t p)
     case VP_DJ: return pf.dj;
     case VP_REPEAT: return pfs.repeat;
     case VP_TAPE: return pfs.tape;
-    case VP_DJRESO: return pfs.dj_reso;
+    case VP_DJRESO: return *dj_q();                  /* (1.3.1: RING's Decay its own) */
     case VP_DJTYPE: return djt_place(pfs.dj_ftype);   /* (1.0: the knob's order) */
     case VP_DJTUNE: return pfs.dj_tune;
     case VP_DJSPREAD: return pfs.dj_spread;          /* (1.0 Phase 18) */
@@ -1819,7 +1819,7 @@ static void vp_set(uint32_t p, uint32_t v)
     case VP_DJ: pf.dj = (uint8_t)v; return;
     case VP_REPEAT: pfs.repeat = (uint8_t)v; return;
     case VP_TAPE: pfs.tape = (uint8_t)v; return;
-    case VP_DJRESO: pfs.dj_reso = (uint8_t)v; return;
+    case VP_DJRESO: *dj_q() = (uint8_t)(v & 127u); return;
     case VP_DJTYPE: pfs.dj_ftype = DJT_AT[v < NDJT ? v : 0u]; return;
     case VP_DJTUNE: pfs.dj_tune = (uint8_t)(v < NRTUNE ? v : 0u); return;
     case VP_DJSPREAD: pfs.dj_spread = (uint8_t)(v & 127u); return;   /* (1.0 Phase 18) */
