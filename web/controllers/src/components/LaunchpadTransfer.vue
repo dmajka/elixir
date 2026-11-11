@@ -164,6 +164,6 @@ function download(kind: 'backup' | 'trace') {
     <button :disabled="busy || !plan || !confirmed || !backupDownloaded || !MK3_BROWSER_WRITE_ENABLED" @click="writeTest">Confirm MK3 overwrite &amp; upload</button>
     <button v-if="canRestore" :disabled="busy || !MK3_BROWSER_WRITE_ENABLED" @click="restoreOriginal">Restore original MK3 slot 1</button>
     <p v-if="progress" role="status">{{ progress.message }} · Browser accepted {{ progress.acceptedSends }} mode sends · Stored test {{ progress.stored ? 'matches' : 'pending' }} · Original {{ progress.restored ? 'restored' : 'awaiting restoration' }}</p>
-    <p>Direct upload supports slot 1, firmware build 483 and momentary CC pads on explicit channels. To select custom mode 1, quickly tap and release Custom, then quickly tap and release the leftmost Track Select button immediately below the grid. Leave both buttons released while using the pads.</p>
+    <p>Direct upload supports slot 1, firmware build 483 and momentary CC and note pads on explicit channels. To select custom mode 1, quickly tap and release Custom, then quickly tap and release the leftmost Track Select button immediately below the grid. Leave both buttons released while using the pads.</p>
   </section>
 </template>

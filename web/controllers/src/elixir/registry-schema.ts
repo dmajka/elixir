@@ -15,7 +15,7 @@ const FIELDS = ['id', 'name', 'shortName', 'category', 'scope', 'track', 'channe
 const REQUIRED = ['id', 'name', 'shortName', 'category', 'scope', 'messageType', 'alternateMessageTypes', 'number', 'minimum',
   'maximum', 'controlType', 'interpretation', 'documentation']
 const TYPES = ['cc', 'note', 'program-change', 'realtime']
-const GROUP: Record<string, string | undefined> = { 'remote-tracks': 'remoteTracks', 'remote-global': 'remoteGlobal', system: undefined }
+const GROUP: Record<string, string | undefined> = { 'remote-tracks': 'remoteTracks', 'remote-global': 'remoteGlobal', 'track-voices': undefined, system: undefined }
 const TRACKS = ['d1', 'd2', 'd3', 'sn', 'cy', 'ch', 'oh', 'selected']
 
 function fail(where: string, what: string): never { throw new Error(`parameter registry: ${where}: ${what}`) }
@@ -47,7 +47,9 @@ export function parseParameterDocument(value: unknown): ParameterDocument {
     for (const k of ['name', 'shortName', 'category', 'interpretation']) text(p, k, where)
     const number = int(p, 'number', where), min = int(p, 'minimum', where), max = int(p, 'maximum', where)
     if (!(p.scope as string in GROUP)) fail(where, `bad scope ${JSON.stringify(p.scope)}`)
-    if (p.channelGroup !== GROUP[p.scope as string]) fail(where, 'channelGroup does not match scope')
+    // (track-voices: each track on its own channel, its group by the track: trackD1 .. trackOH)
+    const group = p.scope === 'track-voices' && typeof p.track === 'string' && p.track !== 'selected' ? `track${p.track.toUpperCase()}` : GROUP[p.scope as string]
+    if (p.channelGroup !== group) fail(where, 'channelGroup does not match scope')
     if (Object.hasOwn(p, 'track') && !TRACKS.includes(p.track as string)) fail(where, 'bad track')
     if (!TYPES.includes(p.messageType as string)) fail(where, 'bad messageType')
     if (!Array.isArray(p.alternateMessageTypes) || p.alternateMessageTypes.some(t => !TYPES.includes(t))) fail(where, 'bad alternateMessageTypes')

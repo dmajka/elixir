@@ -2,7 +2,8 @@ import { decodeLaunchpadFile } from './codec'
 import { MK3_SLOT1_INDEX, readLaunchpadSlot1 } from './hardware-protocol'
 import type { MidiRequestTransport } from '../../../midi/request-transport'
 
-/** Verified browser subset: slot1, build483, explicit-channel momentary CC pads. */
+/** Verified browser subset: slot1, build483, explicit-channel momentary CC and note pads (the notes: restoring the
+ * user's Drums Square, note pads on channels 1, 4, 5 and 14, read back byte for byte through this same path). */
 export const MK3_BROWSER_WRITE_ENABLED = true
 export const MK3_TESTED_BUILD = 483
 export interface LaunchpadUploadProgress {
@@ -21,8 +22,8 @@ export function prepareLaunchpadWrite(file: Uint8Array): Uint8Array {
 }
 function validateCandidate(file: Uint8Array) {
   const mode = decodeLaunchpadFile(file)
-  if (mode.pads.some(p => p.type !== 'off' && (p.type !== 'cc' || p.channel === 'global' || p.behavior !== 'momentary'))) {
-    throw new Error('The MK3 browser test supports explicit-channel momentary CC pads only')
+  if (mode.pads.some(p => p.type !== 'off' && ((p.type !== 'cc' && p.type !== 'note') || p.channel === 'global' || p.behavior !== 'momentary'))) {
+    throw new Error('Sending from the browser supports explicit-channel momentary CC and note pads only')
   }
   return mode
 }

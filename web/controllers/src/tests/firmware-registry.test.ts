@@ -11,7 +11,7 @@ import { parseParameterDocument, type ParameterDocument } from '../elixir/regist
 
 const ELIXIR = join(process.cwd(), '../..')   // (vitest runs in web/controllers)
 const PY = process.env.PYTHON || 'python3'
-const FILES = ['remote.c', 'midi.c', 'seq.c', 'kit.c', 'elixir.c']
+const FILES = ['remote.c', 'midi.c', 'seq.c', 'kit.c', 'elixir.c', 'engine.c', 'dsp.c']
 
 function firmwareCopy(edit: (remote: string) => string) {
   const dir = mkdtempSync(join(tmpdir(), 'elixir-src-'))
@@ -59,7 +59,7 @@ describe('the registry generated from the firmware', () => {
     expect(again.json().equals(current)).toBe(true)
     const meta = JSON.parse(readFileSync(join(again.out, 'elixir-midi-parameters.meta.json'), 'utf8'))
     const sha = execFileSync('shasum', ['-a', '256', join(again.out, 'elixir-midi-parameters.json')], { encoding: 'utf8' }).split(' ')[0]
-    expect(meta).toMatchObject({ schemaVersion: 1, sha256: sha, parameterCount: 304 })
+    expect(meta).toMatchObject({ schemaVersion: 1, sha256: sha, parameterCount: 311 })
     const doc = parseParameterDocument(JSON.parse(current.toString('utf8')))
     expect(doc.parameters.map(p => p.id)).toEqual([...doc.parameters.map(p => p.id)].sort())   // (sorted by id)
   })

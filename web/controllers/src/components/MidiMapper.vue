@@ -13,7 +13,7 @@ import { LCXL_MK2_FILE_SERIALIZER } from '../devices/novation/launch-control-xl-
 import { LCXL_MK2_PROFILE } from '../devices/novation/launch-control-xl-mk2/profile'
 import { generateTemplate, TEMPLATE_CATALOG, type BuiltinTemplateId } from '../elixir/templates'
 import { generateLaunchpadTemplate, LAUNCHPAD_TEMPLATE_CATALOG, type LaunchpadTemplateId } from '../elixir/launchpad-templates'
-import { DEFAULT_CHANNEL_SETTINGS, validateChannelSettings } from '../elixir/channel-settings'
+import { DEFAULT_CHANNEL_SETTINGS, isTrackChannelGroup, TRACK_CHANNEL_DEFAULTS, TRACK_CHANNEL_GROUPS, validateChannelSettings, withTrackChannels } from '../elixir/channel-settings'
 import { createEmptyTemplate } from '../elixir/mapping-context'
 import { REGISTRY_SOURCE } from '../elixir/parameter-registry'
 import { assignTrackRow } from '../elixir/assignment-tools'
@@ -82,7 +82,7 @@ const catalog = computed(() => isLaunchpad(deviceId.value) ? LAUNCHPAD_TEMPLATE_
 const report = computed(() => engine.validate(snapshot()))
 function snapshot() { return JSON.parse(JSON.stringify(template.value)) as ControllerTemplate }
 function ensureAvailable(t: ControllerTemplate) { if (!devices.some(p => p.id === t.deviceProfileId)) throw new Error('Template device is unavailable') }
-const scopeParameters = computed(() => parameters.filter(p => p.scope === (tab.value === 'tracks' ? 'remote-tracks' : 'remote-global') && (!p.track || p.track === 'd1') && p.controlType !== 'realtime' && [p.messageType, ...p.alternateMessageTypes].some(t => emits.value.has(t)) && (hasContinuous.value || p.controlType === 'button' || p.messageType === 'program-change')))
+const scopeParameters = computed(() => parameters.filter(p => (tab.value === 'tracks' ? p.scope === 'remote-tracks' || p.scope === 'track-voices' : p.scope === 'remote-global') && (!p.track || p.track === 'd1') && p.controlType !== 'realtime' && [p.messageType, ...p.alternateMessageTypes].some(t => emits.value.has(t)) && (hasContinuous.value || p.controlType === 'button' || p.messageType === 'program-change')))
 // what this model's controls can send: no knobs on a Launchpad, no program changes from an XL mk2
 const emits = computed(() => new Set<string>(profile.value.controls.flatMap(c => c.messageTypes)))
 const hasContinuous = computed(() => profile.value.controls.some(c => c.kind === 'encoder' || c.kind === 'fader'))
@@ -90,14 +90,18 @@ const sheet = computed(() => profile.value.controls.flatMap(c => {
   const a = template.value.assignments.find(a => a.controlId === c.id), p = a && parameters.find(p => p.id === a.parameterId)
   if (!a || !p) return []
   const type = a.messageType ?? p.messageType
-  return [{ id: c.id, control: c.name, name: p.name, message: type === 'program-change' ? `Program ${p.number}` : `${type === 'cc' ? 'CC' : 'Note'} ${p.number}`, channel: a.channelOverride ?? (p.channelGroup ? template.value.channels[p.channelGroup] : undefined), mode: c.kind === 'button' || c.kind === 'pad' ? (a.buttonMode ?? 'momentary') : '' }]
+  return [{ id: c.id, control: c.name, name: p.name, message: type === 'program-change' ? `Program ${p.number}` : `${type === 'cc' ? 'CC' : 'Note'} ${p.number}`, channel: a.channelOverride ?? channelOf(p), mode: c.kind === 'button' || c.kind === 'pad' ? (a.buttonMode ?? 'momentary') : '' }]
 }))
 const selectedParameterName = computed(() => parameters.find(p => p.id === assignment.value?.parameterId)?.name ?? 'Unassigned')
 const tabsElement = ref<HTMLElement>()
 const TABS = ['tracks', 'global', 'control', 'setup'] as const
 const TAB_NAMES = { tracks: 'Tracks', global: 'Global', control: 'Control', setup: 'Setup' }
 const selectedParameter = computed(() => parameters.find(p => p.id === assignment.value?.parameterId))
-const remoteChannelOf = (p: { channelGroup?: string }) => p.channelGroup === 'remoteTracks' ? template.value.channels.remoteTracks : template.value.channels.remoteGlobal
+/** a parameter's channel in this template (a track's hit: its own channel, the FM-1's default until set) */
+const channelOf = (p: { channelGroup?: string }) => !p.channelGroup ? undefined : template.value.channels[p.channelGroup] ?? (isTrackChannelGroup(p.channelGroup) ? TRACK_CHANNEL_DEFAULTS[p.channelGroup] : undefined)
+/** the template plays tracks on their own channels (a hit assigned): CONFIG: MIDI CHANNELS matters */
+const usesTrackChannels = computed(() => template.value.assignments.some(a => isTrackChannelGroup(parameters.find(p => p.id === a.parameterId)?.channelGroup)))
+const TRACK_CHANNEL_LABELS = ['D1', 'D2', 'D3', 'SN', 'CY', 'CH', 'OH']
 const kindOf = (p: { messageType: string; number: number }) => p.messageType === 'program-change' ? `program change ${p.number}` : `${p.messageType === 'cc' ? 'CC' : p.messageType} ${p.number}`
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
 async function stepTab(direction: number) {
@@ -149,6 +153,7 @@ function assign(controlId: string, parameterId: string) {
       next.assignments = next.assignments.filter(a => a.controlId !== controlId)
       next.assignments.push({ controlId, parameterId })
     }
+    if (isTrackChannelGroup(parameters.find(p => p.id === parameterId)?.channelGroup)) next.channels = withTrackChannels(next.channels)
     engine.resolve(next); template.value = next; selected.value = controlId; error.value = ''
     status.value = `${parameters.find(p => p.id === parameterId)?.name ?? parameterId} assigned.`
     picked.value = ''
@@ -175,7 +180,7 @@ function unassign() {
 function loadPreset() {
   try {
     if (preset.value === 'current') return
-    const ch = { remoteTracks: template.value.channels.remoteTracks!, remoteGlobal: template.value.channels.remoteGlobal! }
+    const ch = { ...template.value.channels, remoteTracks: template.value.channels.remoteTracks!, remoteGlobal: template.value.channels.remoteGlobal! }
     let next: ControllerTemplate
     if (preset.value === 'blank') next = { ...createEmptyTemplate('user.new', 'Elixir Custom', deviceId.value), channels: ch }
     else if (preset.value.startsWith('saved:')) next = importTemplate(exportTemplate(saved.value[Number(preset.value.slice(6))]!))
@@ -254,7 +259,7 @@ onBeforeUnmount(() => observer?.disconnect())
         <div id="mapper-sidebar-panel" class="mx-panel" role="tabpanel" :aria-labelledby="`mapper-tab-${tab}`">
           <template v-if="tab === 'tracks' || tab === 'global'">
             <div v-if="multi" class="mx-banner"><span>{{ targets.length }} controls selected</span><button @click="tab = 'control'">Colors &amp; clear →</button></div>
-            <p class="mx-hint">{{ tab === 'tracks' ? `What belongs to a track, on the TRACKS channel (${template.channels.remoteTracks}). Drop one on column 1 to fill the row, D1 to OH.` : `The transport, performance and effects, on the GLOBAL channel (${template.channels.remoteGlobal}).` }} Drag a parameter onto a control, or pick it and click the control.</p>
+            <p class="mx-hint">{{ tab === 'tracks' ? `What belongs to a track, on the TRACKS channel (${template.channels.remoteTracks}); a hit plays the track at the pad's velocity on its own channel. Drop one on column 1 to fill the row, D1 to OH.` : `The transport, performance and effects, on the GLOBAL channel (${template.channels.remoteGlobal}).` }} Drag a parameter onto a control, or pick it and click the control.</p>
             <label class="mx-category">Show<select v-model="category" aria-label="Parameter category"><option value="">Everything</option><option v-for="name in categories" :key="name">{{ name }}</option></select></label>
             <div v-for="group in parameterGroups" :key="group.name" class="mx-group"><h2>{{ group.name }} <span>{{ group.items.length }}</span></h2><button v-for="p in group.items" :key="p.id" class="mx-param" draggable="true" :title="p.interpretation" :aria-pressed="picked === p.id" @dragstart="drag($event, p.id)" @click="picked = picked === p.id ? '' : p.id"><span>{{ p.track === 'd1' ? p.name.replace(/^D1 /, '') : p.name }}</span><small>{{ p.track ? 'tracks 1–7' : kindOf(p) }}</small></button><p v-if="!group.items.length" class="mx-hint">Nothing in this category.</p></div>
           </template>
@@ -262,7 +267,7 @@ onBeforeUnmount(() => observer?.disconnect())
             <template v-if="multi"><h2 class="mx-title">{{ targets.length }} controls selected <button class="mx-link" @click="selectOnly">just {{ control.name }}</button></h2><p class="mx-hint">{{ targetSummary }}</p></template>
             <template v-else>
               <h2 class="mx-title">{{ control.name }}</h2>
-              <p v-if="selectedParameter" class="mx-what"><b>{{ selectedParameter.name }}</b><span>{{ kindOf(selectedParameter) }}{{ selectedParameter.channelGroup ? ` · channel ${remoteChannelOf(selectedParameter)}` : '' }}</span>{{ selectedParameter.interpretation }}</p>
+              <p v-if="selectedParameter" class="mx-what"><b>{{ selectedParameter.name }}</b><span>{{ kindOf(selectedParameter) }}{{ selectedParameter.channelGroup ? ` · channel ${channelOf(selectedParameter)}` : '' }}</span>{{ selectedParameter.interpretation }}</p>
               <p v-else class="mx-hint">Nothing assigned. Pick a parameter on the Tracks or Global tab, then click this control.</p>
             </template>
             <template v-for="state in colorStates" :key="state.name"><div v-if="state.enabled" class="mx-colors"><h3>{{ state.name }}</h3><div class="led-swatches"><button v-for="color in state.colors" :key="color" :style="{ background: LED_COLORS[color]?.hex }" :aria-label="`${state.name}: ${LED_COLORS[color]?.name}`" :title="LED_COLORS[color]?.name" :aria-pressed="state.current === color" @click="setColor(color, state.active)" /></div></div></template>
@@ -274,8 +279,10 @@ onBeforeUnmount(() => observer?.disconnect())
           <template v-else>
             <h2 class="mx-title">Setting up</h2>
             <div class="mx-channels" role="group" aria-label="Elixir's remote channels"><span>Elixir’s remote channels</span><label>TRACKS<input v-model.number="template.channels.remoteTracks" aria-label="Tracks MIDI channel" type="number" min="1" max="16"></label><label>GLOBAL<input v-model.number="template.channels.remoteGlobal" aria-label="Global MIDI channel" type="number" min="1" max="16"></label></div>
+            <div v-if="usesTrackChannels" class="mx-channels" role="group" aria-label="The tracks' own channels"><span>The tracks’ own channels (the hits)</span><label v-for="(g, i) in TRACK_CHANNEL_GROUPS" :key="g">{{ TRACK_CHANNEL_LABELS[i] }}<input v-model.number="template.channels[g]" :aria-label="`${TRACK_CHANNEL_LABELS[i]} MIDI channel`" type="number" min="1" max="16"></label></div>
             <ol class="mx-steps">
               <li><b>On the FM-1:</b> GLO twice opens CONFIG; turn SELECT to <b>REMOTE</b>. Set Tracks to <b>{{ template.channels.remoteTracks }}</b> and Global to <b>{{ template.channels.remoteGlobal }}</b>, as above (other channels: change them here first). Knobs: <b>PICKUP</b> for knobs and faders (nothing jumps), REL for endless encoders. Mute/solo: <b>PRESS</b>, or TOGGLE for buttons set to toggle.</li>
+              <li v-if="usesTrackChannels"><b>The hits:</b> each pad plays its track at the pad's velocity on the track's own channel. In CONFIG, <b>MIDI CHANNELS</b> has them (D1–OH on 1–7 unless changed; set them here to match), each track's <b>MIDI NOTE</b> at ANY, and RX with N. Under <b>REC</b>, while playing, a hit records at its velocity (Quantize as REC sets it).<template v-if="isLaunchpad(deviceId)"> In the Launchpad's own Setup, keep velocity on.</template></li>
               <li v-if="profile.id === LCXL_MK2_PROFILE.id"><b>Onto the controller:</b> <b>Send to controller</b> writes one of its eight user templates from Chrome or Edge, and selects it. Or save the device file (.syx) and send it with Novation Components.</li>
               <li v-else-if="writable"><b>Onto the controller:</b> <b>Send to controller</b> writes custom mode 1 from Chrome or Edge, after a backup. For another mode, save the device file (.syx) and send it with Novation Components.</li>
               <li v-else-if="exportable"><b>Onto the controller:</b> <b>File ▾ → Save device file (.syx)</b>, then in Novation Components import it and send it to a user template. Select that template on the {{ profile.model }}; <b>Connect &amp; check</b> then shows whether each control sends what Elixir expects.</li>

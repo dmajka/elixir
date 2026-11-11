@@ -4,7 +4,7 @@
  * No conventional voice CCs are included in this remote registry.
  */
 import generated from 'virtual:elixir-parameters'
-import { validateChannelSettings, type ChannelSettings } from './channel-settings'
+import { validateChannelSettings, withTrackChannels, type ChannelSettings, type TrackChannelGroup } from './channel-settings'
 import { parseParameterDocument } from './registry-schema'
 export type MessageType = 'cc' | 'note' | 'program-change' | 'realtime'
 export type Track = 'd1' | 'd2' | 'd3' | 'sn' | 'cy' | 'ch' | 'oh' | 'selected'
@@ -13,9 +13,10 @@ export interface Parameter {
   readonly name: string
   readonly shortName: string
   readonly category: string
-  readonly scope: 'remote-tracks' | 'remote-global' | 'system'
+  /** track-voices: a track played on its own channel (CONFIG: MIDI CHANNELS), not the remote's */
+  readonly scope: 'remote-tracks' | 'remote-global' | 'track-voices' | 'system'
   readonly track?: Track
-  readonly channelGroup?: keyof ChannelSettings
+  readonly channelGroup?: keyof ChannelSettings | TrackChannelGroup
   readonly messageType: MessageType
   readonly alternateMessageTypes: readonly MessageType[]
   /** CC/note/program number, or system real-time status byte. */
@@ -36,9 +37,10 @@ const document = parseParameterDocument(generated)
 export const REGISTRY_SOURCE = Object.freeze({ firmwareVersion: document.firmwareVersion, sourceRevision: document.sourceRevision })
 // Freeze nested metadata too: consumers must use explicit registry overrides later.
 // The JSON is sorted by id; the mapper lists TRACKS, then GLOBAL, then system, each by message type and number.
-const SCOPE_ORDER = ['remote-tracks', 'remote-global', 'system'], TYPE_ORDER = ['cc', 'note', 'program-change', 'realtime']
+const SCOPE_ORDER = ['remote-tracks', 'remote-global', 'track-voices', 'system'], TYPE_ORDER = ['cc', 'note', 'program-change', 'realtime']
 const displayOrder = (a: Parameter, b: Parameter) => SCOPE_ORDER.indexOf(a.scope) - SCOPE_ORDER.indexOf(b.scope) ||
   TYPE_ORDER.indexOf(a.messageType) - TYPE_ORDER.indexOf(b.messageType) || a.number - b.number
+  || TRACKS.indexOf(a.track ?? 'selected') - TRACKS.indexOf(b.track ?? 'selected')   // (the hits: one note, D1 to OH)
 export const PARAMETER_REGISTRY: readonly Parameter[] = Object.freeze([...document.parameters].sort(displayOrder).map(p => Object.freeze({ ...p, alternateMessageTypes: Object.freeze([...p.alternateMessageTypes]), documentation: Object.freeze({ ...p.documentation }), ...(p.encoderBehavior ? { encoderBehavior: Object.freeze([...p.encoderBehavior]) as Parameter['encoderBehavior'] } : {}), ...(p.feedback ? { feedback: Object.freeze({ ...p.feedback }) } : {}) })))
 const byId = new Map(PARAMETER_REGISTRY.map(p => [p.id, p]))
 if (byId.size !== PARAMETER_REGISTRY.length) throw new Error('Duplicate parameter IDs')
@@ -55,10 +57,11 @@ export interface ResolveOptions { messageType?: MessageType; value?: number; rel
 /** Resolve and encode one event. No I/O, toggle state machine, or clock scheduler. */
 export function resolveParameter(id: string, channels: ChannelSettings, options: ResolveOptions = {}) {
   validateChannelSettings(channels)
+  channels = withTrackChannels(channels)
   const parameter = getParameter(id), messageType = options.messageType ?? parameter.messageType
   if (![parameter.messageType, ...parameter.alternateMessageTypes].includes(messageType)) throw new Error('Unsupported message type for parameter')
   if (options.release && parameter.controlType !== 'button') throw new Error('Only buttons have release events')
-  const channel = parameter.channelGroup ? channels[parameter.channelGroup] : undefined
+  const channel = parameter.channelGroup ? (channels as unknown as Record<string, number>)[parameter.channelGroup] : undefined
   const number = parameter.number
   if (messageType === 'program-change' || messageType === 'realtime') {
     if (options.value !== undefined) throw new Error('Value does not apply to program/real-time messages')
@@ -73,5 +76,6 @@ export function resolveParameter(id: string, channels: ChannelSettings, options:
 /** Return ALL matches; channel conflicts must never silently choose one namespace. */
 export function findParametersForMessage(messageType: MessageType, number: number, channel: number | undefined, channels: ChannelSettings): Parameter[] {
   validateChannelSettings(channels)
-  return PARAMETER_REGISTRY.filter(p => [p.messageType, ...p.alternateMessageTypes].includes(messageType) && p.number === number && (p.channelGroup ? channels[p.channelGroup] === channel : channel === undefined))
+  const all = withTrackChannels(channels) as Record<string, number>
+  return PARAMETER_REGISTRY.filter(p => [p.messageType, ...p.alternateMessageTypes].includes(messageType) && p.number === number && (p.channelGroup ? all[p.channelGroup] === channel : channel === undefined))
 }

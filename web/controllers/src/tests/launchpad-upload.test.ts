@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createLaunchpadUploader, prepareLaunchpadWrite } from '../devices/novation/launchpad-pro-mk3/upload'
+import { decodeLaunchpadFile, encodeLaunchpadFile } from '../devices/novation/launchpad-pro-mk3/codec'
 import type { MidiRequestTransport } from '../midi/request-transport'
 const root = 'research/hardware/launchpad-pro-mk3/'
 const original = new Uint8Array(readFileSync(root + 'slot1-Drums-Square-backup.syx'))
@@ -65,9 +66,15 @@ it('rejects changed stored content and invalidated preparation before any write'
   uploader.invalidate()
   await expect(uploader.upload(candidate, next.token)).rejects.toThrow('Prepare')
 })
-it('rejects untested firmware and non-CC candidate pads before writing', async () => {
+it('rejects untested firmware and toggle, global-channel or program pads before writing', async () => {
   const f = simulator(), uploader = createLaunchpadUploader(f.transport, undefined, true)
-  await expect(uploader.prepare(original)).rejects.toThrow('momentary CC')
+  await expect(uploader.prepare(original)).resolves.toBeTruthy()   // (note pads on explicit channels: Drums Square)
+  const variant = (change: (p: ReturnType<typeof decodeLaunchpadFile>['pads'][number]) => void) => {
+    const mode = decodeLaunchpadFile(original); change(mode.pads.find(p => p.type === 'note')!); return encodeLaunchpadFile(mode)
+  }
+  await expect(uploader.prepare(variant(p => { p.behavior = 'toggle' }))).rejects.toThrow('momentary CC and note')
+  await expect(uploader.prepare(variant(p => { p.channel = 'global' }))).rejects.toThrow('momentary CC and note')
+  await expect(uploader.prepare(variant(p => { p.type = 'program-change'; p.behavior = 'trigger' }))).rejects.toThrow('momentary CC and note')
   const otherFirmware = identity.slice(); otherFirmware[15] = 4
   const normalExchange = f.transport.exchange
   f.transport.exchange = vi.fn(async (request, accepts, signal) => request[1] === 126 ? otherFirmware : normalExchange(request, accepts, signal))

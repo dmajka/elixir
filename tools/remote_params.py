@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 # Elixir: the remote map as data (1.3.2): every CC, note and program change the remote's two channels take, read from
-# the firmware that acts on them, for the controller mapper (web/controllers) and anyone else:
+# the firmware that acts on them, for the controller mapper (web/controllers) and anyone else; and (1.3.2) the notes
+# that play each track on its own channel (a drum pad's hit, at the pad's velocity):
 #
 #   elixir-midi-parameters.json        {schemaVersion, firmwareVersion, sourceRevision, parameters: [...]}, sorted by id
 #   elixir-midi-parameters.meta.json   the same version and revision, the JSON's SHA-256, the parameter count
@@ -9,7 +10,8 @@
 #
 # The numbers come from the firmware alone: remote.c's layout (RM_CC0, RM_TB0, RM_GB0, RM_ROLL0, RM_XK) and tables
 # (the TRACKS rows' enum, RM_GK, the GLOBAL rows' enum, RM_PF, RM_FX), midi.c's CCs on both channels (AK_CC_*), seq.c's
-# NUM_PATTERN, kit.c's NUM_KITS and the factory bank's size (tools/gen_factory_kits.py). What a number is called and
+# NUM_PATTERN, kit.c's NUM_KITS and the factory bank's size (tools/gen_factory_kits.py), engine.c's track channels
+# and dsp.c's SEQ_DEFAULT_NOTE (a track's hit). What a number is called and
 # what it does (META below) is keyed by the firmware's own symbol (PAR_BPM, PF_FILL, RR_DECAY ..), so a number that
 # moves in the firmware moves here, and a symbol the firmware gains that META doesn't name stops the build.
 # web/make_site.py runs it on every site build; the mapper's build (web/controllers/vite.config.ts) does too.
@@ -31,8 +33,10 @@ SCHEMA = 1
 NAME = "elixir-midi-parameters"
 TRACKS = ["d1", "d2", "d3", "sn", "cy", "ch", "oh", "selected"]
 LABELS = ["D1", "D2", "D3", "SN", "CY", "CH", "OH", "Selected track"]
-SCOPES = {"remote-tracks", "remote-global", "system"}
+SCOPES = {"remote-tracks", "remote-global", "track-voices", "system"}
 GROUPS = {"remote-tracks": "remoteTracks", "remote-global": "remoteGlobal"}
+# (track-voices: each track on its own channel, CONFIG: MIDI CHANNELS; the group by the track)
+TRACK_GROUPS = {t: "track" + t.upper() for t in TRACKS[:7]}
 TYPES = {"cc", "note", "program-change", "realtime"}
 CONTROLS = {"continuous", "button", "selection", "realtime"}
 BUTTONS = {"press-or-state", "held", "press", "tap-latch-hold"}
@@ -175,7 +179,8 @@ def revision(src_dir):
 
 def build(src_dir=ROOT / "firmware/src", kits=None):
     """the parameters, from the firmware in src_dir"""
-    files = {f: (src_dir / f).read_text(encoding="utf-8") for f in ("remote.c", "midi.c", "seq.c", "kit.c", "elixir.c")}
+    files = {f: (src_dir / f).read_text(encoding="utf-8") for f in ("remote.c", "midi.c", "seq.c", "kit.c", "elixir.c",
+                                                                      "engine.c", "dsp.c")}
     rc, mc = files["remote.c"], files["midi.c"]
     cc0, ntk, tb0, ntb = (define(rc, n, "remote.c") for n in ("RM_CC0", "RM_NTK", "RM_TB0", "RM_NTB"))
     gb0, ngb, roll0, nxk = (define(rc, n, "remote.c") for n in ("RM_GB0", "RM_NGB", "RM_ROLL0", "RM_NXK"))
@@ -198,6 +203,8 @@ def build(src_dir=ROOT / "firmware/src", kits=None):
     free = define(files["seq.c"], "CROLL_FREE", "seq.c")
     nkits = define(files["kit.c"], "NUM_KITS", "kit.c")
     nfactory = kits if kits is not None else factory_kits()
+    hit = define(files["dsp.c"], "SEQ_DEFAULT_NOTE", "dsp.c")
+    tch = track_channels(files["engine.c"])
 
     out = []
     knob = {"messageType": "cc", "alternateMessageTypes": [], "minimum": 0, "maximum": 127,
@@ -320,6 +327,17 @@ def build(src_dir=ROOT / "firmware/src", kits=None):
                 maximum=top, controlType="selection",
                 interpretation=f"The kit's number from 0 (shown from 1); it {what}.", documentation=doc("midi.c", sym))
 
+    # each track on its own channel (midi.c midi_message, midi_note_on): a note on plays it at its velocity, recorded
+    # under REC while playing; the default note at the voice's own pitch while the track's MIDI NOTE is ANY
+    for c, t in enumerate(TRACKS[:7]):
+        add(id=f"tracks.{t}.hit", name=f"{LABELS[c]} Hit", category="Pads", scope="track-voices", track=t,
+            channelGroup=TRACK_GROUPS[t], messageType="note", alternateMessageTypes=[], number=hit, minimum=1,
+            maximum=127, controlType="button", buttonBehavior="press",
+            interpretation=f"Plays {LABELS[c]} at the pad's velocity, at the voice's own pitch, on the track's own channel "
+            f"(CONFIG: MIDI CHANNELS, {tch[c]} by default). Under REC, while playing, it records at that velocity. "
+            "Needs the track's MIDI NOTE at ANY (the default); a note off does nothing.",
+            documentation=doc("midi.c", "midi_note_on (dsp.c SEQ_DEFAULT_NOTE, engine.c PAR_MIDI_CHAN_*)"))
+
     for key, name, status in (("clock", "MIDI clock", 0xF8), ("start", "MIDI start", 0xFA), ("stop", "MIDI stop", 0xFC)):
         add(id=f"system.{key}", name=name, category="MIDI sync", scope="system", messageType="realtime",
             alternateMessageTypes=[], number=status, minimum=0, maximum=0, controlType="realtime",
@@ -332,6 +350,14 @@ def build(src_dir=ROOT / "firmware/src", kits=None):
     validate(params)
     return {"schemaVersion": SCHEMA, "firmwareVersion": version[1], "sourceRevision": revision(src_dir),
             "parameters": params}
+
+
+def track_channels(src):
+    """engine.c engine_globals_default: tracks 1..6 on channels 1..6, the seventh's (1-based)"""
+    m = re.search(r"for \(t = 0; t < 6u; t\+\+\)\s*par\[PAR_MIDI_CHAN_1 \+ t\] = \(uint8_t\)\(t \+ (\d+)u\);\s*"
+                  r"par\[PAR_MIDI_CHAN_7\] = (\d+);", src)
+    need(m, "engine.c: the track channels' defaults (PAR_MIDI_CHAN_*) not found")
+    return [t + int(m[1]) for t in range(6)] + [int(m[2])]
 
 
 # the records' contract (web/controllers/src/elixir/registry-schema.ts checks the same in the mapper's build)
@@ -357,7 +383,8 @@ def validate(params):
         for f in ("number", "minimum", "maximum"):
             need(type(p[f]) is int, f"{pid}: {f} not an integer")
         need(p["scope"] in SCOPES and p["messageType"] in TYPES and p["controlType"] in CONTROLS, f"{pid}: bad enum")
-        need(p.get("channelGroup") == GROUPS.get(p["scope"]), f"{pid}: channelGroup doesn't match scope")
+        group = TRACK_GROUPS.get(p.get("track")) if p["scope"] == "track-voices" else GROUPS.get(p["scope"])
+        need(p.get("channelGroup") == group, f"{pid}: channelGroup doesn't match scope")
         need("track" not in p or p["track"] in TRACKS, f"{pid}: bad track")
         need(isinstance(p["alternateMessageTypes"], list) and set(p["alternateMessageTypes"]) <= TYPES,
              f"{pid}: bad alternateMessageTypes")
@@ -385,14 +412,15 @@ def validate(params):
 CSV_COLUMNS = ["id", "name", "category", "scope", "channelGroup", "defaultChannel", "messageType",
                "alternateMessageTypes", "number", "minimum", "maximum", "controlType", "buttonBehavior", "track",
                "interpretation", "source", "symbol"]
-DEFAULT_CHANNEL = {"remoteTracks": 15, "remoteGlobal": 16}   # (CONFIG: REMOTE's defaults; the FM-1 can change them)
+DEFAULT_CHANNEL = {"remoteTracks": 15, "remoteGlobal": 16,   # (CONFIG: REMOTE's defaults; the FM-1 can change them;
+                   **{g: c + 1 for c, g in enumerate(TRACK_GROUPS.values())}}   # .. MIDI CHANNELS' the tracks')
 
 
 def to_csv(doc):
     out = io.StringIO()
     w = csv.writer(out, lineterminator="\n")
     w.writerow(CSV_COLUMNS)
-    scopes, types = ["remote-tracks", "remote-global", "system"], ["cc", "note", "program-change", "realtime"]
+    scopes, types = ["remote-tracks", "remote-global", "track-voices", "system"], ["cc", "note", "program-change", "realtime"]
     for p in sorted(doc["parameters"], key=lambda p: (scopes.index(p["scope"]), types.index(p["messageType"]),
                                                       p["number"])):   # (a table: by channel and number)
         row = {**p, "defaultChannel": DEFAULT_CHANNEL.get(p.get("channelGroup"), ""),
@@ -410,7 +438,7 @@ def write(doc, out_dir):
             "sourceRevision": doc["sourceRevision"], "sha256": hashlib.sha256(data).hexdigest(),
             "parameterCount": len(doc["parameters"]), "csv": f"{NAME}.csv",
             "sources": ["firmware/src/remote.c", "firmware/src/midi.c", "firmware/src/seq.c", "firmware/src/kit.c",
-                        "assets/kits/factory", "tools/remote_params.py"]}
+                        "firmware/src/engine.c", "firmware/src/dsp.c", "assets/kits/factory", "tools/remote_params.py"]}
     (out_dir / f"{NAME}.json").write_bytes(data)
     (out_dir / f"{NAME}.csv").write_text(to_csv(json.loads(data)), encoding="utf-8")
     (out_dir / f"{NAME}.meta.json").write_text(json.dumps(meta, indent=1) + "\n", encoding="utf-8")

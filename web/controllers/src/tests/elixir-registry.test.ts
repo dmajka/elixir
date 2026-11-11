@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { channelWarnings, DEFAULT_CHANNEL_SETTINGS, validateChannelSettings } from '../elixir/channel-settings'
+import { channelWarnings, DEFAULT_CHANNEL_SETTINGS, validateChannelSettings, withTrackChannels } from '../elixir/channel-settings'
 import { PARAMETER_REGISTRY, filterParameters, findParametersForMessage, getParameter, resolveParameter, TRACKS } from '../elixir/parameter-registry'
 const defaults = { ...DEFAULT_CHANNEL_SETTINGS }
 // Independent transcription of page 6, including every column of each row.
@@ -95,9 +95,9 @@ describe('page 5 shared messages and real-time', () => {
   })
 })
 describe('registry contracts', () => {
-  it('contains 304 uniquely identified parameters with complete metadata', () => {
-    expect(PARAMETER_REGISTRY).toHaveLength(304)
-    expect(new Set(PARAMETER_REGISTRY.map(p=>p.id)).size).toBe(304)
+  it('contains 311 uniquely identified parameters with complete metadata', () => {
+    expect(PARAMETER_REGISTRY).toHaveLength(311)
+    expect(new Set(PARAMETER_REGISTRY.map(p=>p.id)).size).toBe(311)
     for(const p of PARAMETER_REGISTRY) {
       expect(p.name && p.shortName && p.category && p.interpretation).toBeTruthy()
       expect(p.documentation.source).toMatch(/^firmware\/src\/(remote|midi)\.c$/)
@@ -105,8 +105,17 @@ describe('registry contracts', () => {
       expect(Object.isFrozen(p)).toBe(true)
       const {bytes}=resolveParameter(p.id,defaults)
       expect(bytes.length).toBe(p.messageType==='realtime'?1:p.messageType==='program-change'?2:3)
-      for(const type of [p.messageType,...p.alternateMessageTypes]) expect(findParametersForMessage(type,p.number,p.channelGroup?defaults[p.channelGroup]:undefined,defaults)).toContain(p)
+      for(const type of [p.messageType,...p.alternateMessageTypes]) expect(findParametersForMessage(type,p.number,p.channelGroup?(withTrackChannels(defaults) as Record<string,number>)[p.channelGroup]:undefined,defaults)).toContain(p)
     }
+  })
+  it('plays each track on its own channel: note 60 at the pad velocity, seven hits', () => {
+    const hits = PARAMETER_REGISTRY.filter(p => p.scope === 'track-voices')
+    expect(hits.map(p => p.id)).toEqual(['d1','d2','d3','sn','cy','ch','oh'].map(t => `tracks.${t}.hit`))
+    hits.forEach((p, i) => {
+      expect(p).toMatchObject({ messageType: 'note', number: 60, controlType: 'button', channelGroup: `track${p.track!.toUpperCase()}` })
+      expect([...resolveParameter(p.id, defaults, { value: 37 }).bytes]).toEqual([0x90 | i, 60, 37])
+    })
+    expect(findParametersForMessage('note', 60, 4, defaults).map(p => p.id)).toEqual(['tracks.sn.hit'])
   })
   it('preserves selected, CH/OH, conventional vs remote, and contextual actions', () => {
     expect(getParameter('tracks.selected.volume').number).toBe(15)

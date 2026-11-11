@@ -14,7 +14,7 @@ export const LAUNCHPAD_PRO_MK3_PROFILE: DeviceProfile = Object.freeze<DeviceProf
   protocol: { format: 'novation-launchpad-pro-mk3-binary-v1', fileExport: 'verified', hardwareUpload: 'verified' },
   firmware: { minimumBuild: 430, hardwareTested: true }, feedback: 'unverified', relativeValueFormat: 'unverified',
   limitations: ['Single-pad CC/note/program widgets on the 8×8 grid; surrounding navigation buttons are not assignable here.',
-    'Fader/keyboard widgets, continuous macros and track triggering are not implemented.',
+    'Fader/keyboard widgets and continuous macros are not implemented. Note pads play the tracks at their velocity on the tracks’ own channels (Drum Record).',
     'Pad labels are workspace metadata; hardware stores no per-pad text. Shared active color is green (21).',
-    'Direct upload verified for slot1, firmware build483 and explicit-channel momentary CC/off pads. Other slots/builds, note/program/toggle uploads, reconnect persistence and unrelated-slot preservation await hardware validation. External LED feedback is unverified.'],
+    'Direct upload verified for slot1, firmware build483 and explicit-channel momentary CC, note and off pads (note pads: the Drums Square restore, read back exactly). Other slots/builds, program/toggle uploads, reconnect persistence and unrelated-slot preservation await hardware validation. External LED feedback is unverified.'],
 })

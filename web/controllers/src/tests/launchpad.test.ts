@@ -129,3 +129,18 @@ it('replays all 32 physical mute/solo events from the latched custom-mode browse
   }
   expect(new Uint8Array(readFileSync(root + 'slot1-quick-tap-restored-readback.syx'))).toEqual(new Uint8Array(readFileSync(root + 'slot1-Drums-Square-backup.syx')))
 })
+it('Drum Record: seven velocity note pads bottom left on the tracks’ channels, Record and Play bottom right', () => {
+  const t = generateLaunchpadTemplate('pad-drum-record')
+  const mode = decodeLaunchpadFile(engine.exportFile(t, serializer))
+  const pad = (row: number, col: number) => mode.pads.find(p => p.address === 10 * (9 - row) + col)!
+  // the square: rows 6–8 (pads 11–33): D1 D2 D3 along the bottom, SN CH OH above, CY on top
+  const hits: [number, number, number][] = [[8, 1, 1], [8, 2, 2], [8, 3, 3], [7, 1, 4], [6, 2, 5], [7, 2, 6], [7, 3, 7]]
+  for (const [r, c, ch] of hits) expect(pad(r, c)).toMatchObject({ type: 'note', channel: ch, number: 60, behavior: 'momentary', onValue: 0 })
+  expect(pad(8, 7)).toMatchObject({ type: 'cc', channel: 16, number: 49, onValue: 127 })   // REC
+  expect(pad(8, 8)).toMatchObject({ type: 'cc', channel: 16, number: 48, onValue: 127 })   // PLAY / STOP
+  expect(mode.pads.filter(p => p.type === 'note')).toHaveLength(7)
+  for (const c of [1, 3]) expect(pad(6, c).type).toBe('off')
+  // tracks moved on the FM-1's MIDI CHANNELS page move with the template
+  const moved = generateLaunchpadTemplate('pad-drum-record', { remoteTracks: 15, remoteGlobal: 16, trackSN: 10 } as never)
+  expect(decodeLaunchpadFile(engine.exportFile(moved, serializer)).pads.find(p => p.address === 21)).toMatchObject({ type: 'note', channel: 10 })
+})
