@@ -2,8 +2,8 @@
  "schemaVersion": 1,
  "file": "elixir-midi-parameters.json",
  "firmwareVersion": "v1.3.1",
- "sourceRevision": "ee83a5456075",
- "sha256": "18335ed3c5ca151ff402ceeed7d1e0da40ba5b5e23820744b81592810bcec7a7",
+ "sourceRevision": "dd2d99c6ddcf",
+ "sha256": "6eae072edf50673e53a250873beadfa42b14a9ab9be42c286501bc602b7dc750",
  "parameterCount": 304,
  "csv": "elixir-midi-parameters.csv",
  "sources": [

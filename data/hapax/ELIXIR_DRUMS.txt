@@ -1,0 +1,200 @@
+# Elixir for the FM-1: a drum track
+# Written from Elixir v1.3.1's remote map (dd2d99c6ddcf) by tools/hapax_defs.py:
+# https://dmajka.github.io/elixir/controllers/ (the map: https://dmajka.github.io/elixir/data/)
+# Lanes 1-7 play D1 D2 D3 SN CY CH OH on Elixir's track channels (CONFIG: MIDI CHANNELS, 1-7 by default)
+# at note 60, the voice's own pitch (with the track's MIDI NOTE at ANY, the default). The track's own
+# channel is the remote's TRACKS (15): per-track volume, pan, filter, decay, sends, mutes ..
+# Pots 1-8: the selected track's volume, pan, filter, resonance, decay, pitch, delay and reverb sends.
+# Copy it to the HAPAX folder of the SD card; load it on a track: 2ND + the track's button, INSTRUMENT DEFINITION.
+
+VERSION 1
+TRACKNAME ELIXIR
+TYPE DRUM
+OUTPORT NULL           # the port the FM-1 is on: set it on the track
+OUTCHAN 15             # the remote's TRACKS channel (CONFIG: REMOTE): the CCs, pots and PCs below
+INPORT NULL
+INCHAN NULL
+MAXRATE NULL
+
+[DRUMLANES]
+1:NULL:1:60 D1
+2:NULL:2:60 D2
+3:NULL:3:60 D3
+4:NULL:4:60 SN
+5:NULL:5:60 CY
+6:NULL:6:60 CH
+7:NULL:7:60 OH
+[/DRUMLANES]
+
+# Program changes: Elixir launches patterns 1-32 (queued, as its pattern page does)
+[PC]
+1 Pattern 1
+2 Pattern 2
+3 Pattern 3
+4 Pattern 4
+5 Pattern 5
+6 Pattern 6
+7 Pattern 7
+8 Pattern 8
+9 Pattern 9
+10 Pattern 10
+11 Pattern 11
+12 Pattern 12
+13 Pattern 13
+14 Pattern 14
+15 Pattern 15
+16 Pattern 16
+17 Pattern 17
+18 Pattern 18
+19 Pattern 19
+20 Pattern 20
+21 Pattern 21
+22 Pattern 22
+23 Pattern 23
+24 Pattern 24
+25 Pattern 25
+26 Pattern 26
+27 Pattern 27
+28 Pattern 28
+29 Pattern 29
+30 Pattern 30
+31 Pattern 31
+32 Pattern 32
+[/PC]
+
+[CC]
+8 D1 Volume
+9 D2 Volume
+10 D3 Volume
+11 SN Volume
+12 CY Volume
+13 CH Volume
+14 OH Volume
+15 SEL Volume
+16 D1 Pan
+17 D2 Pan
+18 D3 Pan
+19 SN Pan
+20 CY Pan
+21 CH Pan
+22 OH Pan
+23 SEL Pan
+24 D1 Filter frequency
+25 D2 Filter frequency
+26 D3 Filter frequency
+27 SN Filter frequency
+28 CY Filter frequency
+29 CH Filter frequency
+30 OH Filter frequency
+31 SEL Filter frequency
+32 D1 Resonance
+33 D2 Resonance
+34 D3 Resonance
+35 SN Resonance
+36 CY Resonance
+37 CH Resonance
+38 OH Resonance
+39 SEL Resonance
+40 D1 Decay
+41 D2 Decay
+42 D3 Decay
+43 SN Decay
+44 CY Decay
+45 CH Decay
+46 OH Decay
+47 SEL Decay
+48 D1 Pitch
+49 D2 Pitch
+50 D3 Pitch
+51 SN Pitch
+52 CY Pitch
+53 CH Pitch
+54 OH Pitch
+55 SEL Pitch
+56 D1 Delay send
+57 D2 Delay send
+58 D3 Delay send
+59 SN Delay send
+60 CY Delay send
+61 CH Delay send
+62 OH Delay send
+63 SEL Delay send
+64 D1 FX send
+65 D2 FX send
+66 D3 FX send
+67 SN FX send
+68 CY FX send
+69 CH FX send
+70 OH FX send
+71 SEL FX send
+72 D1 Reverb send
+73 D2 Reverb send
+74 D3 Reverb send
+75 SN Reverb send
+76 CY Reverb send
+77 CH Reverb send
+78 OH Reverb send
+79 SEL Reverb send
+80 D1 Sample rate
+81 D2 Sample rate
+82 D3 Sample rate
+83 SN Sample rate
+84 CY Sample rate
+85 CH Sample rate
+86 OH Sample rate
+87 SEL Sample rate
+88 D1 LFO amount
+89 D2 LFO amount
+90 D3 LFO amount
+91 SN LFO amount
+92 CY LFO amount
+93 CH LFO amount
+94 OH LFO amount
+95 SEL LFO amount
+96 D1 Density
+97 D2 Density
+98 D3 Density
+99 SN Density
+100 CY Density
+101 CH Density
+102 OH Density
+103 SEL Density
+104 D1 Mute
+105 D2 Mute
+106 D3 Mute
+107 SN Mute
+108 CY Mute
+109 CH Mute
+110 OH Mute
+111 SEL Mute
+112 D1 Solo
+113 D2 Solo
+114 D3 Solo
+115 SN Solo
+116 CY Solo
+117 CH Solo
+118 OH Solo
+119 SEL Solo
+[/CC]
+
+[ASSIGN]
+1 CC:15      # SEL Volume
+2 CC:23      # SEL Pan
+3 CC:31      # SEL Filter frequency
+4 CC:39      # SEL Resonance
+5 CC:47      # SEL Decay
+6 CC:55      # SEL Pitch
+7 CC:63      # SEL Delay send
+8 CC:79      # SEL Reverb send
+[/ASSIGN]
+
+[AUTOMATION]
+[/AUTOMATION]
+
+[COMMENT]
+Elixir drums
+Lanes 1-7 D1 to OH on channels 1-7 note 60
+Track channel 15 the remote TRACKS map
+Pots the selected track
+PC 1-32 patterns 1-32
+[/COMMENT]

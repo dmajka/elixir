@@ -1,0 +1,1179 @@
+{
+  "id": "elixir_fm1_global",
+  "name": "Elixir Global",
+  "abbr": "ElxG",
+  "manufacturer": "Elixir",
+  "parameters": [
+    {
+      "type": "cc",
+      "name": "LFO 4 depth",
+      "abbr": "LFO4",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 2,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Ring Wet",
+      "abbr": "RgWt",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 3,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Ring Slope",
+      "abbr": "RgSl",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 4,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Ring Tone",
+      "abbr": "RgTn",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 5,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Ring Tune",
+      "abbr": "RgTu",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 7,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Tempo",
+      "abbr": "Tmpo",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 8,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Shuffle",
+      "abbr": "Shuf",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 9,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Morph",
+      "abbr": "Mrph",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 10,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Sample rate",
+      "abbr": "SRat",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 11,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Master filter",
+      "abbr": "MFlt",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 12,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Roll rate",
+      "abbr": "RlRt",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 13,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Repeat",
+      "abbr": "Rept",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 14,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Tape time",
+      "abbr": "TpTm",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 15,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "FX wet",
+      "abbr": "FxWt",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 16,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "FX P1",
+      "abbr": "FxP1",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 17,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "FX P2",
+      "abbr": "FxP2",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 18,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "FX P3",
+      "abbr": "FxP3",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 19,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "FX P4",
+      "abbr": "FxP4",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 20,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Bus dirt",
+      "abbr": "BDrt",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 21,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Echo to reverb",
+      "abbr": "EcRv",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 22,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Saturate / Grain scatter",
+      "abbr": "Satu",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 23,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Reverb level",
+      "abbr": "RvLv",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 24,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Reverb size",
+      "abbr": "RvSz",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 25,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Reverb damping",
+      "abbr": "RvDp",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 26,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Master dirt",
+      "abbr": "MDrt",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 27,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Global density",
+      "abbr": "Dens",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 28,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Ghost velocity",
+      "abbr": "GhVl",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 29,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Build",
+      "abbr": "Bild",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 30,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Vary",
+      "abbr": "Vary",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 31,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Macro 1",
+      "abbr": "Mac1",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 32,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Macro 2",
+      "abbr": "Mac2",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 33,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Macro 3",
+      "abbr": "Mac3",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 34,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Macro 4",
+      "abbr": "Mac4",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 35,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Drill",
+      "abbr": "Drll",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 36,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Jitter",
+      "abbr": "Jitr",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 37,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Cuts",
+      "abbr": "Cuts",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 38,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Pump",
+      "abbr": "Pump",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 39,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Comb note",
+      "abbr": "CbNt",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 40,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Comb feedback",
+      "abbr": "CbFb",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 41,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Crush",
+      "abbr": "Crsh",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 42,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Reverse length",
+      "abbr": "RvsL",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 43,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "LFO 1 depth",
+      "abbr": "LFO1",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 44,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "LFO 2 depth",
+      "abbr": "LFO2",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 45,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "LFO 3 depth",
+      "abbr": "LFO3",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 46,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Filter resonance / Ring decay",
+      "abbr": "MRes",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 47,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Play / Stop",
+      "abbr": "Play",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 48,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Record",
+      "abbr": "Rec",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 49,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Fill",
+      "abbr": "Fill",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 50,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Repeat (held)",
+      "abbr": "RptH",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 51,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Freeze",
+      "abbr": "Frez",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 52,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Throw reverb",
+      "abbr": "ThRv",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 53,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Throw FX",
+      "abbr": "ThFx",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 54,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Feedback push",
+      "abbr": "FbPs",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 55,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Tape stop",
+      "abbr": "TpSt",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 56,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Low-pass sweep",
+      "abbr": "LPSw",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 57,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "High-pass sweep",
+      "abbr": "HPSw",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 58,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Reverse",
+      "abbr": "Revs",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 59,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Previous pattern",
+      "abbr": "PtPr",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 60,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Next pattern",
+      "abbr": "PtNx",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 61,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Control All",
+      "abbr": "CAll",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 62,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Ring Spread",
+      "abbr": "RgSp",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 63,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Select D1",
+      "abbr": "SD1",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 64,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Select D2",
+      "abbr": "SD2",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 65,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Select D3",
+      "abbr": "SD3",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 66,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Select SN",
+      "abbr": "SSN",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 67,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Select CY",
+      "abbr": "SCY",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 68,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Select CH",
+      "abbr": "SCH",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 69,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Select OH",
+      "abbr": "SOH",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 70,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Control All revert",
+      "abbr": "CARv",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 71,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D1 roll (held)",
+      "abbr": "RD1",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 72,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D2 roll (held)",
+      "abbr": "RD2",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 73,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D3 roll (held)",
+      "abbr": "RD3",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 74,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "SN roll (held)",
+      "abbr": "RSN",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 75,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CY roll (held)",
+      "abbr": "RCY",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 76,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CH roll (held)",
+      "abbr": "RCH",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 77,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "OH roll (held)",
+      "abbr": "ROH",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 78,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Selected roll (held)",
+      "abbr": "RSL",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 79,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D1 drill (held)",
+      "abbr": "DD1",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 80,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D2 drill (held)",
+      "abbr": "DD2",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 81,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D3 drill (held)",
+      "abbr": "DD3",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 82,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "SN drill (held)",
+      "abbr": "DSN",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 83,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CY drill (held)",
+      "abbr": "DCY",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 84,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CH drill (held)",
+      "abbr": "DCH",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 85,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "OH drill (held)",
+      "abbr": "DOH",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 86,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Selected drill (held)",
+      "abbr": "DSL",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 87,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Half",
+      "abbr": "Half",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 88,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Jitter",
+      "abbr": "JitB",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 89,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Cuts",
+      "abbr": "CutB",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 90,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Short",
+      "abbr": "Shrt",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 91,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Pump",
+      "abbr": "PmpB",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 92,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Comb",
+      "abbr": "Comb",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 93,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Space",
+      "abbr": "Spce",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 94,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Crush",
+      "abbr": "CrsB",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 95,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Delay Time / Grain position",
+      "abbr": "DlTm",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 96,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Delay Feedback",
+      "abbr": "DlFb",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 97,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Delay Tone",
+      "abbr": "DlTn",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 98,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Delay Band",
+      "abbr": "DlBd",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 99,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Delay Wow / Grain size",
+      "abbr": "DlWw",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 100,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Delay Glitch / Grain density",
+      "abbr": "DlGl",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 101,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Delay Route",
+      "abbr": "DlRt",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 102,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Delay Reverb to FX",
+      "abbr": "DlRF",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 103,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Density exclude D1",
+      "abbr": "XD1",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 104,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Density exclude D2",
+      "abbr": "XD2",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 105,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Density exclude D3",
+      "abbr": "XD3",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 106,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Density exclude SN",
+      "abbr": "XSN",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 107,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Density exclude CY",
+      "abbr": "XCY",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 108,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Density exclude CH",
+      "abbr": "XCH",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 109,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Density exclude OH",
+      "abbr": "XOH",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 110,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Density all in",
+      "abbr": "DnAl",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 111,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D1 roll rate",
+      "abbr": "FD1",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 112,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D2 roll rate",
+      "abbr": "FD2",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 113,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D3 roll rate",
+      "abbr": "FD3",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 114,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "SN roll rate",
+      "abbr": "FSN",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 115,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CY roll rate",
+      "abbr": "FCY",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 116,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CH roll rate",
+      "abbr": "FCH",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 117,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "OH roll rate",
+      "abbr": "FOH",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 118,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Selected roll rate",
+      "abbr": "FSL",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 119,
+      "nr2": 0
+    }
+  ],
+  "script": null
+}

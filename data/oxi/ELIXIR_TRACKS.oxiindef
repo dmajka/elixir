@@ -1,0 +1,1129 @@
+{
+  "id": "elixir_fm1_tracks",
+  "name": "Elixir Tracks",
+  "abbr": "ElxT",
+  "manufacturer": "Elixir",
+  "parameters": [
+    {
+      "type": "cc",
+      "name": "D1 Volume",
+      "abbr": "D1Vo",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 8,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D2 Volume",
+      "abbr": "D2Vo",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 9,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D3 Volume",
+      "abbr": "D3Vo",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 10,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "SN Volume",
+      "abbr": "SNVo",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 11,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CY Volume",
+      "abbr": "CYVo",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 12,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CH Volume",
+      "abbr": "CHVo",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 13,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "OH Volume",
+      "abbr": "OHVo",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 14,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Selected Volume",
+      "abbr": "SLVo",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 15,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D1 Pan",
+      "abbr": "D1Pn",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 64,
+      "nr1": 16,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D2 Pan",
+      "abbr": "D2Pn",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 64,
+      "nr1": 17,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D3 Pan",
+      "abbr": "D3Pn",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 64,
+      "nr1": 18,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "SN Pan",
+      "abbr": "SNPn",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 64,
+      "nr1": 19,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CY Pan",
+      "abbr": "CYPn",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 64,
+      "nr1": 20,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CH Pan",
+      "abbr": "CHPn",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 64,
+      "nr1": 21,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "OH Pan",
+      "abbr": "OHPn",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 64,
+      "nr1": 22,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Selected Pan",
+      "abbr": "SLPn",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 64,
+      "nr1": 23,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D1 Filter frequency",
+      "abbr": "D1Fl",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 24,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D2 Filter frequency",
+      "abbr": "D2Fl",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 25,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D3 Filter frequency",
+      "abbr": "D3Fl",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 26,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "SN Filter frequency",
+      "abbr": "SNFl",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 27,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CY Filter frequency",
+      "abbr": "CYFl",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 28,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CH Filter frequency",
+      "abbr": "CHFl",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 29,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "OH Filter frequency",
+      "abbr": "OHFl",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 30,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Selected Filter frequency",
+      "abbr": "SLFl",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 31,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D1 Resonance",
+      "abbr": "D1Rs",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 32,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D2 Resonance",
+      "abbr": "D2Rs",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 33,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D3 Resonance",
+      "abbr": "D3Rs",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 34,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "SN Resonance",
+      "abbr": "SNRs",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 35,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CY Resonance",
+      "abbr": "CYRs",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 36,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CH Resonance",
+      "abbr": "CHRs",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 37,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "OH Resonance",
+      "abbr": "OHRs",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 38,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Selected Resonance",
+      "abbr": "SLRs",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 39,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D1 Decay",
+      "abbr": "D1Dc",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 40,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D2 Decay",
+      "abbr": "D2Dc",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 41,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D3 Decay",
+      "abbr": "D3Dc",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 42,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "SN Decay",
+      "abbr": "SNDc",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 43,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CY Decay",
+      "abbr": "CYDc",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 44,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CH Decay",
+      "abbr": "CHDc",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 45,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "OH Decay",
+      "abbr": "OHDc",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 46,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Selected Decay",
+      "abbr": "SLDc",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 47,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D1 Pitch",
+      "abbr": "D1Pt",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 48,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D2 Pitch",
+      "abbr": "D2Pt",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 49,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D3 Pitch",
+      "abbr": "D3Pt",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 50,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "SN Pitch",
+      "abbr": "SNPt",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 51,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CY Pitch",
+      "abbr": "CYPt",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 52,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CH Pitch",
+      "abbr": "CHPt",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 53,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "OH Pitch",
+      "abbr": "OHPt",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 54,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Selected Pitch",
+      "abbr": "SLPt",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 55,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D1 Delay send",
+      "abbr": "D1Dl",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 56,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D2 Delay send",
+      "abbr": "D2Dl",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 57,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D3 Delay send",
+      "abbr": "D3Dl",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 58,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "SN Delay send",
+      "abbr": "SNDl",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 59,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CY Delay send",
+      "abbr": "CYDl",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 60,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CH Delay send",
+      "abbr": "CHDl",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 61,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "OH Delay send",
+      "abbr": "OHDl",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 62,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Selected Delay send",
+      "abbr": "SLDl",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 63,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D1 FX send",
+      "abbr": "D1Fx",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 64,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D2 FX send",
+      "abbr": "D2Fx",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 65,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D3 FX send",
+      "abbr": "D3Fx",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 66,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "SN FX send",
+      "abbr": "SNFx",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 67,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CY FX send",
+      "abbr": "CYFx",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 68,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CH FX send",
+      "abbr": "CHFx",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 69,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "OH FX send",
+      "abbr": "OHFx",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 70,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Selected FX send",
+      "abbr": "SLFx",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 71,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D1 Reverb send",
+      "abbr": "D1Rv",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 72,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D2 Reverb send",
+      "abbr": "D2Rv",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 73,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D3 Reverb send",
+      "abbr": "D3Rv",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 74,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "SN Reverb send",
+      "abbr": "SNRv",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 75,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CY Reverb send",
+      "abbr": "CYRv",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 76,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CH Reverb send",
+      "abbr": "CHRv",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 77,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "OH Reverb send",
+      "abbr": "OHRv",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 78,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Selected Reverb send",
+      "abbr": "SLRv",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 79,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D1 Sample rate",
+      "abbr": "D1SR",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 80,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D2 Sample rate",
+      "abbr": "D2SR",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 81,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D3 Sample rate",
+      "abbr": "D3SR",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 82,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "SN Sample rate",
+      "abbr": "SNSR",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 83,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CY Sample rate",
+      "abbr": "CYSR",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 84,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CH Sample rate",
+      "abbr": "CHSR",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 85,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "OH Sample rate",
+      "abbr": "OHSR",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 86,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Selected Sample rate",
+      "abbr": "SLSR",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 87,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D1 LFO amount",
+      "abbr": "D1Lf",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 88,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D2 LFO amount",
+      "abbr": "D2Lf",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 89,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D3 LFO amount",
+      "abbr": "D3Lf",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 90,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "SN LFO amount",
+      "abbr": "SNLf",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 91,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CY LFO amount",
+      "abbr": "CYLf",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 92,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CH LFO amount",
+      "abbr": "CHLf",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 93,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "OH LFO amount",
+      "abbr": "OHLf",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 94,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Selected LFO amount",
+      "abbr": "SLLf",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 95,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D1 Density",
+      "abbr": "D1Dn",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 64,
+      "nr1": 96,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D2 Density",
+      "abbr": "D2Dn",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 64,
+      "nr1": 97,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D3 Density",
+      "abbr": "D3Dn",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 64,
+      "nr1": 98,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "SN Density",
+      "abbr": "SNDn",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 64,
+      "nr1": 99,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CY Density",
+      "abbr": "CYDn",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 64,
+      "nr1": 100,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CH Density",
+      "abbr": "CHDn",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 64,
+      "nr1": 101,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "OH Density",
+      "abbr": "OHDn",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 64,
+      "nr1": 102,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Selected Density",
+      "abbr": "SLDn",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 64,
+      "nr1": 103,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D1 Mute",
+      "abbr": "D1Mu",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 104,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D2 Mute",
+      "abbr": "D2Mu",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 105,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D3 Mute",
+      "abbr": "D3Mu",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 106,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "SN Mute",
+      "abbr": "SNMu",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 107,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CY Mute",
+      "abbr": "CYMu",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 108,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CH Mute",
+      "abbr": "CHMu",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 109,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "OH Mute",
+      "abbr": "OHMu",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 110,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Selected Mute",
+      "abbr": "SLMu",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 111,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D1 Solo",
+      "abbr": "D1So",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 112,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D2 Solo",
+      "abbr": "D2So",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 113,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "D3 Solo",
+      "abbr": "D3So",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 114,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "SN Solo",
+      "abbr": "SNSo",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 115,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CY Solo",
+      "abbr": "CYSo",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 116,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "CH Solo",
+      "abbr": "CHSo",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 117,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "OH Solo",
+      "abbr": "OHSo",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 118,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
+      "name": "Selected Solo",
+      "abbr": "SLSo",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 119,
+      "nr2": 0
+    }
+  ],
+  "script": null
+}

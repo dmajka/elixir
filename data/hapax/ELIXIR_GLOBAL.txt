@@ -1,0 +1,208 @@
+# Elixir for the FM-1: the global channel
+# Written from Elixir v1.3.1's remote map (dd2d99c6ddcf) by tools/hapax_defs.py:
+# https://dmajka.github.io/elixir/controllers/ (the map: https://dmajka.github.io/elixir/data/)
+# A track on the remote's GLOBAL channel (16). Its lanes are the performance buttons that act while held:
+# a note's length is how long it holds (FILL, FREEZE, TAPE STOP ..). The CCs: tempo, morph, the effects,
+# the reverb, the macros, the rolls; the tap-to-latch effects (HALF .. CRUSH) are left to a controller.
+# Pots 1-8: morph, master filter, its resonance, FX wet, reverb level, density, macros 1 and 2.
+# Copy it to the HAPAX folder of the SD card; load it on a track: 2ND + the track's button, INSTRUMENT DEFINITION.
+
+VERSION 1
+TRACKNAME ELIXIR GLOBAL
+TYPE DRUM
+OUTPORT NULL           # the port the FM-1 is on: set it on the track
+OUTCHAN 16             # the remote's GLOBAL channel (CONFIG: REMOTE)
+INPORT NULL
+INCHAN NULL
+MAXRATE NULL
+
+[DRUMLANES]
+1:NULL:NULL:50 Fill
+2:NULL:NULL:51 Repeat held
+3:NULL:NULL:52 Freeze
+4:NULL:NULL:53 Throw reverb
+5:NULL:NULL:54 Throw FX
+6:NULL:NULL:55 Feedback push
+7:NULL:NULL:56 Tape stop
+8:NULL:NULL:57 Low-pass sweep
+9:NULL:NULL:58 High-pass sweep
+10:NULL:NULL:59 Reverse
+[/DRUMLANES]
+
+# Program changes: Elixir launches patterns 1-32 (queued, as its pattern page does)
+[PC]
+1 Pattern 1
+2 Pattern 2
+3 Pattern 3
+4 Pattern 4
+5 Pattern 5
+6 Pattern 6
+7 Pattern 7
+8 Pattern 8
+9 Pattern 9
+10 Pattern 10
+11 Pattern 11
+12 Pattern 12
+13 Pattern 13
+14 Pattern 14
+15 Pattern 15
+16 Pattern 16
+17 Pattern 17
+18 Pattern 18
+19 Pattern 19
+20 Pattern 20
+21 Pattern 21
+22 Pattern 22
+23 Pattern 23
+24 Pattern 24
+25 Pattern 25
+26 Pattern 26
+27 Pattern 27
+28 Pattern 28
+29 Pattern 29
+30 Pattern 30
+31 Pattern 31
+32 Pattern 32
+[/PC]
+
+[CC]
+2 LFO 4 depth
+3 Ring Wet
+4 Ring Slope
+5 Ring Tone
+7 Ring Tune
+8 Tempo
+9 Shuffle
+10 Morph
+11 Sample rate
+12 Master filter
+13 Roll rate
+14 Repeat
+15 Tape time
+16 FX wet
+17 FX P1
+18 FX P2
+19 FX P3
+20 FX P4
+21 Bus dirt
+22 Echo to reverb
+23 Saturate - Grain scatter
+24 Reverb level
+25 Reverb size
+26 Reverb damping
+27 Master dirt
+28 Global density
+29 Ghost velocity
+30 Build
+31 Vary
+32 Macro 1
+33 Macro 2
+34 Macro 3
+35 Macro 4
+36 Drill
+37 Jitter
+38 Cuts
+39 Pump
+40 Comb note
+41 Comb feedback
+42 Crush
+43 Reverse length
+44 LFO 1 depth
+45 LFO 2 depth
+46 LFO 3 depth
+47 Filter resonance - Ring decay
+48 Play - Stop
+49 Record
+50 Fill
+51 Repeat held
+52 Freeze
+53 Throw reverb
+54 Throw FX
+55 Feedback push
+56 Tape stop
+57 Low-pass sweep
+58 High-pass sweep
+59 Reverse
+60 Previous pattern
+61 Next pattern
+62 Control All
+63 Ring Spread
+64 Select D1
+65 Select D2
+66 Select D3
+67 Select SN
+68 Select CY
+69 Select CH
+70 Select OH
+71 Control All revert
+72 D1 roll held
+73 D2 roll held
+74 D3 roll held
+75 SN roll held
+76 CY roll held
+77 CH roll held
+78 OH roll held
+79 SEL roll held
+80 D1 drill held
+81 D2 drill held
+82 D3 drill held
+83 SN drill held
+84 CY drill held
+85 CH drill held
+86 OH drill held
+87 SEL drill held
+88 Half
+89 Jitter
+90 Cuts
+91 Short
+92 Pump
+93 Comb
+94 Space
+95 Crush
+96 Delay Time - Grain position
+97 Delay Feedback
+98 Delay Tone
+99 Delay Band
+100 Delay Wow - Grain size
+101 Delay Glitch - Grain density
+102 Delay Route
+103 Delay Reverb to FX
+104 Density exclude D1
+105 Density exclude D2
+106 Density exclude D3
+107 Density exclude SN
+108 Density exclude CY
+109 Density exclude CH
+110 Density exclude OH
+111 Density all in
+112 D1 roll rate
+113 D2 roll rate
+114 D3 roll rate
+115 SN roll rate
+116 CY roll rate
+117 CH roll rate
+118 OH roll rate
+119 SEL roll rate
+[/CC]
+
+[ASSIGN]
+1 CC:10      # Morph
+2 CC:12      # Master filter
+3 CC:47      # Filter resonance - Ring decay
+4 CC:16      # FX wet
+5 CC:24      # Reverb level
+6 CC:28      # Global density
+7 CC:32      # Macro 1
+8 CC:33      # Macro 2
+[/ASSIGN]
+
+[AUTOMATION]
+[/AUTOMATION]
+
+[COMMENT]
+Elixir global
+Channel 16 the remote GLOBAL map
+Lanes the held performance buttons
+A note holds for its length
+PC 1-32 patterns 1-32
+[/COMMENT]
