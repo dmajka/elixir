@@ -1,0 +1,90 @@
+{
+  "elixir-mute-solo.json": {
+    "bytes": 1613,
+    "sha256": "7a9fc2051c981aa93aa14e8b4a01ef8ad6478b0d9750872a0714d5837af6955f"
+  },
+  "elixir-mute-solo.syx": {
+    "bytes": 544,
+    "sha256": "2f29d8374f9d736ed3ee2ec2807a7289d085e2d72304342899ccafaf96c26d04"
+  },
+  "launchpad-slot1-browser-backup.syx": {
+    "bytes": 540,
+    "sha256": "a78dcfcd64de975453903336ffb39336f892331601cc2842705ff787d1310c9c"
+  },
+  "launchpad-slot1-read-transaction.json": {
+    "bytes": 7540,
+    "sha256": "5237702cacbfab7fb6f99f37645f63fc80c782662dfe0dc28d981e07f3cf51d7"
+  },
+  "slot1-Drums-Square-backup.syx": {
+    "bytes": 540,
+    "sha256": "a78dcfcd64de975453903336ffb39336f892331601cc2842705ff787d1310c9c"
+  },
+  "slot1-Drums-Square-restored.syx": {
+    "bytes": 540,
+    "sha256": "a78dcfcd64de975453903336ffb39336f892331601cc2842705ff787d1310c9c"
+  },
+  "slot1-approved-browser-backup.syx": {
+    "bytes": 540,
+    "sha256": "a78dcfcd64de975453903336ffb39336f892331601cc2842705ff787d1310c9c"
+  },
+  "slot1-before-browser-test.syx": {
+    "bytes": 540,
+    "sha256": "a78dcfcd64de975453903336ffb39336f892331601cc2842705ff787d1310c9c"
+  },
+  "slot1-direct-restore-transaction.json": {
+    "bytes": 48546,
+    "sha256": "e848ae5eeccf1e7d9ed991d60c6028e71c364538a6a440d7bb61a19001fd6076"
+  },
+  "slot1-direct-restored-readback.syx": {
+    "bytes": 540,
+    "sha256": "a78dcfcd64de975453903336ffb39336f892331601cc2842705ff787d1310c9c"
+  },
+  "slot1-direct-upload-first-pad.json": {
+    "bytes": 4307,
+    "sha256": "1f3b2743774ab787e8578173a6844d27b9d85dbf619f8dea2f3b8c7d3f3196b8"
+  },
+  "slot1-direct-upload-readback.syx": {
+    "bytes": 544,
+    "sha256": "2f29d8374f9d736ed3ee2ec2807a7289d085e2d72304342899ccafaf96c26d04"
+  },
+  "slot1-direct-upload-transaction.json": {
+    "bytes": 28211,
+    "sha256": "a4675bca1fef03e94436ea238b4187ba39e636fe54a4a5925c0347f97e99d030"
+  },
+  "slot1-mute-solo-physical.json": {
+    "bytes": 26300,
+    "sha256": "432c90d3a672977d36e8ad9e22f43d05ebaa86495b4a53345d5ad5998f63bc65"
+  },
+  "slot1-mute-solo-readback.syx": {
+    "bytes": 544,
+    "sha256": "7c8869e2841ea6f860ca80bb1815352b01fbe9a500a356b8a99a4a5812c719ac"
+  },
+  "slot1-quick-tap-before.syx": {
+    "bytes": 540,
+    "sha256": "a78dcfcd64de975453903336ffb39336f892331601cc2842705ff787d1310c9c"
+  },
+  "slot1-quick-tap-mute-solo-physical.json": {
+    "bytes": 6198,
+    "sha256": "1fb7a54e8e8e5b0ec2b24ffdc6e769739eb804767ed3213965e62d8cba713346"
+  },
+  "slot1-quick-tap-restore-transaction.json": {
+    "bytes": 48546,
+    "sha256": "e735ca0d80f3e654902fc2b267418b267e0081935cd69731ceb2bf6587b50888"
+  },
+  "slot1-quick-tap-restored-readback.syx": {
+    "bytes": 540,
+    "sha256": "a78dcfcd64de975453903336ffb39336f892331601cc2842705ff787d1310c9c"
+  },
+  "slot1-quick-tap-upload-readback.syx": {
+    "bytes": 544,
+    "sha256": "2f29d8374f9d736ed3ee2ec2807a7289d085e2d72304342899ccafaf96c26d04"
+  },
+  "slot1-quick-tap-upload-transaction.json": {
+    "bytes": 28211,
+    "sha256": "ea766070c951dd5b23b0e8ea06a594d32e637b2a50464eb07805fd8a6a5a5bc8"
+  },
+  "slot1-restored-quick-tap-physical.json": {
+    "bytes": 4899,
+    "sha256": "e4419dd9477fc0f4fadd1c4ba44429dd43a21f6f19f0a8cc827b608e9ad3ac10"
+  }
+}

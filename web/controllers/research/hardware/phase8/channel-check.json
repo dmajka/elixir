@@ -1,0 +1,208 @@
+{
+  "schemaVersion": 1,
+  "id": "phase8-channel-check",
+  "name": "Phase8 Ch3 Ch7",
+  "deviceProfileId": "novation.launch-control-xl3",
+  "channels": {
+    "remoteTracks": 3,
+    "remoteGlobal": 7
+  },
+  "receiver": {
+    "encoderMode": "pickup",
+    "buttonMode": "press"
+  },
+  "assignments": [
+    {
+      "controlId": "encoder.1.1",
+      "parameterId": "global.morph"
+    },
+    {
+      "controlId": "encoder.1.2",
+      "parameterId": "tracks.d2.reverb-send"
+    },
+    {
+      "controlId": "encoder.1.3",
+      "parameterId": "tracks.d3.reverb-send"
+    },
+    {
+      "controlId": "encoder.1.4",
+      "parameterId": "tracks.sn.reverb-send"
+    },
+    {
+      "controlId": "encoder.1.5",
+      "parameterId": "tracks.cy.reverb-send"
+    },
+    {
+      "controlId": "encoder.1.6",
+      "parameterId": "tracks.ch.reverb-send"
+    },
+    {
+      "controlId": "encoder.1.7",
+      "parameterId": "tracks.oh.reverb-send"
+    },
+    {
+      "controlId": "encoder.1.8",
+      "parameterId": "tracks.selected.reverb-send"
+    },
+    {
+      "controlId": "encoder.2.1",
+      "parameterId": "tracks.d1.delay-send"
+    },
+    {
+      "controlId": "encoder.2.2",
+      "parameterId": "tracks.d2.delay-send"
+    },
+    {
+      "controlId": "encoder.2.3",
+      "parameterId": "tracks.d3.delay-send"
+    },
+    {
+      "controlId": "encoder.2.4",
+      "parameterId": "tracks.sn.delay-send"
+    },
+    {
+      "controlId": "encoder.2.5",
+      "parameterId": "tracks.cy.delay-send"
+    },
+    {
+      "controlId": "encoder.2.6",
+      "parameterId": "tracks.ch.delay-send"
+    },
+    {
+      "controlId": "encoder.2.7",
+      "parameterId": "tracks.oh.delay-send"
+    },
+    {
+      "controlId": "encoder.2.8",
+      "parameterId": "tracks.selected.delay-send"
+    },
+    {
+      "controlId": "encoder.3.1",
+      "parameterId": "tracks.d1.fx-send"
+    },
+    {
+      "controlId": "encoder.3.2",
+      "parameterId": "tracks.d2.fx-send"
+    },
+    {
+      "controlId": "encoder.3.3",
+      "parameterId": "tracks.d3.fx-send"
+    },
+    {
+      "controlId": "encoder.3.4",
+      "parameterId": "tracks.sn.fx-send"
+    },
+    {
+      "controlId": "encoder.3.5",
+      "parameterId": "tracks.cy.fx-send"
+    },
+    {
+      "controlId": "encoder.3.6",
+      "parameterId": "tracks.ch.fx-send"
+    },
+    {
+      "controlId": "encoder.3.7",
+      "parameterId": "tracks.oh.fx-send"
+    },
+    {
+      "controlId": "encoder.3.8",
+      "parameterId": "tracks.selected.fx-send"
+    },
+    {
+      "controlId": "fader.1",
+      "parameterId": "tracks.d1.volume"
+    },
+    {
+      "controlId": "fader.2",
+      "parameterId": "tracks.d2.volume"
+    },
+    {
+      "controlId": "fader.3",
+      "parameterId": "tracks.d3.volume"
+    },
+    {
+      "controlId": "fader.4",
+      "parameterId": "tracks.sn.volume"
+    },
+    {
+      "controlId": "fader.5",
+      "parameterId": "tracks.cy.volume"
+    },
+    {
+      "controlId": "fader.6",
+      "parameterId": "tracks.ch.volume"
+    },
+    {
+      "controlId": "fader.7",
+      "parameterId": "tracks.oh.volume"
+    },
+    {
+      "controlId": "fader.8",
+      "parameterId": "tracks.selected.volume"
+    },
+    {
+      "controlId": "button.1.1",
+      "parameterId": "tracks.d1.mute"
+    },
+    {
+      "controlId": "button.1.2",
+      "parameterId": "tracks.d2.mute"
+    },
+    {
+      "controlId": "button.1.3",
+      "parameterId": "tracks.d3.mute"
+    },
+    {
+      "controlId": "button.1.4",
+      "parameterId": "tracks.sn.mute"
+    },
+    {
+      "controlId": "button.1.5",
+      "parameterId": "tracks.cy.mute"
+    },
+    {
+      "controlId": "button.1.6",
+      "parameterId": "tracks.ch.mute"
+    },
+    {
+      "controlId": "button.1.7",
+      "parameterId": "tracks.oh.mute"
+    },
+    {
+      "controlId": "button.1.8",
+      "parameterId": "tracks.selected.mute"
+    },
+    {
+      "controlId": "button.2.1",
+      "parameterId": "tracks.d1.solo"
+    },
+    {
+      "controlId": "button.2.2",
+      "parameterId": "tracks.d2.solo"
+    },
+    {
+      "controlId": "button.2.3",
+      "parameterId": "tracks.d3.solo"
+    },
+    {
+      "controlId": "button.2.4",
+      "parameterId": "tracks.sn.solo"
+    },
+    {
+      "controlId": "button.2.5",
+      "parameterId": "tracks.cy.solo"
+    },
+    {
+      "controlId": "button.2.6",
+      "parameterId": "tracks.ch.solo"
+    },
+    {
+      "controlId": "button.2.7",
+      "parameterId": "tracks.oh.solo"
+    },
+    {
+      "controlId": "button.2.8",
+      "parameterId": "tracks.selected.solo"
+    }
+  ]
+}

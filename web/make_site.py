@@ -10,9 +10,14 @@
 #   mobile/                     the emulator laid out for phones (web/emu/mobile.html, on try/'s files; 0.16):
 #                               not linked from anywhere and noindex while it's tried out
 #   library/                    backup, restore and LXR-02 kit import over Web MIDI (web/library.html, library.js)
+#   controllers/                1.3.2: the controller mapper (web/controllers, Vue: Launch Control XL 3 and mk2, and
+#                               Launchpad Pro MK3 templates for the remote map), built here with npm; ?view=admin its full editor
+#   data/                       elixir-midi-parameters.json (.meta.json, .csv): the remote map, generated from the firmware
+#                               (tools/remote_params.py) on every build; the mapper is built from the same bytes
 #   manual/index.html           MANUAL.md as a page, with docs/img (its signal-flow diagrams: tools/flow_svg.py) in
 #                               manual/img, and elixir-manual-VER.pdf, the page printed (headless Chrome)
-#   cheatsheet.pdf              four pages of keys and knobs (web/cheatsheet.pdf: tools/cheatsheet.sh); fmhub.json
+#   cheatsheet.pdf              the pages of keys and knobs: web/cheatsheet.html printed (1.3.2: here, its remote
+#                               tables rewritten first; no Chrome: web/cheatsheet.pdf, tools/cheatsheet.sh's); fmhub.json
 #                               links to it
 #   firmware/                   elixir-VER.fwsc, elixir-VER-src.tar.gz (the source, as the GPL asks), MANUAL.md,
 #                               LICENSE, NOTICE.md, LICENSES/, and a page listing them; 1.3.1: the earlier releases'
@@ -39,7 +44,7 @@ SRC = ["build.sh", "LICENSE", "LICENSES", "NOTICE.md", "README.md", "MANUAL.md",
 
 # the header on every page: depth 0 at the root, 1 a folder down; here: the page's own link
 NAV = [("try/", "Try it"), ("install/", "Install"), ("manual/", "Manual"), ("cheatsheet.pdf", "Cheat sheet"),
-       ("library/", "Library")]
+       ("library/", "Library"), ("controllers/", 'Controllers<span class="beta">beta</span>')]
 
 
 def nav(depth, here=None):
@@ -66,6 +71,8 @@ header.site nav { display: flex; gap: 20px; flex-wrap: wrap; margin-left: auto; 
 header.site nav a { color: #a29b8e; text-decoration: none; padding: 4px 0; }
 header.site nav a:hover, header.site nav a[aria-current] { color: #f2ede3; }
 header.site nav a[aria-current] { box-shadow: inset 0 -2px #f0a43a; }
+header.site nav .beta { margin-left: 5px; padding: 1px 4px; border: 1px solid #f0a43a; border-radius: 4px; color: #f5b04f;
+  font-size: 10px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; vertical-align: 2px; }
 header.site .px-c { fill: #96603a; } header.site .px-o { fill: #f2ede3; } header.site .px-g { fill: rgba(242,237,227,.08); }
 header.site .px-h { fill: #fff; } header.site .px-l { fill: #f0a43a; } header.site .px-L { fill: #f8d394; }
 header.site .px-d { fill: #a8640f; }
@@ -199,6 +206,8 @@ def markdown(md):
         ln = lines[i]
         if ln.strip() == "<!-- grid -->":
             grid = True
+            i += 1
+        elif re.fullmatch(r"<!-- /?remote:[\w-]+ -->", ln.strip()):   # (tools/remote_docs.py's table marks)
             i += 1
         elif ln.strip() == "<!-- panel -->":           # (the FM-1 at a glance: panel_svg, after the parse)
             out.append("<!--PANEL-->")
@@ -732,6 +741,36 @@ def earlier_releases(ver):
     return out
 
 
+# 1.3.2: the controller mapper (web/controllers): the remote map generated into data/, then the Vue app built on
+# those same bytes (vite.config.ts: ELIXIR_PARAMS) into controllers/, under the site's header. Node and npm needed
+def controllers(out):
+    sys.path.insert(0, str(ROOT / "tools"))
+    import remote_params
+    import remote_docs
+    doc = remote_params.build()
+    params = remote_params.write(doc, out / "data")
+    for f in remote_docs.update(doc):               # (the manual's and the cheat sheet's remote tables)
+        print(f"site: {f}: its remote map tables rewritten from the firmware: commit it"
+              + (" (and run tools/cheatsheet.sh for web/cheatsheet.pdf)" if f.endswith(".html") else ""),
+              file=sys.stderr)
+    app = ROOT / "web/controllers"
+    npm = shutil.which("npm")
+    if not npm:
+        raise SystemExit("site: no npm: the controller mapper (web/controllers) needs Node.js 24")
+    if not (app / "node_modules").exists():
+        subprocess.run([npm, "ci", "--no-audit", "--no-fund"], cwd=app, check=True)
+    built = ROOT / "build/controllers"
+    subprocess.run([npm, "run", "--silent", "build", "--", "--outDir", str(built), "--emptyOutDir", "--logLevel",
+                    "warn"], cwd=app, check=True, env={**os.environ, "ELIXIR_PARAMS": str(params)})
+    shutil.copytree(built, out / "controllers")
+    page = (out / "controllers/index.html").read_text(encoding="utf-8")
+    if page.count("<body>") != 1:                  # (the header's look: site.css, bundled in as a layer)
+        raise SystemExit("build/controllers/index.html must contain <body> once")
+    page = page.replace("<body>", "<body>\n" + nav(1, "controllers/"))
+    (out / "controllers/index.html").write_text(page, encoding="utf-8")
+    return doc
+
+
 def files_page(entries):
     li = "".join(f'<li><a href="{n}">{n}</a> <span>{d}</span></li>' for n, d in entries)
     return ('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -765,7 +804,13 @@ def main(pkg, out):
     # 0.14: the front page at the root, the install page at install/
     shutil.copy(ROOT / "web/site.css", out / "site.css")
     shutil.copytree(ROOT / "web/shots", out / "shots")
-    shutil.copy(ROOT / "web/cheatsheet.pdf", out / "cheatsheet.pdf")
+    params = controllers(out)                       # (1.3.2: controllers/ and data/; the remote tables rewritten)
+    cheat = ROOT / "build/cheatsheet.html"           # 1.3.2: the cheat sheet printed fresh (its remote tables current),
+    cheat.parent.mkdir(exist_ok=True)                # else the committed web/cheatsheet.pdf
+    cheat.write_text((ROOT / "web/cheatsheet.html").read_text(encoding="utf-8")
+                     .replace("<!--POTION-->", potion_svg(small=True)), encoding="utf-8")
+    if not print_pdf(cheat, out / "cheatsheet.pdf"):
+        shutil.copy(ROOT / "web/cheatsheet.pdf", out / "cheatsheet.pdf")
     (out / "favicon.svg").write_text(favicon(), encoding="utf-8")
     front = (ROOT / "web/index.html").read_text(encoding="utf-8")
     for mark, text in (("<!--NAV-->", nav(0)), ("<!--WORD-->", word_svg()), ("<!--POTION-->", potion_svg()),
@@ -841,7 +886,7 @@ def main(pkg, out):
         "".join(f'<li><a href="{n}">{n}</a></li>' for n in lic) + '</ul><p><a href="../LICENSE">LICENSE (GPL-3.0)</a>'
         ' · <a href="../NOTICE.md">NOTICE.md</a></p>\n', encoding="utf-8")
     src = f"elixir-{ver}-src.tar.gz"
-    skip = lambda ti: None if re.search(r"(__pycache__|\.dSYM|\.DS_Store|docs/TO_DO[^/]*\.md|"
+    skip = lambda ti: None if re.search(r"(__pycache__|\.dSYM|\.DS_Store|node_modules|web/controllers/dist|docs/TO_DO[^/]*\.md|"
                                         r"docs/TECHNICAL_DOCUMENTATION\.md)", ti.name) else ti   # (private notes)
     with tarfile.open(fw / src, "w:gz") as tf:
         for f in SRC:
@@ -852,10 +897,13 @@ def main(pkg, out):
         *((f"elixir-{o['version']}.fwsc", f"an earlier release's package ({o['size']} B, identity {o['product']}; "
            f"its source: the {o['version']} tag)") for o in older),
         ("MANUAL.md", "the manual as Markdown"),
+        ("../data/elixir-midi-parameters.json", f"the remote map's {len(params['parameters'])} parameters, from the "
+         "firmware (a parameter list, not a controller configuration); its .meta.json beside it"),
+        ("../data/elixir-midi-parameters.csv", "the same parameters as a spreadsheet table"),
         ("LICENSE", "GPL-3.0"), ("NOTICE.md", "what Elixir is built from"), ("LICENSES/", "the other license texts")]),
         encoding="utf-8")
     (out / ".nojekyll").write_text("")              # GitHub Pages: serve the files as they are
-    print(f"site: {out}: index.html, install/, library/, try/, manual/, firmware/{name} ({len(raw)} B, {product}), firmware/{src}"
+    print(f"site: {out}: index.html, install/, library/, controllers/ ({len(params['parameters'])} parameters), try/, manual/, firmware/{name} ({len(raw)} B, {product}), firmware/{src}"
           f"{', earlier: ' + ' '.join(o['version'] for o in older) if older else ''}")
 
 

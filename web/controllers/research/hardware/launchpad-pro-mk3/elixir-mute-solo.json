@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "id": "elixir.pad-mute-solo",
+  "name": "Elixir Mute Solo",
+  "deviceProfileId": "novation.launchpad-pro-mk3",
+  "channels": {
+    "remoteTracks": 15,
+    "remoteGlobal": 16
+  },
+  "receiver": {
+    "encoderMode": "pickup",
+    "buttonMode": "press"
+  },
+  "assignments": [
+    {
+      "controlId": "pad.1.1",
+      "parameterId": "tracks.d1.mute"
+    },
+    {
+      "controlId": "pad.1.2",
+      "parameterId": "tracks.d2.mute"
+    },
+    {
+      "controlId": "pad.1.3",
+      "parameterId": "tracks.d3.mute"
+    },
+    {
+      "controlId": "pad.1.4",
+      "parameterId": "tracks.sn.mute"
+    },
+    {
+      "controlId": "pad.1.5",
+      "parameterId": "tracks.cy.mute"
+    },
+    {
+      "controlId": "pad.1.6",
+      "parameterId": "tracks.ch.mute"
+    },
+    {
+      "controlId": "pad.1.7",
+      "parameterId": "tracks.oh.mute"
+    },
+    {
+      "controlId": "pad.1.8",
+      "parameterId": "tracks.selected.mute"
+    },
+    {
+      "controlId": "pad.2.1",
+      "parameterId": "tracks.d1.solo"
+    },
+    {
+      "controlId": "pad.2.2",
+      "parameterId": "tracks.d2.solo"
+    },
+    {
+      "controlId": "pad.2.3",
+      "parameterId": "tracks.d3.solo"
+    },
+    {
+      "controlId": "pad.2.4",
+      "parameterId": "tracks.sn.solo"
+    },
+    {
+      "controlId": "pad.2.5",
+      "parameterId": "tracks.cy.solo"
+    },
+    {
+      "controlId": "pad.2.6",
+      "parameterId": "tracks.ch.solo"
+    },
+    {
+      "controlId": "pad.2.7",
+      "parameterId": "tracks.oh.solo"
+    },
+    {
+      "controlId": "pad.2.8",
+      "parameterId": "tracks.selected.solo"
+    }
+  ]
+}

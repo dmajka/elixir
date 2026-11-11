@@ -1,0 +1,3 @@
+/* Elixir's site.css (its colors, light and dark, its header and page), as a layer: the mapper's own rules always
+   win over it, whatever their specificity, so its buttons and inputs keep their looks. */
+@import "../../site.css" layer(site);

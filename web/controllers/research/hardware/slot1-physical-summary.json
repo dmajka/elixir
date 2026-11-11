@@ -1,0 +1,51 @@
+{
+  "sourceCapture": "input-20261110-133706.jsonl",
+  "startPacketZeroBased": 66,
+  "packets": 573,
+  "controls": [
+    {
+      "channel": 15,
+      "cc": 72,
+      "messages": 139,
+      "minimum": 0,
+      "maximum": 127,
+      "first": 1,
+      "last": 0
+    },
+    {
+      "channel": 15,
+      "cc": 8,
+      "messages": 430,
+      "minimum": 0,
+      "maximum": 127,
+      "first": 78,
+      "last": 0
+    },
+    {
+      "channel": 15,
+      "cc": 104,
+      "messages": 2,
+      "minimum": 0,
+      "maximum": 127,
+      "first": 127,
+      "last": 0,
+      "values": [
+        127,
+        0
+      ]
+    },
+    {
+      "channel": 15,
+      "cc": 112,
+      "messages": 2,
+      "minimum": 0,
+      "maximum": 127,
+      "first": 127,
+      "last": 0,
+      "values": [
+        127,
+        0
+      ]
+    }
+  ]
+}

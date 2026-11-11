@@ -11,3 +11,8 @@ build/ui_test build/shots > build/ui_test.log 2>&1 || { tail -40 build/ui_test.l
 tail -1 build/ui_test.log
 "$CC" -O2 -I build/gen -I firmware/src tests/render_test.c -o build/render_test -lm -w
 build/render_test build/ | tail -1
+# 1.3.2: the remote map still reads as data (tools/remote_params.py: the controller mapper's parameters; it stops on a
+# symbol it can't name or two parameters on one address)
+python3 tools/remote_params.py build/params
+# .. and the manual's and the cheat sheet's remote tables say what it says (tools/remote_docs.py rewrites them)
+python3 tools/remote_docs.py --check

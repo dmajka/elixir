@@ -1,0 +1,34 @@
+{
+  "components-blank.syx": {
+    "bytes": 544,
+    "sha256": "93424e60a8ef81628e2825c99ff2f4ddc1d903138e3cbf4dff03f8b2899992a8"
+  },
+  "components-cc.syx": {
+    "bytes": 544,
+    "sha256": "d57d5c830a9c853de91594a4118cdb11d8ee98b1a0dfc9e45a20f863832ec890"
+  },
+  "components-cc104-ch15-toggle.syx": {
+    "bytes": 544,
+    "sha256": "033c17a266e2cb4eacfb53732de82f23e18805c571af4bea80a1c3c522b769e2"
+  },
+  "components-cc104-ch15.syx": {
+    "bytes": 544,
+    "sha256": "bb4c413a8b4d8f472167e5a0f3df2192d2d44c58654d0d20f42608820976a780"
+  },
+  "components-note-added.syx": {
+    "bytes": 544,
+    "sha256": "3106558eabc79f219e371cf3f2358ba8f3cdb755c58ac08a8f4a6e4e67e1ec3d"
+  },
+  "components-program-added.syx": {
+    "bytes": 544,
+    "sha256": "8284492934dcc420e724f8630f92e5b408b2279573a8af431198d9477569bb29"
+  },
+  "components-reexport-mixed.syx": {
+    "bytes": 545,
+    "sha256": "ba1bfc2d4d78d5efec24d6be6efbd7253892b0ea6cfdd5fb80822edc2f74d4ff"
+  },
+  "independent-mixed.syx": {
+    "bytes": 544,
+    "sha256": "c2211a28c49a8d54be36f238e7c55de21e91680752a593ba1987a7492af5878c"
+  }
+}

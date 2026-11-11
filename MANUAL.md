@@ -1702,8 +1702,11 @@ The remote map has **two channels** of its own, made for an 8-column controller 
 - **TRACKS** (channel 15 by default): what belongs to a track. Columns 1–7 are the tracks **D1 D2 D3 SN CY CH OH**, column 8 the **selected track**. CH and OH both act on the hat voice, except their decays.
 - **GLOBAL** (channel 16 by default): the transport, the performance, the effects, the tempo, morph and the rest.
 
+**The map as data:** every number below, generated from the firmware with each release: [elixir-midi-parameters.json](https://dmajka.github.io/elixir/data/elixir-midi-parameters.json) (or as a [spreadsheet, CSV](https://dmajka.github.io/elixir/data/elixir-midi-parameters.csv)). The [controllers page](https://dmajka.github.io/elixir/controllers/) builds templates for the Launch Control XL (3 and mk2) and the Launchpad Pro MK3 from it, and sends them.
+
 Knobs and faders are CCs. Every number is used once on its channel, so a knob and a button never share one. A button can be a **CC or a note** of its number, whichever the controller sends: a CC above 0 or a note on is a press, CC 0 or a note off (or velocity 0) a release. Mute, solo and the DENSITY tracks toggle (for mute and solo that is the **PRESS** setting below); the effects (88–95) and CONTROL ALL (62) latch on a tap and act while held on a longer press ([below](#the-effects-tap-or-hold-from-10)); the other held ones act while held; select, PLAY / STOP, REC and the patterns act on the press. Their lights follow the state. On a Launch Control XL, give one template the TRACKS channel and another the GLOBAL channel (or one template's knobs one channel and its buttons the other). The cheat sheet has this map on one page.
 
+<!-- remote:manual-tracks -->
 **TRACKS (channel 15): knobs CC 8–103, buttons 104–119.** The number is 8 + 8 × row + column − 1.
 
 <!-- grid -->
@@ -1723,7 +1726,9 @@ Knobs and faders are CCs. Every number is used once on its channel, so a knob an
 | DENSITY (1.0) | **96** | **97** | **98** | **99** | **100** | **101** | **102** | **103** |
 | Mute | **104** | **105** | **106** | **107** | **108** | **109** | **110** | **111** |
 | Solo | **112** | **113** | **114** | **115** | **116** | **117** | **118** | **119** |
+<!-- /remote:manual-tracks -->
 
+<!-- remote:manual-global-knobs -->
 **GLOBAL (channel 16): knobs and faders, CC 8–47**
 
 <!-- grid -->
@@ -1734,9 +1739,11 @@ Knobs and faders are CCs. Every number is used once on its channel, so a knob an
 | 24–31 | **24** Rev level | **25** Rev size | **26** Rev damp | **27** Master dirt | **28** DENSITY | **29** Ghost vel | **30** Build | **31** Vary |
 | 32–39 | **32** Macro 1 | **33** Macro 2 | **34** Macro 3 | **35** Macro 4 | **36** DRILL | **37** JITTER | **38** CUTS | **39** PUMP |
 | 40–47 | **40** COMB note | **41** COMB fb | **42** CRUSH | **43** REV length | **44** LFO 1 depth | **45** LFO 2 depth | **46** LFO 3 depth | **47** Filter reso |
+<!-- /remote:manual-global-knobs -->
 
 **GLOBAL (channel 16): more knobs, off the grid** (from 1.0). 63 and 96–103 were buttons before 1.0 (CONTROL ALL latched, the effects latched): a tap on 62 or 88–95 does that now.
 
+<!-- remote:manual-global-off-grid -->
 | CC | Sets | | CC | Sets |
 |---|---|---|---|---|
 | **96** | Delay Time (GRAIN: Position) | | **3** | RING Wet |
@@ -1747,9 +1754,11 @@ Knobs and faders are CCs. Every number is used once on its channel, so a knob an
 | **101** | Delay Glitch (GRAIN: Density) | | **2** | LFO 4's depth |
 | **102** | Route (the middle PARALLEL, left DLY > FX, right FX > DLY) | | | |
 | **103** | Rev>FX | | | |
+<!-- /remote:manual-global-off-grid -->
 
 The delay's row is a strip of eight for a controller's knob row: Feedback and Band side by side for the howl, Time to bend the tape's pitch or move GRAIN's grains over a FREEZE. Saturate (CC 23) is GRAIN's Scatter. RING's Filt (the root) is the master filter (CC 12), its Decay Filter reso (CC 47); the RING knobs set their values whatever the Filter type, and are heard while it is RING. CC 0, 1 and 6 stay free (bank select, the mod wheel, data entry), as do 120–123 (MIDI's channel messages).
 
+<!-- remote:manual-global-buttons -->
 **GLOBAL (channel 16): buttons, CC or note 48–111**
 
 <!-- grid -->
@@ -1763,13 +1772,16 @@ The delay's row is a strip of eight for a controller's knob row: Feedback and Ba
 | Effects, tap or hold | **88** HALF | **89** JITTER | **90** CUTS | **91** SHORT | **92** PUMP | **93** COMB | **94** SPACE | **95** CRUSH |
 | (knobs: the delay) | **96** Time | **97** Feedback | **98** Tone | **99** Band | **100** Wow | **101** Glitch | **102** Route | **103** Rev>FX |
 | DENSITY out | **104** D1 | **105** D2 | **106** D3 | **107** SN | **108** CY | **109** CH | **110** OH | **111** all in |
+<!-- /remote:manual-global-buttons -->
 
+<!-- remote:manual-rolls -->
 **GLOBAL (channel 16): a roll per track, CC 112–119** (from 1.0; a fader each)
 
 <!-- grid -->
 | | D1 | D2 | D3 | SN | CY | CH | OH | Selected |
 |---|---|---|---|---|---|---|---|---|
 | Roll (by value) | **112** | **113** | **114** | **115** | **116** | **117** | **118** | **119** |
+<!-- /remote:manual-rolls -->
 
 #### The effects: tap or hold (from 1.0)
 

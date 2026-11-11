@@ -1,0 +1,356 @@
+{
+  "schemaVersion": 1,
+  "source": "passive-web-midi-input",
+  "inputPorts": [
+    {
+      "id": "-946831688",
+      "name": "828ES MIDI In",
+      "manufacturer": "MOTU",
+      "type": "input",
+      "state": "connected"
+    },
+    {
+      "id": "1591545354",
+      "name": "Network RTP Session 1",
+      "manufacturer": "Unknown",
+      "type": "input",
+      "state": "connected"
+    },
+    {
+      "id": "-1722465063",
+      "name": "Network RTP Session 3",
+      "manufacturer": "Unknown",
+      "type": "input",
+      "state": "connected"
+    },
+    {
+      "id": "1419092018",
+      "name": "Network RTP Session 4",
+      "manufacturer": "Unknown",
+      "type": "input",
+      "state": "connected"
+    },
+    {
+      "id": "1315683862",
+      "name": "Network RTP Session 5",
+      "manufacturer": "Unknown",
+      "type": "input",
+      "state": "connected"
+    },
+    {
+      "id": "-2025649191",
+      "name": "Launchpad Pro MK3 LPProMK3 MIDI",
+      "manufacturer": "Focusrite - Novation",
+      "type": "input",
+      "state": "connected"
+    },
+    {
+      "id": "1591092149",
+      "name": "Launchpad Pro MK3 LPProMK3 DIN",
+      "manufacturer": "Focusrite - Novation",
+      "type": "input",
+      "state": "connected"
+    },
+    {
+      "id": "1507866257",
+      "name": "Launchpad Pro MK3 LPProMK3 DAW",
+      "manufacturer": "Focusrite - Novation",
+      "type": "input",
+      "state": "connected"
+    }
+  ],
+  "selectedInput": "-2025649191",
+  "selectedOutput": "2023923634",
+  "identityVerified": false,
+  "excludeMidiClock": true,
+  "messages": [
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1500273.4000005722,
+      "bytes": [
+        190,
+        104,
+        127
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1500492.6999998093,
+      "bytes": [
+        190,
+        104,
+        0
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1500758.8000001907,
+      "bytes": [
+        190,
+        105,
+        127
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1500967.8000001907,
+      "bytes": [
+        190,
+        105,
+        0
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1501243.9000005722,
+      "bytes": [
+        190,
+        106,
+        127
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1501437.8000001907,
+      "bytes": [
+        190,
+        106,
+        0
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1501714.6999998093,
+      "bytes": [
+        190,
+        107,
+        127
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1501920.1000003815,
+      "bytes": [
+        190,
+        107,
+        0
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1502225.8000001907,
+      "bytes": [
+        190,
+        108,
+        127
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1502425.1000003815,
+      "bytes": [
+        190,
+        108,
+        0
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1502749.6000003815,
+      "bytes": [
+        190,
+        109,
+        127
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1502957.1999998093,
+      "bytes": [
+        190,
+        109,
+        0
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1503274.1000003815,
+      "bytes": [
+        190,
+        110,
+        127
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1503455.6000003815,
+      "bytes": [
+        190,
+        110,
+        0
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1503780,
+      "bytes": [
+        190,
+        111,
+        127
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1503947.1999998093,
+      "bytes": [
+        190,
+        111,
+        0
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1504622.5,
+      "bytes": [
+        190,
+        112,
+        127
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1504803.3000001907,
+      "bytes": [
+        190,
+        112,
+        0
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1505132.1000003815,
+      "bytes": [
+        190,
+        113,
+        127
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1505337.1000003815,
+      "bytes": [
+        190,
+        113,
+        0
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1505631.5,
+      "bytes": [
+        190,
+        114,
+        127
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1505830.1999998093,
+      "bytes": [
+        190,
+        114,
+        0
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1506130.1000003815,
+      "bytes": [
+        190,
+        115,
+        127
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1506334.8000001907,
+      "bytes": [
+        190,
+        115,
+        0
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1506666,
+      "bytes": [
+        190,
+        116,
+        127
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1506875.1999998093,
+      "bytes": [
+        190,
+        116,
+        0
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1507207.3000001907,
+      "bytes": [
+        190,
+        117,
+        127
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1507418.6000003815,
+      "bytes": [
+        190,
+        117,
+        0
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1507749.3000001907,
+      "bytes": [
+        190,
+        118,
+        127
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1507935.1999998093,
+      "bytes": [
+        190,
+        118,
+        0
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1508268.5,
+      "bytes": [
+        190,
+        119,
+        127
+      ]
+    },
+    {
+      "inputId": "-2025649191",
+      "timestamp": 1508435.9000005722,
+      "bytes": [
+        190,
+        119,
+        0
+      ]
+    }
+  ]
+}

@@ -1,0 +1,110 @@
+{
+  "source": "Components Get Custom Mode then file export; no slot writes during baseline capture",
+  "slots": [
+    {
+      "slot": 1,
+      "beforeBytes": 1228,
+      "beforeSHA256": "f0f8b49c420d9ce2a15aa6b04d2f0dfc0fad6458b817b89dbdafea7046b10cb2",
+      "afterSHA256": "f0f8b49c420d9ce2a15aa6b04d2f0dfc0fad6458b817b89dbdafea7046b10cb2",
+      "unchanged": true
+    },
+    {
+      "slot": 2,
+      "beforeBytes": 988,
+      "beforeSHA256": "fdfecb673beacaa972ae20bd29db848256b0b4ac1f4ae45c6ab8853a9182f214",
+      "afterSHA256": "fdfecb673beacaa972ae20bd29db848256b0b4ac1f4ae45c6ab8853a9182f214",
+      "unchanged": true
+    },
+    {
+      "slot": 3,
+      "beforeBytes": 666,
+      "beforeSHA256": "2acdc9c33659c882f78d6ac958b1db82967d520600e5b3f283d769ca8803cd7d",
+      "afterSHA256": "2acdc9c33659c882f78d6ac958b1db82967d520600e5b3f283d769ca8803cd7d",
+      "unchanged": true
+    },
+    {
+      "slot": 4,
+      "beforeBytes": 666,
+      "beforeSHA256": "3dbc17b9cd29c919bd1ca9a6a7d6e74274634f68eec614fb1e46d0342295be00",
+      "afterSHA256": "3dbc17b9cd29c919bd1ca9a6a7d6e74274634f68eec614fb1e46d0342295be00",
+      "unchanged": true
+    },
+    {
+      "slot": 5,
+      "beforeBytes": 666,
+      "beforeSHA256": "d1a3d5da4aa51ddd3b938a99e48dadab7f55ac9049df46eceedf8187fe375785",
+      "afterSHA256": "d1a3d5da4aa51ddd3b938a99e48dadab7f55ac9049df46eceedf8187fe375785",
+      "unchanged": true
+    },
+    {
+      "slot": 6,
+      "beforeBytes": 666,
+      "beforeSHA256": "0d2250f399a683cf8cb324202a84ec50041d26c7160c758c5966877a0ed15f2a",
+      "afterSHA256": "0d2250f399a683cf8cb324202a84ec50041d26c7160c758c5966877a0ed15f2a",
+      "unchanged": true
+    },
+    {
+      "slot": 7,
+      "beforeBytes": 666,
+      "beforeSHA256": "f4e47186673ca9901de43c3f77b1e4ab739c8d04767d067b6482f70d26d29dba",
+      "afterSHA256": "f4e47186673ca9901de43c3f77b1e4ab739c8d04767d067b6482f70d26d29dba",
+      "unchanged": true
+    },
+    {
+      "slot": 8,
+      "beforeBytes": 1130,
+      "beforeSHA256": "1dfbd521db43107d8e9e06a243f42b1dd1b71791f5ada7ee68a077711db0b8ae",
+      "afterSHA256": "1dfbd521db43107d8e9e06a243f42b1dd1b71791f5ada7ee68a077711db0b8ae",
+      "unchanged": true
+    },
+    {
+      "slot": 9,
+      "beforeBytes": 633,
+      "beforeSHA256": "ceca1c779932e2aac0364508acc143417d50a4870f41227b0e2c837b95ea9d09",
+      "afterSHA256": "ceca1c779932e2aac0364508acc143417d50a4870f41227b0e2c837b95ea9d09",
+      "unchanged": true
+    },
+    {
+      "slot": 10,
+      "beforeBytes": 666,
+      "beforeSHA256": "18f12043a58428bc5669cb19bf32f16adf07afb30b4c93df89db85f83e1bbf2f",
+      "afterSHA256": "18f12043a58428bc5669cb19bf32f16adf07afb30b4c93df89db85f83e1bbf2f",
+      "unchanged": true
+    },
+    {
+      "slot": 11,
+      "beforeBytes": 666,
+      "beforeSHA256": "5b29e603d2458eb4ea6852054b2e458e18676adc6e846e9e4fd7f61d247667b0",
+      "afterSHA256": "5b29e603d2458eb4ea6852054b2e458e18676adc6e846e9e4fd7f61d247667b0",
+      "unchanged": true
+    },
+    {
+      "slot": 12,
+      "beforeBytes": 666,
+      "beforeSHA256": "32657ca31647ef39d254a4568f26a96fce068335353529107058609d7f947e7e",
+      "afterSHA256": "32657ca31647ef39d254a4568f26a96fce068335353529107058609d7f947e7e",
+      "unchanged": true
+    },
+    {
+      "slot": 13,
+      "beforeBytes": 666,
+      "beforeSHA256": "2c2ddda6d826b8ae599e3354d8b0f8344037cbd063c614dd44ff2b5cc7f6236a",
+      "afterSHA256": "2c2ddda6d826b8ae599e3354d8b0f8344037cbd063c614dd44ff2b5cc7f6236a",
+      "unchanged": true
+    },
+    {
+      "slot": 14,
+      "beforeBytes": 666,
+      "beforeSHA256": "084fa8743d96ac02c800caefe6d01417ea75a0ca06ac20f1bfd28e8c3c5367c4",
+      "afterSHA256": "084fa8743d96ac02c800caefe6d01417ea75a0ca06ac20f1bfd28e8c3c5367c4",
+      "unchanged": true
+    },
+    {
+      "slot": 15,
+      "beforeBytes": 666,
+      "beforeSHA256": "6dd3994d6e446ccab6e89268594d095c01ba36a3fce9eef42560c952770e994f",
+      "afterSHA256": "6dd3994d6e446ccab6e89268594d095c01ba36a3fce9eef42560c952770e994f",
+      "unchanged": true
+    }
+  ]
+}

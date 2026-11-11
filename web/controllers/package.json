@@ -1,0 +1,27 @@
+{
+  "name": "elixir-midi-mapper",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "template": "vite-node tools/templates/inspect.ts"
+  },
+  "dependencies": {
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "@vitejs/plugin-vue": "^6.0.0",
+    "@vue/test-utils": "^2.4.6",
+    "jsdom": "^27.0.0",
+    "typescript": "~5.9.0",
+    "vite": "^7.1.0",
+    "vitest": "^3.2.0",
+    "vue-tsc": "^3.1.0"
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "date": "2026-11-10",
+  "hardware_connected": false,
+  "files": [
+    {
+      "file": "baseline.syx",
+      "origin": "Components-1.72.5-UI-export",
+      "settings": "New Custom Mode defaults; name *New Custom Mode",
+      "bytes": 684,
+      "sha256": "213701d9ded78d07c45e5ddb3e8ef91eb6d16dc2f1093efce935160e8af0704c",
+      "baseline_difference_count": 0
+    },
+    {
+      "file": "button-note.syx",
+      "origin": "Components-1.72.5-UI-export",
+      "settings": "Button 1 Control Change \u2192 Note (A3 / 69; momentary; velocity127)",
+      "bytes": 683,
+      "sha256": "d6d5d575aa5f4ca04dee9dfe7bb0bed80f0df3e3127ef2f6f5cfc8ad5cb0ab89",
+      "baseline_difference_count": 205
+    },
+    {
+      "file": "button-toggle.syx",
+      "origin": "Components-1.72.5-UI-export",
+      "settings": "Button 1 Momentary \u2192 Toggle",
+      "bytes": 684,
+      "sha256": "eac3f76546c5b6190a7db3e693907e09e3ea37bd760c1f48c2d1f93df9d95943",
+      "baseline_difference_count": 1
+    },
+    {
+      "file": "channel15-verified.syx",
+      "origin": "Components-1.72.5-UI-export",
+      "settings": "Encoder 1 Global channel \u2192 Channel 15",
+      "bytes": 684,
+      "sha256": "ae497c94db8eaaa369a3d58a5c404e8b825c7b2eefe5a4866d5620afee631c37",
+      "baseline_difference_count": 2
+    },
+    {
+      "file": "components-reexport-mixed.syx",
+      "origin": "Components-1.72.5-UI-export",
+      "settings": "Components import then Download of independent-mixed.syx; verified channels1/15/16, relative, toggle, labels, program and off control",
+      "bytes": 678,
+      "sha256": "ef7a7531b013b9463286ad677c916a84ceca6ca3d4cb9c3ea1205d5df8666015",
+      "baseline_difference_count": 615
+    },
+    {
+      "file": "encoder-blue.syx",
+      "origin": "Components-1.72.5-UI-export",
+      "settings": "Encoder 1 off color Vibrant red (5) \u2192 Vibrant blue (41)",
+      "bytes": 684,
+      "sha256": "f728887c154d6a4c1012017aa35473e64ff9d172a2f9a7019792db73e1aede85",
+      "baseline_difference_count": 1
+    },
+    {
+      "file": "encoder-cc74.syx",
+      "origin": "Components-1.72.5-UI-export",
+      "settings": "Encoder 1 CC 13 \u2192 74",
+      "bytes": 684,
+      "sha256": "b495f06731592137ee3a679231b27ef0d8718be7e9a0a0254b802428d98a1c61",
+      "baseline_difference_count": 1
+    },
+    {
+      "file": "encoder-label.syx",
+      "origin": "Components-1.72.5-UI-export",
+      "settings": "Encoder 1 Relative plus name Reverb D1; two changes, not an isolated probe",
+      "bytes": 693,
+      "sha256": "d3a721faa3a2737498110b1f968f039789b3ccdb18861cb79cb0b28fc8ae7bbd",
+      "baseline_difference_count": 399
+    },
+    {
+      "file": "encoder-relative.syx",
+      "origin": "Components-1.72.5-UI-export",
+      "settings": "Encoder 1 Absolute \u2192 Relative",
+      "bytes": 684,
+      "sha256": "25c3fae2e2e0b4d93068ba4a56e41b1193bae216868d5cda0f69693cf6e77c43",
+      "baseline_difference_count": 1
+    },
+    {
+      "file": "independent-baseline.syx",
+      "origin": "independent-codec",
+      "settings": "Independent baseline from createDefaultMode()",
+      "bytes": 684,
+      "sha256": "213701d9ded78d07c45e5ddb3e8ef91eb6d16dc2f1093efce935160e8af0704c",
+      "baseline_difference_count": 0
+    },
+    {
+      "file": "independent-mixed.syx",
+      "origin": "independent-codec",
+      "settings": "Independent mixed mode; see README and generate-xl3-check.mjs",
+      "bytes": 678,
+      "sha256": "ef7a7531b013b9463286ad677c916a84ceca6ca3d4cb9c3ea1205d5df8666015",
+      "baseline_difference_count": 615
+    },
+    {
+      "file": "label-isolated.syx",
+      "origin": "Components-1.72.5-UI-export",
+      "settings": "Encoder 1 name empty \u2192 Reverb D1; absolute restored explicitly",
+      "bytes": 693,
+      "sha256": "a479395eab463c26e6622e51f878a03db75820cf8b624c3fa8cc888e947ae77d",
+      "baseline_difference_count": 398
+    }
+  ]
+}

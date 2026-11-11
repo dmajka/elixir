@@ -622,6 +622,7 @@
 
   <div class="col">
     <h2>TRACKS (channel 15)</h2>
+    <!-- remote:cheat-tracks -->
     <table class="grid">
       <tr><th></th><th>D1</th><th>D2</th><th>D3</th><th>SN</th><th>CY</th><th>CH</th><th>OH</th><th>sel</th></tr>
       <tr><td>Volume</td><td>8</td><td>9</td><td>10</td><td>11</td><td>12</td><td>13</td><td>14</td><td>15</td></tr>
@@ -639,6 +640,7 @@
       <tr><td>Mute ⇄</td><td>104</td><td>105</td><td>106</td><td>107</td><td>108</td><td>109</td><td>110</td><td>111</td></tr>
       <tr><td>Solo ⇄</td><td>112</td><td>113</td><td>114</td><td>115</td><td>116</td><td>117</td><td>118</td><td>119</td></tr>
     </table>
+    <!-- /remote:cheat-tracks -->
     <p class="note">Knobs are CCs (8–103); buttons (104–119) a CC or a note. Column 8: the selected track. CH and OH
       share the hat voice, but for their decays. DENSITY: the track's own, centered at 64, on top of 16's CC 28.</p>
 
@@ -657,24 +659,29 @@
 
   <div class="col">
     <h2>GLOBAL (channel 16): knobs and faders</h2>
+    <!-- remote:cheat-global-knobs -->
     <table class="grid cells">
       <tr><td>8–15</td><td><b>8</b>Tempo</td><td><b>9</b>Shuffle</td><td><b>10</b>Morph</td><td><b>11</b>SRate</td><td><b>12</b>Master filter</td><td><b>13</b>Roll rate</td><td><b>14</b>Repeat</td><td><b>15</b>Tape time</td></tr>
-      <tr><td>16–23</td><td><b>16</b>FX wet</td><td><b>17</b>P1</td><td><b>18</b>P2</td><td><b>19</b>P3</td><td><b>20</b>P4</td><td><b>21</b>Bus dirt</td><td><b>22</b>Echo>rev</td><td><b>23</b>Saturate</td></tr>
+      <tr><td>16–23</td><td><b>16</b>FX wet</td><td><b>17</b>P1</td><td><b>18</b>P2</td><td><b>19</b>P3</td><td><b>20</b>P4</td><td><b>21</b>Bus dirt</td><td><b>22</b>Echo&gt;rev</td><td><b>23</b>Saturate</td></tr>
       <tr><td>24–31</td><td><b>24</b>Rev level</td><td><b>25</b>Rev size</td><td><b>26</b>Rev damp</td><td><b>27</b>Mstr dirt</td><td><b>28</b>DENSITY</td><td><b>29</b>Ghost vel</td><td><b>30</b>Build</td><td><b>31</b>Vary</td></tr>
       <tr><td>32–39</td><td><b>32</b>Macro 1</td><td><b>33</b>Macro 2</td><td><b>34</b>Macro 3</td><td><b>35</b>Macro 4</td><td><b>36</b>DRILL</td><td><b>37</b>JITTER</td><td><b>38</b>CUTS</td><td><b>39</b>PUMP</td></tr>
       <tr><td>40–47</td><td><b>40</b>COMB note</td><td><b>41</b>COMB fb</td><td><b>42</b>CRUSH</td><td><b>43</b>REV len</td><td><b>44</b>LFO1 dep</td><td><b>45</b>LFO2 dep</td><td><b>46</b>LFO3 dep</td><td><b>47</b>Filter reso</td></tr>
     </table>
+    <!-- /remote:cheat-global-knobs -->
     <h2>GLOBAL (channel 16): knobs off the grid</h2>
+    <!-- remote:cheat-global-off-grid -->
     <table class="grid cells">
-      <tr><td>Delay</td><td><b>96</b>Time</td><td><b>97</b>Feedback</td><td><b>98</b>Tone</td><td><b>99</b>Band</td><td><b>100</b>Wow</td><td><b>101</b>Glitch</td><td><b>102</b>Route</td><td><b>103</b>Rev>FX</td></tr>
+      <tr><td>Delay</td><td><b>96</b>Time</td><td><b>97</b>Feedback</td><td><b>98</b>Tone</td><td><b>99</b>Band</td><td><b>100</b>Wow</td><td><b>101</b>Glitch</td><td><b>102</b>Route</td><td><b>103</b>Rev&gt;FX</td></tr>
       <tr><td>RING · LFO 4</td><td><b>3</b>Wet</td><td><b>4</b>Slope</td><td><b>5</b>Tone</td><td><b>7</b>Tune</td><td><b>63</b>Spread</td><td><b>2</b>LFO4 dep</td><td></td><td></td></tr>
     </table>
+    <!-- /remote:cheat-global-off-grid -->
     <p class="note">GRAIN: Time is Position, Wow Size, Glitch Density (Saturate, 23, Scatter). Band 0: off. RING's root
       is the master filter (12), its Decay Filter reso (47).</p>
     <h2>GLOBAL (channel 16): buttons, CC or note</h2>
+    <!-- remote:cheat-global-buttons -->
     <table class="grid cells">
       <tr><td>Transport · held</td><td><b>48</b>PLAY/STOP</td><td><b>49</b>REC</td><td><b>50</b>FILL</td><td><b>51</b>REPEAT</td><td><b>52</b>FREEZE</td><td><b>53</b>THROW REV</td><td><b>54</b>THROW FX</td><td><b>55</b>FB PUSH</td></tr>
-      <tr><td>Held · patterns</td><td><b>56</b>TAPE STOP</td><td><b>57</b>LP sweep</td><td><b>58</b>HP sweep</td><td><b>59</b>REVERSE</td><td><b>60</b><b>◀ pattern</b></td><td><b>61</b><b>pattern ▶</b></td><td><b>62</b>CTRL ALL tap/hold</td><td><b>63</b><i>knob</i></td></tr>
+      <tr><td>Held · patterns</td><td><b>56</b>TAPE STOP</td><td><b>57</b>LP sweep</td><td><b>58</b>HP sweep</td><td><b>59</b>REVERSE</td><td><b>60</b>◀ pattern</td><td><b>61</b>pattern ▶</td><td><b>62</b>CTRL ALL tap/hold</td><td><b>63</b><i>knob</i></td></tr>
       <tr><td>Select</td><td><b>64</b>D1</td><td><b>65</b>D2</td><td><b>66</b>D3</td><td><b>67</b>SN</td><td><b>68</b>CY</td><td><b>69</b>CH</td><td><b>70</b>OH</td><td><b>71</b>CA revert</td></tr>
       <tr><td>Roll (held)</td><td><b>72</b>D1</td><td><b>73</b>D2</td><td><b>74</b>D3</td><td><b>75</b>SN</td><td><b>76</b>CY</td><td><b>77</b>CH</td><td><b>78</b>OH</td><td><b>79</b>sel</td></tr>
       <tr><td>DRILL (held)</td><td><b>80</b>D1</td><td><b>81</b>D2</td><td><b>82</b>D3</td><td><b>83</b>SN</td><td><b>84</b>CY</td><td><b>85</b>CH</td><td><b>86</b>OH</td><td><b>87</b>sel</td></tr>
@@ -682,6 +689,7 @@
       <tr><td>DENSITY out ⇄</td><td><b>104</b>D1</td><td><b>105</b>D2</td><td><b>106</b>D3</td><td><b>107</b>SN</td><td><b>108</b>CY</td><td><b>109</b>CH</td><td><b>110</b>OH</td><td><b>111</b>all in</td></tr>
       <tr><td>Roll (fader)</td><td><b>112</b>D1</td><td><b>113</b>D2</td><td><b>114</b>D3</td><td><b>115</b>SN</td><td><b>116</b>CY</td><td><b>117</b>CH</td><td><b>118</b>OH</td><td><b>119</b>sel</td></tr>
     </table>
+    <!-- /remote:cheat-global-buttons -->
     <p class="note">The effects are PERF's and work from any page. DENSITY out: 104–110 leave a track out of DENSITY
       (again: back in), 111 puts them all back. Roll faders: the value is the rate, 1–32 on the grid (1/4 … 1/32),
       33–127 free (1/32 … 1/256), 0 off; several at once, while playing. Effects and CONTROL ALL: a tap (under ¼ s) latches, again off; a longer press holds (TOGGLE pads: the

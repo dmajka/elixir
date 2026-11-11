@@ -1,0 +1,27 @@
+{
+  "capture": "research/hardware/slot1-reconnect-capture.jsonl",
+  "frames": [
+    {
+      "file": "frame-001.syx",
+      "source": "LCXL3 1 MIDI Out",
+      "endpoint": 135839843,
+      "length": 17,
+      "header": "f0 7e 00 06 02 00 20 29 48 01 00"
+    },
+    {
+      "file": "frame-002.syx",
+      "source": "LCXL3 1 MIDI Out",
+      "endpoint": 135839843,
+      "length": 652,
+      "header": "f0 00 20 29 02 15 05 00 10 00 06"
+    },
+    {
+      "file": "frame-003.syx",
+      "source": "LCXL3 1 MIDI Out",
+      "endpoint": 135839843,
+      "length": 546,
+      "header": "f0 00 20 29 02 15 05 00 10 03 06"
+    }
+  ],
+  "incompleteSources": []
+}
