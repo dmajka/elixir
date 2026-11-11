@@ -15,7 +15,8 @@
 #   cheatsheet.pdf              four pages of keys and knobs (web/cheatsheet.pdf: tools/cheatsheet.sh); fmhub.json
 #                               links to it
 #   firmware/                   elixir-VER.fwsc, elixir-VER-src.tar.gz (the source, as the GPL asks), MANUAL.md,
-#                               LICENSE, NOTICE.md, LICENSES/, and a page listing them
+#                               LICENSE, NOTICE.md, LICENSES/, and a page listing them; 1.3.1: the earlier releases'
+#                               packages the install page offers (from their GitHub releases, cached in build/releases/)
 #
 #   web/make_site.py [PACKAGE.fwsc] [OUT_DIR]      (default: build/elixir.fwsc build/site)
 import html
@@ -698,6 +699,39 @@ def print_pdf(page, pdf):
     return True
 
 
+def proj_version(ref):
+    """the project format a git ref saves (firmware/src/project.c PROJ_VERSION), None if it has none"""
+    r = subprocess.run(["git", "show", f"{ref}:firmware/src/project.c"], cwd=ROOT, capture_output=True, text=True)
+    m = re.search(r"#define PROJ_VERSION (\d+)u", r.stdout) if r.returncode == 0 else None
+    return int(m[1]) if m else None
+
+
+def earlier_releases(ver):
+    """1.3.1: the earlier releases the install page offers, newest first: [(version, package bytes)]. From 1.0 (the
+    0.x test releases left out), and only those that save the projects as this one does (older formats refuse a newer project's slots). Each the GitHub release's own
+    signed package (release.yml's, attested), downloaded once into build/releases/ by gh; a release gh can't fetch
+    is left out with a warning (the page still builds)."""
+    tags = subprocess.run(["git", "tag", "-l", "v*", "--sort=-v:refname"], cwd=ROOT, capture_output=True,
+                          text=True).stdout.split()
+    fmt, out = proj_version("HEAD"), []
+    for tag in tags:
+        if tag == ver or not re.fullmatch(r"v[1-9]\d*(\.\d+)+", tag) or proj_version(tag) != fmt:   # (from 1.0)
+            continue
+        cache = ROOT / "build/releases" / tag
+        pkgs = sorted(cache.glob("*.fwsc")) if cache.exists() else []
+        if not pkgs:
+            cache.mkdir(parents=True, exist_ok=True)
+            r = subprocess.run(["gh", "release", "download", tag, "--pattern", "*.fwsc", "--dir", str(cache)],
+                               cwd=ROOT, capture_output=True, text=True)
+            pkgs = sorted(cache.glob("*.fwsc"))
+            if r.returncode or not pkgs:
+                print(f"site: {tag}'s package not fetched from its GitHub release, left out: {r.stderr.strip()}",
+                      file=sys.stderr)
+                continue
+        out.append((tag, pkgs[0].read_bytes()))
+    return out
+
+
 def files_page(entries):
     li = "".join(f'<li><a href="{n}">{n}</a> <span>{d}</span></li>' for n, d in entries)
     return ('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -745,7 +779,14 @@ def main(pkg, out):
     page = (ROOT / "web/install.html").read_text(encoding="utf-8")
     lib = "\n".join(strip_module((ROOT / "web" / f).read_text(encoding="utf-8"))
                     for f in ("fm1pkg.js", "fm1ota.js", "install.js"))
-    meta = json.dumps({"version": ver, "product": product, "pkg": "../firmware/" + name})
+    older = []                                       # (1.3.1: the earlier releases, a menu under Install)
+    for v, b in earlier_releases(ver):
+        p = product_of(b)
+        if not re.fullmatch(r"FM-1_359\d{6}", p):
+            raise SystemExit(f"{v}'s release package: identity {p!r} is not Elixir's")
+        (fw / f"elixir-{v}.fwsc").write_bytes(b)
+        older.append({"version": v, "product": p, "pkg": f"../firmware/elixir-{v}.fwsc", "size": len(b)})
+    meta = json.dumps({"version": ver, "product": product, "pkg": "../firmware/" + name, "older": older})
     for mark in ("/*LIB*/", "/*META*/", "<!--NAV-->"):
         if page.count(mark) != 1:
             raise SystemExit(f"web/install.html must contain {mark} once")
@@ -808,11 +849,14 @@ def main(pkg, out):
     (fw / "index.html").write_text(files_page([
         (name, f"the firmware package ({len(raw)} B, identity {product})"),
         (src, "the complete source (GPL-3.0)"),
+        *((f"elixir-{o['version']}.fwsc", f"an earlier release's package ({o['size']} B, identity {o['product']}; "
+           f"its source: the {o['version']} tag)") for o in older),
         ("MANUAL.md", "the manual as Markdown"),
         ("LICENSE", "GPL-3.0"), ("NOTICE.md", "what Elixir is built from"), ("LICENSES/", "the other license texts")]),
         encoding="utf-8")
     (out / ".nojekyll").write_text("")              # GitHub Pages: serve the files as they are
-    print(f"site: {out}: index.html, install/, library/, try/, manual/, firmware/{name} ({len(raw)} B, {product}), firmware/{src}")
+    print(f"site: {out}: index.html, install/, library/, try/, manual/, firmware/{name} ({len(raw)} B, {product}), firmware/{src}"
+          f"{', earlier: ' + ' '.join(o['version'] for o in older) if older else ''}")
 
 
 if __name__ == "__main__":

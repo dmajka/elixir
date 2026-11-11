@@ -32,6 +32,11 @@
   ul { padding-left: 20px; margin: 0 0 14px; }
   li { margin-bottom: 6px; }
   footer.site { margin-top: 48px; }
+  .older { margin-top: 28px; padding: 14px 18px; border-radius: var(--radius); background: var(--well); }
+  .older h3 { font-size: 16px; font-weight: 600; margin: 0 0 6px; }
+  .older .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 10px 0 0; }
+  .older select { font: inherit; font-size: 16px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line);
+                  background: var(--card); color: var(--fg); min-width: 0; max-width: 100%; }
 </style>
 </head>
 <body>
@@ -83,6 +88,18 @@
   <p><button id="go" disabled>Install Elixir</button></p>
   <p class="small">If an install is cut off (cable pulled, page closed), the FM-1 stays in update mode. Plug it in
     and press the same button again to finish it.</p>
+
+  <div class="older" id="older" hidden>
+    <h3>Install an earlier version</h3>
+    <p class="small">To go back to an earlier release of Elixir (from 1.0 on), pick it and install it over Elixir as
+      above. Your projects, kit library and settings are kept. A version doesn't have what came after it, and a
+      project you save while running it loses those later settings.</p>
+    <div class="row">
+      <label for="older-ver" class="small">Version</label>
+      <select id="older-ver"></select>
+      <button class="alt" id="older-go" disabled>Install this version</button>
+    </div>
+  </div>
 
   <div id="progress" hidden><progress id="bar" max="100" value="0"></progress></div>
   <p id="status"></p>
@@ -136,6 +153,8 @@ const MSG = {
   stockConfirm: "Install the official V15 firmware? Elixir's projects on the FM-1 will be lost.",
   elixirConfirm: "Install Elixir? Projects saved by Elixir are kept; anything Felucca saved on the " +
     "FM-1 will be replaced.",
+  olderConfirm: (v) => `Install Elixir ${v}, an earlier version? Your projects are kept, but ${v} doesn't have ` +
+    "what came after it, and a project saved while running it loses those settings.",
 };
 const say = (k, arg = "") => { $("status").textContent = (MSG[k] ?? k) + arg; };
 const log = (t) => { $("log").textContent += t + "\n"; };
@@ -144,9 +163,15 @@ const lock = (on) => {
   writing = on;
   $("go").disabled = on || !image; $("stock-go").disabled = on || !stock;
   $("stock-file").disabled = on; $("check").disabled = on || !navigator.requestMIDIAccess;
+  $("older-go").disabled = on || !navigator.requestMIDIAccess;
 };
 window.addEventListener("beforeunload", (e) => { if (writing) { e.preventDefault(); e.returnValue = MSG.leave; } });
 $("ver").textContent = meta.version;
+// 1.3.1: the earlier releases (make_site.py: those with this version's project format), newest first
+if (meta.older && meta.older.length) {
+  for (const o of meta.older) $("older-ver").add(new Option(o.version, o.version));
+  $("older").hidden = false;
+}
 
 async function midi() {
   try { return await navigator.requestMIDIAccess({ sysex: true }); } catch (e) { say("denied"); return null; }
@@ -237,6 +262,7 @@ async function addKitPacks(access) {
 (async () => {
   if (!navigator.requestMIDIAccess) { say("nomidi"); return; }
   $("check").disabled = false;
+  $("older-go").disabled = false;
   try {
     const r = await fetch(meta.pkg);
     if (!r.ok) throw new Error(`${meta.pkg}: HTTP ${r.status}`);
@@ -264,6 +290,23 @@ $("go").addEventListener("click", async () => {
   if (writing || !image || !confirm(MSG.elixirConfirm)) return;
   lock(true);
   await run(image, meta.product);
+  lock(false);
+});
+
+// 1.3.1: an earlier release: its package fetched when asked for, checked as the current one is; no kit packs (those
+// are this version's library format and its page's)
+$("older-go").addEventListener("click", async () => {
+  const o = (meta.older || []).find((x) => x.version === $("older-ver").value);
+  if (writing || !o || !confirm(MSG.olderConfirm(o.version))) return;
+  lock(true);
+  try {
+    say("start");
+    const r = await fetch(o.pkg);
+    if (!r.ok) throw new Error(`${o.pkg}: HTTP ${r.status}`);
+    const pkg = new Uint8Array(await r.arrayBuffer());
+    if (productOf(pkg) !== o.product) say("badpkg");
+    else await run(logicalImage(pkg), o.product);
+  } catch (e) { say("loadfail", e.message); }
   lock(false);
 });
 
