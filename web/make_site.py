@@ -13,7 +13,9 @@
 #   controllers/                1.3.2: the controller mapper (web/controllers, Vue: Launch Control XL 3 and mk2, and
 #                               Launchpad Pro MK3 templates for the remote map), built here with npm; ?view=admin its full editor
 #   data/                       elixir-midi-parameters.json (.meta.json, .csv): the remote map, generated from the firmware
-#                               (tools/remote_params.py) on every build; the mapper is built from the same bytes
+#                               (tools/remote_params.py) on every build; the mapper is built from the same bytes;
+#                               hapax/, oxi/: the Hapax's and the OXI One's instrument definitions, from the same map
+#                               (tools/hapax_defs.py, tools/oxi_defs.py)
 #   manual/index.html           MANUAL.md as a page, with docs/img (its signal-flow diagrams: tools/flow_svg.py) in
 #                               manual/img, and elixir-manual-VER.pdf, the page printed (headless Chrome)
 #   cheatsheet.pdf              the pages of keys and knobs: web/cheatsheet.html printed (1.3.2: here, its remote
@@ -747,8 +749,12 @@ def controllers(out):
     sys.path.insert(0, str(ROOT / "tools"))
     import remote_params
     import remote_docs
+    import hapax_defs
+    import oxi_defs
     doc = remote_params.build()
     params = remote_params.write(doc, out / "data")
+    hapax_defs.write(doc, out / "data/hapax")       # (the Hapax's instrument definitions, from the same map)
+    oxi_defs.write(doc, out / "data/oxi")           # (and the OXI One's)
     for f in remote_docs.update(doc):               # (the manual's and the cheat sheet's remote tables)
         print(f"site: {f}: its remote map tables rewritten from the firmware: commit it"
               + (" (and run tools/cheatsheet.sh for web/cheatsheet.pdf)" if f.endswith(".html") else ""),
@@ -900,6 +906,13 @@ def main(pkg, out):
         ("../data/elixir-midi-parameters.json", f"the remote map's {len(params['parameters'])} parameters, from the "
          "firmware (a parameter list, not a controller configuration); its .meta.json beside it"),
         ("../data/elixir-midi-parameters.csv", "the same parameters as a spreadsheet table"),
+        ("../data/hapax/ELIXIR_DRUMS.txt", "a Squarp Hapax instrument definition: a drum track playing D1 to OH, "
+         "its CCs the remote's TRACKS channel"),
+        ("../data/hapax/ELIXIR_GLOBAL.txt", "its companion for the remote's GLOBAL channel: the held performance "
+         "buttons as lanes, the effects as CCs"),
+        ("../data/oxi/ELIXIR_TRACKS.oxiindef", "an OXI One instrument definition (the OXI App imports it): the "
+         "remote's TRACKS channel as named CCs"),
+        ("../data/oxi/ELIXIR_GLOBAL.oxiindef", "its companion for the remote's GLOBAL channel"),
         ("LICENSE", "GPL-3.0"), ("NOTICE.md", "what Elixir is built from"), ("LICENSES/", "the other license texts")]),
         encoding="utf-8")
     (out / ".nojekyll").write_text("")              # GitHub Pages: serve the files as they are

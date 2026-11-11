@@ -10,7 +10,7 @@ it('shows a compact workspace, grouped parameters and channels without advanced 
   const request = vi.fn(); vi.stubGlobal('navigator', { requestMIDIAccess: request })
   const w = setup()
   expect(w.findAll('.control')).toHaveLength(48)
-  expect(w.find<HTMLInputElement>('.mx-channels input').element.value).toBe('15')
+  expect(w.find('.mx-channels').exists()).toBe(false)   // (on the Setup tab: set once)
   expect(w.findAll('[role=tab]').map(t => t.text())).toEqual(['Tracks', 'Global', 'Control', 'Setup'])
   expect(w.findAll('.mx-group h2').map(h => h.text())).toEqual([expect.stringContaining('Knobs & sliders'), expect.stringContaining('Buttons & pads')])
   expect(w.find('.hardware-panel').exists()).toBe(false)
@@ -44,6 +44,7 @@ it('supports category-only browsing, click assignment, bulk drop, colors and ato
   emitted.name = 'Host mutation'
   expect((w.emitted('template-change')!.at(-1)![0] as { name: string }).name).toBe('Host mutation')
   // Mutating the delivered copy does not rename the workspace.
+  await w.find('#mapper-tab-setup').trigger('click'); await flushPromises()
   await w.find('.mx-channels input').setValue('14')
   expect((w.emitted('template-change')!.at(-1)![0] as { name: string }).name).not.toBe('Host mutation')
   await w.find('.mx-devices button:last-child').trigger('click')
@@ -53,6 +54,7 @@ it('honors host devices, channels, registry and saved templates', async () => {
   const p = PARAMETER_REGISTRY.find(p => p.id === 'tracks.d1.volume')!
   const w = setup({ availableDevices: [XL3_PROFILE.id], defaultChannels: { remoteTracks: 13, remoteGlobal: 14 }, parameterOverrides: [{ ...p, name: 'Host volume', shortName: 'Host volume', number: 7 }] })
   expect(w.findAll('.mx-devices button')).toHaveLength(1)
+  await w.find('#mapper-tab-setup').trigger('click'); await flushPromises()
   expect(w.find<HTMLInputElement>('.mx-channels input').element.value).toBe('13')
   expect(w.text()).toContain('Host volume')
   const pad = setup({ availableDevices: [LAUNCHPAD_PRO_MK3_PROFILE.id] })
@@ -76,6 +78,7 @@ it('saves and reopens editable JSON from the toolbar and emits detached saves', 
     saved.channels.remoteTracks = 12
     Object.defineProperty(input.element, 'files', { configurable: true, value: [{ size: text.length, text: async () => JSON.stringify(saved) }] })
     await input.trigger('change'); await flushPromises()
+    await w.find('#mapper-tab-setup').trigger('click'); await flushPromises()
     expect(w.find<HTMLInputElement>('.mx-channels input').element.value).toBe('12')
     expect(click).toHaveBeenCalledOnce()
   } finally { click.mockRestore() }
@@ -120,8 +123,8 @@ it('opens a guarded send panel with device-specific mode counts and preserves it
 it('offers device and editable downloads and rejects non-config imports atomically', async () => {
   const w = setup()
   await w.find('.mx-menu>button').trigger('click')
-  expect(w.find('#mapper-download-options').text()).toContain('Device file (.syx)')
-  expect(w.find('#mapper-download-options').text()).toContain('Editable config (.json)')
+  expect(w.find('#mapper-download-options').text()).toContain('Save device file (.syx)')
+  expect(w.find('#mapper-download-options').text()).toContain('Save editable config (.json)')
   const input = w.find('[aria-label="Import configuration JSON"]')
   Object.defineProperty(input.element, 'files', { configurable: true, value: [{ name: 'mode.syx', size: 20, text: async () => 'bad' }] })
   await input.trigger('change'); await flushPromises()
@@ -159,8 +162,8 @@ it('selects several controls and sets their colors together', async () => {
 })
 it('walks through the FM-1 setup with the template\'s own channels', async () => {
   const w = setup({ parameterJsonUrl: '../data/elixir-midi-parameters.json' })
-  await w.find('.mx-channels input').setValue('12')
   await w.find('#mapper-tab-setup').trigger('click'); await flushPromises()
+  await w.find('.mx-channels input').setValue('12')
   expect(w.find('.mx-steps').text()).toContain('Set Tracks to 12 and Global to 16')
   expect(w.find('a[href="../manual/#the-remote-map"]').exists()).toBe(true)
   expect(w.find('a[href="../data/elixir-midi-parameters.csv"]').exists()).toBe(true)

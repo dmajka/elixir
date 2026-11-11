@@ -2,6 +2,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import HardwareConnection from './HardwareConnection.vue'
 import ControllerPreview from './ControllerPreview.vue'
+import SequencerPanel from './SequencerPanel.vue'
+import { SEQUENCERS, sequencerById } from '../devices/sequencers'
 import { LED_COLORS, PARAMETER_DRAG_TYPE } from './led-colors'
 import { createMapperContext, mapperContextKey, type MidiMapperOptions } from '../integration/context'
 import { ALL_PROFILES, canWrite, convertTemplate, FAMILIES, familyOf, modelName, profileById } from '../devices/families'
@@ -127,7 +129,16 @@ function switchDevice(id: string) {
 }
 /** the model the dialog found on the MIDI ports (HardwareConnection), when it isn't the one drawn */
 function useModel(id: string) { const was = deviceId.value; switchDevice(id); if (deviceId.value !== was) status.value = `Found on the MIDI ports. ${status.value}` }
-const switchFamily = (id: string) => { const f = families.find(f => f.id === id)!; switchDevice(f.models.find(m => m.id === lastModel[id])?.id ?? f.models[0]!.id) }
+// Sequencers (Hapax, OXI One): files to download from the site's data/, no template; #hapax, #oxi open one. Only on
+// the site (a parameter JSON URL), where web/make_site.py writes them.
+const dataUrl = options.parameterJsonUrl?.replace(/[^/]*$/, '')
+const sequencer = ref(dataUrl ? sequencerById(location.hash.slice(1))?.id ?? '' : '')
+const sequencerShown = computed(() => sequencerById(sequencer.value))
+watch(sequencer, s => history.replaceState(null, '', s ? `#${s}` : location.pathname + location.search))
+/** the narrow toolbar's one list: every controller model, then the sequencers */
+const deviceChoice = computed(() => sequencer.value ? `seq:${sequencer.value}` : deviceId.value)
+function chooseDevice(v: string) { if (v.startsWith('seq:')) sequencer.value = v.slice(4); else { sequencer.value = ''; switchDevice(v) } }
+const switchFamily = (id: string) => { sequencer.value = ''; const f = families.find(f => f.id === id)!; switchDevice(f.models.find(m => m.id === lastModel[id])?.id ?? f.models[0]!.id) }
 function select(id: string) { selection.value = [id]; selected.value = id; if (picked.value) assign(id, picked.value) }
 function assign(controlId: string, parameterId: string) {
   try {
@@ -218,17 +229,21 @@ onBeforeUnmount(() => observer?.disconnect())
 <template>
   <main class="mx" :class="options.theme?.className" :style="{ color: options.theme?.foreground, background: options.theme?.background, '--mapper-accent': options.theme?.accent }">
     <div class="mx-toolbar">
-      <div class="mx-devices" role="group" aria-label="Controller"><button v-for="f in families" :key="f.id" :aria-pressed="family.id === f.id" @click="switchFamily(f.id)">{{ f.name }}</button></div>
-      <select v-if="family.models.length > 1" class="mx-model" :value="deviceId" aria-label="Model" @change="switchDevice(($event.target as HTMLSelectElement).value)"><option v-for="m in family.models" :key="m.id" :value="m.id">{{ modelName(m) }}</option></select>
-      <label class="mx-start">Start from<select v-model="preset" aria-label="Start from a template" @change="loadPreset"><option value="current">Your edits</option><option value="blank">Nothing (blank)</option><optgroup label="Elixir templates"><option v-for="p in catalog" :key="p.id" :value="p.id">{{ p.name.replace(/^Elixir /, '') }}</option></optgroup><optgroup v-if="saved.length" label="Saved"><option v-for="(t, i) in saved" :key="i" :value="`saved:${i}`">{{ t.name }}</option></optgroup></select></label>
-      <div class="mx-channels" role="group" aria-label="Elixir's remote channels" title="CONFIG → REMOTE on the FM-1: the same two channels"><label>TRACKS<input v-model.number="template.channels.remoteTracks" aria-label="Tracks MIDI channel" type="number" min="1" max="16"></label><label>GLOBAL<input v-model.number="template.channels.remoteGlobal" aria-label="Global MIDI channel" type="number" min="1" max="16"></label></div>
-      <div class="mx-files">
-        <button class="mx-quiet" @click="fileInput?.click()">Open…</button><input ref="fileInput" class="mx-hidden" type="file" accept=".json,application/json" aria-label="Import configuration JSON" @change="upload">
-        <div class="mx-menu"><button class="mx-quiet" :aria-expanded="downloadsOpen" aria-controls="mapper-download-options" @click="downloadsOpen = !downloadsOpen">Save ▾</button><div v-if="downloadsOpen" id="mapper-download-options" class="mx-menu-list" @keydown.esc="downloadsOpen = false"><button :disabled="!report.valid || !exportable" @click="download('syx')">Device file (.syx)<small>{{ exportable ? 'for Novation Components' : `not yet for the ${profile.model}` }}</small></button><button @click="download('json')">Editable config (.json)<small>to open here again</small></button></div></div>
-        <button class="mx-primary" :disabled="writable && !report.valid" @click="openSend">{{ writable ? 'Send to controller' : 'Connect & check' }}</button>
+      <div class="mx-pick">
+        <div class="mx-devices" role="group" aria-label="Controller"><button v-for="f in families" :key="f.id" :aria-pressed="!sequencer && family.id === f.id" @click="switchFamily(f.id)">{{ f.name }}</button></div>
+        <div v-if="dataUrl" class="mx-devices" role="group" aria-label="Sequencer"><button v-for="q in SEQUENCERS" :key="q.id" :aria-pressed="sequencer === q.id" @click="sequencer = q.id">{{ q.name }}</button></div>
       </div>
+      <select class="mx-device-select" :value="deviceChoice" aria-label="Device" @change="chooseDevice(($event.target as HTMLSelectElement).value)"><optgroup label="Controllers"><option v-for="m in devices" :key="m.id" :value="m.id">{{ m.model }}</option></optgroup><optgroup v-if="dataUrl" label="Sequencers"><option v-for="q in SEQUENCERS" :key="q.id" :value="`seq:${q.id}`">{{ q.name }}</option></optgroup></select>
+      <template v-if="!sequencer"><select v-if="family.models.length > 1" class="mx-model" :value="deviceId" aria-label="Model" @change="switchDevice(($event.target as HTMLSelectElement).value)"><option v-for="m in family.models" :key="m.id" :value="m.id">{{ modelName(m) }}</option></select>
+      <label class="mx-start"><span>Start from</span><select v-model="preset" aria-label="Start from a template" @change="loadPreset"><option value="current">Your edits</option><option value="blank">Nothing (blank)</option><optgroup label="Elixir templates"><option v-for="p in catalog" :key="p.id" :value="p.id">{{ p.name.replace(/^Elixir /, '') }}</option></optgroup><optgroup v-if="saved.length" label="Saved"><option v-for="(t, i) in saved" :key="i" :value="`saved:${i}`">{{ t.name }}</option></optgroup></select></label>
+      <div class="mx-files">
+        <input ref="fileInput" class="mx-hidden" type="file" accept=".json,application/json" aria-label="Import configuration JSON" @change="upload">
+        <div class="mx-menu"><button class="mx-quiet" :aria-expanded="downloadsOpen" aria-controls="mapper-download-options" @click="downloadsOpen = !downloadsOpen">File ▾</button><div v-if="downloadsOpen" id="mapper-download-options" class="mx-menu-list" @keydown.esc="downloadsOpen = false"><button :disabled="!report.valid || !exportable" @click="download('syx')">Save device file (.syx)<small>{{ exportable ? 'for Novation Components' : `not yet for the ${profile.model}` }}</small></button><button @click="download('json')">Save editable config (.json)<small>to open here again</small></button><button @click="downloadsOpen = false; fileInput?.click()">Open editable config…<small>a .json saved from this page</small></button></div></div>
+        <button class="mx-primary" :disabled="writable && !report.valid" @click="openSend">{{ writable ? 'Send to controller' : 'Connect & check' }}</button>
+      </div></template>
     </div>
-    <div class="mx-layout">
+    <SequencerPanel v-if="sequencerShown && dataUrl" :sequencer="sequencerShown" :data-url="dataUrl" :tracks-channel="template.channels.remoteTracks" :global-channel="template.channels.remoteGlobal" />
+    <div v-else class="mx-layout">
       <div class="mx-stage">
         <div ref="viewport" class="mx-preview"><div ref="art" class="device-art" :style="{ transform: `translate(-50%, -50%) scale(${Math.max(.1, scale)})`, width: isLaunchpad(deviceId) ? '700px' : '790px' }"><ControllerPreview :profile="profile" :assignments="template.assignments.map(a => ({ ...a, label: undefined }))" :selected="selected" :selection="selection" @select="select" @select-many="selectMany" @drop-parameter="assign" /></div></div>
         <p class="mx-count">{{ template.assignments.length }} of {{ profile.controls.length }} controls assigned · drag across controls to select several</p>
@@ -258,11 +273,12 @@ onBeforeUnmount(() => observer?.disconnect())
           </template>
           <template v-else>
             <h2 class="mx-title">Setting up</h2>
+            <div class="mx-channels" role="group" aria-label="Elixir's remote channels"><span>Elixir’s remote channels</span><label>TRACKS<input v-model.number="template.channels.remoteTracks" aria-label="Tracks MIDI channel" type="number" min="1" max="16"></label><label>GLOBAL<input v-model.number="template.channels.remoteGlobal" aria-label="Global MIDI channel" type="number" min="1" max="16"></label></div>
             <ol class="mx-steps">
-              <li><b>On the FM-1:</b> GLO twice opens CONFIG; turn SELECT to <b>REMOTE</b>. Set Tracks to <b>{{ template.channels.remoteTracks }}</b> and Global to <b>{{ template.channels.remoteGlobal }}</b>, as above. Knobs: <b>PICKUP</b> for knobs and faders (nothing jumps), REL for endless encoders. Mute/solo: <b>PRESS</b>, or TOGGLE for buttons set to toggle.</li>
+              <li><b>On the FM-1:</b> GLO twice opens CONFIG; turn SELECT to <b>REMOTE</b>. Set Tracks to <b>{{ template.channels.remoteTracks }}</b> and Global to <b>{{ template.channels.remoteGlobal }}</b>, as above (other channels: change them here first). Knobs: <b>PICKUP</b> for knobs and faders (nothing jumps), REL for endless encoders. Mute/solo: <b>PRESS</b>, or TOGGLE for buttons set to toggle.</li>
               <li v-if="profile.id === LCXL_MK2_PROFILE.id"><b>Onto the controller:</b> <b>Send to controller</b> writes one of its eight user templates from Chrome or Edge, and selects it. Or save the device file (.syx) and send it with Novation Components.</li>
               <li v-else-if="writable"><b>Onto the controller:</b> <b>Send to controller</b> writes custom mode 1 from Chrome or Edge, after a backup. For another mode, save the device file (.syx) and send it with Novation Components.</li>
-              <li v-else-if="exportable"><b>Onto the controller:</b> <b>Save ▾ → Device file (.syx)</b>, then in Novation Components import it and send it to a user template. Select that template on the {{ profile.model }}; <b>Connect &amp; check</b> then shows whether each control sends what Elixir expects.</li>
+              <li v-else-if="exportable"><b>Onto the controller:</b> <b>File ▾ → Save device file (.syx)</b>, then in Novation Components import it and send it to a user template. Select that template on the {{ profile.model }}; <b>Connect &amp; check</b> then shows whether each control sends what Elixir expects.</li>
               <li v-else><b>Onto the controller:</b> this page can't write the {{ profile.model }} yet. In Novation Components, open one of its user templates and set each control as listed below; then <b>Connect &amp; check</b> shows whether each one sends what Elixir expects.</li>
               <li><b>Connecting:</b> both are USB devices, so they meet at a USB host (a computer, or a USB MIDI host box), or the controller's MIDI out goes to the FM-1's TRS input. The lights and knob rings follow Elixir only over USB.</li>
             </ol>
@@ -280,7 +296,7 @@ onBeforeUnmount(() => observer?.disconnect())
       <div class="mx-dialog-head"><h2 id="send-dialog-title">{{ writable ? 'Send to' : 'Connect' }} the {{ profile.model }}</h2><button aria-label="Close send panel" :disabled="sendBusy" @click="closeSend">×</button></div>
       <p v-if="profile.id === LCXL_MK2_PROFILE.id" class="mx-hint">Close Novation Components first. Connect, pick the user template to replace, confirm, and send. Nothing is sent before you do.</p>
       <p v-else-if="writable" class="mx-hint">Close Novation Components first. Connect, back up the mode you'll replace, then confirm. Nothing is sent before you do.</p>
-      <p v-else class="mx-hint">This page doesn't write to the {{ profile.model }}: send it the device file (Save ▾) with Novation Components. Here you can check it: connect, choose its input, and move the controls it asks for.</p>
+      <p v-else class="mx-hint">This page doesn't write to the {{ profile.model }}: send it the device file (File ▾) with Novation Components. Here you can check it: connect, choose its input, and move the controls it asks for.</p>
       <HardwareConnection v-if="sendStarted" :key="family.id" :template="template" compact @busy="sendBusy = $event" @destination-slot="template.destinationSlot = $event" @use-model="useModel" />
     </dialog>
   </main>
@@ -303,8 +319,10 @@ onBeforeUnmount(() => observer?.disconnect())
 .mx-devices{display:flex;padding:3px;gap:3px;border:1px solid var(--line,#2d2a25);border-radius:9px;background:var(--well,#201e1b)}
 .mx-devices button{border:0;background:none;padding:5px 10px;border-radius:6px;color:var(--dim,#a29b8e);font-size:14px;white-space:nowrap}
 .mx-devices [aria-pressed=true]{background:var(--card,#1b1a17);color:var(--fg,#f2ede3);font-weight:600;box-shadow:0 1px 2px #0003}
+.mx-pick{display:flex;gap:8px}
+.mx-device-select{display:none}
 .mx-start,.mx-channels,.mx-channels label{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--dim,#a29b8e)}
-.mx-channels{gap:10px}.mx-channels label{gap:6px;font-size:12px;letter-spacing:.04em}
+.mx-channels{flex-wrap:wrap;gap:8px 12px;margin:4px 0 12px}.mx-channels>span{width:100%;font-size:13px}.mx-channels label{gap:6px;font-size:12px;letter-spacing:.04em}
 .mx select,.mx-channels input{background:var(--card,#1b1a17);border:1px solid var(--line,#2d2a25);border-radius:7px;padding:6px 8px;font-size:14px;color:var(--fg,#f2ede3)}
 .mx-channels input{width:52px}
 .mx-files{display:flex;align-items:center;gap:8px;margin-left:auto}
@@ -386,12 +404,15 @@ onBeforeUnmount(() => observer?.disconnect())
 .mx-dialog :deep(h3){font-size:16px;margin:18px 0 6px}
 .mx-dialog :deep(.error){color:var(--warn,#ff9a5c);border:1px solid var(--warn,#ff9a5c);border-radius:7px;padding:8px 10px}
 
-@media (max-width:900px){.mx-layout{grid-template-columns:minmax(0,1fr) 280px}.mx-files{margin-left:0}}
+@media (max-width:1100px){.mx-start>span{display:none}}
+@media (max-width:900px){.mx-layout{grid-template-columns:minmax(0,1fr) 280px}}
+@media (max-width:980px){.mx-pick,.mx-model{display:none}.mx-device-select{display:block;max-width:100%}}
 @media (max-width:640px){
   .mx{height:auto;min-height:calc(100dvh - var(--host-nav-height,0px));overflow:visible}
   .mx-layout{grid-template-columns:1fr;grid-template-rows:minmax(260px,46dvh) auto}
   .mx-side{border-left:0;border-top:1px solid var(--line,#2d2a25)}
   .mx-panel{overflow:visible}
-  .mx-toolbar{gap:8px 12px}.mx-devices button{padding:6px 8px;font-size:13px}
+  .mx-toolbar{gap:8px}.mx-device-select,.mx-start{flex:1 1 140px;min-width:0}.mx-start select{width:100%;min-width:0}
+  .mx-files{flex:1 1 100%;justify-content:flex-end}
 }
 </style>
