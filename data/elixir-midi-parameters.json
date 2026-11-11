@@ -1,7 +1,7 @@
 {
  "schemaVersion": 1,
  "firmwareVersion": "v1.3.1",
- "sourceRevision": "dd2d99c6ddcf",
+ "sourceRevision": "389b5384c0d4",
  "parameters": [
   {
    "id": "global.build",
@@ -4091,6 +4091,27 @@
    "shortName": "CH FX send"
   },
   {
+   "id": "tracks.ch.hit",
+   "name": "CH Hit",
+   "category": "Pads",
+   "scope": "track-voices",
+   "track": "ch",
+   "channelGroup": "trackCH",
+   "messageType": "note",
+   "alternateMessageTypes": [],
+   "number": 60,
+   "minimum": 1,
+   "maximum": 127,
+   "controlType": "button",
+   "buttonBehavior": "press",
+   "interpretation": "Plays CH at the pad's velocity, at the voice's own pitch, on the track's own channel (CONFIG: MIDI CHANNELS, 6 by default). Under REC, while playing, it records at that velocity. Needs the track's MIDI NOTE at ANY (the default); a note off does nothing.",
+   "documentation": {
+    "source": "firmware/src/midi.c",
+    "symbol": "midi_note_on (dsp.c SEQ_DEFAULT_NOTE, engine.c PAR_MIDI_CHAN_*)"
+   },
+   "shortName": "CH Hit"
+  },
+  {
    "id": "tracks.ch.lfo-amount",
    "name": "CH LFO amount",
    "category": "Modulation",
@@ -4491,6 +4512,27 @@
     "symbol": "RR_FXS (RM_CC0 + 8 x row + column)"
    },
    "shortName": "CY FX send"
+  },
+  {
+   "id": "tracks.cy.hit",
+   "name": "CY Hit",
+   "category": "Pads",
+   "scope": "track-voices",
+   "track": "cy",
+   "channelGroup": "trackCY",
+   "messageType": "note",
+   "alternateMessageTypes": [],
+   "number": 60,
+   "minimum": 1,
+   "maximum": 127,
+   "controlType": "button",
+   "buttonBehavior": "press",
+   "interpretation": "Plays CY at the pad's velocity, at the voice's own pitch, on the track's own channel (CONFIG: MIDI CHANNELS, 5 by default). Under REC, while playing, it records at that velocity. Needs the track's MIDI NOTE at ANY (the default); a note off does nothing.",
+   "documentation": {
+    "source": "firmware/src/midi.c",
+    "symbol": "midi_note_on (dsp.c SEQ_DEFAULT_NOTE, engine.c PAR_MIDI_CHAN_*)"
+   },
+   "shortName": "CY Hit"
   },
   {
    "id": "tracks.cy.lfo-amount",
@@ -4895,6 +4937,27 @@
    "shortName": "D1 FX send"
   },
   {
+   "id": "tracks.d1.hit",
+   "name": "D1 Hit",
+   "category": "Pads",
+   "scope": "track-voices",
+   "track": "d1",
+   "channelGroup": "trackD1",
+   "messageType": "note",
+   "alternateMessageTypes": [],
+   "number": 60,
+   "minimum": 1,
+   "maximum": 127,
+   "controlType": "button",
+   "buttonBehavior": "press",
+   "interpretation": "Plays D1 at the pad's velocity, at the voice's own pitch, on the track's own channel (CONFIG: MIDI CHANNELS, 1 by default). Under REC, while playing, it records at that velocity. Needs the track's MIDI NOTE at ANY (the default); a note off does nothing.",
+   "documentation": {
+    "source": "firmware/src/midi.c",
+    "symbol": "midi_note_on (dsp.c SEQ_DEFAULT_NOTE, engine.c PAR_MIDI_CHAN_*)"
+   },
+   "shortName": "D1 Hit"
+  },
+  {
    "id": "tracks.d1.lfo-amount",
    "name": "D1 LFO amount",
    "category": "Modulation",
@@ -5297,6 +5360,27 @@
    "shortName": "D2 FX send"
   },
   {
+   "id": "tracks.d2.hit",
+   "name": "D2 Hit",
+   "category": "Pads",
+   "scope": "track-voices",
+   "track": "d2",
+   "channelGroup": "trackD2",
+   "messageType": "note",
+   "alternateMessageTypes": [],
+   "number": 60,
+   "minimum": 1,
+   "maximum": 127,
+   "controlType": "button",
+   "buttonBehavior": "press",
+   "interpretation": "Plays D2 at the pad's velocity, at the voice's own pitch, on the track's own channel (CONFIG: MIDI CHANNELS, 2 by default). Under REC, while playing, it records at that velocity. Needs the track's MIDI NOTE at ANY (the default); a note off does nothing.",
+   "documentation": {
+    "source": "firmware/src/midi.c",
+    "symbol": "midi_note_on (dsp.c SEQ_DEFAULT_NOTE, engine.c PAR_MIDI_CHAN_*)"
+   },
+   "shortName": "D2 Hit"
+  },
+  {
    "id": "tracks.d2.lfo-amount",
    "name": "D2 LFO amount",
    "category": "Modulation",
@@ -5697,6 +5781,27 @@
     "symbol": "RR_FXS (RM_CC0 + 8 x row + column)"
    },
    "shortName": "D3 FX send"
+  },
+  {
+   "id": "tracks.d3.hit",
+   "name": "D3 Hit",
+   "category": "Pads",
+   "scope": "track-voices",
+   "track": "d3",
+   "channelGroup": "trackD3",
+   "messageType": "note",
+   "alternateMessageTypes": [],
+   "number": 60,
+   "minimum": 1,
+   "maximum": 127,
+   "controlType": "button",
+   "buttonBehavior": "press",
+   "interpretation": "Plays D3 at the pad's velocity, at the voice's own pitch, on the track's own channel (CONFIG: MIDI CHANNELS, 3 by default). Under REC, while playing, it records at that velocity. Needs the track's MIDI NOTE at ANY (the default); a note off does nothing.",
+   "documentation": {
+    "source": "firmware/src/midi.c",
+    "symbol": "midi_note_on (dsp.c SEQ_DEFAULT_NOTE, engine.c PAR_MIDI_CHAN_*)"
+   },
+   "shortName": "D3 Hit"
   },
   {
    "id": "tracks.d3.lfo-amount",
@@ -6156,6 +6261,27 @@
     "symbol": "RR_FXS (RM_CC0 + 8 x row + column)"
    },
    "shortName": "OH FX send"
+  },
+  {
+   "id": "tracks.oh.hit",
+   "name": "OH Hit",
+   "category": "Pads",
+   "scope": "track-voices",
+   "track": "oh",
+   "channelGroup": "trackOH",
+   "messageType": "note",
+   "alternateMessageTypes": [],
+   "number": 60,
+   "minimum": 1,
+   "maximum": 127,
+   "controlType": "button",
+   "buttonBehavior": "press",
+   "interpretation": "Plays OH at the pad's velocity, at the voice's own pitch, on the track's own channel (CONFIG: MIDI CHANNELS, 7 by default). Under REC, while playing, it records at that velocity. Needs the track's MIDI NOTE at ANY (the default); a note off does nothing.",
+   "documentation": {
+    "source": "firmware/src/midi.c",
+    "symbol": "midi_note_on (dsp.c SEQ_DEFAULT_NOTE, engine.c PAR_MIDI_CHAN_*)"
+   },
+   "shortName": "OH Hit"
   },
   {
    "id": "tracks.oh.lfo-amount",
@@ -7587,6 +7713,27 @@
     "symbol": "RR_FXS (RM_CC0 + 8 x row + column)"
    },
    "shortName": "SN FX send"
+  },
+  {
+   "id": "tracks.sn.hit",
+   "name": "SN Hit",
+   "category": "Pads",
+   "scope": "track-voices",
+   "track": "sn",
+   "channelGroup": "trackSN",
+   "messageType": "note",
+   "alternateMessageTypes": [],
+   "number": 60,
+   "minimum": 1,
+   "maximum": 127,
+   "controlType": "button",
+   "buttonBehavior": "press",
+   "interpretation": "Plays SN at the pad's velocity, at the voice's own pitch, on the track's own channel (CONFIG: MIDI CHANNELS, 4 by default). Under REC, while playing, it records at that velocity. Needs the track's MIDI NOTE at ANY (the default); a note off does nothing.",
+   "documentation": {
+    "source": "firmware/src/midi.c",
+    "symbol": "midi_note_on (dsp.c SEQ_DEFAULT_NOTE, engine.c PAR_MIDI_CHAN_*)"
+   },
+   "shortName": "SN Hit"
   },
   {
    "id": "tracks.sn.lfo-amount",

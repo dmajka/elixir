@@ -1,5 +1,5 @@
 # Elixir for the FM-1: the global channel
-# Written from Elixir v1.3.1's remote map (dd2d99c6ddcf) by tools/hapax_defs.py:
+# Written from Elixir v1.3.1's remote map (389b5384c0d4) by tools/hapax_defs.py:
 # https://dmajka.github.io/elixir/controllers/ (the map: https://dmajka.github.io/elixir/data/)
 # A track on the remote's GLOBAL channel (16). Its lanes are the performance buttons that act while held:
 # a note's length is how long it holds (FILL, FREEZE, TAPE STOP ..). The CCs: tempo, morph, the effects,

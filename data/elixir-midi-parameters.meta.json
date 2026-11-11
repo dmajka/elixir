@@ -2,15 +2,17 @@
  "schemaVersion": 1,
  "file": "elixir-midi-parameters.json",
  "firmwareVersion": "v1.3.1",
- "sourceRevision": "dd2d99c6ddcf",
- "sha256": "6eae072edf50673e53a250873beadfa42b14a9ab9be42c286501bc602b7dc750",
- "parameterCount": 304,
+ "sourceRevision": "389b5384c0d4",
+ "sha256": "a9231910f4757f64a9ba85270ea2d1ab356453277a61ecb219b5e1f9211f28cb",
+ "parameterCount": 311,
  "csv": "elixir-midi-parameters.csv",
  "sources": [
   "firmware/src/remote.c",
   "firmware/src/midi.c",
   "firmware/src/seq.c",
   "firmware/src/kit.c",
+  "firmware/src/engine.c",
+  "firmware/src/dsp.c",
   "assets/kits/factory",
   "tools/remote_params.py"
  ]
