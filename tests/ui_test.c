@@ -10452,6 +10452,9 @@ static void phase_100_6(void)
     turn(EN_K1, -2);
     page_params(pp);
     check(pfs.dj_ftype == DJT_RING && pp[3] == VP_DJTUNE, "Type: RING, with Tune");
+    check(vp_get(VP_DJRESO) == 0u, "RING: its own Decay, not ACID's Reso (1.3.1)");
+    vp_set(VP_DJRESO, 110);                          /* (a long ring: the site's picture) */
+    run_ms(40);
     {                                                /* 1.0: RING: the chord's notes ring, the others don't */
         char nm[16];
         uint32_t k, j, root;
