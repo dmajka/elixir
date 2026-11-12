@@ -5,7 +5,26 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#define TBL_RAW 1                                    /* (22: the packed tables' values, to check the unpacked ones) */
 #include "../web/emu/elixir_web.c"
+/* 1.4: the locks in the pool (seq.c lk_*). The tests' view: a step's i-th lock (in code order): its code
+ * (NO_AUTOMATION: none), its value */
+static uint32_t lock_get(const pattern_t *p, uint32_t t, uint32_t k, uint32_t i)
+{
+    uint16_t c[LK_STEP];
+    uint8_t v[LK_STEP];
+    return i < lk_step(p, t, k, c, v) ? c[i] : NO_AUTOMATION;
+}
+static uint32_t lk_n_act(void)                       /* the playing pattern's locks */
+{
+    return lk_at[lk_run(&pat[sq.active], NTRACK - 1u) + 1u] - lk_at[lk_run(&pat[sq.active], 0)];
+}
+static uint32_t lock_val(const pattern_t *p, uint32_t t, uint32_t k, uint32_t i)
+{
+    uint16_t c[LK_STEP];
+    uint8_t v[LK_STEP];
+    return i < lk_step(p, t, k, c, v) ? v[i] : 0u;
+}
 
 static const char *shots = "build/shots";
 static int shot_n, fails;
@@ -68,6 +87,14 @@ static void goto_mode(uint32_t b, uint32_t m)        /* press b until the mode i
     for (i = 0; i < 6u && ui.mode != m; i++)
         press(b);
     check(ui.mode == m, "the mode a button cycles to");
+}
+static void sect_go(uint32_t sc)                     /* 1.4: SELECT to section sc's first page (a sound button pressed
+                                                      * again does nothing) */
+{
+    uint32_t i;
+    for (i = 0; i < 40u && !(ui.sect == sc && ui.half == 0); i++)
+        turn(EN_SELECT, sect_rank(ui.sect) < sect_rank(sc) ? 1 : -1);
+    check(ui.mode == M_SOUND && ui.sect == sc && ui.half == 0, "SELECT to a section");
 }
 static void perf_goto(uint32_t g)                    /* 29: PERF's page g (ARP: its set) */
 {
@@ -297,14 +324,12 @@ static void phase2(void)
     /* a version-2 lock (Elixir's parameters at the LXR's free numbers) moves to its own number */
     {
         pattern_t *p = &pat[0];
-        lock_set(p, 0, 5, 0, 247);
-        lock_set(p, 0, 5, 1, 223);
-        lock_v2(p, 0, 5, 0);
-        lock_v2(p, 0, 5, 1);
+        lk_clear(p, 0, 5, 1);
+        lock_old(2, p, 0, 5, 247, 1);
+        lock_old(2, p, 0, 5, 223, 2);
         check(autodest_to_par(lock_get(p, 0, 5, 0)) == PAR_FX_SEND1 &&
               autodest_to_par(lock_get(p, 0, 5, 1)) == PAR_FX_SEND1 + 10u, "version-2 locks move to their numbers");
-        seq_clear_automation(0, p, 0);
-        seq_clear_automation(0, p, 1);
+        seq_clear_automation(0, p);
     }
     /* the panel: SCL > SHAPE, LFO > RANDOM > CROSS MOD; a lock on a shaping parameter, saved and loaded */
     for (i = 0; i < NUM_PATTERN; i++)                 /* (the dense project's patterns and kits out) */
@@ -315,13 +340,13 @@ static void phase2(void)
         for (i = 0; i < NUM_KITS; i++)
             kit_put(i, k);
     }
-    pat_backup = pat[sq.active];
+    pat_cp(&pat_backup, &pat[sq.active]);
     eng_reset(0);
     goto_mode(B_HOME, M_HOME);
     black(0);
     press(B_SCL);
-    press(B_SCL);
-    check(ui.mode == M_SOUND && ui.sect == S_SHAPE, "SCL twice: SHAPE");
+    sect_go(S_SHAPE);
+    check(ui.mode == M_SOUND && ui.sect == S_SHAPE, "SCL, SELECT: SHAPE");
     turn(EN_K1, 1);
     turn(EN_K4, 4);
     {
@@ -345,28 +370,28 @@ static void phase2(void)
     check(ui.sect == S_LFO && ui.half == 0, "LFO: LFO 1");
     turn(EN_SELECT, 1);
     check(ui.sect == S_LFO && ui.half == 1, "LFO, SELECT: LFO 1's second page");
-    press(B_LFO);
-    check(ui.sect == S_LFO2 && ui.half == 0, "LFO again: TRK LFO 2 (25b)");
+    turn(EN_SELECT, 1);
+    check(ui.sect == S_LFO2 && ui.half == 0, "LFO, SELECT: TRK LFO 2 (25b)");
     shot("lfo2");
     turn(EN_SELECT, 1);
     check(ui.sect == S_LFO2 && ui.half == 1, "SELECT: TRK LFO 2's second page");
     shot("lfo2-b");
-    press(B_LFO);
-    check(ui.sect == S_RANDOM, "LFO again: RANDOM");
+    turn(EN_SELECT, 1);
+    check(ui.sect == S_RANDOM, "SELECT: RANDOM");
     turn(EN_K1, 30);
     shot("random");
-    press(B_LFO);
-    check(ui.sect == S_XMOD, "LFO again: CROSS MOD");
+    sect_go(S_XMOD);
+    check(ui.sect == S_XMOD, "SELECT: CROSS MOD");
     black(3);
     turn(EN_K1, 1);
     turn(EN_K3, 60);
     turn(EN_K4, 1);
     check(par[PAR_XSRC1 + 3] == 1 && par[PAR_XAMT1 + 3] > 0 && par[PAR_CHOKE1 + 3] == 1, "CROSS MOD: source, amount");
     shot("xmod");
+    sect_go(S_SENDS);
+    check(ui.sect == S_SENDS, "SELECT: FX TRACK SENDS (1.0 Phase 16)");
     press(B_LFO);
-    check(ui.sect == S_SENDS, "LFO again: FX TRACK SENDS (1.0 Phase 16)");
-    press(B_LFO);
-    check(ui.sect == S_LFO, "LFO again: back to the LFO page");
+    check(ui.sect == S_SENDS, "1.4: LFO again: nothing");
     press(B_SEQ);
     black(0);
     white(6);
@@ -418,7 +443,7 @@ static void phase3(void)
     for (i = 0; i < NUM_PATTERN; i++)
         seq_clear_pattern(&pat[i]);
     sq.active = sq.pending = 0;
-    pat_backup = pat[0];
+    pat_cp(&pat_backup, &pat[0]);
     par_set(PAR_BPM, 120);
     par[PAR_SHUFFLE] = 0;
     for (i = 0; i < 16u; i += 4)
@@ -653,7 +678,7 @@ static void p4_reset(void)                           /* stopped, pattern 1 empty
     for (i = 0; i < NUM_PATTERN; i++)
         seq_clear_pattern(&pat[i]);
     sq.active = sq.pending = 0;
-    pat_backup = pat[0];
+    pat_cp(&pat_backup, &pat[0]);
     sq.gsync = 0x7F;
     par_set(PAR_BPM, 120);
     par[PAR_SHUFFLE] = 0;
@@ -967,7 +992,7 @@ static void phase5a(void)
      * in the count) */
     main_set(p, 0, 4, 1);
     p->rat[0][4] = RAT_BOUNCE | 5u | BC_BALL << 3;
-    pat_backup = *p;
+    pat_cp(&pat_backup, p);
     c = trig_count[0];
     play_from_start();
     for (i = 0, n = 0; i < 1900u && n < 24u; i++) {
@@ -993,7 +1018,7 @@ static void phase5a(void)
     /* SLOW with a drift: the gaps grow; the drift reaches the last hit */
     p->rat[0][4] = RAT_BOUNCE | 1u | BC_SLOW << 3;  /* 3 hits */
     p->bnc[0] = (uint8_t)((12u + 7u) << 2 | 3u);   /* from 1/32, +7 semitones */
-    pat_backup = *p;
+    pat_cp(&pat_backup, p);
     c = trig_count[0];
     play_from_start();
     for (i = 0, n = 0; i < 1100u && n < 24u; i++) {
@@ -1010,7 +1035,7 @@ static void phase5a(void)
     p->rat[0][4] = RAT_BOUNCE | 5u | BC_BALL << 3;
     p->bnc[0] = BNC_DEFAULT;
     main_set(p, 0, 5, 1);
-    pat_backup = *p;
+    pat_cp(&pat_backup, p);
     c = trig_count[0];
     play_from_start();
     run_ms(1400);
@@ -1023,7 +1048,7 @@ static void phase5a(void)
     main_set(p, 0, 0, 1);
     p->rat[0][4] = 0;
     p->rat[0][0] = 0;
-    pat_backup = *p;
+    pat_cp(&pat_backup, p);
     goto_mode(B_SEQ, M_STEP);
     white(0);
     turn(EN_SELECT, 3 - (int32_t)ui.page);
@@ -1039,7 +1064,7 @@ static void phase5a(void)
     /* the roll sweep: a roll key held in PERF, KNOB 3 the roll's rate, faster as it turns */
     p->bnc[0] = BNC_DEFAULT;
     p->rat[0][0] = 0;
-    pat_backup = *p;
+    pat_cp(&pat_backup, p);
     perf_goto(0);
     play_from_start();
     keys |= 1u;
@@ -1118,7 +1143,7 @@ static void lk_set(uint32_t l, uint32_t src, uint32_t ev, uint32_t tgt, uint32_t
     p->link[l][1] = (uint8_t)(e | w << 4);
     p->link[l][2] = (uint8_t)(int8_t)a;
     p->link[l][3] = 0;
-    pat_backup = *p;
+    pat_cp(&pat_backup, p);
 }
 static void phase5b(void)
 {
@@ -1129,7 +1154,7 @@ static void phase5b(void)
         main_set(p, 0, k, (k & 3u) == 0u);
         main_set(p, 1, k, 1);
     }
-    pat_backup = *p;
+    pat_cp(&pat_backup, p);
     check(lk_bar(1) == 16u, "LINKS: none, D2 16 hits");
     lk_set(0, 0, LV_HIT, 1, LE_DUCK, LW_SAME, 100);
     check(lk_bar(1) == 12u, "LINKS: D1 hit ducks D2 (same step)");
@@ -1146,7 +1171,7 @@ static void phase5b(void)
     /* depth 0: as no links */
     lk_set(0, 0, LV_HIT, 1, LE_DUCK, LW_BAR, 100);
     p->cdepth = 0;
-    pat_backup = *p;
+    pat_cp(&pat_backup, p);
     memset(sq.locc, 0, sizeof sq.locc);
     check(lk_bar(1) == 16u && lk_bar(0) == 4u && !sq.locc[1], "LINKS: depth 0, as none (not looked at)");
     p->cdepth = 127;
@@ -1189,8 +1214,8 @@ static void phase5b(void)
     run_ms(5);
     check(vc[1].velo == (int32_t)((v0 - 40u) * 32768u / 127u), "LINKS: VELOCITY -40");
     check(vc[1].osc.base_note == p->step[1][0].note + 7u, "LINKS: PITCH +7");
-    check(auto_par[1][2] == PAR_VELOD2 && auto_val[1][2] == (uint8_t)clamp32((int32_t)par[PAR_VELOD2] - 40, 0, 127),
-          "LINKS: DECAY -40 (lane 2)");
+    check(auto_par[1][AUTO_DEC] == PAR_VELOD2 &&
+          auto_val[1][AUTO_DEC] == (uint8_t)clamp32((int32_t)par[PAR_VELOD2] - 40, 0, 127), "LINKS: DECAY -40 (its lane)");
     run_ms(130);
     check(vc[1].velo == (int32_t)(v0 * 32768u / 127u) && vc[1].osc.base_note == p->step[1][1].note &&
           auto_par[1][2] == 0u, "LINKS: the next hit as set");
@@ -1206,7 +1231,7 @@ static void phase5b(void)
     check(trig_count[1] == c + 1u, "LINKS: .. half a step");
     seq_stop_now();
     memset(p->link, 0, sizeof p->link);
-    pat_backup = *p;
+    pat_cp(&pat_backup, p);
     /* the page: SHIFT + SEQ; Start; the sentence; LINK SETUP; the grid's mark */
     hold(B_OCTDN);                                   /* (SHIFT) */
     press(B_SEQ);
@@ -1262,7 +1287,7 @@ static void phase5c(void)
     p4_reset();
     for (k = 0; k < 16u; k += 4u)
         main_set(p, 0, k, 1);
-    pat_backup = *p;
+    pat_cp(&pat_backup, p);
     perf_goto(PG_PERF2);
     check(ui.page == PG_PERF2 && perf_bank2(), "PERFORM 2: the seventh PERF page");
     /* HALF: the ticks at half the rate */
@@ -1298,7 +1323,7 @@ static void phase5c(void)
     check((pf.on >> PF_JITTER) & 1u && (ui.pf_latch >> PF_JITTER) & 1u, "JITTER latched");
     for (k = 0; k < 16u; k++)
         main_set(p, 1, k, 1);
-    pat_backup = *p;
+    pat_cp(&pat_backup, p);
     {
         uint32_t late = 0, most = 0, hits = 0, last = trig_count[1];
         start_now();
@@ -1330,7 +1355,7 @@ static void phase5c(void)
     check(!((pf.on >> PF_JITTER) & 1u), "JITTER: the key again lets go");
     for (k = 0; k < 16u; k++)
         main_set(p, 1, k, 0);
-    pat_backup = *p;
+    pat_cp(&pat_backup, p);
     /* SHORT: the kick's tail */
     {
         float e0 = 0, e1 = 0;
@@ -1900,15 +1925,40 @@ static void phase14(void)
     page_params(pp);
     check(ui.sect == S_LFO && ui.half == 1 && pp[2] == PAR_LFOMODE1, "1.0: LFO 1's MODE: its second page, K3, by SELECT");
     press(B_LFO);
-    check(ui.sect == S_LFO2 && ui.half == 0, "1.0: LFO again, from LFO 1's pages: LFO 2 (the next section, no paging)");
+    check(ui.sect == S_LFO && ui.half == 1, "1.4: LFO again: nothing (SELECT goes through the pages)");
+    press(B_ENV);
+    check(ui.sect == S_AEG && ui.half == 0, "ENV: AMP EG");
+    press(B_ENV);
+    check(ui.sect == S_AEG && ui.half == 0, "1.4: ENV again: nothing");
+    {   /* 1.4: with Last page, EDIT keeps the page SELECT took it to, in ENV's sections or LFO's too */
+        uint8_t pm = kset.pmem, sc, hf;
+        kset.pmem = 1;
+        ui.gsect[S_MODEL] = 0;
+        press(B_HOME);
+        press(B_EDIT);
+        check(ui.mode == M_SOUND && ui.sect == S_MODEL, "EDIT: MODEL");
+        while (ui.sect != S_AEG)
+            turn(EN_SELECT, 1);
+        turn(EN_SELECT, 1);
+        sc = ui.sect;
+        hf = ui.half;
+        press(B_ENV);
+        check(ui.sect == sc && ui.half == hf, "1.4: ENV lit (SELECT went there from EDIT): nothing");
+        press(B_EDIT);
+        check(ui.sect == sc && ui.half == hf, "1.4: EDIT again: nothing");
+        press(B_HOME);
+        press(B_EDIT);
+        check(ui.mode == M_SOUND && ui.sect == sc && ui.half == hf, "1.4: HOME, EDIT: EDIT's last page, ENV's section");
+        press(B_HOME);
+        press(B_ENV);
+        check(ui.sect == S_AEG && ui.half == 0, "1.4: ENV: its own last page, not EDIT's");
+        press(B_HOME);
+        press(B_EDIT);
+        check(ui.sect == sc && ui.half == hf, "1.4: EDIT: still its own");
+        kset.pmem = pm;
+    }
     press(B_LFO);
-    check(ui.sect == S_RANDOM && ui.half == 0, "1.0: LFO again: RANDOM PER HIT");
-    press(B_ENV);
-    press(B_ENV);
-    check(ui.sect == S_GATE && ui.half == 0, "1.0: ENV again: GATE, not AMP EG's second page");
-    goto_mode(B_LFO, M_SOUND);
-    while (ui.sect != S_LFO)
-        press(B_LFO);
+    check(ui.sect == S_LFO, "LFO: LFO 1");
     turn(EN_SELECT, 1);
     check(ui.sect == S_LFO && ui.half == 1, "LFO MODE: back on its page by SELECT");
     turn(EN_K3, -3);
@@ -2118,15 +2168,15 @@ static void phase14(void)
             ld_q8[i] = 0;
         cores_why = CW_BUILD;
     }
-    goto_mode(B_LFO, M_SOUND);
-    for (i = 0; i < NSPG && ui.sect != S_LFO; i++)
-        press(B_LFO);
+    press(B_HOME);
+    press(B_LFO);
+    sect_go(S_LFO);
     turn(EN_SELECT, 1);
     press(B_FX);
     press(B_LFO);
     check(ui.mode == M_SOUND && ui.sect == S_LFO && ui.half == 1, "LFO: back to LFO 1's second page (its MODE)");
     press(B_LFO);
-    check(ui.sect == S_LFO2, "LFO again: on as before");
+    check(ui.sect == S_LFO && ui.half == 1, "1.4: LFO again: nothing");
     seq_goto(PG_SCALE);
     press(B_HOME);
     press(B_SEQ);
@@ -2249,10 +2299,11 @@ static void phase39_rush(void)
     ui.mode = M_STEP;
     ui.track = 2;
     ui.step = 5;
-    vp_set(PAR_P1_DEST, LOCK_RUSH_IDX);
+    ui.lk_row = 0;                                   /* (1.4: the LOCKS page: ADD, RUSH, its value) */
+    vp_set(PAR_P2_DEST, LOCK_RUSH_IDX);
     vp_set(PAR_P1_VAL, 90);
     main_set(p, 2, 5, 1);
-    check(lock_get(p, 2, 5, 0) == RUSH_CODE && rush_lock(p, 2, 5) == 90u && vp_get(PAR_P1_DEST) == LOCK_RUSH_IDX,
+    check(lock_get(p, 2, 5, 0) == RUSH_CODE && rush_lock(p, 2, 5) == 90u && vp_get(PAR_P2_DEST) == LOCK_RUSH_IDX,
           "STEP: RUSH as a lock target");
     {
         char b[24] = {0};
@@ -2335,7 +2386,7 @@ static void phase9_perf(void)
     main_set(p, 0, 0, 1);
     for (i = 1; i < 16u; i++)
         main_set(p, 0, i, 1);
-    pat_backup = *p;
+    pat_cp(&pat_backup, p);
     black(0);
     press(B_REC);
     play_from_start();
@@ -2505,7 +2556,8 @@ static void phase9_keys(void)
             rp->len[4] = 16;
             rp->groove = 0;
             rp->ghum = 0;
-            check(P_RECOPT[1] == VP_RQUANT && vp_get(VP_RQUANT) == 1u, "REC options: KNOB 2 Quantize, ON at first");
+            check(P_RECOPT[0] == VP_RQUANT && vp_get(VP_RQUANT) == 100u && vp_max(VP_RQUANT) == 100u,
+                  "REC options: KNOB 1 Quantize, 100% at first");
             vp_set(VP_RQUANT, 0);
             press(B_PLAY);
             press(B_REC);
@@ -2531,8 +2583,14 @@ static void phase9_keys(void)
             n = trig_count[4] - c;
             printf("  Quantize OFF: late shift %u, early %u, next pass %u hits\n", late, early, n);
             check(n == 2u, "Quantize OFF: the next pass plays both");
-            vp_set(VP_RQUANT, 1);
-            check(!sq.rfree, "Quantize ON again");
+            vp_set(VP_RQUANT, 50);                     /* 1.4: Quantize 50%: half as late */
+            for (k = 0; k < 4000u && !(sq.idx[4] == 11 && sq.tph[4] == 8u); k++)
+                run_ms(1);
+            key_note_post(4, tb_note(4), 100, KF_REC);  /* (a third of step 12 late: 8 24ths, 4 kept: one eighth) */
+            run_ms(4);
+            check(main_on(rp, 4, 11) && rp->timing[4][11] >> 4 == 8u, "Quantize 50%: a late hit, half as late");
+            vp_set(VP_RQUANT, 100);
+            check(!sq.rfree, "Quantize 100% again");
             press(B_REC);
             press(B_PLAY);
             *rp = keep;
@@ -2859,7 +2917,7 @@ static void phase11_sound_solo(void)
     /* SOLO: SHIFT + GLO on the selected track; only it plays; another soloed too; off again */
     for (i = 0; i < NTRACK; i++)
         main_set(p, i, 0, 1);
-    pat_backup = *p;
+    pat_cp(&pat_backup, p);
     black(3);
     hold(B_OCTDN);
     press(B_GLO);
@@ -2992,7 +3050,7 @@ static void phase11(void)
         for (i = 0; i < 4u; i++) {
             uint32_t k;
             p->dir[0] = (uint8_t)i;
-            pat_backup = *p;
+            pat_cp(&pat_backup, p);
             dir_order(10, o);
             for (k = 0, ok = 1; k < 10u; k++)
                 ok &= o[k] == WANT[i][k];
@@ -3020,7 +3078,7 @@ static void phase11(void)
     /* a time round is the length in steps: REV, a step on 1, plays once a bar; 1:2 every other bar */
     p->dir[0] = DIR_PING;
     main_set(p, 0, 0, 1);
-    pat_backup = *p;
+    pat_cp(&pat_backup, p);
     play_from_start();
     i = hits_in(0, 8000 - 50);
     press(B_PLAY);
@@ -3036,7 +3094,7 @@ static void phase11(void)
             p->dir[0] = (uint8_t)(d ? DIR_REV : DIR_FWD);
             main_set(p, 0, s2, 1);
             p->timing[0][s2] = 3u << 4;              /* (shift -4/8 of a step) */
-            pat_backup = *p;
+            pat_cp(&pat_backup, p);
             c = trig_count[0];
             at[d] = 0;
             play_from_start();
@@ -3157,9 +3215,9 @@ static void phase13_control_all(void)
         ok &= par[kit_par(i)] == k0[i];
     check(ok && !ui.ca_ask && !ui.copy && ui.msg[12] == 'R', "OCT+ in the dialog: the kit reverted, no COPY held");
     /* a parameter only some voices have: FM's on D1..D3, the others left alone */
-    for (i = 0; i < 4u && !(ui.mode == M_SOUND && ui.sect == S_FM); i++)
-        press(B_EDIT);
-    check(ui.sect == S_FM, "EDIT: MODEL, OSCILLATOR, then FM");
+    press(B_EDIT);
+    sect_go(S_FM);
+    check(ui.sect == S_FM, "EDIT, SELECT: FM");
     for (i = 0; i < KIT_LEN; i++)
         k0[i] = par[kit_par(i)];
     hold(B_OCTUP);
@@ -3174,8 +3232,8 @@ static void phase13_control_all(void)
     check(ok, "CONTROL ALL on FM: D1..D3 moved, the voices without it untouched");
     /* a Elixir parameter (blocks of six): bits on every voice */
     press(B_SCL);
-    press(B_SCL);
-    check(ui.sect == S_SHAPE, "SCL again: SHAPE");
+    sect_go(S_SHAPE);
+    check(ui.sect == S_SHAPE, "SCL, SELECT: SHAPE");
     hold(B_OCTUP);
     turn(EN_K4, 2);
     release(B_OCTUP);
@@ -3497,7 +3555,7 @@ static void phase12_remote(void)
     /* REC: a track's knob records a lock on its own track */
     for (i = 0; i < 16u; i++)
         main_set(p, 2, i, 1);
-    pat_backup = *p;
+    pat_cp(&pat_backup, p);
     gbtn(48);
     check(sq.running, "PLAY from the remote");
     sq.rec = 1;
@@ -4936,8 +4994,8 @@ static void gen_step_edit_test(void)
     key_hold(8);                                     /* a lock held on step 9: the live copy has it */
     turn(EN_K1, 3);
     key_up(8);
-    check(gpat.step[1][8].p1n == pt->step[1][8].p1n && gpat.step[1][8].p1v == pt->step[1][8].p1v &&
-          pt->step[1][8].p1n != NO_AUTOMATION, "a held step's lock on a generator's track: the live copy too");
+    check(lock_get(&gpat, 1, 8, 0) == lock_get(pt, 1, 8, 0) && lock_val(&gpat, 1, 8, 0) == lock_val(pt, 1, 8, 0) &&
+          lock_get(pt, 1, 8, 0) != NO_AUTOMATION, "a held step's lock on a generator's track: the live copy too");
     pt->gen[1][0] = GEN_OFF;
     seq_clear_track(1, pt);
     sq.gsync |= 1u << 1;
@@ -5092,7 +5150,7 @@ static void phase24(void)
     key_up(2);
     k = autodest_to_par(lock_get(pt, 3, 2, 0)) == PAR_MODEL1 + 3u ? 0u : 1u;
     check(autodest_to_par(lock_get(pt, 3, 2, k)) == PAR_MODEL1 + 3u &&
-          (k ? pt->step[3][2].p2v : pt->step[3][2].p1v) == MD_MC0 + 6u, "a step locks SN's MICRO type");
+          lock_val(pt, 3, 2, k) == MD_MC0 + 6u, "a step locks SN's MICRO type");
     press(B_PLAY);
     for (k = 0; k < 2200u; k += 5u) {
         run_ms(5);
@@ -5100,8 +5158,7 @@ static void phase24(void)
     }
     press(B_PLAY);
     check(seen & 1u << 7, "the locked step plays GRAIN");
-    lock_set(pt, 3, 2, 0, NO_AUTOMATION);
-    lock_set(pt, 3, 2, 1, NO_AUTOMATION);
+    lk_clear(pt, 3, 2, 1);
     main_set(pt, 3, 2, 0);
     /* a kit with SN on MODAL (not its) loads it as LXR; the hats' DUST stays */
     {
@@ -5454,14 +5511,13 @@ static void phase27a(void)
     ui.track = 3;
     run_ms(40);
     press(B_SCL);
-    for (i = 0; i < 6u && ui.sect != S_INSERT; i++)
-        press(B_SCL);
+    sect_go(S_INSERT);
     page_params(pp);
     title_text(b, sizeof b, &pg, &np);
     check(ui.sect == S_INSERT && pp[0] == PAR_INS1 + 3u && pp[1] == PAR_INSA1 + 3u && pp[2] == PAR_INSB1 + 3u &&
-          pp[3] == PAR_INSC1 + 3u && !strcmp(b, "INSERT FX"), "the filter button: FILTER, SHAPE, then INSERT");
+          pp[3] == PAR_INSC1 + 3u && !strcmp(b, "INSERT FX"), "the filter button, SELECT: INSERT");
     press(B_SCL);
-    check(ui.sect == S_FILTER, "again: back to FILTER");
+    check(ui.sect == S_INSERT, "1.4: SCL again: nothing");
     sound_open(S_INSERT, 0);
     run_ms(20);
     turn(EN_K1, 1);                                  /* (1.0: OFF, SHIFTER, RING: the dropped types passed) */
@@ -7064,8 +7120,16 @@ static void wd_slot_copy(pattern_t *c)               /* (41) the slot with its f
 {
     uint32_t i;
     *c = pat[wd.slot];
-    for (i = wd.nfoot; i--;)
-        wd_put(c, wd_fp[i].t & 7u, wd_fp[i].s, &wd_fp[i]);
+    for (i = wd.nfoot; i--;) {                       /* (wd_put's but the locks: c is not one of the pool's) */
+        const foot_t *f = &wd_fp[i];
+        uint32_t t = f->t & 7u, st = f->s;
+        c->step[t][st] = f->x;
+        c->timing[t][st] = f->tim;
+        c->lhi[t][st] = f->lhi;
+        c->cond[t][st] = f->cond;
+        c->rat[t][st] = f->rat;
+        main_set(c, t, st, f->t >> 7);
+    }
 }
 static int wd_slot_home(const pattern_t *home)       /* .. home exactly */
 {
@@ -7767,11 +7831,11 @@ static void phase_023t11(void)
     p4_reset();
     p = &pat[sq.active];
     for (i = 0, ok = 1; i < NLEN_ALL; i++) {         /* (every length beside two locks of the highest codes) */
-        lock_set(p, 0, 3, 0, NPAR - 1u);
-        lock_set(p, 0, 3, 1, NPAR - 2u);
+        (void)lk_put(p, 0, 3, NPAR - 1u, 1);
+        (void)lk_put(p, 0, 3, NPAR - 2u, 2);
         step_len_set(p, 0, 3, i);
-        ok &= step_len(p, 0, 3) == i && lock_get(p, 0, 3, 0) == NPAR - 1u && lock_get(p, 0, 3, 1) == NPAR - 2u;
-        lock_set(p, 0, 3, i & 1u, NO_AUTOMATION);
+        ok &= step_len(p, 0, 3) == i && lock_get(p, 0, 3, 1) == NPAR - 1u && lock_get(p, 0, 3, 0) == NPAR - 2u;
+        lk_clear(p, 0, 3, 1);
         ok &= step_len(p, 0, 3) == i;
         ok &= len_knob(len_pos(i)) == i;
     }
@@ -8559,6 +8623,20 @@ static void phase_100_4(void)
     check(strcmp(b, "D3 dens") == 0, "DENSITY: the card's name");
     perf_reset();
     check(sq.tdens[2] == 0 && sq.tdens[4] == 0, "RESET PERF: the tracks' DENSITY centred");
+    /* 1.4: the remote's RUSH a track (row 11, was the LFO's amount): the last turned up rushes, its 0 lets it go */
+    sq.ru_live = 0;
+    check(rm_par(RR_RUSH * 8u + 3u) == VP_TRUSH + 3u && vp_get(VP_TRUSH + 3u) == 0u, "TRACKS' row 11: RUSH, off");
+    rcc(88 + 3, 127);
+    check(sq.ru_t == 3u && sq.ru_live == RUSH_MAX, "RUSH: SN's CC at the top, SN rushes 100%");
+    rcc(88 + 0, 64);
+    check(sq.ru_t == 0u && sq.ru_live == 50u && vp_get(VP_TRUSH + 3u) == 0u && vp_get(VP_TRUSH) == 50u,
+          "RUSH: D1's turned up takes it over");
+    rcc(88 + 3, 0);
+    check(sq.ru_t == 0u && sq.ru_live == 50u, "RUSH: SN's at 0 lets nothing go (not its)");
+    rcc(88 + 0, 0);
+    check(sq.ru_live == 0u, "RUSH: D1's at 0 lets it go");
+    card_name(b, sizeof b, VP_TRUSH + 3u);
+    check(strcmp(b, "SN rush") == 0, "RUSH: the card's name");
     /* the rolls a track: the CC's value its rate */
     play_from_start();
     c = trig_count[3];
@@ -10578,7 +10656,7 @@ static void phase_100_5(void)
     /* TIME STRETCH */
     for (i = 0; i < 16u; i++)
         main_set(&pat[0], 0, i, 1), main_set(&pat[0], 1, i, 1), main_set(&pat[0], 2, i, 1);
-    pat_backup = pat[0];
+    pat_cp(&pat_backup, &pat[0]);
     seq_stretch_set(1, 5000);
     seq_stretch_set(2, 20000);
     play_from_start();
@@ -10609,7 +10687,7 @@ static void phase_100_5(void)
     /* a pattern change: kept (the default), REALIGN: in time again */
     seq_stretch_set(1, 9900);
     run_ms(2000);
-    pat[1] = pat[0];
+    pat_cp(&pat[1], &pat[0]);
     seq_set_next_pattern(1);
     a = sq.toff[1];
     for (i = 0; i < 100u && sq.active != 1u; i++)
@@ -10645,7 +10723,7 @@ static void phase_100_5(void)
     web_share[WEB_SHARE_V2] = 1;
     web_share[WEB_SHARE_V2 + 1u + WV_JOURNEY] = 6;
     b = web_share_put(WEB_SHARE_V5);
-    check(a == WEB_SHARE_V6 + NGLKGL + 1u && b == 0u && wd.k[WV_JOURNEY] == WJ_ENDLESS, "an older phone link's ENDLESS: ENDLESS");
+    check(a == WEB_SHARE_V7 + 2u + 4u * lk_n_act() && b == 0u && wd.k[WV_JOURNEY] == WJ_ENDLESS, "an older phone link's ENDLESS: ENDLESS");
     web_share[WEB_SHARE_V2 + 1u + WV_JOURNEY] = 6;
     b = web_share_put(a);
     check(b == 0u && wd.k[WV_JOURNEY] == 6u, "a new one's 1024 BARS: 1024 BARS");
@@ -10656,7 +10734,7 @@ static void phase_100_5(void)
     /* BOILING FROG: the tempo with the heat, a track drifting out of time and back */
     for (i = 0; i < 16u; i++)
         main_set(&pat[0], 0, i & ~3u, 1), main_set(&pat[0], 5, i, 1), main_set(&pat[0], 6, i, 1);
-    pat_backup = pat[0];
+    pat_cp(&pat_backup, &pat[0]);
     perf_goto(PG_WANDER);
     wd_vset(WV_QUEST, Q_FROG);
     check(wd.k[WV_FATE] == WF_LOST && wd.k[WV_JOURNEY] == 5u, "BOILING FROG: LOST, 512 bars at first");
@@ -10689,7 +10767,7 @@ static void phase_100_5(void)
      * faded out first; the feedback rings at 126-127; THE WAY OUT: all of it home */
     for (i = 0; i < 16u; i += 2u)
         main_set(&pat[0], 1, i, 1), main_set(&pat[0], 4, i + 1u, 1);
-    pat_backup = pat[0];
+    pat_cp(&pat_backup, &pat[0]);
     par_set(PAR_DLY_LEVEL, 0);
     par_set(PAR_DSYNC, 0);
     par_set(PAR_FX_DELAY_TYPE, DELAY_NORMAL);
@@ -10759,7 +10837,7 @@ static void phase_100_5(void)
      * RING tuned low with its root sliding, back to tape halfway through THE DARK; home: the delay and the DJ filter */
     for (i = 0; i < 16u; i += 2u)
         main_set(&pat[0], 1, i, 1), main_set(&pat[0], 4, i + 1u, 1);
-    pat_backup = pat[0];
+    pat_cp(&pat_backup, &pat[0]);
     par_set(PAR_DLY_LEVEL, 0);
     par_set(PAR_FX_DELAY_TYPE, DELAY_NORMAL);
     par_set(PAR_DLY_BAND, 0);
@@ -11362,6 +11440,580 @@ static void lfo_smooth_drift(void)
     vp_set(PAR_WAVE_LFO1, LFO_SINE);
 }
 
+/* ------------------------------------------------------- Phase 19 (1.4) --- */
+/* the lock pool. A reference model (each step's locks as a little list) against every operation, at random; the
+ * limits (8 a step, 8,192 in all); the LOCKS page; recording; a version-12 project's locks (tests/data, saved by 1.3.1:
+ * the same sound, render_test's way, checked once by hand) and saving them again; a full pool saved; share links */
+#define LKR_ID (NUM_PATTERN + 3u)
+static struct { uint8_t n; uint16_t c[LK_STEP]; uint8_t v[LK_STEP]; } lkr[LKR_ID][NTRACK][NUM_STEPS];
+static pattern_t *lkr_p(uint32_t id) { return id < NUM_PATTERN ? &pat[id] : id == LK_BK ? &pat_backup : id == LK_GP ? &gpat : &upat; }
+static uint32_t lkr_rng = 12345u;
+static uint32_t lkr_r(uint32_t n) { lkr_rng = lkr_rng * 1664525u + 1013904223u; return (lkr_rng >> 8) % n; }
+static void lkr_sort(uint32_t id, uint32_t t, uint32_t k)
+{
+    uint32_t i, j, n = lkr[id][t][k].n;
+    for (i = 1; i < n; i++)
+        for (j = i; j > 0 && lkr[id][t][k].c[j - 1u] > lkr[id][t][k].c[j]; j--) {
+            uint16_t c = lkr[id][t][k].c[j];
+            uint8_t v = lkr[id][t][k].v[j];
+            lkr[id][t][k].c[j] = lkr[id][t][k].c[j - 1u];
+            lkr[id][t][k].v[j] = lkr[id][t][k].v[j - 1u];
+            lkr[id][t][k].c[j - 1u] = c;
+            lkr[id][t][k].v[j - 1u] = v;
+        }
+}
+static uint32_t lkr_used(int pats)
+{
+    uint32_t id, t, k, n = 0;
+    for (id = 0; id < (pats ? NUM_PATTERN : LKR_ID); id++)
+        for (t = 0; t < NTRACK; t++)
+            for (k = 0; k < NUM_STEPS; k++)
+                n += lkr[id][t][k].n;
+    return n;
+}
+static int lkr_same(void)                             /* the pool as the model has it, and in order */
+{
+    uint32_t id, t, k, i, r, n;
+    uint16_t c[LK_STEP];
+    uint8_t v[LK_STEP];
+    if (lk_at[0] != 0 || lk_at[LK_NRUN] > LK_CAP || lk_used() != lkr_used(1) || lk_at[LK_NRUN] != lkr_used(0))
+        return 0;
+    for (r = 0; r < LK_NRUN; r++) {
+        if (lk_at[r] > lk_at[r + 1u])
+            return 0;
+        for (i = lk_at[r] + 1u; i < lk_at[r + 1u]; i++)
+            if (LK_KEY(i - 1u) >= LK_KEY(i))
+                return 0;
+    }
+    for (id = 0; id < LKR_ID; id++)
+        for (t = 0; t < NTRACK; t++)
+            for (k = 0; k < NUM_STEPS; k++) {
+                n = lk_step(lkr_p(id), t, k, c, v);
+                if (n != lkr[id][t][k].n)
+                    return 0;
+                for (i = 0; i < n; i++)
+                    if (c[i] != lkr[id][t][k].c[i] || v[i] != lkr[id][t][k].v[i])
+                        return 0;
+            }
+    return 1;
+}
+static void lkr_put(uint32_t id, uint32_t t, uint32_t k, uint32_t c, uint32_t v)
+{
+    uint32_t i, e, n = lkr[id][t][k].n;
+    int full = id < NUM_PATTERN ? lkr_used(1) >= LK_N : lkr_used(0) - lkr_used(1) >= LK_SIDE;
+    e = lk_put(lkr_p(id), t, k, c, v);
+    for (i = 0; i < n && lkr[id][t][k].c[i] != c; i++)
+        ;
+    if (i < n) {
+        lkr[id][t][k].v[i] = (uint8_t)v;
+        if (e)
+            fails++, printf("FAIL: lk_put refused a replace\n");
+        return;
+    }
+    if (n >= LK_STEP || full) {
+        if (e != (n >= LK_STEP ? LK_STEPFULL : LK_POOLFULL))
+            fails++, printf("FAIL: lk_put's refusal (%u)\n", e);
+        return;
+    }
+    lkr[id][t][k].c[n] = (uint16_t)c;
+    lkr[id][t][k].v[n] = (uint8_t)v;
+    lkr[id][t][k].n++;
+    lkr_sort(id, t, k);
+}
+static void lkr_model_test(void)
+{
+    uint32_t op, ok = 1, id, t, k, i, n = 0;
+    memset(lkr, 0, sizeof lkr);
+    lk_full = 0;
+    for (id = 0; id < LKR_ID; id++)
+        for (t = 0; t < NTRACK; t++)
+            lk_clear(lkr_p(id), t, 0, NUM_STEPS);
+    for (op = 0; op < 60000u && ok; op++) {
+        uint32_t a = lkr_r(LKR_ID), b = lkr_r(LKR_ID), ta = lkr_r(NTRACK), tb = lkr_r(NTRACK);
+        uint32_t ka = lkr_r(op < 30000u ? 8u : NUM_STEPS), kb = lkr_r(NUM_STEPS), w = lkr_r(1000);
+        if (w < 600u) {                               /* (mostly: puts, to fill it) */
+            lkr_put(a, ta, ka, 1u + lkr_r(op & 1u ? 12u : 600u), lkr_r(128));
+        } else if (w < 700u) {
+            uint32_t c = lkr[a][ta][ka].n ? lkr[a][ta][ka].c[lkr_r(lkr[a][ta][ka].n)] : 5u;
+            lk_del(lkr_p(a), ta, ka, c);
+            for (i = 0; i < lkr[a][ta][ka].n && lkr[a][ta][ka].c[i] != c; i++)
+                ;
+            if (i < lkr[a][ta][ka].n) {
+                memmove(&lkr[a][ta][ka].c[i], &lkr[a][ta][ka].c[i + 1u], (lkr[a][ta][ka].n - i - 1u) * 2u);
+                memmove(&lkr[a][ta][ka].v[i], &lkr[a][ta][ka].v[i + 1u], lkr[a][ta][ka].n - i - 1u);
+                lkr[a][ta][ka].n--;
+            }
+        } else if (w < 740u) {
+            uint32_t m = 1u + lkr_r(8);
+            lk_clear(lkr_p(a), ta, ka, m);
+            for (i = ka; i < ka + m && i < NUM_STEPS; i++)
+                lkr[a][ta][i].n = 0;
+        } else if (w < 800u) {                        /* (a step into another: its old locks if no room) */
+            uint32_t need = lkr[b][tb][kb].n, have = lkr[a][ta][ka].n;
+            int room = need <= have || (a < NUM_PATTERN ? lkr_used(1) + need - have <= LK_N
+                                                        : lkr_used(0) - lkr_used(1) + need - have <= LK_SIDE);
+            if ((lk_step_copy(lkr_p(a), ta, ka, lkr_p(b), tb, kb) == 0) != room)
+                ok = 0;
+            if (room)
+                lkr[a][ta][ka] = lkr[b][tb][kb];
+        } else if (w < 840u) {                        /* (a track: no room, a pattern's as it was, a copy's none) */
+            uint32_t need = 0, have = 0;
+            int room;
+            for (i = 0; i < NUM_STEPS; i++) {
+                need += lkr[b][tb][i].n;
+                have += lkr[a][ta][i].n;
+            }
+            room = (a == b && ta == tb) || need <= have ||
+                   (a < NUM_PATTERN ? lkr_used(1) + need - have <= LK_N : lkr_used(0) - lkr_used(1) + need - have <= LK_SIDE);
+            if ((lk_trk_copy(lkr_p(a), ta, lkr_p(b), tb) == 0) != room)
+                ok = 0;
+            for (i = 0; i < NUM_STEPS && !(a == b && ta == tb); i++)
+                if (room)
+                    lkr[a][ta][i] = lkr[b][tb][i];
+                else if (a >= NUM_PATTERN)
+                    lkr[a][ta][i].n = 0;
+        } else if (w < 860u) {                        /* (a pattern: no room, a pattern as it was, a copy none) */
+            uint32_t need = 0, have = 0;
+            int room;
+            for (t = 0; t < NTRACK; t++)
+                for (i = 0; i < NUM_STEPS; i++) {
+                    need += lkr[b][t][i].n;
+                    have += lkr[a][t][i].n;
+                }
+            room = a == b || need <= have ||
+                   (a < NUM_PATTERN ? lkr_used(1) + need - have <= LK_N : lkr_used(0) - lkr_used(1) + need - have <= LK_SIDE);
+            if ((lk_pat_copy(lkr_p(a), lkr_p(b)) == 0) != room)
+                ok = 0;
+            if (a != b)
+                for (t = 0; t < NTRACK; t++)
+                    for (i = 0; i < NUM_STEPS; i++)
+                        if (room)
+                            lkr[a][t][i] = lkr[b][t][i];
+                        else if (a >= NUM_PATTERN)
+                            lkr[a][t][i].n = 0;
+        } else if (w < 880u) {                        /* (two patterns swapped: both patterns' or both copies') */
+            if ((a < NUM_PATTERN) == (b < NUM_PATTERN)) {
+                static uint8_t tmp[sizeof lkr[0]];
+                lk_pat_swap(lkr_p(a), lkr_p(b));
+                memcpy(tmp, lkr[a], sizeof tmp);
+                memcpy(lkr[a], lkr[b], sizeof tmp);
+                memcpy(lkr[b], tmp, sizeof tmp);
+            }
+        } else if (w < 900u) {
+            if ((a < NUM_PATTERN) == (b < NUM_PATTERN)) {
+                static uint8_t tmp[sizeof lkr[0][0]];
+                lk_trk_swap(lkr_p(a), lkr_p(b), ta);
+                memcpy(tmp, lkr[a][ta], sizeof tmp);
+                memcpy(lkr[a][ta], lkr[b][ta], sizeof tmp);
+                memcpy(lkr[b][ta], tmp, sizeof tmp);
+            }
+        } else {                                      /* (a track's first len steps rotated r later) */
+            uint32_t len = 1u + lkr_r(NUM_STEPS), r = len > 1u ? 1u + lkr_r(len - 1u) : 0u;
+            static uint8_t tmp[sizeof lkr[0][0]];
+            if (!r)
+                continue;
+            memcpy(tmp, lkr[a][ta], sizeof tmp);
+            lk_trk_rot(lkr_p(a), ta, r, len);
+            for (i = 0; i < len; i++)
+                memcpy(&lkr[a][ta][(i + r) % len], tmp + i * sizeof lkr[0][0][0], sizeof lkr[0][0][0]);
+        }
+        if (op % 97u == 0u || op > 59000u)
+            ok &= lkr_same();
+
+        n = lk_at[LK_NRUN] > n ? lk_at[LK_NRUN] : n;
+    }
+    ok &= lkr_same();
+    for (i = 0; i < 200000u && lk_used() < LK_N; i++)   /* (then full: every pattern step's 8 till 8,192) */
+        lkr_put(lkr_r(NUM_PATTERN), lkr_r(NTRACK), lkr_r(NUM_STEPS), 1u + lkr_r(900), lkr_r(128));
+    lkr_put(3, 3, 3, 1000, 1);
+    lkr_put(LK_UP, 0, 0, 1001, 2);                   /* (a copy's: its own room) */
+    ok &= lkr_same() && lk_full == LK_POOLFULL;
+    printf("  %u operations, the pool's most %u (patterns %u of %u)\n", op, n, lk_used(), (unsigned)LK_N);
+    check(ok && lk_used() == LK_N, "1.4: the lock pool against its model (60,000 operations, filled to 8,192)");
+    for (id = 0; id < LKR_ID; id++)
+        for (t = 0; t < NTRACK; t++)
+            lk_clear(lkr_p(id), t, 0, NUM_STEPS);
+    lk_bad = 0;
+    lk_full = 0;
+}
+/* 1.4 fixes (2026-11-11): a copy the pool can't hold changes nothing (patterns, tracks, bars) and says so; CLEAR STEP
+ * LOCKS; CLEAR TRACK LOCKS on a generator's live track; no interrupts on and off from the audio block */
+static void phase19_fixes(void)
+{
+    pattern_t *p = &pat[5], keep;
+    uint32_t i, t, k, c, ok;
+    p4_reset();
+    for (i = 0; i < LKR_ID; i++)
+        for (t = 0; t < NTRACK; t++)
+            lk_clear(lkr_p(i), t, 0, NUM_STEPS);
+    lk_put(p, 0, 0, 40, 7);                          /* (pattern 6: one step, one lock) */
+    main_set(p, 0, 0, 1);
+    p->step[0][0].note = 61;
+    lk_put(&pat[0], 2, 3, 41, 9);                     /* (pattern 1, track 3: a step to copy) */
+    for (i = 1; i < 4u && lk_used() < LK_N; i++)      /* (patterns 2-4 filled: the pool full) */
+        for (t = 0; t < NTRACK && lk_used() < LK_N; t++)
+            for (k = 0; k < NUM_STEPS && lk_used() < LK_N; k++)
+                for (c = 0; c < LK_STEP && lk_used() < LK_N; c++)
+                    lk_put(&pat[i], t, k, 100u + c, c);
+    keep = *p;
+    lk_full = 0;
+    ok = pv_copy(1, 5) != 0 && !memcmp(&keep, p, sizeof keep) && lk_get(p, 0, 0, 40) == 7 &&
+         lk_used() == LK_N && lk_full == LK_POOLFULL;
+    run_ms(60);
+    check(ok && msg_on() && !strcmp(ui.msg, "NO LOCKS LEFT: 8,192 IN USE"),
+          "1.4 fix: a pattern copy the pool can't hold changes nothing (steps and locks), said");
+    keep = *p;
+    seq_copy_track(0, 1, &pat[1]);                    /* (pattern 2's full track over its track 2: same count, fits) */
+    lk_full = 0;
+    seq_copy_track(0, 3, p);                          /* (pattern 6's track 1 (one lock) over its empty track 4) */
+    ok = lk_used() == LK_N && lk_full == LK_POOLFULL && !memcmp(&keep, p, sizeof keep) && !lk_has(p, 3, 0);
+    check(ok && lk_get(&pat[1], 1, 5, 103) == 3, "1.4 fix: a track copy that doesn't fit leaves the track as it was");
+    lk_full = 0;
+    bar_copy(p, 0, 0, 1, 0);
+    check(lk_full == LK_POOLFULL && !main_on(p, 0, 16) && !lk_has(p, 0, 16) && p->step[0][16].note != 61,
+          "1.4 fix: a bar copy that doesn't fit leaves the step as it was");
+    for (i = 1; i < 4u; i++)
+        for (t = 0; t < NTRACK; t++)
+            lk_clear(&pat[i], t, 0, NUM_STEPS);
+    lk_full = 0;
+    check(pv_copy(5, 6) == 0 && lk_get(&pat[6], 0, 0, 40) == 7 && pat[6].step[0][0].note == 61 && lk_get(p, 0, 0, 40) == 7,
+          "1.4 fix: with room, the same copy goes through");
+    /* CLEAR STEP LOCKS: step edit's LOCKS page opens CLEAR on it; only that step's locks go */
+    p = &pat[sq.active];
+    lk_put(p, 1, 4, 40, 1);
+    lk_put(p, 1, 4, 300, 2);
+    lk_put(p, 1, 5, 40, 3);
+    main_set(p, 1, 4, 1);
+    goto_mode(B_SEQ, M_STEP);
+    ui.page = 2;
+    ui.track = 1;
+    ui.step = 4;
+    ui.force = 1;
+    run_ms(40);
+    hold(B_OCTDN);
+    press(B_OCTUP);
+    check(ui.clear_open && ui.clear_sel == CL_STEP_LK, "1.4: CLEAR on the LOCKS page: CLEAR STEP LOCKS first");
+    shot("clear-step-locks");
+    press(B_OCTUP);
+    release(B_OCTDN);
+    check(!lk_has(p, 1, 4) && lk_get(p, 1, 5, 40) == 3 && main_on(p, 1, 4) && !strcmp(ui.msg, "STEP'S LOCKS CLEARED"),
+          "1.4: CLEAR STEP LOCKS: that step's, the next step's kept, the step still on");
+    goto_mode(B_HOME, M_HOME);
+    hold(B_OCTDN);
+    press(B_OCTUP);
+    ui.clear_sel = CL_AUTO;
+    turn(EN_SELECT, 1);
+    c = ui.clear_sel;
+    turn(EN_SELECT, -1);
+    check(c == CL_SOUND && ui.clear_sel == CL_AUTO, "1.4: CLEAR STEP LOCKS isn't offered outside step edit");
+    release(B_OCTDN);
+    /* CLEAR TRACK LOCKS on a generator's track: its live copy's too */
+    p->gen[2][0] = GEN_MUTATE;
+    lk_put(p, 2, 0, 40, 5);
+    lk_put(&gpat, 2, 0, 40, 5);
+    seq_clear_automation(2, p);
+    check(!lk_has(p, 2, 0) && !lk_has(&gpat, 2, 0), "1.4 fix: CLEAR TRACK LOCKS: a generator's live track's too");
+    p->gen[2][0] = GEN_OFF;
+    run_ms(20);
+    check(lk_isr == 0 && lk_cs == 0, "1.4 fix: the audio block leaves the locks' ISR flag and depth at 0");
+    p4_reset();
+    lk_full = 0;
+}
+/* 1.4: no morph kit, morph turned to 100%: OCT+ takes this kit as the morph, SAVE > MORPH into an Init slot; SAVE at
+ * 100% after: the morph's slot again */
+static void morph_offer_test(void)
+{
+    uint32_t i, ok, s, f0 = PAR_FILTER_FREQ_1, keep = kset.medit;
+    uint8_t mp[KIT_LEN];
+    printf("1.4: this kit as the morph\n");
+    goto_mode(B_HOME, M_HOME);
+    memcpy(mp, morph_par, KIT_LEN);
+    kit_init_values(morph_par);
+    kset.medit = 0;                                   /* (SPLIT: at 100% the knobs edit the morph kit) */
+    par[f0] = 33;
+    perf_goto(0);
+    vp_set(PAR_MORPH, 0);
+    turn(EN_K3, 1);
+    turn(EN_K3, -1);
+    check(par[PAR_MORPH] == 0 && !mo_offering(), "MORPH 0: nothing offered");
+    vp_set(PAR_MORPH, 250);
+    for (i = 0; i < 10u && par[PAR_MORPH] < 255u; i++)
+        turn(EN_K3, 1);
+    check(par[PAR_MORPH] == 255u && mo_offering(), "MORPH 100% with no morph kit: OCT+ offers this kit");
+    shot("morph-offer");
+    press(B_OCTUP);
+    for (i = 0, ok = 1; i < KIT_LEN; i++)
+        ok &= morph_par[i] == par[kit_par(i)];
+    check(ok && ui.mode == M_SAVE && ui.io_type == IO_MORPH && !ui.io_naming, "OCT+: the kit is the morph; SAVE > MORPH");
+    shot("morph-offer-save");
+    s = ui.io_slot;
+    check(s != kit_loaded && !memcmp(kit_names[s], "Init    ", 8), ".. into an Init slot, not the kit's");
+    ui.io_src = 0;
+    press(B_OCTUP);
+    check(ui.io_naming && !memcmp(ui.io_name, kit_names[kit_loaded], 8), ".. named as the kit, to change");
+    i = kit_loaded;
+    press(B_OCTUP);
+    check(kit_morph_loaded == s && kit_loaded == i, "MORPH SAVED: the morph's slot; the kit's slot stays");
+    perf_goto(0);
+    check(!mo_offering(), "a morph kit now: nothing offered");
+    ui.track = 0;
+    press(B_SCL);
+    turn(EN_K2, 5);                                   /* (filter freq: at 100%, SPLIT, the morph kit's) */
+    check(par[f0] == 33u && morph_par[kit_idx(f0)] != 33u, "at 100%: the knob moves the morph kit, the kit stays");
+    press(B_SAVE);
+    check(ui.mode == M_SAVE && ui.io_type == IO_MORPH && ui.io_slot == s, "SAVE at 100%: SAVE > MORPH, its slot");
+    press(B_OCTUP);
+    press(B_OCTUP);
+    kit_get(s, mp);
+    check(mp[kit_idx(f0)] == morph_par[kit_idx(f0)] && kit_morph_loaded == s, "saved again into the morph's slot");
+    perf_goto(0);
+    turn(EN_K3, -1);
+    press(B_SAVE);
+    check(ui.io_type == IO_KIT, "SAVE below 100%: the kit");
+    goto_mode(B_HOME, M_HOME);
+    kit_init_values(morph_par);
+    kset.medit = (uint8_t)keep;
+}
+static void phase19_locks(void)
+{
+    pattern_t *p;
+    uint32_t i, t, k, ok;
+    printf("phase 19 (1.4): the lock pool\n");
+    morph_offer_test();
+    p4_reset();
+    lkr_model_test();
+    phase19_fixes();
+    p4_reset();
+    p = &pat[0];
+    /* 8 a step; the ninth refused, the screen says so */
+    for (i = 0, ok = 1; i < LK_STEP; i++)
+        ok &= lk_put(p, 1, 4, 300u + i, i) == LK_OK;
+    ok &= lk_put(p, 1, 4, 290u, 9) == LK_STEPFULL && lk_put(p, 1, 4, 300u, 77) == LK_OK && lk_get(p, 1, 4, 300u) == 77;
+    run_ms(60);
+    check(ok && msg_on() && !strcmp(ui.msg, "STEP FULL: 8 LOCKS"), "1.4: 8 locks a step, the ninth refused (said)");
+    /* the LOCKS page: the list; ADD, a parameter, its value; OFF deletes */
+    goto_mode(B_SEQ, M_STEP);
+    ui.page = 2;
+    ui.track = 1;
+    ui.step = 4;
+    ui.lk_row = 0;
+    ui.force = 1;
+    run_ms(60);
+    shot("p19-locks-full");
+    check(vp_get(PAR_P2_DEST) == lk_code_idx(300u) && lk_ui_max(PAR_P1_DEST) == 7u, "LOCKS: a full step's 8 rows");
+    lk_clear(p, 1, 4, 1);
+    ui.lk_row = 0;
+    run_ms(60);
+    shot("p19-locks-empty");
+    check(lk_ui_max(PAR_P1_DEST) == 0u && vp_get(PAR_P2_DEST) == 0u, "LOCKS: an empty step, ADD only");
+    vp_set(PAR_P2_DEST, lock_idx_of(PAR_FILTER_FREQ_1 + 1u));
+    vp_set(PAR_P1_VAL, 33);
+    ui.lk_row = 1;
+    vp_set(PAR_P2_DEST, lock_idx_of(PAR_TILT1 + 1u));
+    vp_set(PAR_P1_VAL, 90);
+    ui.lk_row = 2;
+    vp_set(PAR_P2_DEST, LOCK_RUSH_IDX);
+    main_set(p, 1, 4, 1);
+    run_ms(60);
+    shot("p19-locks-list");
+    check(lk_get(p, 1, 4, par_to_autodest(PAR_FILTER_FREQ_1 + 1u)) == 33 &&
+          lk_get(p, 1, 4, par_to_autodest(PAR_TILT1 + 1u)) == 90 && lk_get(p, 1, 4, RUSH_CODE) == (int32_t)(RUSH_MAX / 2u),
+          "LOCKS: three added from the page (filter, tilt, RUSH)");
+    {
+        char b[24];
+        ui.lk_row = (uint8_t)(lk_get(p, 1, 4, RUSH_CODE) >= 0 ? 2 : 0);
+        for (i = 0; i < 3u; i++)
+            if (lock_get(p, 1, 4, i) == RUSH_CODE)
+                ui.lk_row = (uint8_t)i;
+        card_value(b, sizeof b, PAR_P1_VAL, vp_get(PAR_P1_VAL));
+        check(!strcmp(b, "50%"), "LOCKS: RUSH's value as a %");
+        card_value(b, sizeof b, PAR_P1_DEST, vp_get(PAR_P1_DEST));
+        check(b[1] == '/' && b[2] == '3', "LOCKS: the row card, n/3");
+    }
+    vp_set(PAR_P2_DEST, 0);                          /* (OFF: RUSH gone) */
+    check(lk_get(p, 1, 4, RUSH_CODE) < 0 && lock_get(p, 1, 4, 1) != NO_AUTOMATION && lock_get(p, 1, 4, 2) == NO_AUTOMATION,
+          "LOCKS: OFF deletes the row's lock");
+    ui.lk_row = 0;                                   /* (another parameter the step has: passed over) */
+    k = lock_get(p, 1, 4, 0);
+    vp_set(PAR_P2_DEST, lk_code_idx(lock_get(p, 1, 4, 1)));
+    check(lock_get(p, 1, 4, 0) != lock_get(p, 1, 4, 1) && lk_step(p, 1, 4, (uint16_t[8]){0}, (uint8_t[8]){0}) == 2u,
+          "LOCKS: a parameter the step already has is passed over");
+    (void)k;
+    /* held step, three knobs on a sound page: three locks (were 2 at most) */
+    lk_clear(p, 0, 2, 1);
+    goto_mode(B_EDIT, M_SOUND);
+    ui.track = 0;
+    ui.sect = S_FILTER;                              /* (TYPE, FREQ, RESO, DRIVE: FREQ .. DRIVE locked) */
+    ui.half = 0;
+    run_ms(30);
+    key_hold(2);
+    turn(EN_K4, 2);
+    turn(EN_K2, 2);
+    turn(EN_K3, 2);
+    key_up(2);
+    check(lk_step(p, 0, 2, (uint16_t[8]){0}, (uint8_t[8]){0}) == 3u, "1.4: a held step takes a lock for each knob turned (3)");
+    /* live recording: two parameters on the playing steps, each its own lock */
+    for (t = 0; t < NTRACK; t++)
+        lk_clear(p, t, 0, NUM_STEPS);
+    for (k = 0; k < 16u; k++)
+        main_set(p, 0, k, 1);
+    press(B_REC);
+    play_from_start();
+    for (i = 0; i < 40u; i++) {
+        turn(EN_K1, i & 1u ? 1 : -1);
+        turn(EN_K2, i & 1u ? -1 : 1);
+    }
+    press(B_PLAY);
+    press(B_REC);
+    {
+        uint32_t n2 = 0, n1 = 0;
+        for (k = 0; k < 16u; k++) {
+            uint32_t n = lk_step(p, 0, k, (uint16_t[8]){0}, (uint8_t[8]){0});
+            n2 += n >= 2u;
+            n1 += n >= 1u;
+        }
+        printf("  recorded: %u steps with a lock, %u with both\n", n1, n2);
+        check(n2 >= 4u, "1.4: recording two knobs: each its own lock on the playing step");
+    }
+    /* copies: a track, a bar, a pattern; rotate; UNDO */
+    for (t = 0; t < NTRACK; t++)
+        lk_clear(p, t, 0, NUM_STEPS);
+    lk_put(p, 2, 1, 40, 11);
+    lk_put(p, 2, 1, 300, 12);
+    lk_put(p, 2, 17, 41, 13);
+    seq_copy_track(2, 4, p);
+    check(lk_get(p, 4, 1, 40) == 11 && lk_get(p, 4, 1, 300) == 12 && lk_get(p, 4, 17, 41) == 13, "1.4: COPY a track: its locks");
+    bar_copy(p, 2, 0, 2, 0);
+    check(lk_get(p, 2, 33, 40) == 11 && lk_get(p, 2, 33, 300) == 12, "1.4: COPY a bar: its locks");
+    pv_copy(0, 6);
+    check(lk_get(&pat[6], 4, 17, 41) == 13 && lk_get(&pat[6], 2, 33, 300) == 12, "1.4: COPY a pattern: its locks");
+    trk_rotate(p, 2, 3, 16);
+    check(lk_get(p, 2, 4, 40) == 11 && lk_get(p, 2, 1, 40) < 0 && lk_get(p, 2, 33, 40) == 11,
+          "1.4: NUDGE: the locks move with their steps (the length's only)");
+    seq_undo_save(2);
+    seq_clear_track(2, p);
+    check(!lk_has(p, 2, 4) && seq_undo(2) && lk_get(p, 2, 4, 40) == 11 && lk_get(p, 2, 33, 300) == 12,
+          "1.4: UNDO brings a track's locks back");
+    seq_clear_automation(2, p);
+    check(!lk_has(p, 2, 4) && !lk_has(p, 2, 33) && main_on(p, 2, 4) == main_on(p, 2, 4), "1.4: CLEAR LOCKS: the track's");
+    /* RELOAD / DROP: the playing pattern's locks as loaded */
+    p4_reset();
+    lk_put(&pat[0], 0, 0, 40, 5);
+    pat_cp(&pat_backup, &pat[0]);
+    lk_put(&pat[0], 0, 0, 40, 99);
+    lk_put(&pat[0], 0, 1, 41, 9);
+    pat_revert = 1;
+    sq.pending = 1;
+    seq_pattern_activate();
+    check(lk_get(&pat[0], 0, 0, 40) == 5 && lk_get(&pat[0], 0, 1, 41) < 0, "1.4: RELOAD: the pattern's locks as saved");
+    sq.pending = 0;
+    seq_pattern_activate();
+    p4_reset();
+    /* a version-12 project with locks (1.3.1's, tests/data): into the pool; saved again (13), the same */
+    {
+        FILE *f = fopen("tests/data/proj_v12_locks.bin", "rb");
+        static uint8_t img[PROJ_SLOT];
+        static uint32_t e0[LK_CAP];
+        static uint16_t at0[LK_NRUN + 1u];
+        size_t n = f ? fread(img, 1, sizeof img, f) : 0;
+        uint32_t ph, l, used = 0;
+        proj_hdr_t h;
+        int rc;
+        if (f)
+            fclose(f);
+        for (l = 0; l < PROJ_NLOG; l++)
+            if (pj.phys[l] >= 0)
+                used |= 1u << pj.phys[l];
+        for (ph = 0; used & (1u << ph); ph++)
+            ;
+        memset(nor + PROJ_BASE + ph * PROJ_SLOT, 0xFF, PROJ_SLOT);
+        memcpy(nor + PROJ_BASE + ph * PROJ_SLOT, img, n);
+        check(n > 256 && hdr_read(ph, &h) == 0 && h.version == 12, "the version-12 locks fixture");
+        pj.phys[h.logical] = (int8_t)ph;
+        rc = proj_load(h.logical);
+        p = &pat[0];
+        check(rc == 0 && lk_used() == 85u && lk_get(p, 0, 0, par_to_autodest(PAR_FILTER_FREQ_1)) == 20 &&
+              lk_get(p, 0, 1, par_to_autodest(PAR_TILT1)) == 17 && lk_get(p, 3, 6, RUSH_CODE) == 70 &&
+              lk_get(p, 6, 14, par_to_autodest(PAR_FILTER_FREQ_1 + 5u)) == 20 + 14 * 6 + 6 && step_len(p, 3, 6) == 0u,
+              "version 12: two locks a step into the pool (85), the length's bits apart");
+        memcpy(e0, lk_e, sizeof e0);
+        memcpy(at0, lk_at, sizeof at0);
+        rc = proj_save(2, "LOCKS13 ");
+        rc |= proj_load(2);
+        check(rc == 0 && !memcmp(at0, lk_at, sizeof at0) && !memcmp(e0, lk_e, lk_used() * 4u), "version 13: the locks saved and loaded back the same");
+        proj_scan();
+    }
+    /* a full pool (8,192 locks over every pattern), the init kits: it saves; it loads back full */
+    p4_reset();
+    for (i = 0, k = 0; i < NUM_PATTERN; i++)
+        for (t = 0; t < NTRACK; t++)
+            for (k = 0; k < NUM_STEPS && lk_used() < LK_N; k++)
+                for (ok = 0; ok < 4u && lk_used() < LK_N; ok++)
+                    (void)lk_put(&pat[i], t, k, 37u + ok * 60u, (k + ok) & 127u);
+    {
+        int rc = proj_save(2, "FULLPOOL");
+        uint32_t len = rc == 0 ? pj_len(2) : 0u;
+        printf("  a full pool's project: %s, %u bytes (a slot holds %u)\n", rc == 0 ? "saved" : "too big", len,
+               (unsigned)PROJ_PAYLOAD);
+        check(rc == 0 && lk_used() == LK_N, "1.4: 8,192 locks (init kits) save");
+        rc = proj_load(2);
+        check(rc == 0 && lk_used() == LK_N, ".. and load back, all 8,192");
+        check(lk_put(&pat[31], 6, 63, 300, 1) == LK_POOLFULL, "1.4: the pool full: a new lock refused");
+        run_ms(60);
+        check(msg_on() && !strcmp(ui.msg, "NO LOCKS LEFT: 8,192 IN USE"), ".. and said");
+        ui.mode = M_STEP;
+        ui.page = 2;
+        ui.track = 6;
+        ui.step = 63;
+        ui.force = 1;
+        run_ms(60);
+        shot("p19-locks-pool-full");
+    }
+    /* share links: the pattern's locks go with it; a link from before 1.4 (7-byte steps, two locks in them) */
+    p4_reset();
+    lk_put(&pat[0], 1, 3, 40, 21);
+    lk_put(&pat[0], 1, 3, 300, 22);
+    lk_put(&pat[0], 5, 60, RUSH_CODE, 23);
+    {
+        uint32_t n = web_share_get(), rc;
+        lk_clear(&pat[0], 1, 0, NUM_STEPS);
+        lk_clear(&pat[0], 5, 0, NUM_STEPS);
+        rc = web_share_put(n);
+        check(n == WEB_SHARE_V7 + 2u + 12u && rc == 0 && lk_get(&pat[0], 1, 3, 40) == 21 &&
+              lk_get(&pat[0], 1, 3, 300) == 22 && lk_get(&pat[0], 5, 60, RUSH_CODE) == 23, "1.4: a share link's locks");
+        /* (the same link as 1.3 wrote it: the steps 7 bytes, the locks in them, lhi's bits; no locks after) */
+        {
+            static uint8_t old[sizeof web_share];
+            uint8_t *q = web_share + WEB_SHARE_HEAD + KIT_NAME_LEN + KIT_LEN, *o;
+            uint32_t s7 = NTRACK * NUM_STEPS * 7u, s3 = NTRACK * NUM_STEPS * 3u, tail = WEB_SHARE_V7 - (WEB_SHARE_HEAD +
+                          KIT_NAME_LEN + KIT_LEN + s3), hi = (uint32_t)offsetof(pattern_t, lhi) - s3;
+            n = web_share_get();
+            memcpy(old, web_share, WEB_SHARE_HEAD + KIT_NAME_LEN + KIT_LEN);
+            o = old + WEB_SHARE_HEAD + KIT_NAME_LEN + KIT_LEN;
+            for (i = 0; i < NTRACK * NUM_STEPS; i++) {
+                memcpy(o + 7u * i, q + 3u * i, 3);
+                o[7u * i + 3u] = o[7u * i + 5u] = NO_AUTOMATION;
+                o[7u * i + 4u] = o[7u * i + 6u] = 0;
+            }
+            memcpy(o + s7, q + s3, tail);
+            o[7u * (1u * NUM_STEPS + 3u) + 3u] = 40;     /* (D2 step 4: lane 1 code 40, lane 2 code 300: 0x2C | 1 << 8) */
+            o[7u * (1u * NUM_STEPS + 3u) + 4u] = 31;
+            o[7u * (1u * NUM_STEPS + 3u) + 5u] = (uint8_t)(300u & 0xFFu);
+            o[7u * (1u * NUM_STEPS + 3u) + 6u] = 32;
+            o[s7 + hi + 1u * NUM_STEPS + 3u] = (uint8_t)((300u >> 8) << 4 | 1u << 2);   /* (+ a length bit) */
+            old[6] = (uint8_t)(sizeof(pattern_t) + WEB_OLD_STEP);
+            old[7] = (uint8_t)((sizeof(pattern_t) + WEB_OLD_STEP) >> 8);
+            memcpy(web_share, old, WEB_SHARE_V7 + WEB_OLD_STEP);
+            for (t = 0; t < NTRACK; t++)
+                lk_clear(&pat[0], t, 0, NUM_STEPS);
+            rc = web_share_put(WEB_SHARE_V7 + WEB_OLD_STEP);
+            check(rc == 0 && lk_get(&pat[0], 1, 3, 40) == 31 && lk_get(&pat[0], 1, 3, 300) == 32 &&
+                  lk_used() == 2u && pat[0].lhi[1][3] == 1u << 2, "1.4: a link from 1.3: its two locks a step into the pool");
+        }
+    }
+    p4_reset();
+}
+
 int main(int argc, char **argv)
 {
     uint32_t t;
@@ -11370,6 +12022,17 @@ int main(int argc, char **argv)
         shots = argv[1];
     web_nor_erase();
     web_boot();
+    {                                                /* 22: every packed table unpacked to its generator's values */
+        uint32_t bad = 0;
+#define TBL_CMP(name, off, code, crc) bad += memcmp(name, name##_raw, sizeof name) != 0;
+        TBL_LIST(TBL_CMP)
+        check(!bad && tbl_state == TBL_OK && TBL_N == 13u, "22: the packed tables unpack to their values");
+        printf("22: %u tables, %u B of RAM from %u B packed\n", TBL_N, TBL_RAM_BYTES, (uint32_t)sizeof tbl_bits);
+        PL_FOLD[7] ^= 1;                             /* (a stray write: the check sees it) */
+        check(!tables_check() && tbl_state == TBL_BAD, "22: a changed table fails its CRC");
+        PL_FOLD[7] ^= 1;
+        tbl_state = TBL_OK;
+    }
     check(kset.gtakes == GT_KEYS && midi_gtakes == GT_KEYS, "0.24: Global in starts at KEYS");
     midi_gtakes = GT_ALL;                            /* (the tests below send the LXR's CCs there: phase_024g) */
     run_ms(200);
@@ -11399,8 +12062,8 @@ int main(int argc, char **argv)
     press(B_EDIT);
     check(ui.mode == M_SOUND && ui.sect == S_MODEL, "EDIT: the MODEL page first (29)");
     shot("model");
-    press(B_EDIT);
-    check(ui.mode == M_SOUND && ui.sect == S_OSC, "EDIT again: the oscillator page");
+    sect_go(S_OSC);
+    check(ui.mode == M_SOUND && ui.sect == S_OSC, "SELECT: the oscillator page");
     shot("osc");
     turn(EN_K1, -5);                                  /* coarse down */
     check(par[PAR_COARSE1] != INIT_KIT[8 + PAR_COARSE1], "K1 moves the coarse tune");
@@ -11452,7 +12115,7 @@ int main(int argc, char **argv)
     keys &= ~(1u << WHITE_KEY[8]);
     web_keys(keys);
     run_ms(40);
-    check(pat[0].step[0][8].p1n != NO_AUTOMATION || pat[0].step[0][8].p2n != NO_AUTOMATION, "the step holds a lock");
+    check(lk_has(&pat[0], 0, 8), "the step holds a lock");
     /* SHIFT: the legend */
     hold(B_OCTDN);
     shot("shift");
@@ -11750,11 +12413,9 @@ int main(int argc, char **argv)
                         step_t *st = &pat[i].step[t][k];
                         st->volume = (uint8_t)(0x80 | (k * 7u + t) % 127u);
                         st->note = (uint8_t)(40 + (k + i) % 30u);
-                        if (pass) {                    /* + both locks, chance, timing */
-                            st->p1n = 37;
-                            st->p1v = (uint8_t)k;
-                            st->p2n = 95;
-                            st->p2v = (uint8_t)i;
+                        if (pass) {                    /* + two locks (1.4: till the pool is full), chance, timing */
+                            (void)lk_put(&pat[i], t, k, 37, k);
+                            (void)lk_put(&pat[i], t, k, 95, i);
                             st->prob = 50;
                             pat[i].timing[t][k] = 0x82;
                         }
@@ -11882,6 +12543,7 @@ int main(int argc, char **argv)
     phase_100_17();
     phase_100_18();
     lfo_smooth_drift();
+    phase19_locks();
     copy_pass();                                     /* (1.0's copy and picture pass: last, as it runs time) */
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;

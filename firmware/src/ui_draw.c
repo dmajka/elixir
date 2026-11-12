@@ -160,7 +160,7 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
         break;
     }
     case M_PERF:                                     /* (29: the pages of the set shown) */
-        put_str(b, PERF_TITLE[ui.page % NPERF], n);
+        put_str(b, mo_offering() ? "OCT+: THIS KIT AS MORPH" : PERF_TITLE[ui.page % NPERF], n);   /* (1.4) */
         *pg = ui.page % NPERF - perf_first();
         *np = perf_count();
         break;
@@ -355,7 +355,7 @@ static uint32_t col_sig(uint32_t c)
                            (sq.running && sq.idx[t] == (int8_t)st) << 2);
         if (main_on(pt, t, st))
             s = sig_add(s, (uint32_t)x->volume | (uint32_t)x->prob << 8 | (uint32_t)pt->timing[t][st] << 16 |
-                               (uint32_t)(x->p1n != NO_AUTOMATION || x->p2n != NO_AUTOMATION) << 24);
+                               (uint32_t)lk_has(pt, t, st) << 24);
     }
     return s;
 }
@@ -391,7 +391,7 @@ static void draw_col(uint32_t c)
             }
             if ((pt->timing[t][st] & 15u) != 0u)     /* flam: a notch */
                 cv_rect(CELL_W / 2, top, 1, (int32_t)h, play ? T_SEL : bg);
-            if (x->p1n != NO_AUTOMATION || x->p2n != NO_AUTOMATION)   /* a lock: a dot */
+            if (lk_has(pt, t, st))                   /* a lock: a dot */
                 cv_rect(CELL_W - 4, y + 1, 3, 3, T_ACCENT);
             if ((pt->timing[t][st] >> 4) != 7u)      /* shifted: a tick under it */
                 cv_rect((pt->timing[t][st] >> 4) < 7u ? 1 : CELL_W - 3, y + ROW_H - 2, 2, 1, T_TEXT);
@@ -553,7 +553,14 @@ static void draw_clear(int32_t y0)
     (void)y0;
     cv_rrect(10, 20, 220, 88, 6, T_SURF, T_BG);
     cv_text_in(10, 30, 220, &AF_S, "SHIFT + COPY", T_MID, T_SURF);
-    cv_text_in(10, 50, 220, &AF_M, CLEAR_NAME[ui.clear_sel], T_ACCENT, T_SURF);
+    if (ui.clear_sel == CL_STEP_LK) {                /* (1.4: which step: CLEAR STEP 12 LOCKS) */
+        char b[24];
+        put_str(b, "CLEAR STEP ", sizeof b);
+        put_str(put_int(b + str_len(b), (int32_t)(ui.step & 63u) + 1), " LOCKS", 8);
+        cv_text_in(10, 50, 220, &AF_M, b, T_ACCENT, T_SURF);
+    } else {
+        cv_text_in(10, 50, 220, &AF_M, CLEAR_NAME[ui.clear_sel], T_ACCENT, T_SURF);
+    }
     cv_text_in(10, 76, 220, &AF_S, "SELECT: what   COPY: confirm", T_TEXT, T_SURF);
     cv_text_in(10, 90, 220, &AF_S, "let go of SHIFT to cancel", T_MID, T_SURF);
 }
@@ -770,6 +777,80 @@ static void draw_gen_pop(int32_t y0)
     put_str(b + str_len(b), "/", sizeof b - str_len(b));
     put_int(b + str_len(b), (int32_t)NGEN);
     cv_text_r(226, 10, &AF_S, b, T_DIM, T_SURF);
+}
+/* 1.4: the LOCKS page: the selected step's locks, a row each (its parameter, its value as its card reads it), the
+ * row KNOB 1 picks lit; ADD after the last while the step has room. Above: the step, how many; the pool's count */
+#define LK_ROWS 5u
+static void lk_value(char *b, uint32_t n, uint32_t c, uint32_t v);
+static void card_name(char *b, uint32_t n, uint32_t p);
+static void lk_name(char *b, uint32_t n, uint32_t c)  /* a lock's parameter as its card names it, its voice first */
+{
+    uint32_t p = autodest_to_par(c), v = p >= NUM_PARAMS ? par_k_voice(p) : par_voice(p);
+    if (c == RUSH_CODE) {
+        put_str(b, "RUSH", n);
+        return;
+    }
+    card_name(b, n, p);
+    if (v < 6u && n > 4u && !(b[0] == VOICE_SHORT[v][0] && b[1] == VOICE_SHORT[v][1])) {   /* (not "D1 D1 fx") */
+        uint32_t i = str_len(b) + 3u < n ? str_len(b) + 1u : n - 3u;
+        for (; i > 0; i--)
+            b[i + 2u] = b[i - 1u];
+        b[0] = VOICE_SHORT[v][0];
+        b[1] = VOICE_SHORT[v][1];
+        b[2] = ' ';
+        b[n - 1u] = 0;
+    }
+}
+static char *put_thou(char *b, uint32_t v)            /* 8,192 */
+{
+    if (v < 1000u)
+        return put_int(b, (int32_t)v);
+    b = put_int(b, (int32_t)(v / 1000u));
+    *b++ = ',';
+    b[0] = (char)('0' + v % 1000u / 100u);
+    b[1] = (char)('0' + v % 100u / 10u);
+    b[2] = (char)('0' + v % 10u);
+    b[3] = 0;
+    return b + 3;
+}
+static uint32_t locks_sig(void)
+{
+    uint16_t c[LK_STEP];
+    uint8_t v[LK_STEP];
+    uint32_t r, n = lk_ui_rows(c, v, &r), i, s = sig_add(19, n | r << 4 | ui.step << 8 | ui.track << 16);
+    for (i = 0; i < n; i++)
+        s = sig_add(s, c[i] | (uint32_t)v[i] << 10);
+    return sig_add(s, lk_used());
+}
+static void draw_locks(int32_t y0)
+{
+    uint16_t c[LK_STEP];
+    uint8_t v[LK_STEP];
+    uint32_t r, n = lk_ui_rows(c, v, &r), rows = n < LK_STEP ? n + 1u : n, top, i;
+    char b[32];
+    (void)y0;
+    put_str(b, "STEP ", sizeof b);
+    put_int(b + 5, (int32_t)(ui.step & 63u) + 1);
+    put_str(b + str_len(b), n == LK_STEP ? "   FULL 8/8" : "", sizeof b - str_len(b));
+    cv_text(8, 3, &AF_S, b, T_MID);
+    put_str(put_thou(b, LK_N - lk_used()), " / 8,192 LEFT", 16);
+    cv_text_r(232, 3, &AF_S, b, T_DIM, T_BG);
+    top = r + 1u > LK_ROWS ? r + 1u - LK_ROWS : 0u;  /* (scrolled: the row in sight) */
+    for (i = top; i < rows && i < top + LK_ROWS; i++) {
+        int32_t y = 20 + (int32_t)(i - top) * 21;
+        uint16_t bg = i == r ? T_THEME : T_SURF, fg = i == r ? T_INK : T_TEXT;
+        cv_rrect(4, y, 232, 19, 4, bg, T_BG);
+        if (i >= n) {
+            cv_text(12, y + CAP_IN(M, 19), &AF_M, n ? "+ ADD A LOCK" : "+ ADD A LOCK (PARAM)", i == r ? T_INK : T_DIM);
+            continue;
+        }
+        lk_value(b, sizeof b, c[i], v[i]);
+        cv_text_r(228, y + CAP_IN(M, 19), &AF_M, b, fg, bg);
+        lk_name(b, sizeof b, c[i]);
+        cv_text_fit(12, y + CAP_IN(M, 19), &AF_M, b, fg, bg, 136);
+    }
+    if (!n)
+        help_text_m(12, 46, "No locks. Hold a step and turn a knob, or turn PARAM here.", T_DIM, 14);
 }
 static void draw_perf_page(int32_t y0);
 static uint32_t glfo_sig(uint32_t i) { return gls[i].dest != GD_OFF ? (uint32_t)gl.out[i] >> 11 : 0u; }
@@ -1724,7 +1805,7 @@ static void draw_body(void)
         s = 1;
     } else if (ui.clear_open) {
         fn = draw_clear;
-        s = sig_add(2, ui.clear_sel);
+        s = sig_add(2, ui.clear_sel | (ui.step & 63u) << 8);
     } else if (ui.sb_open) {
         fn = draw_sound_browser;
         s = sig_add(40, ui.sb_sel | ui.track << 16);
@@ -1842,6 +1923,14 @@ static void draw_body(void)
             if (track_viz_page()) {                  /* (30: GROOVE, BOUNCE, MELODY, SCALE: their pictures) */
                 fn = draw_track_viz;
                 s = sig_add(15, track_viz_sig());
+                break;
+            }
+            draw_grid();
+            return;
+        case M_STEP:
+            if (ui.page % 4u == 2u) {                /* (1.4: LOCKS: the step's locks, a list) */
+                fn = draw_locks;
+                s = locks_sig();
                 break;
             }
             draw_grid();
@@ -2044,6 +2133,7 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_MOUT ... VP_MOUT_LAST: put_str(b, VOICE_SHORT[p - VP_MOUT], n); cat(b, " out", n); return;
     case VP_UMIX ... VP_UMIX_LAST: put_str(b, p - VP_UMIX == 5u ? "HH" : VOICE_SHORT[p - VP_UMIX], n); cat(b, " mix", n); return;
     case VP_TD ... VP_TD_LAST: put_str(b, VOICE_SHORT[p - VP_TD], n); cat(b, " dens", n); return;
+    case VP_TRUSH ... VP_TRUSH_LAST: put_str(b, VOICE_SHORT[p - VP_TRUSH], n); cat(b, " rush", n); return;
     case VP_MSEL: put_str(b, "Macro", n); return;
     case VP_MTARGET: put_str(b, "Target", n); return;
     case VP_MMIN: put_str(b, "Min", n); return;
@@ -2064,13 +2154,12 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case PAR_STEP_PROB: put_str(b, "Chance", n); return;
     case PAR_STEP_FLAM: put_str(b, "Flam", n); return;
     case PAR_STEP_SHIFT: put_str(b, "Shift", n); return;
-    case PAR_P1_DEST: put_str(b, "Lock 1", n); return;
-    case PAR_P2_DEST: put_str(b, "Lock 2", n); return;
+    case PAR_P1_DEST: put_str(b, "Lock", n); return;   /* (1.4: the LOCKS page's list: the row, its parameter) */
+    case PAR_P2_DEST: put_str(b, "Param", n); return;
     case PAR_P1_VAL: case PAR_P2_VAL: put_str(b, "Value", n); return;
     case PAR_EUKLID_LENGTH: put_str(b, "Length", n); return;
     case PAR_EUKLID_STEPS: put_str(b, "Hits", n); return;
     case PAR_EUKLID_ROTATION: put_str(b, "Rotate", n); return;
-    case PAR_AUTOM_TRACK: put_str(b, "Lock lane", n); return;
     case PAR_FOLLOW: put_str(b, "Follow", n); return;
     case PAR_PATTERN_MODE: put_str(b, "Kit chg", n); return;
     case PAR_MIDI_CHAN_GLOBAL: put_str(b, "Global ch", n); return;
@@ -2377,13 +2466,41 @@ static int card_unit(char *b, uint32_t n, uint32_t p, uint32_t v)
     return 0;
 }
 
+static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v);
+static void lk_value(char *b, uint32_t n, uint32_t c, uint32_t v)   /* 1.4: a lock's value as its card reads it */
+{
+    uint32_t q = autodest_to_par(c);
+    if (c == RUSH_CODE)
+        put_str(put_int(b, (int32_t)(v > RUSH_MAX ? RUSH_MAX : v)), "%", 2);   /* (39: a RUSH lock: its amount) */
+    else if (q)
+        card_value(b, n, q, v);
+    else
+        put_int(b, (int32_t)v);
+}
 static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
 {
     if (pl_card(b, n, p, v))                         /* (0.23-t7: P WTABLE's, P CHORD's) */
         return;
-    if ((p == PAR_P1_VAL || p == PAR_P2_VAL) && ui.mode == M_STEP &&
-        lock_get(shown_pat(), ui.track, ui.step & 63u, p == PAR_P2_VAL) == RUSH_CODE) {
-        put_str(put_int(b, (int32_t)(v > RUSH_MAX ? RUSH_MAX : v)), "%", 2);   /* (39: a RUSH lock: its amount) */
+    if ((p == PAR_P1_VAL || p == PAR_P1_DEST || p == PAR_P2_DEST) && ui.mode == M_STEP) {   /* 1.4: the LOCKS page's
+                                                      * row, its parameter, its value */
+        uint16_t c[LK_STEP];
+        uint8_t lv[LK_STEP];
+        uint32_t r, nl = lk_ui_rows(c, lv, &r);
+        if (p == PAR_P1_DEST) {
+            if (r >= nl) {
+                put_str(b, "ADD", n);
+            } else {
+                put_int(b, (int32_t)r + 1);
+                put_str(b + str_len(b), "/", n - str_len(b));
+                put_int(b + str_len(b), (int32_t)nl);
+            }
+        } else if (r >= nl) {
+            put_str(b, p == PAR_P2_DEST ? "OFF" : "-", n);
+        } else if (p == PAR_P2_DEST) {
+            lk_name(b, n, c[r]);
+        } else {
+            lk_value(b, n, c[r], v);
+        }
         return;
     }
     switch (p) {                                     /* (0.16: the master compressor) */
@@ -2489,7 +2606,7 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
     case VP_CAKIT: put_str(b, v ? "KIT ONLY" : "BOTH KITS", n); return;
     case VP_MEDIT: put_str(b, v == 1u ? "KIT ONLY" : v ? "BOTH KITS" : "SPLIT", n); return;   /* (1.0: SPLIT) */
     case VP_PMEM: case VP_AUDITION: put_str(b, v ? "YES" : "NO", n); return;
-    case VP_RQUANT: put_str(b, v ? "ON" : "OFF", n); return;
+    case VP_RQUANT: put_str(put_int(b, (int32_t)v), "%", 5); return;   /* (1.4: 0 .. 100%) */
     case VP_NUDGE:                                    /* (1.3: steps, + later) */
         if (v > 16u) {
             b[0] = '+';
@@ -2638,7 +2755,7 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
     case VP_WD ... VP_WD_LAST: wd_card_value(b, n, p - VP_WD, v); return;
     case VP_DVARY: if (v) put_int(b, (int32_t)v); else put_str(b, "OFF", n); return;
     case VP_STCH: put_str(put_int(b, (int32_t)(v * 100u / 127u)), "%", 2); return;
-    case VP_RUSH: case VP_RFILT:
+    case VP_RUSH: case VP_RFILT: case VP_TRUSH ... VP_TRUSH_LAST:
         if (v)
             put_str(put_int(b, (int32_t)v), "%", 2);
         else
@@ -2900,7 +3017,6 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
     case PAR_STEP_NOTE: note_name(b, v); return;
     case PAR_STEP_PROB: put_int(b, (int32_t)v); put_str(b + str_len(b), "%", n - str_len(b)); return;
     case PAR_STEP_FLAM: put_str(b, L_FLAM[v % 6u], n); return;
-    case PAR_AUTOM_TRACK: put_int(b, (int32_t)v + 1); return;
     case PAR_PATTERN_MODE: put_str(b, v ? "AUTO" : "OFF", n); return;
     case PAR_FOLLOW: put_str(b, v ? "ON" : "OFF", n); return;
     case PAR_MORPH: put_int(b, (int32_t)(v * 100u / 255u)); put_str(b + str_len(b), "%", n - str_len(b)); return;
@@ -2921,11 +3037,9 @@ static void draw_card(uint32_t k, uint32_t p)
     uint16_t bg = T_SURF, fg = T_TEXT;
     int32_t x0 = (int32_t)k * 60;
     if (p != VP_NONE && ui.held_step >= 0 && par_lockable(p) && ui.mode != M_STEP) {
-        const pattern_t *sp = shown_pat();
-        const step_t *st = &sp->step[ui.track][ui.held_step];
-        uint32_t d = par_to_autodest(p), hs = (uint32_t)ui.held_step;
+        int32_t g = lk_get(shown_pat(), ui.track, (uint32_t)ui.held_step, par_to_autodest(p));
         lock = 1;
-        val = lock_get(sp, ui.track, hs, 0) == d ? st->p1v : lock_get(sp, ui.track, hs, 1) == d ? st->p2v : vp_get(p);
+        val = g >= 0 ? (uint32_t)g : vp_get(p);
     } else {
         val = p == VP_NONE ? 0u : vp_get(p);
     }
@@ -3079,15 +3193,24 @@ static void draw_splash(void)
     draw_word(33, 117, 5, ux_mix(T_THEME, T_BG, 45));           /* (36 columns: 180 px; a shadow, then the word) */
     draw_word(30, 114, 5, T_TEXT);
     draw_text_box(0, 160, 240, &AF_M, SPLASH_LINE, T_TEXT, 1);   /* (1.0: a drum synth, grown from the LXR-02) */
-    draw_text_box(0, 192, 240, &AF_S, "grown from the LXR-02's engine", T_MID, 1);
+    if (tbl_state == TBL_BAD)                                   /* 22: a packed table's CRC failed (tblpack.c) */
+        draw_text_box(0, 192, 240, &AF_S, "TABLES BAD", T_REC, 1);
+    else
+        draw_text_box(0, 192, 240, &AF_S, "grown from the LXR-02's engine", T_MID, 1);
     draw_text_box(0, 209, 240, &AF_S, "free and unofficial, " ELIXIR_VERSION, T_MID, 1);
 }
 /* 29: CONFIG's last page: the potion and the word small, the version, the CPU line with the battery (37: the load of
  * each core is on LOAD) */
 static void draw_about(void)
 {
+    static uint32_t tbl_ms;
     uint32_t r, k, i;
     int32_t x = 128;
+    if (tbl_state != TBL_BAD && fm1_ms - tbl_ms > 2000u) {    /* 22: the tables again, on opening and every 2 s
+                                                                 * (~1 ms: a stray write into one would show here) */
+        tbl_ms = fm1_ms;
+        tables_check();
+    }
     for (r = 0; r < 18u; r++)
         for (k = 0; k < 22u; k++) {
             uint16_t c = potion_col(POTION[r][k]);
@@ -3102,6 +3225,9 @@ static void draw_about(void)
         x += (int32_t)(WORD_W[i] + 2u) * 3;
     }
     cv_text(82, 40, &AF_S, ELIXIR_VERSION, T_THEME);
-    cv_text(82, 54, &AF_S, "the LXR-02 on the FM-1", T_MID);
+    if (tbl_state == TBL_BAD)
+        cv_text(82, 54, &AF_S, "TABLES BAD", T_REC);
+    else
+        cv_text(82, 54, &AF_S, "the LXR-02 on the FM-1", T_MID);
     draw_cpu(178, "CPU ");                           /* (1.0: at the bottom, as LOAD's) */
 }

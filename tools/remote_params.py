@@ -53,7 +53,9 @@ TRACK_KNOBS = {                                       # remote.c's TRACKS knob r
     "RR_DECAY": ("decay", "Decay", "Sound"), "RR_PITCH": ("pitch", "Pitch", "Sound"),
     "RR_DLYS": ("delay-send", "Delay send", "Sends"), "RR_FXS": ("fx-send", "FX send", "Sends"),
     "RR_REVS": ("reverb-send", "Reverb send", "Sends"), "RR_SRATE": ("sample-rate", "Sample rate", "Sound"),
-    "RR_LFO": ("lfo-amount", "LFO amount", "Modulation"),
+    "RR_RUSH": ("rush", "Rush", "Performance",
+                "PERFORM: RUSH on this track, 0 off to 100% (a roll that takes the kit over). One track rushes at a "
+                "time: the last turned up; back to 0 on the rushing track lets it go. Recorded under REC as RUSH locks."),
     "RR_RNDP": ("density", "Density", "Sequencer",
                 "The track's own density, centered at 64, on top of PERFORM's (not saved)."),
 }

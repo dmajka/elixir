@@ -47,7 +47,7 @@ describe('automatic Elixir templates', () => {
   })
   it('keeps all six sound parameter families', () => {
     const ids = generateTemplate('sound-editor').assignments.map(a => a.parameterId)
-    for (const key of ['filter-frequency', 'resonance', 'pitch', 'decay', 'sample-rate', 'lfo-amount']) expect(ids.some(id => id.endsWith(`.${key}`))).toBe(true)
+    for (const key of ['filter-frequency', 'resonance', 'pitch', 'decay', 'sample-rate', 'pan']) expect(ids.some(id => id.endsWith(`.${key}`))).toBe(true)
   })
   it('rejects invalid channels and exposes overlaps without rewriting channels', () => {
     expect(() => generateTemplate('effects', { remoteTracks: 0, remoteGlobal: 16 })).toThrow()

@@ -12,6 +12,7 @@ void rg_core(int model, double f, double s, double b, double d, double p, int en
     uint32_t fq = (uint32_t)(f * 4294967296.0), k, i;
     int32_t S = (int32_t)(s * 65536 + 0.5), B = (int32_t)(b * 65536 + 0.5), D = (int32_t)(d * 65536 + 0.5),
             P = (int32_t)(p * 65536 + 0.5);
+    tables_unpack();                                 /* (22: as the boot) */
     memset(m, 0, sizeof *m);
     m->type = m->ran = (uint8_t)model;
     model_reset(m, 1);

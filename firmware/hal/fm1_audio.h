@@ -4,12 +4,13 @@
  * The application owns the buffer: two halves
  * of half_words int32 (L, R, 24-bit left-justified), zeroed before init.
  *
- *   fm1_audio_init(buf, half_words, isr, prio)  codec and ALNK0 bring-up;
+ *   fm1_audio_init(buf, half_words, isr, prio)  codec and ALNK0 bring-up, the codec still quiet;
  *                         isr = asm wrapper (fm1_isr.S) for FM1_IRQ_ALNK0
+ *   fm1_audio_unmute()    the codec heard, once boot is done (no power-on pop)
  *   in the ISR:   p = fm1_audio_pending();  fm1_audio_ack_aux(p);
  *                 if (p & FM1_AUDIO_HALF) { fill fm1_audio_free_half();
  *                                           fm1_audio_ack_half(); }
- *   fm1_audio_stop()      DMA off (crash screen, UBOOT): no looping buzz
+ *   fm1_audio_stop()      codec quiet, DMA off (crash screen, UBOOT): no looping buzz
  */
 #pragma once
 #include <stdint.h>
@@ -65,14 +66,16 @@ FM1_INLINE void fm1_audio_init(int32_t *buf, uint32_t half_words, void (*isr)(vo
     FM1_ALNK_CON1 |= 1u << 12;
     FM1_ALNK_CON1 |= 1u << 14;
     FM1_ALNK_ADR3 = (uint32_t)(uintptr_t)buf;
-    fm1__pc_out(6, 1);
     FM1_ALNK_CON1 &= ~(1u << 15);
     FM1_ALNK_CON2 = 0x0Fu;
     fm1_irq_attach(FM1_IRQ_ALNK0, isr, prio);
     FM1_ALNK_CON0 |= 0x800u;
-    fm1_delay_ms(5);
-    fm1__pc_out(6, 1);
+    fm1_delay_ms(50);                          /* zero-filled DMA runs; the codec control line (PC6) stays low */
 }
+/* The codec control line released. On a cold boot the codec's output has only just powered up: released at init (or
+ * before the I2S runs) it settles audibly, the power-on pop. main.c calls this once the splash is over, on silent I2S
+ * running since init (Melodee 1.2.1 and 1.6.0's fix). */
+FM1_INLINE void fm1_audio_unmute(void) { fm1__pc_out(6, 1); }
 
 FM1_INLINE uint8_t fm1_audio_pending(void) { return FM1_ALNK_CON2; }
 FM1_INLINE void fm1_audio_ack_aux(uint8_t p)   /* the other three pendings */
@@ -86,4 +89,4 @@ FM1_INLINE void fm1_audio_ack_aux(uint8_t p)   /* the other three pendings */
 }
 FM1_INLINE uint32_t fm1_audio_free_half(void) { return ((FM1_ALNK_CON0 >> 15) & 1u) ^ 1u; }   /* 0 / 1 */
 FM1_INLINE void fm1_audio_ack_half(void) { FM1_ALNK_CON2 |= 0x08u; }
-FM1_INLINE void fm1_audio_stop(void) { FM1_ALNK_CON0 &= ~0x800u; }
+FM1_INLINE void fm1_audio_stop(void) { fm1__pc_out(6, 0); FM1_ALNK_CON0 &= ~0x800u; }

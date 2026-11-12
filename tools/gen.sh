@@ -8,6 +8,8 @@ PY="${PYTHON:-python3}"
 [ -d /opt/homebrew/lib ] && export DYLD_FALLBACK_LIBRARY_PATH="${DYLD_FALLBACK_LIBRARY_PATH:-/opt/homebrew/lib}"
 mkdir -p build/gen
 "$PY" tools/gen_tables.py build/gen/elixir_tables.h
+"$PY" tools/tblpack.py build/gen/tblpack_data.h build/gen/elixir_tables.h firmware/src/rings_tables.h \
+    firmware/src/plaits_tables.h                                  # (22: the tables packed in flash)
 "$PY" tools/gen_aa_font.py build/gen/ui_fonts.h --preset inter-tight 2>&1 | grep -v "Raqm\|warnings.warn" | tail -1
 "$PY" tools/gen_ui_palettes.py build/gen/ui_palettes.h
 "$PY" tools/gen_aa_keycaps.py build/gen/ui_keycaps.h 2>&1 | grep -v "Raqm\|warnings.warn" | tail -1

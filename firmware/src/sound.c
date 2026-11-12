@@ -107,14 +107,17 @@ static uint8_t morph_amt;                        /* 0..255 (PAR_MORPH): 0 = the 
 
 /* automation (step parameter locks): the parameter each track's two lanes hold, and the value */
 #define NO_AUTOMATION 0xFFu
-static uint16_t auto_par[NTRACK][3];             /* 0 = none (lanes 0, 1: the step's locks; 2: a link's DECAY) */
-static uint8_t auto_val[NTRACK][3];
+#define LK_STEP 8u                                   /* 1.4: a step's locks, most (seq.c lk_*) */
+#define AUTO_DEC LK_STEP                             /* (the lane a link's DECAY takes) */
+#define NLANE (LK_STEP + 1u)
+static uint16_t auto_par[NTRACK][NLANE];         /* 0 = none (lanes 0 .. 7: the step's locks; 8: a link's DECAY) */
+static uint8_t auto_val[NTRACK][NLANE];
 static uint32_t auto_lk[(NPAR + 31u) / 32u];       /* 0.15: the parameters a lock holds (auto_lk_update) */
 
-/* a lock's destination code (12 bits: the step's byte, p1n / p2n, and 4 bits in the pattern's lhi, seq.c). Below
+/* a lock's destination code (10 bits: 1.4, seq.c lk_*; before, the step's byte and 2 bits in the pattern's lhi). Below
  * 256, the LXR's numbers: the parameter + 1 below 128 (its "stupid offset"), the parameter above, 0xFF none. From
  * 256, Elixir's parameters as they are. (0.2 stored Elixir's in the numbers the LXR leaves free, 247..254 and
- * 221..227; project.c lock_v2 moves a version-2 project's locks over.) */
+ * 221..227; project.c lock_old moves a version-2 project's locks over.) */
 static uint32_t autodest_to_par(uint32_t d)
 {
     if (d == NO_AUTOMATION || d == 0u)
@@ -320,7 +323,7 @@ static uint32_t par_base(uint32_t p)
     uint32_t t, k;
     if (p < NPAR && auto_lk[p >> 5] & 1u << (p & 31u))    /* (0.15: a lock's, found without the search at every other) */
         for (t = 0; t < NTRACK; t++)
-            for (k = 0; k < 3u; k++)
+            for (k = 0; k < NLANE; k++)
                 if (auto_par[t][k] == p)
                     return auto_val[t][k];
     if (par_sound(p) && morph_amt && !morph_excluded(p))
@@ -925,11 +928,11 @@ static void auto_lk_update(void)
     uint32_t t, k;
     memset(auto_lk, 0, sizeof auto_lk);
     for (t = 0; t < NTRACK; t++)
-        for (k = 0; k < 3u; k++)
+        for (k = 0; k < NLANE; k++)
             if (auto_par[t][k])
                 auto_lk[auto_par[t][k] >> 5] |= 1u << (auto_par[t][k] & 31u);
 }
-/* automationNode.c: a triggered step's two locks. The lane's last parameter goes back to its value first */
+/* automationNode.c: a triggered step's locks (up to 8, from the pool). A lane's last parameter goes back to its value first */
 static void auto_set(uint32_t track, uint32_t lane, uint32_t dest, uint32_t val)
 {
     uint32_t old = auto_par[track][lane], p = autodest_to_par(dest);
@@ -945,11 +948,41 @@ static void auto_set(uint32_t track, uint32_t lane, uint32_t dest, uint32_t val)
         snd_mv[kit_idx(p)] = 0xFFu;                  /* (not snd_refresh's: the sweep applies it next time) */
     }
 }
+/* 1.4: a triggered step's n locks (codes, values) into track t's lanes 0 .. LK_STEP - 1 at once; what the lanes held
+ * and this step doesn't goes back to its value */
+static void auto_step(uint32_t t, uint32_t n, const uint16_t *c, const uint8_t *v)
+{
+    uint16_t old[LK_STEP];
+    uint32_t i, j, p, on = 0;
+    for (i = 0; i < LK_STEP; i++) {
+        old[i] = auto_par[t][i];
+        on |= old[i];
+    }
+    if (!n && !on)                                   /* (most steps: none before, none now) */
+        return;
+    for (i = 0; i < LK_STEP; i++) {
+        p = i < n ? autodest_to_par(c[i]) : 0u;
+        auto_par[t][i] = (uint16_t)(p && par_sound(p) ? p : 0u);
+        auto_val[t][i] = i < n ? v[i] : 0u;
+    }
+    auto_lk_update();
+    for (i = 0; i < LK_STEP; i++) {
+        for (j = 0; j < LK_STEP && old[i] && auto_par[t][j] != old[i]; j++)
+            ;
+        if (old[i] && j == LK_STEP)
+            snd_refresh(old[i]);
+    }
+    for (i = 0; i < LK_STEP; i++)
+        if ((p = auto_par[t][i]) != 0u) {
+            snd_apply(p, auto_val[t][i], q16_of(auto_val[t][i]), 0);
+            snd_mv[kit_idx(p)] = 0xFFu;
+        }
+}
 static void auto_clear_all(void)
 {
     uint32_t t, k;
     for (t = 0; t < NTRACK; t++)
-        for (k = 0; k < 3u; k++)
+        for (k = 0; k < NLANE; k++)
             auto_set(t, k, NO_AUTOMATION, 0);
 }
 

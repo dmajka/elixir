@@ -920,10 +920,10 @@ static void viz_trans(void)
         return;
     }
     {
-        const int8_t *d = LXR_TRANS[(w - 2u) % 12u];
-        uint32_t len = 2204u;
+        uint32_t k = (w - 2u) % 12u, len = 2204u;
         uint64_t span;
-        while (len > 64u && iabs(d[len - 1u]) < 3)   /* (the sample's sound: its silent end off) */
+#define d_at(s) lxr_trans_at(k, s)                   /* (1.4: the one-shots without their trailing zeros) */
+        while (len > 64u && iabs(d_at(len - 1u)) < 3)   /* (the sample's sound: its silent end off) */
             len--;
         span = ((uint64_t)len * 9u / 8u) << 20;      /* (the plot: the sound at x1, a little after) */
         vz_hguide(VMID, vz_faint());
@@ -931,7 +931,7 @@ static void viz_trans(void)
             uint64_t a = span * i / VN, z = span * (i + 1u) / VN;
             uint32_t s0 = (uint32_t)(a >> 20), s1 = (uint32_t)(z >> 20), s, mx = 0;
             for (s = s0; s <= s1 && s < 2204u; s++)
-                mx = (uint32_t)iabs(d[s]) > mx ? (uint32_t)iabs(d[s]) : mx;
+                mx = (uint32_t)iabs(d_at(s)) > mx ? (uint32_t)iabs(d_at(s)) : mx;
             mx = mx * vol / 127u;
             if (mx)
                 cv_rect(VX0 + (int32_t)i, VMID - (int32_t)(mx * 32u / 128u), 1, 1 + (int32_t)(mx * 64u / 128u),
@@ -940,6 +940,7 @@ static void viz_trans(void)
         put_int(b, (int32_t)((len << 20) / inc * 10u / 441u));   /* (2204 << 20: in 32 bits) */
         put_str(b + str_len(b), " ms AT THIS PITCH", sizeof b - str_len(b));
         cv_text_r(VX1, VZ_Y + 4 + 14, &AF_S, b, T_MID, vz_bg());
+#undef d_at
     }
 }
 

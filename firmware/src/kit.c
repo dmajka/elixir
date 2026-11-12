@@ -204,7 +204,10 @@ static void kit_save_ram(uint32_t n, int morph)
                                                         : par[p];
     }
     kit_put(n, k);
-    kit_loaded = (uint8_t)n;
+    if (morph)                                       /* (1.4: a morph saved: the morph's slot, the kit's stays) */
+        kit_morph_loaded = (uint8_t)n;
+    else
+        kit_loaded = (uint8_t)n;
 }
 static void kit_load_morph(uint32_t n)               /* LOAD MORPH: a slot as the morph target */
 {

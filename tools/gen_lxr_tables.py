@@ -78,6 +78,32 @@ def arr(ctype, name, dims, vals, per=16):
     return out
 
 
+TRANS_PLAY = 2204          # dsp.c's TR_END: the player reads samples 0..2203 of a one-shot
+TRANS_TAIL = 1             # (1.4) a one-shot's tail of samples no louder than this is left off: it reads as 0
+
+
+def trans_tables(trans):
+    """(1.4) the one-shots back to back, each without its tail of +-1 and 0 (it reads as 0): ~2.6 KB of flash.
+    Almost all of it is one-shot 1's 46 ms of +-1 after its 4 ms click (42 dB under it; no difference heard)"""
+    data, ofs = [], [0]
+    for r in range(12):
+        row = trans[r * 2205:r * 2205 + TRANS_PLAY]
+        k = len(row)
+        while k and abs(row[k - 1]) <= TRANS_TAIL:
+            k -= 1
+        data += row[:k]
+        ofs.append(len(data))
+    L = ["", "/* the transient generator's one-shots: 12 of signed 8-bit samples, up to 2204 played (~50 ms), back to back in",
+         " * LXR_TRANS_D without their tails of +-1 and 0 (1.4: lxr_trans_at reads 0 past a one-shot's end) */",
+         "#define LXR_TRANS_N 12", f"#define LXR_TRANS_LEN {TRANS_PLAY}"]
+    L += arr("uint16_t", "LXR_TRANS_OFS", f"[{len(ofs)}]", ofs)
+    L += arr("int8_t", "LXR_TRANS_D", f"[{len(data)}]", data, 24)
+    L += ["static inline int32_t lxr_trans_at(uint32_t w, uint32_t i)   /* one-shot w's sample i */",
+          "{", "    return i < (uint32_t)(LXR_TRANS_OFS[w + 1u] - LXR_TRANS_OFS[w]) ? LXR_TRANS_D[LXR_TRANS_OFS[w] + i] : 0;",
+          "}"]
+    return L
+
+
 def main():
     lxr = Path(sys.argv[1])
     out = Path(sys.argv[2]) if len(sys.argv) > 2 else Path(__file__).resolve().parents[1] / "firmware/src/lxr_tables.h"
@@ -113,9 +139,7 @@ def main():
     L += arr("int16_t", "LXR_SAW", "[7][1024]", tabs["sawTable"][4 * 1024:])     # (34: 24 KB of flash)
     L += arr("int16_t", "LXR_REC", "[7][1024]", tabs["recTable"][4 * 1024:])
     L += arr("int16_t", "LXR_TRI", "[7][1024]", tabs["triTable"][4 * 1024:])
-    L += ["", "/* the transient generator's one-shots: 12 x 2205 signed 8-bit samples (~50 ms) */",
-          "#define LXR_TRANS_N 12", "#define LXR_TRANS_LEN 2205"]
-    L += arr("int8_t", "LXR_TRANS", "[12][2205]", trans, 24)
+    L += trans_tables(trans)
     L += ["", "/* FX bus drive: the ECC83 tube curve (129 points over -1..1) and the 1N914 diode (257 points), Q15 */"]
     L += arr("int16_t", "LXR_ECC83", "[129]", [max(-32768, min(32767, round(v * 32768))) for v in ecc])
     L += arr("int16_t", "LXR_1N914", "[257]", [max(-32768, min(32767, round(v * 32768))) for v in dio])

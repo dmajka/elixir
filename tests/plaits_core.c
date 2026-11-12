@@ -12,6 +12,7 @@ void pl_core(int eng, double note, double harm, double timbre, double morph, dou
     pl_par_t p;
     int32_t o[PLSUB], a[PLSUB];
     int k, i;
+    tables_unpack();                                 /* (22: as the boot) */
     pl_rng = seed;
     pl_dif.owner = -1;
     memset(v, 0, sizeof *v);

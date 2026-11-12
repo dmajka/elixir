@@ -11,6 +11,7 @@ void rv_core(int size, int damp, const float *in, float *mid, float *side, int n
 {
     int32_t x[BLOCK], o[BLOCK];
     int k, i;
+    tables_unpack();                                 /* (22: as the boot) */
     rev_clear();
     memset(&plt, 0, sizeof plt);
     rv.size = (uint8_t)size;

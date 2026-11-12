@@ -58,6 +58,7 @@ static uint32_t load_clock(void);       /* 17a: audio.c; dsp.c LOAD_MARK */
 #define STACK_MARK 0x57AC57ACu          /* 18a: the stacks' unused words (main.c stacks_paint, audio.c) */
 
 /* ------------------------------------------------- tables, display --- */
+#define TBL_RAM POOL                     /* 22: the packed tables, unpacked at boot into the pool (tblpack.c) */
 #include "elixir_tables.h"               /* generated (tools/gen_tables.py) */
 #include "lxr_tables.h"
 #include "lxr_params.h"

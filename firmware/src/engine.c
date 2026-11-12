@@ -45,6 +45,7 @@ static void wd_defaults(void);                      /* (40: WANDER, wander.c) */
 static void engine_init(void)
 {
     uint32_t i;
+    tables_unpack();                                /* (22: done at boot on the FM-1; the host builds' first) */
     params_init();
     voices_init();
     pl_words_scan();                                /* (0.15: Plaits' speech words, found once here: ~7 ms on the FM-1,
@@ -84,6 +85,8 @@ static void engine_block(int32_t *out)
         last_bpm = par[PAR_BPM];
         seq_tempo_changed();
     }
+    lk_isr = 1;                                     /* (1.4 fix: MIDI's and the remote's recorded locks are written
+                                                     * here, in the audio ISR: no interrupts on and off around them) */
     snd_service();
     DG_MARK(DG_SND);
     midi_service();
@@ -91,6 +94,7 @@ static void engine_block(int32_t *out)
     perf_block();
     DG_MARK(DG_IN);
     seq_block();
+    lk_isr = 0;
     DG_MARK(DG_SEQ);
     voices_block();
     comp_master(mix_l, mix_r);                      /* (0.16: the master's COMPRESSOR, off at RATIO OFF) */

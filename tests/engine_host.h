@@ -9,6 +9,8 @@
 #include "grids_map.h"
 #define RING_PUBLISH() __asm__ volatile("" ::: "memory")
 #define POOL                             /* (the firmware: .pool, the big zeroed RAM) */
+#define LK_IRQ_OFF() ((void)0)           /* (1.4: seq.c lk_in: one thread here) */
+#define LK_IRQ_ON() ((void)0)
 #define RAMBUF                           /* (the firmware: .ram_buf, zeroed RAM in RAMTEXT) */
 #define RAMHOT                           /* (the firmware: .ram_hot, code run from RAM) */
 #define NOINITBUF                        /* (the firmware: .noinit_buf, zeroed RAM in NOINIT) */

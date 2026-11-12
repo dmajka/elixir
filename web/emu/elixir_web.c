@@ -15,6 +15,7 @@
  * Also built natively (tests/ui_test.c) for the screen and input tests. */
 #include <stdint.h>
 #include <string.h>
+#include <stddef.h>
 #undef memset                            /* the firmware's own (libc.c), apart from the host's */
 #undef memcpy
 #undef memcmp
@@ -107,6 +108,8 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
 static void lcd_sync(void) {}
 
 /* ----------------------------------------------------------- the sources --- */
+#define LK_IRQ_OFF() ((void)0)                       /* (1.4: seq.c lk_in) */
+#define LK_IRQ_ON() ((void)0)
 #include "elixir_tables.h"
 #include "lxr_tables.h"
 #include "lxr_params.h"
@@ -208,6 +211,7 @@ static uint32_t web_booted, web_boot_ms, web_last_frame;
 
 static void web_power_on(void)                  /* main.c fm1_main's boot */
 {
+    tables_unpack();                            /* (22: first, as fm1_main) */
     usb.config = 1;                             /* the page is the USB host: MIDI out reaches it (web_midi_out) */
     persist_boot();
     palette_apply();
@@ -434,7 +438,13 @@ EXPORT void web_set_surf(uint32_t c) { web_surf = (uint16_t)c; palette_apply(); 
 #define WEB_SHARE_V4 (WEB_SHARE_V3 + WEB_GL3 * NGLKGL)   /* .. then (0.25.1) the global LFOs, as a project's KGL1 */
 #define WEB_SHARE_V5 (WEB_SHARE_V4 + WEB_GL3)  /* .. then (1.0) their RATEs */
 #define WEB_SHARE_V6 (WEB_SHARE_V5 + 1u)        /* .. then (1.0) 1: WANDER's JOURNEY has 1024 BARS (ENDLESS 7) */
-static uint8_t web_share[WEB_SHARE_V6 + NGLKGL + 1u];   /* .. then (1.0 Phase 11) LFO 4, its 7 bytes and RATE */
+#define WEB_SHARE_V7 (WEB_SHARE_V6 + NGLKGL + 1u)   /* .. then (1.0 Phase 11) LFO 4, its 7 bytes and RATE */
+#define WEB_LK_MAX (NTRACK * NUM_STEPS * LK_STEP)
+/* .. then (1.4) the pattern's locks: a count (u16), then each its track, its key (u16: step << 10 | code), its value.
+ * A link from before 1.4 has the pattern as it was then (each step 7 bytes, its two locks in it: WEB_OLD_STEP more
+ * bytes; web_share_old) */
+#define WEB_OLD_STEP (NTRACK * NUM_STEPS * 4u)
+static uint8_t web_share[WEB_SHARE_V7 + WEB_OLD_STEP + 2u + 4u * WEB_LK_MAX];
 static void web_gl_put(uint32_t i, const uint8_t *g, uint32_t rate)
 {
     gls[i].dest = (uint8_t)(g[0] < NGD ? g[0] : GD_OFF);
@@ -455,7 +465,7 @@ EXPORT uint32_t web_share_get(void)
     b[0] = (uint8_t)WEB_SHARE_MAGIC; b[1] = (uint8_t)(WEB_SHARE_MAGIC >> 8);
     b[2] = (uint8_t)(WEB_SHARE_MAGIC >> 16); b[3] = (uint8_t)(WEB_SHARE_MAGIC >> 24);
     b[4] = (uint8_t)KIT_LEN; b[5] = (uint8_t)(KIT_LEN >> 8);
-    b[6] = (uint8_t)sizeof(pattern_t); b[7] = (uint8_t)(sizeof(pattern_t) >> 8);
+    b[6] = (uint8_t)sizeof(pattern_t); b[7] = (uint8_t)(sizeof(pattern_t) >> 8);   /* (the layout: 1.4's smaller) */
     b[8] = par[PAR_BPM];
     b[9] = par[PAR_MORPH];
     b[10] = 1;
@@ -477,7 +487,59 @@ EXPORT uint32_t web_share_get(void)
             g[NGLKGL] = gls[i].rate;
     }
     b[WEB_SHARE_V5] = 1;
-    return sizeof web_share;
+    {                                            /* (1.4: the locks) */
+        uint32_t t, j, n = 0;
+        uint8_t *l = b + WEB_SHARE_V7 + 2u;
+        for (t = 0; t < NTRACK; t++)
+            for (j = lk_at[lk_run(&pat[sq.active], t)]; j < lk_at[lk_run(&pat[sq.active], t) + 1u]; j++, n++) {
+                l[4u * n] = (uint8_t)t;
+                l[4u * n + 1u] = (uint8_t)LK_KEY(j);
+                l[4u * n + 2u] = (uint8_t)(LK_KEY(j) >> 8);
+                l[4u * n + 3u] = LK_VAL(j);
+            }
+        b[WEB_SHARE_V7] = (uint8_t)n;
+        b[WEB_SHARE_V7 + 1u] = (uint8_t)(n >> 8);
+        return WEB_SHARE_V7 + 2u + 4u * n;
+    }
+}
+/* 1.4: a link from before 1.4 (its pattern 7-byte steps): the pattern to today's layout in place, its locks (two a
+ * step: the code's byte, its two high bits in lhi, the value) as 1.4's after the rest; the new length (0: not one) */
+static uint32_t web_share_old(uint32_t n)
+{
+    uint8_t *b = web_share, *q = b + WEB_SHARE_HEAD + KIT_NAME_LEN + KIT_LEN;
+    uint32_t i, t, k, nl = 0, rest, hi = (uint32_t)offsetof(pattern_t, lhi) - NTRACK * NUM_STEPS * 3u + NTRACK * NUM_STEPS * 7u;
+    static uint8_t l[4u * 2u * NTRACK * NUM_STEPS];
+    if (n < WEB_SHARE_V1 + WEB_OLD_STEP)
+        return 0;
+    for (t = 0; t < NTRACK; t++)
+        for (k = 0; k < NUM_STEPS; k++) {
+            const uint8_t *x = q + (t * NUM_STEPS + k) * 7u, h = q[hi + t * NUM_STEPS + k];
+            for (i = 0; i < 2u; i++) {
+                uint32_t c = x[3u + 2u * i] | (uint32_t)(h >> (4u * i) & 3u) << 8;
+                if (c == NO_AUTOMATION || !c)
+                    continue;
+                l[4u * nl] = (uint8_t)t;
+                l[4u * nl + 1u] = (uint8_t)(k << 10 | c);
+                l[4u * nl + 2u] = (uint8_t)((k << 10 | c) >> 8);
+                l[4u * nl + 3u] = x[4u + 2u * i];
+                nl++;
+            }
+            q[hi + t * NUM_STEPS + k] = (uint8_t)(h & 0x4Cu);   /* (the length's bits) */
+        }
+    for (i = 0; i < NTRACK * NUM_STEPS; i++)         /* (each step's first 3 bytes, together) */
+        memmove(q + 3u * i, q + 7u * i, 3);
+    rest = n - (WEB_SHARE_HEAD + KIT_NAME_LEN + KIT_LEN + NTRACK * NUM_STEPS * 7u);
+    memmove(q + NTRACK * NUM_STEPS * 3u, q + NTRACK * NUM_STEPS * 7u, rest);
+    n -= WEB_OLD_STEP;
+    if (n < WEB_SHARE_V7)                            /* (an older link's shorter tail: the locks after the full one) */
+        memset(b + n, 0, WEB_SHARE_V7 - n);
+    b[6] = (uint8_t)sizeof(pattern_t);
+    b[7] = (uint8_t)(sizeof(pattern_t) >> 8);
+    b[WEB_SHARE_V7] = (uint8_t)nl;
+    b[WEB_SHARE_V7 + 1u] = (uint8_t)(nl >> 8);
+    memcpy(b + WEB_SHARE_V7 + 2u, l, 4u * nl);
+    return n < WEB_SHARE_V7 ? n | 0x80000000u : WEB_SHARE_V7 + 2u + 4u * nl;   /* (bit 31: the tail's length n, the
+                                                      * locks after it all the same) */
 }
 /* web_share_buf's n bytes into the playing pattern and the slot its kit came from (which loads); 0 done, 1 not a
  * share, 2 another layout (another version) */
@@ -487,9 +549,24 @@ EXPORT uint32_t web_share_put(uint32_t n)
     uint8_t kit[KIT_LEN];
     pattern_t *p = &pat[sq.active];
     uint32_t i, slot = kit_loaded < 32u ? kit_loaded : 0u;
+    uint32_t lks = 0;                            /* (1.4: the locks' place, 0: none) */
     if (n < WEB_SHARE_HEAD || (b[0] | b[1] << 8 | (uint32_t)b[2] << 16 | (uint32_t)b[3] << 24) != WEB_SHARE_MAGIC)
         return 1;
-    if ((n != sizeof web_share && n != WEB_SHARE_V6 && n != WEB_SHARE_V5 && n != WEB_SHARE_V4 && n != WEB_SHARE_V3 && n != WEB_SHARE_V2 && n != WEB_SHARE_V1) || (b[4] | b[5] << 8) != KIT_LEN || (b[6] | b[7] << 8) != sizeof(pattern_t))
+    if ((b[6] | b[7] << 8) == sizeof(pattern_t) + WEB_OLD_STEP && (b[4] | b[5] << 8) == KIT_LEN) {   /* (before 1.4) */
+        uint32_t m = web_share_old(n);
+        if (!m)
+            return 2;
+        n = m & 0x7FFFFFFFu;
+        lks = 1;
+        if (!(m >> 31))
+            n = WEB_SHARE_V7;                    /* (a full one: its locks after it) */
+    } else if (n >= WEB_SHARE_V7 + 2u) {
+        lks = 1;
+        if (n != WEB_SHARE_V7 + 2u + 4u * (b[WEB_SHARE_V7] | (uint32_t)b[WEB_SHARE_V7 + 1u] << 8))
+            return 2;
+        n = WEB_SHARE_V7;
+    }
+    if ((n != WEB_SHARE_V7 && n != WEB_SHARE_V6 && n != WEB_SHARE_V5 && n != WEB_SHARE_V4 && n != WEB_SHARE_V3 && n != WEB_SHARE_V2 && n != WEB_SHARE_V1) || (b[4] | b[5] << 8) != KIT_LEN || (b[6] | b[7] << 8) != sizeof(pattern_t))
         return 2;
     memcpy(kit, k, KIT_LEN);
     kit_sanitize(kit);
@@ -512,17 +589,28 @@ EXPORT uint32_t web_share_put(uint32_t n)
     if (p->groove > NGROOVE)
         p->groove = 0;
     p->sroot %= 12u;
-    for (i = 0; i < NTRACK; i++)
+    for (i = 0; i < NTRACK; i++) {
         if (p->len[i] > NUM_STEPS)
             p->len[i] = 16;
+        lk_clear(p, i, 0, NUM_STEPS);            /* (1.4: the link's locks, or none) */
+    }
+    if (lks) {
+        uint32_t nl = b[WEB_SHARE_V7] | (uint32_t)b[WEB_SHARE_V7 + 1u] << 8;
+        const uint8_t *l = b + WEB_SHARE_V7 + 2u;
+        for (i = 0; i < nl && i < WEB_LK_MAX; i++) {
+            uint32_t key = l[4u * i + 1u] | (uint32_t)l[4u * i + 2u] << 8;
+            if (l[4u * i] < NTRACK && (key & LK_CODE) && (key & LK_CODE) != NO_AUTOMATION)
+                (void)lk_put(p, l[4u * i], key >> 10, key & LK_CODE, l[4u * i + 3u]);
+        }
+    }
     if (b[8] >= 20u)
         par[PAR_BPM] = b[8];
-    pat_backup = *p;                             /* (as loaded: a pattern change doesn't drop it) */
+    pat_cp(&pat_backup, p);                      /* (as loaded: a pattern change doesn't drop it) */
     sq.gsync = (1u << NTRACK) - 1u;
     if (n >= WEB_SHARE_V4)                       /* (0.25.1: the global LFOs; older links leave them as they are) */
         for (i = 0; i < WEB_GL3; i++)            /* (1.0: RATE; before, as it was) */
             web_gl_put(i, b + WEB_SHARE_V3 + i * NGLKGL, n >= WEB_SHARE_V5 ? b[WEB_SHARE_V4 + i] : gls[i].rate);
-    if (n >= sizeof web_share)                   /* (1.0 Phase 11: LFO 4) */
+    if (n >= WEB_SHARE_V7)                       /* (1.0 Phase 11: LFO 4) */
         web_gl_put(3, b + WEB_SHARE_V6, b[WEB_SHARE_V6 + NGLKGL]);
     if (n >= WEB_SHARE_V3 && b[WEB_SHARE_V2] == 1u) {   /* (0.25: WANDER with the sharer's knobs, set out) */
         for (i = 0; i < NWV; i++) {

@@ -95,6 +95,7 @@ static int16_t flt_line[NVOICE][FLT_LINE] RAMBUF;   /* 28: the COMB filter's lin
 #include "micro.c"                                  /* (Phase 24: MICRO, on every voice) */
 #include "ensemble.c"                               /* (0.25: ENSEMBLE, on every voice) */
 #include "noise.c"                                  /* (1.0, 10c: NOISE, on every voice) */
+#include "tblpack.c"                                /* (22: the packed tables: after every header that has some) */
 
 static uint32_t decim_rate[NVOICE + 1];          /* [6]: ALL (the PERF page's global reducer). Q16 */
 static modnode_t velo_mod[NVOICE], lfo_mod[NVOICE], lfo2_mod[NVOICE];

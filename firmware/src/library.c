@@ -387,10 +387,16 @@ static uint32_t lib_pat(uint32_t cmd, const uint8_t *a, uint32_t n)
         if (n < 4u + cnt * 8u)
             return LS_BAD;
         for (i = 0; i < cnt; i++) {
-            memcpy(&p->step[t][first + i], a + 4 + i * 7u, 7);
+            const uint8_t *x = a + 4 + i * 7u;       /* (the LXR's step: volume, prob, note, then its two locks) */
+            uint32_t j;
+            memcpy(&p->step[t][first + i], x, sizeof(step_t));
             p->step[t][first + i].prob &= PROB_MASK;     /* (19b: its top bit is Elixir's length: none) */
             p->timing[t][first + i] = a[4 + cnt * 7u + i];
             p->lhi[t][first + i] = 0;
+            lk_clear(p, t, first + i, 1);            /* (1.4: its locks into the pool) */
+            for (j = 3; j < 7u; j += 2u)
+                if (x[j] != NO_AUTOMATION && x[j])
+                    (void)lk_put(p, t, first + i, x[j], x[j + 1u]);
         }
         return LS_OK;
     }
@@ -404,7 +410,7 @@ static uint32_t lib_pat(uint32_t cmd, const uint8_t *a, uint32_t n)
     p->shuffle = a[57] > 127u ? 127u : a[57];
     p->kit = a[65] < NUM_KITS ? a[65] : 0u;
     if (a[0] == sq.active) {                         /* the playing pattern: as loaded */
-        pat_backup = *p;
+        pat_cp(&pat_backup, p);
         sq.gsync = (1u << NTRACK) - 1u;
     }
     return LS_OK;

@@ -19,7 +19,7 @@
 #define PROJ_AUTO 4u                                /* the session */
 #define PROJ_NLOG 5u
 #define PROJ_MAGIC 0x4A52504Bu                      /* "KPRJ" (Kettle's, kept: its projects load) */
-#define PROJ_VERSION 12u                            /* (1 .. 11 still load: proj_read_payload) */
+#define PROJ_VERSION 13u                            /* (1 .. 12 still load: proj_read_payload) */
 #define PROJ_PAYLOAD (PROJ_SLOT - 256u)
 
 typedef struct {
@@ -121,7 +121,7 @@ static void wd_read(void);
 /* Version 2 (Elixir 0.2): 32 patterns; Elixir's parameters (the sends, the reverb) in the edit buffer and the
  * kits; every count written, so a later version can add to the end of a part; a step as a mask of the fields that
  * differ from an empty step's, then those fields. Version 3 (0.3): the same, and a step's locks' high bits (SF_HI,
- * seq.c lhi); more of Elixir's parameters (their counts say so). Version 2 still loads (lock_v2 moves Elixir's locks
+ * seq.c lhi); more of Elixir's parameters (their counts say so). Version 2 still loads (lock_old moves Elixir's locks
  * to their numbers), and so does version 1 (64 patterns, a step all of its 8 bytes): its first 32 patterns, songs
  * pointing past them to the last one, a voice's Out = FX BUS as FX SEND 127. Version 4 (0.5): a track's clock
  * and generator after its length (CLK_1X and GEN_OFF before), a step's condition and ratchet (SF_X). Version 5
@@ -133,7 +133,9 @@ static void wd_read(void);
  * chance's top bits; three global LFOs (two before: the third off); the scale last chosen, DENSITY and STUTTER after
  * the LFOs (KSC1; STUTTER off before). Version 11 (0.18): a pattern's GROOVE (groove, amount, HUMANIZE, the tracks
  * that don't follow) after its scale (off before). Version 12 (0.23): a track's BASE note after its melody (0
- * before); a step's note may have NOTE_LOCK (bit 7). */
+ * before); a step's note may have NOTE_LOCK (bit 7). Version 13 (1.4): a step's locks out of it (SF_L1, SF_L2 unused,
+ * SF_HI the length's bits only): a track's after its steps, a count (u16) then each lock's key (u16: step << 10 |
+ * code) and value, in key order (seq.c lk_*); a track with locks only is written. */
 #define SF_VOL 0x01u
 #define SF_PROB 0x02u
 #define SF_NOTE 0x04u
@@ -146,8 +148,7 @@ static uint32_t step_diff(const pattern_t *p, uint32_t t, uint32_t k)   /* the f
 {
     const step_t *s = &p->step[t][k];
     return (s->volume != ((k & 7u) == 0u ? 0xFFu : 127u) ? SF_VOL : 0u) | (s->prob != 100u ? SF_PROB : 0u) |
-           (s->note != SEQ_DEFAULT_NOTE ? SF_NOTE : 0u) | (s->p1n != NO_AUTOMATION || s->p1v ? SF_L1 : 0u) |
-           (s->p2n != NO_AUTOMATION || s->p2v ? SF_L2 : 0u) | (p->timing[t][k] != 0x70u ? SF_TIME : 0u) |
+           (s->note != SEQ_DEFAULT_NOTE ? SF_NOTE : 0u) | (p->timing[t][k] != 0x70u ? SF_TIME : 0u) |
            (p->lhi[t][k] ? SF_HI : 0u) | (p->cond[t][k] || p->rat[t][k] ? SF_X : 0u);
 }
 static int track_is_default(const pattern_t *p, uint32_t t)
@@ -160,7 +161,7 @@ static int track_is_default(const pattern_t *p, uint32_t t)
     for (k = 0; k < NML; k++)
         if (p->mel[t][k])
             return 0;
-    if (p->tbase[t])
+    if (p->tbase[t] || lk_at[lk_run(p, t) + 1u] != lk_at[lk_run(p, t)])   /* (1.4: or a lock) */
         return 0;
     for (k = 0; k < NUM_STEPS; k++)
         if (step_diff(p, t, k))
@@ -210,7 +211,8 @@ static void proj_write_payload(void)
     pw_byte(sq.active);
     pw_byte(sq.song);
     pw_byte(sq.roll_rate);
-    pw_byte((uint8_t)(sq.lane | sq.rfree << 1));   /* (1.3: bit 1, REC's Quantize OFF; before: 0) */
+    pw_byte(sq.rfree);                               /* (1.4: 100 less REC's Quantize %; before version 13: bit 1,
+                                                      * Quantize OFF, bit 0 the record lane) */
     for (k = 0; k < 3u * NTRACK; k++)               /* (0.10: unused, the Euclid settings before: now the pattern's) */
         pw_byte(0);
     pw_byte(NUM_KITS);
@@ -290,14 +292,6 @@ static void proj_write_payload(void)
                     pw_byte(st->prob);
                 if (m & SF_NOTE)
                     pw_byte(st->note);
-                if (m & SF_L1) {
-                    pw_byte(st->p1n);
-                    pw_byte(st->p1v);
-                }
-                if (m & SF_L2) {
-                    pw_byte(st->p2n);
-                    pw_byte(st->p2v);
-                }
                 if (m & SF_TIME)
                     pw_byte(p->timing[t][k]);
                 if (m & SF_HI)
@@ -305,6 +299,14 @@ static void proj_write_payload(void)
                 if (m & SF_X) {
                     pw_byte(p->cond[t][k]);
                     pw_byte(p->rat[t][k]);
+                }
+            }
+            {                                       /* (version 13: the track's locks) */
+                uint32_t r = lk_run(p, t), j;
+                pw_u16(lk_at[r + 1u] - lk_at[r]);
+                for (j = lk_at[r]; j < lk_at[r + 1u]; j++) {
+                    pw_u16(LK_KEY(j));
+                    pw_byte(LK_VAL(j));
                 }
             }
         }
@@ -391,24 +393,30 @@ static void proj_write_payload(void)
         pw_u16(sq.tstr[i]);
 }
 
-/* a version-2 lock code: Elixir's parameters were at the numbers the LXR leaves free (247..254: PAR_FX_SEND1 ..,
- * 221..227: the next 7); now at their own (lock_set) */
-static void lock_v2(pattern_t *p, uint32_t t, uint32_t k, uint32_t lane)
+/* a lock as versions 1 .. 12 kept it (two a step: the code's byte, its high bits in lhi, the value) into the pool. A
+ * version-2 code: Elixir's parameters were at the numbers the LXR leaves free (247..254: PAR_FX_SEND1 .., 221..227:
+ * the next 7); now at their own */
+static void lock_old(uint32_t ver, pattern_t *p, uint32_t t, uint32_t k, uint32_t c, uint32_t v)
 {
-    uint32_t c = lock_get(p, t, k, lane);
-    if (c >= 247u && c <= 254u)
-        lock_set(p, t, k, lane, NUM_PARAMS + c - 247u);
-    else if (c >= 221u && c <= 227u)
-        lock_set(p, t, k, lane, NUM_PARAMS + 8u + c - 221u);
+    if (ver == 2u && c >= 247u && c <= 254u)
+        c = NUM_PARAMS + c - 247u;
+    else if (ver == 2u && c >= 221u && c <= 227u)
+        c = NUM_PARAMS + 8u + c - 221u;
+    if (c != NO_AUTOMATION && c)
+        (void)lk_put(p, t, k, c, v);
 }
 /* a step of version ver into p (step k of track t) */
 static void pr_step(uint32_t ver, pattern_t *p, uint32_t t, uint32_t k)
 {
     step_t *st = &p->step[t][k];
-    uint32_t m;
+    uint32_t m, l[4] = {NO_AUTOMATION, 0, NO_AUTOMATION, 0}, i;
     if (ver < 2u) {
         pr_bytes(st, sizeof(step_t));
+        for (i = 0; i < 4u; i++)
+            l[i] = pr_byte();
         p->timing[t][k] = (uint8_t)pr_byte();
+        lock_old(ver, p, t, k, l[0], l[1]);
+        lock_old(ver, p, t, k, l[2], l[3]);
         return;
     }
     m = pr_byte();
@@ -418,13 +426,13 @@ static void pr_step(uint32_t ver, pattern_t *p, uint32_t t, uint32_t k)
         st->prob = (uint8_t)pr_byte();
     if (m & SF_NOTE)
         st->note = (uint8_t)pr_byte();
-    if (m & SF_L1) {
-        st->p1n = (uint8_t)pr_byte();
-        st->p1v = (uint8_t)pr_byte();
+    if (ver < 13u && (m & SF_L1)) {
+        l[0] = pr_byte();
+        l[1] = pr_byte();
     }
-    if (m & SF_L2) {
-        st->p2n = (uint8_t)pr_byte();
-        st->p2v = (uint8_t)pr_byte();
+    if (ver < 13u && (m & SF_L2)) {
+        l[2] = pr_byte();
+        l[3] = pr_byte();
     }
     if (m & SF_TIME)
         p->timing[t][k] = (uint8_t)pr_byte();
@@ -435,10 +443,33 @@ static void pr_step(uint32_t ver, pattern_t *p, uint32_t t, uint32_t k)
         p->cond[t][k] = (uint8_t)((c & COND_MASK) < NCOND ? c : c & ~COND_MASK);
         p->rat[t][k] = (uint8_t)(pr_byte() & (ver >= 6u ? 0xFFu : 0x7Fu));   /* (version 6: RAT_BOUNCE) */
     }
-    if (ver == 2u) {
-        lock_v2(p, t, k, 0);
-        lock_v2(p, t, k, 1);
+    if (ver < 13u) {                                 /* (the codes' high bits: lhi's 0, 1 and 4, 5) */
+        lock_old(ver, p, t, k, l[0] | (p->lhi[t][k] & 3u) << 8, l[1]);
+        lock_old(ver, p, t, k, l[2] | (p->lhi[t][k] >> 4 & 3u) << 8, l[3]);
     }
+    p->lhi[t][k] &= 0x4Cu;                           /* (the length's) */
+}
+/* version 13: a track's locks into p (in key order, at most LK_STEP a step; what doesn't fit the pool dropped) */
+static void pr_locks(pattern_t *p, uint32_t t)
+{
+    uint32_t n = pr_u16(), r = lk_run(p, t), w, i, key, v, last = 0, ks = 0;
+    if (lk_splice(r, lk_at[r + 1u], 0, n)) {         /* (the pool full: none) */
+        lk_full = LK_POOLFULL;
+        pr_skip(3u * n);
+        return;
+    }
+    w = lk_at[r + 1u] - n;
+    for (i = 0; i < n; i++) {
+        key = pr_u16();
+        v = pr_byte();
+        ks = (w > lk_at[r] && key >> 10 == last >> 10) ? ks + 1u : 0u;
+        if ((w > lk_at[r] && key <= last) || ks >= LK_STEP || !(key & LK_CODE) || (key & LK_CODE) == NO_AUTOMATION ||
+            key >> 10 >= NUM_STEPS)
+            continue;
+        lk_e[w++] = key << 8 | v;
+        last = key;
+    }
+    (void)lk_splice(r, w, lk_at[r + 1u] - w, 0);
 }
 
 /* 0.9: a kit's (kit layout) model from before 0.9 as Rings' nearest: SKIN BAR BELL PLATE (struck bodies) MODAL, TUBE
@@ -483,8 +514,7 @@ static int proj_read_payload(uint32_t ver)
     sq.roll_rate = (uint8_t)(pr_byte() % 14u);
     {
         uint8_t b = pr_byte();
-        sq.lane = (uint8_t)(b & 1u);
-        sq.rfree = (uint8_t)(b >> 1 & 1u);
+        sq.rfree = (uint8_t)(ver >= 13u ? (b > 100u ? 100u : b) : (b >> 1 & 1u) * 100u);
     }
     for (k = 0; k < 3u * NTRACK; k++)               /* (the Euclid settings before 0.10: the pattern's now) */
         (void)pr_byte();
@@ -615,6 +645,8 @@ static int proj_read_payload(uint32_t ver)
             for (k = 0; k < NUM_STEPS; k++)
                 if (bits[k >> 3] & (1u << (k & 7u)))
                     pr_step(ver, p, t, k);
+            if (ver >= 13u)
+                pr_locks(p, t);
         }
     }
     for (i = npat; i < NUM_PATTERN; i++) {
@@ -814,7 +846,7 @@ static int proj_write(uint32_t l, const char *name)
             target = (int)ph;
     if (target < 0)
         return -2;
-    pat_backup = pat[sq.active];                    /* (the LXR saves the playing pattern into its slot first) */
+    pat_cp(&pat_backup, &pat[sq.active]);           /* (the LXR saves the playing pattern into its slot first) */
     for (s = 0; s < PROJ_SLOT; s += 0x1000u)
         if (st_erase(phys_base((uint32_t)target) + s))
             return -3;
@@ -863,7 +895,7 @@ static void proj_after_load(void)                   /* the session as the projec
     par[PAR_PATTERN_MODE] = 0;
     pv_skip = 0;                                    /* (the edit buffer: the shared voices) */
     pv_switch(PV_FREE, sq.active, sq.active);
-    pat_backup = pat[sq.active];
+    pat_cp(&pat_backup, &pat[sq.active]);
     sq.gsync = (1u << NTRACK) - 1u;                 /* (the generators' live tracks from the loaded pattern) */
     for (t = 0; t < NTRACK; t++)
         sq.idx[t] = -1;

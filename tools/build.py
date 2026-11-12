@@ -126,6 +126,8 @@ def generate():
             failed.append(c[0].name)
     if failed:
         raise SystemExit(f"build: {', '.join(failed)} failed")
+    subprocess.run([sys.executable, str(tools / "tblpack.py"), str(GEN / "tblpack_data.h"), str(GEN / "elixir_tables.h"),
+                    str(FW / "src" / "rings_tables.h"), str(FW / "src" / "plaits_tables.h")], check=True)   # (22)
 
 
 # ---- update loader

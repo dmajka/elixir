@@ -40,20 +40,7 @@ static uint8_t data_locked;
 static int st_erase(uint32_t off) { return data_locked ? ST_LOCKED : st_erase_dev(off); }
 static int st_prog(uint32_t off, const void *src, uint32_t n) { return data_locked ? ST_LOCKED : st_prog_dev(off, src, n); }
 
-static uint32_t st_crc32_add(uint32_t c, const void *p, uint32_t n)   /* zlib CRC-32, 4 bits per step; running:
-                                                                         * from 0xFFFFFFFF, the CRC is ~c */
-{
-    static const uint32_t T[16] = {
-        0x00000000u, 0x1DB71064u, 0x3B6E20C8u, 0x26D930ACu, 0x76DC4190u, 0x6B6B51F4u, 0x4DB26158u, 0x5005713Cu,
-        0xEDB88320u, 0xF00F9344u, 0xD6D6A3E8u, 0xCB61B38Cu, 0x9B64C2B0u, 0x86D3D2D4u, 0xA00AE278u, 0xBDBDF21Cu};
-    const uint8_t *b = p;
-    while (n--) {
-        c ^= *b++;
-        c = (c >> 4) ^ T[c & 15u];
-        c = (c >> 4) ^ T[c & 15u];
-    }
-    return c;
-}
+/* st_crc32_add: tblpack.c (22: the tables' check, with the engine) */
 static uint32_t st_crc32(const void *p, uint32_t n) { return ~st_crc32_add(0xFFFFFFFFu, p, n); }
 
 static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy A (0) / B (1) */

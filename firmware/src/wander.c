@@ -222,8 +222,13 @@ static const uint8_t WD_ORDER[NTRACK] = {5, 6, 4, 2, 1, 3, 0};
 static int wd_backbone(uint32_t t) { return t == 0u || t == 3u; }
 
 typedef struct { uint8_t on, t, g, left; uint16_t moved; } thread_t;
-typedef struct { uint8_t t, s; step_t x; uint8_t tim, lhi, cond, rat; } foot_t;   /* (41) a step's bytes (t: its
-                                                                                  * track, bit 7 on) */
+typedef struct {                                     /* (41) a step's bytes (t: its track, bit 7 on); 1.4: its locks */
+    uint8_t t, s;
+    step_t x;
+    uint8_t tim, lhi, cond, rat, ln;
+    uint8_t lv[LK_STEP];
+    uint16_t lc[LK_STEP];
+} foot_t;
 typedef struct { uint16_t p; uint8_t tg, last, th; uint32_t due, every; } glide_t;   /* (p 0: free; th: its thread
                                                                                       * + 1, 0 none) */
 static struct {
@@ -674,6 +679,7 @@ static void wd_get(const pattern_t *p, uint32_t t, uint32_t s, foot_t *f)
     f->lhi = p->lhi[t][s];
     f->cond = p->cond[t][s];
     f->rat = p->rat[t][s];
+    f->ln = (uint8_t)lk_step(p, t, s, f->lc, f->lv);
 }
 static void wd_put(pattern_t *p, uint32_t t, uint32_t s, const foot_t *f)
 {
@@ -682,6 +688,7 @@ static void wd_put(pattern_t *p, uint32_t t, uint32_t s, const foot_t *f)
     p->lhi[t][s] = f->lhi;
     p->cond[t][s] = f->cond;
     p->rat[t][s] = f->rat;
+    (void)lk_step_set(p, t, s, f->ln, f->lc, f->lv);
     main_set(p, t, s, f->t >> 7);
 }
 static int wd_fpi(uint32_t t, uint32_t s)            /* step (t, s)'s footprint (-1: none) */
@@ -1031,9 +1038,7 @@ static void wd_rapply(const rmove_t *m)
         } else {                                     /* (a new one: the track's note, plain) */
             x->note = (uint8_t)wd_note(p, t);
             x->prob = (uint8_t)((x->prob & ~PROB_MASK) | 100u);
-            lock_set(p, t, s, 0, NO_AUTOMATION);
-            lock_set(p, t, s, 1, NO_AUTOMATION);
-            x->p1v = x->p2v = 0;
+            lk_clear(p, t, s, 1);
             p->cond[t][s] = 0;
             p->rat[t][s] = 0;
             p->timing[t][s] = 7u << 4;
@@ -2068,7 +2073,7 @@ static void wd_home_go(uint32_t fate, int instant)
     if (!bars)
         wd_frog_home_bar(1);
     if (sp_pending() && sp.pend_p == sq.active) {    /* (a spell's side journey still to reverse: its pattern back) */
-        pat[sq.active] = upat;
+        pat_cp(&pat[sq.active], &upat);
         sp.pend = 0;
         sq.gsync = (uint8_t)((1u << NTRACK) - 1u);
     }
@@ -2351,7 +2356,9 @@ static void wd_postcard(void)                        /* SHIFT (OCT-) + REST: whe
         ui_message("NO EMPTY PATTERN FOR A POSTCARD");
         return;
     }
-    pat[n] = pat[sq.active];                         /* (0.23-t11: the voices as they sound now, LOCKED in its own */
+    if (pat_cp(&pat[n], &pat[sq.active]))            /* (1.4 fix: the pool can't hold its locks: LOCKS FULL) */
+        return;
+                                                     /* (0.23-t11: the voices as they sound now, LOCKED in its own */
     kit_stash(PV_SLOT(n));                           /* kit slot: not pv_copy, which stashes the playing one's) */
     pat_set_voices(&pat[n], PV_LOCKED, pat_kit(&pat[n]));
     pv_name(n);

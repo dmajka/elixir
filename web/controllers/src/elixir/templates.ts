@@ -8,7 +8,7 @@ export const TEMPLATE_CATALOG = Object.freeze([
   Object.freeze({ id: 'mixer', name: 'Elixir Mixer', description: 'Eight track columns: volume, sends, mute and solo.' }),
   Object.freeze({ id: 'performance', name: 'Elixir Perform', description: 'Density, morph, macros, roll rates and held performance actions.' }),
   Object.freeze({ id: 'effects', name: 'Elixir Effects', description: 'Delay, reverb, FX bus, routing and track FX sends.' }),
-  Object.freeze({ id: 'sound-editor', name: 'Elixir Sound', description: 'Eight filters and resonances; pitch, decay, sample rate and LFO for D1, D2, D3 and selected track.' }),
+  Object.freeze({ id: 'sound-editor', name: 'Elixir Sound', description: 'Eight filters and resonances; pitch, decay, sample rate and pan for D1, D2, D3 and selected track.' }),
   Object.freeze({ id: 'sequencer', name: 'Elixir Sequencer', description: 'Density, roll, track selection, pattern navigation and pattern 1–4 triggers.' }),
 ] as const)
 export type BuiltinTemplateId = typeof TEMPLATE_CATALOG[number]['id']
@@ -33,7 +33,7 @@ export function generateTemplate(id: BuiltinTemplateId, channels: ChannelSetting
   } else if (id === 'sound-editor') {
     row('encoder.1', trackRow('filter-frequency')); row('encoder.2', trackRow('resonance'))
     row('encoder.3', [...soundRow('pitch'), ...soundRow('decay')])
-    row('fader', [...soundRow('sample-rate'), ...soundRow('lfo-amount')]); muteSolo()
+    row('fader', [...soundRow('sample-rate'), ...soundRow('pan')]); muteSolo()
   } else if (id === 'performance') {
     row('encoder.1', global('density', 'morph', 'macro-1', 'macro-2', 'macro-3', 'macro-4', 'roll-rate', 'master-filter'))
     row('encoder.2', global('build', 'vary', 'drill', 'jitter', 'cuts', 'pump', 'repeat', 'filter-resonance'))

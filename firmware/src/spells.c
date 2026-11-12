@@ -1003,9 +1003,7 @@ steps:
             x->prob = (uint8_t)((x->prob & ~PROB_MASK) | 100u);
             x->volume = (uint8_t)((x->volume & STEP_ACTIVE_MASK) |
                                   clamp32((int32_t)(S->fl & SF_SOFT ? 40u + m * 8u : 64u + m * 10u) + sp_pm(10), 20, 127));
-            lock_set(p, t, s, 0, NO_AUTOMATION);
-            lock_set(p, t, s, 1, NO_AUTOMATION);
-            x->p1v = x->p2v = 0;
+            lk_clear(p, t, s, 1);
             p->cond[t][s] = 0;
             if (p->rat[t][s] & 7u)
                 nrat--;
@@ -1272,14 +1270,14 @@ static void sp_cast(uint32_t seed)                   /* the spell on the targets
 static void sp_snapshot(void)                        /* the state a cast starts from (REVERSE's) */
 {
     uint32_t i;
-    upat = pat[sq.active];
+    pat_cp(&upat, &pat[sq.active]);
     undo_t = -1;                                     /* (upat is the spell's now: no track's UNDO, no DENSITY's) */
     dundo = 0;
     for (i = 0; i < KIT_LEN; i++) {
         ca_snap[i] = par[kit_par(i)];
         ca_msnap[i] = morph_par[i];
     }
-    sp.pend = 1;
+    sp.pend = !(lk_bad & 4u);                        /* (1.4: no REVERSE if its locks didn't fit) */
     sp.pend_p = sq.active;
     sp.pend_loads = kit_loads;
 }
@@ -1290,7 +1288,7 @@ static int sp_pending(void)                          /* a cast REVERSE can still
 static void sp_restore(void)
 {
     uint32_t i;
-    pat[sq.active] = upat;
+    pat_cp(&pat[sq.active], &upat);
     for (i = 0; i < KIT_LEN; i++) {
         par[kit_par(i)] = ca_snap[i];
         morph_par[i] = ca_msnap[i];

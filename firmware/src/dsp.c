@@ -233,17 +233,19 @@ typedef struct {
 
 static void trans_block(trans_t *t, int16_t *buf)   /* transient_calcBlock */
 {
-    uint32_t i;
+    uint32_t i, w, end;
     const int8_t *d;
     if (t->wave <= TR_OFFSET || t->phase >= TR_END) {
         for (i = 0; i < BLOCK; i++)
             buf[i] = 0;
         return;
     }
-    d = LXR_TRANS[t->wave - 2u];
+    w = t->wave - 2u;
+    d = LXR_TRANS_D + LXR_TRANS_OFS[w];
+    end = (uint32_t)(LXR_TRANS_OFS[w + 1u] - LXR_TRANS_OFS[w]) << 20;  /* (1.4: past it the one-shot's zeros, not kept) */
     for (i = 0; i < BLOCK; i++) {
         if (t->phase < TR_END) {
-            buf[i] = (int16_t)((d[t->phase >> 20] * 256 * t->vol) >> 15);
+            buf[i] = t->phase < end ? (int16_t)((d[t->phase >> 20] * 256 * t->vol) >> 15) : 0;
             t->phase += t->inc;
         } else {
             buf[i] = 0;

@@ -7,8 +7,10 @@
  * but for their decays), column 8 the selected track.
  *   knobs, CC 8 + 8 x row + column:
  *     8 volume    16 pan    24 filter    32 resonance    40 decay    48 pitch    56 drive    64 FX send
- *     72 reverb send    80 sample rate    88 LFO amount    96 DENSITY (1.0, was random pitch: the track's own,
- *     centred at 64, on top of PERF's; not committed)
+ *     72 reverb send    80 sample rate    88 RUSH (1.4, was LFO amount: the knob 0..100% on that track, as
+ *     PERFORM: RUSH's with the track chosen; one track rushes at a time, the last turned up; down to 0 on the
+ *     rushing track lets it go)    96 DENSITY (1.0, was random pitch: the track's own, centred at 64, on top of
+ *     PERF's; not committed)
  *   buttons, 104 + 8 x row + column: 104 mute    112 solo
  *   (0.24.3: CONFIG: REMOTE's Mute/solo: PRESS, a press flips the mute (solo); TOGGLE, the button's state is the
  *   mute's (solo's): on mutes, off unmutes, for a controller's toggle buttons)
@@ -58,7 +60,7 @@ static const uint8_t RM_XK[RM_NXK] = {3, 2, 4, 5, 7, 63, 96, 97, 98, 99, 100, 10
 #define RM_ROLL0 112u                                /* 1.0: GLOBAL's rolls a track: 112 .. 119 */
 #define RM_NK (RM_NTK + RM_NGK)                      /* the knobs: TRACKS' then GLOBAL's */
 #define RM_NB (RM_NTB + RM_NGB)                      /* the buttons: the same */
-enum { RR_VOL, RR_PAN, RR_FILTER, RR_RESO, RR_DECAY, RR_PITCH, RR_DLYS, RR_FXS, RR_REVS, RR_SRATE, RR_LFO, RR_RNDP };
+enum { RR_VOL, RR_PAN, RR_FILTER, RR_RESO, RR_DECAY, RR_PITCH, RR_DLYS, RR_FXS, RR_REVS, RR_SRATE, RR_RUSH, RR_RNDP };
 enum { RB_MUTE, RB_SOLO };                           /* TRACKS' button rows */
 enum { RG_PERF, RG_PERF2, RG_SELECT, RG_ROLL, RG_DRILL, RG_HOLD, RG_LATCH, RG_DENS };   /* GLOBAL's */
 static const uint16_t RM_GK[RM_NGK] = {
@@ -120,7 +122,7 @@ static uint32_t rm_par(uint32_t i)
     case RR_FXS: return PAR_FX_SEND1 + v;
     case RR_REVS: return PAR_REV_SEND1 + v;
     case RR_SRATE: return PAR_VOICE_DECIMATION1 + v;
-    case RR_LFO: return PAR_AMOUNT_LFO1 + v;
+    case RR_RUSH: return VP_TRUSH + (t < NTRACK ? t : 0u);   /* (1.4: was the LFO's amount) */
     default: return VP_TD + t;                       /* (1.0: DENSITY, in place of random pitch) */
     }
 }

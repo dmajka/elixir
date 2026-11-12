@@ -164,6 +164,7 @@ static void elixir_boot(void)                     /* the instrument at power-on 
 static void fm1_main(void)
 {
     uint32_t ms;
+    tables_unpack();                              /* 22: before anything reads a table (tblpack.c) */
     persist_boot();
     if (flash_ok)
         ota_boot_cleanup();                       /* the staging area an update left */
@@ -192,12 +193,15 @@ static void fm1_main(void)
             uboot_held();
         }
     }
+    fm1_audio_unmute();                           /* the codec settled on silent I2S since audio_init: no power-on pop */
     lcd_fill(0, 0, 240, 240, T_BG);
     ui.force = 1;
     if (cores_why == CW_HELD) {
         fm1_input_edges(0);                       /* (REC's press: not a REC) */
         ui_message("ONE CORE (REC HELD)");
     }
+    if (tbl_state == TBL_BAD)
+        ui_message("TABLES BAD");                 /* 22: a packed table's CRC failed: a bug, shown */
     for (;;) {
         uint32_t m = fm1_ms;
         fm1_wdt_feed();

@@ -26,7 +26,7 @@ TRACKS_FILE, GLOBAL_FILE = "ELIXIR_TRACKS.oxiindef", "ELIXIR_GLOBAL.oxiindef"
 TRACK_TAG = {"d1": "D1", "d2": "D2", "d3": "D3", "sn": "SN", "cy": "CY", "ch": "CH", "oh": "OH", "selected": "SL"}
 TRACK_PARAM = {                                      # tracks.<track>.<key>: two letters after the track's two
     "volume": "Vo", "pan": "Pn", "filter-frequency": "Fl", "resonance": "Rs", "decay": "Dc", "pitch": "Pt",
-    "delay-send": "Dl", "fx-send": "Fx", "reverb-send": "Rv", "sample-rate": "SR", "lfo-amount": "Lf",
+    "delay-send": "Dl", "fx-send": "Fx", "reverb-send": "Rv", "sample-rate": "SR", "rush": "Ru",
     "density": "Dn", "mute": "Mu", "solo": "So"}
 CENTERED = {"pan", "density"}                        # (64 is their middle: the default)
 GLOBAL_ABBR = {                                      # global.<key>: what words alone can't make readable in four

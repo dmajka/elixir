@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Elixir: the LXR-02's sequencer. 32 patterns (the LXR's 64, halved for RAM: 5,162 B each) of 7 tracks x 64 steps (4
- * bars of 16), each step with velocity, note, probability, two automation locks, flam (x2 .. x8) and a shift of -7..+7
+ * bars of 16), each step with velocity, note, probability, up to 8 automation locks (1.4: a pool, lk_*), flam (x2 .. x8)
+ * and a shift of -7..+7
  * eighths of a step; per track a length of 1..64; per pattern a shuffle and a kit. 64 songs of 64 entries (a pattern,
  * END or LOOP). Rolls, live recording of notes and automation, mutes, the Euclidean generator, MIDI clock in and out.
  * Ported from the LXR firmware, Core/Src/Soundengine/Sequencer (sequencer.c, EuklidGenerator.c, clockSync.c), Copyright
@@ -24,12 +25,13 @@
 #define STEP_ACTIVE_MASK 0x80u
 #define STEP_VOLUME_MASK 0x7Fu
 
-typedef struct { uint8_t volume, prob, note, p1n, p1v, p2n, p2v; } step_t;   /* the LXR's Step, as its .PAT */
+typedef struct { uint8_t volume, prob, note; } step_t;   /* the LXR's Step, as its .PAT, but its locks (1.4: lk_*) */
 typedef struct {
     step_t step[NTRACK][NUM_STEPS];
     uint8_t timing[NTRACK][NUM_STEPS];           /* flam (low nibble: off x2 x3 x4 x6 x8) | shift << 4 (0..14, 7 = 0) */
     uint16_t main[NTRACK][4];                    /* step on bits, a word a bar */
-    uint8_t lhi[NTRACK][NUM_STEPS];              /* the locks' codes' high bits: lock 1 low nibble, 2 high (lock_get) */
+    uint8_t lhi[NTRACK][NUM_STEPS];              /* a step's length's bits 3-5 in bits 2, 3, 6 (step_len; 1.4: the
+                                                  * locks' bits 0, 1, 4, 5 out: lk_*) */
     uint8_t cond[NTRACK][NUM_STEPS];             /* the trig condition (0.5: COND_*, cond_ok) */
     uint8_t rat[NTRACK][NUM_STEPS];              /* the ratchet: hits - 1 (0 none) | rate << 3 | fade << 5 */
     uint8_t len[NTRACK];                         /* 1..64 (0: 16) */
@@ -202,6 +204,314 @@ static uint8_t pat_keep = 1;        /* 0.9: a pattern's edits stay when another 
 static uint8_t pat_revert;          /* RELOAD: the playing pattern back as saved, whatever Edits says */
 static pattern_t gpat POOL;         /* the generators' live tracks: track t of it plays when t's generator is on */
 static pattern_t upat POOL;         /* UNDO: a track as it was before DICE, COMMIT, EUCLID (undo_t, undo_p) */
+/* ------------------------------------------------------------ locks --- */
+/* 1.4 (Phase 19): a step's locks, out of the step into one pool for the project. A lock is its step, its 10-bit
+ * destination code (sound.c autodest_to_par: below 256 the LXR's numbers, from 256 Elixir's parameters; RUSH_CODE
+ * RUSH's) and its value, a word each: lk_e = key << 8 | value, the key step << 10 | code (a word so the moves with the
+ * interrupts off are word moves: 12,288 at most, ~0.1 ms). A run per pattern and track (run id * NTRACK + t,
+ * lk_at[r] .. lk_at[r + 1]), sorted by key, the runs in order: the 32 patterns' (LK_N between them: the count the
+ * STEP page shows), then RELOAD's copy (pat_backup), the generators' live tracks (gpat) and UNDO's (upat), in
+ * LK_SIDE more. A step holds up to LK_STEP. The audio ISR reads the playing pattern's run at a hit, and changes runs
+ * itself (a pattern change, the generators); the main loop changes them with the interrupts off (lk_in), so a hit
+ * never reads a run half moved. Each pattern_t is one of pat[], pat_backup, gpat, upat (lk_id) */
+#define LK_N 8192u                                   /* the patterns' locks, all 32 */
+#define LK_SIDE 4096u                                /* RELOAD's, the live tracks' and UNDO's copies */
+#define LK_CAP (LK_N + LK_SIDE)
+#define LK_BK NUM_PATTERN                            /* the copies' ids: pat_backup, gpat, upat */
+#define LK_GP (NUM_PATTERN + 1u)
+#define LK_UP (NUM_PATTERN + 2u)
+#define LK_NRUN ((NUM_PATTERN + 3u) * NTRACK)
+#define LK_PATS (NUM_PATTERN * NTRACK)               /* (lk_at[LK_PATS]: the patterns' locks in use) */
+#define LK_CODE 0x3FFu
+enum { LK_OK, LK_STEPFULL, LK_POOLFULL };
+static uint32_t lk_e[LK_CAP] POOL;
+#define LK_KEY(i) (lk_e[i] >> 8)
+#define LK_VAL(i) ((uint8_t)lk_e[i])
+static uint16_t lk_at[LK_NRUN + 1u] POOL;
+static uint8_t lk_isr;                               /* the audio ISR's (seq_block): no lk_in there */
+static uint8_t lk_cs;                                /* lk_in's depth */
+static uint8_t lk_bad;                               /* bit id - LK_BK: that copy's locks didn't fit (it has none) */
+static uint8_t lk_full;                              /* 1.4: the last lock refused (LK_STEPFULL, LK_POOLFULL): the UI says so */
+#ifndef LK_IRQ_OFF
+#define LK_IRQ_OFF() fm1_irq_off()
+#define LK_IRQ_ON() fm1_irq_on()
+#endif
+static void lk_in(void)
+{
+    if (!lk_isr && !lk_cs++)
+        LK_IRQ_OFF();
+}
+static void lk_out(void)
+{
+    if (!lk_isr && !--lk_cs)
+        LK_IRQ_ON();
+}
+static uint32_t lk_id(const pattern_t *p)
+{
+    return p == &pat_backup ? LK_BK : p == &gpat ? LK_GP : p == &upat ? LK_UP : (uint32_t)(p - pat);
+}
+static uint32_t lk_run(const pattern_t *p, uint32_t t) { return lk_id(p) * NTRACK + t; }
+static uint32_t lk_used(void) { return lk_at[LK_PATS]; }
+static uint32_t lk_lb(uint32_t r, uint32_t key)      /* the first of run r's at key or after */
+{
+    uint32_t lo = lk_at[r], hi = lk_at[r + 1u];
+    key <<= 8;
+    while (lo < hi) {
+        uint32_t m = (lo + hi) >> 1;
+        if (lk_e[m] < key)
+            lo = m + 1u;
+        else
+            hi = m;
+    }
+    return lo;
+}
+static void lk_move(uint32_t *d, const uint32_t *s, uint32_t n)   /* n words, overlapping */
+{
+    if (d < s)
+        while (n--)
+            *d++ = *s++;
+    else
+        while (n--)
+            d[n] = s[n];
+}
+/* run r: its n entries from i become m (their room: the caller writes them); -1 no room (nothing changed) */
+static int lk_splice(uint32_t r, uint32_t i, uint32_t n, uint32_t m)
+{
+    uint32_t used = lk_at[LK_NRUN], q;
+    if (m == n)                                      /* (1.4 fix: no move when the size stays: a full pool's tail is
+                                                      * 12,288 words, ~0.1 ms with the interrupts off) */
+        return 0;
+    if (m > n && (used + m - n > LK_CAP || (r < LK_PATS && lk_at[LK_PATS] + m - n > LK_N) ||
+                  (r >= LK_PATS && used - lk_at[LK_PATS] + m - n > LK_SIDE)))
+        return -1;
+    lk_move(&lk_e[i + m], &lk_e[i + n], used - i - n);
+    for (q = r + 1u; q <= LK_NRUN; q++)
+        lk_at[q] = (uint16_t)(lk_at[q] + m - n);
+    return 0;
+}
+/* step k of track t: its locks (codes, values; up to LK_STEP), how many */
+static uint32_t lk_step(const pattern_t *p, uint32_t t, uint32_t k, uint16_t *c, uint8_t *v)
+{
+    uint32_t r = lk_run(p, t), i = lk_lb(r, k << 10), n = 0;
+    for (; i < lk_at[r + 1u] && LK_KEY(i) >> 10 == k && n < LK_STEP; i++, n++) {
+        c[n] = (uint16_t)(LK_KEY(i) & LK_CODE);
+        v[n] = LK_VAL(i);
+    }
+    return n;
+}
+static int lk_has(const pattern_t *p, uint32_t t, uint32_t k)   /* step k has a lock */
+{
+    uint32_t r = lk_run(p, t), i = lk_lb(r, k << 10);
+    return i < lk_at[r + 1u] && LK_KEY(i) >> 10 == k;
+}
+static int32_t lk_get(const pattern_t *p, uint32_t t, uint32_t k, uint32_t code)   /* its value, -1 none */
+{
+    uint32_t r = lk_run(p, t), key = k << 10 | code, i = lk_lb(r, key);
+    return i < lk_at[r + 1u] && LK_KEY(i) == key ? (int32_t)LK_VAL(i) : -1;
+}
+static uint32_t lk_put(pattern_t *p, uint32_t t, uint32_t k, uint32_t code, uint32_t v)   /* set or added: LK_OK .. */
+{
+    uint32_t r = lk_run(p, t), key = k << 10 | code, i, e = LK_OK;
+    lk_in();
+    i = lk_lb(r, key);
+    if (i < lk_at[r + 1u] && LK_KEY(i) == key)
+        lk_e[i] = key << 8 | (v & 0xFFu);
+    else if (lk_lb(r, (k + 1u) << 10) - lk_lb(r, k << 10) >= LK_STEP)
+        e = LK_STEPFULL;
+    else if (lk_splice(r, i, 0, 1))
+        e = LK_POOLFULL;
+    else
+        lk_e[i] = key << 8 | (v & 0xFFu);
+    lk_out();
+    if (e)
+        lk_full = (uint8_t)e;
+    return e;
+}
+static void lk_del(pattern_t *p, uint32_t t, uint32_t k, uint32_t code)
+{
+    uint32_t r = lk_run(p, t), key = k << 10 | code, i;
+    lk_in();
+    i = lk_lb(r, key);
+    if (i < lk_at[r + 1u] && LK_KEY(i) == key)
+        (void)lk_splice(r, i, 1, 0);
+    lk_out();
+}
+static void lk_clear(pattern_t *p, uint32_t t, uint32_t k, uint32_t n)   /* steps k .. k + n - 1: none */
+{
+    uint32_t r = lk_run(p, t), i, j;
+    lk_in();
+    i = lk_lb(r, k << 10);
+    j = lk_lb(r, (k + n) << 10);
+    (void)lk_splice(r, i, j - i, 0);
+    lk_out();
+}
+/* step k of track t: these n locks, all it has (codes sorted or not); its old ones if they don't fit */
+static int lk_step_set(pattern_t *p, uint32_t t, uint32_t k, uint32_t n, const uint16_t *c, const uint8_t *v)
+{
+    uint32_t r = lk_run(p, t), i, j, a, b;
+    int e;
+    lk_in();
+    i = lk_lb(r, k << 10);
+    j = lk_lb(r, (k + 1u) << 10);
+    e = lk_splice(r, i, j - i, n);
+    if (!e)
+        for (a = 0; a < n; a++) {                    /* (sorted in: n is at most LK_STEP) */
+            uint32_t e = (k << 10 | (c[a] & LK_CODE)) << 8 | v[a];
+            for (b = i + a; b > i && lk_e[b - 1u] > e; b--)
+                lk_e[b] = lk_e[b - 1u];
+            lk_e[b] = e;
+        }
+    lk_out();
+    if (e)
+        lk_full = LK_POOLFULL;
+    return e;
+}
+static int lk_step_copy(pattern_t *d, uint32_t dt, uint32_t dk, const pattern_t *s, uint32_t st, uint32_t sk)
+{
+    uint16_t c[LK_STEP];
+    uint8_t v[LK_STEP];
+    uint32_t n;
+    int e;
+    lk_in();
+    n = lk_step(s, st, sk, c, v);
+    e = lk_step_set(d, dt, dk, n, c, v);
+    lk_out();
+    return e;
+}
+static void lk_rev(uint32_t i, uint32_t j)           /* entries i .. j - 1 reversed */
+{
+    while (i + 1u < j) {
+        uint32_t e = lk_e[--j];
+        lk_e[j] = lk_e[i];
+        lk_e[i++] = e;
+    }
+}
+static void lk_rot(uint32_t i, uint32_t m, uint32_t j)   /* i .. m - 1 and m .. j - 1 swapped */
+{
+    lk_rev(i, j);
+    lk_rev(i, i + j - m);
+    lk_rev(i + j - m, j);
+}
+/* runs a .. a + n - 1 and b .. b + n - 1 (a + n <= b) swapped, each keeping its runs' sizes */
+static void lk_swap(uint32_t a, uint32_t b, uint32_t n)
+{
+    uint16_t sa[NTRACK], sb[NTRACK];
+    uint32_t q, x, y, d;
+    lk_in();
+    for (q = 0; q < n; q++) {
+        sa[q] = (uint16_t)(lk_at[a + q + 1u] - lk_at[a + q]);
+        sb[q] = (uint16_t)(lk_at[b + q + 1u] - lk_at[b + q]);
+    }
+    x = lk_at[a + n] - lk_at[a];
+    y = lk_at[b + n] - lk_at[b];
+    lk_rot(lk_at[a], lk_at[a + n], lk_at[b + n]);    /* (A M B -> M B A) */
+    lk_rot(lk_at[a], lk_at[a] + (lk_at[b] - lk_at[a + n]), lk_at[a] + (lk_at[b + n] - lk_at[a + n]));   /* (M B -> B M) */
+    d = y - x;
+    for (q = 0; q < n; q++)
+        lk_at[a + q + 1u] = (uint16_t)(lk_at[a + q] + sb[q]);
+    for (q = a + n + 1u; q <= b; q++)
+        lk_at[q] = (uint16_t)(lk_at[q] + d);
+    for (q = 0; q < n; q++)
+        lk_at[b + q + 1u] = (uint16_t)(lk_at[b + q] + sa[q]);
+    lk_out();
+}
+/* track st of s into track dt of d, its locks: -1 no room (1.4 fix: a pattern's track then as it was, LOCKS FULL;
+ * a copy's (pat_backup, gpat, upat) none: lk_bad) */
+static int lk_trk_copy(pattern_t *d, uint32_t dt, const pattern_t *s, uint32_t st)
+{
+    uint32_t rd = lk_run(d, dt), rs = lk_run(s, st), n;
+    int e;
+    if (rd == rs)
+        return 0;
+    lk_in();
+    n = lk_at[rs + 1u] - lk_at[rs];
+    e = lk_splice(rd, lk_at[rd], lk_at[rd + 1u] - lk_at[rd], n);
+    if (e) {
+        if (rd >= LK_PATS) {
+            (void)lk_splice(rd, lk_at[rd], lk_at[rd + 1u] - lk_at[rd], 0);
+            lk_bad |= (uint8_t)(1u << (rd / NTRACK - LK_BK));
+        } else {
+            lk_full = LK_POOLFULL;
+        }
+    } else {
+        if (rd >= LK_PATS)
+            lk_bad &= (uint8_t)~(1u << (rd / NTRACK - LK_BK));
+        lk_move(&lk_e[lk_at[rd]], &lk_e[lk_at[rs]], n);   /* (rs moved if after rd: lk_at's) */
+    }
+    lk_out();
+    return e;
+}
+/* all of s's locks into d: -1 no room (1.4 fix: a pattern then as it was; a copy none, lk_bad). A pattern's runs are
+ * next to each other, so d's go in one splice: one move of the pool's tail with the interrupts off, not 14 */
+static int lk_pat_copy(pattern_t *d, const pattern_t *s)
+{
+    uint32_t id = lk_id(d), rd = id * NTRACK, rs = lk_id(s) * NTRACK, t, need, have;
+    uint16_t sz[NTRACK];
+    int e;
+    if (id == lk_id(s))
+        return 0;
+    lk_in();
+    for (t = 0; t < NTRACK; t++)
+        sz[t] = (uint16_t)(lk_at[rs + t + 1u] - lk_at[rs + t]);
+    need = lk_at[rs + NTRACK] - lk_at[rs];
+    have = lk_at[rd + NTRACK] - lk_at[rd];
+    e = lk_splice(rd + NTRACK - 1u, lk_at[rd], have, need);   /* (d's runs as one: lk_at past them moved) */
+    if (!e) {
+        lk_move(&lk_e[lk_at[rd]], &lk_e[lk_at[rs]], need);   /* (s's start read after: moved if after d) */
+        for (t = 0; t + 1u < NTRACK; t++)
+            lk_at[rd + t + 1u] = (uint16_t)(lk_at[rd + t] + sz[t]);
+    } else if (id >= LK_BK) {
+        (void)lk_splice(rd + NTRACK - 1u, lk_at[rd], have, 0);
+        for (t = 0; t + 1u < NTRACK; t++)
+            lk_at[rd + t + 1u] = lk_at[rd];
+    } else {
+        lk_full = LK_POOLFULL;
+    }
+    if (id >= LK_BK)
+        lk_bad = (uint8_t)(e ? lk_bad | 1u << (id - LK_BK) : lk_bad & ~(1u << (id - LK_BK)));
+    lk_out();
+    return e;
+}
+/* a pattern into another, its locks too: -1 refused (1.4 fix: into one of pat[] that the pool can't hold, nothing
+ * changes and the UI says LOCKS FULL; into a copy, its steps without locks: lk_bad) */
+static int pat_cp(pattern_t *d, const pattern_t *s)
+{
+    int e;
+    lk_in();                                         /* (the audio ISR sees the steps and their locks together) */
+    e = lk_pat_copy(d, s);
+    if (!e || lk_id(d) >= LK_BK)
+        *d = *s;
+    lk_out();
+    return e && lk_id(d) < LK_BK ? -1 : 0;
+}
+static void lk_pat_swap(pattern_t *a, pattern_t *b)  /* the two patterns' locks swapped */
+{
+    uint32_t x = lk_id(a), y = lk_id(b);
+    if (x != y)
+        lk_swap((x < y ? x : y) * NTRACK, (x < y ? y : x) * NTRACK, NTRACK);
+}
+static void lk_trk_swap(pattern_t *a, pattern_t *b, uint32_t t)
+{
+    uint32_t x = lk_run(a, t), y = lk_run(b, t);
+    if (x != y)
+        lk_swap(x < y ? x : y, x < y ? y : x, 1);
+}
+/* track t's locks on steps 0 .. len - 1 rotated n later (trk_rotate's) */
+static void lk_trk_rot(pattern_t *p, uint32_t t, uint32_t n, uint32_t len)
+{
+    uint32_t r = lk_run(p, t), i, a, m, e;
+    lk_in();
+    a = lk_at[r];
+    m = lk_lb(r, (len - n) << 10);                   /* (a .. m - 1 go n later; m .. e - 1 wrap round to the start) */
+    e = lk_lb(r, len << 10);
+    for (i = a; i < e; i++) {
+        uint32_t k = lk_e[i] >> 18;
+        k = k + n < len ? k + n : k + n - len;
+        lk_e[i] = k << 18 | (lk_e[i] & 0x3FFFFu);
+    }
+    lk_rot(a, m, e);
+    lk_out();
+}
 /* 20: the melody's notes as they played, step by step (bit 7: played; COMMIT writes them in), their lengths */
 static uint8_t mel_n[NTRACK][NUM_STEPS] POOL, mel_l[NTRACK][NUM_STEPS] POOL;
 static uint8_t songs[NUM_SONGS][MAX_SONG_LENGTH] RAMBUF;   /* (1.0: in the old debug gap) */
@@ -220,8 +530,9 @@ static struct {
     uint8_t prescale, master_cnt;
     uint8_t muted, roll, roll_rate, last_on;
     uint8_t solo;                                /* 0.10: the soloed tracks (any: only they play; seq_mutes) */
-    uint8_t rec, erase, lane;                    /* recording, erasing (SHIFT CLEAR while recording), automation lane */
-    uint8_t rfree;                               /* 1.3: REC's Quantize OFF: a hit keeps its timing (the step's shift) */
+    uint8_t rec, erase;                          /* recording, erasing (SHIFT CLEAR while recording) */
+    uint8_t rfree;                               /* 1.3: REC's Quantize OFF: a hit keeps its timing (the step's shift);
+                                                  * 1.4: how much of it, 0 .. 100 (%; Quantize is 100 less) */
     int8_t armed_step, armed_track;              /* a step held while a knob turns: its lock */
     int8_t skip[NTRACK];                         /* a note just recorded into a step still to play: not again */
     uint16_t skipc[NTRACK];                      /* 1.3: the skip's ticks left (a step that doesn't play: let go) */
@@ -473,12 +784,15 @@ static void pv_set(uint32_t v)
         kit_loaded = pv_from;
     }
 }
-/* a pattern copied over another (COPY, SAVE): a LOCKED one's voices go with it; the playing pattern's voices follow */
-static void pv_copy(uint32_t src, uint32_t dst)
+/* a pattern copied over another (COPY, SAVE): a LOCKED one's voices go with it; the playing pattern's voices follow.
+ * -1: refused (1.4 fix: the pool can't hold its locks; nothing changed, the UI says LOCKS FULL) */
+static int pv_copy(uint32_t src, uint32_t dst)
 {
     uint32_t a = pat_voices(&pat[sq.active]);
     if (src == dst || src >= NUM_PATTERN || dst >= NUM_PATTERN)
-        return;
+        return 0;
+    if (pat_cp(&pat[dst], &pat[src]))
+        return -1;
     if (src == sq.active && a == PV_LOCKED)
         kit_stash(PV_SLOT(src));                     /* (as it sounds now) */
     if (pat_voices(&pat[src]) == PV_LOCKED) {
@@ -487,9 +801,9 @@ static void pv_copy(uint32_t src, uint32_t dst)
         kit_put(PV_SLOT(dst), k);
         pv_name(dst);
     }
-    pat[dst] = pat[src];
     if (dst == sq.active)                            /* (its old voices go unkept: KIT's way out) */
         pv_switch(a == PV_LOCKED ? PV_KIT : a, dst, dst);
+    return 0;
 }
 /* 0.13: what triggers the global LFOs (perform.c glfo_block): PLAY, a pattern change, a bar; OCT+ on LFO n's page:
  * GLE_KEY << n */
@@ -511,28 +825,9 @@ static uint32_t ui_track(void);                      /* the track the panel show
 static uint32_t ui_pattern(void);                    /* the pattern it shows */
 
 /* ------------------------------------------------------------ steps --- */
-/* a step's lock (lane 0, 1): its 12-bit destination code (sound.c autodest_to_par): the step's byte and its 4 high
- * bits in lhi (Elixir's parameters, 302 and on) */
-static uint32_t lock_get(const pattern_t *p, uint32_t t, uint32_t k, uint32_t lane)
-{
-    const step_t *s = &p->step[t][k];
-    return (lane ? s->p2n : s->p1n) | ((p->lhi[t][k] >> (lane * 4u)) & 3u) << 8;   /* (bits 2, 3, 6: the length) */
-}
-static void lock_set(pattern_t *p, uint32_t t, uint32_t k, uint32_t lane, uint32_t code)
-{
-    step_t *s = &p->step[t][k];
-    if (lane)
-        s->p2n = (uint8_t)code;
-    else
-        s->p1n = (uint8_t)code;
-    p->lhi[t][k] = (uint8_t)((p->lhi[t][k] & (lane ? 0xCFu : 0xFCu)) | ((code >> 8) & 3u) << (lane * 4u));
-}
-
 static void step_reset(step_t *s)                    /* seq_resetNote */
 {
     s->note = SEQ_DEFAULT_NOTE;
-    s->p1n = s->p2n = NO_AUTOMATION;
-    s->p1v = s->p2v = 0;
     s->prob = 100;
     s->volume = 127;
 }
@@ -550,6 +845,7 @@ static void seq_clear_track(uint32_t t, pattern_t *p)   /* seq_clearTrack */
     }
     for (k = 0; k < 4u; k++)
         p->main[t][k] = 0;
+    lk_clear(p, t, 0, NUM_STEPS);
     p->len[t] = 16;
     p->clk[t] = CLK_1X;
     memset(p->gen[t], 0, sizeof p->gen[t]);
@@ -584,7 +880,7 @@ static void pat_delete(uint32_t n)
     pat[n].gx = pat[n].gy = pat[n].gchaos = 0;
     if (n == sq.active) {
         pv_switch(a == PV_LOCKED ? PV_KIT : a, n, n);
-        pat_backup = pat[n];
+        pat_cp(&pat_backup, &pat[n]);
     }
 }
 static int pat_blank(const pattern_t *p)             /* nothing on and no generator: a blank pattern */
@@ -599,16 +895,11 @@ static int pat_blank(const pattern_t *p)             /* nothing on and no genera
     }
     return 1;
 }
-static void seq_clear_automation(uint32_t t, pattern_t *p, uint32_t lane)
+static void seq_clear_automation(uint32_t t, pattern_t *p)   /* (1.4: all the track's locks in the pattern) */
 {
-    uint32_t k;
-    for (k = 0; k < NUM_STEPS; k++) {
-        lock_set(p, t, k, lane, NO_AUTOMATION);
-        if (lane == 0u)
-            p->step[t][k].p1v = 0;
-        else
-            p->step[t][k].p2v = 0;
-    }
+    lk_clear(p, t, 0, NUM_STEPS);
+    if (p == &pat[sq.active] && gen_live(p, t))     /* (1.4 fix: a generator's live track too, as live_step_sync) */
+        lk_clear(&gpat, t, 0, NUM_STEPS);
 }
 static uint32_t track_len(const pattern_t *p, uint32_t t)
 {
@@ -708,11 +999,11 @@ static uint32_t seq_rand(void);
  * scale; random pitch per hit there in whole degrees (up to 7 either way, the amount squared) */
 static void seq_trigger(uint32_t t, const pattern_t *p, uint32_t k, uint32_t vel, uint32_t note)
 {
-    const step_t *s = p ? &p->step[t][k] : 0;
+    uint16_t c[LK_STEP];
+    uint8_t v[LK_STEP];
     uint32_t r = vc[t < V_HAT ? t : V_HAT].rnd[0];
     int32_t deg = 0;
-    auto_set(t, 0, s ? lock_get(p, t, k, 0) : NO_AUTOMATION, s ? s->p1v : 0u);
-    auto_set(t, 1, s ? lock_get(p, t, k, 1) : NO_AUTOMATION, s ? s->p2v : 0u);
+    auto_step(t, p ? lk_step(p, t, k, c, v) : 0u, c, v);
     if (r && scale_on(t)) {
         int32_t span = (int32_t)(r * r * 7u / 16129u);
         deg = span ? (int32_t)(seq_rand() % (uint32_t)(2 * span + 1)) - span : 0;
@@ -727,9 +1018,9 @@ static void seq_trigger(uint32_t t, const pattern_t *p, uint32_t k, uint32_t vel
 static void midi_out_legato(uint32_t track, uint32_t note, uint32_t vel);
 static void seq_legato(uint32_t t, const pattern_t *p, uint32_t k, uint32_t vel, uint32_t note)
 {
-    const step_t *s = &p->step[t][k];
-    auto_set(t, 0, lock_get(p, t, k, 0), s->p1v);
-    auto_set(t, 1, lock_get(p, t, k, 1), s->p2v);
+    uint16_t c[LK_STEP];
+    uint8_t v[LK_STEP];
+    auto_step(t, lk_step(p, t, k, c, v), c, v);
     note = trp_fit(t, scale_fit(t, note, 0));
     voice_legato(t, note);
     midi_out_legato(t, note, vel);
@@ -1199,10 +1490,10 @@ static void step_hit(uint32_t t, const pattern_t *p, uint32_t s, uint32_t loop, 
     }
     if (m && m->dec) {                               /* DECAY: lane 2, this hit and its ratchet */
         uint32_t d = TRACK_DECAY[t];
-        auto_set(t, 2, par_to_autodest(d), (uint32_t)clamp32((int32_t)par[d] + m->dec, 0, 127));
+        auto_set(t, AUTO_DEC, par_to_autodest(d), (uint32_t)clamp32((int32_t)par[d] + m->dec, 0, 127));
         sq.ldec |= (uint8_t)(1u << t);
     } else if (sq.ldec & (1u << t)) {
-        auto_set(t, 2, NO_AUTOMATION, 0);
+        auto_set(t, AUTO_DEC, NO_AUTOMATION, 0);
         sq.ldec &= (uint8_t)~(1u << t);
     }
     n = (r & 7u) + 1u;
@@ -1425,29 +1716,18 @@ static uint32_t trk_dir(uint32_t t);
 static void live_step_sync(const pattern_t *p, uint32_t t, uint32_t s);
 static uint32_t rush_lock(const pattern_t *p, uint32_t t, uint32_t k)   /* step k's RUSH (0: none) */
 {
-    uint32_t v = 0;
+    int32_t v;
     if (!main_on(p, t, k))
         return 0;
-    if (lock_get(p, t, k, 0) == RUSH_CODE)
-        v = p->step[t][k].p1v;
-    else if (lock_get(p, t, k, 1) == RUSH_CODE)
-        v = p->step[t][k].p2v;
-    return v > RUSH_MAX ? RUSH_MAX : v;
+    v = lk_get(p, t, k, RUSH_CODE);
+    return v < 0 ? 0u : (uint32_t)v > RUSH_MAX ? RUSH_MAX : (uint32_t)v;
 }
-/* step k of track t gets a RUSH of v (the lane that has one, else a free one, else the recording lane); turned on
- * at the keys' velocity if it was off */
+/* step k of track t gets a RUSH of v (1.4: its own lock; none if the step is full or the pool); turned on at the
+ * keys' velocity if it was off */
 static void rush_lock_set(pattern_t *p, uint32_t t, uint32_t k, uint32_t v)
 {
-    uint32_t d0 = lock_get(p, t, k, 0), d1 = lock_get(p, t, k, 1), lane = sq.lane;
-    if (d0 == RUSH_CODE || (d1 != RUSH_CODE && d0 == NO_AUTOMATION))
-        lane = 0;
-    else if (d1 == RUSH_CODE || d1 == NO_AUTOMATION)
-        lane = 1;
-    lock_set(p, t, k, lane, RUSH_CODE);
-    if (lane)
-        p->step[t][k].p2v = (uint8_t)v;
-    else
-        p->step[t][k].p1v = (uint8_t)v;
+    if (lk_put(p, t, k, RUSH_CODE, v))
+        return;
     if (!main_on(p, t, k)) {
         p->step[t][k].volume = (uint8_t)((p->step[t][k].volume & ~STEP_VOLUME_MASK) | key_vel);
         main_set(p, t, k, 1);
@@ -1933,6 +2213,7 @@ static void live_step_sync(const pattern_t *p, uint32_t t, uint32_t s)
     gpat.lhi[t][s] = p->lhi[t][s];
     gpat.cond[t][s] = p->cond[t][s];
     gpat.rat[t][s] = p->rat[t][s];
+    (void)lk_step_copy(&gpat, t, s, p, t, s);
 }
 /* 1.3: NUDGE: track t's first len steps rotated n later (negative: earlier), each with all it has; in place */
 static void rot_rev(uint8_t *a, uint32_t sz, uint32_t i, uint32_t j)   /* (elements i .. j - 1 reversed) */
@@ -1968,6 +2249,7 @@ static void trk_rotate(pattern_t *p, uint32_t t, int32_t n, uint32_t len)
     rot_el(p->lhi[t], 1, len, (uint32_t)n);
     rot_el(p->cond[t], 1, len, (uint32_t)n);
     rot_el(p->rat[t], 1, len, (uint32_t)n);
+    lk_trk_rot(p, t, (uint32_t)n, len);
     for (k = 0; k < len; k++)
         m |= (uint64_t)main_on(p, t, k) << k;
     mask = len >= 64u ? ~(uint64_t)0 : ((uint64_t)1 << len) - 1u;
@@ -1975,8 +2257,11 @@ static void trk_rotate(pattern_t *p, uint32_t t, int32_t n, uint32_t len)
     for (k = 0; k < len; k++)
         main_set(p, t, k, (int)((r >> k) & 1u));
 }
-static void trk_copy(pattern_t *d, const pattern_t *s, uint32_t t)
+/* (lk: its locks too; -1: into one of pat[] that the pool can't hold, nothing copied (1.4 fix)) */
+static int trk_copy_x(pattern_t *d, const pattern_t *s, uint32_t t, int lk)
 {
+    if (lk && lk_trk_copy(d, t, s, t) && lk_id(d) < LK_BK)
+        return -1;
     memcpy(d->step[t], s->step[t], sizeof d->step[t]);
     memcpy(d->timing[t], s->timing[t], sizeof d->timing[t]);
     memcpy(d->lhi[t], s->lhi[t], sizeof d->lhi[t]);
@@ -1992,7 +2277,9 @@ static void trk_copy(pattern_t *d, const pattern_t *s, uint32_t t)
     d->sfollow = (uint8_t)((d->sfollow & ~(1u << t)) | (s->sfollow & (1u << t)));
     memcpy(d->mel[t], s->mel[t], sizeof d->mel[t]);
     d->tbase[t] = s->tbase[t];
+    return 0;
 }
+static int trk_copy(pattern_t *d, const pattern_t *s, uint32_t t) { return trk_copy_x(d, s, t, 1); }
 static void seq_gen_sync(uint32_t t);
 /* every track before its first step, its counts from 0; 1.0: but the tracks in keep (TIME STRETCH's, off the clock's
  * grid: a pattern change) where they are. The rest realigned: on the clock's grid again */
@@ -2037,14 +2324,14 @@ static void seq_pattern_activate(void)               /* seq_setPendingPatternAct
                                                       * realign at STOP, or with REALIGN at a pattern change) */
         sq.gsync = (1u << NTRACK) - 1u;              /* (the generators' live tracks from the new pattern) */
         sq.load_pending = 0;
-        if (!pat_keep || pat_revert)
-            pat[sq.active] = pat_backup;             /* unsaved changes of the old pattern go (the LXR's way) */
+        if ((!pat_keep || pat_revert) && !(lk_bad & 1u))   /* (1.4: not if its copy's locks didn't fit) */
+            pat_cp(&pat[sq.active], &pat_backup);    /* unsaved changes of the old pattern go (the LXR's way) */
         pat_revert = 0;
         if (pat_blank(&pat[sq.pending])) {           /* (19a: a blank pattern starts with the scale last chosen) */
             pat[sq.pending].sroot = scl_last.root;
             pat[sq.pending].scale = scl_last.scale;
         }
-        pat_backup = pat[sq.pending];
+        pat_cp(&pat_backup, &pat[sq.pending]);
         sq.active = sq.pending;
         glfo_ev |= GLE_PATTERN;
         seq_set_shuffle_from(sq.active);
@@ -2510,7 +2797,15 @@ static void seq_clock_out_tick(void)
 
 /* the audio ISR, once a BLOCK, before the voices render it */
 static void seq_gen_syncs(void);
-static void seq_block(void)
+static void seq_block_run(void);
+static void seq_block(void)                          /* (1.4: lk_isr: the locks changed here without lk_in) */
+{
+    uint8_t was = lk_isr;                            /* (engine_block sets it around its input too) */
+    lk_isr = 1;
+    seq_block_run();
+    lk_isr = was;
+}
+static void seq_block_run(void)
 {
     if (sq.gsync)                                    /* (the generators' live tracks the panel reset) */
         seq_gen_syncs();
@@ -2613,7 +2908,7 @@ static void seq_add_note(uint32_t t, uint32_t vel, uint32_t note)
     p->step[t][q].prob = (uint8_t)((p->step[t][q].prob & ~PROB_MASK) | 100u);   /* (19b: its length kept) */
     g = groove_at(t, q, lp, 0);
     if (sq.rfree) {                                  /* 1.3: Quantize OFF: how early or late, as the step's shift */
-        int32_t e = o - g;
+        int32_t e = (o - g) * (int32_t)sq.rfree / 100;   /* (1.4: Quantize 0 .. 99%: that much nearer the step) */
         e = e >= 0 ? (e + 1) / 3 : -((1 - e) / 3);   /* (eighths of a step, rounded: 3 24ths each) */
         e = clamp32(e, -7, 7);
         p->timing[t][q] = (uint8_t)((p->timing[t][q] & 0x0Fu) | (uint32_t)(e + 7) << 4);
@@ -2637,24 +2932,14 @@ static void seq_record_automation(uint32_t t, uint32_t param, uint32_t val)
     if (sq.rec && sq.running && t < NTRACK && sq.idx[t] >= 0) {
         pattern_t *p = &pat[sq.active];
         uint32_t k = (uint32_t)sq.idx[t];
-        if (main_on(p, t, k)) {
-            lock_set(p, t, k, sq.lane, dest);
-            if (sq.lane == 0u)
-                p->step[t][k].p1v = (uint8_t)val;
-            else
-                p->step[t][k].p2v = (uint8_t)val;
+        if (main_on(p, t, k) && !lk_put(p, t, k, dest, val))   /* (1.4: the parameter's own lock) */
             live_step_sync(p, t, k);
-        }
     }
     if (sq.armed_step >= 0 && sq.armed_track >= 0) {
         pattern_t *p = &pat[ui_pattern()];
         uint32_t at = (uint32_t)sq.armed_track, k = (uint32_t)sq.armed_step;
-        lock_set(p, at, k, sq.lane, dest);
-        if (sq.lane == 0u)
-            p->step[at][k].p1v = (uint8_t)val;
-        else
-            p->step[at][k].p2v = (uint8_t)val;
-        live_step_sync(p, at, k);
+        if (!lk_put(p, at, k, dest, val))
+            live_step_sync(p, at, k);
     }
 }
 
@@ -2845,22 +3130,23 @@ static void seq_gen_loop(uint32_t t)                 /* track t round again: MUT
                     continue;
                 if (op == 1u) {                      /* move to a free neighbour */
                     uint32_t d = gen_rand(2) ? (s + 1u) % len : (s + len - 1u) % len;
-                    if (main_on(p, t, d))
-                        continue;
+                    if (main_on(p, t, d) || lk_step_copy(p, t, d, p, t, s))
+                        continue;                    /* (1.4 fix: its locks first; the pool full, it stays) */
                     p->step[t][d] = p->step[t][s];
                     p->timing[t][d] = p->timing[t][s];
                     p->lhi[t][d] = p->lhi[t][s];
                     p->cond[t][d] = p->cond[t][s];
                     p->rat[t][d] = p->rat[t][s];
+                    lk_clear(p, t, s, 1);
                     main_set(p, t, d, 1);
                     main_set(p, t, s, 0);
-                } else {                             /* drift a lock's value, else the velocity */
+                } else {                             /* drift a lock's value (1.4: its first), else the velocity */
                     step_t *st = &p->step[t][s];
                     int32_t dv = (int32_t)gen_rand(17) - 8;
-                    if (st->p1n != NO_AUTOMATION || p->lhi[t][s] & 3u)
-                        st->p1v = (uint8_t)clamp32((int32_t)st->p1v + dv, 0, 127);
-                    else if (st->p2n != NO_AUTOMATION || p->lhi[t][s] >> 4 & 3u)
-                        st->p2v = (uint8_t)clamp32((int32_t)st->p2v + dv, 0, 127);
+                    uint16_t lc[LK_STEP];
+                    uint8_t lv[LK_STEP];
+                    if (lk_step(p, t, s, lc, lv))
+                        (void)lk_put(p, t, s, lc[0], (uint32_t)clamp32((int32_t)lv[0] + dv, 0, 127));
                     else
                         st->volume = (uint8_t)((st->volume & STEP_ACTIVE_MASK) |
                                                clamp32((int32_t)(st->volume & STEP_VOLUME_MASK) + dv, 1, 127));
@@ -2894,7 +3180,7 @@ static void seq_undo_save(uint32_t t)
 {
     dundo = 0;                                       /* (31: upat a track's now, not DENSITY's pattern) */
     trk_copy(&upat, &pat[sq.active], t);
-    undo_t = (int8_t)t;
+    undo_t = (int8_t)(lk_bad & 4u ? -1 : (int32_t)t);   /* (1.4: no UNDO if its locks didn't fit) */
     undo_p = sq.active;
 }
 static int seq_undo(uint32_t t)                      /* the track and its saved copy swapped (UNDO again: redo) */
@@ -2905,9 +3191,10 @@ static int seq_undo(uint32_t t)                      /* the track and its saved 
         return 0;
     memcpy(g, p->gen[t], 4);                         /* (the generator's settings stay as they are, the melody's) */
     memcpy(m, p->mel[t], NML);
-    trk_copy(&gpat, p, t);                           /* (gpat: a scratch track for the swap, synced below) */
-    trk_copy(p, &upat, t);
-    trk_copy(&upat, &gpat, t);
+    trk_copy_x(&gpat, p, t, 0);                      /* (gpat: a scratch track for the swap, synced below; 1.4: */
+    trk_copy_x(p, &upat, t, 0);                      /* .. the locks swapped in the pool) */
+    trk_copy_x(&upat, &gpat, t, 0);
+    lk_trk_swap(p, &upat, t);
     memcpy(p->gen[t], g, 4);
     memcpy(p->mel[t], m, NML);
     sq.gsync |= (uint8_t)(1u << t);
@@ -2924,8 +3211,8 @@ static void seq_commit(uint32_t t)                   /* COMMIT: the live track i
     seq_undo_save(t);
     memcpy(g, p->gen[t], 4);
     memcpy(m, p->mel[t], NML);
-    if (gen_live(p, t))
-        trk_copy(p, &gpat, t);
+    if (gen_live(p, t) && trk_copy(p, &gpat, t))   /* (1.4 fix: the pool can't hold its locks: LOCKS FULL) */
+        return;
     for (k = 0; k < NUM_STEPS; k++)
         if (mel_n[t][k] & 0x80u) {
             p->step[t][k].note = (uint8_t)(mel_n[t][k] & 127u);
@@ -2957,8 +3244,7 @@ static uint32_t dens_write(pattern_t *p)             /* DENSITY now, into p (the
                 x->note = note_keep(t, sq.lnote[t]);
                 x->volume = (uint8_t)(dens_ghost_vel(t, s, lp) | STEP_ACTIVE_MASK);
                 x->prob = 100u;                      /* (its length AUTO, no condition) */
-                lock_set(p, t, s, 0, NO_AUTOMATION);
-                lock_set(p, t, s, 1, NO_AUTOMATION);
+                lk_clear(p, t, s, 1);
                 p->cond[t][s] = 0;
                 p->rat[t][s] = 0;
                 p->timing[t][s] = 7u << 4;
@@ -2988,12 +3274,12 @@ static uint32_t dens_write(pattern_t *p)             /* DENSITY now, into p (the
 static uint32_t seq_dens_commit(void)
 {
     uint32_t n;
-    upat = pat[sq.active];
+    pat_cp(&upat, &pat[sq.active]);
     undo_t = -1;                                     /* (upat holds the pattern now: no track's UNDO) */
     sq.wonly = 2;
     n = dens_write(&pat[sq.active]);
     sq.wonly = 0;
-    dundo = 1;
+    dundo = lk_bad & 4u ? 0u : 1u;                   /* (1.4: no UNDO if its locks didn't fit) */
     dundo_p = sq.active;
     return n;
 }
@@ -3014,9 +3300,10 @@ static int seq_dens_undo(void)                       /* the pattern and the kept
 {
     if (!dundo || dundo_p != sq.active)
         return 0;
-    gpat = pat[sq.active];                           /* (gpat: scratch for the swap, then synced) */
-    pat[sq.active] = upat;
+    gpat = pat[sq.active];                           /* (gpat: scratch for the swap, then synced; 1.4: the locks */
+    pat[sq.active] = upat;                           /* .. swapped in the pool) */
     upat = gpat;
+    lk_pat_swap(&pat[sq.active], &upat);
     dundo = (uint8_t)(3u - dundo);
     sq.gsync = (uint8_t)((1u << NTRACK) - 1u);
     return 1;
@@ -3063,7 +3350,7 @@ static void seq_init(void)                           /* seq_init */
         pat[i].kit = 0;
         pat[i].gx = pat[i].gy = pat[i].gchaos = 0;
     }
-    pat_backup = pat[0];
+    pat_cp(&pat_backup, &pat[0]);
     for (t = 0; t < NTRACK; t++) {
         sq.idx[t] = -1;
         sq.skip[t] = -1;
