@@ -720,7 +720,7 @@ From 0.25, any track can play **ENSEMBLE**, after 4ms' Ensemble Oscillator (Matt
 
 The MODEL page draws the eight oscillators as bars at their pitches, as tall as their levels (Warp and Twist are on its cards). **The pitch** is the voice's: Coarse and Fine on the OSC page, the pitch EG (on D1–D3: a sweep for gongs and drops), the scale, KEYS, random pitch. The cymbal and the hats sit high by default, so on them turn Coarse down first, or every oscillator is above the audible range and the voice is silent. Each hit restarts the oscillators together, so hits sound the same. **The amp EG** shapes it on every voice (its page stays), with the filter, drive, shape and the rest after it.
 
-**Cost:** ENSEMBLE isn't one of the [two models at once](#both) and can be on any voice, but each one takes about 10% of the CPU (see the LOAD page): D1–D3 run on the second core, SN, CY and the hats on the first. Its cost depends mostly on Twist: FEEDBACK is the heaviest. One Rings model, one Plaits engine and three ENSEMBLE voices play together without trouble.
+**Cost:** ENSEMBLE isn't one of the [two models at once](#both) and can be on any voice, but each one takes about 7% of the CPU (see the LOAD page; about 10% before 1.4, which made it a third lighter with the same sound): D1–D3 run on the second core, SN, CY and the hats on the first. Its cost depends mostly on Warp: CHEBY is the heaviest, with Twist at FEEDBACK most of all; with Warp off it costs about half as much. One Rings model, one Plaits engine and three ENSEMBLE voices play together without trouble.
 
 ### The sound browser
 
@@ -2175,7 +2175,7 @@ FM-1 (RAIN is an estimate), as a share of the second core:
 | **P CHORD** | Plaits' chords | 14 | ███████ | yes |
 | **STRING** | Rings' string | 13 | ███████ | yes |
 | **P FM** | Plaits' FM | 13 | ███████ | yes |
-| **ENSEMBLE** | eight stacked sines | 13 | ███████ | no |
+| **ENSEMBLE** | eight stacked sines | 9 (an estimate from 1.4; was 13) | █████ | no |
 | **RAIN** | grains on tuned bells | 10 (an estimate; less when sparse) | █████ | no |
 | **FM** | Rings' FM resonator | 10 | █████ | yes |
 | **P STRING** | Plaits' string | 9 | █████ | yes |
