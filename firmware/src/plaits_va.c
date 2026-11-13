@@ -390,35 +390,50 @@ PL_ENGINE fm_render(pl_fm_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, u
     smf = pl_divn((int32_t)tmf - (int32_t)d->pmf, n);
     sa = pl_ip(d->amt, tam, n);
     sf = pl_ip(d->fb, tfb, n);
-    for (i = 0; i < n; i++) {
-        int32_t pfb, mfb, ch = d->cfir, ct = 0, sh = d->sfir, st = 0, j;
-        uint32_t ci, mf;
-        d->amt += sa;
-        d->fb += sf;
-        d->pcf += (uint32_t)scf;
-        d->pmf += (uint32_t)smf;
-        pfb = d->fb < 0 ? pm(d->fb, d->fb) >> 1 : 0;
-        mfb = d->fb > 0 ? pm(d->fb, d->fb) >> 2 : 0;
-        ci = d->pcf;
-        mf = d->pmf;
-        for (j = 0; j < 4; j++) {
-            int32_t mod, car, sub;
-            d->mph += (uint32_t)(((uint64_t)mf * (uint32_t)(PL1 + pm(d->prev, pfb))) >> 24);
-            d->cph += ci;
-            d->sph += ci >> 1;
-            mod = pl_sinpm(d->mph, pm(mfb, d->prev));
-            car = pl_sinpm(d->cph, pm(d->amt, mod));
-            sub = pl_sinpm(d->sph, pm(pm(d->amt, car), PL1 >> 2));
-            PL_ONE_POLE(d->prev, car, 838861);       /* 0.05 */
-            ch += pm(car, PL_DS_FIR[3 - j]);
-            ct += pm(car, PL_DS_FIR[j]);
-            sh += pm(sub, PL_DS_FIR[3 - j]);
-            st += pm(sub, PL_DS_FIR[j]);
+    {   /* 1.4: the state in locals, the 4 steps unrolled (the FIR's taps constants), bit-identical */
+        uint32_t mph = d->mph, cph = d->cph, sph = d->sph, pcf = d->pcf, pmf = d->pmf;
+        int32_t amt = d->amt, fb = d->fb, prev = d->prev, cfir = d->cfir, sfir = d->sfir;
+#define FM_STEP(c3, c0) do {                                                                       \
+            int32_t mod, car, sub;                                                                 \
+            mph += (uint32_t)(((uint64_t)mf * (uint32_t)(PL1 + pm(prev, pfb))) >> 24);              \
+            cph += ci;                                                                             \
+            sph += ci >> 1;                                                                        \
+            mod = pl_sinpm(mph, pm(mfb, prev));                                                    \
+            car = pl_sinpm(cph, pm(amt, mod));                                                     \
+            sub = pl_sinpm(sph, pm(pm(amt, car), PL1 >> 2));                                       \
+            PL_ONE_POLE(prev, car, 838861);          /* 0.05 */                                    \
+            ch += pm(car, c3);                                                                     \
+            ct += pm(car, c0);                                                                     \
+            sh += pm(sub, c3);                                                                     \
+            st += pm(sub, c0);                                                                     \
+        } while (0)
+        for (i = 0; i < n; i++) {
+            int32_t pfb, mfb, ch = cfir, ct = 0, sh = sfir, st = 0;
+            uint32_t ci, mf;
+            amt += sa;
+            fb += sf;
+            pcf += (uint32_t)scf;
+            pmf += (uint32_t)smf;
+            pfb = fb < 0 ? pm(fb, fb) >> 1 : 0;
+            mfb = fb > 0 ? pm(fb, fb) >> 2 : 0;
+            ci = pcf;
+            mf = pmf;
+            FM_STEP(PL_DS_FIR[3], PL_DS_FIR[0]);
+            FM_STEP(PL_DS_FIR[2], PL_DS_FIR[1]);
+            FM_STEP(PL_DS_FIR[1], PL_DS_FIR[2]);
+            FM_STEP(PL_DS_FIR[0], PL_DS_FIR[3]);
+            out[i] = ch;
+            aux[i] = sh;
+            cfir = ct;
+            sfir = st;
         }
-        out[i] = ch;
-        aux[i] = sh;
-        d->cfir = ct;
-        d->sfir = st;
+#undef FM_STEP
+        d->mph = mph;
+        d->cph = cph;
+        d->sph = sph;
+        d->prev = prev;
+        d->cfir = cfir;
+        d->sfir = sfir;
     }
     d->amt = tam;
     d->fb = tfb;
