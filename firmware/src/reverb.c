@@ -22,13 +22,14 @@ static union {                          /* ROOM's allpasses; SPRING's allpass ch
     int32_t sp[(556 + 441) / 2];
 } rev_u RAMBUF;
 #define rev_ap (rev_u.ap)
+static int16_t pl_buf[1139 + 2350 + 1318 + 1146] POOL;   /* PLATE's D1A, DEL1, D2A, D2B; HALL's lines */
 static struct {
     uint8_t type, size, damp;            /* the parameters: the model (0 ROOM, 1 SPRING, 2 HALL, 3 PLATE), SIZE, DAMP */
     int32_t level;                       /* the return, Q15 */
     int32_t lvl_last;                    /* (1.0) the return as the last block ended (the ramp to level) */
     uint8_t rtype;                       /* the model running */
     uint8_t idle;                        /* blocks with no send and a silent tail (it sleeps: no work) */
-    uint16_t comb_i[4], ap_i[2];
+    uint16_t comb_w, ap_w;               /* ROOM: the combs' write pointer, the allpasses' (rev_room) */
     int32_t comb_lp[4];
     uint16_t sp_w;                       /* SPRING: the loop's write index (SP_MASK) */
     int32_t sp_lp, sp_hp, sp_he, sp_size;   /* .. its loop low-pass, low cut (and its remainder), the loop
@@ -54,12 +55,14 @@ static struct {
 #define SP_WOB ((uint32_t)(2.0 * 0.1768 * BLOCK / FS * 4294967296.0))   /* the wobble: ~0.35 Hz (Felucca's) */
 _Static_assert(sizeof rev_comb / 2u >= SP_LEN && sizeof rev_u.sp / 4u >= 4u * (SP_N + 1u), "SPRING in ROOM's buffers");
 
-/* HALL (type 2): a smooth, dense, stereo reverb, again in ROOM's buffers (its few states and one block of work in
+/* HALL (type 2): a smooth, dense, stereo reverb, in the shared buffers (its few states and one block of work in
  * the pool). ROOM's 4 combs each ring on their own (the metallic tone); here every echo goes round 8 lines that all
  * feed each other, and they run at half the rate (22.05 kHz: the same memory holds twice the time, so twice the
  * resonances, at half the work; the tail stops near 10 kHz, as a hall's air does). The send (every other sample of
  * it, low-passed 1 2 1; ROOM's level) -> a low cut (~110 Hz: no boom in a long tail) -> 2 allpass diffusers
- * (rev_ap: a drum's click smeared into a burst) -> into the 8 lines (rev_comb, mutually prime lengths, 21 .. 34 ms).
+ * (rev_ap: a drum's click smeared into a burst) -> into the 8 lines (pl_buf, mutually prime lengths, 21 .. 34 ms;
+ * 1.4: each with a block's spare samples after its end, so the matrix writes a block straight in and only what
+ * passed the end is copied to the start).
  * Lines 1, 2, 4, 7 are read through slow sines (+-HL_MOD samples, between samples; 0.37 or 0.74 Hz, each in its
  * own phase): the resonances drift instead of ringing. Lines 0, 3, 5, 6, read at their ends, go through a one-pole
  * low-pass (DAMP: the mixing takes every echo through them); every line through its gain (from its length: all
@@ -80,8 +83,8 @@ _Static_assert(sizeof rev_comb / 2u >= SP_LEN && sizeof rev_u.sp / 4u >= 4u * (S
 static const uint16_t HL_LEN[HL_NL] = {467, 509, 547, 593, 631, 673, 709, 743};   /* (+1 each: the mirror) */
 static const uint16_t HL_AP[HL_NAP] = {131, 307};
 static const int16_t HL_APG[HL_NAP] = {11469, 10240};               /* Q14: 0.7, 0.625 */
-_Static_assert(467 + 509 + 547 + 593 + 631 + 673 + 709 + 743 + HL_NL <= sizeof rev_comb / 2u &&
-               131 + 307 <= sizeof rev_u.ap / 2u, "HALL in ROOM's buffers");
+_Static_assert(467 + 509 + 547 + 593 + 631 + 673 + 709 + 743 + HL_NL * HL_NC <= sizeof pl_buf / 2u &&
+               131 + 307 <= sizeof rev_u.ap / 2u, "HALL in PLATE's buffer and ROOM's allpasses");
 _Static_assert(BLOCK % 2u == 0u && HL_NC + 2u * HL_MOD + 2u < 467u && HL_NC <= 131u, "HALL: one wrap a block at most");
 static struct {                          /* HALL's state (in the pool) */
     uint16_t i[HL_NL], d[HL_NAP];        /* the lines' write indices, the diffusers' */
@@ -93,53 +96,79 @@ static struct {                          /* HALL's state (in the pool) */
     uint8_t side;                        /* sd holds this block's stereo difference (HALL running) */
     int32_t sd[BLOCK];                   /* the block's left minus right */
     int32_t bx[HL_NC], l[HL_NC], r[HL_NC];   /* the block at half the rate: the diffused send, left, right */
-    int16_t y[HL_NL][HL_NC];             /* the lines' ends, then what goes back into them */
+    int16_t y[HL_NL][HL_NC];             /* the lines' ends */
 } hl RAMBUF;
 #define rev_side (hl.sd)
 
 /* ROOM (type 0): 4 damped combs + 2 allpasses (Freeverb-like, mono), added to out. Elixir: the loops' products
  * round towards zero (Felucca's floor them and its master's DC blocker takes out the offset they leave, -33 here
- * for ever after a hit; Elixir has no DC blocker) */
+ * for ever after a hit; Elixir has no DC blocker). 1.4: the 4 combs fill rev_comb and share one write pointer w,
+ * moving back a sample at a time (Clouds' way; the same values as a pointer a comb): comb k writes at P_k = w + the
+ * lengths before it and reads at P_k + its length = P_k+1 (comb 3: P_4 = w + all of them = w), the sample it wrote
+ * its length ago. Every comb reads before any writes (comb k reads where comb k+1 writes this sample), so the 4
+ * reads and writes take 4 places (3 wraps), not 8. The 2 allpasses in rev_ap the same way */
+#define RC_T (1116u + 1188u + 1277u + 1356u)
+#define RA_T (556u + 441u)
+_Static_assert(sizeof rev_comb / 2u == RC_T && sizeof rev_u.ap / 2u == RA_T, "ROOM: the combs fill rev_comb, the allpasses rev_ap");
+static inline int32_t room_comb(int16_t *c, uint32_t pw, int32_t o, int32_t *lp, int32_t in, int32_t size, int32_t kd)
+{
+    int32_t l = o + sh_tz((*lp - o) * kd, 15);
+    *lp = l;
+    c[pw] = (int16_t)clamp32(in + sh_tz(l * size, 15), -32768, 32767);
+    return o;
+}
 static __attribute__((noinline)) void rev_room(const int32_t *in_, int32_t *out, uint32_t n)
 {
-    uint32_t i, k;
-    int32_t size = space_on ? 32440 : 25000 + rv.size * 50, damp = 32767 - rv.damp * 200;   /* (SPACE: held) */
+    uint32_t i, w = rv.comb_w, v = rv.ap_w;
+    int32_t size = space_on ? 32440 : 25000 + rv.size * 50, kd = rv.damp * 200;   /* (SPACE: held) */
+    int32_t l0 = rv.comb_lp[0], l1 = rv.comb_lp[1], l2 = rv.comb_lp[2], l3 = rv.comb_lp[3];
+    int16_t *c = rev_comb, *ap = rev_ap;
     for (i = 0; i < n; i++) {
-        int32_t a = 0;
-        int16_t *c = rev_comb;
-        int32_t in = mulq15(in_[i], 2580);              /* 1/8 at -4 dB */
-        for (k = 0; k < 4u; k++) {
-            int32_t o = c[rv.comb_i[k]];
-            rv.comb_lp[k] = o + sh_tz((rv.comb_lp[k] - o) * (32767 - damp), 15);
-            c[rv.comb_i[k]] = (int16_t)clamp32(in + sh_tz(rv.comb_lp[k] * size, 15), -32768, 32767);
-            if (++rv.comb_i[k] >= REV_COMB[k])
-                rv.comb_i[k] = 0;
-            a += o;
-            c += REV_COMB[k];
+        uint32_t p1, p2, p3, q1;
+        int32_t in = mulq15(in_[i], 2580), a, o0, o1, y;   /* 1/8 at -4 dB */
+        w = w ? w - 1u : RC_T - 1u;
+        p1 = w + 1116u, p1 = p1 >= RC_T ? p1 - RC_T : p1;
+        p2 = w + 1116u + 1188u, p2 = p2 >= RC_T ? p2 - RC_T : p2;
+        p3 = w + 1116u + 1188u + 1277u, p3 = p3 >= RC_T ? p3 - RC_T : p3;
+        {
+            int32_t r0 = c[p1], r1 = c[p2], r2 = c[p3], r3 = c[w];   /* (the reads first) */
+            a = room_comb(c, w, r0, &l0, in, size, kd);
+            a += room_comb(c, p1, r1, &l1, in, size, kd);
+            a += room_comb(c, p2, r2, &l2, in, size, kd);
+            a += room_comb(c, p3, r3, &l3, in, size, kd);
         }
-        c = rev_ap;
-        for (k = 0; k < 2u; k++) {
-            int32_t o = c[rv.ap_i[k]];
-            int32_t v = a + sh_tz(o, 1);
-            c[rv.ap_i[k]] = (int16_t)clamp32(v, -32768, 32767);
-            a = o - a;                                  /* Freeverb: out = buf - in (o - v is a notch comb) */
-            if (++rv.ap_i[k] >= REV_AP[k])
-                rv.ap_i[k] = 0;
-            c += REV_AP[k];
-        }
-        out[i] += a;
+        v = v ? v - 1u : RA_T - 1u;
+        q1 = v + 556u, q1 = q1 >= RA_T ? q1 - RA_T : q1;
+        o0 = ap[q1], o1 = ap[v];
+        y = a + sh_tz(o0, 1);                           /* Freeverb: out = buf - in (o - v is a notch comb) */
+        ap[v] = (int16_t)clamp32(y, -32768, 32767);
+        a = o0 - a;
+        y = a + sh_tz(o1, 1);
+        ap[q1] = (int16_t)clamp32(y, -32768, 32767);
+        out[i] += o1 - a;
     }
+    rv.comb_w = (uint16_t)w, rv.ap_w = (uint16_t)v;
+    rv.comb_lp[0] = l0, rv.comb_lp[1] = l1, rv.comb_lp[2] = l2, rv.comb_lp[3] = l3;
 }
 
-/* SPRING (see above), added to out */
+/* SPRING (see above), added to out. A stage (1.4: unrolled): its product towards 0, as the loop's gain (floors
+ * would feed the loop a little offset and noise for ever) */
+#define SP_STAGE(k)                                                                         \
+    {                                                                                       \
+        int32_t sv = (x - q[k]) * SP_A, so = q[k];                                          \
+        x = ((sv + ((sv >> 31) & 4095)) >> 12) + p;                                         \
+        p = so;                                                                             \
+        q[k] = x;                                                                           \
+    }
+_Static_assert(SP_N == 10u, "SPRING: SP_STAGE written out for 10 stages");
 static __attribute__((noinline)) void rev_spring(const int32_t *in_, int32_t *out, uint32_t n)
 {
-    uint32_t i, k, s = rv.size;
+    uint32_t i, s = rv.size;
     int32_t g = space_on ? 32112 : 19661 + (int32_t)s * 85;   /* the loop's gain: 0.6 .. 0.93 (SPACE: 0.98) */
     int32_t kl = 26000 - rv.damp * 160;                 /* its low-pass: ~9 kHz .. ~1.3 kHz */
     int32_t len = (int32_t)(1323u + ((s * 1323u) >> 7)) << 8, L, L2, L3, f, w;
     int16_t *ln = rev_comb;
-    int32_t *ap = rev_u.sp;
+    int32_t *ap = rev_u.sp, *q;
     if (!rv.sp_size)
         rv.sp_size = len;
     rv.sp_size += clamp32(len - rv.sp_size, -256, 256); /* SIZE glides (a sample a block at most) */
@@ -160,15 +189,11 @@ static __attribute__((noinline)) void rev_spring(const int32_t *in_, int32_t *ou
         rv.sp_he = o & 63;                              /* to hold an offset in the loop */
         rv.sp_hp += o >> 6;
         x -= rv.sp_hp;
-        p = ap[j];                                      /* the chain: ap[j + k], stage k's output 4 samples ago */
-        ap[j] = x;
-        for (k = 1; k <= SP_N; k++) {                   /* (lossless: bounded by the loop's input, no clamp) */
-            int32_t v = (x - ap[j + k]) * SP_A;         /* towards 0, as the loop's gain: floors would feed */
-            o = ap[j + k];                              /* the loop a little offset and noise for ever */
-            x = ((v + ((v >> 31) & 4095)) >> 12) + p;
-            p = o;
-            ap[j + k] = x;
-        }
+        q = ap + j;                                     /* the chain: q[k], stage k's output 4 samples ago */
+        p = q[0];
+        q[0] = x;
+        SP_STAGE(1) SP_STAGE(2) SP_STAGE(3) SP_STAGE(4) SP_STAGE(5)   /* (lossless: bounded by the loop's input, */
+        SP_STAGE(6) SP_STAGE(7) SP_STAGE(8) SP_STAGE(9) SP_STAGE(10)  /* .. no clamp) */
         ln[wp & SP_MASK] = (int16_t)clamp32(x, -32768, 32767);
         rv.sp_w = (uint16_t)(wp + 1u);
         out[i] += (t0 + (((t1 - t0) * f) >> 8)) * 4 + ln[(wp - (uint32_t)L3) & SP_MASK] * 2;
@@ -257,7 +282,7 @@ static inline void hall_end_lp(const int16_t *b, int16_t *y, uint32_t n, int32_t
 #define HL_LFO ((uint32_t)(0.37 * BLOCK / FS * 4294967296.0))   /* the drift: 0.37 Hz (even lines), 0.74 Hz (odd) */
 static __attribute__((noinline)) void rev_hall(const int32_t *in_, int32_t *out, uint32_t n)
 {
-    int16_t *b = rev_comb, *a = rev_ap;
+    int16_t *b = pl_buf, *a = rev_ap, *o0, *o1, *o2, *o3, *o4, *o5, *o6, *o7;
     uint32_t i, k, s, m, d;
     int32_t kd = HL_KD(rv.damp);
     int32_t xp = hl.x, hp = hl.hp, he = hl.he, mp = hl.m, sp = hl.s;
@@ -300,8 +325,17 @@ static __attribute__((noinline)) void rev_hall(const int32_t *in_, int32_t *out,
         } else {
             HL_RUNS(d, HL_LEN[k], m, s, hall_end(b + d, f, hl.y[k] + s, m, g, lo));
         }
-        b += HL_LEN[k] + 1u;
+        b += HL_LEN[k] + HL_NC;
     }
+    b = pl_buf;                                         /* (each line's block written from its index on: past its */
+    o0 = b + hl.i[0], b += HL_LEN[0] + HL_NC;           /* .. end into its spare samples, copied below) */
+    o1 = b + hl.i[1], b += HL_LEN[1] + HL_NC;
+    o2 = b + hl.i[2], b += HL_LEN[2] + HL_NC;
+    o3 = b + hl.i[3], b += HL_LEN[3] + HL_NC;
+    o4 = b + hl.i[4], b += HL_LEN[4] + HL_NC;
+    o5 = b + hl.i[5], b += HL_LEN[5] + HL_NC;
+    o6 = b + hl.i[6], b += HL_LEN[6] + HL_NC;
+    o7 = b + hl.i[7];
     for (i = 0; i < HL_NC; i++) {
         int32_t y0 = hl.y[0][i], y1 = hl.y[1][i], y2 = hl.y[2][i], y3 = hl.y[3][i];
         int32_t y4 = hl.y[4][i], y5 = hl.y[5][i], y6 = hl.y[6][i], y7 = hl.y[7][i], x = hl.bx[i];
@@ -313,22 +347,30 @@ static __attribute__((noinline)) void rev_hall(const int32_t *in_, int32_t *out,
         t = y1 + y2 + y3 + y4 + y5 + y6 + y7;
         p0 = y2 + y3 + y5, p1 = y3 + y4 + y6, p2 = y4 + y5 + y7, p3 = y5 + y6 + y1;
         p4 = y6 + y7 + y2, p5 = y7 + y1 + y3, p6 = y1 + y2 + y4;
-        y0 += t;
-        hl.y[0][i] = (int16_t)clamp32(t + x, -32768, 32767);   /* (+ the send: signs spread over the rows) */
-        hl.y[1][i] = (int16_t)clamp32(2 * p0 + y1 - y0 + x, -32768, 32767);
-        hl.y[2][i] = (int16_t)clamp32(2 * p1 + y2 - y0 + x, -32768, 32767);
-        hl.y[3][i] = (int16_t)clamp32(2 * p2 + y3 - y0 + x, -32768, 32767);
-        hl.y[4][i] = (int16_t)clamp32(2 * p3 + y4 - y0 + x, -32768, 32767);
-        hl.y[5][i] = (int16_t)clamp32(2 * p4 + y5 - y0 + x, -32768, 32767);
-        hl.y[6][i] = (int16_t)clamp32(2 * p5 + y6 - y0 + x, -32768, 32767);
-        hl.y[7][i] = (int16_t)clamp32(2 * p6 + y7 - y0 - x, -32768, 32767);
+        y0 = x - (y0 + t);                              /* (rows 1 .. 6: + the send - y0 - t, row 7: - the send) */
+        o0[i] = (int16_t)clamp32(t + x, -32768, 32767);   /* (+ the send: signs spread over the rows) */
+        o1[i] = (int16_t)clamp32(2 * p0 + y1 + y0, -32768, 32767);
+        o2[i] = (int16_t)clamp32(2 * p1 + y2 + y0, -32768, 32767);
+        o3[i] = (int16_t)clamp32(2 * p2 + y3 + y0, -32768, 32767);
+        o4[i] = (int16_t)clamp32(2 * p3 + y4 + y0, -32768, 32767);
+        o5[i] = (int16_t)clamp32(2 * p4 + y5 + y0, -32768, 32767);
+        o6[i] = (int16_t)clamp32(2 * p5 + y6 + y0, -32768, 32767);
+        o7[i] = (int16_t)clamp32(2 * p6 + y7 + y0 - 2 * x, -32768, 32767);
     }
-    b = rev_comb;
-    for (k = 0; k < HL_NL; k++) {                       /* back into the lines (and the mirror after a wrap) */
-        d = hl.i[k];
-        HL_RUNS(d, HL_LEN[k], m, s, for (i = 0; i < m; i++) b[d + i] = hl.y[k][s + i]; if (!d) b[HL_LEN[k]] = b[0]);
+    b = pl_buf;
+    for (k = 0; k < HL_NL; k++) {                       /* past the end: to the start; the mirror (b[len] = b[0]) */
+        d = hl.i[k] + HL_NC;
+        if (d > HL_LEN[k]) {                            /* (b[len] written above: position 0's) */
+            d -= HL_LEN[k];
+            for (i = 0; i < d; i++)
+                b[i] = b[HL_LEN[k] + i];
+        } else {
+            if (!hl.i[k])                               /* (b[0] written above) */
+                b[HL_LEN[k]] = b[0];
+            d = d == HL_LEN[k] ? 0u : d;
+        }
         hl.i[k] = (uint16_t)d;
-        b += HL_LEN[k] + 1u;
+        b += HL_LEN[k] + HL_NC;
     }
     for (i = 0; i < HL_NC; i++) {                       /* back to 44.1 kHz, between samples */
         int32_t mm = (hl.l[i] + hl.r[i]) * HL_OUT, ss = (hl.l[i] - hl.r[i]) * HL_OUT;
@@ -357,7 +399,6 @@ static __attribute__((noinline)) void rev_hall(const int32_t *in_, int32_t *out,
 #define PL_N 10u
 enum { PL_AP1, PL_AP2, PL_AP3, PL_AP4, PL_D1A, PL_D1B, PL_DEL1, PL_D2A, PL_D2B, PL_DEL2 };
 static const uint16_t PL_LEN[PL_N] = {78, 112, 166, 275, 1139, 1404, 2350, 1318, 1146, 3295};   /* (Clouds' x 0.689) */
-static int16_t pl_buf[1139 + 2350 + 1318 + 1146] POOL;   /* D1A, DEL1, D2A, D2B */
 _Static_assert(78 + 112 + 166 + 275 <= sizeof rev_u.ap / 2u && 1404 + 3295 <= sizeof rev_comb / 2u,
                "PLATE: the diffusers in ROOM's allpasses, D1B and DEL2 in its combs");
 #define PL_KAP 20480                     /* Clouds' diffusion, 0.625 (Q15) */
@@ -371,84 +412,83 @@ _Static_assert(78 + 112 + 166 + 275 <= sizeof rev_u.ap / 2u && 1404 + 3295 <= si
 #endif
 #define PL_LFO1 ((uint32_t)(0.5 * BLOCK / FS * 4294967296.0))   /* Clouds' LFOs: 0.5 Hz (the diffuser), 0.3 Hz */
 #define PL_LFO2 ((uint32_t)(0.3 * BLOCK / FS * 4294967296.0))
+/* The lines (1.4: Clouds' own way, one write pointer a buffer, each line at a fixed offset from it): the lines
+ * in one buffer share its pointer, which moves back a sample at a time and wraps at the buffer's lines' total (3
+ * pointers, not a head a line); line k's sample d back is the buffer's (w + PL_OFF[k] + d) mod PL_T. The same values
+ * as a buffer a line (each starts from zeros) */
+#define PL_T0 (78u + 112u + 166u + 275u)        /* rev_u.ap: AP1 .. AP4 */
+#define PL_T1 (1404u + 3295u)                   /* rev_comb: D1B, DEL2 */
+#define PL_T2 (1139u + 2350u + 1318u + 1146u)   /* pl_buf: D1A, DEL1, D2A, D2B */
+static const uint8_t PL_GRP[PL_N] = {0, 0, 0, 0, 2, 1, 2, 2, 2, 1};
+static const uint16_t PL_OFF[PL_N] = {0, 78, 78 + 112, 78 + 112 + 166, 0, 0, 1139, 1139 + 2350, 1139 + 2350 + 1318,
+                                      1404};
 static struct {
-    int16_t *b[PL_N];                    /* the lines */
-    uint16_t p[PL_N];                    /* their heads (each a sample back, as Clouds' write pointer) */
+    uint16_t w[3];                       /* the buffers' write pointers */
     int32_t lp1, lp2, x, m, s;           /* the branches' low-passes; the send's last sample; the last mid, side */
     uint32_t ph1, ph2;
     uint8_t lo;                          /* the last block was quiet: towards zero (as HALL's lo) */
 } plt;
-static void plate_lines(void)
+#define PL_AI __attribute__((always_inline)) static inline
+PL_AI int16_t *pl_at(const uint32_t *w, uint32_t k, uint32_t d)   /* line k, d samples back (d < its length) */
 {
-    static const uint8_t WHERE[PL_N] = {0, 0, 0, 0, 2, 1, 2, 2, 2, 1};   /* rev_u.ap, rev_comb, pl_buf */
-    int16_t *at[3] = {rev_u.ap, rev_comb, pl_buf};
-    uint32_t k;
-    for (k = 0; k < PL_N; k++) {
-        plt.b[k] = at[WHERE[k]];
-        at[WHERE[k]] += PL_LEN[k];
-    }
+    uint32_t g = PL_GRP[k], t = g == 0u ? PL_T0 : g == 1u ? PL_T1 : PL_T2, i = w[g] + PL_OFF[k] + d;
+    return (g == 0u ? rev_u.ap : g == 1u ? rev_comb : pl_buf) + (i >= t ? i - t : i);
 }
-static inline int32_t pl_rd(uint32_t k, uint32_t d)   /* line k, d samples back (d < its length) */
+PL_AI int32_t pl_rd(const uint32_t *w, uint32_t k, uint32_t d) { return *pl_at(w, k, d); }
+PL_AI void pl_wr(const uint32_t *w, uint32_t k, uint32_t d, int32_t v) { *pl_at(w, k, d) = (int16_t)clamp32(v, -32768, 32767); }
+PL_AI int32_t pl_sh(int32_t m, uint32_t sh, int lo)   /* the loops' products: to the nearest, or towards zero */
 {
-    uint32_t i = plt.p[k] + d;
-    return plt.b[k][i >= PL_LEN[k] ? i - PL_LEN[k] : i];
+    return lo ? sh_tz(m, sh) : sh_rn(m, sh);
 }
-static inline void pl_wr(uint32_t k, uint32_t d, int32_t v)
+PL_AI int32_t pl_interp(const uint32_t *w, uint32_t k, uint32_t d8, int lo)   /* .. d8 / 256 back, between samples */
 {
-    uint32_t i = plt.p[k] + d;
-    plt.b[k][i >= PL_LEN[k] ? i - PL_LEN[k] : i] = (int16_t)clamp32(v, -32768, 32767);
+    int32_t a = pl_rd(w, k, d8 >> 8), b = pl_rd(w, k, (d8 >> 8) + 1u);
+    return a + pl_sh((b - a) * (int32_t)(d8 & 255u), 8, lo);
 }
-static inline int32_t pl_sh(int32_t m, uint32_t sh)   /* the loops' products: to the nearest, or towards zero */
+PL_AI int32_t pl_ap(const uint32_t *w, uint32_t k, int32_t acc, int32_t g, int lo)   /* an allpass: Read TAIL x g,
+                                                                                   * WriteAllPass x -g */
 {
-    return plt.lo ? sh_tz(m, sh) : sh_rn(m, sh);
+    int32_t r = pl_rd(w, k, PL_LEN[k] - 1u);
+    acc += pl_sh(r * g, 15, lo);
+    pl_wr(w, k, 0, acc);
+    return pl_sh(clamp32(acc, -32768, 32767) * -g, 15, lo) + r;
 }
-static inline int32_t pl_interp(uint32_t k, uint32_t d8)   /* .. d8 / 256 samples back, between samples */
-{
-    int32_t a = pl_rd(k, d8 >> 8), b = pl_rd(k, (d8 >> 8) + 1u);
-    return a + pl_sh((b - a) * (int32_t)(d8 & 255u), 8);
-}
-static inline int32_t pl_ap(uint32_t k, int32_t acc, int32_t g)   /* an allpass: Read TAIL x g, WriteAllPass x -g */
-{
-    int32_t r = pl_rd(k, PL_LEN[k] - 1u);
-    acc += pl_sh(r * g, 15);
-    pl_wr(k, 0, acc);
-    return pl_sh(clamp32(acc, -32768, 32767) * -g, 15) + r;
-}
-static __attribute__((noinline)) void rev_plate(const int32_t *in_, int32_t *out, uint32_t n)
+/* a block (lo: the rounding, a constant: a function each, no test a product) */
+PL_AI uint32_t plate_run(const int32_t *in_, int32_t *out, int lo)
 {
     int32_t krt = space_on ? 32604 : 11469 + (int32_t)rv.size * 162;   /* 0.35 .. 0.98 (Q15) */
     int32_t klp = 32767 - (int32_t)rv.damp * 193, xp = plt.x, mp = plt.m, sp = plt.s, lp1 = plt.lp1, lp2 = plt.lp2;
-    uint32_t i, k, l1, l2, pk = 0;
-    (void)n;
-    if (!plt.b[0])
-        plate_lines();
+    uint32_t i, l1, l2, pk = 0, w[3] = {plt.w[0], plt.w[1], plt.w[2]};
     plt.ph1 += PL_LFO1;
     plt.ph2 += PL_LFO2;
     l1 = (uint32_t)(sine_at(plt.ph1) + 32768) >> 1;   /* (0 .. 32767: Clouds' cosines, 0 .. 1) */
     l2 = (uint32_t)(sine_at(plt.ph2) + 32768) >> 1;
+    l1 = (7u << 8) + ((PL_SW1 * l1) >> 7);              /* (the taps, d8) */
+    l2 = (3225u << 8) + ((PL_SW2 * l2) >> 7);
     for (i = 0; i < HL_NC; i++) {
         int32_t x = (xp + 2 * in_[2u * i] + in_[2u * i + 1u]) >> 2, acc, ap, wl, wr, mm, ss;   /* (1 2 1) */
         xp = in_[2u * i + 1u];
-        for (k = 0; k < PL_N; k++)
-            plt.p[k] = (uint16_t)(plt.p[k] ? plt.p[k] - 1u : PL_LEN[k] - 1u);
-        acc = pl_interp(PL_AP1, (7u << 8) + ((PL_SW1 * l1) >> 7));   /* the smear: AP1 into itself, 69 back */
-        pl_wr(PL_AP1, 69, acc);
+        w[0] = w[0] ? w[0] - 1u : PL_T0 - 1u;
+        w[1] = w[1] ? w[1] - 1u : PL_T1 - 1u;
+        w[2] = w[2] ? w[2] - 1u : PL_T2 - 1u;
+        acc = pl_interp(w, PL_AP1, l1, lo);             /* the smear: AP1 into itself, 69 back */
+        pl_wr(w, PL_AP1, 69, acc);
         acc = mulq15(clamp32(x, -262143, 262143), PL_GAIN) >> 1;   /* (Q15 audio -> the lines' Q14) */
-        acc = pl_ap(PL_AP1, acc, PL_KAP);
-        acc = pl_ap(PL_AP2, acc, PL_KAP);
-        acc = pl_ap(PL_AP3, acc, PL_KAP);
-        ap = pl_ap(PL_AP4, acc, PL_KAP);
-        acc = clamp32(ap + pl_sh(pl_interp(PL_DEL2, (3225u << 8) + ((PL_SW2 * l2) >> 7)) * krt, 15), -32768, 32767);
-        lp1 = acc + pl_sh((lp1 - acc) * (32767 - klp), 15);   /* (towards the input: no stuck DC) */
-        acc = pl_ap(PL_D1A, lp1, -PL_KAP);
-        acc = pl_ap(PL_D1B, acc, PL_KAP);
-        pl_wr(PL_DEL1, 0, acc);
+        acc = pl_ap(w, PL_AP1, acc, PL_KAP, lo);
+        acc = pl_ap(w, PL_AP2, acc, PL_KAP, lo);
+        acc = pl_ap(w, PL_AP3, acc, PL_KAP, lo);
+        ap = pl_ap(w, PL_AP4, acc, PL_KAP, lo);
+        acc = clamp32(ap + pl_sh(pl_interp(w, PL_DEL2, l2, lo) * krt, 15, lo), -32768, 32767);
+        lp1 = acc + pl_sh((lp1 - acc) * (32767 - klp), 15, lo);   /* (towards the input: no stuck DC) */
+        acc = pl_ap(w, PL_D1A, lp1, -PL_KAP, lo);
+        acc = pl_ap(w, PL_D1B, acc, PL_KAP, lo);
+        pl_wr(w, PL_DEL1, 0, acc);
         wl = 2 * clamp32(acc, -32768, 32767);
-        acc = clamp32(ap + pl_sh(pl_rd(PL_DEL1, PL_LEN[PL_DEL1] - 1u) * krt, 15), -32768, 32767);
-        lp2 = acc + pl_sh((lp2 - acc) * (32767 - klp), 15);
-        acc = pl_ap(PL_D2A, lp2, PL_KAP);
-        acc = pl_ap(PL_D2B, acc, -PL_KAP);
-        pl_wr(PL_DEL2, 0, acc);
+        acc = clamp32(ap + pl_sh(pl_rd(w, PL_DEL1, PL_LEN[PL_DEL1] - 1u) * krt, 15, lo), -32768, 32767);
+        lp2 = acc + pl_sh((lp2 - acc) * (32767 - klp), 15, lo);
+        acc = pl_ap(w, PL_D2A, lp2, PL_KAP, lo);
+        acc = pl_ap(w, PL_D2B, acc, -PL_KAP, lo);
+        pl_wr(w, PL_DEL2, 0, acc);
         wr = 2 * clamp32(acc, -32768, 32767);
         mm = ((wl + wr) * PL_OUT) >> 2;              /* (Q14 x 2: back to the others' level) */
         ss = ((wl - wr) * PL_OUT) >> 2;
@@ -461,7 +501,15 @@ static __attribute__((noinline)) void rev_plate(const int32_t *in_, int32_t *out
         pk |= (uint32_t)iabs(wl) | (uint32_t)iabs(wr);
     }
     plt.x = xp, plt.m = mp, plt.s = sp, plt.lp1 = lp1, plt.lp2 = lp2;
-    plt.lo = pk < PL_QUIET;
+    plt.w[0] = (uint16_t)w[0], plt.w[1] = (uint16_t)w[1], plt.w[2] = (uint16_t)w[2];
+    return pk;
+}
+static __attribute__((noinline)) uint32_t plate_rn(const int32_t *in_, int32_t *out) { return plate_run(in_, out, 0); }
+static __attribute__((noinline)) uint32_t plate_tz(const int32_t *in_, int32_t *out) { return plate_run(in_, out, 1); }
+static void rev_plate(const int32_t *in_, int32_t *out, uint32_t n)
+{
+    (void)n;
+    plt.lo = (plt.lo ? plate_tz(in_, out) : plate_rn(in_, out)) < PL_QUIET;
     hl.side = 1;
 }
 
@@ -524,6 +572,7 @@ static int32_t rev_ret[2][2][BLOCK] POOL;           /* the return, a pair, each 
 static uint8_t rev_ok[2];                           /* rev_ret[o] holds a return */
 static uint8_t rev_rs;                              /* the half reverb_add takes; reverb_job fills the other */
 #define REV_WILD (1 << 22)
+_Static_assert(BLOCK == 64u, "reverb_process: the LEVEL ramp's / BLOCK as a shift");
 static void reverb_process(const int32_t *in, uint32_t fed, uint32_t o)
 {
     int32_t *wet = rev_wet, *wl = rev_ret[o][0], *wr = rev_ret[o][1];
@@ -541,13 +590,29 @@ static void reverb_process(const int32_t *in, uint32_t fed, uint32_t o)
         rev_switch(in, wet, BLOCK, rt);
     else
         rev_model(in, wet, BLOCK);
-    for (i = 0; i < BLOCK; i++) {                   /* (LEVEL ramped from the last block's: no zipper as it moves) */
-        int32_t w = wet[i], s = hl.side ? rev_side[i] : 0,
-                g = rv.lvl_last + (int32_t)(((rv.level - rv.lvl_last) * (int32_t)(i + 1u)) / (int32_t)BLOCK);
-        wl[i] = mulq16(w + s, g << 1);
-        wr[i] = mulq16(w - s, g << 1);
-        pk |= iabs(w) | iabs(s);
-    }
+    if (rv.level == rv.lvl_last && !hl.side) {      /* (LEVEL still: one gain; mono; 1.4) */
+        int32_t g = rv.level << 1;
+        for (i = 0; i < BLOCK; i++) {
+            int32_t w = wet[i];
+            wl[i] = wr[i] = mulq16(w, g);
+            pk |= iabs(w);
+        }
+    } else if (rv.level == rv.lvl_last) {           /* (.. stereo) */
+        int32_t g = rv.level << 1;
+        for (i = 0; i < BLOCK; i++) {
+            int32_t w = wet[i], s = rev_side[i];
+            wl[i] = mulq16(w + s, g);
+            wr[i] = mulq16(w - s, g);
+            pk |= iabs(w) | iabs(s);
+        }
+    } else
+        for (i = 0; i < BLOCK; i++) {               /* (LEVEL ramped from the last block's: no zipper as it moves) */
+            int32_t w = wet[i], s = hl.side ? rev_side[i] : 0,
+                    g = rv.lvl_last + sh_tz((rv.level - rv.lvl_last) * (int32_t)(i + 1u), 6);   /* (/ BLOCK) */
+            wl[i] = mulq16(w + s, g << 1);
+            wr[i] = mulq16(w - s, g << 1);
+            pk |= iabs(w) | iabs(s);
+        }
     rv.lvl_last = rv.level;
     if (pk >= REV_WILD) {
         rev_clear();
