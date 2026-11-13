@@ -531,8 +531,9 @@
     <div class="updates">
       <!-- 1.4: not released yet. At release, put the tag's date in place of "Coming soon". -->
       <div class="card"><h3>1.4<span>Coming soon</span></h3>
-        <p>Mostly refinements: more room for locks, smoother everyday handling, a few fixes, and a faster, leaner
-          firmware underneath. Projects from 1.3 load as before.</p>
+        <p>Far more room for locks, deleting from the save and load pages, program changes out to your other gear, a
+          drippy dub SPRING, and a lighter engine: most effects and the heaviest drum models now take less of the
+          processor, so more fits at once. Projects from 1.3 load as before.</p>
         <h4>Locks</h4>
         <ul>
           <li><b>Up to eight locks on a step</b>, one per parameter (it was two). All 32 patterns share one pool of
@@ -544,24 +545,28 @@
           <li>If the pool is ever full, a copy that needs more locks is refused with <b>NO LOCKS LEFT</b> and
             nothing changes, so no locks are lost along the way.</li>
         </ul>
+        <h4>Sound</h4>
+        <ul>
+          <li><b>SPRING</b> is now a drippy dub spring: every echo is a chirp that sweeps up, more with each trip
+            along the spring, through a tank driven hard, in stereo. Size makes the drip deeper. Kits that use SPRING
+            sound different from 1.3, and louder.</li>
+          <li><b>Make a morph from this kit</b>: with no morph target loaded, turn Morph to 100% and press OCT+. Elixir
+            copies the kit as the target, so you can change it and morph between the two.</li>
+        </ul>
         <h4>Recording and sequencing</h4>
         <ul>
           <li>REC's <b>Quantize</b> goes from 0 to 100%, not just on or off, so you can tighten your timing without
             losing all of the feel.</li>
           <li>A cleaner <b>pattern page</b>: the copy, paste and delete hints are smaller and line up, so the
             patterns stand out.</li>
-        </ul>
-        <h4>Sound and performance</h4>
-        <ul>
-          <li><b>Make a morph from this kit</b>: with no morph target loaded, turn Morph to 100% and press OCT+. Elixir
-            copies the kit as the target, so you can change it and morph between the two.</li>
           <li>The sound buttons are easier to follow. EDIT remembers the page you were on, wherever SELECT took you.
             Pressing a sound button a second time does nothing; SELECT turns the pages.</li>
         </ul>
         <h4>Saving and deleting</h4>
         <ul>
           <li><b>Delete a kit, sound, project, pattern or song</b> from the save or load page: select it, press CLEAR
-            (hold OCT&minus;, press OCT+), then OCT+ again to confirm. A deleted project is gone from flash. A kit slot goes back to Init.</li>
+            (hold OCT&minus;, press OCT+), then OCT+ again to confirm. A deleted project is gone from flash. A kit slot
+            goes back to Init.</li>
         </ul>
         <h4>MIDI and controllers</h4>
         <ul>
@@ -569,37 +574,28 @@
             (its own number, any number or none), the channel, and when. <b>AHEAD</b> sends it as soon as the next
             pattern is queued, so a Digitakt or Digitone changes pattern on the same downbeat as Elixir.</li>
           <li><b>Rush per track</b> from a controller: the remote's TRACKS channel has a Rush knob for each track
-            (CC 88&ndash;94) where LFO amount was.</li>
+            (CC 88&ndash;94) where LFO amount was. Update a controller template that used those CCs.</li>
+        </ul>
+        <h4>More room to play</h4>
+        <p>These take less of the processor and sound exactly the same, so heavier kits and effect chains fit
+          without CPU OVERLOAD. The figures are CONFIG &rarr; LOAD's readings on an FM-1, 1.3 &rarr; 1.4.</p>
+        <ul>
+          <li><b>Reverbs</b>: ROOM 6% &rarr; 3&ndash;4%, HALL 6% &rarr; 5%, PLATE 9% &rarr; 5%.</li>
+          <li><b>Delays</b>: MONO 6% &rarr; 4%, PING PONG 7% &rarr; 4%, TAPE 6% &rarr; 4%, TAPE PP 7% &rarr; 5%
+            (9% &rarr; 8% with Pitch on).</li>
+          <li><b>Master filter and FX bus</b>: RING 12&ndash;13% &rarr; 8%; ENSEMBLE about a third lighter; PHASER
+            and every voice's filter lighter too. ENSEMBLE + PHASER + RING together: 55% &rarr; 48%.</li>
+          <li><b>Drum models</b> (on D1&ndash;D3): P ADDTV 23% &rarr; 16% (15% &rarr; 11% with Aux at 0),
+            P SD 24% &rarr; 18%, P BD 20% &rarr; 18% (much lighter still with Aux at 0 or 127), MODAL 20% &rarr; 18%,
+            P SWARM 15% &rarr; 13%. Two heavy models fit together more often.</li>
         </ul>
         <h4>Fixes</h4>
         <ul>
           <li>Saving a morph no longer moves the kit you were on to the morph's slot.</li>
           <li><b>CLEAR TRACK</b> clears the track's steps and keeps its length, clock and direction. Before, it also
             set the track back to 16 steps.</li>
-        </ul>
-        <h4>Under the hood</h4>
-        <ul>
-          <li>The sound tables are stored compressed and unpacked when the FM-1 starts. That frees about 31 KB of
-            flash for new features, and the sound is bit-for-bit the same.</li>
-          <li><b>ENSEMBLE</b> uses about a third less processor time (less than that with the CHEBY warp), so it
-            leaves more room for effects. It sounds exactly the same.</li>
-          <li>Plaits' analog drums are lighter: <b>P SD</b> 24% → 18%, <b>P BD</b> 20% → 18%, and much lighter
-            with Aux at 0 or 127. <b>MODAL</b> (20% → 18%) and <b>P SWARM</b> (15% → 13%) are lighter too, so two
-            heavy models fit together more often. They sound exactly the same.</li>
-          <li><b>P ADDTV</b> is much lighter: 23% → 16% of the second core, and 15% → 11% with Aux at 0. It sounds
-            exactly the same.</li>
-          <li>The master filter's <b>RING</b> (12–13% → 8% of the first core), the FX bus <b>PHASER</b> and every
-            voice's filter are lighter: ENSEMBLE + PHASER + RING went from 55% to 48% of the first core. They
-            sound exactly the same.</li>
-          <li>Every delay but GRAIN is lighter: <b>MONO</b> 6% → 4%, <b>PING PONG</b> 7% → 4%, <b>TAPE</b> 6% → 4%
-            and <b>TAPE PP</b> 7% → 5% of the first core (9% → 8% with Pitch on). They sound exactly the same.</li>
-          <li><b>SPRING</b> is rebuilt as a drippy dub spring: every echo is a chirp that sweeps up, more with each
-            trip along the spring, with a tank you can drive hard and stereo pickups. Size makes the drip deeper. It
-            sounds different from 1.3's SPRING, and louder.</li>
-          <li>Every reverb is lighter: <b>ROOM</b> 6% → 3–4%, <b>HALL</b> 6% → 5%, <b>PLATE</b>
-            9% → 5% of the core that runs it. They sound exactly the same.</li>
-          <li>The tape delay's <b>Glitch</b> no longer starts the same few glitches over every time you change the
-            delay's Mode; GRAIN's random grains likewise.</li>
+          <li>The tape delay's <b>Glitch</b> no longer plays the same few glitches every time you change the delay's
+            Mode, and GRAIN's random grains no longer repeat that way either.</li>
         </ul>
       </div>
       <div class="card"><h3>1.3.1<span>November 10, 2026</span></h3>
