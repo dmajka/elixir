@@ -28,7 +28,7 @@ Three settings:
 |---|---|---|---|
 | **Sends** | per pattern, saved with the project | `AUTO` (the pattern's own index: pattern 1 sends 0) · a program `0–127` · `OFF` | `AUTO` |
 | **Channel** | device setting | `GLOB` (follows the global channel) · `1–16` | `GLOB` |
-| **When** | device setting | `AHEAD` · `AT CHANGE` | `AHEAD` |
+| **When** | device setting | `AHEAD` · `CHANGE` | `AHEAD` |
 
 The existing TX filter's **P** bit still switches all program change output off.
 
@@ -46,7 +46,7 @@ send its program change, once.
 | Song mode, stopped or not yet started | the song's first row (PLAY starts there) |
 | Otherwise (playing, nothing queued; or stopped) | the pattern playing |
 
-`AT CHANGE`: always the pattern playing. This sends the program change as the new pattern starts, which is the old
+`CHANGE`: always the pattern playing. This sends the program change as the new pattern starts, which is the old
 behavior. It suits gear that switches immediately on receipt (for example an Elektron set to direct jump).
 
 Stopped, a pattern change happens at once on both ends, so both modes send at once.
@@ -109,7 +109,7 @@ A01–H16 are programs 0–127 (bank = program / 16, pattern = program % 16 + 1)
 | Mapping and channel | `midi.c`: `midi_pc_prog`, `midi_pc_ch`, `midi_out_pc` |
 | Saved | the project (version 14, in the pattern header); the settings' `pcch` and `pcwhen` (in the struct's former padding, so older and newer firmware read each other's settings) |
 | UI | CONFIG → **PROGRAM CHANGE OUT**, after MIDI OUT: Pattern, Sends, Channel, When |
-| Tests | `tests/ui_test.c: phase_140_pc` (stopped, AHEAD, remapped channel and program, OFF, AT CHANGE, song look-ahead with LOOP, project round trip, delete resets) |
+| Tests | `tests/ui_test.c: phase_140_pc` (stopped, AHEAD, remapped channel and program, OFF, CHANGE, song look-ahead with LOOP, project round trip, delete resets) |
 
 Cost: one byte per pattern (plus the playing pattern's backup copy), two bytes of settings, and a few compares per
 audio block. The project format grows only for patterns that set it.

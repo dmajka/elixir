@@ -736,7 +736,7 @@ static uint8_t pv_skip;             /* (a pattern saved into another slot: its K
 /* 1.4: PROGRAM CHANGE OUT (docs/MIDI_PROGRAM_CHANGE_OUT.md): the program change a pattern sends goes out from the
  * audio ISR (seq_pc_out, each block) when the pattern the far end should be heading for changes: AHEAD (the default),
  * the one queued (or the song's next row) as soon as it is known, so a box that changes at the end of its own pattern
- * (an Elektron) changes on the same downbeat; AT CHANGE, the one playing, when it starts (the LXR's way). Stopped,
+ * (an Elektron) changes on the same downbeat; CHANGE, the one playing, when it starts (the LXR's way). Stopped,
  * the one playing (in a song, AHEAD: its first row's). The settings (project.c kset.pcch, pcwhen) set these */
 enum { PCW_AHEAD, PCW_CHANGE };
 static volatile uint8_t pc_ch;      /* the channel: 0 the global one, 1..16 */

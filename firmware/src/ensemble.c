@@ -21,8 +21,10 @@
  * (POSITION: 64 even), DETUNE (EXCITER), SCALE (TENSION: FREE OCTAVE FIFTH MAJOR MINOR PENTA HARMONIC SEMI).
  * Pitch: the voice's oscillator increment (its note, pitch EG, random, tape). Samples Q15, phases Q32, amounts Q16. */
 
+#ifndef FM1_OPAQUE                                   /* (the host's and the emulator's builds: hal/fm1_cc.h's) */
+#define FM1_OPAQUE(x) ((void)0)
+#endif
 #define NEO 8u                                       /* oscillators */
-#define EN_SUB 32u                                   /* samples a pass (scratch on core 1's 4 KB stack) */
 enum { EW_FOLD, EW_CHEBY, EW_SEGMENT, EW_NONE };
 enum { ET_FEEDBACK, ET_PULSAR, ET_CRUSH };
 enum { ES_FREE, ES_OCTAVE, ES_FIFTH, ES_MAJOR, ES_MINOR, ES_PENTA, ES_HARMONIC, ES_SEMI, NES };
@@ -84,11 +86,24 @@ static const uint16_t EN_FMAX[66] = {   /* its gain, Q12, at amounts 0 .. 1/16 (
     3768, 3768, 3768, 3768, 3768, 3768, 3768, 3768, 3768, 3768, 3768, 3768, 3768, 3768, 3768, 3768,
     3768, 3768,
 };
-/* SEGMENT's curves (enosc's triangles), in twelfths, -1 .. 1 in 8 segments */
-static const int8_t EN_TRI[8][9] = {
-    {-12, -9, -6, -3, 0, 3, 6, 9, 12}, {-12, -12, -8, -4, 0, 4, 8, 12, 12}, {-12, -12, -12, -6, 0, 6, 12, 12, 12},
-    {-12, -12, -12, -12, 0, 12, 12, 12, 12}, {-12, -6, -12, -6, 0, 6, 12, 6, 12}, {-12, -6, 0, -12, 0, 12, 0, 6, 12},
-    {-12, -6, 12, -12, 0, 12, -12, 6, 12}, {12, -12, 12, -12, 0, 12, -12, 12, -12}};
+/* SEGMENT's curves (enosc's triangles), in twelfths, -1 .. 1 in 8 segments (1.4: kept as EN_TRI2 below):
+ *   {-12, -9, -6, -3, 0, 3, 6, 9, 12},
+ *   {-12, -12, -8, -4, 0, 4, 8, 12, 12},
+ *   {-12, -12, -12, -6, 0, 6, 12, 12, 12},
+ *   {-12, -12, -12, -12, 0, 12, 12, 12, 12},
+ *   {-12, -6, -12, -6, 0, 6, 12, 6, 12},
+ *   {-12, -6, 0, -12, 0, 12, 0, 6, 12},
+ *   {-12, -6, 12, -12, 0, 12, -12, 6, 12},
+ *   {12, -12, 12, -12, 0, 12, -12, 12, -12} */
+static const int32_t EN_TRI2[8][8][2] = {   /* (1.4: each segment's start (c << 15) x 2731 and its slope x 2731) */
+    {{-1073872896, 8193}, {-805404672, 8193}, {-536936448, 8193}, {-268468224, 8193}, {0, 8193}, {268468224, 8193}, {536936448, 8193}, {805404672, 8193}},
+    {{-1073872896, 0}, {-1073872896, 10924}, {-715915264, 10924}, {-357957632, 10924}, {0, 10924}, {357957632, 10924}, {715915264, 10924}, {1073872896, 0}},
+    {{-1073872896, 0}, {-1073872896, 0}, {-1073872896, 16386}, {-536936448, 16386}, {0, 16386}, {536936448, 16386}, {1073872896, 0}, {1073872896, 0}},
+    {{-1073872896, 0}, {-1073872896, 0}, {-1073872896, 0}, {-1073872896, 32772}, {0, 32772}, {1073872896, 0}, {1073872896, 0}, {1073872896, 0}},
+    {{-1073872896, 16386}, {-536936448, -16386}, {-1073872896, 16386}, {-536936448, 16386}, {0, 16386}, {536936448, 16386}, {1073872896, -16386}, {536936448, 16386}},
+    {{-1073872896, 16386}, {-536936448, 16386}, {0, -32772}, {-1073872896, 32772}, {0, 32772}, {1073872896, -32772}, {0, 16386}, {536936448, 16386}},
+    {{-1073872896, 16386}, {-536936448, 49158}, {1073872896, -65544}, {-1073872896, 32772}, {0, 32772}, {1073872896, -65544}, {-1073872896, 49158}, {536936448, 16386}},
+    {{1073872896, -65544}, {-1073872896, 65544}, {1073872896, -65544}, {-1073872896, 32772}, {0, 32772}, {1073872896, -65544}, {-1073872896, 65544}, {1073872896, -65544}}};
 /* the scales (enosc's defaults), semitones Q8; the last is the period */
 static const uint16_t EN_SC_HARM[9] = {0, 522, 989, 1411, 1797, 2152, 2480, 2786, 3072};   /* (harmonics 8 .. 16) */
 static const uint16_t EN_SC_ET[NES][7] = {
@@ -164,98 +179,120 @@ static void en_pitch(const ensemble_t *e, uint32_t i, int32_t *p1, int32_t *p2, 
     *cf = c < 0 ? 0 : c > 32767 ? 32767 : c;
 }
 
-/* one oscillator for n samples: its phase twisted (kept in x for CHEBY), its sine, warped, x its gain ramp (g .. + gs a
- * sample, Q15), added to acc */
-static void en_osc(uint32_t *php, int16_t *fbp, uint32_t inc, uint32_t tw, uint32_t ta, uint32_t wt, uint32_t wa,
-                   int32_t g, int32_t gs, int32_t *acc, uint32_t n)
+/* sin(2 pi ph), Q15, as en_sin: its quarter turn and sine_at's three quarters are a whole one, so the table's index is
+ * the phase's top 12 bits as they are (1.4: bit-identical, no offset, no mask) */
+static inline int32_t en_sin0(uint32_t ph)
 {
-    uint32_t x[EN_SUB], i, ph = *php;
-    int16_t s[EN_SUB];
-    int32_t fb = *fbp;
-    switch (tw) {                                    /* the phase twisted, its sine */
-    case ET_FEEDBACK: {
-        uint32_t off = ta << 16;                     /* (enosc: + the amount as a phase too) */
-        for (i = 0; i < n; i++) {
-            int32_t y;
-            ph += inc;
-            x[i] = ph + off + (uint32_t)(fb * (int32_t)ta);   /* (its low-passed output x the amount, half a cycle a unit) */
-            y = en_sin(x[i]);
+    const int16_t *p = &RG_SINE[ph >> 20];
+    int32_t a = p[0];
+    return a + (((p[1] - a) * (int32_t)((ph >> 5) & 0x7FFFu)) >> 15);
+}
+
+/* the warps' settings for a block (en_osc) */
+typedef struct {
+    int32_t gn;                                      /* FOLD: its gain, Q12 */
+    uint32_t n1, fr;                                 /* CHEBY: T(n1) .. T(n1 + 1); SEGMENT: fr the blend */
+    const int32_t (*c0)[2], (*c1)[2];                /* SEGMENT: the curves (EN_TRI2's) */
+    uint32_t k1;                                     /* CHEBY: its first phase's offset */
+} en_warp_t;
+
+/* one oscillator for n samples, one pass a sample (1.4: was three, through two buffers on the stack: twist, warp, add;
+ * the same numbers): its phase twisted (x, kept for CHEBY), its sine (y) warped, x its gain ramp (g .. + gs a sample,
+ * Q15), added to acc. tw and wt are constants where it's inlined: each pair its own loop */
+static inline __attribute__((always_inline)) void en_run(const uint32_t tw, const uint32_t wt, uint32_t *php,
+                                                         int16_t *fbp, uint32_t inc, uint32_t ta, uint32_t wa,
+                                                         const en_warp_t *wp, int32_t g, int32_t gs, int32_t *acc,
+                                                         uint32_t n)
+{
+    uint32_t ph = *php, off = ta << 16, sq = 16384u * ta, n1 = wp->n1, fr = wp->fr;
+    int32_t fb = *fbp, gn = wp->gn;
+    const int32_t (*c0)[2] = wp->c0, (*c1)[2] = wp->c1;
+    uint32_t k1 = wp->k1;
+    int32_t *end = acc + n;
+    (void)off; (void)sq; (void)n1; (void)fr; (void)gn; (void)c0; (void)c1; (void)wa; (void)k1;
+    while (acc < end) {
+        uint32_t x;
+        int32_t y;
+        ph += inc;
+        if (tw == ET_FEEDBACK) {
+            x = ph + off + (uint32_t)(fb * (int32_t)ta);   /* (its low-passed output x the amount, half a cycle a unit) */
+            y = en_sin0(x);
             fb += (y - fb) >> 2;
-            s[i] = (int16_t)y;
+        } else if (tw == ET_PULSAR) {                /* (ta: the squeeze, Q8, 256 .. 16384) */
+            uint32_t q = (ph >> 16) * ta;
+            x = q >= 1u << 24 ? 0u : q << 8;
+            y = en_sin0(x);
+        } else {                                     /* CRUSH */
+            x = ph ^ ((ph >> 16) * ta) ^ sq;
+            y = en_sin0(x);
         }
-        break;
+        if (wt == EW_FOLD) {
+            uint32_t q = (uint32_t)(((y * (int32_t)wa) >> 16) + 32768), k = q >> 7;   /* (512 intervals) */
+            int32_t a = EN_FOLD[k], z = a + (((EN_FOLD[k + 1u] - a) * (int32_t)((q & 127u) << 8)) >> 15);
+            y = sat16((z * gn) >> 12);
+        } else if (wt == EW_CHEBY) {                 /* (sin 2 pi f = cos 2 pi (f - 1/4): T_n of it is cos 2 pi n (f - 1/4),
+                                                      * -sine_at's. 1.4: sine_at(p) is en_sin0(p + 3/4 turn), so its phase is
+                                                      * x n1 + k1, the next one's that + x - 1/4 turn; and between two of
+                                                      * the table's values, within +-32767, it needs no saturation) */
+            uint32_t t1 = x * n1 + k1;
+            int32_t a = -en_sin0(t1), b = -en_sin0(t1 + x + 0xC0000000u);
+            y = a + (((b - a) * (int32_t)fr) >> 15);
+        } else if (wt == EW_SEGMENT) {               /* curve k and k + 1, blended */
+            uint32_t u = (uint32_t)(y + 32768) * 8u, j = u >> 16, f = (u & 0xFFFFu) >> 1;
+            /* (twelfths to Q15: ((c << 15) + slope f) 2731 >> 15, the 2731 in the table; its sum in 32 bits wraps as
+             * the product did, the result fits) */
+            int32_t a = (int32_t)((uint32_t)c0[j][0] + (uint32_t)c0[j][1] * f) >> 15;
+            int32_t b = (int32_t)((uint32_t)c1[j][0] + (uint32_t)c1[j][1] * f) >> 15;
+            y = sat16(a + (((b - a) * (int32_t)fr) >> 15));
+        }
+        *acc++ += (y * g) >> 15;
+        g += gs;
+        FM1_OPAQUE(acc);                             /* (a pointer that moves: no index and base on the stack) */
     }
-    case ET_PULSAR:                                  /* (ta: the squeeze, Q8, 256 .. 16384) */
-        for (i = 0; i < n; i++) {
-            uint32_t q;
-            ph += inc;
-            q = (ph >> 16) * ta;
-            x[i] = q >= 1u << 24 ? 0u : q << 8;
-            s[i] = (int16_t)en_sin(x[i]);
-        }
-        break;
-    default:                                         /* CRUSH */
-        for (i = 0; i < n; i++) {
-            ph += inc;
-            x[i] = ph ^ ((ph >> 16) * ta) ^ (16384u * ta);
-            s[i] = (int16_t)en_sin(x[i]);
-        }
-        break;
-    }
-    switch (wt) {                                    /* the sine warped */
-    case EW_FOLD: {
-        uint32_t gi = wa >> 6, gf = wa & 63u;        /* (its gain: EN_FMAX over 0 .. 1/16) */
-        int32_t gn = gi >= 64u ? EN_FMAX[64]
-                               : EN_FMAX[gi] + (int32_t)((((int32_t)EN_FMAX[gi + 1u] - (int32_t)EN_FMAX[gi]) * (int32_t)gf) >> 6);
-        for (i = 0; i < n; i++) {
-            uint32_t q = (uint32_t)(((s[i] * (int32_t)wa) >> 16) + 32768), k = q >> 7;   /* (512 intervals) */
-            int32_t a = EN_FOLD[k], y = a + (((EN_FOLD[k + 1u] - a) * (int32_t)((q & 127u) << 8)) >> 15);
-            s[i] = (int16_t)sat16((y * gn) >> 12);
-        }
-        break;
-    }
-    case EW_CHEBY: {                                 /* T(n1) .. T(n1 + 1), n1 = 1 + the amount x 14 */
-        uint32_t q = wa * 14u, n1 = 1u + (q >> 16), fr = (q & 0xFFFFu) >> 1;
-        if (n1 >= 15u) {
-            n1 = 14u;
-            fr = 32767u;
-        }
-        if (n1 == 1u && fr == 0u)
-            break;
-        for (i = 0; i < n; i++) {                    /* (sin 2 pi f = cos 2 pi (f - 1/4): T_n of it is cos 2 pi n (f - 1/4),
-                                                      * -sine_at's) */
-            uint32_t f = x[i] - 0x40000000u;
-            int32_t a = -sine_at(f * n1), b = -sine_at(f * (n1 + 1u));
-            s[i] = (int16_t)sat16(a + (((b - a) * (int32_t)fr) >> 15));
-        }
-        break;
-    }
-    case EW_NONE:
-        break;
-    default: {                                       /* SEGMENT: curve k and k + 1, blended */
-        uint32_t q = wa * 7u, k = q >> 16, fr = (q & 0xFFFFu) >> 1;
-        const int8_t *c0, *c1;
-        if (k > 6u) {
-            k = 6u;
-            fr = 32767u;
-        }
-        if (k == 0u && fr == 0u)
-            break;
-        c0 = EN_TRI[k];
-        c1 = EN_TRI[k + 1u];
-        for (i = 0; i < n; i++) {
-            uint32_t u = (uint32_t)(s[i] + 32768) * 8u, j = u >> 16, f = (u & 0xFFFFu) >> 1;
-            int32_t a = (((c0[j] << 15) + (c0[j + 1u] - c0[j]) * (int32_t)f) * 2731) >> 15;   /* (twelfths to Q15) */
-            int32_t b = (((c1[j] << 15) + (c1[j + 1u] - c1[j]) * (int32_t)f) * 2731) >> 15;
-            s[i] = (int16_t)sat16(a + (((b - a) * (int32_t)fr) >> 15));
-        }
-        break;
-    }
-    }
-    for (i = 0; i < n; i++, g += gs)
-        acc[i] += (s[i] * g) >> 15;
     *php = ph;
     *fbp = (int16_t)fb;
+}
+#define EN_RUN3(tw) do { switch (wt) { \
+    case EW_FOLD: en_run(tw, EW_FOLD, php, fbp, inc, ta, wa, &w, g, gs, acc, n); break; \
+    case EW_CHEBY: en_run(tw, EW_CHEBY, php, fbp, inc, ta, wa, &w, g, gs, acc, n); break; \
+    case EW_SEGMENT: en_run(tw, EW_SEGMENT, php, fbp, inc, ta, wa, &w, g, gs, acc, n); break; \
+    default: en_run(tw, EW_NONE, php, fbp, inc, ta, wa, &w, g, gs, acc, n); break; } } while (0)
+static __attribute__((noinline)) void en_osc(uint32_t *php, int16_t *fbp, uint32_t inc, uint32_t tw, uint32_t ta, uint32_t wt, uint32_t wa,
+                   int32_t g, int32_t gs, int32_t *acc, uint32_t n)
+{
+    en_warp_t w = {0, 0, 0, 0, 0, 0};
+    if (wt == EW_FOLD) {
+        uint32_t gi = wa >> 6, gf = wa & 63u;        /* (its gain: EN_FMAX over 0 .. 1/16) */
+        w.gn = gi >= 64u ? EN_FMAX[64]
+                         : EN_FMAX[gi] + (int32_t)((((int32_t)EN_FMAX[gi + 1u] - (int32_t)EN_FMAX[gi]) * (int32_t)gf) >> 6);
+    } else if (wt == EW_CHEBY) {                     /* T(n1) .. T(n1 + 1), n1 = 1 + the amount x 14 */
+        uint32_t q = wa * 14u;
+        w.n1 = 1u + (q >> 16);
+        w.fr = (q & 0xFFFFu) >> 1;
+        if (w.n1 >= 15u) {
+            w.n1 = 14u;
+            w.fr = 32767u;
+        }
+        if (w.n1 == 1u && w.fr == 0u)                /* (T1: the sine as it is) */
+            wt = EW_NONE;
+        w.k1 = 0xC0000000u - 0x40000000u * w.n1;
+    } else if (wt == EW_SEGMENT) {                   /* curve k and k + 1, blended */
+        uint32_t q = wa * 7u, k = q >> 16;
+        w.fr = (q & 0xFFFFu) >> 1;
+        if (k > 6u) {
+            k = 6u;
+            w.fr = 32767u;
+        }
+        if (k == 0u && w.fr == 0u)                   /* (the first curve: a straight line) */
+            wt = EW_NONE;
+        w.c0 = EN_TRI2[k];
+        w.c1 = EN_TRI2[k + 1u];
+    }
+    switch (tw) {
+    case ET_FEEDBACK: EN_RUN3(ET_FEEDBACK); break;
+    case ET_PULSAR: EN_RUN3(ET_PULSAR); break;
+    default: EN_RUN3(ET_CRUSH); break;
+    }
 }
 
 #define EN_K 26214u                                  /* the level's balance term (enosc: 0.5 + a normalization; here
@@ -266,8 +303,8 @@ static void en_block(uint32_t vi, const voice_t *v, int16_t *buf)
 {
     ensemble_t *e = &eno[vi];
     struct { uint32_t inc, ta, wa; int32_t g, gs; uint8_t k, m; } mb[2u * NEO];
-    int32_t acc[EN_SUB], x, bq, dcur, dacc = 0;
-    uint32_t base = v->osc.inc, wt, wk, tt, tk, w, t, r, a, sum = 0, atten, amp[NEO], k, m, nm = 0, i, sb, d2;
+    int32_t acc[BLOCK], x, bq, dcur, dacc = 0;
+    uint32_t base = v->osc.inc, wt, wk, tt, tk, w, t, r, a, sum = 0, atten, amp[NEO], k, m, nm = 0, i, d2;
     if (e->strike) {                                 /* (a hit: every phase at the sine's zero, rising) */
         e->strike = 0;
         for (k = 0; k < NEO; k++) {
@@ -351,14 +388,11 @@ static void en_block(uint32_t vi, const voice_t *v, int16_t *buf)
         dcur = -dcur * 77 / 64;                      /* (enosc: x -1.2, accumulated) */
         dacc += dcur;
     }
-    for (sb = 0; sb < BLOCK; sb += EN_SUB) {
-        memset(acc, 0, sizeof acc);
-        for (i = 0; i < nm; i++) {
-            en_osc_t *o = &e->o[mb[i].k];
-            en_osc(&o->ph[mb[i].m], &o->fb[mb[i].m], mb[i].inc, tt, mb[i].ta, wt, mb[i].wa, mb[i].g + mb[i].gs * (int32_t)sb,
-                   mb[i].gs, acc, EN_SUB);
-        }
-        for (i = 0; i < EN_SUB; i++)
-            buf[sb + i] = (int16_t)sat16(acc[i]);
+    memset(acc, 0, sizeof acc);                      /* (1.4: the whole block in one pass: no buffers but acc) */
+    for (i = 0; i < nm; i++) {
+        en_osc_t *o = &e->o[mb[i].k];
+        en_osc(&o->ph[mb[i].m], &o->fb[mb[i].m], mb[i].inc, tt, mb[i].ta, wt, mb[i].wa, mb[i].g, mb[i].gs, acc, BLOCK);
     }
+    for (i = 0; i < BLOCK; i++)
+        buf[i] = (int16_t)sat16(acc[i]);
 }

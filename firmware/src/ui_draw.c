@@ -1652,7 +1652,7 @@ static void draw_config_help(int32_t y0)
     case CF_PCOUT:                                   /* 1.4: PROGRAM CHANGE OUT */
         y = help_item(y, "SENDS", "AUTO: its own number (P01 sends 0), or a program 0-127, or OFF");
         y = help_item(y, "CHANNEL", "GLOB: the global channel's. TX filter P on (MIDI)");
-        help_item(y, "WHEN", "AHEAD: as it's queued, so an Elektron keeps time. AT CHANGE: as it starts");
+        help_item(y, "WHEN", "AHEAD: as it's queued, so an Elektron keeps time. CHANGE: as it starts");
         break;
     case CF_UMIX:                                    /* 1.0, Phase 8: the voices in the USB audio's stereo mix */
     case CF_UMIX + 1:
@@ -2659,7 +2659,7 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
         cat(b, t, n);
         return;
     }
-    case VP_PCWHEN: put_str(b, v ? "AT CHANGE" : "AHEAD", n); return;
+    case VP_PCWHEN: put_str(b, v ? "CHANGE" : "AHEAD", n); return;
     case VP_LEDS: put_str(b, v == 0u ? "OFF" : v == 1u ? "LOW" : "HIGH", n); return;
     case VP_AUTOSAVE: case VP_ACCEL: put_str(b, v ? "ON" : "OFF", n); return;
     case VP_PKEEP: put_str(b, v ? "KEEP" : "DROP", n); return;

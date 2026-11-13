@@ -8,3 +8,7 @@
 #pragma once
 
 #define FM1_INLINE static inline __attribute__((always_inline))
+
+/* FM1_OPAQUE(x): x's value as the compiler can't follow it (an empty asm, no instruction). 1.4: ENSEMBLE's
+ * accumulator pointer, so its loop steps a pointer and doesn't rebuild an index and a base from the stack each sample */
+#define FM1_OPAQUE(x) __asm__("" : "+r"(x))

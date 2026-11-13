@@ -12210,7 +12210,7 @@ static void phase_140_pc(void)
     pc_until(22);
     pc_run(50);
     check(sq.active == 22u && pc_gotn == 0u, "1.4 PC OUT: P23 OFF sends none");
-    /* AT CHANGE: when the pattern starts */
+    /* CHANGE: when the pattern starts */
     vp_set(VP_PCWHEN, PCW_CHANGE);
     pc_gotn = 0;
     seq_set_next_pattern(23);
@@ -12219,7 +12219,7 @@ static void phase_140_pc(void)
     pc_until(23);
     pc_run(5);
     check(ok && pc_gotn == 1u && pc_got[0] == (4u << 8 | 23u) && pc_at[0] == 23u,
-          "1.4 PC OUT: AT CHANGE, program 23 as P24 starts");
+          "1.4 PC OUT: CHANGE, program 23 as P24 starts");
     seq_stop_now();
     /* a song, AHEAD: each row's program goes out while the row before plays (P25 x2, P26, then the first again) */
     vp_set(VP_PCWHEN, PCW_AHEAD);
