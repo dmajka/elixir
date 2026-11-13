@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Elixir: measures of the reverb's impulse responses (docs/TO_DO_REVERBS.md step 0), from tests/bench/reverb_bench.c's
+"""Elixir: measures of the reverb's impulse responses (docs/completed/TO_DO_REVERBS.md step 0), from tests/bench/reverb_bench.c's
 ir_<MODEL>_s<SIZE>.wav (stereo, 32-bit float, the return at LEVEL 1 to an impulse of 4.0) and irq_ (to 0.5).
 
   .venv/bin/python tools/reverb_measures.py build/rev/          the table

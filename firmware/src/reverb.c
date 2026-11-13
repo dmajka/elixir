@@ -7,7 +7,11 @@
  * samples (CTL); here a block is the engine's BLOCK (64): the drifts' increments are per block, and HALL's half
  * rate block (HL_NC) is 32 samples. Felucca's comments, abridged where they spoke of its other effects. */
 
-#define NREV 4u                          /* the models (22: PLATE the fourth) */
+#ifndef REV_LOFI
+#define REV_LOFI 0                       /* 1.4: LOFI (type 4) built but off: its sound is still open
+                                          * (docs/TO_DO_REVERBS_2.md); the bench builds it with -DREV_LOFI=1 */
+#endif
+#define NREV (4u + REV_LOFI)             /* the models (22: PLATE the fourth; LOFI the fifth) */
 static inline int32_t mulq15(int32_t a, int32_t b) { return (a * b) >> 15; }
 /* m / 2^sh rounded towards zero (a product that feeds back must not floor: a loop of floors holds an offset and a
  * little noise for ever) */
@@ -569,6 +573,174 @@ static void rev_plate(const int32_t *in_, int32_t *out, uint32_t n)
     hl.side = 1;
 }
 
+#if REV_LOFI
+/* LOFI (type 4, 1.4): a degraded reverb (after what the Pladask Elektrisk Draume and the Caroline Meteore do, our
+ * own model): a small 4-line FDN run on a slow, coarse, wobbly clock, each pass round it a little dirtier. The send
+ * -> a one-pole (the only anti-alias: the folding is the character) -> sampled every tick of the clock (fs / R, R 2
+ * .. 16 from SIZE, fractional, gliding: a sweep while it rings bends the tail's pitch, and the same lines last R / 2
+ * times longer at a lower clock: longer, darker, grainier) -> the dwell, a soft clip -> 2 allpass diffusers (a
+ * smear) -> the 4 lines (a Hadamard matrix between them, each line's gain from its length: the same decay in ticks,
+ * so in seconds it follows the clock) -> each line's write: a one-pole (DAMP: darker a pass), a low cut (no DC in a
+ * runaway), a soft clip (bounds HAVOC), and the bits cut (DAMP: 15 -> ~6 bits, towards zero: the tail decays into
+ * grit and gates off). The clock wobbles by a slow smoothed random (DAMP: deeper): the tail's pitch drifts like warped
+ * tape. Out held between ticks (the stair-steps' aliases) or between ticks, mid and side. SPACE = HAVOC: the loop's
+ * gain above 1 into the soft clips: the tail swells to a drone and holds, released it collapses. Its lines in ROOM's
+ * combs and PLATE's buffer, its diffusers in ROOM's allpasses (no RAM of its own) */
+#ifndef LF_L0
+#define LF_L0 557
+#define LF_L1 709
+#define LF_L2 877
+#define LF_L3 1069
+#endif
+#ifndef LF_RT
+#define LF_RT 22050                      /* the decay: RT60 in ticks (1 s at R 2, 8 s at R 16) */
+#endif
+#ifndef LF_DRIVE
+#define LF_DRIVE (2 * 4096)              /* the dwell (Q12) */
+#endif
+#ifndef LF_BITS
+#define LF_BITS 6                        /* the bits cut at DAMP 127 (of a line's 16) */
+#endif
+#ifndef LF_WOB
+#define LF_WOB 3                         /* the clock's wobble at DAMP 127, % (a fifth of it at 0) */
+#endif
+#ifndef LF_LIN
+#define LF_LIN 0                         /* the output: 0 held, 1 between ticks */
+#endif
+#ifndef LF_HAVOC
+#define LF_HAVOC 35000                   /* SPACE: the loop's gain (Q15, ~1.07) */
+#endif
+#ifndef LF_OUT
+#define LF_OUT 4                         /* the output's gain, / 8 (PLATE's level) */
+#endif
+#ifndef LF_S0
+#define LF_S0 65                         /* SIZE 0's clock: SIZE runs from this one's (R ~5.7) to 127's (R 16) */
+#endif
+#ifndef LF_FUZZ
+#define LF_FUZZ 0                        /* DAMP: 0 the bits, 1 a fuzz on the return, 2 a drive in the loop */
+#endif
+#ifndef LF_AA
+#define LF_AA 16384                      /* the send's one-pole at most (Q15: ~4.6 kHz); less at a slower clock */
+#endif
+#define LF_D0 113u
+#define LF_D1 337u
+static const uint16_t LF_LEN[4] = {LF_L0, LF_L1, LF_L2, LF_L3};
+_Static_assert(LF_L0 + LF_L2 <= sizeof rev_comb / 2u && LF_L1 + LF_L3 <= sizeof pl_buf / 2u &&
+               LF_D0 + LF_D1 <= sizeof rev_u.ap / 2u, "LOFI in the shared buffers");
+static struct {
+    uint32_t ph, inc;                    /* the clock (Q16 a tick), its increment (glides to SIZE's) */
+    int32_t a;                           /* the send's one-pole */
+    int32_t m0, m1, s0, s1;              /* the last two ticks' mid and side */
+    int32_t lp[4], hp[4], le[4], he[4];  /* the lines' low-passes, low cuts, their steps' remainders */
+    int16_t g[4];                        /* their gains (Q15; 0: not yet) */
+    uint16_t i[4], d[2];                 /* the lines' and diffusers' indices */
+    uint32_t rn;                         /* the wobble's random */
+    int32_t wt, wb;                      /* .. its target, its smoothed value (Q15) */
+    int32_t fz, rz;                      /* LF_FUZZ: the drive (Q4), its reciprocal (Q15, x 16) */
+} lf;
+static int16_t *lf_line(uint32_t k)
+{
+    return k == 0u ? rev_comb : k == 1u ? pl_buf : k == 2u ? rev_comb + LF_L0 : pl_buf + LF_L1;
+}
+static inline int32_t lf_ap(int16_t *b, uint16_t *j, uint32_t n, int32_t x)   /* a diffuser, g 0.625 */
+{
+    int32_t y = b[*j], v = x + sh_tz(y * 20480, 15);
+    b[*j] = (int16_t)clamp32(v, -32768, 32767);
+    *j = (uint16_t)(*j + 1u == n ? 0u : *j + 1u);
+    return y - sh_tz(v * 20480, 15);
+}
+/* a tick of the tank: x in (Q13) -> mid and side out */
+static __attribute__((noinline)) void lf_tick(int32_t x, int32_t kl, uint32_t qs, int32_t *mo, int32_t *so)
+{
+    int32_t y[4], h[4], k, e;
+    x = lf_ap(rev_ap, &lf.d[0], LF_D0, x);
+    x = lf_ap(rev_ap + LF_D0, &lf.d[1], LF_D1, x);
+    for (k = 0; k < 4; k++)
+        y[k] = lf_line((uint32_t)k)[lf.i[k]];
+#if LF_FUZZ == 1
+    {                                                   /* (the return through a fuzz, left and right) */
+        int32_t fl = sh_tz(softclip(((y[0] + y[2]) * 8 * lf.fz) >> 4), 3);
+        int32_t fr = sh_tz(softclip(((y[1] + y[3]) * 8 * lf.fz) >> 4), 3);
+        *mo = sh_tz((fl + fr) * lf.rz, 16), *so = sh_tz((fl - fr) * lf.rz, 16);   /* (x 1/2 .. ~1/5) */
+    }
+#else
+    *mo = y[0] + y[1] + y[2] + y[3];
+    *so = y[0] - y[1] + y[2] - y[3];
+#endif
+    h[0] = (y[0] + y[1] + y[2] + y[3]) >> 1;            /* (Hadamard / 2: orthogonal) */
+    h[1] = (y[0] - y[1] + y[2] - y[3]) >> 1;
+    h[2] = (y[0] + y[1] - y[2] - y[3]) >> 1;
+    h[3] = (y[0] - y[1] - y[2] + y[3]) >> 1;
+    for (k = 0; k < 4; k++) {
+        int16_t *b = lf_line((uint32_t)k);
+        int32_t g = space_on ? LF_HAVOC : lf.g[k];
+        int32_t v = sh_tz(h[k] * g, 15) + ((k & 1) ? -x : x);
+        e = (v - lf.lp[k]) * kl + lf.le[k];             /* (DAMP: darker a pass; the low-pass and the low cut keep */
+        lf.le[k] = e & 32767, lf.lp[k] += e >> 15;      /* .. their steps' remainders: no offset held) */
+        v = lf.lp[k];
+        e = v - lf.hp[k] + lf.he[k];
+        lf.he[k] = e & 63, lf.hp[k] += e >> 6;
+        v -= lf.hp[k];
+#if LF_FUZZ == 2
+        v = sh_tz(sh_tz(softclip((v * 8 * lf.fz) >> 4), 3) * lf.rz, 15);   /* (driven, and back down: a loud tail
+                                                         * squashed, a quiet one as it was) */
+#else
+        v = sh_tz(softclip(v << 3), 3);                 /* (Q13 -> Q16 and back: bounded at +-2; towards zero: a
+                                                         * floor here held a limit cycle) */
+#endif
+        v = sh_tz(v, qs) << qs;                         /* (the bits) */
+        b[lf.i[k]] = (int16_t)clamp32(v, -32768, 32767);
+        lf.i[k] = (uint16_t)(lf.i[k] + 1u == LF_LEN[k] ? 0u : lf.i[k] + 1u);
+    }
+}
+static __attribute__((noinline)) void rev_lofi(const int32_t *in_, int32_t *out, uint32_t n)
+{
+    uint32_t i, k, inc, d = rv.damp, qs = (d * LF_BITS + 63u) / 127u, ph = lf.ph;
+    int32_t kl = 32767 - (int32_t)d * 150, a = lf.a, w, ka;
+    if (!lf.g[0]) {                                     /* (the gains: RT60 LF_RT ticks: 2^(-len 3 log2(10) / LF_RT)) */
+        for (k = 0; k < 4u; k++)
+            lf.g[k] = (int16_t)exp2_neg((uint32_t)(((uint64_t)LF_LEN[k] * 653033u) / LF_RT));   /* (3 log2 10, Q16) */
+        lf.rn = 0x2545F491u;
+    }
+#if LF_FUZZ
+    lf.fz = 16 + (int32_t)d * (LF_FUZZ == 1 ? 240 : 112) / 127;   /* (x1 .. x16, x1 .. x8) */
+    lf.rz = LF_FUZZ == 1 ? 32768 - (int32_t)d * 160 : 32768 * 16 / lf.fz;   /* (1: the return's gain, Q15) */
+    qs = 2u, kl = 32767 - 64 * 150;                     /* (DAMP is the fuzz: the bits and the darkening fixed) */
+#endif
+    inc = exp2_neg((LF_S0 + (uint32_t)rv.size * (127u - LF_S0) / 127u) * 3u * 65536u / 127u);   /* (Q15 0.5 .. 1/16 = Q16 the ticks a sample) */
+    if (!lf.inc)
+        lf.inc = inc;
+    lf.inc += (uint32_t)clamp32((int32_t)(inc - lf.inc), -48, 48);   /* (glides: a SIZE sweep bends the pitch) */
+    lf.rn ^= lf.rn << 13, lf.rn ^= lf.rn >> 17, lf.rn ^= lf.rn << 5;
+    if ((lf.rn >> 24) < 24u)                            /* (a new target now and then: ~every 10 blocks) */
+        lf.wt = (int32_t)(lf.rn & 65535u) - 32768;
+    lf.wb += (lf.wt - lf.wb) >> 4;
+    w = (int32_t)(LF_WOB * 32768 / 100 / 5) + (int32_t)((LF_WOB * 32768 / 100 * 4 / 5) * d / 127u);
+    inc = (uint32_t)((int32_t)lf.inc + (int32_t)(((int64_t)lf.inc * ((lf.wb * w) >> 15)) >> 15));
+    ka = (int32_t)inc < LF_AA ? (int32_t)inc : LF_AA;  /* (the send's one-pole: ~the tick rate / 2 pi) */
+    for (i = 0; i < n; i++) {
+        a += sh_tz((clamp32(in_[i], -65535, 65535) - a) * ka, 15);
+        ph += inc;
+        if (ph >= 65536u) {
+            int32_t m, s;
+            ph -= 65536u;
+            lf_tick(softclip_in(a, LF_DRIVE) >> 3, kl, qs, &m, &s);
+            lf.m0 = lf.m1, lf.s0 = lf.s1, lf.m1 = (m * LF_OUT) >> 3, lf.s1 = (s * LF_OUT) >> 3;
+        }
+#if LF_LIN
+        out[i] += lf.m0 + (int32_t)(((int64_t)(lf.m1 - lf.m0) * (int32_t)ph) >> 16);
+        rev_side[i] = lf.s0 + (int32_t)(((int64_t)(lf.s1 - lf.s0) * (int32_t)ph) >> 16);
+#else
+        out[i] += lf.m1;
+        rev_side[i] = lf.s1;
+#endif
+    }
+    lf.ph = ph, lf.a = a;
+    hl.side = 1;
+}
+
+#endif
+
 /* the reverb's buffers and states to silence (the model changed) */
 static void rev_clear(void)
 {
@@ -586,10 +758,20 @@ static void rev_clear(void)
     for (i = 0; i < sizeof pl_buf / 2u; i++)
         pl_buf[i] = 0;
     plt.lp1 = plt.lp2 = plt.x = plt.m = plt.s = 0;
+#if REV_LOFI
+    for (i = 0; i < 4u; i++)
+        lf.lp[i] = lf.hp[i] = lf.le[i] = lf.he[i] = 0;
+    lf.a = lf.m0 = lf.m1 = lf.s0 = lf.s1 = 0;
+#endif
 }
 
 static void rev_model(const int32_t *in_, int32_t *out, uint32_t n)   /* the model running, added to out */
 {
+#if REV_LOFI
+    if (rv.rtype == 4u)
+        rev_lofi(in_, out, n);
+    else
+#endif
     if (rv.rtype == 3u)
         rev_plate(in_, out, n);
     else if (rv.rtype == 2u)

@@ -1,7 +1,8 @@
-/* Elixir: the reverb's models (1.4, docs/TO_DO_REVERBS.md step 0): a hash per model (the bit-identical check) and
+/* Elixir: the reverb's models (1.4, docs/completed/TO_DO_REVERBS.md step 0): a hash per model (the bit-identical check) and
  * WAVs to listen to and measure.
  *   cc -O2 -w -I build/gen -I firmware/src -I tests tests/bench/reverb_bench.c -o build/reverb_bench
  *   build/reverb_bench                   the hashes (one per model the case starts on)
+ *   (-DREV_LOFI=1: LOFI as a fifth model, and build/reverb_bench lofi DIR TAG its listening set, -DLF_*: its variants)
  *   build/reverb_bench wav build/rev/    the WAVs (the directory must exist), then
  *   .venv/bin/python tools/reverb_measures.py build/rev/
  * The hash: each case a model, SIZE, DAMP and LEVEL at random, a few hundred blocks of noise and hits (some loud
@@ -35,7 +36,7 @@ static void hash32(const int32_t *b, uint32_t n)
         H *= 1099511628211ull;
     }
 }
-static const char *const NAME[NREV] = {"ROOM", "SPRING", "HALL", "PLATE"};
+static const char *const NAME[5] = {"ROOM", "SPRING", "HALL", "PLATE", "LOFI"};
 
 /* the reverb from silence, model m (as after a model change; the states' memsets: a fresh boot's zeros) */
 static void rv_reset(uint32_t m, uint32_t size, uint32_t damp, int32_t level)
@@ -44,6 +45,9 @@ static void rv_reset(uint32_t m, uint32_t size, uint32_t damp, int32_t level)
     memset(&hl, 0, sizeof hl);
     memset(&plt, 0, sizeof plt);
     memset(&spr, 0, sizeof spr);
+#if REV_LOFI
+    memset(&lf, 0, sizeof lf);
+#endif
     rev_clear();
     rev_ok[0] = rev_ok[1] = 0;
     space_on = 0;
@@ -74,6 +78,9 @@ static void sig_in(int32_t *b, uint32_t blk, uint32_t lvl)
     }
 }
 
+#ifndef NOTHER
+#define NOTHER NREV                       /* (the models a case switches among: 4 for 1.4's step-1 hashes) */
+#endif
 static uint32_t slept;                    /* cases that reached sleep (a check the hash covers it) */
 static uint64_t bench_model(uint32_t m, uint32_t ncase)
 {
@@ -81,7 +88,7 @@ static uint64_t bench_model(uint32_t m, uint32_t ncase)
     uint32_t c, b, ok;
     H = 1469598103934665603ull;
     for (c = 0; c < ncase; c++) {
-        uint32_t lvl = 1u + c % 4u, other = (m + 1u + (rnd() >> 16) % (NREV - 1u)) % NREV;
+        uint32_t lvl = 1u + c % 4u, other = (m + 1u + (rnd() >> 16) % (NOTHER - 1u)) % NOTHER;
         rv_reset(m, knob(), knob(), (int32_t)(rnd() >> 17));
         for (b = 0; b < 1610u; b++) {
             switch (b) {                             /* (one input at a time) */
@@ -219,10 +226,76 @@ static void wavs(const char *dir)
     printf("WAVs in %s\n", dir);
 }
 
+#if REV_LOFI
+/* LOFI's listening set (docs/TO_DO_REVERBS_2.md): the beat at SIZE 0 / 32 / 64 / 100 / 127, DAMP 10 and 110;
+ * its IR (loud) at the same; sweep: the beat's first bar then SIZE swept 100 -> 20 -> 127 while it rings; havoc: the
+ * beat with SPACE held over its second bar, then let go */
+static void lofi_wavs(const char *dir, const char *tag)
+{
+    static const uint8_t SZ[] = {0, 32, 64, 100, 127}, DP[] = {10, 110};
+    char path[512];
+    int32_t in[BLOCK];
+    uint32_t z, q, n, i, v;
+    render_dry();
+    for (z = 0; z < sizeof SZ; z++)
+        for (q = 0; q < sizeof DP; q++) {
+            rv_reset(4, SZ[z], DP[q], 32767);
+            for (n = 0; n + BLOCK <= IRLEN; n += BLOCK) {
+                for (i = 0; i < BLOCK; i++)
+                    in[i] = n + i == 0u ? 32767 : 0;
+                rv_block(in);
+                for (i = 0; i < BLOCK; i++) {
+                    irb[2u * (n + i)] = rev_ok[0] ? rev_ret[0][0][i] / 32768.0f : 0.0f;
+                    irb[2u * (n + i) + 1u] = rev_ok[0] ? rev_ret[0][1][i] / 32768.0f : 0.0f;
+                }
+            }
+            snprintf(path, sizeof path, "%s%sir_s%u_d%u.wav", dir, tag, SZ[z], DP[q]);
+            wav_write(path, irb, IRLEN, 1);
+            rv_reset(4, SZ[z], DP[q], 25800);
+            for (n = 0; n + BLOCK <= BEAT + TAIL; n += BLOCK) {
+                for (i = 0; i < BLOCK; i++)
+                    in[i] = (dry[2u * (n + i)] + dry[2u * (n + i) + 1u]) / 4;
+                rv_block(in);
+                for (i = 0; i < 2u * BLOCK; i++)
+                    mixo[2u * n + i] = (int16_t)sat16(dry[2u * n + i] + (rev_ok[0] ? rev_ret[0][i & 1u][i >> 1] : 0));
+            }
+            snprintf(path, sizeof path, "%s%sbeat_s%u_d%u.wav", dir, tag, SZ[z], DP[q]);
+            wav_write(path, mixo, BEAT + TAIL, 0);
+        }
+    for (v = 0; v < 2u; v++) {                      /* (0: the sweep, 1: HAVOC) */
+        rv_reset(4, 64, 64, 25800);
+        for (n = 0; n + BLOCK <= BEAT + TAIL; n += BLOCK) {
+            uint32_t t = n * 100u / FS;              /* (centiseconds) */
+            int beat = v ? n < BEAT : n < BEAT / 2u;
+            if (!v && t >= 200u) {                   /* (100 at 2.0 s -> 20 at 3.5 s -> 127 at 5.5 s) */
+                rv.size = (uint8_t)(t < 350u ? 100u - (t - 200u) * 80u / 150u : t < 550u ? 20u + (t - 350u) * 107u / 200u : 127u);
+            }
+            if (v)
+                space_on = n >= BEAT / 2u && n < BEAT;
+            for (i = 0; i < BLOCK; i++)
+                in[i] = beat ? (dry[2u * (n + i)] + dry[2u * (n + i) + 1u]) / 4 : 0;
+            rv_block(in);
+            for (i = 0; i < 2u * BLOCK; i++)
+                mixo[2u * n + i] = (int16_t)sat16((beat ? dry[2u * n + i] : 0) + (rev_ok[0] ? rev_ret[0][i & 1u][i >> 1] : 0));
+        }
+        snprintf(path, sizeof path, "%s%s%s.wav", dir, tag, v ? "havoc" : "sweep");
+        wav_write(path, mixo, BEAT + TAIL, 0);
+    }
+    printf("LOFI WAVs in %s (%s)\n", dir, tag);
+}
+
+#endif
+
 int main(int argc, char **argv)
 {
     uint32_t m, ncase = 40;
     tables_unpack();
+#if REV_LOFI
+    if (argc > 1 && !strcmp(argv[1], "lofi")) {
+        lofi_wavs(argc > 2 ? argv[2] : "build/lofi/", argc > 3 ? argv[3] : "");
+        return 0;
+    }
+#endif
     if (argc > 1 && !strcmp(argv[1], "wav")) {
         wavs(argc > 2 ? argv[2] : "build/rev/");
         return 0;

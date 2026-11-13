@@ -73,7 +73,11 @@ static const char *const L_CSRC[] = {"MIX", "D1", "D2", "D3", "SN", "CY", "HH"};
 static const char *const L_PATMODE[] = {"OFF", "AUTO"};
 static const char *const L_FLAM[] = {"OFF", "x2", "x3", "x4", "x6", "x8"};
 static const char *const L_OFFON[] = {"OFF", "ON"};
-static const char *const L_REVMODEL[] = {"ROOM", "SPRING", "HALL", "PLATE"};
+static const char *const L_REVMODEL[] = {"ROOM", "SPRING", "HALL", "PLATE",
+#if REV_LOFI
+                                          "LOFI"
+#endif
+};
 static const char *const L_SHAPE[] = {"LXR", "FOLD", "CLIP", "ASYM", "RECTIFY", "FUZZ", "TAPE", "SINE FOLD", "BITE"};
 static const char *const L_XMODE[] = {"DUCK", "FILTER", "RING"};
 static const char *const L_CHOKE[] = {"OFF", "1", "2", "3", "4"};
