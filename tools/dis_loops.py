@@ -48,7 +48,7 @@ def shortest(ins, tg, end):
         m = re.search(r"goto -?\d+ <[^>]*: ([0-9a-f]+) >", t)
         if m:
             b = int(m.group(1), 16)
-            if tg <= b <= end:
+            if tg <= b <= end and b in text:
                 outs.append(b)
         if not (t.startswith("goto") or "= [sp++]" in t and "pc" in t or t.startswith("rts")) and a in nxt:
             outs.append(nxt[a])

@@ -427,11 +427,22 @@ PL_ENGINE fm_render(pl_fm_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, u
 }
 
 /* ------------------------------------------------------------ additive --- */
-/* HarmonicOscillator<12>: a batch of 12 harmonics from k1, by the recurrence on sin(phase), Q28 inside */
+/* HarmonicOscillator<12>: a batch of 12 harmonics from k1, by the recurrence on sin(phase), Q28 inside.
+ * 1.4, bit-identical: the 12 harmonics unrolled (no index, compare or register moves a harmonic), one noinline function
+ * per k1 / add (constants: the k1 == 1 batch skips its two extra sines). Tried, worse by 3-11 instructions a sample
+ * (register choices): the ramps' setup skipped when still (in here, or out in a helper with the ramps in the struct). */
 typedef struct { uint32_t ph, f; int32_t amp[12]; } pl_hosc_t;
-static void hosc_render(pl_hosc_t *o, int k1, uint32_t f, const int32_t *amps, int32_t *out, int add, uint32_t n)
+#define HOSC_H(k) do {                                                                 \
+        int32_t t_ = cur;                                                              \
+        a[k] += sa[k];                                                                 \
+        sum += (int32_t)(((int64_t)a[k] * cur) >> 28);                                  \
+        cur = (int32_t)(((int64_t)two_x * cur) >> 28) - prev;                           \
+        prev = t_;                                                                     \
+    } while (0)
+static inline __attribute__((always_inline)) void hosc_body(pl_hosc_t *o, const int k1, uint32_t f, const int32_t *amps,
+                                                            int32_t *out, const int add, uint32_t n)
 {
-    int32_t sa[12], sf;
+    int32_t sa[12], sf, *a = o->amp;
     uint32_t i;
     int k;
     if (f > 0x80000000u)
@@ -454,13 +465,8 @@ static void hosc_render(pl_hosc_t *o, int k1, uint32_t f, const int32_t *amps, i
             prev = pl_sin(o->ph * (uint32_t)(k1 - 1) + 0x40000000u) << 4;
             cur = pl_sin(o->ph * (uint32_t)k1) << 4;
         }
-        for (k = 0; k < 12; k++) {
-            int32_t t = cur;
-            o->amp[k] += sa[k];
-            sum += (int32_t)(((int64_t)o->amp[k] * cur) >> 28);
-            cur = (int32_t)(((int64_t)two_x * cur) >> 28) - prev;
-            prev = t;
-        }
+        HOSC_H(0); HOSC_H(1); HOSC_H(2); HOSC_H(3); HOSC_H(4); HOSC_H(5);
+        HOSC_H(6); HOSC_H(7); HOSC_H(8); HOSC_H(9); HOSC_H(10); HOSC_H(11);
         out[i] = add ? out[i] + sum : sum;
     }
     for (k = 0; k < 12; k++)
@@ -468,7 +474,19 @@ static void hosc_render(pl_hosc_t *o, int k1, uint32_t f, const int32_t *amps, i
                                            : PL1 - (int32_t)(((uint64_t)f * (uint32_t)(k1 + k)) >> 7)));
     o->f = f;
 }
-typedef struct { pl_hosc_t h[3]; int32_t amps[36]; } pl_add_t;
+#undef HOSC_H
+static __attribute__((noinline)) void hosc_lo(pl_hosc_t *o, uint32_t f, const int32_t *amps, int32_t *out, uint32_t n)
+{
+    hosc_body(o, 1, f, amps, out, 0, n);
+}
+static __attribute__((noinline)) void hosc_hi(pl_hosc_t *o, uint32_t f, const int32_t *amps, int32_t *out, uint32_t n)
+{
+    hosc_body(o, 13, f, amps, out, 1, n);
+}
+/* 1.4: an amps set's last inputs, and whether its last call left it as it was (then, the same inputs again, it would
+ * again: skipped; with still knobs most settings settle within ~15 sub-blocks, the rest cycle and keep computing) */
+typedef struct { int32_t t, s, b, still; } pl_akey_t;
+typedef struct { pl_hosc_t h[3]; int32_t amps[36]; pl_akey_t key[2]; } pl_add_t;
 static void add_init(pl_add_t *d) { memset(d, 0, sizeof *d); }
 static void add_amps(int32_t centroid, int32_t slope, int32_t bumps, int32_t *amps, const uint8_t *idx, int nh)
 {
@@ -494,6 +512,24 @@ static void add_amps(int32_t centroid, int32_t slope, int32_t bumps, int32_t *am
     for (i = 0; i < nh; i++)
         amps[idx[i]] = pm(amps[idx[i]], inv);
 }
+/* add_amps, skipped while it would change nothing */
+static void add_amps_kept(pl_akey_t *k, int32_t centroid, int32_t slope, int32_t bumps, int32_t *amps, const uint8_t *idx,
+                         int nh, int nw)
+{
+    int32_t old[24];
+    int i, same = 1;
+    if (k->still && k->t == centroid && k->s == slope && k->b == bumps)
+        return;
+    for (i = 0; i < nw; i++)
+        old[i] = amps[i];
+    add_amps(centroid, slope, bumps, amps, idx, nh);
+    for (i = 0; i < nw; i++)
+        same &= old[i] == amps[i];
+    k->t = centroid;
+    k->s = slope;
+    k->b = bumps;
+    k->still = same;
+}
 PL_ENGINE add_render(pl_add_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
 {
     static const uint8_t ints[24] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23};
@@ -503,15 +539,15 @@ PL_ENGINE add_render(pl_add_t *d, const pl_par_t *p, int32_t *out, int32_t *aux,
     if (p->only == PLS_AUX) {
         memset(out, 0, n * sizeof out[0]);
     } else {
-        add_amps(p->timbre, slope, bumps, d->amps, ints, 24);
-        hosc_render(&d->h[0], 1, p->f0, d->amps, out, 0, n);
-        hosc_render(&d->h[1], 13, p->f0, d->amps + 12, out, 1, n);
+        add_amps_kept(&d->key[0], p->timbre, slope, bumps, d->amps, ints, 24, 24);
+        hosc_lo(&d->h[0], p->f0, d->amps, out, n);
+        hosc_hi(&d->h[1], p->f0, d->amps + 12, out, n);
     }
     if (p->only == PLS_OUT) {
         memset(aux, 0, n * sizeof aux[0]);
     } else {
-        add_amps(p->timbre, slope, bumps, d->amps + 24, organ, 8);
-        hosc_render(&d->h[2], 1, p->f0, d->amps + 24, aux, 0, n);
+        add_amps_kept(&d->key[1], p->timbre, slope, bumps, d->amps + 24, organ, 8, 12);
+        hosc_lo(&d->h[2], p->f0, d->amps + 24, aux, n);
     }
 }
 
