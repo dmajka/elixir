@@ -2164,15 +2164,15 @@ FM-1 (RAIN is an estimate), as a share of the second core:
 
 | Model | What it is | Cost (% of the second core) | | Counts as one of the two |
 |---|---|---|---|---|
-| **P SD** | Plaits' analog snare | 24 (about 12 with Aux at 0 or 127) | ████████████ | yes |
 | **P ADDTV** | Plaits' additive | 23 (about 15 with Aux at 0) | ████████████ | yes |
-| **MODAL** | Rings' bells and plates | 20 | ██████████ | yes |
-| **P BD** | Plaits' analog kick | 20 (about 10 with Aux at 0 or 127) | ██████████ | yes |
-| **P VA** | Plaits' analog oscillators | 19 | ██████████ | yes |
-| **P HH** | Plaits' analog hi-hat | 17 (about 9 with Aux at 0 or 127) | █████████ | yes |
+| **P SD** | Plaits' analog snare | 18 (about 7 with Aux at 0 or 127) | █████████ | yes |
+| **P BD** | Plaits' analog kick | 18 (about 9 with Aux at 0 or 127) | █████████ | yes |
+| **MODAL** | Rings' bells and plates | 18 | █████████ | yes |
+| **P VA** | Plaits' analog oscillators | 18 | █████████ | yes |
+| **P HH** | Plaits' analog hi-hat | 17 (about 7 with Aux at 0 or 127) | █████████ | yes |
 | **P WSHAPE** | Plaits' wavefolder | 16 | ████████ | yes |
-| **P SWARM** | Plaits' swarm | 15 | ████████ | yes |
 | **P CHORD** | Plaits' chords | 14 | ███████ | yes |
+| **P SWARM** | Plaits' swarm | 13 | ███████ | yes |
 | **STRING** | Rings' string | 13 | ███████ | yes |
 | **P FM** | Plaits' FM | 13 | ███████ | yes |
 | **ENSEMBLE** | eight stacked sines | 9 (an estimate from 1.4; was 13) | █████ | no |
@@ -2186,10 +2186,11 @@ FM-1 (RAIN is an estimate), as a share of the second core:
 **A rule of thumb:** add up the numbers for the models on D1–D3. Up to about **45** is comfortable. Past about
 **50**, expect trouble, sooner when the delay, the reverb and the RING filter are busy too.
 
-For example, MODAL (20) + P SD (24) + RAIN (10) adds up to 54: too much. Any one of these brings it back:
+For example, MODAL (18) + P SD (18) + P BD (18) adds up to 54: too much. Any one of these brings it back:
 
-- **Set P SD's Aux to 0 or 127.** Only one of its two snares is then computed (54 → 42). The same goes for P BD and P HH.
-- **Swap the heaviest model for a lighter one** that does a similar job: Rings' STRING or FM in place of MODAL, or CLOUD in place of RAIN.
+- **Set P SD's Aux to 0 or 127.** Only one of its two snares is then computed (54 → 43). The same goes for P BD and P HH.
+- **Swap the heaviest model for a lighter one** that does a similar job: Rings' STRING or FM in place of MODAL, or
+  CLOUD in place of RAIN when it is the one pushing you over.
 - **Move the third voice back to LXR**, or to NOISE or a MICRO type, which cost next to nothing.
 
 To see where you stand, open CONFIG → LOAD while the pattern plays: the **D1-D3** line is the second core's work. If
