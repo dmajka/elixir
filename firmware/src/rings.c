@@ -562,7 +562,7 @@ static void fm_run(model_t *m, uint32_t f, int32_t s, int32_t b, int32_t d, int3
         mfb = m->ffb > 0 ? rg_mul(m->ffb, m->ffb, 18) : 0;  /* 0.25 fb^2 */
         mod = rg_sinefm(m->mph, rg_mul(mfb, m->prev, 16));
         car = rg_sinefm(m->cph, rg_mul(m->fma, mod, 16));
-        m->prev += (car - m->prev) / 10;
+        m->prev += div10(car - m->prev);
         g = RG_ONE + rg_mul(env_amt, (m->aenv >> 8) - RG_ONE, 16);
         m->gain += rg_mul(g - m->gain, 83886 + rg_mul(754975, m->fma, 16), 24);   /* 0.005 + 0.045 fm, Q24 */
         out[i] += rg_mul(car + mod, m->gain, 20);

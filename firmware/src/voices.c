@@ -581,14 +581,14 @@ static void drum_block(voice_t *v, int16_t *buf)     /* calcDrumVoiceSyncBlock *
 shape:
     if (v->shape == SH_LXR) {
         for (i = 0; i < BLOCK; i++) {                /* calcDistBlockFiltered: the shape smoothed (0.01 a sample) */
-            v->dks += ((v->dk << 8) - v->dks) / 100;
+            v->dks += div100((v->dk << 8) - v->dks);
             buf[i] = (int16_t)dist_sample(buf[i], v->dks >> 8);
         }
     } else {
         shape_block(v, buf);
     }
     for (i = 0; i < BLOCK; i++) {                    /* the mixer volume, smoothed (MixerPageFilter, 0.01) */
-        v->vol_s += ((v->vol << 9) - v->vol_s) / 100;
+        v->vol_s += div100((v->vol << 9) - v->vol_s);
         buf[i] = (int16_t)((buf[i] * (v->vol_s >> 9)) >> 15);
     }
 }

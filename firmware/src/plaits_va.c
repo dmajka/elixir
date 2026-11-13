@@ -3,7 +3,7 @@
  * VariableSawOscillator), waveshaping and 2-op FM. Phases Q24 (0 .. 1, as Plaits' floats), frequencies Q24. */
 
 /* the step of a ParameterInterpolator over n samples */
-static inline int32_t pl_ip(int32_t from, int32_t to, uint32_t n) { return (to - from) / (int32_t)n; }
+static inline int32_t pl_ip(int32_t from, int32_t to, uint32_t n) { return pl_divn(to - from, n); }
 
 /* ------------------------------------------------ variable shape osc --- */
 typedef struct { int32_t mph, sph, next, ppw, mf, sf, pw, ws; uint8_t high; } pl_vs_t;
@@ -14,23 +14,26 @@ static void vs_init(pl_vs_t *o)
     o->sf = 167772;                                  /* 0.01 */
 }
 /* ComputeNaiveSample: the phase's saw, morphed to square (sq) and triangle (tri) */
-static inline int32_t vs_naive(int32_t ph, int32_t pw, int32_t tri, int32_t sq)
+/* (1.4: c: the reciprocals of pw and 1 - pw, kept while pw stays: pl_div's numbers without its divide a sample) */
+static inline int32_t vs_div(int32_t a, pl_rcp_t *c, int32_t b) { pl_rcp_set(c, b); return pl_div_c(a, c); }
+static inline int32_t vs_naive(int32_t ph, int32_t pw, int32_t tri, int32_t sq, pl_rcp_t *c)
 {
     int32_t saw = ph, square = ph < pw ? 0 : PL1, t;
     saw += pm(square - saw, sq);
     if (tri) {
-        t = ph < pw ? pl_div(ph, pw) : PL1 - pl_div(ph - pw, PL1 - pw);
+        t = ph < pw ? vs_div(ph, &c[0], pw) : PL1 - vs_div(ph - pw, &c[1], PL1 - pw);
         saw += pm(t - saw, tri);
     }
     return saw;
 }
 /* (slope_up + slope_down) frequency, the triangle's step */
-static inline int32_t vs_tstep(int32_t f, int32_t pw) { return pl_div(f, pw) + pl_div(f, PL1 - pw); }
+static inline int32_t vs_tstep(int32_t f, int32_t pw, pl_rcp_t *c) { return vs_div(f, &c[0], pw) + vs_div(f, &c[1], PL1 - pw); }
 /* Render (sync: by mf, the master's frequency) */
 static void vs_render(pl_vs_t *o, int sync, int32_t mf, int32_t f, int32_t pw, int32_t ws, int32_t *out, uint32_t n)
 {
     int32_t smf, sff, spw, sws, ns = o->next;
     uint32_t i;
+    pl_rcp_t c[2] = {{0, 0, 0}, {0, 0, 0}};
     mf = pmin(mf, PL1 >> 2);
     f = pmin(f, PL1 >> 2);
     pw = f >= (PL1 >> 2) ? PL1 >> 1 : pclamp(pw, 2 * f, PL1 - 2 * f);
@@ -64,7 +67,7 @@ static void vs_render(pl_vs_t *o, int sync, int32_t mf, int32_t f, int32_t pw, i
                 }
                 if (!o->high && spr >= w)
                     tdr = 1;
-                val = vs_naive(spr, w, tri, sq);
+                val = vs_naive(spr, w, tri, sq, c);
                 ts -= pm(val, blep_this(rt));
                 ns -= pm(val, blep_next(rt));
             }
@@ -76,7 +79,7 @@ static void vs_render(pl_vs_t *o, int sync, int32_t mf, int32_t f, int32_t pw, i
                 if (o->sph < w)
                     break;
                 t = pclamp(pl_div(o->sph - w, o->ppw - w + fr), 0, PL1);
-                tst = tri ? pm(vs_tstep(fr, w), tri) : 0;
+                tst = tri ? pm(vs_tstep(fr, w, c), tri) : 0;
                 ts += pm(sq, blep_this(t));
                 ns += pm(sq, blep_next(t));
                 ts -= pm(tst, iblep_this(t));
@@ -89,7 +92,7 @@ static void vs_render(pl_vs_t *o, int sync, int32_t mf, int32_t f, int32_t pw, i
                     break;
                 o->sph -= PL1;
                 t = pclamp(pl_div(o->sph, fr), 0, PL1);
-                tst = tri ? pm(vs_tstep(fr, w), tri) : 0;
+                tst = tri ? pm(vs_tstep(fr, w, c), tri) : 0;
                 ts -= pm(PL1 - tri, blep_this(t));
                 ns -= pm(PL1 - tri, blep_next(t));
                 ts += pm(tst, iblep_this(t));
@@ -101,7 +104,7 @@ static void vs_render(pl_vs_t *o, int sync, int32_t mf, int32_t f, int32_t pw, i
             o->sph = pm(rt, fr);
             o->high = 0;
         }
-        ns += vs_naive(o->sph, w, tri, sq);
+        ns += vs_naive(o->sph, w, tri, sq, c);
         o->ppw = w;
         out[i] = 2 * ts - PL1;
     }
@@ -125,6 +128,7 @@ static void vsaw_render(pl_vsaw_t *o, int32_t f, int32_t pw, int32_t ws, int32_t
 {
     int32_t sff, spw, sws, ns = o->next;
     uint32_t i;
+    pl_rcp_t c[2] = {{0, 0, 0}, {0, 0, 0}};
     f = pmin(f, PL1 >> 2);
     pw = f >= (PL1 >> 2) ? PL1 >> 1 : pclamp(pw, 2 * f, PL1 - 2 * f);
     sff = pl_ip(o->f, f, n);
@@ -142,7 +146,7 @@ static void vsaw_render(pl_vsaw_t *o, int32_t f, int32_t pw, int32_t ws, int32_t
         notch = PL1 - o->ws;
         o->ph += fr;
         if (!o->high && o->ph >= w) {
-            int32_t tst = pm(vs_tstep(fr, w), tri), nt = pm(PL_NOTCH + PL1 - w, notch);
+            int32_t tst = pm(vs_tstep(fr, w, c), tri), nt = pm(PL_NOTCH + PL1 - w, notch);
             int32_t t = pclamp(pl_div(o->ph - w, o->ppw - w + fr), 0, PL1);
             ts += pm(nt, blep_this(t));
             ns += pm(nt, blep_next(t));
@@ -150,7 +154,7 @@ static void vsaw_render(pl_vsaw_t *o, int32_t f, int32_t pw, int32_t ws, int32_t
             ns -= pm(tst, iblep_next(t));
             o->high = 1;
         } else if (o->ph >= PL1) {
-            int32_t tst = pm(vs_tstep(fr, w), tri), nt = pm(PL_NOTCH + PL1, notch), t;
+            int32_t tst = pm(vs_tstep(fr, w, c), tri), nt = pm(PL_NOTCH + PL1, notch), t;
             o->ph -= PL1;
             t = pclamp(pl_div(o->ph, fr), 0, PL1);
             ts -= pm(nt, blep_this(t));
@@ -161,7 +165,7 @@ static void vsaw_render(pl_vsaw_t *o, int32_t f, int32_t pw, int32_t ws, int32_t
         }
         x = pm(o->ph < w ? o->ph : PL1 + PL_NOTCH, notch);
         if (tri)
-            x += pm(o->ph < w ? pl_div(o->ph, w) : PL1 - pl_div(o->ph - w, PL1 - w), tri);
+            x += pm(o->ph < w ? vs_div(o->ph, &c[0], w) : PL1 - vs_div(o->ph - w, &c[1], PL1 - w), tri);
         ns += x;
         o->ppw = w;
         out[i] = pm(2 * ts - PL1, 13981013);         /* / 1.2 */
@@ -198,7 +202,7 @@ static int32_t va_detune(int32_t h)                  /* ComputeDetuning: semiton
     r = iv[i] + (int32_t)(((int64_t)(iv[i + 1] - iv[i]) * pl_squash(pl_squash(fr))) >> 24);
     return neg ? -r : r;
 }
-static void va_render(pl_va_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
+PL_ENGINE va_render(pl_va_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
 {
     int32_t tmp[PLSUB], sa = pm(p->timbre, p->timbre), det = va_detune(p->harm), t = p->timbre, m = p->morph;
     int32_t pf = (int32_t)(p->f0 >> 8), af = (int32_t)(pl_note_f(p->note + det) >> 8);
@@ -248,6 +252,7 @@ static void slope_render(pl_slope_t *o, int32_t f, int32_t pw, int32_t *out, uin
 {
     int32_t sff, spw, ns = o->next;
     uint32_t i;
+    pl_rcp_t c[2] = {{0, 0, 0}, {0, 0, 0}};        /* (1.4: w's, 1 - w's: vs_naive's) */
     f = pclamp(f, 17, PL1 >> 2);
     pw = pclamp(pw, 2 * f, PL1 - 2 * f);
     sff = pl_ip(o->f, f, n);
@@ -260,7 +265,7 @@ static void slope_render(pl_slope_t *o, int32_t f, int32_t pw, int32_t *out, uin
         fr = o->f;
         w = o->pw;
         o->ph += fr;
-        disc = vs_tstep(fr, w);
+        disc = vs_tstep(fr, w, c);
         if (o->high ^ (o->ph < w)) {
             int32_t t = pl_div(o->ph - w, fr);
             ts -= pm(iblep_this(t), disc);
@@ -275,7 +280,7 @@ static void slope_render(pl_slope_t *o, int32_t f, int32_t pw, int32_t *out, uin
             ns += pm(iblep_next(t), disc);
             o->high = 1;
         }
-        ns += o->high ? pl_div(o->ph, w) : PL1 - pl_div(o->ph - w, PL1 - w);
+        ns += o->high ? vs_div(o->ph, &c[0], w) : PL1 - vs_div(o->ph - w, &c[1], PL1 - w);
         out[i] = 2 * ts - PL1;
     }
     o->f = f;
@@ -305,7 +310,7 @@ static int32_t ws_hermite(const int16_t *tb, int32_t idx)
     int32_t c = (x1 - xm1) >> 1, v = x0 - x1, w = c + v, a = w + v + ((x2 - x0) >> 1), bn = w + a;
     return pm(pm(pm(a, f) - bn, f) + c, f) + x0;
 }
-static void ws_render(pl_ws_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
+PL_ENGINE ws_render(pl_ws_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
 {
     int32_t f0 = (int32_t)(p->f0 >> 8), pw = pm(p->morph, 7549747) + (PL1 >> 1);   /* 0.45 */
     int32_t slope = 3 * PL1 + 5 * pabs(p->morph - (PL1 >> 1)), sa = 2 * pabs(p->harm - (PL1 >> 1));
@@ -364,7 +369,7 @@ static void fm_init(pl_fm_t *d)
     d->pcf = d->pmf = 5356535u;                      /* a0 */
 }
 static inline int32_t pl_sinpm(uint32_t ph, int32_t pmod) { return pl_sin(ph + ((uint32_t)pmod << 8)); }
-static void fm_render(pl_fm_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
+PL_ENGINE fm_render(pl_fm_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
 {
     int32_t note = p->note - (24 << 16), i24 = PL_FM_Q[0], ratio, mnote, hft, tam, tfb, sa, sf, scf, smf;
     uint32_t tmf, tcf, i;
@@ -381,8 +386,8 @@ static void fm_render(pl_fm_t *d, const pl_par_t *p, int32_t *out, int32_t *aux,
     tcf = pl_note_f(note);
     tam = pm(2 * pm(p->timbre, p->timbre), hft);
     tfb = 2 * p->morph - PL1;
-    scf = ((int32_t)tcf - (int32_t)d->pcf) / (int32_t)n;
-    smf = ((int32_t)tmf - (int32_t)d->pmf) / (int32_t)n;
+    scf = pl_divn((int32_t)tcf - (int32_t)d->pcf, n);
+    smf = pl_divn((int32_t)tmf - (int32_t)d->pmf, n);
     sa = pl_ip(d->amt, tam, n);
     sf = pl_ip(d->fb, tfb, n);
     for (i = 0; i < n; i++) {
@@ -436,7 +441,7 @@ static void hosc_render(pl_hosc_t *o, int k1, uint32_t f, const int32_t *amps, i
         int32_t att = fk >= 0x80000000ull ? 0 : PL1 - (int32_t)(fk >> 7);   /* 1 - 2 f k */
         sa[k] = pl_ip(o->amp[k], pm(amps[k], att), n);
     }
-    sf = ((int32_t)(f >> 1) - (int32_t)(o->f >> 1)) / (int32_t)n;   /* (halved: f up to 0.5) */
+    sf = pl_divn((int32_t)(f >> 1) - (int32_t)(o->f >> 1), n);   /* (halved: f up to 0.5) */
     for (i = 0; i < n; i++) {
         int32_t two_x, prev, cur, sum = 0;
         o->f += (uint32_t)(sf * 2);
@@ -489,7 +494,7 @@ static void add_amps(int32_t centroid, int32_t slope, int32_t bumps, int32_t *am
     for (i = 0; i < nh; i++)
         amps[idx[i]] = pm(amps[idx[i]], inv);
 }
-static void add_render(pl_add_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
+PL_ENGINE add_render(pl_add_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
 {
     static const uint8_t ints[24] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23};
     static const uint8_t organ[8] = {0, 1, 2, 3, 5, 7, 9, 11};
@@ -529,7 +534,7 @@ static int32_t wt_read(int x, int y, int z, int32_t pi, int32_t pf)
     return pm(pm(pm(a, pf) - bn, pf) + c, pf) + x0;
 }
 static inline int32_t wt_clamp(int32_t x) { return pclamp(16 * (x - (PL1 >> 1)), -(PL1 >> 1), PL1 >> 1) + (PL1 >> 1); }
-static void wt_render(pl_wt_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
+PL_ENGINE wt_render(pl_wt_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
 {
     int32_t q, lpc, f0 = (int32_t)(p->f0 >> 8), x, y, z, xf, yf, zf, sx, sy, sz, sf;
     uint32_t i;
@@ -547,7 +552,7 @@ static void wt_render(pl_wt_t *d, const pl_par_t *p, int32_t *out, int32_t *aux,
     sx = pl_ip(d->px, x, n);
     sy = pl_ip(d->py, y, n);
     sz = pl_ip(d->pz, z, n);
-    sf = ((int32_t)p->f0 - (int32_t)d->pf0) / (int32_t)n;
+    sf = pl_divn((int32_t)p->f0 - (int32_t)d->pf0, n);
     for (i = 0; i < n; i++) {
         int32_t g, cut, xi, yi, zi, x0, x1, y0, y1, z0, z1, pi, pf, a, b, c0, c1, mix, sh;
         uint32_t fq, r;
@@ -695,29 +700,36 @@ static void wto_render(pl_wto_t *o, int32_t f, int32_t amp, int32_t wf, int32_t 
     sf = pl_ip(o->f, f, n);
     sa = pl_ip(o->amp, a, n);
     sw = pl_ip(o->wf, wf, n);
-    for (i = 0; i < n; i++) {
-        int32_t cut, wi, wfr, pi, pf, x0, x1, s;
-        const int16_t *t0, *t1;
-        o->f += sf;
-        o->amp += sa;
-        o->wf += sw;
-        cut = pmin(o->f * 128, PL1);
-        o->ph += o->f;
-        if (o->ph >= PL1)
-            o->ph -= PL1;
-        wi = o->wf >> 24;
-        wfr = o->wf & 0xFFFFFF;
-        pi = o->ph >> 17;
-        pf = (o->ph & 0x1FFFF) << 7;
-        t0 = PL_CHW_AT(wi) + pi;
-        t1 = PL_CHW_AT(wi + 1) + pi;
-        x0 = (t0[0] << 12) + pm((t0[1] - t0[0]) << 12, pf);
-        x1 = (t1[0] << 12) + pm((t1[1] - t1[0]) << 12, pf);
-        s = x0 + pm(x1 - x0, wfr);
-        PL_ONE_POLE(o->dlp, s - o->dprev, cut);
-        o->dprev = s;
-        PL_ONE_POLE(o->lp, o->dlp, cut);
-        out[i] += (int32_t)(((int64_t)o->amp * o->lp) >> 16);
+    {   /* (1.4: the state in locals: out's stores can't be to them) */
+        int32_t of = o->f, oa = o->amp, ow = o->wf, ph = o->ph, dlp = o->dlp, dprev = o->dprev, lp = o->lp;
+        for (i = 0; i < n; i++) {
+            int32_t cut, wi, wfr, pi, pf, x0, x1, s;
+            const int16_t *t0, *t1;
+            of += sf;
+            oa += sa;
+            ow += sw;
+            cut = pmin(of * 128, PL1);
+            ph += of;
+            if (ph >= PL1)
+                ph -= PL1;
+            wi = ow >> 24;
+            wfr = ow & 0xFFFFFF;
+            pi = ph >> 17;
+            pf = (ph & 0x1FFFF) << 7;
+            t0 = PL_CHW_AT(wi) + pi;
+            t1 = PL_CHW_AT(wi + 1) + pi;
+            x0 = (t0[0] << 12) + pm((t0[1] - t0[0]) << 12, pf);
+            x1 = (t1[0] << 12) + pm((t1[1] - t1[0]) << 12, pf);
+            s = x0 + pm(x1 - x0, wfr);
+            PL_ONE_POLE(dlp, s - dprev, cut);
+            dprev = s;
+            PL_ONE_POLE(lp, dlp, cut);
+            out[i] += (int32_t)(((int64_t)oa * lp) >> 16);
+        }
+        o->ph = ph;
+        o->dlp = dlp;
+        o->dprev = dprev;
+        o->lp = lp;
     }
     o->f = f;
     o->amp = a;
@@ -743,7 +755,7 @@ static int32_t ch_quant(int32_t harm, int32_t last)
 }
 typedef struct { pl_ss_t dd[5]; pl_wto_t wt[5]; int32_t mlp, tlp, chord; } pl_ch_t;
 static void ch_init(pl_ch_t *d) { memset(d, 0, sizeof *d); { int i; for (i = 0; i < 5; i++) d->dd[i].f = 16777; } }
-static void ch_render(pl_ch_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
+PL_ENGINE ch_render(pl_ch_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
 {
     int32_t reg[7], ratio[5], amp[5], rg, ri, rf, inv, ii, ifr, rot, rn, mask = 0, f0, wform, k, v;
     uint32_t i;
@@ -760,12 +772,14 @@ static void ch_render(pl_ch_t *d, const pl_par_t *p, int32_t *out, int32_t *aux,
     inv = d->tlp * 20;
     ii = inv >> 24;
     ifr = inv & 0xFFFFFF;
-    rot = ii / 4;
-    rn = ii % 4;
+    rot = div2k(ii, 2);                              /* (ii / 4, ii % 4; 1.4: no divides, here and below) */
+    rn = ii - 4 * rot;
     for (k = 0; k < 4; k++) {
-        int32_t base = (int32_t)pl_semi(PL_CHORDS[d->chord][k] * 65536 / 100, 24);
-        int32_t tr = (int32_t)((1 << ((3 + ii - k) / 4)) * (PL1 >> 2) >> 0);
-        int tv = (k - rot + 5) % 5, pv = (tv - 1 + 5) % 5;
+        int32_t base = (int32_t)pl_semi(div100(PL_CHORDS[d->chord][k] * 65536), 24);
+        int32_t tr = (int32_t)((1 << div2k(3 + ii - k, 2)) * (PL1 >> 2) >> 0);
+        int tv = k - rot + 5, pv;                    /* ((k - rot + 5) % 5, (tv + 4) % 5: k 0..3, rot 0..5) */
+        tv = tv >= 5 ? tv - 5 : tv;
+        pv = tv + 4 >= 5 ? tv - 1 : tv + 4;
         int32_t r = (int32_t)(((int64_t)base * tr) >> 24);
         if (k == rn) {
             ratio[tv] = r;
@@ -1202,7 +1216,7 @@ static void sp_init(pl_sp_t *d)
     nv_init(&d->nv);
     lpc_init(&d->lpc);
 }
-static void sp_render(pl_sp_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
+PL_ENGINE sp_render(pl_sp_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
 {
     int32_t f0 = (int32_t)(p->f0 >> 8), group = 6 * p->harm;
     uint32_t i;

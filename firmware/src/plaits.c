@@ -24,6 +24,11 @@
 #include "plaits_tables.h"
 
 #define PL1 (1 << 24)
+#ifndef FM1_OPAQUE                                   /* (the host's and the emulator's builds: hal/fm1_cc.h's) */
+#define FM1_OPAQUE(x) ((void)0)
+#endif
+#define PL_ENGINE static __attribute__((noinline)) void   /* (1.4: an engine's render out of pl_engine_render, so each
+                                                      * shows as its own in build/elixir.dis: tools/dis_loops.py) */
 #define PLSUB 16u
 #define PL_L2C 341464474                             /* log2(2^32 x 55 / 4 / FS), Q24: Plaits' NoteToFrequency's a0 / 4 */
 enum {
@@ -71,6 +76,9 @@ static inline int32_t pclamp(int32_t x, int32_t lo, int32_t hi) { return x < lo 
 static inline int32_t pabs(int32_t x) { return x < 0 ? -x : x; }
 static inline int32_t pmin(int32_t a, int32_t b) { return a < b ? a : b; }
 static inline int32_t pmax(int32_t a, int32_t b) { return a > b ? a : b; }
+/* x / n, n a sub-block's length (PLSUB: by shifts, 1.4: -Os's hardware divide otherwise) */
+static inline int32_t pl_divn(int32_t x, uint32_t n) { return n == PLSUB ? div2k(x, 4) : x / (int32_t)n; }
+_Static_assert(PLSUB == 16u && BLOCK / PLSUB == 4u, "pl_divn, pl_block: the shifts");
 static uint32_t pl_rng;                               /* stmlib::Random */
 static inline uint32_t pl_word(void) { return pl_rng = pl_rng * 1664525u + 1013904223u; }
 static inline int32_t pl_randf(void) { return (int32_t)(pl_word() >> 8); }   /* GetFloat: [0, 1), Q24 */
@@ -105,15 +113,13 @@ static uint32_t pl_note_f(int32_t note)
     return pl_exp2(PL_L2C + (int32_t)(((int64_t)n * 1398101) >> 16), 0);
 }
 static int32_t pl_f_note(uint32_t f) { return 9 * 65536 + (int32_t)(((int64_t)(pl_log2(f) - PL_L2C) * 12) >> 8); }
-/* a / b, Q24 (by rg_rcp's 17 bits: b's sign kept) */
-static int32_t pl_div(int32_t a, int32_t b)
+/* a / b, Q24 (by rg_rcp's 17 bits: b's sign kept); pl_div_rs: with b's r, sh (rg_rcp's of |b|) at hand */
+static inline __attribute__((always_inline)) int32_t pl_div_rs(int32_t a, int32_t b, uint32_t r, int32_t sh)
 {
-    int32_t sh, k, neg = (b < 0) ^ (a < 0);
-    uint32_t r;
+    int32_t k, neg = (b < 0) ^ (a < 0);
     int64_t p;
     if (!b)
         return a >= 0 ? 0x7FFFFFFF : -0x7FFFFFFF;
-    r = rg_rcp((uint32_t)pabs(b), &sh);
     p = (int64_t)pabs(a) * r;
     k = 24 - sh;
     if (k < 0) {
@@ -125,6 +131,28 @@ static int32_t pl_div(int32_t a, int32_t b)
         p = 0x7FFFFFFF;
     return neg ? -(int32_t)p : (int32_t)p;
 }
+static int32_t pl_div(int32_t a, int32_t b)
+{
+    int32_t sh = 0;
+    uint32_t r = b ? rg_rcp((uint32_t)pabs(b), &sh) : 0u;
+    return pl_div_rs(a, b, r, sh);
+}
+/* 1.4: a divisor's rg_rcp kept while it stays (P VA's and P WSHAPE's pulse widths: a divide a block, not several a
+ * sample, when the width holds). pl_div_c(a, c) is pl_div(a, c->b) to the bit; out of line, as pl_div (inlined, the
+ * oscillators' loops spilled) */
+typedef struct { int32_t b, sh; uint32_t r; } pl_rcp_t;
+static __attribute__((noinline)) void pl_rcp_new(pl_rcp_t *c, int32_t b)
+{
+    c->b = b;
+    c->sh = 0;
+    c->r = b ? rg_rcp((uint32_t)pabs(b), &c->sh) : 0u;
+}
+static inline void pl_rcp_set(pl_rcp_t *c, int32_t b)
+{
+    if (b != c->b)
+        pl_rcp_new(c, b);
+}
+static __attribute__((noinline)) int32_t pl_div_c(int32_t a, const pl_rcp_t *c) { return pl_div_rs(a, c->b, c->r, c->sh); }
 /* 1 / x of a Q8 value, as Q24 (Svf's r = 1 / resonance) */
 static int32_t pl_inv8(uint32_t q8)
 {
@@ -276,6 +304,7 @@ static inline int32_t pl_diode(int32_t x)
 typedef struct {
     int32_t prem, frem, pulse, ph, plp, flp, retrig, lp_out, tone_lp;
     pl_svf_t res;
+    uint32_t res_f, res_q;                           /* (1.4: res's f and q: set again only when they change) */
     int32_t od_pre, od_post;
     /* the synthetic one (AUX) */
     uint32_t sph, sf0;
@@ -300,7 +329,7 @@ static void bd_init(pl_bd_t *d)
     memset(d, 0, sizeof *d);
     pl_svf_fq(&d->click, (uint32_t)(5000ull * 4294967296ull / FS), 512, TAN_FAST);
 }
-static void bd_render(pl_bd_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
+PL_ENGINE bd_render(pl_bd_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
 {
     uint32_t i, f0 = p->f0;
     int32_t h4 = pmin(p->harm * 4, PL1), afm = h4, sfm = pclamp(p->harm * 4 - PL1, 0, PL1);
@@ -352,7 +381,12 @@ static void bd_render(pl_bd_t *d, const pl_par_t *p, int32_t *out, int32_t *aux,
             fr = fr > 1717986918u ? 1717986918u : fr;    /* 0.4 */
             {
                 uint64_t qq = 256u + (((uint64_t)q8 * fr) >> 32);
-                pl_svf_fq(&d->res, fr, qq > 0xFFFFFFFFull ? 0xFFFFFFFFu : (uint32_t)qq, TAN_DIRTY);
+                uint32_t q = qq > 0xFFFFFFFFull ? 0xFFFFFFFFu : (uint32_t)qq;
+                if (fr != d->res_f || q != d->res_q) {   /* (1.4: its two divides only when it moves: a still */
+                    d->res_f = fr;                   /* pitch after the attack, HARMONICS under 1/4) */
+                    d->res_q = q;
+                    pl_svf_fq(&d->res, fr, q, TAN_DIRTY);
+                }
             }
             pl_svf_run(&d->res, pm(pulse - pm(d->retrig, 3355443), scale), &d->lp_out, &ro, 0);
             PL_ONE_POLE(d->tone_lp, pm(pulse, exl) + ro, tone_f);
@@ -362,7 +396,7 @@ static void bd_render(pl_bd_t *d, const pl_par_t *p, int32_t *out, int32_t *aux,
             int32_t dr = (PL1 >> 1) + (drive >> 1), d2 = pm(dr, dr), pa = dr >> 1, pb = pm(pm(pm(d2, d2), dr), 24 * PL1);
             int32_t pre = pa + pm(pb - pa, d2), sq = pm(dr, 2 * PL1 - dr);
             int32_t post = pl_div(PL1, pl_softclip(5536481 + pm(sq, pre - 5536481)));   /* 0.33 */
-            int32_t pst = (pre - d->od_pre) / (int32_t)n, qst = (post - d->od_post) / (int32_t)n;
+            int32_t pst = pl_divn(pre - d->od_pre, n), qst = pl_divn(post - d->od_post, n);
             for (i = 0; i < n; i++) {
                 d->od_pre += pst;
                 d->od_post += qst;
@@ -392,7 +426,7 @@ static void bd_render(pl_bd_t *d, const pl_par_t *p, int32_t *out, int32_t *aux,
             d->bpw = 44;
             d->fpw = 57;
         }
-        f0step = (int32_t)(f0 - d->sf0) / (int32_t)n;
+        f0step = pl_divn((int32_t)(f0 - d->sf0), n);
         for (i = 0; i < n; i++) {
             int32_t mix = 0, body, tr, x;
             PL_ONE_POLE(d->pnoise, pl_randf() - (PL1 >> 1), 33554);   /* 0.002 */
@@ -447,7 +481,7 @@ static inline int32_t sd_dsine(int32_t ph)
     int32_t x = ph >> 6, tri = (x < (PL1 >> 1) ? x : PL1 - x) * 4 - 21810381;   /* - 1.3 */
     return pl_div(2 * tri, PL1 + pabs(tri));
 }
-static void sd_render(pl_sd_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
+PL_ENGINE sd_render(pl_sd_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
 {
     static const int32_t MF[5] = {16777216, 33554432, 53351547, 69793219, 94287954};   /* 1, 2, 3.18, 4.16, 5.62 */
     uint32_t i, k, f0 = p->f0, f[5], q8, nk;
@@ -493,22 +527,43 @@ static void sd_render(pl_sd_t *d, const pl_par_t *p, int32_t *out, int32_t *aux,
             uint32_t fnn = fn > 2143188436u ? 2143188436u : (uint32_t)fn;
             pl_svf_fq(&d->nf, fnn, 256u + (uint32_t)(((uint64_t)fnn * 384u) >> 32), TAN_FAST);   /* 1 + 1.5 f */
         }
+        /* (1.4: a mode at a time over the block, its filter's state in registers; the sum, the noise after. The same
+         * arithmetic as a sample at a time, bit-identical) */
+        int32_t shl[PLSUB], ex1[PLSUB], exs[PLSUB];
+        {
+            pl_svf_t r0 = d->res[0];
+            int32_t g0 = gain[0], prem = d->prem, pls = d->pulse, plp = d->plp;
+            for (i = 0; i < n; i++) {
+                int32_t pulse, ex;
+                if (prem) {
+                    --prem;
+                    pulse = prem ? d->ph : d->ph - PL1;
+                    pls = pulse;
+                } else {
+                    pls -= pm(pls, 3804357);          /* 1 / (0.1 ms) */
+                    pulse = pls;
+                }
+                PL_ONE_POLE(plp, pulse, 12582912);    /* 0.75 */
+                ex = (pulse - plp) + pm(pulse, 100663);   /* 0.006 */
+                shl[i] = pm(g0, pl_svf_bp(&r0, ex) + pm(ex, exl));
+                ex = pm(pulse, 436208);               /* 0.026: the other modes' */
+                ex1[i] = ex;
+                exs[i] = pm(ex, exl);
+            }
+            d->res[0] = r0;
+            d->prem = prem;
+            d->pulse = pls;
+            d->plp = plp;
+        }
+        for (k = 1; k < nk; k++) {                    /* (1.0: the 808's two alone: the others' gains are 0) */
+            pl_svf_t rk = d->res[k];
+            int32_t gk = gain[k];
+            for (i = 0; i < n; i++)
+                shl[i] += pm(gk, pl_svf_bp(&rk, ex1[i]) + exs[i]);
+            d->res[k] = rk;
+        }
         for (i = 0; i < n; i++) {
-            int32_t pulse, shell = 0, noise;
-            if (d->prem) {
-                --d->prem;
-                pulse = d->prem ? d->ph : d->ph - PL1;
-                d->pulse = pulse;
-            } else {
-                d->pulse -= pm(d->pulse, 3804357);    /* 1 / (0.1 ms) */
-                pulse = d->pulse;
-            }
-            PL_ONE_POLE(d->plp, pulse, 12582912);     /* 0.75 */
-            for (k = 0; k < nk; k++) {                /* (1.0: the 808's two alone: the others' gains are 0) */
-                int32_t ex = k == 0 ? (pulse - d->plp) + pm(pulse, 100663) : pm(pulse, 436208);   /* 0.006, 0.026 */
-                shell += pm(gain[k], pl_svf_bp(&d->res[k], ex) + pm(ex, exl));
-            }
-            shell = pl_softclip(shell);
+            int32_t shell = pl_softclip(shl[i]), noise;
             noise = 2 * pl_randf() - PL1;
             noise = noise < 0 ? 0 : noise;
             d->nenv = pl_keep(d->nenv, knoise);
@@ -587,7 +642,7 @@ static void pl_osc_render(pl_osc_t *o, int32_t f, int saw, int32_t *out, uint32_
     int32_t step, ns = o->next, pw = PL1 >> 1;
     uint32_t i;
     f = pclamp(f, 17, PL1 >> 2);
-    step = (f - o->f) / (int32_t)n;
+    step = pl_divn(f - o->f, n);
     for (i = 0; i < n; i++) {
         int32_t ts = ns, ff, ph;
         uint32_t old = o->ph;
@@ -714,7 +769,7 @@ static void hh_render1(pl_hh1_t *h, int which, pl_hh_t *d, const pl_par_t *p, in
     for (i = 0; i < n; i++)
         out[i] = pl_svf_hp(&h->hpf, out[i]);
 }
-static void hh_render(pl_hh_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
+PL_ENGINE hh_render(pl_hh_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
 {
     if (p->only == PLS_AUX)
         memset(out, 0, n * sizeof out[0]);
@@ -973,7 +1028,7 @@ static inline __attribute__((always_inline)) void cl_play(pl_cl_t *d, int32_t *o
         d->sl[k] = sl;
     }
 }
-static void cl_render(pl_cl_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
+PL_ENGINE cl_render(pl_cl_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
 {
     int32_t len = (int32_t)((88ull * pl_exp2(pm(p->timbre, 103179878), 16)) >> 16);   /* 88 x 2^(6.15 t): 2 .. 150 ms */
     uint32_t rate = pl_exp2(pm(p->morph, 119118234), 16);   /* 2^(7.1 m), Q16: 1 .. 137, x 3 a second */
@@ -1002,7 +1057,7 @@ static void cl_render(pl_cl_t *d, const pl_par_t *p, int32_t *out, int32_t *aux,
  * colour 1 - col (col 0: a plain VCA) */
 static void pl_lpg(pl_svf_t *f, int32_t *x, int32_t gl, int32_t gk, int32_t col)
 {
-    int32_t gst = (gk - gl) / (int32_t)PLSUB;
+    int32_t gst = div2k(gk - gl, 4);                  /* (/ PLSUB) */
     uint32_t i;
     if (col) {
         int32_t hf = PL1 - col, g2 = pm(gk, gk), g4 = pm(g2, g2), t = PL1 - gk, t2 = pm(t, t);
@@ -1091,7 +1146,7 @@ static void rn_tune(pl_rn_t *d, uint32_t f0, uint32_t c, int32_t r)
                                                       * the bands' Q28) */
     d->kr = r;
 }
-static void rn_render(pl_rn_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
+PL_ENGINE rn_render(pl_rn_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
 {
     uint32_t c = rn_chord(p->harm), rate = pl_exp2(pm(p->morph, 119118234), 16), i, k;
     int32_t r = p->timbre >> 17, x[PLSUB], len, iv, ov, lvl, peak = 0;
@@ -1226,7 +1281,7 @@ static void st_string(pl_st_t *d, uint32_t vi, uint32_t f0, int32_t nl, int32_t 
         dcomp = PL_SVF_SHIFT[ix] + (int32_t)(((int64_t)(PL_SVF_SHIFT[ix < 256 ? ix + 1 : 256] - PL_SVF_SHIFT[ix]) * fx) >> 16);
     }
     target = (uint32_t)(((uint64_t)delay * (uint32_t)dcomp) >> 16);
-    step = ((int32_t)target - (int32_t)d->dly) / (int32_t)n;
+    step = pl_divn((int32_t)target - (int32_t)d->dly, n);
     sp = pm(pm(nl, 2 * PL1 - nl), 3774874);          /* x 0.225 */
     scorr = pclamp((int32_t)(((int64_t)delay * 160 / FS) << 8), PL1, 35232154);   /* (160 / FS) delay, 1 .. 2.1 */
     nas = nl > 12582912 ? 4 * (nl - 12582912) : 0;
@@ -1286,7 +1341,7 @@ static void st_string(pl_st_t *d, uint32_t vi, uint32_t f0, int32_t nl, int32_t 
         out[i] += d->so1 + pm(d->so0 - d->so1, d->src);
     }
 }
-static void st_render(pl_st_t *d, uint32_t vi, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
+PL_ENGINE st_render(pl_st_t *d, uint32_t vi, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
 {
     int32_t tmp[PLSUB], b = pm(p->timbre, p->timbre), dmp = p->morph, s = p->harm, nl;
     uint32_t i, f0 = p->f0;
@@ -1340,7 +1395,7 @@ static void sw_init(pl_sw_t *d)
         v->x = 1 << 28;
     }
 }
-static void sw_render(pl_sw_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
+PL_ENGINE sw_render(pl_sw_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, uint32_t n)
 {
     int32_t dens = (int32_t)(((uint64_t)pl_note_f((int32_t)(((int64_t)p->timbre * 120) >> 8)) * 419430u * n) >> 32);   /* x 0.025 n, Q24 */
     int32_t spread = pm(pm(p->harm, p->harm), p->harm);
@@ -1386,25 +1441,27 @@ static void sw_render(pl_sw_t *d, const pl_par_t *p, int32_t *out, int32_t *aux,
         f = (f * (uint32_t)(PL1 + lin)) >> 24;
         fr = f >= 0x40000000ull ? PL1 >> 2 : (int32_t)(f >> 8);   /* Q24, kMaxFrequency 0.25 */
         /* the saw */
-        step = (fr - v->sf) / (int32_t)n;
-        gstep = (a - v->sg) / (int32_t)n;
-        {
-            int32_t ns = v->snext;
+        step = pl_divn(fr - v->sf, n);
+        gstep = pl_divn(a - v->sg, n);
+        {   /* (1.4: the state in locals, as in the sine below: out's stores can't be to them) */
+            int32_t ns = v->snext, sf = v->sf, sg = v->sg;
+            uint32_t sph = v->sph;
             for (i = 0; i < n; i++) {
                 int32_t ts = ns;
-                uint32_t old = v->sph;
+                uint32_t old = sph;
                 ns = 0;
-                v->sf += step;
-                v->sg += gstep;
-                v->sph += (uint32_t)v->sf << 8;
-                if (v->sph < old) {
-                    int32_t t = pl_div((int32_t)(v->sph >> 8), v->sf);
+                sf += step;
+                sg += gstep;
+                sph += (uint32_t)sf << 8;
+                if (sph < old) {
+                    int32_t t = pl_div((int32_t)(sph >> 8), sf);
                     ts -= blep_this(t);
                     ns -= blep_next(t);
                 }
-                ns += (int32_t)(v->sph >> 8);
-                out[i] += pm(2 * ts - PL1, v->sg);
+                ns += (int32_t)(sph >> 8);
+                out[i] += pm(2 * ts - PL1, sg);
             }
+            v->sph = sph;
             v->snext = ns;
             v->sf = fr;
             v->sg = a;
@@ -1419,8 +1476,8 @@ static void sw_render(pl_sw_t *d, const pl_par_t *p, int32_t *out, int32_t *aux,
         }
         {   /* Fast2Sin(f) = f pi (2 - 0.32 (f pi)^2), Q28 */
             int32_t fp = pm(fr, 52707179), e28 = (int32_t)(((int64_t)pm(fp, 2 * PL1 - pm(5368709, pm(fp, fp)))) << 4);
-            estep = (e28 - v->eps) / (int32_t)n;
-            astep = (amp - v->sa) / (int32_t)n;
+            estep = pl_divn(e28 - v->eps, n);
+            astep = pl_divn(amp - v->sa, n);
             {
                 int64_t nrm = (((int64_t)v->x * v->x) >> 28) + (((int64_t)v->y * v->y) >> 28);   /* Q28 */
                 if (nrm <= (1 << 27) || nrm >= (2 << 28)) {   /* (stmlib: fast_rsqrt_carmack) */
@@ -1432,13 +1489,18 @@ static void sw_render(pl_sw_t *d, const pl_par_t *p, int32_t *out, int32_t *aux,
                     }
                 }
             }
-            for (i = 0; i < n; i++) {
-                v->eps += estep;
-                v->sa += astep;
-                e = v->eps;
-                v->x += (int32_t)(((int64_t)e * v->y) >> 28);
-                v->y -= (int32_t)(((int64_t)e * v->x) >> 28);
-                aux[i] += pm(v->sa, v->x >> 4);
+            {
+                int32_t eps = v->eps, sa = v->sa, x = v->x, y = v->y;
+                for (i = 0; i < n; i++) {
+                    eps += estep;
+                    sa += astep;
+                    e = eps;
+                    x += (int32_t)(((int64_t)e * y) >> 28);
+                    y -= (int32_t)(((int64_t)e * x) >> 28);
+                    aux[i] += pm(sa, x >> 4);
+                }
+                v->x = x;
+                v->y = y;
             }
             v->eps = e28;
             v->sa = amp;
@@ -1581,7 +1643,7 @@ static void pl_block(uint32_t vi, const voice_t *v, int16_t *buf)
     p.only = (uint8_t)(mix <= 0 ? PLS_OUT : mix >= PL1 ? PLS_AUX : PLS_BOTH);   /* (1.0: the side not heard not
                                                       * rendered: about half a drum engine's cost) */
     p.col = col;
-    gs = (g1 - g0) / (int32_t)(BLOCK / PLSUB);
+    gs = div2k(g1 - g0, 2);                          /* (/ (BLOCK / PLSUB)) */
     for (k = 0; k < BLOCK / PLSUB; k++) {
         int32_t gk = g0 + gs * (int32_t)(k + 1);
         p.trig = d->trig;

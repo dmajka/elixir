@@ -41,6 +41,12 @@ static inline int32_t clamp32(int32_t v, int32_t lo, int32_t hi) { return v < lo
 /* 1.0 (Phase 10d): clamp32 for lo <= hi, the top first: two conditional moves, where clamp32's order costs a third */
 static inline int32_t clamp_hl(int32_t v, int32_t lo, int32_t hi) { v = v > hi ? hi : v; return v < lo ? lo : v; }
 static inline int32_t iabs(int32_t v) { return v < 0 ? -v : v; }
+/* x / 10, x / 100 (C's: toward 0) by a multiply: -Os compiles a constant divide to the hardware divide, many cycles
+ * (1.4; the same for every int32_t x: tests/bench/divc_test.c checks all 2^32) */
+static inline int32_t div10(int32_t x) { return (int32_t)(((int64_t)x * 1717986919) >> 34) - (x >> 31); }
+static inline int32_t div100(int32_t x) { return (int32_t)(((int64_t)x * 1374389535) >> 37) - (x >> 31); }
+/* x / 2^k (C's: toward 0) by shifts: -Os divides even by 16 or 64 (a power of two) with the hardware divide */
+static inline int32_t div2k(int32_t x, int k) { return (x + (int32_t)((uint32_t)(x >> 31) >> (32 - k))) >> k; }
 static inline int32_t mulq16(int32_t a, int32_t b) { return (int32_t)(((int64_t)a * b) >> 16); }
 
 /* a 1025-point table over a 0..1 input (Q16, 0..65536), linear between points */
