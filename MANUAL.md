@@ -924,7 +924,9 @@ The page shows the gain reduction as it happens. The settings are part of the ki
 
 ### Reverb
 
-A separate send bus after the FX bus, from Felucca: **ROOM** (a Freeverb-style room), **SPRING** (one spring of a spring tank: chirps and drips), **HALL** (a dense, smooth, stereo hall). From 0.16 also **PLATE**: Mutable Instruments Clouds' reverb (Jon Dattorro's plate), long and lush, with a slow shimmer in its tail; checked against Clouds' own code (`tests/reverb_compare.sh`). Size sets the length, Damping the darkness, Level the return. PERFORM 2's SPACE holds any of them. When nothing is fed to it and its tail has died away, it stops processing to save CPU. Its cost while it runs (CONFIG → LOAD's REVERB, measured on the unit with 1.4): ROOM and SPRING 3–4%, HALL and PLATE 5%.
+A separate send bus after the FX bus, from Felucca: **ROOM** (a Freeverb-style room), **SPRING** (a spring tank), **HALL** (a dense, smooth, stereo hall). From 0.16 also **PLATE**: Mutable Instruments Clouds' reverb (Jon Dattorro's plate), long and lush, with a slow shimmer in its tail; checked against Clouds' own code (`tests/reverb_compare.sh`). Size sets the length, Damping the darkness, Level the return. PERFORM 2's SPACE holds any of them. When nothing is fed to it and its tail has died away, it stops processing to save CPU. Its cost while it runs (CONFIG → LOAD's REVERB, measured on the unit with 1.4): ROOM 3–4%, HALL and PLATE 5%, SPRING about 6% (estimated).
+
+**SPRING** (rebuilt in 1.4: the drippy dub spring) is modeled on a real tank, after Välimäki, Parker and Abel's spring reverb model. A spring carries high frequencies more slowly than low ones, so each echo arrives as a chirp: the lows first, sweeping up over tens of milliseconds, and every trip along the spring bends it further. That is the drip. The send drives the tank hard (its dwell, as on an amp's spring reverb: hit it harder for more grit), and two pickups give it stereo. **Size** makes the spring longer: a longer loop, a longer tail and a deeper drip. Small sizes chirp only near the top, and from about 90 up each echo sweeps down into the mids. Damping darkens it.
 
 ---
 

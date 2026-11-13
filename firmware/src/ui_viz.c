@@ -1890,7 +1890,7 @@ static void vz_cone(int32_t cx, int32_t top, int32_t hw, int32_t h, uint16_t c) 
 }
 static void viz_reverb(void)
 {
-    static const char *const D[NREV] = {"Close walls, quick echoes", "Twangy, bright", "Long, slow swell",
+    static const char *const D[NREV] = {"Close walls, quick echoes", "Drippy, twangy", "Long, slow swell",
                                         "Dense and smooth"};
     uint32_t ty = par[PAR_REV_TYPE] % NREV, sz = par[PAR_REV_SIZE], dp = par[PAR_REV_DAMP], lv = par[PAR_REV_LEVEL];
     int32_t f = 55 + (int32_t)sz * 45 / 127, gy = VY1 - 4, cx = 166, cy, rx, i, n = 2 + (int32_t)sz * 4 / 127;

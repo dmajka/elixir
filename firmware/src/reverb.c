@@ -16,7 +16,11 @@ static inline int32_t sh_rn(int32_t m, uint32_t sh) { return (m + (1 << (sh - 1u
 
 static const uint16_t REV_COMB[4] = {1116, 1188, 1277, 1356};
 static const uint16_t REV_AP[2] = {556, 441};
-static int16_t rev_comb[1116 + 1188 + 1277 + 1356] RAMBUF;   /* (18a: in RAMTEXT) */
+static union {                          /* ROOM's combs; SPRING's loop (int32) */
+    int16_t s[1116 + 1188 + 1277 + 1356];
+    int32_t l[(1116 + 1188 + 1277 + 1356) / 2];
+} rev_cu RAMBUF;                         /* (18a: in RAMTEXT) */
+#define rev_comb (rev_cu.s)
 static union {                          /* ROOM's allpasses; SPRING's allpass chain (int32: no clamps) */
     int16_t ap[556 + 441];
     int32_t sp[(556 + 441) / 2];
@@ -31,29 +35,59 @@ static struct {
     uint8_t idle;                        /* blocks with no send and a silent tail (it sleeps: no work) */
     uint16_t comb_w, ap_w;               /* ROOM: the combs' write pointer, the allpasses' (rev_room) */
     int32_t comb_lp[4];
-    uint16_t sp_w;                       /* SPRING: the loop's write index (SP_MASK) */
-    int32_t sp_lp, sp_hp, sp_he, sp_size;   /* .. its loop low-pass, low cut (and its remainder), the loop
-                                             * length (Q8, glides) */
-    uint32_t sp_ph;                      /* .. the output tap's wobble */
 } rv;
 
-/* SPRING (type 1): one spring of a spring tank, mono, in the ROOM's own buffers (no RAM of its own): the input and
- * the loop's return -> a low cut (~110 Hz: a spring carries little bass) -> SP_N stretched first-order allpasses,
- * (a + z^-4) / (1 + a z^-4) (after Valimaki, Parker and Abel: below fs / 8 = 5.5 kHz the group delay rises with
- * frequency, the chirp; each pass round the loop adds more of it: the "boing", the drips) -> the loop's delay line
- * (rev_comb, SP_LEN) -> back through a one-pole low-pass (DAMP) and the decay gain (SIZE). The output: the spring's
- * far end, half way along the loop (the first sound 15 .. 30 ms after the send: the tank's own pre-delay; a slow
- * wobble of a sample or two on it), plus a second, quieter pickup at three quarters (a shorter spring beside it:
- * denser). SIZE sets the loop's length (30 .. 60 ms) and its decay; DAMP the loop's low-pass. The allpasses'
- * states: 4 samples each (int32), in rev_ap's memory. Changing the model fades the old one's block out and clears
- * both buffers. */
-#define SP_LEN 4096u                     /* the loop's line in rev_comb (4937 samples) */
+/* SPRING (type 1, 1.4: the drip): a dub spring tank, after Valimaki, Parker and Abel's model ("Parametric Spring
+ * Reverberation Effect", JAES 2010) as Parker makes it cheaper ("Efficient Dispersion Generation Structures for
+ * Spring Reverb Emulation", EURASIP 2011: its low chirps' loop at a quarter of the rate). A spring delays its high
+ * frequencies more than its lows (dispersion, up to a transition near 5 kHz), so each echo arrives as a chirp, lows
+ * first and sweeping up over tens of milliseconds, and every trip round the spring bends it more: the drip. Here,
+ * at 11.025 kHz (fs / 4, blocks of SP_NQ): the send (low-passed, 1 2 3 4 3 2 1, every 4th sample) -> the dwell, a
+ * soft clip driven hard (a tank's input is driven near saturation: drip grows with it) -> + the loop's return ->
+ * a low cut (~110 Hz) -> SP_N first-order allpasses (a + z^-1) / (1 + a z^-1), whose group delay peaks at the
+ * quarter rate's Nyquist, 5.5 kHz (SP_N (1 + a) / (1 - a) samples: the chirp) -> the loop's line (int32: a quiet
+ * tail decays as a loud one does) -> back through a one-pole low-pass (DAMP) and the decay gain (SIZE). SIZE sets
+ * the loop (40 .. 80 ms), its decay and the drip (the stages' coefficient: a longer spring disperses more, the
+ * chirp reaching further down); DAMP the loop's low-pass; the loop's length wobbles slowly (the tail's pitch
+ * drifts a little). Two pickups on the line, half and three eighths of the loop back, give the left and right.
+ * Back to 44.1 kHz between samples. The allpasses' states in rev_ap's memory, the line in rev_comb's. */
+#define SP_Q 4u                          /* the tank's rate: fs / SP_Q */
+#define SP_NQ (BLOCK / SP_Q)             /* a block at that rate */
+#define SP_LEN 2048u                     /* the loop's line (int32, 186 ms) */
 #define SP_MASK (SP_LEN - 1u)
-#define SP_N 10u                         /* allpass stages */
-#define SP_A 2867                        /* their coefficient, Q12 (0.7: Q12 keeps (x - o) * a in 32 bits up to
-                                          * |x - o| < 749000, far past any peak the chain reaches) */
-#define SP_WOB ((uint32_t)(2.0 * 0.1768 * BLOCK / FS * 4294967296.0))   /* the wobble: ~0.35 Hz (Felucca's) */
-_Static_assert(sizeof rev_comb / 2u >= SP_LEN && sizeof rev_u.sp / 4u >= 4u * (SP_N + 1u), "SPRING in ROOM's buffers");
+#ifndef SP_N
+#define SP_N 48u                         /* allpass stages */
+#endif
+#define SP_A0 3523                       /* their coefficient, Q12: 0.86 at SIZE 0 .. (- SP_AS x (SIZE / 127)^2) */
+#define SP_AS 900                        /* .. 0.64 at 127 (0.80 at 64): lower spreads the chirp further down */
+#ifndef SP_DRIVE
+#define SP_DRIVE (3 * 4096)              /* the dwell: the send into the soft clip, Q12 */
+#endif
+#ifndef SP_OUT
+#define SP_OUT 4                         /* the pickups' gain, / 8 */
+#endif
+#define SP_WOB ((uint32_t)(0.35 * BLOCK / FS * 4294967296.0))   /* the wobble: ~0.35 Hz */
+_Static_assert(sizeof rev_cu.l / 4u >= SP_LEN && sizeof rev_u.sp / 4u >= SP_N + 1u && BLOCK % SP_Q == 0u,
+               "SPRING in ROOM's buffers");
+static struct {
+    int32_t h1, h2, h3;                  /* the send's last three samples (the decimator) */
+    int32_t lp, hp, he, size;            /* the loop's low-pass, low cut (and its step's remainder); its length (Q8,
+                                          * glides) */
+    int32_t m, s;                        /* the last mid and side out (quarter rate) */
+    int32_t om, os;                      /* the output's low-pass (44.1 kHz: the images above 5.5 kHz down) */
+    uint32_t ph;                         /* the wobble */
+    int32_t a;                           /* the stages' coefficient (Q12, glides to SIZE's) */
+    uint16_t w;                          /* the line's write index */
+    int32_t x[SP_NQ];                    /* the block at the quarter rate */
+} spr;
+#define SP_AP(i, y) sh_tz(((i) - (y)) * ka, 12)    /* a stage's product (towards zero: no offset, no limit
+                                                     * cycle in the loop) */
+_Static_assert(SP_N % 4u == 0u && SP_Q == 4u, "SPRING: the stages 4 at a time, the output 4 samples a step");
+static inline int32_t tz15_64(int32_t a, int32_t b)  /* a b / 2^15 towards zero (64-bit product) */
+{
+    int64_t m = (int64_t)a * b;
+    return (int32_t)((m + ((m >> 63) & 32767)) >> 15);
+}
 
 /* HALL (type 2): a smooth, dense, stereo reverb, in the shared buffers (its few states and one block of work in
  * the pool). ROOM's 4 combs each ring on their own (the metallic tone); here every echo goes round 8 lines that all
@@ -151,53 +185,75 @@ static __attribute__((noinline)) void rev_room(const int32_t *in_, int32_t *out,
     rv.comb_lp[0] = l0, rv.comb_lp[1] = l1, rv.comb_lp[2] = l2, rv.comb_lp[3] = l3;
 }
 
-/* SPRING (see above), added to out. A stage (1.4: unrolled): its product towards 0, as the loop's gain (floors
- * would feed the loop a little offset and noise for ever) */
-#define SP_STAGE(k)                                                                         \
-    {                                                                                       \
-        int32_t sv = (x - q[k]) * SP_A, so = q[k];                                          \
-        x = ((sv + ((sv >> 31) & 4095)) >> 12) + p;                                         \
-        p = so;                                                                             \
-        q[k] = x;                                                                           \
-    }
-_Static_assert(SP_N == 10u, "SPRING: SP_STAGE written out for 10 stages");
+/* SPRING (see above): a block (n = BLOCK), the mid added to out, the side into rev_side */
 static __attribute__((noinline)) void rev_spring(const int32_t *in_, int32_t *out, uint32_t n)
 {
-    uint32_t i, s = rv.size;
+    uint32_t j, k, s = rv.size, w = spr.w, L, f, LA, LB;
     int32_t g = space_on ? 32112 : 19661 + (int32_t)s * 85;   /* the loop's gain: 0.6 .. 0.93 (SPACE: 0.98) */
-    int32_t kl = 26000 - rv.damp * 160;                 /* its low-pass: ~9 kHz .. ~1.3 kHz */
-    int32_t len = (int32_t)(1323u + ((s * 1323u) >> 7)) << 8, L, L2, L3, f, w;
-    int16_t *ln = rev_comb;
-    int32_t *ap = rev_u.sp, *q;
-    if (!rv.sp_size)
-        rv.sp_size = len;
-    rv.sp_size += clamp32(len - rv.sp_size, -256, 256); /* SIZE glides (a sample a block at most) */
-    L = rv.sp_size >> 8;
-    rv.sp_ph += SP_WOB;                                 /* the wobble: a slow sine, 1.5 samples deep */
-    w = (rv.sp_size >> 1) + ((sine_at(rv.sp_ph) * 3) >> 8);   /* the far end, Q8 */
-    L2 = w >> 8;
-    f = w & 255;
-    L3 = (L * 3) >> 2;
-    for (i = 0; i < n; i++) {
-        uint32_t wp = rv.sp_w, j = (wp & 3u) * (SP_N + 1u);
-        int32_t x = mulq15(in_[i], 2580), r = ln[(wp - (uint32_t)L) & SP_MASK], p, o;
-        int32_t t0 = ln[(wp - (uint32_t)L2) & SP_MASK], t1 = ln[(wp - (uint32_t)L2 - 1u) & SP_MASK];
-        rv.sp_lp += mulq15(r - rv.sp_lp, kl);
-        o = rv.sp_lp * g;
-        x += (o + ((o >> 31) & 32767)) >> 15;           /* towards 0: a loop of floors would hold an offset */
-        o = x - rv.sp_hp + rv.sp_he;                    /* the low cut, its step's remainder kept: no dead band */
-        rv.sp_he = o & 63;                              /* to hold an offset in the loop */
-        rv.sp_hp += o >> 6;
-        x -= rv.sp_hp;
-        q = ap + j;                                     /* the chain: q[k], stage k's output 4 samples ago */
-        p = q[0];
-        q[0] = x;
-        SP_STAGE(1) SP_STAGE(2) SP_STAGE(3) SP_STAGE(4) SP_STAGE(5)   /* (lossless: bounded by the loop's input, */
-        SP_STAGE(6) SP_STAGE(7) SP_STAGE(8) SP_STAGE(9) SP_STAGE(10)  /* .. no clamp) */
-        ln[wp & SP_MASK] = (int16_t)clamp32(x, -32768, 32767);
-        rv.sp_w = (uint16_t)(wp + 1u);
-        out[i] += (t0 + (((t1 - t0) * f) >> 8)) * 4 + ln[(wp - (uint32_t)L3) & SP_MASK] * 2;
+    int32_t kl = 32767 - rv.damp * 124;                 /* its low-pass: none .. ~1.3 kHz */
+    int32_t len = (int32_t)(441u + ((s * 441u) >> 7)) << 8, d;
+    int32_t h1 = spr.h1, h2 = spr.h2, h3 = spr.h3, lp = spr.lp, hp = spr.hp, he = spr.he, mp = spr.m, sp = spr.s;
+    int32_t om = spr.om, os = spr.os;
+    int32_t *ln = rev_cu.l, *st = rev_u.sp, *x = spr.x, pin, ka = SP_A0 - (int32_t)(SP_AS * s * s / (127u * 127u));
+    (void)n;
+    if (!spr.size)
+        spr.size = len, spr.a = ka;
+    spr.a += clamp32(ka - spr.a, -4, 4);                /* (the drip glides: ~0.1% a block) */
+    ka = spr.a;
+    spr.size += clamp32(len - spr.size, -256, 256);     /* SIZE glides (a sample a block at most) */
+    spr.ph += SP_WOB;
+    d = spr.size + ((sine_at(spr.ph) * 3) >> 9);        /* the loop's length, +-0.75 samples of wobble, Q8 */
+    L = (uint32_t)d >> 8;
+    f = (uint32_t)d & 255u;
+    LA = (uint32_t)spr.size >> 9;                        /* the pickups: half the loop back, three eighths */
+    LB = (uint32_t)(spr.size * 3) >> 11;
+    for (j = 0; j < SP_NQ; j++) {                       /* the send in, the loop's return added */
+        const int32_t *v = in_ + SP_Q * j;
+        int32_t y = (h1 + 2 * h2 + 3 * h3 + 4 * v[0] + 3 * v[1] + 2 * v[2] + v[3]) >> 4, r0, r1;
+        h1 = v[1], h2 = v[2], h3 = v[3];
+        y = softclip_in(clamp32(y, -65535, 65535), SP_DRIVE) >> 3;   /* the dwell (Q16 -> the tank's Q13) */
+        r0 = ln[(w + j - L) & SP_MASK];
+        r1 = ln[(w + j - L - 1u) & SP_MASK];
+        lp += tz15_64(r0 + (int32_t)(((int64_t)(r1 - r0) * (int32_t)f) >> 8) - lp, kl);
+        y += tz15_64(lp, g);                            /* (towards zero: a loop of floors holds an offset) */
+        r0 = y - hp + he;                               /* the low cut, its step's remainder kept */
+        he = r0 & 15;
+        hp += r0 >> 4;
+        x[j] = clamp32(y - hp, -131071, 131071);
     }
+    pin = st[0];                                        /* the chain, 4 stages at a time over the block: stage k's */
+    st[0] = x[SP_NQ - 1u];                              /* .. state its last output, pin its input's last */
+    for (k = 1; k < SP_N; k += 4u) {
+        int32_t y1 = st[k], y2 = st[k + 1u], y3 = st[k + 2u], y4 = st[k + 3u], p = pin, *q = x;
+        const int32_t *e = x + SP_NQ;
+        pin = y4;
+        FM1_OPAQUE(q);
+        do {                                            /* (a stage's input before: the last stage's output before) */
+            int32_t i = *q, o;
+            o = SP_AP(i, y1) + p, p = i;
+            i = SP_AP(o, y2) + y1, y1 = o;
+            o = SP_AP(i, y3) + y2, y2 = i;
+            i = SP_AP(o, y4) + y3, y3 = o, y4 = i;
+            *q++ = i;
+        } while (q != e);
+        st[k] = y1, st[k + 1u] = y2, st[k + 2u] = y3, st[k + 3u] = y4;
+    }
+    for (j = 0; j < SP_NQ; j++) {                       /* into the line; the pickups out, back to 44.1 kHz: */
+        int32_t a, b, dm, ds, *o = out + SP_Q * j, *r = rev_side + SP_Q * j;   /* .. between samples, then a */
+        ln[(w + j) & SP_MASK] = x[j];                   /* .. one-pole (~5 kHz: the images above 5.5 kHz down) */
+        a = ln[(w + j - LA) & SP_MASK];
+        b = ln[(w + j - LB) & SP_MASK];
+        a = (a + b) * SP_OUT >> 3, b = a - ((b * SP_OUT) >> 2);   /* (the mid, the side) */
+        dm = (a - mp) >> 2, ds = (b - sp) >> 2;         /* (the last step lands on it: no floor held) */
+        mp += dm, sp += ds, om = sh_tz(om + mp, 1), os = sh_tz(os + sp, 1), o[0] += om, r[0] = os;
+        mp += dm, sp += ds, om = sh_tz(om + mp, 1), os = sh_tz(os + sp, 1), o[1] += om, r[1] = os;
+        mp += dm, sp += ds, om = sh_tz(om + mp, 1), os = sh_tz(os + sp, 1), o[2] += om, r[2] = os;
+        mp = a, sp = b, om = sh_tz(om + mp, 1), os = sh_tz(os + sp, 1), o[3] += om, r[3] = os;
+    }
+    spr.w = (uint16_t)(w + SP_NQ);
+    spr.h1 = h1, spr.h2 = h2, spr.h3 = h3, spr.lp = lp, spr.hp = hp, spr.he = he, spr.m = mp, spr.s = sp;
+    spr.om = om, spr.os = os;
+    hl.side = 1;
 }
 
 /* HALL's helpers. 2^-x, x Q16 (0 .. 16): Q15 (32768 at x = 0). 2^-x = 2^u / 2^(i + 1), u = 1 - frac(x); 2^u by a
@@ -525,7 +581,7 @@ static void rev_clear(void)
         rv.comb_lp[i] = 0;
     for (i = 0; i < HL_NL; i++)
         hl.lp[i] = hl.le[i] = 0;
-    rv.sp_lp = rv.sp_hp = rv.sp_he = 0;
+    spr.h1 = spr.h2 = spr.h3 = spr.lp = spr.hp = spr.he = spr.m = spr.s = spr.om = spr.os = 0;
     hl.x = hl.m = hl.s = hl.hp = hl.he = 0;
     for (i = 0; i < sizeof pl_buf / 2u; i++)
         pl_buf[i] = 0;

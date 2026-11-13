@@ -43,6 +43,7 @@ static void rv_reset(uint32_t m, uint32_t size, uint32_t damp, int32_t level)
     memset(&rv, 0, sizeof rv);
     memset(&hl, 0, sizeof hl);
     memset(&plt, 0, sizeof plt);
+    memset(&spr, 0, sizeof spr);
     rev_clear();
     rev_ok[0] = rev_ok[1] = 0;
     space_on = 0;
