@@ -1,5 +1,5 @@
 /* Elixir: the core-0 filters (1.4, docs/TO_DO_PERF_VOICES.md A): the master filter's RING, the FX bus PHASER, the
- * voice filter (svf_block, every type) hashed over a knob grid, one hash each (the bit-identical check).
+ * voice filter (svf_block, every type), the TAPE delays hashed over a knob grid, one hash each (the bit-identical check).
  *   cc -O2 -w -I build/gen -I firmware/src -I tests tests/bench/filters_bench.c -o build/filters_bench && build/filters_bench
  * Each case: fresh state, a few dozen blocks of noise and hits (loud enough to clip), its inputs moved one at a time
  * along the way (a cache of coefficients must see each), some blocks with none moved. Host ns are no measure of the
@@ -185,6 +185,75 @@ static uint64_t bench_svf(uint32_t ncase, uint32_t only)
     return H;
 }
 
+/* TAPE and TAPE PP: fx_tape over its knobs (TIME, FEEDBACK, TONE, LEVEL, WOW, SATURATE, GLITCH, PITCH, BAND, ECHO >
+ * REVERB, SYNC, FB PUSH, the global LFOs, FREEZE), short times (echoes within the case), each moved alone along the
+ * way; the mix, the reverb's send, and the states and line at the end hashed */
+static uint32_t kq(void) { return knob() * 65536u / 127u; }
+static uint64_t bench_tape(uint32_t ncase)
+{
+    for (uint32_t c = 0; c < ncase; c++) {
+        uint32_t lvl = c & 3u;
+        memset(&tp, 0, sizeof tp);
+        tp.rng = rnd();                              /* (GLITCH's draws: not the same few from 0 every case) */
+        memset(fx.bd, 0, sizeof fx.bd);
+        memset(fxbuf, 0, sizeof fxbuf);
+        memset(ps_buf, 0, sizeof ps_buf);
+        fx.delay_type = (uint8_t)((c & 1u) ? DELAY_TAPEPP : DELAY_TAPE);
+        fx.route = (c >> 1) % 5u == 4u ? R_L1 : R_ST1;
+        fx.dl_t = (int32_t)(rnd() % 22000u);         /* (squared: to ~0.17 s) */
+        fx.d_fb = (int32_t)kq();
+        fx.d_tone = 1311 + (int32_t)(((int64_t)kq() * kq() * 64225) >> 32);
+        fx.dl_lvl = (int32_t)(kq() >> 1);
+        fx.dl_g = (rnd() & 3u) ? 32768 : (int32_t)(rnd() >> 17);
+        fx.dl_e = (rnd() & 1u) ? fx.dl_lvl : 0;
+        fx.d_wow = (rnd() & 1u) ? 0 : (int32_t)kq();
+        fx.d_sat = knob();
+        fx.d_glitch = (rnd() & 1u) ? 0 : knob() * 516;
+        fx.d_pitch = (uint8_t)((rnd() & 1u) ? 0u : rnd() % NDPITCH);
+        fx.band = (uint8_t)((rnd() & 1u) ? 0u : knob());
+        fx.lfo_band = (rnd() & 3u) ? 0 : (int32_t)(rnd() >> 15) - 65536;
+        fx.lfo_time = (rnd() & 3u) ? 0 : (int32_t)(rnd() % 8000u) - 4000;
+        fx.lfo_fb = (rnd() & 3u) ? 0 : (int32_t)(rnd() >> 16) - 32768;
+        fx.d_echorev = (rnd() & 1u) ? 0 : (int32_t)kq();
+        fx.rev_fx = 0;
+        fx.d_route = 64;
+        fx.d_sync = (uint8_t)((rnd() & 7u) == 0u);
+        fx.push = (rnd() & 1u) ? 0 : (int32_t)(rnd() >> 15);
+        fx.freeze = 0;
+        fx_bpm_x10 = 600u + rnd() % 1800u;
+        for (uint32_t b = 0; b < 90; b++) {
+            switch (b) {
+            case 20: fx.d_fb = (int32_t)kq(); break;
+            case 26: fx.d_tone = 1311 + (int32_t)(((int64_t)kq() * kq() * 64225) >> 32); break;
+            case 32: fx.dl_t = (int32_t)(rnd() % 22000u); break;
+            case 38: fx.d_sat = knob(); break;
+            case 44: fx.band = (uint8_t)knob(); break;
+            case 50: fx.d_pitch = (uint8_t)(rnd() % NDPITCH); break;
+            case 56: fx.d_wow = (int32_t)kq(); break;
+            case 60: fx.dl_lvl = (int32_t)(kq() >> 1); break;
+            case 64: fx.d_glitch = knob() * 516; break;
+            case 70: fx.freeze = (uint8_t)((rnd() & 3u) == 0u); break;
+            case 76: fx.freeze = 0, fx.push = (int32_t)(rnd() >> 15); break;
+            }
+            sig_in(fx_l, b, lvl);
+            sig_in(fx_r, b + 3u, lvl);
+            if (b > 40 && (b & 7u) == 0u)
+                memset(fx_l, 0, BLOCK * sizeof fx_l[0]), memset(fx_r, 0, BLOCK * sizeof fx_r[0]);
+            for (int i = 0; i < BLOCK; i++)
+                mix_l[i] = (int32_t)(rnd() >> 20) - 2048, mix_r[i] = (int32_t)(rnd() >> 20) - 2048, rev_in[i] = 0;
+            fx_tape();
+            hash32(mix_l, BLOCK);
+            hash32(mix_r, BLOCK);
+            hash32(rev_in, BLOCK);
+        }
+        hash32((const int32_t *)&tp, sizeof tp / 4u);
+        hash32(&fx.bd[0][0], 4);
+        hash16(fxbuf, FXBUF_SIZE);
+        hash16(ps_buf, PS_LEN);
+    }
+    return H;
+}
+
 int main(int argc, char **argv)
 {
     const char *only = argc > 1 ? argv[1] : "";
@@ -205,6 +274,11 @@ int main(int argc, char **argv)
         uint32_t t1 = argc > 3 ? (uint32_t)atoi(argv[3]) : 0;
         H = 1469598103934665603ull, rs = 3u, t0 = now();
         printf("SVF      %016llx  %.1f us/case\n", (unsigned long long)bench_svf(ncase * 4u, t1), (now() - t0) / 1000.0 / ncase);
+        all = (all ^ H) * 1099511628211ull;
+    }
+    if (!*only || !strcmp(only, "tape")) {
+        H = 1469598103934665603ull, rs = 4u, t0 = now();
+        printf("TAPE     %016llx  %.1f us/case\n", (unsigned long long)bench_tape(ncase / 3u), (now() - t0) / 1000.0 / ncase);
         all = (all ^ H) * 1099511628211ull;
     }
     printf("all      %016llx\n", (unsigned long long)all);

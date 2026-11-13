@@ -589,14 +589,20 @@ static inline int32_t tape_read(uint32_t base, uint32_t mask, int32_t d)   /* th
     int32_t a = fxbuf[base + i], b = fxbuf[base + ((i + 1u) & mask)];
     return a + (int32_t)(((int64_t)(b - a) * (int32_t)f) >> 16);
 }
+/* 1.4: x / 27 and x / 64 (BLOCK) as C's divides round (toward 0), without the hardware divide -Os emits for them:
+ * div27 exact for |x| < 2^24 (checked over all of them; tape_sat's 4 u^3 stays under 442,368) */
+static inline int32_t div27(int32_t x) { return (int32_t)(((int64_t)x * 636291452) >> 34) - (x >> 31); }
+static inline int32_t div64(int32_t x) { return (x + (int32_t)((uint32_t)(x >> 31) >> 26)) >> 6; }
+_Static_assert(BLOCK == 64, "div64: / BLOCK");
 /* the cubic soft clip (y = u - 4/27 u^3, flat at u = 1.5), its ceiling 32768 / g: x x g in, x 1/g out (gi: 2^32 / g) */
 static inline int32_t tape_sat(int32_t x, int32_t g, uint32_t gi)
 {
     int32_t u = (int32_t)(((int64_t)x * g) >> 16), u3;
     u = u > 49152 ? 49152 : u < -49152 ? -49152 : u;
-    u3 = (int32_t)(((int64_t)u * u >> 15) * u >> 15);
-    u -= u3 * 4 / 27;
-    return (int32_t)(((int64_t)u * gi) >> 16);
+    u3 = (int32_t)(((int64_t)u * u) >> 15);          /* (1.4: under 73,729: 32-bit, so a 32 x 32 multiply next, */
+    u3 = (int32_t)(((int64_t)u3 * u) >> 15);         /* .. not a 64 x 32 one; the same numbers) */
+    u -= div27(u3 * 4);
+    return (int32_t)(((int64_t)u * (int32_t)gi) >> 16);   /* (gi <= 65536: signed, one multiply) */
 }
 static int32_t tape_shift(int32_t x, uint32_t c)     /* PITCH: two crossfaded heads over the window (side c) */
 {
@@ -656,14 +662,155 @@ static inline int32_t band_peak(uint32_t c, int32_t x)   /* the echo x (a sample
     s[0] = clamp32(s[0], -(1 << 24), 1 << 24);
     return x + (mulr16(s[1], 11469) >> 4);           /* (0.175 = 0.5 x the damping: a peak of 1.5) */
 }
+/* 1.4: the half-rate loop, TAPE (pp 0: one line, the input summed) or TAPE PP (pp 1: each side's echo feeds the
+ * other), the state in locals and a function each (pp a constant), bit-identical (tests/bench/filters_bench.c tape) */
+static inline __attribute__((always_inline)) void tape_run(const int pp, uint32_t mask, int32_t fb, int32_t g, uint32_t gi,
+                                                           int32_t er, int32_t e0, int32_t e1)
+{
+    const uint32_t half = FXBUF_SIZE >> 1, lb = pp ? half : 0u;
+    const int st = fx_stereo(), freeze = fx.freeze, band = fx.band, pitch = fx.d_pitch;
+    int32_t *side = fx_side(), *ol = st ? mix_l : side, rv_sum = 0;
+    int32_t wowd = (int32_t)(((int64_t)fx.d_wow * (40 << 16)) >> 16), fld = (int32_t)(((int64_t)fx.d_wow * (3 << 16)) >> 16);
+    int32_t cur = tp.cur, tgt = tp.tgt, wow = tp.wow, prev0 = tp.prev[0], prev1 = tp.prev[1];
+    int32_t hp0 = tp.hp[0], lp0 = tp.lp[0], tone = fx.d_tone, *hp1 = &tp.hp[1], *lp1 = &tp.lp[1];   /* (PP's second side in
+                                                      * memory: registers) */
+    uint32_t h, w = tp.w, flph = tp.flph;
+    for (h = 0; h < BLOCK / 2u; h++) {
+        int32_t d, e0s, e1s, env = 65536, lvl, a, b;
+        uint32_t i = 2u * h;
+        lvl = e0 + div64((e1 - e0) * (int32_t)(i + 2u));
+        cur += (tgt - cur) >> 11;                    /* (the glide: ~90 ms) */
+        if (++tp.wown >= 4096u) {                    /* WOW: a new drift every ~0.19 s */
+            tp.wown = 0;
+            tp.wowt = (int32_t)(((int64_t)((int32_t)(tp_rand() & 0xFFFFu) - 32768) * wowd) >> 15);
+        }
+        wow += (tp.wowt - wow) >> 11;
+        flph += 1168730u;                            /* (~6 Hz at 22.05 kHz) */
+        d = cur + wow + (int32_t)(((int64_t)sine_at(flph) * fld) >> 15);
+        if (!tp.gleft) {
+            tp.cur = cur;                            /* (its length: the delay now) */
+            tape_glitch();
+        }
+        if (tp.gmode != GL_NONE) {                   /* GLITCH: the repeat read another way, faded in and out */
+            uint32_t k = tp.glen - tp.gleft, m;
+            switch (tp.gmode) {
+            case GL_STUTTER: d += (int32_t)((k - k % tp.gst) << 16); break;
+            case GL_REVERSE: d += (int32_t)((2u * k) << 16); break;
+            case GL_SKIP: d += (int32_t)((tp.gskip * tp.glen) << 16); break;
+            default: d += (int32_t)(k << 15); break; /* (GL_HALF) */
+            }
+            m = k < tp.gleft - 1u ? k : tp.gleft - 1u;
+            env = m < TP_FADE ? (int32_t)(m * 65536u / TP_FADE) : 65536;
+        }
+        tp.gleft--;
+        d = clamp32(d, (int32_t)(2u << 16), (int32_t)(mask << 16));
+        {   /* tape_read, the line d (Q16) behind the head */
+            uint32_t p = (w << 16) - (uint32_t)d, ri = (p >> 16) & mask, f = p & 0xFFFFu, rj = (ri + 1u) & mask;
+            int32_t x0 = fxbuf[lb + ri], x1 = fxbuf[lb + rj];
+            e0s = x0 + (int32_t)(((int64_t)(x1 - x0) * (int32_t)f) >> 16);
+            if (pp) {
+                x0 = fxbuf[ri];
+                x1 = fxbuf[rj];
+                e1s = x0 + (int32_t)(((int64_t)(x1 - x0) * (int32_t)f) >> 16);
+            } else {
+                e1s = e0s;
+            }
+        }
+        if (env < 65536) {
+            e0s = (int32_t)(((int64_t)e0s * env) >> 16);
+            e1s = (int32_t)(((int64_t)e1s * env) >> 16);
+        }
+        {   /* the feedback: low cut, tone, BAND, PITCH, onto the tape (PP: each side's echo feeds the other) */
+            int32_t in0 = (fx_l[i] + fx_l[i + 1u]) >> 1, in1 = (fx_r[i] + fx_r[i + 1u]) >> 1, x, y;
+            if (!pp)
+                in0 = sat16(in0 + in1);
+            x = pp ? e1s : e0s;
+            if (freeze) {
+                y = x;
+            } else {
+                hp0 += (int32_t)(((int64_t)1843 * ((x << 8) - hp0)) >> 16);   /* (~100 Hz: 1 - 0.9719) */
+                x -= hp0 >> 8;
+                lp0 += (int32_t)(((int64_t)tone * ((x << 8) - lp0)) >> 16);
+                x = lp0 >> 8;
+                if (band)                            /* (1.0: BAND) */
+                    x = band_peak(0, x);
+                if (pitch)
+                    x = tape_shift(x, 0);
+                y = tape_sat(in0 + (int32_t)(((int64_t)x * fb) >> 16), g, gi);
+            }
+            fxbuf[(pp ? half : 0u) + w] = (int16_t)sat16(y);
+            if (pp) {
+                x = e0s;
+                if (freeze) {
+                    y = x;
+                } else {
+                    *hp1 += (int32_t)(((int64_t)1843 * ((x << 8) - *hp1)) >> 16);
+                    x -= *hp1 >> 8;
+                    *lp1 += (int32_t)(((int64_t)tone * ((x << 8) - *lp1)) >> 16);
+                    x = *lp1 >> 8;
+                    if (band)
+                        x = band_peak(1, x);
+                    if (pitch)
+                        x = tape_shift(x, 1);
+                    y = tape_sat(in1 + (int32_t)(((int64_t)x * fb) >> 16), g, gi);
+                }
+                fxbuf[w] = (int16_t)sat16(y);
+            }
+        }
+        if (pitch)
+            tp.psw++;
+        w = (w + 1u) & mask;
+        /* back up to the full rate: halfway, then the new; the echoes at LEVEL, added to the bus */
+        a = (prev0 + e0s) >> 1;
+        b = e0s;
+        ol[i] += (a * lvl) >> 15;
+        ol[i + 1u] += (b * lvl) >> 15;
+        if (er) {                                    /* 21c: ECHO > REVERB: the echoes into the reverb's send */
+            rev_in[i] += (int32_t)(((int64_t)a * er) >> 17);
+            rev_in[i + 1u] += (int32_t)(((int64_t)b * er) >> 17);
+            rv_sum |= a | b;
+        }
+        prev0 = e0s;
+        a = (prev1 + e1s) >> 1;
+        b = e1s;
+        if (st) {
+            mix_r[i] += (a * lvl) >> 15;
+            mix_r[i + 1u] += (b * lvl) >> 15;
+        }
+        if (er) {
+            rev_in[i] += (int32_t)(((int64_t)a * er) >> 17);
+            rev_in[i + 1u] += (int32_t)(((int64_t)b * er) >> 17);
+            rv_sum |= a | b;
+        }
+        prev1 = e1s;
+    }
+    tp.cur = cur;
+    tp.wow = wow;
+    tp.prev[0] = prev0;
+    tp.prev[1] = prev1;
+    tp.hp[0] = hp0;
+    tp.lp[0] = lp0;
+    tp.w = w;
+    tp.flph = flph;
+    if (rv_sum)
+        rev_fed = 1;
+}
+static __attribute__((noinline)) void tape_mono(uint32_t mask, int32_t fb, int32_t g, uint32_t gi, int32_t er, int32_t e0,
+                                                int32_t e1)
+{
+    tape_run(0, mask, fb, g, gi, er, e0, e1);
+}
+static __attribute__((noinline)) void tape_pp(uint32_t mask, int32_t fb, int32_t g, uint32_t gi, int32_t er, int32_t e0,
+                                              int32_t e1)
+{
+    tape_run(1, mask, fb, g, gi, er, e0, e1);
+}
 static void fx_tape(void)
 {
-    uint32_t h, c, mask = fx.delay_type == DELAY_TAPE ? FXBUF_MASK : FXBUF_MASK >> 1, half = FXBUF_SIZE >> 1;
-    int pp = fx.delay_type == DELAY_TAPEPP, st = fx_stereo();
-    int32_t *side = fx_side(), e[2], fb, g = 65536 + fx.d_sat * 3 * 516;   /* (SATURATE: 1 .. 4) */
+    uint32_t mask = fx.delay_type == DELAY_TAPE ? FXBUF_MASK : FXBUF_MASK >> 1;
+    int32_t fb, g = 65536 + fx.d_sat * 3 * 516;      /* (SATURATE: 1 .. 4) */
     uint32_t gi = (uint32_t)(0xFFFFFFFFu / (uint32_t)g) + 1u;
-    int32_t wowd = (int32_t)(((int64_t)fx.d_wow * (40 << 16)) >> 16), fld = (int32_t)(((int64_t)fx.d_wow * (3 << 16)) >> 16);
-    int32_t er = dly_loop() ? 0 : (int32_t)(((int64_t)fx.d_echorev * fx.dl_g) >> 15), rv_sum = 0, lvl, e0 = fx.dl_e, e1 = dl_gain();
+    int32_t er = dly_loop() ? 0 : (int32_t)(((int64_t)fx.d_echorev * fx.dl_g) >> 15), e0 = fx.dl_e, e1 = dl_gain();
     fb = (int32_t)(((int64_t)fx.d_fb * 75366) >> 16);   /* (to 115%) */
     fb += (int32_t)(((int64_t)(75366 - fb) * fx.push) >> 16);
     if (fx.lfo_fb)
@@ -674,84 +821,10 @@ static void fx_tape(void)
     tp.tgt = tape_target();
     if (!tp.cur)
         tp.cur = tp.tgt;
-    for (h = 0; h < BLOCK / 2u; h++) {
-        int32_t d, in[2], env = 65536;
-        uint32_t k;
-        lvl = e0 + (int32_t)(((e1 - e0) * (int32_t)(2u * h + 2u)) / (int32_t)BLOCK);
-        tp.cur += (tp.tgt - tp.cur) >> 11;           /* (the glide: ~90 ms) */
-        if (++tp.wown >= 4096u) {                    /* WOW: a new drift every ~0.19 s */
-            tp.wown = 0;
-            tp.wowt = (int32_t)(((int64_t)((int32_t)(tp_rand() & 0xFFFFu) - 32768) * wowd) >> 15);
-        }
-        tp.wow += (tp.wowt - tp.wow) >> 11;
-        tp.flph += 1168730u;                         /* (~6 Hz at 22.05 kHz) */
-        d = tp.cur + tp.wow + (int32_t)(((int64_t)sine_at(tp.flph) * fld) >> 15);
-        if (!tp.gleft)
-            tape_glitch();
-        k = tp.glen - tp.gleft;
-        tp.gleft--;
-        switch (tp.gmode) {                          /* GLITCH: the repeat read another way */
-        case GL_STUTTER: d += (int32_t)((k - k % tp.gst) << 16); break;
-        case GL_REVERSE: d += (int32_t)((2u * k) << 16); break;
-        case GL_SKIP: d += (int32_t)((tp.gskip * tp.glen) << 16); break;
-        case GL_HALF: d += (int32_t)(k << 15); break;
-        default: break;
-        }
-        if (tp.gmode != GL_NONE) {                   /* (faded in and out: no clicks) */
-            uint32_t m = k < tp.gleft ? k : tp.gleft;
-            env = m < TP_FADE ? (int32_t)(m * 65536u / TP_FADE) : 65536;
-        }
-        d = clamp32(d, (int32_t)(2u << 16), (int32_t)(mask << 16));
-        e[0] = tape_read(pp ? half : 0u, mask, d);
-        e[1] = pp ? tape_read(0, mask, d) : e[0];
-        if (env < 65536) {
-            e[0] = (int32_t)(((int64_t)e[0] * env) >> 16);
-            e[1] = (int32_t)(((int64_t)e[1] * env) >> 16);
-        }
-        in[0] = (fx_l[2u * h] + fx_l[2u * h + 1u]) >> 1;
-        in[1] = (fx_r[2u * h] + fx_r[2u * h + 1u]) >> 1;
-        if (!pp)
-            in[0] = sat16(in[0] + in[1]);
-        for (c = 0; c < (pp ? 2u : 1u); c++) {       /* the feedback: low cut, tone, PITCH, onto the tape */
-            int32_t x = e[pp ? 1u - c : c], y;      /* (PP: each side's echo feeds the other) */
-            int32_t lo;
-            if (fx.freeze) {
-                y = x;
-            } else {
-                tp.hp[c] += (int32_t)(((int64_t)1843 * ((x << 8) - tp.hp[c])) >> 16);   /* (~100 Hz: 1 - 0.9719) */
-                lo = tp.hp[c] >> 8;
-                x -= lo;
-                tp.lp[c] += (int32_t)(((int64_t)fx.d_tone * ((x << 8) - tp.lp[c])) >> 16);
-                x = tp.lp[c] >> 8;
-                if (fx.band)                         /* (1.0: BAND) */
-                    x = band_peak(c, x);
-                if (fx.d_pitch)
-                    x = tape_shift(x, c);
-                y = tape_sat((pp ? in[c] : in[0]) + (int32_t)(((int64_t)x * fb) >> 16), g, gi);
-            }
-            fxbuf[(pp ? (c ? 0u : half) : 0u) + tp.w] = (int16_t)sat16(y);
-        }
-        if (fx.d_pitch)
-            tp.psw++;
-        tp.w = (tp.w + 1u) & mask;
-        for (c = 0; c < 2u; c++) {                   /* back up to the full rate: halfway, then the new */
-            int32_t a = (tp.prev[c] + e[c]) >> 1, b = e[c];
-            uint32_t i = 2u * h;
-            if (st || !c) {                          /* (1.0: the echoes at LEVEL, added to the bus) */
-                int32_t *o = !st ? side : c ? mix_r : mix_l;
-                o[i] += (a * lvl) >> 15;
-                o[i + 1u] += (b * lvl) >> 15;
-            }
-            if (er) {                                /* 21c: ECHO > REVERB: the echoes into the reverb's send */
-                rev_in[i] += (int32_t)(((int64_t)a * er) >> 17);
-                rev_in[i + 1u] += (int32_t)(((int64_t)b * er) >> 17);
-                rv_sum |= a | b;
-            }
-            tp.prev[c] = e[c];
-        }
-    }
-    if (rv_sum)
-        rev_fed = 1;
+    if (fx.delay_type == DELAY_TAPEPP)
+        tape_pp(mask, fb, g, gi, er, e0, e1);
+    else
+        tape_mono(mask, fb, g, gi, er, e0, e1);
     fx.dl_e = e1;
 }
 
