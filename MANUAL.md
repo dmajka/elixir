@@ -201,13 +201,14 @@ Hold SHIFT (OCT−) and press **OCT+** (CLEAR). A list opens; turn SELECT to cho
 
 | Choice | Clears |
 |---|---|
-| CLEAR TRACK | the selected track's steps |
+| CLEAR TRACK | the selected track's steps, their locks and its generator; from 1.4 its length, clock and direction stay as they were |
 | CLEAR PATTERN | every track of the pattern |
 | CLEAR TRACK LOCKS | every lock on the selected track in the pattern shown; its steps stay (from 1.4; before, CLEAR AUTOMATION 1 and 2 cleared one lane each) |
 | CLEAR STEP LOCKS | (step edit only) every lock on the selected step; the step stays on. On the LOCKS page the list opens here (from 1.4) |
 | CLEAR SOUND (INIT) | the selected track's voice back to the init kit's, every one of its parameters (sends, shape, LFO, model …); the other voices stay as they are. CH and OH share a voice. |
 | CLEAR KIT (INIT) | every voice back to the init kit |
 | DELETE SONG ROW | (song page) the selected row |
+| DELETE | (save and load pages only, from 1.4) the selected slot: a kit, sound, project, pattern or song. See [Loading and saving](#loading-and-saving) |
 
 ### Mutes and solo
 
@@ -262,7 +263,8 @@ MIDI notes played while in step edit set the selected step's note.
 A lock sets one parameter to a different value on one step, for example a higher filter cutoff on the last kick of the bar. From 1.4 a step can hold up to **eight** locks, one for each parameter, and the project shares one pool of **8,192** locks among all 32 patterns. One pattern can be dense with locks while the next has none. (Before 1.4, every step had room for exactly two.)
 
 - **The quick way:** on any sound page (EDIT, ENV, SCL, LFO, GLO, the mixer), hold a step key and turn a knob. The step turns on if it was off, and the knob's card shows the locked value in the accent color. Turn another knob while still holding the step and that parameter gets a lock of its own.
-- **On the LOCKS page** (step edit's third page): the screen lists the selected step's locks, one row each, with the parameter's name and its value as its card reads it (Hz, ms, %). **Lock** (KNOB 1) picks a row; **Param** (KNOB 2) changes that row's parameter (parameters the step already locks are skipped; turned all the way down to **OFF**, the lock is deleted); **Value** (KNOB 3) sets its value. The last row, **+ ADD A LOCK**, adds one: turn Param there and the new lock starts from the kit's value. Tap another step key to see its locks.
+- **On the LOCKS page** (step edit's third page): the screen lists the selected step's locks, one row each, with the parameter's name and its value as its card reads it (Hz, ms, %). **Lock** (KNOB 1) picks a row; **Param** (KNOB 2) changes that row's parameter (parameters the step already locks are skipped; turned all the way down to **OFF**, the lock is deleted); **Value** (KNOB 3) sets its value. The last row, **+ Add a lock**, adds one: turn Param there and the new lock starts from the kit's value. The line at the bottom says what the knobs do on the row selected. Tap another step key to see its locks.
+- **Deleting a lock:** select its row and turn **Param** all the way down to **OFF**. To delete all of the step's locks at once, press CLEAR (SHIFT (OCT−) + OCT+), then COPY.
 - **The count:** the top line shows the step (and **FULL 8/8** when it has eight) and how many of the pool's 8,192 locks are left. A ninth lock on a step is refused with **STEP FULL: 8 LOCKS**; a lock when the pool is used up, with **NO LOCKS LEFT: 8,192 IN USE**.
 - **Clearing:** SHIFT (OCT−) + OCT+ offers **CLEAR TRACK LOCKS** (the selected track's, in this pattern) and, in step edit, **CLEAR STEP LOCKS** (the selected step's); on the LOCKS page it opens on the step's. See [Clearing](#clearing).
 - **When the pool is full:** a copy that needs more locks than are left (a pattern, a track, a bar, SAVE PATTERN, a postcard, an UNDO) is refused rather than done without its locks: nothing changes and the screen says **NO LOCKS LEFT: 8,192 IN USE**. Clear some locks (or a pattern you don't need) and copy again.
@@ -1571,6 +1573,17 @@ The page draws the cottage, the home pattern and how far away you are.
 | SONG (save only) | 64 | OCT+ | (the song page) |
 
 **Naming:** KNOB 1 the letter's position, KNOB 2 the letter, KNOB 3 upper / lower case. OCT+ saves, OCT− alone goes back.
+
+**Deleting** (from 1.4): on the save or load page, select the slot, then press CLEAR (hold SHIFT (OCT−), press OCT+). The screen asks **DELETE KIT 05** with the slot's name under it: press **COPY (OCT+)** again to delete it, or let go of SHIFT to keep it.
+
+| Type | Deleting it |
+|---|---|
+| KIT, MORPH (SLOTS) | The slot goes back to Init. The sound you're playing doesn't change |
+| KIT, MORPH (LIBRARY), SOUND | The library slot is emptied |
+| PROJECT | The project is erased from flash, every saved copy of it. The session you're playing stays as it is |
+| PATTERN | As the pattern page's delete: the pattern is emptied |
+| SONG | All its rows go |
+| FACTORY | Can't be deleted |
 
 ### Projects
 

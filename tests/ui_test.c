@@ -12041,6 +12041,110 @@ static void pc_until(uint32_t pattern)                /* .. until the pattern pl
     for (i = 0; i < 8000u && sq.active != pattern; i++)
         pc_run(1);
 }
+/* 1.4: SAVE / LOAD: CLEAR (SHIFT + COPY) offers DELETE for the slot shown; COPY deletes it. A project goes with every
+ * copy of it; a kit slot goes back to Init; a library sound goes; a song empties; the factory's stay */
+static void io_del(void)
+{
+    hold(B_OCTDN);
+    press(B_OCTUP);
+    run_ms(30);
+}
+static void phase_140_delete(void)
+{
+    char nm[9];
+    uint32_t ok;
+    uint8_t keep[KIT_PK], kname[KIT_NAME_LEN];
+    seq_stop_now();
+    memcpy(keep, kits[7], KIT_PK);
+    memcpy(kname, kit_names[7], KIT_NAME_LEN);
+    /* a project, saved twice (two copies in flash) */
+    ok = proj_save(2, "DOOMED  ") == 0 && proj_save(2, "DOOMED  ") == 0 && proj_exists(2);
+    io_open(M_LOAD, IO_PROJECT);
+    ui.io_slot = 2;
+    run_ms(30);
+    shot("io-load-help");
+    io_del();
+    ok &= ui.clear_open && ui.clear_sel == CL_SLOT;
+    shot("io-delete-ask");
+    turn(EN_SELECT, 1);                              /* (DELETE is the last: SELECT stays on it) */
+    ok &= ui.clear_sel == CL_SLOT;
+    press(B_OCTUP);
+    release(B_OCTDN);
+    proj_scan();
+    check(ok && !ui.clear_open && !proj_exists(2) && !strcmp(ui.msg, "PROJECT DELETED"),
+          "1.4 DELETE: LOAD PROJECT 3, CLEAR, COPY: every copy gone");
+    io_del();                                        /* an empty slot */
+    press(B_OCTUP);
+    release(B_OCTDN);
+    check(!strcmp(ui.msg, "THE SLOT IS EMPTY"), "1.4 DELETE: an empty project slot says so");
+    /* letting go of SHIFT cancels */
+    memcpy(kit_names[7], "Bass    ", KIT_NAME_LEN);
+    io_open(M_SAVE, IO_KIT);
+    ui.io_slot = 7;
+    io_del();
+    release(B_OCTDN);
+    ok = !ui.clear_open && !memcmp(kit_names[7], "Bass    ", 8);
+    io_del();
+    press(B_OCTUP);
+    release(B_OCTDN);
+    check(ok && !memcmp(kit_names[7], "Init    ", 8), "1.4 DELETE: a kit slot back to Init (SHIFT let go: kept)");
+    memcpy(kits[7], keep, KIT_PK);
+    memcpy(kit_names[7], kname, KIT_NAME_LEN);
+    /* a library sound */
+    ok = libsound_save(5, "SNARE   ", 3) == 0 && !kl_name(KLK_SOUND, 5, nm);
+    io_open(M_LOAD, IO_SOUND);
+    ui.io_slot = 5;
+    io_del();
+    press(B_OCTUP);
+    release(B_OCTDN);
+    check(ok && kl_name(KLK_SOUND, 5, nm) && !strcmp(ui.msg, "SOUND DELETED"), "1.4 DELETE: a library sound");
+    /* a song */
+    songs[6][0] = 3;
+    songs[6][1] = 4;
+    io_open(M_SAVE, IO_SONG);
+    ui.io_slot = 6;
+    io_del();
+    press(B_OCTUP);
+    release(B_OCTDN);
+    check(songs[6][0] == SONG_END && songs[6][1] == SONG_END, "1.4 DELETE: a song emptied");
+    /* the factory's */
+    io_open(M_LOAD, IO_KIT);
+    ui.io_type = IO_FACTORY;
+    ui.io_slot = 0;
+    io_del();
+    press(B_OCTUP);
+    release(B_OCTDN);
+    check(!strcmp(ui.msg, "FACTORY KITS CAN'T BE DELETED"), "1.4 DELETE: the factory kits stay");
+    /* elsewhere, DELETE isn't among CLEAR's */
+    goto_mode(B_HOME, M_HOME);
+    hold(B_OCTDN);
+    press(B_OCTUP);
+    turn(EN_SELECT, 20);
+    ok = ui.clear_open && ui.clear_sel == CL_SONG_ROW;
+    release(B_OCTDN);
+    check(ok && !ui.clear_open, "1.4 DELETE: only on SAVE and LOAD");
+    mode_set(M_PATTERN);
+    run_ms(30);
+    shot("patterns-legend");    /* CLEAR TRACK: the steps go, the length, clock and direction stay */
+    {
+        pattern_t *p = &pat[sq.active];
+        p->len[2] = 32;
+        p->dir[2] = DIR_FWD + 1u;
+        p->main[2][0] = 0x0101u;
+        mode_set(M_HOME);
+        track_select(2);
+        hold(B_OCTDN);
+        press(B_OCTUP);
+        ok = ui.clear_open && ui.clear_sel == CL_TRACK;
+        press(B_OCTUP);
+        release(B_OCTDN);
+        check(ok && !p->main[2][0] && p->len[2] == 32u && p->dir[2] == DIR_FWD + 1u,
+              "1.4 CLEAR TRACK: the steps cleared, the length and direction kept");
+        p->len[2] = 16;
+        p->dir[2] = DIR_FWD;
+    }
+}
+
 static void phase_140_pc(void)
 {
     uint32_t g = midi_global_ch(), i, ok;
@@ -12692,6 +12796,7 @@ int main(int argc, char **argv)
     lfo_smooth_drift();
     phase19_locks();
     phase_140_pc();
+    phase_140_delete();
     copy_pass();                                     /* (1.0's copy and picture pass: last, as it runs time) */
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;

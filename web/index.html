@@ -529,6 +529,60 @@
   <section class="band" id="updates">
     <div class="intro"><h2>Updates</h2><p>What each release added and fixed.</p></div>
     <div class="updates">
+      <!-- 1.4: not released yet. At release, put the tag's date in place of "Coming soon". -->
+      <div class="card"><h3>1.4<span>Coming soon</span></h3>
+        <p>Mostly refinements: more room for locks, smoother everyday handling, a few fixes, and a faster, leaner
+          firmware underneath. Projects from 1.3 load as before.</p>
+        <h4>Locks</h4>
+        <ul>
+          <li><b>Up to eight locks on a step</b>, one per parameter (it was two). All 32 patterns share one pool of
+            8,192 locks, so a busy pattern can use far more than its share while the others use none.</li>
+          <li>A new <b>LOCKS</b> page (step edit's third page) lists a step's locks with their values. Add one, change
+            its parameter or value, or turn Param to OFF to delete it. The bottom line says what each knob does.</li>
+          <li><b>CLEAR TRACK LOCKS</b> and <b>CLEAR STEP LOCKS</b> clear a track's or a step's locks and leave the steps
+            alone.</li>
+          <li>If the pool is ever full, a copy that needs more locks is refused with <b>NO LOCKS LEFT</b> and
+            nothing changes, so no locks are lost along the way.</li>
+        </ul>
+        <h4>Recording and sequencing</h4>
+        <ul>
+          <li>REC's <b>Quantize</b> goes from 0 to 100%, not just on or off, so you can tighten your timing without
+            losing all of the feel.</li>
+          <li>A cleaner <b>pattern page</b>: the copy, paste and delete hints are smaller and line up, so the
+            patterns stand out.</li>
+        </ul>
+        <h4>Sound and performance</h4>
+        <ul>
+          <li><b>Make a morph from this kit</b>: with no morph target loaded, turn Morph to 100% and press OCT+. Elixir
+            copies the kit as the target, so you can change it and morph between the two.</li>
+          <li>The sound buttons are easier to follow. EDIT remembers the page you were on, wherever SELECT took you.
+            Pressing a sound button a second time does nothing; SELECT turns the pages.</li>
+        </ul>
+        <h4>Saving and deleting</h4>
+        <ul>
+          <li><b>Delete a kit, sound, project, pattern or song</b> from the save or load page: select it, press CLEAR
+            (hold OCT&minus;, press OCT+), then OCT+ again to confirm. A deleted project is gone from flash. A kit slot goes back to Init.</li>
+        </ul>
+        <h4>MIDI and controllers</h4>
+        <ul>
+          <li><b>Program change out</b> (CONFIG &rarr; PROGRAM CHANGE OUT): choose which program each pattern sends
+            (its own number, any number or none), the channel, and when. <b>AHEAD</b> sends it as soon as the next
+            pattern is queued, so a Digitakt or Digitone changes pattern on the same downbeat as Elixir.</li>
+          <li><b>Rush per track</b> from a controller: the remote's TRACKS channel has a Rush knob for each track
+            (CC 88&ndash;94) where LFO amount was.</li>
+        </ul>
+        <h4>Fixes</h4>
+        <ul>
+          <li>Saving a morph no longer moves the kit you were on to the morph's slot.</li>
+          <li><b>CLEAR TRACK</b> clears the track's steps and keeps its length, clock and direction. Before, it also
+            set the track back to 16 steps.</li>
+        </ul>
+        <h4>Under the hood</h4>
+        <ul>
+          <li>The sound tables are stored compressed and unpacked when the FM-1 starts. That frees about 31 KB of
+            flash for new features, and the sound is bit-for-bit the same.</li>
+        </ul>
+      </div>
       <div class="card"><h3>1.3.1<span>November 10, 2026</span></h3>
         <ul>
           <li>Fixed: switching the master filter away from <b>RING</b> no longer carries RING's Decay over as the
@@ -541,7 +595,7 @@
             its hit, like a drum pad, so you can build a beat pass by pass and watch the steps appear on the grid.</li>
           <li>Erasing while recording is clearer: hold OCT&minus; and OCT+ together and the screen says
             <b>ERASING AS IT PLAYS</b>.</li>
-          <li>New <b>Quantize</b> record option (SHIFT + REC). Turn it OFF to keep how early or late you played
+          <li>New <b>Quantize</b> record option (hold OCT&minus;, press REC). Turn it OFF to keep how early or late you played
             each hit.</li>
           <li><b>Nudge</b> a whole track up to 16 steps either way: SEQ &rarr; GENERATOR, with the generator OFF,
             KNOB 4. Press OCT+ to keep it.</li>

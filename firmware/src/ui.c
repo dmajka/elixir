@@ -2844,9 +2844,58 @@ static void io_ok(void)
 
 /* CLEAR (SHIFT + COPY): what it clears */
 /* (1.4: CLEAR TRACK LOCKS, the track's in the pattern shown; CLEAR STEP LOCKS, the selected step's: step edit only) */
-enum { CL_TRACK, CL_PATTERN, CL_AUTO, CL_STEP_LK, CL_SOUND, CL_KIT, CL_SONG_ROW, NCLEAR };
+/* (1.4: DELETE, the SAVE / LOAD page's selected slot: SAVE and LOAD only, the last) */
+enum { CL_TRACK, CL_PATTERN, CL_AUTO, CL_STEP_LK, CL_SOUND, CL_KIT, CL_SONG_ROW, CL_SLOT, NCLEAR };
 static const char *const CLEAR_NAME[NCLEAR] = {"CLEAR TRACK", "CLEAR PATTERN", "CLEAR TRACK LOCKS", "CLEAR STEP LOCKS",
-                                               "CLEAR SOUND (INIT)", "CLEAR KIT (INIT)", "DELETE SONG ROW"};
+                                               "CLEAR SOUND (INIT)", "CLEAR KIT (INIT)", "DELETE SONG ROW", "DELETE"};
+static int io_mode(void) { return (ui.mode == M_SAVE || ui.mode == M_LOAD) && !ui.io_naming; }
+/* 1.4: the SAVE / LOAD page's slot deleted (CLEAR, COPY): a kit slot to Init, a library kit or sound, a project (the
+ * session stays), a pattern (as the pattern page's DELETE), a song emptied. The factory's stay */
+static void io_delete(void)
+{
+    uint32_t s = ui.io_slot, t = ui.io_type;
+    int rc = 0;
+    const char *done = "DELETED";
+    char nm[9];
+    if (t == IO_FACTORY || t == IO_FMORPH) {
+        ui_message("FACTORY KITS CAN'T BE DELETED");
+        return;
+    }
+    if (t == IO_SOUND || ((t == IO_KIT || t == IO_MORPH) && io_lib())) {
+        uint32_t k = t == IO_SOUND ? KLK_SOUND : KLK_KIT;
+        if (kl_name(k, s, nm)) {
+            ui_message("THE SLOT IS EMPTY");
+            return;
+        }
+        rc = kl_write(k, s, 0, 0, 0);
+        done = t == IO_SOUND ? "SOUND DELETED" : "LIBRARY KIT DELETED";
+    } else if (t == IO_KIT || t == IO_MORPH) {
+        uint8_t k[KIT_LEN];
+        kit_init_values(k);
+        kit_put(s, k);
+        memcpy(kit_names[s], "Init    ", KIT_NAME_LEN);
+        done = "KIT SLOT DELETED (INIT)";
+    } else if (t == IO_PROJECT) {
+        if (!proj_exists(s)) {
+            ui_message("THE SLOT IS EMPTY");
+            return;
+        }
+        rc = proj_delete(s);
+        if (kset.project == s) {
+            kset.project = 0xFF;
+            settings_later();
+        }
+        done = "PROJECT DELETED";
+    } else if (t == IO_PATTERN) {
+        pat_delete(s);
+        done = "PATTERN DELETED";
+    } else if (t == IO_SONG) {
+        memset(songs[s], SONG_END, MAX_SONG_LENGTH);
+        song_rd[s % NUM_SONGS] = 0;
+        done = "SONG DELETED";
+    }
+    ui_message(rc == 0 ? done : rc == ST_LOCKED ? fx_msg(" DATA: NOT DELETED") : "DELETE FAILED");
+}
 /* 0.10: CLEAR SOUND: the track's voice as the init kit has it (the rest of the kit as it is) */
 static void sound_init(uint32_t v, int saved)        /* (1.0: saved: as the kit loaded has it, RELOAD's one voice) */
 {
@@ -2863,7 +2912,16 @@ static void clear_do(void)
 {
     pattern_t *pt = shown_pat();
     switch (ui.clear_sel) {
-    case CL_TRACK: seq_clear_track(ui.track, pt); ui_message("TRACK CLEARED"); break;
+    case CL_TRACK: {                                 /* (1.4, the user: the steps go; the TRACK page's length, clock and
+                                                      * direction stay. CLEAR PATTERN and delete still reset them) */
+        uint8_t len = pt->len[ui.track], clk = pt->clk[ui.track], dir = pt->dir[ui.track];
+        seq_clear_track(ui.track, pt);
+        pt->len[ui.track] = len;
+        pt->clk[ui.track] = clk;
+        pt->dir[ui.track] = dir;
+        ui_message("TRACK CLEARED");
+        break;
+    }
     case CL_PATTERN: seq_clear_pattern(pt); ui_message("PATTERN CLEARED"); break;
     case CL_AUTO: seq_clear_automation(ui.track, pt); ui_message("TRACK'S LOCKS CLEARED"); break;
     case CL_STEP_LK:
@@ -2879,6 +2937,7 @@ static void clear_do(void)
         ui_message("KIT CLEARED");
         break;
     case CL_SONG_ROW: song_delete_row(sq.song, ui.song_row); ui_message("ROW DELETED"); break;
+    case CL_SLOT: io_delete(); break;
     default: break;
     }
     ui.clear_open = 0;
@@ -3460,7 +3519,8 @@ static void button_down(uint32_t b)
             }
             if (!ui.clear_open) {
                 ui.clear_open = 1;
-                ui.clear_sel = ui.mode == M_SONG ? CL_SONG_ROW   /* (0.10: on a sound page, its sound) */
+                ui.clear_sel = io_mode() ? CL_SLOT       /* (1.4: SAVE / LOAD: the slot shown) */
+                             : ui.mode == M_SONG ? CL_SONG_ROW   /* (0.10: on a sound page, its sound) */
                              : ui.mode == M_SOUND || ui.mode == M_KEYS ? CL_SOUND
                              : ui.mode == M_STEP && ui.page % 4u == 2u ? CL_STEP_LK   /* (1.4: the LOCKS page) */
                              : CL_TRACK;
@@ -3809,7 +3869,7 @@ static void ui_input(void)
     }
     if ((n = panel_enc(EN_SELECT)) != 0 && !ui_asking()) {
         if (ui.clear_open) {
-            ui.clear_sel = (uint8_t)clamp32((int32_t)ui.clear_sel + n, 0, NCLEAR - 1);
+            ui.clear_sel = (uint8_t)clamp32((int32_t)ui.clear_sel + n, 0, io_mode() ? NCLEAR - 1 : NCLEAR - 2);
             if (ui.clear_sel == CL_STEP_LK && ui.mode != M_STEP)   /* (1.4: a step is selected in step edit only) */
                 ui.clear_sel = (uint8_t)(n > 0 ? CL_STEP_LK + 1 : CL_STEP_LK - 1);
         } else if (ui.kb_open) {

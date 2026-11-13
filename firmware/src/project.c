@@ -891,6 +891,29 @@ static int proj_save(uint32_t l, const char *name)  /* 0.5.1: hushed (storage_hw
     return rc;
 }
 
+/* 1.4: a project deleted (SAVE / LOAD, CLEAR): every copy of it (an older copy would win once the newest went), each
+ * copy's first sector erased, which takes its header; the session (PROJ_AUTO) isn't. 0, or an error */
+static int proj_delete(uint32_t l)
+{
+    uint32_t ph;
+    int rc = 0;
+    if (data_locked)
+        return ST_LOCKED;
+    if (!flash_ok || l >= PROJ_USER || proj_lock)
+        return -1;
+    flash_hush();
+    for (ph = 0; ph < PROJ_NPHYS && !rc; ph++) {
+        proj_hdr_t h;
+        if (!hdr_read(ph, &h) && h.logical == l && st_erase(phys_base(ph)))
+            rc = -3;
+    }
+    flash_unhush();
+    proj_scan();
+    if (pj.loaded == l)
+        pj.loaded = 0xFF;                            /* (ui.c io_delete: the settings' project too) */
+    return rc;
+}
+
 static void proj_after_load(void)                   /* the session as the project left it */
 {
     uint32_t t;

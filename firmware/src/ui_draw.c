@@ -548,11 +548,30 @@ static void draw_sound_browser(int32_t y0)           /* 0.8 */
     }
 }
 
+static void io_slot_name(char *b, uint32_t n, uint32_t type, uint32_t s);
 static void draw_clear(int32_t y0)
 {
     (void)y0;
     cv_rrect(10, 20, 220, 88, 6, T_SURF, T_BG);
     cv_text_in(10, 30, 220, &AF_S, "SHIFT + COPY", T_MID, T_SURF);
+    if (ui.clear_sel == CL_SLOT) {                   /* (1.4: DELETE KIT 05, its name under it) */
+        static const char *const TY[NIO] = {"KIT ", "PATTERN ", "SONG ", "KIT ", "SOUND ", "PROJECT ", "FACTORY ",
+                                            "FACTORY "};
+        char b[32], r[32];
+        put_str(b, "DELETE ", sizeof b);
+        cat(b, (ui.io_type == IO_KIT || ui.io_type == IO_MORPH) && io_lib() ? "LIBRARY KIT " : TY[ui.io_type],
+            sizeof b);
+        if (ui.io_slot >= 99u)
+            put_int(b + str_len(b), (int32_t)ui.io_slot + 1);
+        else
+            two_digits(b + str_len(b), ui.io_slot + 1u);
+        cv_text_in(10, 44, 220, &AF_M, b, T_ACCENT, T_SURF);
+        io_slot_name(r, sizeof r, ui.io_type, ui.io_slot);
+        cv_text_in(10, 62, 220, &AF_S, r, T_TEXT, T_SURF);
+        cv_text_in(10, 78, 220, &AF_S, "COPY: delete", T_TEXT, T_SURF);
+        cv_text_in(10, 92, 220, &AF_S, "let go of SHIFT to cancel", T_MID, T_SURF);
+        return;
+    }
     if (ui.clear_sel == CL_STEP_LK) {                /* (1.4: which step: CLEAR STEP 12 LOCKS) */
         char b[24];
         put_str(b, "CLEAR STEP ", sizeof b);
@@ -780,7 +799,7 @@ static void draw_gen_pop(int32_t y0)
 }
 /* 1.4: the LOCKS page: the selected step's locks, a row each (its parameter, its value as its card reads it), the
  * row KNOB 1 picks lit; ADD after the last while the step has room. Above: the step, how many; the pool's count */
-#define LK_ROWS 5u
+#define LK_ROWS 5u                                   /* (1.4: list rows, 16 high, as LOAD's) */
 static void lk_value(char *b, uint32_t n, uint32_t c, uint32_t v);
 static void card_name(char *b, uint32_t n, uint32_t p);
 static void lk_name(char *b, uint32_t n, uint32_t c)  /* a lock's parameter as its card names it, its voice first */
@@ -822,6 +841,7 @@ static uint32_t locks_sig(void)
         s = sig_add(s, c[i] | (uint32_t)v[i] << 10);
     return sig_add(s, lk_used());
 }
+static void help_pairs(int32_t x, int32_t y, const char *const *kv, uint32_t n);
 static void draw_locks(int32_t y0)
 {
     uint16_t c[LK_STEP];
@@ -836,21 +856,31 @@ static void draw_locks(int32_t y0)
     put_str(put_thou(b, LK_N - lk_used()), " / 8,192 LEFT", 16);
     cv_text_r(232, 3, &AF_S, b, T_DIM, T_BG);
     top = r + 1u > LK_ROWS ? r + 1u - LK_ROWS : 0u;  /* (scrolled: the row in sight) */
+    /* (1.4, the user: the rows as LOAD's and the sound browser's lists, the regular face, not the bold on yellow; and
+     * say how to add and delete one) */
     for (i = top; i < rows && i < top + LK_ROWS; i++) {
-        int32_t y = 20 + (int32_t)(i - top) * 21;
-        uint16_t bg = i == r ? T_THEME : T_SURF, fg = i == r ? T_INK : T_TEXT;
-        cv_rrect(4, y, 232, 19, 4, bg, T_BG);
+        int32_t y = 19 + (int32_t)(i - top) * 16;
+        int sel = i == r;
+        uint16_t bg = sel ? T_SEL : T_BG, fg = sel ? T_INK : T_TEXT;
+        if (sel)
+            cv_rrect(4, y, 232, 16, 3, T_SEL, T_BG);
         if (i >= n) {
-            cv_text(12, y + CAP_IN(M, 19), &AF_M, n ? "+ ADD A LOCK" : "+ ADD A LOCK (PARAM)", i == r ? T_INK : T_DIM);
+            cv_text(10, y + CAP_IN(S, 16), &AF_S, "+ Add a lock", sel ? T_INK : T_MID);
             continue;
         }
         lk_value(b, sizeof b, c[i], v[i]);
-        cv_text_r(228, y + CAP_IN(M, 19), &AF_M, b, fg, bg);
+        cv_text_r(230, y + CAP_IN(S, 16), &AF_S, b, fg, bg);
         lk_name(b, sizeof b, c[i]);
-        cv_text_fit(12, y + CAP_IN(M, 19), &AF_M, b, fg, bg, 136);
+        cv_text_fit(10, y + CAP_IN(S, 16), &AF_S, b, fg, bg, 150);
     }
     if (!n)
-        help_text_m(12, 46, "No locks. Hold a step and turn a knob, or turn PARAM here.", T_DIM, 14);
+        help_text_m(10, 42, "No locks on this step. Turn Param to add one, or hold the step's key on any sound page and "
+                    "turn a knob.", T_MID, 10);
+    {
+        static const char *const LA[4] = {"PARAM", "picks one to add", "VALUE", "sets it"};
+        static const char *const LL[4] = {"PARAM to OFF", "deletes it", "CLEAR", "deletes all"};
+        help_pairs(10, 116, r >= n ? LA : LL, 2);
+    }
 }
 static void draw_perf_page(int32_t y0);
 static uint32_t glfo_sig(uint32_t i) { return gls[i].dest != GD_OFF ? (uint32_t)gl.out[i] >> 11 : 0u; }
@@ -1098,12 +1128,21 @@ static void draw_patterns(int32_t y0)
         if (used && i != sq.active && i != sq.pending)
             cv_rect(x + 5, y + 10, 3, 3, T_TEXT);
     }
-    {   /* (1.0, the user: the keys, larger, in place of 37's lock; the Voices card says FREE / LOCKED / KIT) */
-        static const char *const K[3][2] = {{"COPY", "hold OCT+, tap pattern"}, {"PASTE", "hold OCT+, tap target"},
-                                            {"DELETE", "hold OCT-, tap pattern"}};
+    {   /* (1.4, the user: quieter, under a rule: the page is for queuing patterns. Three columns that line up: the
+         * action, the button held, an arrow, the key: DELETE  Hold OCT-  >  Tap a pattern) */
+        static const char *const K[3][3] = {{"COPY", "Hold OCT+", "Tap a pattern"},
+                                            {"PASTE", "Hold OCT+", "Tap the target"},
+                                            {"DELETE", "Hold OCT-", "Tap a pattern"}};
+        cv_rect(10, 64, 220, 1, T_LINE);
         for (i = 0; i < 3u; i++) {
-            cv_text(10, 60 + (int32_t)i * 21, &AF_M, K[i][0], T_THEME);
-            cv_text(84, 60 + (int32_t)i * 21, &AF_M, K[i][1], T_TEXT);
+            int32_t y = 72 + (int32_t)i * 16, m = y + AF_S_CAP_Y + AF_S_CAP_H / 2;
+            cv_text(10, y, &AF_S, K[i][0], T_THEME);
+            cv_text(72, y, &AF_S, K[i][1], T_TEXT);
+            cv_rect(140, m, 9, 1, T_MID);            /* (the arrow) */
+            cv_rect(146, m - 2, 1, 5, T_MID);
+            cv_rect(147, m - 1, 1, 3, T_MID);
+            cv_rect(148, m, 1, 1, T_MID);
+            cv_text(158, y, &AF_S, K[i][2], T_TEXT);
         }
     }
 }
@@ -1231,9 +1270,10 @@ static void draw_io(int32_t y0)
             list_row(i * 16, l, r, s == ui.io_slot, 0);
         }
         {
-            static const char *const LS[4] = {"OCT+", "save", "SAVE", "the load page"};
-            static const char *const LL[4] = {"OCT+", "load", "SAVE", "the save page"};
-            help_pairs(10, 116, ui.mode == M_SAVE ? LS : LL, 2);
+            static const char *const LS[6] = {"OCT+", "save", "SAVE", "to load", "CLEAR", "delete"};
+            static const char *const LL[6] = {"OCT+", "load", "SAVE", "to save", "CLEAR", "delete"};
+            help_pairs(10, 116, ui.mode == M_SAVE ? LS : LL,   /* (1.4: CLEAR deletes the slot; not the factory's) */
+                       ui.io_type == IO_FACTORY || ui.io_type == IO_FMORPH ? 2u : 3u);
         }
     }
 }
