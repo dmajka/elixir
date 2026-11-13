@@ -1099,10 +1099,13 @@ static inline __attribute__((always_inline)) void ph_chain(uint32_t c, int two, 
     int32_t a1 = ph_coef(fx.m_ph + c * 0x40000000u), a = fx.ph_a[c] ? fx.ph_a[c] : a1;
     int32_t da = (a1 - a) >> 3, dw = 0, ddw = fx.dw - fx.dw_last, g0 = fx.dw_last;   /* (8 steps of 8, BLOCK 64) */
     const int16_t *in = c ? fx_r : fx_l;
+    int32_t yb[BLOCK];                               /* (1.4: the chain a loop, the mix another: in one, its states and
+                                                      * DRY/WET's ramp went to the stack) */
     for (j = 0; j < BLOCK; j += 8u) {
         a = j + 8u < BLOCK ? a + da : a1;
         for (i = j; i < j + 8u; i++) {
-            int32_t x = two ? fx_l[i] + fx_r[i] : in[i] * 2, y, g;
+            int32_t x = two ? fx_l[i] + fx_r[i] : in[i] * 2, y;
+            FM1_OPAQUE(a);
             /* (Q8; the feedback from +-2 full scale, its 8 fraction bits rounded off: 32 bits) */
             x = (x << 7) + ((((clamp32(z4, -(1 << 24), 1 << 24) + 128) >> 8) * fb15 + 64) >> 7);
             y = PH_AP(a, z1 - x) + z0;
@@ -1114,16 +1117,40 @@ static inline __attribute__((always_inline)) void ph_chain(uint32_t c, int two, 
             x = PH_AP(a, z4 - y) + z3;
             z3 = y;
             z4 = x;
-            y = clamp32((x + 128) >> 8, -32767, 32767);   /* (-y fits the DRY/WET sum too) */
+            yb[i] = clamp32((x + 128) >> 8, -32767, 32767);   /* (-y fits the DRY/WET sum too) */
+            i++;
+            x = two ? fx_l[i] + fx_r[i] : in[i] * 2;
+            x = (x << 7) + ((((clamp32(z4, -(1 << 24), 1 << 24) + 128) >> 8) * fb15 + 64) >> 7);
+            y = PH_AP(a, z1 - x) + z0;
+            z0 = x;
+            x = PH_AP(a, z2 - y) + z1;
+            z1 = y;
+            y = PH_AP(a, z3 - x) + z2;
+            z2 = x;
+            x = PH_AP(a, z4 - y) + z3;
+            z3 = y;
+            z4 = x;
+            yb[i] = clamp32((x + 128) >> 8, -32767, 32767);
+        }
+    }
+    {
+        const int16_t *pl = two ? fx_l : in, *pr = fx_r;
+        int32_t *ml = two ? mix_l : out, *mr = mix_r;
+        for (i = 0; i < BLOCK; i++) {
+            int32_t y = yb[i], g;
             dw += ddw;
             g = g0 + (dw >> 6);                      /* (DRY/WET at sample i: last block's to this one's; dry and wet
                                                       * 16-bit, g 0 .. 1: between them, no clip needed) */
+            *ml++ += *pl + (((y - *pl) * g) >> 15);
+            pl++;
             if (two) {
-                mix_l[i] += fx_l[i] + (((y - fx_l[i]) * g) >> 15);
-                mix_r[i] += fx_r[i] + (((-y - fx_r[i]) * g) >> 15);
-            } else {
-                out[i] += in[i] + (((y - in[i]) * g) >> 15);
+                *mr++ += *pr + (((-y - *pr) * g) >> 15);
+                pr++;
+                FM1_OPAQUE(pr);
+                FM1_OPAQUE(mr);
             }
+            FM1_OPAQUE(pl);
+            FM1_OPAQUE(ml);
         }
     }
     fx.ph_a[c] = a1;

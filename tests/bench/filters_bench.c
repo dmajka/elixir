@@ -94,6 +94,46 @@ static uint64_t bench_ring(uint32_t ncase)
     return H;
 }
 
+/* PHASER: fx_phaser over its knobs (P1 rate, P2 depth, P3 feedback, P4 centre, FB PUSH, DRY/WET ramping), stereo
+ * (one chain on the sum) and the mono routes; the mix and the states hashed */
+static uint64_t bench_phaser(uint32_t ncase)
+{
+    static const uint8_t RT[] = {R_ST1, R_ST2, R_L1, R_R1};
+    for (uint32_t c = 0; c < ncase; c++) {
+        uint32_t lvl = c & 3u;
+        memset(fx.ph_s, 0, sizeof fx.ph_s);
+        memset(fx.ph_a, 0, sizeof fx.ph_a);
+        fx.route = RT[(c >> 2) & 3u];
+        fx.m_ph = rnd();
+        for (int j = 0; j < 4; j++)
+            fx.p[j] = (int32_t)(knob() * 65536u / 127u);
+        fx.push = (rnd() & 1u) ? 0 : (int32_t)(rnd() >> 15);
+        fx.dw = (int32_t)(knob() * 32768u / 127u);
+        fx.dw_last = (rnd() & 1u) ? fx.dw : (int32_t)(knob() * 32768u / 127u);
+        for (uint32_t b = 0; b < 40; b++) {
+            switch (b) {
+            case 8: fx.p[1] = (int32_t)(knob() * 65536u / 127u); break;
+            case 12: fx.p[2] = (int32_t)(knob() * 65536u / 127u); break;
+            case 16: fx.p[3] = (int32_t)(knob() * 65536u / 127u); break;
+            case 20: fx.p[0] = (int32_t)(knob() * 65536u / 127u); break;
+            case 24: fx.dw = (int32_t)(knob() * 32768u / 127u); break;
+            case 30: fx.push = (int32_t)(rnd() >> 15); break;
+            }
+            sig_in(fx_l, b, lvl);
+            sig_in(fx_r, b + 3u, lvl);
+            for (int i = 0; i < BLOCK; i++)
+                mix_l[i] = (int32_t)(rnd() >> 20) - 2048, mix_r[i] = (int32_t)(rnd() >> 20) - 2048;
+            fx_phaser();
+            hash32(mix_l, BLOCK);
+            hash32(mix_r, BLOCK);
+            fx.dw_last = fx.dw;
+        }
+        hash32(&fx.ph_s[0][0], 10);
+        hash32(fx.ph_a, 2);
+    }
+    return H;
+}
+
 int main(int argc, char **argv)
 {
     const char *only = argc > 1 ? argv[1] : "";
@@ -103,6 +143,11 @@ int main(int argc, char **argv)
     if (!*only || !strcmp(only, "ring")) {
         H = 1469598103934665603ull, rs = 1u, t0 = now();
         printf("RING     %016llx  %.1f us/case\n", (unsigned long long)bench_ring(ncase), (now() - t0) / 1000.0 / ncase);
+        all = (all ^ H) * 1099511628211ull;
+    }
+    if (!*only || !strcmp(only, "phaser")) {
+        H = 1469598103934665603ull, rs = 2u, t0 = now();
+        printf("PHASER   %016llx  %.1f us/case\n", (unsigned long long)bench_phaser(ncase), (now() - t0) / 1000.0 / ncase);
         all = (all ^ H) * 1099511628211ull;
     }
     printf("all      %016llx\n", (unsigned long long)all);
