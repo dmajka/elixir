@@ -47,6 +47,10 @@ enum { MD_LXR, MD_MODAL, MD_STRING, MD_FM, MD_PL0, MD_MC0 = MD_PL0 + 16, MD_EN =
 #define RG_STRETCH 512u                              /* .. its dispersion's all-pass */
 #define RG_COMB 256u                                 /* the plucker's comb */
 #define RG_ONE (1 << 20)
+#ifndef FM1_OPAQUE                                   /* (the host's and the emulator's builds: hal/fm1_cc.h's) */
+#define FM1_OPAQUE(x) ((void)0)
+#endif
+_Static_assert(BLOCK == 64, "rings.c: div2k(x, 6) is x / BLOCK");
 static int32_t exp2_q16(int32_t y);                  /* (fxbus.c) */
 
 typedef struct { int32_t g, rg, h, s1, s2; } rg_svf_t;   /* stmlib's Svf: g, r + g (Q24), h (Q30); states Q26 (in */
@@ -267,15 +271,22 @@ static void modal_run(model_t *m, const int32_t *in, int32_t *out, uint32_t nm)
         uint32_t e1 = (uint32_t)m->e1[k], e2 = (uint32_t)m->e2[k];
         const int32_t *xp = xd, *xe = xd + BLOCK;
         int32_t *o = out;
+        FM1_OPAQUE(xp);                              /* (1.4: kept pointers: clang made them an index and two */
+        FM1_OPAQUE(o);                               /* bases on the stack, 4 instructions a sample) */
         do {    /* 1.0: walked by pointers, the error (0 .. 2^30) subtracted unsigned, the clamp a block's: 20
                  * instructions a sample on the FM-1, from 33 (build/elixir.dis), the same numbers */
             /* the rounding's error fed back through (1 -+ z^-1)^2: the poles sit by z = 1 (or -1, above a quarter
              * of the rate), and a plain truncation there turns into a hum that never decays */
+            /* (1.4: two samples a turn, the states trading places (no moves), the pointers kept: 22 -> 17.5 instructions
+             * a sample, 35 a pair) */
             int64_t acc = (int64_t)b * *xp++ + (int64_t)a1 * y1 - (int64_t)a2 * y2 + (int64_t)c * (int32_t)e1 -
                           (int64_t)(uint64_t)e2;
-            e2 = e1;
-            e1 = (uint32_t)acc & 0x3FFFFFFFu;
-            y2 = y1;
+            e2 = (uint32_t)acc & 0x3FFFFFFFu;        /* (the newest in y2, e2 ..) */
+            y2 = (int32_t)(acc >> 30);
+            *o++ += y2;
+            acc = (int64_t)b * *xp++ + (int64_t)a1 * y2 - (int64_t)a2 * y1 + (int64_t)c * (int32_t)e2 -
+                  (int64_t)(uint64_t)e1;
+            e1 = (uint32_t)acc & 0x3FFFFFFFu;        /* (.. and back in y1, e1) */
             y1 = (int32_t)(acc >> 30);
             *o++ += y1;
         } while (xp != xe);
@@ -390,11 +401,11 @@ static void string_run(model_t *m, uint32_t vi, uint32_t f, int32_t s, int32_t b
         m->fdamp = dcoef;
         m->fbright = bright;
     }
-    dly_step = ((int32_t)delay - (int32_t)m->dly) / (int32_t)BLOCK;
-    cpos_step = (cpos - (int32_t)m->cpos) / (int32_t)BLOCK;
-    dcomp_step = (dcomp - m->dcomp) / (int32_t)BLOCK;
-    fd_step = (dcoef - m->fdamp) / (int32_t)BLOCK;
-    fb_step = (bright - m->fbright) / (int32_t)BLOCK;
+    dly_step = div2k((int32_t)delay - (int32_t)m->dly, 6);   /* (/ BLOCK: 1.4, shifts) */
+    cpos_step = div2k(cpos - (int32_t)m->cpos, 6);
+    dcomp_step = div2k(dcomp - m->dcomp, 6);
+    fd_step = div2k(dcoef - m->fdamp, 6);
+    fb_step = div2k(bright - m->fbright, 6);
     for (i = 0; i < BLOCK; i++) {
         int32_t sm, sac, val, h0, h1, y, nz;
         uint32_t dl, cd, apd, mdl_;
@@ -512,10 +523,10 @@ static void fm_run(model_t *m, uint32_t f, int32_t s, int32_t b, int32_t d, int3
         m->fbr = b;
         m->ffb = fb;
     }
-    cstep = (int32_t)(f - m->cinc) / (int32_t)BLOCK;
-    mstep = (int32_t)(minc - m->minc) / (int32_t)BLOCK;
-    bstep = (b - m->fbr) / (int32_t)BLOCK;
-    fbstep = (fb - m->ffb) / (int32_t)BLOCK;
+    cstep = div2k((int32_t)(f - m->cinc), 6);   /* (/ BLOCK: 1.4, shifts) */
+    mstep = div2k((int32_t)(minc - m->minc), 6);
+    bstep = div2k(b - m->fbr, 6);
+    fbstep = div2k(fb - m->ffb, 6);
     for (i = 0; i < BLOCK; i++) {
         int32_t bands[3], tot = 0, w = 0, fq = 0, k, ae, be, bv, fmin, fmax, fe, fma, pf, mfb, mod, car, g, err;
         /* Follower::Process */
