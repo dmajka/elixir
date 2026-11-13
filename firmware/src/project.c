@@ -19,7 +19,7 @@
 #define PROJ_AUTO 4u                                /* the session */
 #define PROJ_NLOG 5u
 #define PROJ_MAGIC 0x4A52504Bu                      /* "KPRJ" (Kettle's, kept: its projects load) */
-#define PROJ_VERSION 13u                            /* (1 .. 12 still load: proj_read_payload) */
+#define PROJ_VERSION 14u                            /* (1 .. 13 still load: proj_read_payload) */
 #define PROJ_PAYLOAD (PROJ_SLOT - 256u)
 
 typedef struct {
@@ -240,7 +240,7 @@ static void proj_write_payload(void)
             if (p->link[k][1] & 15u)
                 lm |= 1u << k;
         if (p->shuffle || p->kit || p->gx || p->gy || p->gchaos || lm || p->cdepth != 127u || p->sroot || p->scale ||
-            p->sfollow != SFOLLOW_DEFAULT || p->groove || p->gamt != GAMT_DEFAULT || p->ghum || p->gskip)
+            p->sfollow != SFOLLOW_DEFAULT || p->groove || p->gamt != GAMT_DEFAULT || p->ghum || p->gskip || p->pcout)
             tm |= 0x80u;
         pw_byte(tm);
         if (tm & 0x80u) {
@@ -261,6 +261,7 @@ static void proj_write_payload(void)
             pw_byte(p->gamt);
             pw_byte(p->ghum);
             pw_byte(p->gskip);
+            pw_byte(p->pcout);                      /* (version 14: PROGRAM CHANGE OUT) */
         }
         for (t = 0; t < NTRACK; t++) {
             uint8_t bits[8] = {0};
@@ -567,6 +568,7 @@ static int proj_read_payload(uint32_t ver)
         seq_clear_pattern(p);
         p->shuffle = p->kit = 0;
         p->gx = p->gy = p->gchaos = 0;
+        p->pcout = PCO_AUTO;
         if (tm & 0x80u) {
             p->shuffle = (uint8_t)pr_byte();
             {   /* (37: bits 6-7 the pattern's voices, PV_*) */
@@ -600,6 +602,10 @@ static int proj_read_payload(uint32_t ver)
                 p->gskip = (uint8_t)(pr_byte() & ((1u << NTRACK) - 1u));
                 if (p->groove > NGROOVE)
                     p->groove = 0;
+            }
+            if (ver >= 14u) {
+                uint32_t b = pr_byte();
+                p->pcout = (uint8_t)(b <= PCO_OFF ? b : PCO_AUTO);
             }
         }
         for (t = 0; t < NTRACK; t++) {
@@ -653,6 +659,7 @@ static int proj_read_payload(uint32_t ver)
         seq_clear_pattern(&pat[i]);
         pat[i].shuffle = pat[i].kit = 0;
         pat[i].gx = pat[i].gy = pat[i].gchaos = 0;
+        pat[i].pcout = PCO_AUTO;
     }
     n = ver < 2u ? NUM_SONGS : pr_byte();
     for (i = 0; i < n; i++) {                       /* (a song's pattern past the last: the last) */
@@ -1009,7 +1016,10 @@ static void autosave_poll(void)
  * in the padding before the map.
  * 1.0: mvol: the master volume (engine.c out_vol; 127, the default, in settings from before: they are shorter);
  * mout: the tracks whose notes go out over MIDI (bit t; 0, the default: none; CONFIG: MIDI OUT). An Elixir before 1.0
- * doesn't take these longer settings: it starts from its defaults */
+ * doesn't take these longer settings: it starts from its defaults.
+ * 1.4: pcch, pcwhen: PROGRAM CHANGE OUT's channel (0, the default: the global one; 1..16) and when it goes out (seq.c
+ * PCW_*: 0, the default, AHEAD). In the struct's padding: settings from before hold 0 there, and an Elixir before 1.4
+ * takes these (the same length) */
 #define SET_LEN_015 16u
 #define SET_LEN_016 20u
 typedef struct {
@@ -1028,6 +1038,7 @@ typedef struct {
                                                       * what settings from before hold, YES. In a spare bit, not a new
                                                       * byte: an Elixir 1.0 or 1.1 takes these settings, its mask
                                                       * (127) clearing it) */
+    uint8_t pcch, pcwhen;                            /* (1.4: PROGRAM CHANGE OUT, in the padding) */
 } elixir_settings_t;
 #define KS_QUIET 0x80u
 _Static_assert(sizeof(elixir_settings_t) == 284u, "settings: caout after mixout");
@@ -1204,6 +1215,11 @@ static void persist_boot(void)                      /* power-on: the flash, the 
     kset.mixout &= 63u;
     kset.caout &= 127u | KS_QUIET;
     mix_out = kset.mixout;
+    if (kset.pcch > 16u)
+        kset.pcch = 0;
+    kset.pcwhen = kset.pcwhen ? PCW_CHANGE : PCW_AHEAD;
+    pc_ch = kset.pcch;
+    pc_when = kset.pcwhen;
     data_locked = fx_scan() != 0;                    /* (0.24.1: before kl_scan, which may erase a sector) */
     proj_scan();
     kl_scan();

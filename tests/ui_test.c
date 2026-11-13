@@ -8697,6 +8697,9 @@ static void phase_100_4(void)
     check(pp[0] == VP_MOUT + 4u && pp[2] == VP_MOUT + 6u && pp[3] == VP_MVOL, "CONFIG: MIDI OUT, CY .. OH, Volume");
     run_ms(50);
     shot("config-midi-out-2");
+    turn(EN_SELECT, 1);                              /* (1.4: PROGRAM CHANGE OUT) */
+    page_params(pp);
+    check(ui.page == CF_PCOUT && pp[0] == VP_PCPAT, "CONFIG: PROGRAM CHANGE OUT after MIDI OUT");
     turn(EN_SELECT, 1);                              /* (Phase 8: USB MIX, the voices in the stereo mix) */
     page_params(pp);
     check(ui.page == CF_UMIX && pp[0] == VP_UMIX && pp[3] == VP_UMIX + 3u, "CONFIG: USB MIX after MIDI OUT, D1 .. SN");
@@ -12014,6 +12017,150 @@ static void phase19_locks(void)
     p4_reset();
 }
 
+/* ------------------------------------------- 1.4: PROGRAM CHANGE OUT --- */
+static uint32_t pc_got[32], pc_gotn;                  /* the program changes out: channel << 8 | program */
+static uint8_t pc_at[32];                             /* .. the pattern playing as each went out */
+static void pc_run(uint32_t ms)                       /* run, taking the MIDI out (the ring holds 64) */
+{
+    while (ms--) {
+        uint32_t n, i;
+        run_ms(1);
+        n = web_midi_out_take();
+        for (i = 0; i < n; i++) {
+            uint32_t st = (web_mo[i] >> 8) & 0xFFu;
+            if ((st & 0xF0u) == 0xC0u && pc_gotn < 32u) {
+                pc_at[pc_gotn] = sq.active;
+                pc_got[pc_gotn++] = (st & 15u) << 8 | ((web_mo[i] >> 16) & 127u);
+            }
+        }
+    }
+}
+static void pc_until(uint32_t pattern)                /* .. until the pattern plays (8 s at most) */
+{
+    uint32_t i;
+    for (i = 0; i < 8000u && sq.active != pattern; i++)
+        pc_run(1);
+}
+static void phase_140_pc(void)
+{
+    uint32_t g = midi_global_ch(), i, ok;
+    uint8_t ftx = par[PAR_MIDI_FILT_TX], bpm = par[PAR_BPM];
+    uint16_t pp[4];
+    char b[24];
+    seq_stop_now();
+    sq.song_mode = 0;
+    for (i = 20; i < 28u; i++)
+        pat_delete(i);
+    par[PAR_MIDI_FILT_TX] |= 8u;                      /* (TX P) */
+    par[PAR_BPM] = 240;
+    seq_tempo_changed();
+    vp_set(VP_PCCH, 0);
+    vp_set(VP_PCWHEN, PCW_AHEAD);
+    check(kset.pcch == 0u && kset.pcwhen == PCW_AHEAD && pat[20].pcout == PCO_AUTO,
+          "1.4 PC OUT: the defaults, the global channel, AHEAD, AUTO");
+    pc_run(10);
+    pc_gotn = 0;
+    /* stopped: the pattern picked sends its own number at once, on the global channel (as before) */
+    seq_set_next_pattern(20);
+    pc_run(5);
+    check(pc_gotn == 1u && pc_got[0] == (g << 8 | 20u), "1.4 PC OUT: stopped, P21 sends program 20 on the global channel");
+    /* the page: CONFIG after MIDI OUT; Pattern starts at the one playing */
+    goto_mode(B_GLO, M_CONFIG);
+    turn(EN_SELECT, (int32_t)CF_PCOUT - (int32_t)ui.page);
+    page_params(pp);
+    check(ui.page == CF_PCOUT && pp[0] == VP_PCPAT && pp[1] == VP_PCOUT && pp[2] == VP_PCCH && pp[3] == VP_PCWHEN &&
+          vp_get(VP_PCPAT) == 20u, "1.4 PC OUT: its CONFIG page, Pattern at the one playing");
+    card_value(b, sizeof b, VP_PCOUT, vp_get(VP_PCOUT));
+    check(!strcmp(b, "AUTO"), "1.4 PC OUT: AUTO");
+    vp_set(VP_PCPAT, 21);
+    vp_set(VP_PCOUT, 1u + 3u);                        /* (P22 sends program 3) */
+    card_value(b, sizeof b, VP_PCOUT, vp_get(VP_PCOUT));
+    check(pat[21].pcout == 4u && !strcmp(b, "3"), "1.4 PC OUT: P22 sends program 3");
+    vp_set(VP_PCPAT, 22);
+    vp_set(VP_PCOUT, PCO_OFF);
+    vp_set(VP_PCCH, 5);
+    card_value(b, sizeof b, VP_PCCH, vp_get(VP_PCCH));
+    check(pc_ch == 5u && !strcmp(b, "5"), "1.4 PC OUT: its own channel, 5");
+    vp_set(VP_PCCH, 0);
+    card_value(b, sizeof b, VP_PCCH, vp_get(VP_PCCH));
+    check(!strcmp(b, "GLOB 10") || g != 9u, "1.4 PC OUT: GLOB shows the global channel");
+    vp_set(VP_PCCH, 5);
+    run_ms(50);
+    shot("config-pc-out");
+    press(B_HOME);
+    /* AHEAD: queued while P21 plays, P22's program goes out at once on channel 5; none at the change */
+    play_from_start();
+    pc_run(100);
+    pc_gotn = 0;
+    seq_set_next_pattern(21);
+    pc_run(5);
+    check(pc_gotn == 1u && pc_got[0] == (4u << 8 | 3u) && pc_at[0] == 20u,
+          "1.4 PC OUT: AHEAD, P22 queued: program 3 on channel 5 while P21 still plays");
+    seq_set_next_pattern(21);                         /* (queued again: no second one) */
+    pc_until(21);
+    pc_run(50);
+    check(sq.active == 21u && pc_gotn == 1u, "1.4 PC OUT: at the change, nothing more");
+    /* OFF: nothing */
+    pc_gotn = 0;
+    seq_set_next_pattern(22);
+    pc_until(22);
+    pc_run(50);
+    check(sq.active == 22u && pc_gotn == 0u, "1.4 PC OUT: P23 OFF sends none");
+    /* AT CHANGE: when the pattern starts */
+    vp_set(VP_PCWHEN, PCW_CHANGE);
+    pc_gotn = 0;
+    seq_set_next_pattern(23);
+    pc_run(20);
+    ok = pc_gotn == 0u;
+    pc_until(23);
+    pc_run(5);
+    check(ok && pc_gotn == 1u && pc_got[0] == (4u << 8 | 23u) && pc_at[0] == 23u,
+          "1.4 PC OUT: AT CHANGE, program 23 as P24 starts");
+    seq_stop_now();
+    /* a song, AHEAD: each row's program goes out while the row before plays (P25 x2, P26, then the first again) */
+    vp_set(VP_PCWHEN, PCW_AHEAD);
+    memset(songs[3], SONG_END, MAX_SONG_LENGTH);
+    song_put(3, 0, 24, 1);                            /* (x2) */
+    song_put(3, 1, 25, 0);
+    songs[3][2] = SONG_LOOP;
+    sq.song = 3;
+    seq_set_next_pattern(26);
+    pc_run(5);
+    pc_gotn = 0;
+    seq_play_song(1);                                 /* (stopped in the song: its first row's, P25) */
+    pc_run(5);
+    check(pc_gotn == 1u && pc_got[0] == (4u << 8 | 24u), "1.4 PC OUT: a song stopped: its first row's program");
+    pc_gotn = 0;
+    press(B_PLAY);
+    pc_until(25);
+    pc_until(24);
+    pc_run(5);
+    check(pc_gotn == 2u && pc_got[0] == (4u << 8 | 25u) && pc_at[0] == 24u && pc_got[1] == (4u << 8 | 24u) &&
+          pc_at[1] == 25u, "1.4 PC OUT: a song: P26's, then (LOOP) P25's, each while the row before plays");
+    seq_stop_now();
+    seq_play_song(0);
+    sq.song = 0;
+    /* the project keeps a pattern's program; the settings the channel and when */
+    {
+        int rc = proj_save(0, "PCOUT");
+        pat[21].pcout = PCO_AUTO;
+        pat[22].pcout = PCO_AUTO;
+        rc |= proj_load(0);
+        check(rc == 0 && pat[21].pcout == 4u && pat[22].pcout == PCO_OFF && pat[20].pcout == PCO_AUTO,
+              "1.4 PC OUT: the project keeps the patterns' programs");
+    }
+    pat_delete(21);
+    check(pat[21].pcout == PCO_AUTO, "1.4 PC OUT: a pattern deleted: AUTO again");
+    vp_set(VP_PCCH, 0);
+    par[PAR_MIDI_FILT_TX] = ftx;
+    par[PAR_BPM] = bpm;
+    seq_tempo_changed();
+    for (i = 20; i < 28u; i++)
+        pat_delete(i);
+    seq_set_next_pattern(0);
+    pc_run(20);
+}
+
 int main(int argc, char **argv)
 {
     uint32_t t;
@@ -12544,6 +12691,7 @@ int main(int argc, char **argv)
     phase_100_18();
     lfo_smooth_drift();
     phase19_locks();
+    phase_140_pc();
     copy_pass();                                     /* (1.0's copy and picture pass: last, as it runs time) */
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;

@@ -52,7 +52,11 @@ typedef struct {
                                                   * written), HUMANIZE 0..127, the tracks that don't follow (bit t) */
     int8_t tbase[NTRACK];                        /* 0.23-t7: the track's BASE note, semitones from C4 (-24..24): a step's
                                                   * note (but a NOTE_LOCK one) plays this much off */
+    uint8_t pcout;                               /* 1.4: the program change it sends (PROGRAM CHANGE OUT): PCO_AUTO
+                                                  * its own number, 1..128 program 0..127, PCO_OFF none */
 } pattern_t;
+#define PCO_AUTO 0u
+#define PCO_OFF 129u
 #define NOTE_LOCK 0x80u                              /* 0.23-t7: a step's note bit 7: locked (as set), BASE leaves it */
 #define TBASE_MAX 24
 #define NLINK 8u
@@ -729,6 +733,16 @@ enum { PV_FREE, PV_LOCKED, PV_KIT, NPV };
 #define PV_SLOT(n) (NUM_KITS / 2u + (n))
 static uint8_t pv_from;
 static uint8_t pv_skip;             /* (a pattern saved into another slot: its KIT not reloaded when it switches) */
+/* 1.4: PROGRAM CHANGE OUT (docs/MIDI_PROGRAM_CHANGE_OUT.md): the program change a pattern sends goes out from the
+ * audio ISR (seq_pc_out, each block) when the pattern the far end should be heading for changes: AHEAD (the default),
+ * the one queued (or the song's next row) as soon as it is known, so a box that changes at the end of its own pattern
+ * (an Elektron) changes on the same downbeat; AT CHANGE, the one playing, when it starts (the LXR's way). Stopped,
+ * the one playing (in a song, AHEAD: its first row's). The settings (project.c kset.pcch, pcwhen) set these */
+enum { PCW_AHEAD, PCW_CHANGE };
+static volatile uint8_t pc_ch;      /* the channel: 0 the global one, 1..16 */
+static volatile uint8_t pc_when;    /* PCW_* */
+static uint8_t pc_said = 0xFFu;     /* the pattern whose program change went out last (the ISR's) */
+static uint8_t pc_next = 0xFFu;     /* AHEAD in a song: the pattern after this one, 0xFF none (seq_pattern_end) */
 static uint32_t pat_voices(const pattern_t *p) { return (uint32_t)(p->kit >> 6) < NPV ? (uint32_t)(p->kit >> 6) : PV_FREE; }
 static uint32_t pat_kit(const pattern_t *p) { return p->kit & 63u; }
 static void pat_set_voices(pattern_t *p, uint32_t v, uint32_t k) { p->kit = (uint8_t)((k & 63u) | (v % NPV) << 6); }
@@ -820,6 +834,7 @@ static void midi_out_note(uint32_t track, uint32_t note, uint32_t vel);
 static void midi_out_note_off(uint32_t track);
 static void midi_out_rt(uint32_t status);
 static void midi_out_pc(uint32_t pattern);
+static int midi_pc_tx(void);
 static void kit_load_ram(uint32_t n);
 static uint32_t ui_track(void);                      /* the track the panel shows (ui.c) */
 static uint32_t ui_pattern(void);                    /* the pattern it shows */
@@ -878,6 +893,7 @@ static void pat_delete(uint32_t n)
     seq_clear_pattern(&pat[n]);
     pat[n].shuffle = pat[n].kit = 0;
     pat[n].gx = pat[n].gy = pat[n].gchaos = 0;
+    pat[n].pcout = PCO_AUTO;
     if (n == sq.active) {
         pv_switch(a == PV_LOCKED ? PV_KIT : a, n, n);
         pat_cp(&pat_backup, &pat[n]);
@@ -2336,7 +2352,6 @@ static void seq_pattern_activate(void)               /* seq_setPendingPatternAct
         glfo_ev |= GLE_PATTERN;
         seq_set_shuffle_from(sq.active);
         pv_switch(was, from, sq.active);             /* (37: its voices; the LXR's KIT CHANGE AUTO is KIT's) */
-        midi_out_pc(sq.active);
         for (t = 0; t < NTRACK; t++)
             midi_out_note_off(t);
     } else {
@@ -2495,6 +2510,7 @@ static void seq_stop_now(void);
  * ended (stopped) */
 static int seq_pattern_end(void)                     /* (seq_nextStep's master step 0) */
 {
+    pc_next = 0xFFu;
     if (sq.active == sq.pending) {
         uint32_t n = seq_next_in_song(1);
         if (n == SONG_END) {
@@ -2510,7 +2526,33 @@ static int seq_pattern_end(void)                     /* (seq_nextStep's master s
         sq.pending = (uint8_t)n;
     }
     seq_pattern_activate();
+    if (sq.song_mode && pc_when == PCW_AHEAD && midi_pc_tx()) {   /* (1.4: the next row's program change ahead) */
+        uint32_t m = seq_next_in_song(0);
+        if (m != SONG_END)
+            pc_next = (uint8_t)(m < NUM_PATTERN ? m : song_row(songs[sq.song][0]) < NUM_PATTERN
+                                                      ? song_row(songs[sq.song][0]) : 0xFFu);
+    }
     return 1;
+}
+/* 1.4: the program change of the pattern the far end should be heading for, once it changes (the audio ISR) */
+static void seq_pc_out(void)
+{
+    uint32_t w = sq.active;
+    if (pc_when == PCW_AHEAD) {
+        if (sq.running && sq.pending != sq.active) {
+            w = sq.pending;
+        } else if (sq.song_mode) {                   /* (stopped, or not yet in: the song starts at its first row) */
+            uint32_t f = song_row(songs[sq.song % NUM_SONGS][0]);
+            if (!sq.running || sq.song_pos >= MAX_SONG_LENGTH)
+                w = f < NUM_PATTERN ? f : w;
+            else if (pc_next < NUM_PATTERN)
+                w = pc_next;
+        }
+    }
+    if (w == pc_said || w >= NUM_PATTERN)
+        return;
+    pc_said = (uint8_t)w;
+    midi_out_pc(w);
 }
 
 static void seq_gen_step(uint32_t t, uint32_t i);
@@ -2838,6 +2880,7 @@ static void seq_block_run(void)
         sq.ru_hp = 0;
         sq.due = 0;
     }
+    seq_pc_out();
 }
 
 /* MIDI sync: a clock pulse (24 a beat), start, continue, stop (midi.c, in the ISR) */

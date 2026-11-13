@@ -76,7 +76,9 @@ enum { VP_BASE = 0x400, VP_NONE = VP_BASE, VP_IO_TYPE, VP_IO_SLOT, VP_NAME_POS, 
        VP_DJSPREAD, VP_DJSLOPE, VP_DJTONE, VP_DJWET,   /* (1.0 Phase 18: RING (2/2), perform.c pfs.dj_spread ..) */
        VP_AUDITION,                                  /* (1.2: a track key plays the voice too; project.c KS_QUIET) */
        VP_RQUANT, VP_NUDGE,                          /* (1.3: REC's Quantize; the GENERATOR page's Nudge, OFF) */
-       VP_TRUSH, VP_TRUSH_LAST = VP_TRUSH + NTRACK - 1 };   /* (1.4: the remote's RUSH a track: sq.ru_live on it) */
+       VP_TRUSH, VP_TRUSH_LAST = VP_TRUSH + NTRACK - 1,   /* (1.4: the remote's RUSH a track: sq.ru_live on it) */
+       VP_PCPAT, VP_PCOUT, VP_PCCH, VP_PCWHEN };     /* (1.4: PROGRAM CHANGE OUT: the pattern, its program, the
+                                                      * channel, when) */
 _Static_assert(NPAR <= VP_BASE, "the virtual parameters after the parameters (25b + 27a: NPAR 525, past 0x200)");
 /* the ACTION page's action (OCT+ does it); 0.10: those of the track's generator (gen_acts) */
 enum { ACT_NONE, ACT_DICE, ACT_COMMIT, ACT_UNDO, ACT_RESET, NACT };
@@ -152,6 +154,7 @@ static struct {
     uint8_t sbtn;                    /* 1.4: the sound button that opened the sound pages (its group: S_MODEL EDIT ..) */
     uint8_t seq_m, glo_m;            /* .. the mode SEQ and GLO showed last (pmem_save), */
     uint8_t pset[4];                 /* .. 29: PERF's page in each set (PERFORM, 32: SPELLS, 40: WANDER, GLOBAL MOD) */
+    uint8_t pcpat;                   /* 1.4: the pattern PROGRAM CHANGE OUT shows (the one playing as CONFIG opens) */
 } ui = {.held_step = -1, .koct = 3, .knote = 0xFF, .kkey = 0xFF};
 
 
@@ -629,7 +632,7 @@ static const uint16_t P_MIXER[NMIXER][4] = {{PAR_VOL1, PAR_VOL2, PAR_VOL3, PAR_V
                                             {PAR_REV_SEND1 + 4, PAR_REV_SEND1 + 5, PAR_REV_LEVEL, VP_MVOL}};
 static const char *const MIXER_TITLE[NMIXER / 2u] = {"MIXER: VOLUME", "MIXER: PAN", "MIXER: FX SEND",
                                                      "MIXER: DLY SEND", "MIXER: REV SEND"};   /* (Phase 12: REV, so (1/2) fits) */
-#define NCONFIG 16u
+#define NCONFIG 17u
 static const uint16_t P_CONFIG[NCONFIG][4] = {
     {PAR_BPM, PAR_SHUFFLE, PAR_FOLLOW, VP_PLAY},     /* (37: Play in place of Kit chg) */
     {PAR_MIDI_CHAN_GLOBAL, PAR_MIDI_FILT_TX, PAR_MIDI_FILT_RX, PAR_MIDI_ROUTING},
@@ -639,6 +642,7 @@ static const uint16_t P_CONFIG[NCONFIG][4] = {
     {PAR_MIDI_NOTE5, PAR_MIDI_NOTE6, PAR_MIDI_NOTE7, VP_NONE},
     {VP_MOUT, VP_MOUT + 1, VP_MOUT + 2, VP_MOUT + 3},   /* (1.0: MIDI OUT; the master volume) */
     {VP_MOUT + 4, VP_MOUT + 5, VP_MOUT + 6, VP_MVOL},
+    {VP_PCPAT, VP_PCOUT, VP_PCCH, VP_PCWHEN},        /* (1.4: PROGRAM CHANGE OUT) */
     {VP_UMIX, VP_UMIX + 1, VP_UMIX + 2, VP_UMIX + 3},   /* (1.0, Phase 8: USB MIX, the voices in the stereo mix) */
     {VP_UMIX + 4, VP_UMIX + 5, VP_NONE, VP_NONE},
     {VP_LEDS, VP_AUTOSAVE, VP_ACCEL, VP_PALETTE},
@@ -648,15 +652,17 @@ static const uint16_t P_CONFIG[NCONFIG][4] = {
     {VP_NONE, VP_NONE, VP_NONE, VP_NONE},
     {VP_NONE, VP_NONE, VP_NONE, VP_NONE}};
 static const char *const CONFIG_TITLE[NCONFIG] = {"SEQUENCER", "MIDI", "MIDI CHANNELS", "MIDI CHANNELS", "MIDI NOTES",
-                                                  "MIDI NOTES", "MIDI OUT", "MIDI OUT, VOLUME", "USB MIX",
+                                                  "MIDI NOTES", "MIDI OUT", "MIDI OUT, VOLUME",
+                                                  "PROGRAM CHANGE OUT", "USB MIX",
                                                   "USB MIX", "DEVICE",
                                                   "REMOTE", "MORPH",
                                                   "BUTTONS & KITS", "LOAD", "ELIXIR"};
 #define CF_MOUT 6u                                    /* 1.0: MIDI OUT (2 pages) */
-#define CF_UMIX 8u                                    /* 1.0: USB MIX (2 pages) */
-#define CF_REMOTE 11u
-#define CF_LOAD 14u                                   /* 17a, 17b: the load by part, the cores (ui_draw.c draw_load) */
-#define CF_ABOUT 15u                                  /* 29: the potion, the version, the load of each core */
+#define CF_PCOUT 8u                                   /* 1.4: PROGRAM CHANGE OUT */
+#define CF_UMIX 9u                                    /* 1.0: USB MIX (2 pages) */
+#define CF_REMOTE 12u
+#define CF_LOAD 15u                                   /* 17a, 17b: the load by part, the cores (ui_draw.c draw_load) */
+#define CF_ABOUT 16u                                  /* 29: the potion, the version, the load of each core */
 static const uint16_t P_NAME[4] = {VP_NAME_POS, VP_NAME_CHAR, VP_NAME_CASE, VP_NONE};
 /* 37: the song: KNOB 2 the row (SELECT pages); ROWS: insert or delete one (OCT+), the play mode; 42: ROADS: the
  * song played as written or by its chances, how surprising, back to its first row every so many bars */
@@ -1394,6 +1400,10 @@ static uint32_t vp_get(uint32_t p)
     case VP_RSUR: return (song_rd[sq.song % NUM_SONGS] & 15u) ^ 4u;
     case VP_RHOME: return (song_rd[sq.song % NUM_SONGS] >> 4) & 7u;
     case VP_VOICES: return pat_voices(&pat[sq.active]);
+    case VP_PCPAT: return ui.pcpat % NUM_PATTERN;
+    case VP_PCOUT: return pat[ui.pcpat % NUM_PATTERN].pcout;
+    case VP_PCCH: return kset.pcch;
+    case VP_PCWHEN: return kset.pcwhen;
     case VP_LEDS: return kset.leds;
     case VP_AUTOSAVE: return autosave_on;
     case VP_PKEEP: return pat_keep;
@@ -1595,6 +1605,10 @@ static uint32_t vp_max(uint32_t p)
     case VP_RSUR: return 15;
     case VP_RHOME: return NSONGHOME - 1u;
     case VP_VOICES: return NPV - 1u;
+    case VP_PCPAT: return NUM_PATTERN - 1u;
+    case VP_PCOUT: return PCO_OFF;
+    case VP_PCCH: return 16;
+    case VP_PCWHEN: return PCW_CHANGE;
     case VP_LEDS: return 2;
     case VP_IO_SRC: return ui.mode == M_LOAD && (ui.io_type == IO_KIT || ui.io_type == IO_FACTORY ||
                                                  ui.io_type == IO_MORPH || ui.io_type == IO_FMORPH) ? 2u : 1u;
@@ -1824,6 +1838,16 @@ static void vp_set(uint32_t p, uint32_t v)
         ui_message(v == PV_LOCKED ? "VOICES KEPT IN ITS KIT SLOT" : v == PV_KIT ? "PLAYS ITS SAVED KIT"
                                                                              : "SHARED VOICES");
         return;
+    case VP_PCPAT: ui.pcpat = (uint8_t)v; return;
+    case VP_PCOUT: {                                 /* (1.4: into the pattern: the project keeps it) */
+        uint32_t n = ui.pcpat % NUM_PATTERN;
+        pat[n].pcout = (uint8_t)v;
+        if (n == sq.active)
+            pat_backup.pcout = (uint8_t)v;           /* (Edits DROP doesn't take it back) */
+        return;
+    }
+    case VP_PCCH: kset.pcch = (uint8_t)v; pc_ch = (uint8_t)v; settings_later(); return;
+    case VP_PCWHEN: kset.pcwhen = (uint8_t)v; pc_when = (uint8_t)v; settings_later(); return;
     case VP_LEDS: kset.leds = (uint8_t)v; settings_later(); return;
     case VP_AUTOSAVE: autosave_on = (uint8_t)v; settings_later(); return;
     case VP_PKEEP: pat_keep = (uint8_t)v; kset.pdrop = (uint8_t)!v; settings_later(); return;
@@ -2569,6 +2593,7 @@ static void mode_set(uint32_t m)
     }
     if (m == M_CONFIG && ui.mode != M_CONFIG) {
         uint32_t i;
+        ui.pcpat = sq.active;                        /* (1.4: PROGRAM CHANGE OUT starts at the pattern playing) */
         audio_max_us = 0;                            /* (the CPU meter's peaks: from now) */
         for (i = 0; i < NLD; i++)
             ld_pk[i] = 0;

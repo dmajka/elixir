@@ -30,7 +30,9 @@
  *     remote map leaves 120..127 free). Global in KEYS and PAT+KIT take CC 126 / 127 as CC 102 / 103.
  *   - 1.0: on the same channels, CC 125 a slot kit (0..63) as the morph target (LOAD > MORPH) and CC 124 the master
  *     volume (CONFIG's settings, out_vol: 127 the most); a track's notes go out only if CONFIG: MIDI OUT has it on
- *     (midi_mout, all off by default) and TX has N. */
+ *     (midi_mout, all off by default) and TX has N.
+ *   - 1.4: PROGRAM CHANGE OUT (CONFIG; docs/MIDI_PROGRAM_CHANGE_OUT.md): a pattern sends its own program (AUTO, as
+ *     before) or any other, or none; on the global channel or its own; ahead (when queued) or when it starts. */
 
 enum { MF_NOTE = 1, MF_RT = 2, MF_CC = 4, MF_PC = 8 };
 enum { MR_OFF, MR_U2M, MR_M2M, MR_A2M, MR_M2U, MR_M2A };
@@ -117,10 +119,18 @@ static void midi_out_rt(uint32_t st)
     if (midi_tx(MF_RT))
         midi_send(st, 0, 0);
 }
-static void midi_out_pc(uint32_t pattern)
+static int midi_pc_tx(void) { return midi_tx(MF_PC); }
+static uint32_t midi_pc_ch(void) { return pc_ch ? (pc_ch - 1u) & 15u : midi_global_ch(); }   /* (1.4) */
+static uint32_t midi_pc_prog(uint32_t pattern)       /* 1.4: the program the pattern sends, PCO_OFF none */
 {
-    if (midi_tx(MF_PC))
-        midi_send(0xC0u | midi_global_ch(), pattern, 0);
+    uint32_t v = pattern < NUM_PATTERN ? pat[pattern].pcout : PCO_OFF;
+    return v == PCO_AUTO ? pattern : v < PCO_OFF ? v - 1u : PCO_OFF;
+}
+static void midi_out_pc(uint32_t pattern)            /* (1.4: seq_pc_out; its program, on the PC channel) */
+{
+    uint32_t v = midi_pc_prog(pattern);
+    if (midi_tx(MF_PC) && v != PCO_OFF)
+        midi_send(0xC0u | midi_pc_ch(), v, 0);
 }
 
 /* ----------------------------------------------------------------- in --- */

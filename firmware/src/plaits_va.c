@@ -1150,7 +1150,7 @@ static void lpc_render(pl_lpc_t *d, int trig, int bank, int32_t f0, int32_t addr
             int32_t a = pm(addr, 67107186), ai = a >> 24;   /* x (5 - 1.0001) */
             lpc_frame(d, &PL_LPC_PH[ai], &PL_LPC_PH[ai + 1], a & 0xFFFFFF);
         } else {                                     /* (Plaits scans the bank's frames: here, silence till a hit) */
-            static const pl_lpcf_t z;
+            static const pl_lpcf_t z = {0};   /* (= {0}: C and C++ alike, the MPC plugin) */
             lpc_frame(d, &z, &z, 0);
         }
     } else {

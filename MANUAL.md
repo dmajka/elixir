@@ -1649,7 +1649,7 @@ CC 102 and 103 are numbers the MIDI standard leaves undefined, so a keyboard doe
 
 ### Launching patterns and kits
 
-- **Program change 0–31 on the global channel** (10 by default) queues pattern 1–32, as a white key on the pattern page does: while playing it starts when the current pattern ends (the header shows >nn), while stopped at once. Elixir sends a program change on the global channel whenever its pattern changes, so a controller or DAW can follow. From 0.24.2 the remote channels (15 and 16) take them the same way. Program changes on the track channels do nothing.
+- **Program change 0–31 on the global channel** (10 by default) queues pattern 1–32, as a white key on the pattern page does: while playing it starts when the current pattern ends (the header shows >nn), while stopped at once. Elixir also sends a program change when its pattern changes, so other gear can follow: see [Sending program changes](#sending-program-changes-from-14). From 0.24.2 the remote channels (15 and 16) take them the same way. Program changes on the track channels do nothing.
 - **Remote GLOBAL buttons 60 and 61** (CC or note): the previous and the next pattern, queued the same way.
 - **CC 102 on the global channel** loads slot kit 1–64 (values 0–63) at once (Global in KEYS or PAT+KIT).
 - **CC 103 on the global channel** loads factory kit 1–85 (values 0–84) at once, as LOAD → KIT From FACTORY does: into the sound; the slot shown as loaded stays.
@@ -1658,6 +1658,17 @@ CC 102 and 103 are numbers the MIDI standard leaves undefined, so a keyboard doe
 - A pattern can bring its own kit (its Voices at KIT): send the kit after the program change, or it is replaced when the pattern starts.
 
 A pad controller can launch patterns if it can send program changes on the global channel or a remote one; one that sends only notes or CCs can step through them with 60 and 61 on the GLOBAL channel.
+
+### Sending program changes (from 1.4)
+
+Elixir sends a program change over USB MIDI when its pattern changes, so a Digitakt, Digitone or any box that follows Elixir's clock can change its pattern too. (The FM-1 has no MIDI out jack: the other box needs a USB host between them, or a computer.) Set it up on CONFIG → **PROGRAM CHANGE OUT**:
+
+- **Sends**, for each pattern (choose it with **Pattern**): **AUTO** sends the pattern's own number (P01 sends 0, P32 sends 31), as Elixir always has. A number (0–127) sends that program instead, so P02 can call any pattern on the other box. **OFF** sends nothing, and the other box keeps playing what it was. The pattern keeps its setting in the project; COPY copies it, and deleting the pattern sets it back to AUTO.
+- **Channel**: **GLOB** (the default) sends on the global channel (10 unless you changed it); or choose 1–16. Set the other box to receive program changes on that channel (on an Elektron: the auto channel, or the program change in channel, with PRG CH RECEIVE on).
+- **When**: **AHEAD** (the default) sends the program change as soon as the next pattern is known: when you queue it, or, in a song, as the row before it starts. An Elektron that is playing changes pattern at the end of its own, so it lands on the same downbeat as Elixir, as long as both patterns are the same length. **AT CHANGE** sends it as Elixir's new pattern starts, as before 1.4: for gear that changes at once (an Elektron set to change pattern directly, say). Stopped, the program change goes out at once either way.
+- The TX filter's **P** (CONFIG: MIDI) must be on, as it is by default.
+
+If the other box also sends program changes (an Elektron's PRG CH SEND) on the channel Elixir launches patterns from, and the USB host passes them back to Elixir, a pattern that calls a different number makes Elixir follow that number in turn. Turn the other box's program change send off, or put the two on different channels.
 
 ### What the global channel receives
 
@@ -1677,7 +1688,7 @@ Worth knowing in a bigger setup (a Hapax, several controllers): what a message o
 | CC 0, 32 (bank select) | – | – | CC 0: slot kit 1–64 |
 | Pitch bend, aftertouch | – | – | – |
 | Other CCs, NRPN | – | – | [The sound by CC](#the-sound-by-cc), every voice; NRPN |
-| *Sent:* program change | When Elixir's pattern changes (switch off with the TX filter's P) | | |
+| *Sent:* program change | When Elixir's pattern changes (switch off with the TX filter's P; channel, program and timing on CONFIG → PROGRAM CHANGE OUT) | | |
 
 With OFF, none of these do anything. Clock, start, continue and stop have no channel: Elixir follows them only with the tempo turned down to MIDI. The MIDI filters (CONFIG: MIDI) turn notes, CCs or program changes off on every track and global channel at once; the remote channels ignore the filters.
 
@@ -1842,6 +1853,7 @@ GLO twice (past the mixer) opens CONFIG. Turn SELECT for its pages:
 | MIDI CHANNELS (2 pages) | Each track's channel; page 2's KNOB 4, **Global in**: what the global channel takes (KEYS, the default; PAT+KIT; ALL; OFF: see [MIDI at a glance](#midi-at-a-glance)) |
 | MIDI NOTES (2 pages) | Each track's note (ANY or a note) |
 | MIDI OUT (2 pages, from 1.0) | Each track's notes out over USB MIDI on its channel: OFF (the default) or ON; the TX filter's N must be on too. Page 2's KNOB 4, **Volume**: the master volume, 0–127 (127 the default), after MASTER, saved with the settings; CC 124 sets it (see [MIDI at a glance](#midi-at-a-glance)) |
+| PROGRAM CHANGE OUT (from 1.4) | **Pattern**: which of Elixir's patterns the next knob shows (the one playing when CONFIG opens). **Sends**: the program change that pattern sends: **AUTO** (the default: its own number, P01 sends 0), a program 0–127, or **OFF**. **Channel**: **GLOB** (the default: the global channel's, 10) or 1–16. **When**: **AHEAD** (the default) or **AT CHANGE**. See [Sending program changes](#sending-program-changes-from-14) |
 | USB MIX (2 pages, from 1.0) | Each voice's place in the stereo mix while a computer records the FM-1 over USB: **IN** (the default) or **OUT**, a knob a voice (D1 D2 D3 SN, then CY HH). The six stems always play; see [USB audio](#usb-audio-the-mix-and-six-stems) |
 | DEVICE | LEDs (OFF / LOW / HIGH glow), Autosave, Accel (fast knob turns move further), Colors (screen palette: GRAY, GREEN, AMBER, ICE, VIOLET, ROSE, PAPER, HI-CON, NIGHT, MONO, HYRULE (forest green and Triforce gold) or SAND (the default: amber on true black, near-black cards) |
 | REMOTE | Tracks (the TRACKS channel: OFF, 1–16; 15 by default), Global (the GLOBAL channel; 16 by default; never the same as Tracks), Knobs (PICKUP / ABS / REL), Mute/solo (PRESS / TOGGLE): see [the remote map](#the-remote-map) |

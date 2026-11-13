@@ -1609,6 +1609,11 @@ static void draw_config_help(int32_t y0)
         if (ui.page % NCONFIG == CF_MOUT + 1u)
             help_item(y, "VOLUME", "the master volume, after MASTER; CC 124 on the remote's channels");
         break;
+    case CF_PCOUT:                                   /* 1.4: PROGRAM CHANGE OUT */
+        y = help_item(y, "SENDS", "AUTO: its own number (P01 sends 0), or a program 0-127, or OFF");
+        y = help_item(y, "CHANNEL", "GLOB: the global channel's. TX filter P on (MIDI)");
+        help_item(y, "WHEN", "AHEAD: as it's queued, so an Elektron keeps time. AT CHANGE: as it starts");
+        break;
     case CF_UMIX:                                    /* 1.0, Phase 8: the voices in the USB audio's stereo mix */
     case CF_UMIX + 1:
         y = help_item(y, "OUT", "leaves the stereo mix (USB 1-2, the outputs) while a computer records");
@@ -2012,6 +2017,10 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_RSUR: put_str(b, "Surprise", n); return;
     case VP_RHOME: put_str(b, "Home", n); return;
     case VP_VOICES: put_str(b, "Voices", n); return;
+    case VP_PCPAT: put_str(b, "Pattern", n); return;
+    case VP_PCOUT: put_str(b, "Sends", n); return;
+    case VP_PCCH: put_str(b, "Channel", n); return;
+    case VP_PCWHEN: put_str(b, "When", n); return;
     case VP_LEDS: put_str(b, "Leds", n); return;
     case VP_AUTOSAVE: put_str(b, "Autosave", n); return;
     case VP_PKEEP: put_str(b, "Edits", n); return;
@@ -2596,6 +2605,21 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
             put_int(b + 1, SONG_REPS[v % NSONGREP]);
         }
         return;
+    case VP_PCPAT: b[0] = 'P'; two_digits(b + 1, v + 1u); return;   /* (1.4: PROGRAM CHANGE OUT) */
+    case VP_PCOUT:                                   /* (AUTO, OFF, or the program 0..127) */
+        if (v == PCO_OFF || v == PCO_AUTO)
+            put_str(b, v == PCO_OFF ? "OFF" : "AUTO", n);
+        else
+            put_int(b, (int32_t)v - 1);
+        return;
+    case VP_PCCH: {
+        char t[12];
+        put_int(t, (int32_t)(v ? v : midi_global_ch() + 1u));
+        put_str(b, v ? "" : "GLOB ", n);
+        cat(b, t, n);
+        return;
+    }
+    case VP_PCWHEN: put_str(b, v ? "AT CHANGE" : "AHEAD", n); return;
     case VP_LEDS: put_str(b, v == 0u ? "OFF" : v == 1u ? "LOW" : "HIGH", n); return;
     case VP_AUTOSAVE: case VP_ACCEL: put_str(b, v ? "ON" : "OFF", n); return;
     case VP_PKEEP: put_str(b, v ? "KEEP" : "DROP", n); return;
