@@ -474,6 +474,8 @@ typedef struct {
     int32_t damp, samp, fm, hold;                    /* Q30 */
     pl_op_t dlp, shp;
     pl_svf_t slp;
+    uint32_t of0, oq8, af0;                          /* (1.4: the filters' f0 and Q as set: set again when they */
+    int32_t asn, dlev, slev;                         /* move. f0 is never 0: the first block sets them) */
 } pl_sd_t;
 static void sd_init(pl_sd_t *d) { memset(d, 0, sizeof *d); }
 static inline int32_t sd_dsine(int32_t ph)
@@ -500,11 +502,18 @@ PL_ENGINE sd_render(pl_sd_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, u
             d->ph = 3 * PL1 + pm(7 * PL1, p->accent);
             d->nenv = 1 << 30;                       /* 2.0 */
         }
-        for (k = 0; k < 5; k++) {
-            uint64_t fk = ((uint64_t)f0 * (uint32_t)MF[k]) >> 24;
-            uint32_t qk = k ? q8 >> 2 : q8;
-            f[k] = fk > 2143188436u ? 2143188436u : (uint32_t)fk;
-            pl_svf_fq(&d->res[k], f[k], 256u + (uint32_t)(((uint64_t)qk * f[k]) >> 32), TAN_FAST);
+        if (f0 != d->of0 || q8 != d->oq8) {          /* (1.4: 12 divides a sub-block, when they move) */
+            uint64_t fn = (uint64_t)f0 * 16u;
+            uint32_t fnn = fn > 2143188436u ? 2143188436u : (uint32_t)fn;
+            d->of0 = f0;
+            d->oq8 = q8;
+            for (k = 0; k < 5; k++) {
+                uint64_t fk = ((uint64_t)f0 * (uint32_t)MF[k]) >> 24;
+                uint32_t qk = k ? q8 >> 2 : q8;
+                f[k] = fk > 2143188436u ? 2143188436u : (uint32_t)fk;
+                pl_svf_fq(&d->res[k], f[k], 256u + (uint32_t)(((uint64_t)qk * f[k]) >> 32), TAN_FAST);
+            }
+            pl_svf_fq(&d->nf, fnn, 256u + (uint32_t)(((uint64_t)fnn * 384u) >> 32), TAN_FAST);   /* 1 + 1.5 f */
         }
         if (tone < 11184811) {                       /* 808 (2 modes) */
             int32_t t = pm(tone, 25165824), u = PL1 - t;
@@ -521,11 +530,6 @@ PL_ENGINE sd_render(pl_sd_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, u
                 t = pm(t, t);
             }
             nk = 5;
-        }
-        {
-            uint64_t fn = (uint64_t)f0 * 16u;
-            uint32_t fnn = fn > 2143188436u ? 2143188436u : (uint32_t)fn;
-            pl_svf_fq(&d->nf, fnn, 256u + (uint32_t)(((uint64_t)fnn * 384u) >> 32), TAN_FAST);   /* 1 + 1.5 f */
         }
         /* (1.4: a mode at a time over the block, its filter's state in registers; the sum, the noise after. The same
          * arithmetic as a sample at a time, bit-identical) */
@@ -580,13 +584,19 @@ PL_ENGINE sd_render(pl_sd_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, u
         kd = pl_keepq((int32_t)(((int64_t)25365 * pl_semi(-pm(dxt, 72 << 16) - pm(fma, 12 << 16) + pm(sn2, 7 << 16), 24)) >> 24));
         ks = pl_keepq((int32_t)(((int64_t)38048 * pl_semi(-pm(dec, 60 << 16) - pm(sn2, 7 << 16), 24)) >> 24));
         sn2 = pclamp(pm(sn2, 18454938) - 838861, 0, PL1);
-        dlev = pl_sqrt(PL1 - sn2);
-        slev = pl_sqrt(sn2);
-        fmin = (uint32_t)pmin((int32_t)(((uint64_t)f0 * 10u) >> 8), PL1 >> 1);
-        fmax = (uint32_t)pmin((int32_t)(((uint64_t)f0 * 35u) >> 8), PL1 >> 1);
-        pl_op_f(&d->shp, pl_fq((int32_t)fmin), TAN_FAST);
-        pl_svf_fq(&d->slp, pl_fq((int32_t)fmax), 128u + (uint32_t)(sn2 >> 15), TAN_FAST);   /* 0.5 + 2 snappy */
-        pl_op_f(&d->dlp, (uint32_t)pmin((int32_t)(((uint64_t)f0 * 3u) >> 8), PL1 >> 1) << 8, TAN_FAST);
+        if (f0 != d->af0 || sn2 != d->asn) {         /* (1.4: two square roots and 4 divides, when they move) */
+            d->af0 = f0;
+            d->asn = sn2;
+            d->dlev = pl_sqrt(PL1 - sn2);
+            d->slev = pl_sqrt(sn2);
+            fmin = (uint32_t)pmin((int32_t)(((uint64_t)f0 * 10u) >> 8), PL1 >> 1);
+            fmax = (uint32_t)pmin((int32_t)(((uint64_t)f0 * 35u) >> 8), PL1 >> 1);
+            pl_op_f(&d->shp, pl_fq((int32_t)fmin), TAN_FAST);
+            pl_svf_fq(&d->slp, pl_fq((int32_t)fmax), 128u + (uint32_t)(sn2 >> 15), TAN_FAST);   /* 0.5 + 2 snappy */
+            pl_op_f(&d->dlp, (uint32_t)pmin((int32_t)(((uint64_t)f0 * 3u) >> 8), PL1 >> 1) << 8, TAN_FAST);
+        }
+        dlev = d->dlev;
+        slev = d->slev;
         if (p->trig) {
             d->samp = d->damp = (int32_t)(((int64_t)(5033165 + pm(11744051, p->accent))) << 6);
             d->fm = 1 << 30;
@@ -595,40 +605,60 @@ PL_ENGINE sd_render(pl_sd_t *d, const pl_par_t *p, int32_t *out, int32_t *aux, u
         }
         rna = pclamp((PL1 >> 3) - (int32_t)(f0 >> 8), 0, PL1 >> 3) * 8;
         rna = pm(pm(rna, rna), fma);
-        for (i = 0; i < n; i++) {
-            int32_t rn = 0, drum, noise, snare, fq, sz = (int32_t)(n - i), ff;
-            d->damp = (d->damp > 32212255 || !((sz - 1) & 1)) ? pl_keep(d->damp, kd) : d->damp;   /* 0.03 */
-            if (d->hold)
-                --d->hold;
-            else
-                d->samp = pl_keep(d->samp, ks);
-            d->fm = pl_keep(d->fm, kf);
-            rn += d->phs[0] > (1 << 29) ? -PL1 : PL1;
-            rn += d->phs[1] > (1 << 29) ? -PL1 : PL1;
-            rn = pm(rn, pm(rna, 419430));            /* x 0.025 */
-            fq = PL1 + pm(fma, 4 * (d->fm >> 6));
-            ff = (int32_t)(((uint64_t)f0 * (uint32_t)fq) >> 26);   /* Q30 */
-            d->phs[0] += ff;
-            d->phs[1] += pm(ff, 24662507);           /* x 1.47 */
-            if (rna > 1677722) {                     /* 0.1: the oscillators reset each other */
-                int32_t lim = (1 << 30) + (rn << 6), k2;
-                for (k2 = 0; k2 < 2; k2++)
-                    if (d->phs[k2] >= lim)
-                        d->phs[k2] = (1 << 30) - d->phs[k2];
-            } else {
-                if (d->phs[0] >= 1 << 30)
-                    d->phs[0] -= 1 << 30;
-                if (d->phs[1] >= 1 << 30)
-                    d->phs[1] -= 1 << 30;
+        {   /* (1.4: the drum's pass, then the snare's: each its state in locals, the same arithmetic) */
+            int32_t damp = d->damp, samp = d->samp, fm = d->fm, hold = d->hold, ph0 = d->phs[0], ph1 = d->phs[1];
+            int32_t env[PLSUB];
+            pl_op_t dlp = d->dlp;
+            for (i = 0; i < n; i++) {
+                int32_t rn = 0, drum, fq, sz = (int32_t)(n - i), ff;
+                damp = (damp > 32212255 || !((sz - 1) & 1)) ? pl_keep(damp, kd) : damp;   /* 0.03 */
+                if (hold)
+                    --hold;
+                else
+                    samp = pl_keep(samp, ks);
+                fm = pl_keep(fm, kf);
+                rn += ph0 > (1 << 29) ? -PL1 : PL1;
+                rn += ph1 > (1 << 29) ? -PL1 : PL1;
+                rn = pm(rn, pm(rna, 419430));        /* x 0.025 */
+                fq = PL1 + pm(fma, 4 * (fm >> 6));
+                ff = (int32_t)(((uint64_t)f0 * (uint32_t)fq) >> 26);   /* Q30 */
+                ph0 += ff;
+                ph1 += pm(ff, 24662507);             /* x 1.47 */
+                if (rna > 1677722) {                 /* 0.1: the oscillators reset each other */
+                    int32_t lim = (1 << 30) + (rn << 6);
+                    if (ph0 >= lim)
+                        ph0 = (1 << 30) - ph0;
+                    if (ph1 >= lim)
+                        ph1 = (1 << 30) - ph1;
+                } else {
+                    if (ph0 >= 1 << 30)
+                        ph0 -= 1 << 30;
+                    if (ph1 >= 1 << 30)
+                        ph1 -= 1 << 30;
+                }
+                drum = -1677722 + pm(sd_dsine(ph0), 10066330) + pm(sd_dsine(ph1), 4194304);
+                drum = pm(pm(drum, damp >> 6), dlev);
+                aux[i] = pl_op_lp(&dlp, drum);
+                env[i] = (samp >> 6) + (fm >> 6);
             }
-            drum = -1677722 + pm(sd_dsine(d->phs[0]), 10066330) + pm(sd_dsine(d->phs[1]), 4194304);
-            drum = pm(pm(drum, d->damp >> 6), dlev);
-            drum = pl_op_lp(&d->dlp, drum);
-            noise = pl_randf();
-            snare = pl_svf_lp(&d->slp, noise);
-            snare -= pl_op_lp(&d->shp, snare);
-            snare = pm(pm(snare + 1677722, (d->samp >> 6) + (d->fm >> 6)), slev);
-            aux[i] = snare + drum;
+            d->damp = damp;
+            d->samp = samp;
+            d->fm = fm;
+            d->hold = hold;
+            d->phs[0] = ph0;
+            d->phs[1] = ph1;
+            d->dlp = dlp;
+            {
+                pl_svf_t slp = d->slp;
+                pl_op_t shp = d->shp;
+                for (i = 0; i < n; i++) {
+                    int32_t snare = pl_svf_lp(&slp, pl_randf());
+                    snare -= pl_op_lp(&shp, snare);
+                    aux[i] += pm(pm(snare + 1677722, env[i]), slev);
+                }
+                d->slp = slp;
+                d->shp = shp;
+            }
         }
     }
 }
@@ -686,6 +716,7 @@ static void pl_osc_render(pl_osc_t *o, int32_t f, int saw, int32_t *out, uint32_
 typedef struct {
     int32_t env, nclk, nsmp;                         /* env Q29; the clocked noise: its phase Q24 */
     pl_svf_t col, hpf;
+    uint32_t cf, cq;                                 /* (1.4: col's and hpf's f and q as set; cf is never 0) */
 } pl_hh1_t;
 typedef struct {
     uint32_t sq[6];                                  /* SquareNoise's phases */
@@ -741,7 +772,15 @@ static void hh_render1(pl_hh1_t *h, int which, pl_hh_t *d, const pl_par_t *p, in
     cut = (int32_t)(((int64_t)pl_semi(pm(tone, 72 << 16), 16) * (int32_t)((150ll << 24) / FS)) >> 16);
     cut = pclamp(cut, 0, (int32_t)((16000ll << 24) / FS));
     cutf = pl_fq(cut);
-    pl_svf_fq(&h->col, cutf, which == 0 ? 768u + (uint32_t)(pm(tone, 768 << 8) >> 8) : 256u, TAN_ACCURATE);
+    {
+        uint32_t q = which == 0 ? 768u + (uint32_t)(pm(tone, 768 << 8) >> 8) : 256u;
+        if (cutf != h->cf || q != h->cq) {           /* (1.4: their 4 divides, when they move) */
+            h->cf = cutf;
+            h->cq = q;
+            pl_svf_fq(&h->col, cutf, q, TAN_ACCURATE);
+            pl_svf_fq(&h->hpf, cutf, 128u, TAN_ACCURATE);
+        }
+    }
     for (i = 0; i < n; i++)
         out[i] = pl_svf_bp(&h->col, out[i]);
     noisy = pm(noisy, noisy);
@@ -765,7 +804,6 @@ static void hh_render1(pl_hh1_t *h, int which, pl_hh_t *d, const pl_par_t *p, in
             out[i] = pm(out[i], h->env >> 5);
         }
     }
-    pl_svf_fq(&h->hpf, cutf, 128u, TAN_ACCURATE);
     for (i = 0; i < n; i++)
         out[i] = pl_svf_hp(&h->hpf, out[i]);
 }

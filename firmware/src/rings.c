@@ -71,6 +71,9 @@ typedef struct {
     uint32_t cph, mph, cinc, minc;
     int32_t prev, gain, fma, aenv, benv, fbr, ffb, det[3], cent;   /* (aenv, benv: Q28) */
     int32_t flp[2], fbp[2];                          /* the follower's two filters (stmlib's NaiveSvf) */
+    /* (1.4: MODAL's coefficients are for these: computed again only when one moves. f is never 0) */
+    uint32_t mc_f, mc_nb, mc_n;
+    int32_t mc_s, mc_b, mc_d, mc_p;
 } model_t;
 static model_t mdl[3];
 #ifdef RINGS_TAP
@@ -90,7 +93,7 @@ static uint32_t rg_rcp(uint32_t x, int32_t *sh)
     return 0xFFFFFFFFu / ((x << s) >> 16);
 }
 /* 1 / x = r 2^(sh - 94), r ~30 bits (Q30, of 1 / x's mantissa: a Newton step on rg_rcp's): x > 0 */
-static uint32_t rg_rcp64(uint64_t x, int32_t *sh)
+static inline __attribute__((always_inline)) uint32_t rg_rcp64(uint64_t x, int32_t *sh)   /* (1.4: inlined: MODAL's coefficients, twice a mode) */
 {
     int32_t s = __builtin_clzll(x);
     uint32_t xn = (uint32_t)((x << s) >> 32), r0 = (0xFFFFFFFFu / (xn >> 16)) << 14;
@@ -668,7 +671,21 @@ static void model_block(uint32_t vi, const voice_t *v, int16_t *buf)
         }
         for (i = 1; i < BLOCK; i++)
             in[i] = rg_svf(&m->exf, in[i], SVF_LP);
-        nm = modal_coefs(m, f, s, rg_mul(b, b, 16), d, p, modal_budget());
+        {   /* (1.4: the 32 modes' coefficients, ~110 instructions and a divide a sample, only when they move: the
+             * pitch EG and TENSION settled, the knobs still) */
+            uint32_t nb = modal_budget();
+            int32_t b2 = rg_mul(b, b, 16);
+            if (f != m->mc_f || s != m->mc_s || b2 != m->mc_b || d != m->mc_d || p != m->mc_p || nb != m->mc_nb) {
+                m->mc_f = f;
+                m->mc_s = s;
+                m->mc_b = b2;
+                m->mc_d = d;
+                m->mc_p = p;
+                m->mc_nb = nb;
+                m->mc_n = modal_coefs(m, f, s, b2, d, p, nb);
+            }
+            nm = m->mc_n;
+        }
         modal_run(m, in, acc, nm);
         gain = 91750;                                /* 1.4 */
     } else {
