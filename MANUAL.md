@@ -924,7 +924,7 @@ The page shows the gain reduction as it happens. The settings are part of the ki
 
 ### Reverb
 
-A separate send bus after the FX bus, from Felucca: **ROOM** (a Freeverb-style room), **SPRING** (one spring of a spring tank: chirps and drips), **HALL** (a dense, smooth, stereo hall). From 0.16 also **PLATE**: Mutable Instruments Clouds' reverb (Jon Dattorro's plate), long and lush, with a slow shimmer in its tail; checked against Clouds' own code (`tests/reverb_compare.sh`). Size sets the length, Damping the darkness, Level the return. PERFORM 2's SPACE holds any of them. When nothing is fed to it and its tail has died away, it stops processing to save CPU.
+A separate send bus after the FX bus, from Felucca: **ROOM** (a Freeverb-style room), **SPRING** (one spring of a spring tank: chirps and drips), **HALL** (a dense, smooth, stereo hall). From 0.16 also **PLATE**: Mutable Instruments Clouds' reverb (Jon Dattorro's plate), long and lush, with a slow shimmer in its tail; checked against Clouds' own code (`tests/reverb_compare.sh`). Size sets the length, Damping the darkness, Level the return. PERFORM 2's SPACE holds any of them. When nothing is fed to it and its tail has died away, it stops processing to save CPU. Its cost while it runs (CONFIG → LOAD's REVERB, measured on the unit with 1.4): ROOM and SPRING 3–4%, HALL and PLATE 5%.
 
 ---
 
