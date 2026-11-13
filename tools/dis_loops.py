@@ -38,6 +38,8 @@ def shortest(ins, tg, end):
     addrs = [a for a, _ in ins if tg <= a <= end]
     text = dict((a, t) for a, t in ins)
     nxt = dict(zip(addrs, addrs[1:]))
+    if tg not in text:                                # (a jump into the middle of an instruction: not a loop)
+        return 0
     dist, q = {tg: 1}, deque([tg])
     while q:
         a = q.popleft()

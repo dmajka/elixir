@@ -483,14 +483,44 @@ static void delay_step(uint32_t w, int32_t *ol, int32_t *orr)   /* one sample's 
 #ifdef FX_NOW
 static uint32_t d_early_blocks;                      /* (host tests: the blocks read early) */
 #endif
+/* 1.4: no crossfade and no time change waiting (the most blocks): delay_step's reads, a run of them at one fraction;
+ * a loop each for MONO and PING PONG (pp a constant), bit-identical (tests/bench/filters_bench.c delay) */
+static inline __attribute__((always_inline)) void delay_run(const int pp)
+{
+    uint32_t i, mask = pp ? FXBUF_MASK >> 1 : FXBUF_MASK, pos = fx.d_old, f = fx.d_fold;
+    const int16_t *lb = fxbuf, *rb = fxbuf + (FXBUF_SIZE >> 1);
+    for (i = 0; i < BLOCK; i++) {
+        uint32_t q = (pos + 1u) & mask;
+        int32_t a = lb[pos], b = lb[q];
+        d_ol[i] = a + (int32_t)(((int64_t)(b - a) * (int32_t)f) >> 16);
+        if (pp) {
+            a = rb[pos];
+            b = rb[q];
+            d_or[i] = a + (int32_t)(((int64_t)(b - a) * (int32_t)f) >> 16);
+        } else {
+            d_or[i] = d_ol[i];
+        }
+        pos = q;
+    }
+    fx.d_old = pos;
+}
+static __attribute__((noinline)) void delay_run_mono(void) { delay_run(0); }
+static __attribute__((noinline)) void delay_run_pp(void) { delay_run(1); }
 static void delay_reads(void)                        /* the block's echoes, early (delay_far) */
 {
     uint32_t i;
 #ifdef FX_NOW
     d_early_blocks++;
 #endif
-    for (i = 0; i < BLOCK; i++)
-        delay_step((fx.d_write + i) & delay_mask(), &d_ol[i], &d_or[i]);
+    if (fx.d_interp <= 0 && !fx.d_has_pending) {
+        if (fx.delay_type == DELAY_NORMAL)
+            delay_run_mono();
+        else
+            delay_run_pp();
+    } else {
+        for (i = 0; i < BLOCK; i++)
+            delay_step((fx.d_write + i) & delay_mask(), &d_ol[i], &d_or[i]);
+    }
     d_read = 1;
 }
 
@@ -1022,11 +1052,84 @@ static __attribute__((noinline)) void fx_grain(void)
     fx.dl_e = e1;
 }
 
+/* 1.4: fx_delay's loop, a function each for MONO and PING PONG (pp a constant), the state in locals, / BLOCK a shift:
+ * bit-identical (tests/bench/filters_bench.c delay) */
+static inline __attribute__((always_inline)) void delay_mix(const int pp, int32_t fb, int32_t er, int32_t e0, int32_t e1)
+{
+    const uint32_t mask = pp ? FXBUF_MASK >> 1 : FXBUF_MASK, half = FXBUF_SIZE >> 1;
+    const int st = fx_stereo(), freeze = fx.freeze, band = fx.band, rd = d_read;
+    int32_t *side = fx_side(), *ol_out = st ? mix_l : side, rv_sum = 0, tone = fx.d_tone, lp0 = fx.d_lp[0], lp1 = fx.d_lp[1];
+    uint32_t i, w = fx.d_write;
+    for (i = 0; i < BLOCK; i++) {
+        int32_t ol, orr, lvl = e0 + div64((e1 - e0) * (int32_t)(i + 1u));
+        if (rd) {
+            ol = d_ol[i];
+            orr = d_or[i];
+        } else {
+            delay_step(w, &ol, &orr);                /* (near: read between the writes) */
+        }
+        if (freeze) {                                /* FREEZE: what the line holds, round and round */
+            if (pp) {
+                fxbuf[half + w] = (int16_t)sat16(ol);
+                fxbuf[w] = (int16_t)sat16(orr);
+            } else {
+                orr = ol;
+                fxbuf[w] = (int16_t)sat16(ol);
+            }
+        } else if (pp) {
+            int32_t a, b;
+            lp0 += (int32_t)(((int64_t)tone * ((ol << 8) - lp0)) >> 16);   /* (tone) */
+            ol = lp0 >> 8;
+            lp1 += (int32_t)(((int64_t)tone * ((orr << 8) - lp1)) >> 16);
+            orr = lp1 >> 8;
+            if (band) {
+                ol = band_peak(0, ol);
+                orr = band_peak(1, orr);
+            }
+            a = fx_l[i] + (int32_t)(((int64_t)ol * fb) >> 16);
+            b = fx_r[i] + (int32_t)(((int64_t)orr * fb) >> 16);
+            if (band) {                              /* (1.0: the howl held by a soft clip, not a hard one) */
+                a = tape_sat(a, 65536, 65536u);
+                b = tape_sat(b, 65536, 65536u);
+            }
+            fxbuf[half + w] = (int16_t)sat16(a);
+            fxbuf[w] = (int16_t)sat16(b);
+        } else {
+            int32_t a;
+            lp0 += (int32_t)(((int64_t)tone * ((ol << 8) - lp0)) >> 16);
+            ol = lp0 >> 8;
+            if (band)
+                ol = band_peak(0, ol);
+            orr = ol;
+            a = sat16(fx_l[i] + fx_r[i]) + (int32_t)(((int64_t)ol * fb) >> 16);
+            fxbuf[w] = (int16_t)sat16(band ? tape_sat(a, 65536, 65536u) : a);
+        }
+        w = (w + 1u) & mask;
+        ol_out[i] += (ol * lvl) >> 15;               /* (1.0: the echoes at LEVEL, added to the bus) */
+        if (st)
+            mix_r[i] += (orr * lvl) >> 15;
+        if (er) {                                    /* 21c: ECHO > REVERB */
+            rev_in[i] += (int32_t)(((int64_t)(ol + orr) * er) >> 17);
+            rv_sum |= ol | orr;
+        }
+    }
+    fx.d_write = w;
+    fx.d_lp[0] = lp0;
+    fx.d_lp[1] = lp1;
+    if (rv_sum)
+        rev_fed = 1;
+}
+static __attribute__((noinline)) void delay_mix_mono(int32_t fb, int32_t er, int32_t e0, int32_t e1)
+{
+    delay_mix(0, fb, er, e0, e1);
+}
+static __attribute__((noinline)) void delay_mix_pp(int32_t fb, int32_t er, int32_t e0, int32_t e1)
+{
+    delay_mix(1, fb, er, e0, e1);
+}
 static void fx_delay(void)                           /* Delay_process / Delay_processPingPong */
 {
-    uint32_t i, mask = delay_mask(), half = FXBUF_SIZE >> 1;
-    int pp = fx.delay_type != DELAY_NORMAL, st = fx_stereo();
-    int32_t er = dly_loop() ? 0 : fx.throw_echo ? 65536 : fx.d_echorev, rv_sum = 0, lvl, e0 = fx.dl_e, e1 = dl_gain();
+    int32_t er = dly_loop() ? 0 : fx.throw_echo ? 65536 : fx.d_echorev, e0 = fx.dl_e, e1 = dl_gain(), fb;
     if (is_tape() || is_grain()) {
         if (is_grain())
             fx_grain();
@@ -1035,68 +1138,16 @@ static void fx_delay(void)                           /* Delay_process / Delay_pr
         d_read = 0;
         return;
     }
-    int32_t *side = fx_side(), fb = fx.d_fb + (int32_t)(((int64_t)(62259 - fx.d_fb) * fx.push) >> 16);   /* (FB PUSH) */
+    fb = fx.d_fb + (int32_t)(((int64_t)(62259 - fx.d_fb) * fx.push) >> 16);   /* (FB PUSH) */
     if (fx.lfo_fb)                                   /* (19c: the global LFOs, either way) */
         fb = clamp32(fb + fx.lfo_fb, 0, 65536);
     if (fx.band)
         band_coef(0);
     er = (int32_t)(((int64_t)er * fx.dl_g) >> 15);
-    for (i = 0; i < BLOCK; i++) {
-        int32_t ol, orr;
-        lvl = e0 + (int32_t)(((e1 - e0) * (int32_t)(i + 1u)) / (int32_t)BLOCK);
-        if (d_read) {
-            ol = d_ol[i];
-            orr = d_or[i];
-        } else {
-            delay_step(fx.d_write, &ol, &orr);       /* (near: read between the writes) */
-        }
-        if (fx.freeze) {                             /* FREEZE: what the line holds, round and round */
-            if (pp) {
-                fxbuf[half + fx.d_write] = (int16_t)sat16(ol);
-                fxbuf[fx.d_write] = (int16_t)sat16(orr);
-            } else {
-                orr = ol;
-                fxbuf[fx.d_write] = (int16_t)sat16(ol);
-            }
-        } else if (pp) {
-            int32_t a, b;
-            ol = tone(&fx.d_lp[0], ol);
-            orr = tone(&fx.d_lp[1], orr);
-            if (fx.band) {
-                ol = band_peak(0, ol);
-                orr = band_peak(1, orr);
-            }
-            a = fx_l[i] + (int32_t)(((int64_t)ol * fb) >> 16);
-            b = fx_r[i] + (int32_t)(((int64_t)orr * fb) >> 16);
-            if (fx.band) {                           /* (1.0: the howl held by a soft clip, not a hard one) */
-                a = tape_sat(a, 65536, 65536u);
-                b = tape_sat(b, 65536, 65536u);
-            }
-            fxbuf[half + fx.d_write] = (int16_t)sat16(a);
-            fxbuf[fx.d_write] = (int16_t)sat16(b);
-        } else {
-            int32_t a;
-            ol = tone(&fx.d_lp[0], ol);
-            if (fx.band)
-                ol = band_peak(0, ol);
-            orr = ol;
-            a = sat16(fx_l[i] + fx_r[i]) + (int32_t)(((int64_t)ol * fb) >> 16);
-            fxbuf[fx.d_write] = (int16_t)sat16(fx.band ? tape_sat(a, 65536, 65536u) : a);
-        }
-        fx.d_write = (fx.d_write + 1u) & mask;
-        if (st) {                                    /* (1.0: the echoes at LEVEL, added to the bus) */
-            mix_l[i] += (ol * lvl) >> 15;
-            mix_r[i] += (orr * lvl) >> 15;
-        } else {
-            side[i] += (ol * lvl) >> 15;
-        }
-        if (er) {                                    /* 21c: ECHO > REVERB */
-            rev_in[i] += (int32_t)(((int64_t)(ol + orr) * er) >> 17);
-            rv_sum |= ol | orr;
-        }
-    }
-    if (rv_sum)
-        rev_fed = 1;
+    if (fx.delay_type == DELAY_NORMAL)
+        delay_mix_mono(fb, er, e0, e1);
+    else
+        delay_mix_pp(fb, er, e0, e1);
     d_read = 0;
     fx.dl_e = e1;
 }
