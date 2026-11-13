@@ -392,6 +392,20 @@ static inline int32_t softclip(int32_t x)            /* softClipTwo, x Q16 */
     }
     return x < 0 ? -r : r;
 }
+/* 1.4: a voice filter's input through DRIVE's softclip, softclip((v * 2 * drive) >> 12) to the bit: v 16-bit and drive
+ * at most FLT_DRIVE_MAX (sound.c) keep |x| under SC_MAX, in the table (no branch: a loop with one is several blocks,
+ * its registers spilled between them) */
+#define FLT_DRIVE_MAX (1638 + 24576)                 /* (sound.c: 1638 + 65536^2 x 6 >> 20, Q12) */
+_Static_assert(((int64_t)32768 * 2 * FLT_DRIVE_MAX >> 12) < SC_MAX, "softclip_in: under the table's end");
+static inline int32_t softclip_in(int32_t v, int32_t drive)
+{
+    int32_t x = (v * 2 * drive) >> 12, a = x < 0 ? -x : x, r;
+    uint32_t i, f;
+    i = (uint32_t)a >> 11;
+    f = (uint32_t)a & 2047u;
+    r = SOFTCLIP[i] + (int32_t)(((int64_t)(SOFTCLIP[i + 1u] - SOFTCLIP[i]) * (int32_t)f) >> 11);
+    return x < 0 ? -r : r;
+}
 /* (1.0 Phase 10d: fast_tanh and tanh20 clamp the table's index where they branched past 2: the same to the bit, the
  * table 1 from 1.95 (FASTTANH[500 ..]), and a loop with one in it stays one block, where the compiler keeps its
  * registers: ACID's loop -15%) */
@@ -749,9 +763,112 @@ static void ch_block(svf_t *s, uint32_t type, int16_t *buf)
     s->cdirty = 0;
 }
 
-static void svf_block28(svf_t *s, uint32_t type, int16_t *buf)
+/* 28: Elixir's types, a loop each (svf_block28) */
+static __attribute__((noinline)) void f28_lp4(svf_t *s, int16_t *buf)
 {
     uint32_t i;
+    /* (Zavalishin's: each stage y = G u + (1 - G) s, so the 4th is G^4 u + S, S from the states alone; u = x - k y4
+     * solved for this sample, then the tanh on u. The stages are bounded by the tanh's 1, and k < 4 rings out) */
+    const int32_t G = s->k1, B = 65536 - s->k1, k = s->k2, g4 = s->k3, inv = s->k4, mk = 65536 + (k >> 1);
+    int32_t e0 = s->e[0], e1 = s->e[1], e2 = s->e[2], e3 = s->e[3];   /* (Q20 inside: in Q16 the rounding rang on as
+                                                      * a limit cycle. 1.4: the states in locals) */
+    for (i = 0; i < BLOCK; i++) {
+        int32_t x = softclip_in(buf[i], s->drive) << 4, u, v;
+        int32_t S = mulr16(B, mulr16(G, mulr16(G, mulr16(G, e0) + e1) + e2) + e3);
+        int32_t y4 = mulr16(mulr16(g4, x) + S, inv);
+        u = tanh20(x - mulr16(k, y4));
+        v = mulr16(u - e0, G);                       /* (TPT one-poles) */
+        u = v + e0;
+        e0 = u + v;
+        v = mulr16(u - e1, G);
+        u = v + e1;
+        e1 = u + v;
+        v = mulr16(u - e2, G);
+        u = v + e2;
+        e2 = u + v;
+        v = mulr16(u - e3, G);
+        u = v + e3;
+        e3 = u + v;
+        buf[i] = (int16_t)tanh_s16(mulr16((u + 8) >> 4, mk));
+    }
+    s->e[0] = e0, s->e[1] = e1, s->e[2] = e2, s->e[3] = e3;
+}
+static __attribute__((noinline)) void f28_apf(svf_t *s, int16_t *buf)
+{
+    uint32_t i;
+    const int32_t G = s->k1, fbk = s->k2;
+    int32_t e0 = s->e[0], e1 = s->e[1], e2 = s->e[2], e3 = s->e[3], y = s->fb;   /* (1.4: locals) */
+    for (i = 0; i < BLOCK; i++) {
+        int32_t x = softclip_in(buf[i], s->drive), u = clamp32(x + mulr16(fbk, y), -S_LIM, S_LIM), v, lp;
+        v = mulr16(u - e0, G), lp = v + e0;
+        e0 = clamp32(lp + v, -S_LIM, S_LIM);
+        u = 2 * lp - u;
+        v = mulr16(u - e1, G), lp = v + e1;
+        e1 = clamp32(lp + v, -S_LIM, S_LIM);
+        u = 2 * lp - u;
+        v = mulr16(u - e2, G), lp = v + e2;
+        e2 = clamp32(lp + v, -S_LIM, S_LIM);
+        u = 2 * lp - u;
+        v = mulr16(u - e3, G), lp = v + e3;
+        e3 = clamp32(lp + v, -S_LIM, S_LIM);
+        u = 2 * lp - u;
+        y = u;
+        buf[i] = (int16_t)q16_to_s16((x + y) >> 1);
+    }
+    s->e[0] = e0, s->e[1] = e1, s->e[2] = e2, s->e[3] = e3;
+    s->fb = y;
+}
+static __attribute__((noinline)) void f28_comb(svf_t *s, int16_t *buf)
+{
+    uint32_t i;
+    const int32_t pd = s->k1, fbk = s->k2, og = s->k3;
+    const uint32_t pi = (uint32_t)pd >> 16, pf = (uint32_t)pd & 0xFFFFu;
+    int16_t *ln = s->line;
+    uint32_t wp = s->wp;
+    int32_t lp = s->e[0];
+    if (!ln)
+        return;
+    for (i = 0; i < BLOCK; i++) {
+        int32_t x = softclip_in(buf[i], s->drive), w;
+        uint32_t r0 = (wp - pi) & (FLT_LINE - 1u), r1 = (r0 - 1u) & (FLT_LINE - 1u);
+        int32_t d = (ln[r0] + (((ln[r1] - ln[r0]) * (int32_t)(pf >> 2)) >> 14)) << 3;   /* (Q13 -> Q16) */
+        lp += mulr16(d - lp, 45875);                 /* (the loop's one-pole, 0.7) */
+        w = clamp32(x + mulr16(fbk, lp), -(4 << 16) + 8, (4 << 16) - 8);
+        ln[wp] = (int16_t)(w >> 3);
+        wp = (wp + 1u) & (FLT_LINE - 1u);
+        buf[i] = (int16_t)tanh_s16(mulr16(w, og));
+    }
+    s->wp = (uint16_t)wp;
+    s->e[0] = lp;
+}
+static __attribute__((noinline)) void f28_vowel(svf_t *s, int16_t *buf)
+{
+    uint32_t i;
+    const int32_t c1 = s->k1, c2 = s->k2, d = s->k3, og = (65536 + d) >> 1;
+    int32_t e[4] = {s->e[0], s->e[1], s->e[2], s->e[3]};   /* (1.4: locals, not s->e) */
+    for (i = 0; i < BLOCK; i++) {
+        int32_t x = softclip_in(buf[i], s->drive);
+        int32_t y = cham_bp(&e[0], x, c1, d) + mulr16(cham_bp(&e[2], x, c2, d), 39322);   /* (F2 x 0.6) */
+        buf[i] = (int16_t)tanh_s16(mulr16(y, og));
+    }
+    s->e[0] = e[0], s->e[1] = e[1], s->e[2] = e[2], s->e[3] = e[3];
+}
+static __attribute__((noinline)) void f28_reso(svf_t *s, int16_t *buf)
+{
+    uint32_t i;
+    const int32_t c1 = s->k1, c2 = s->k2, c3 = s->k3, d = s->k4, og = d + 8192;
+    int32_t e[6] = {s->e[0], s->e[1], s->e[2], s->e[3], s->e[4], s->e[5]};
+    for (i = 0; i < BLOCK; i++) {
+        int32_t x = softclip_in(buf[i], s->drive);
+        int32_t y = cham_bp(&e[0], x, c1, d) + mulr16(cham_bp(&e[2], x, c2, d), 45875) +
+                    mulr16(cham_bp(&e[4], x, c3, d), 39322);   /* (the root, the fifth x 0.7, the octave x 0.6) */
+        buf[i] = (int16_t)tanh_s16(mulr16(y, og));
+    }
+    for (i = 0; i < 6u; i++)
+        s->e[i] = e[i];
+}
+static void svf_block28(svf_t *s, uint32_t type, int16_t *buf)
+{
     if (type != s->was || s->clr) {                  /* (a switch or a hit: from rest, the line silent) */
         memset(s->e, 0, sizeof s->e);
         s->fb = 0;
@@ -770,84 +887,23 @@ static void svf_block28(svf_t *s, uint32_t type, int16_t *buf)
         ch_block(s, type, buf);
         return;
     }
-    switch (type) {
-    case F_LP4: {
-        /* (Zavalishin's: each stage y = G u + (1 - G) s, so the 4th is G^4 u + S, S from the states alone; u = x - k y4
-         * solved for this sample, then the tanh on u. The stages are bounded by the tanh's 1, and k < 4 rings out) */
-        const int32_t G = s->k1, B = 65536 - s->k1, k = s->k2, g4 = s->k3, inv = s->k4, mk = 65536 + (k >> 1);
-        int32_t *e = s->e;                           /* (Q20 inside: in Q16 the rounding rang on as a limit cycle) */
-        for (i = 0; i < BLOCK; i++) {
-            int32_t x = softclip((buf[i] * 2 * s->drive) >> 12) << 4, u, j;
-            int32_t S = mulr16(B, mulr16(G, mulr16(G, mulr16(G, e[0]) + e[1]) + e[2]) + e[3]);
-            int32_t y4 = mulr16(mulr16(g4, x) + S, inv);
-            u = tanh20(x - mulr16(k, y4));
-            for (j = 0; j < 4; j++) {                /* (TPT one-poles) */
-                int32_t v = mulr16(u - e[j], G);
-                u = v + e[j];
-                e[j] = u + v;
-            }
-            buf[i] = (int16_t)tanh_s16(mulr16((u + 8) >> 4, mk));
-        }
+    switch (type) {                                  /* (1.4: a function a type: each loop its own registers) */
+    case F_LP4:
+        f28_lp4(s, buf);
         break;
-    }
-    case F_APF: {
-        const int32_t G = s->k1, fbk = s->k2;
-        int32_t *e = s->e, y = s->fb;
-        for (i = 0; i < BLOCK; i++) {
-            int32_t x = softclip((buf[i] * 2 * s->drive) >> 12), u = clamp32(x + mulr16(fbk, y), -S_LIM, S_LIM), j;
-            for (j = 0; j < 4; j++) {
-                int32_t v = mulr16(u - e[j], G), lp = v + e[j];
-                e[j] = clamp32(lp + v, -S_LIM, S_LIM);
-                u = 2 * lp - u;
-            }
-            y = u;
-            buf[i] = (int16_t)q16_to_s16((x + y) >> 1);
-        }
-        s->fb = y;
+    case F_APF:
+        f28_apf(s, buf);
         break;
-    }
     case F_COMBP:
-    case F_COMBN: {
-        const int32_t pd = s->k1, fbk = s->k2, og = s->k3;
-        const uint32_t pi = (uint32_t)pd >> 16, pf = (uint32_t)pd & 0xFFFFu;
-        int16_t *ln = s->line;
-        uint32_t wp = s->wp;
-        int32_t lp = s->e[0];
-        if (!ln)
-            return;
-        for (i = 0; i < BLOCK; i++) {
-            int32_t x = softclip((buf[i] * 2 * s->drive) >> 12), w;
-            uint32_t r0 = (wp - pi) & (FLT_LINE - 1u), r1 = (r0 - 1u) & (FLT_LINE - 1u);
-            int32_t d = (ln[r0] + (((ln[r1] - ln[r0]) * (int32_t)(pf >> 2)) >> 14)) << 3;   /* (Q13 -> Q16) */
-            lp += mulr16(d - lp, 45875);             /* (the loop's one-pole, 0.7) */
-            w = clamp32(x + mulr16(fbk, lp), -(4 << 16) + 8, (4 << 16) - 8);
-            ln[wp] = (int16_t)(w >> 3);
-            wp = (wp + 1u) & (FLT_LINE - 1u);
-            buf[i] = (int16_t)tanh_s16(mulr16(w, og));
-        }
-        s->wp = (uint16_t)wp;
-        s->e[0] = lp;
+    case F_COMBN:
+        f28_comb(s, buf);
         break;
-    }
-    case F_VOWEL: {
-        const int32_t c1 = s->k1, c2 = s->k2, d = s->k3, og = (65536 + d) >> 1;
-        for (i = 0; i < BLOCK; i++) {
-            int32_t x = softclip((buf[i] * 2 * s->drive) >> 12);
-            int32_t y = cham_bp(&s->e[0], x, c1, d) + mulr16(cham_bp(&s->e[2], x, c2, d), 39322);   /* (F2 x 0.6) */
-            buf[i] = (int16_t)tanh_s16(mulr16(y, og));
-        }
+    case F_VOWEL:
+        f28_vowel(s, buf);
         break;
-    }
-    case F_RESO: {
-        const int32_t c1 = s->k1, c2 = s->k2, c3 = s->k3, d = s->k4, og = d + 8192;
-        for (i = 0; i < BLOCK; i++) {
-            int32_t x = softclip((buf[i] * 2 * s->drive) >> 12);
-            int32_t y = cham_bp(&s->e[0], x, c1, d) + mulr16(cham_bp(&s->e[2], x, c2, d), 45875) +
-                        mulr16(cham_bp(&s->e[4], x, c3, d), 39322);   /* (the root, the fifth x 0.7, the octave x 0.6) */
-            buf[i] = (int16_t)tanh_s16(mulr16(y, og));
-        }
+    case F_RESO:
+        f28_reso(s, buf);
         break;
-    }
     default:
         break;
     }
@@ -896,6 +952,58 @@ static void svf_coef(svf_t *s)                       /* SVF_recalcFreq + the per
     s->dirty = 0;
 }
 
+/* the LXR's types (and DUB BP) over the block, type a constant */
+static inline __attribute__((always_inline)) void lxr_svf(svf_t *s, int16_t *buf, const uint32_t type)
+{
+    int32_t s1 = s->s1, s2 = s->s2, cx = s->cx, cs1 = s->cs1, cs2 = s->cs2, g0 = s->g0, gg0 = s->gg0, g2 = s->g2,
+            r2 = s->r2, dr = s->drive;
+    uint32_t i;
+    for (i = 0; i < BLOCK; i++) {
+        int32_t x = softclip_in(buf[i], dr);
+        int32_t y1 = (int32_t)(((int64_t)cx * x + (int64_t)cs2 * s2 + (int64_t)cs1 * s1) >> 16);
+        int32_t xx = x - y1, sc = softclip(s1);
+        int32_t y0 = (int32_t)(((int64_t)g0 * sc + (int64_t)gg0 * xx) >> 16);
+        int32_t ugb = mulr16(r2, y0), o;
+        s1 = sc + (int32_t)(((int64_t)g2 * (xx - ugb)) >> 16);
+        s2 = s2 + (int32_t)(((int64_t)g2 * y0) >> 16);
+        s1 = clamp_hl(s1, -S_LIM, S_LIM);
+        s2 = clamp_hl(s2, -S_LIM, S_LIM);
+        switch (type) {
+        case F_LP:
+            o = fast_tanh(y1);
+            break;
+        case F_HP:
+            o = x - ugb - y1;
+            break;
+        case F_BP:
+            o = y0;
+            break;
+        case F_DUB:                                  /* (28: the BP into a tanh, 2 .. 14.8 x by DRIVE; below 24 (-69 */
+            o = y0 - clamp32(y0, -24, 24);           /* .. dB) left out: the BP's own rounding hum, made loud) */
+            o = fast_tanh((int32_t)(((int64_t)o * (8192 + 2 * dr)) >> 12));
+            break;
+        case F_UBP:
+            o = ugb;
+            break;
+        case F_NOTCH:
+            o = x - ugb;
+            break;
+        default:                                     /* F_PEAK: y1 - hp */
+            o = y1 - (x - ugb - y1);
+            break;
+        }
+        buf[i] = (int16_t)q16_to_s16(o);
+    }
+    s->s1 = s1;
+    s->s2 = s2;
+}
+static __attribute__((noinline)) void lxr_lp(svf_t *s, int16_t *buf) { lxr_svf(s, buf, F_LP); }
+static __attribute__((noinline)) void lxr_hp(svf_t *s, int16_t *buf) { lxr_svf(s, buf, F_HP); }
+static __attribute__((noinline)) void lxr_bp(svf_t *s, int16_t *buf) { lxr_svf(s, buf, F_BP); }
+static __attribute__((noinline)) void lxr_dub(svf_t *s, int16_t *buf) { lxr_svf(s, buf, F_DUB); }
+static __attribute__((noinline)) void lxr_ubp(svf_t *s, int16_t *buf) { lxr_svf(s, buf, F_UBP); }
+static __attribute__((noinline)) void lxr_notch(svf_t *s, int16_t *buf) { lxr_svf(s, buf, F_NOTCH); }
+static __attribute__((noinline)) void lxr_peak(svf_t *s, int16_t *buf) { lxr_svf(s, buf, F_PEAK); }
 static void svf_block(svf_t *s, uint32_t type, int16_t *buf)   /* SVF_calcBlockZDF */
 {
     uint32_t i;
@@ -914,8 +1022,9 @@ static void svf_block(svf_t *s, uint32_t type, int16_t *buf)   /* SVF_calcBlockZ
     if (type == F_LP2) {
         int32_t a = s->a, b = s->b, f = s->lp2f, q = s->lp2q;
         for (i = 0; i < BLOCK; i++) {
-            int32_t x = softclip((buf[i] * 2 * s->drive) >> 12);
-            int64_t t = (int64_t)(x - a) + (((int64_t)q * (a - b)) >> 16);
+            int32_t x = softclip_in(buf[i], s->drive);
+            int32_t t = (x - a) + (int32_t)(((int64_t)q * (a - b)) >> 16);   /* (1.4: 32 bits, as the 64 were: q
+                                                      * < 2^23 (svf_coef: 65536 - fl >= 536), |a - b| <= 2^17, |x| < 2^19) */
             a += (int32_t)(((int64_t)f * t) >> 16);
             a = clamp32(a, -65536, 65536);
             b += (int32_t)(((int64_t)f * (a - b)) >> 16);
@@ -926,47 +1035,14 @@ static void svf_block(svf_t *s, uint32_t type, int16_t *buf)   /* SVF_calcBlockZ
         s->b = b;
         return;
     }
-    {
-        int32_t s1 = s->s1, s2 = s->s2;
-        const int32_t cx = s->cx, cs1 = s->cs1, cs2 = s->cs2, g0 = s->g0, gg0 = s->gg0, g2 = s->g2, r2 = s->r2;
-        for (i = 0; i < BLOCK; i++) {
-            int32_t x = softclip((buf[i] * 2 * s->drive) >> 12);
-            int32_t y1 = (int32_t)(((int64_t)cx * x + (int64_t)cs2 * s2 + (int64_t)cs1 * s1) >> 16);
-            int32_t xx = x - y1, sc = softclip(s1);
-            int32_t y0 = (int32_t)(((int64_t)g0 * sc + (int64_t)gg0 * xx) >> 16);
-            int32_t ugb = mulr16(r2, y0), o;
-            s1 = sc + (int32_t)(((int64_t)g2 * (xx - ugb)) >> 16);
-            s2 = s2 + (int32_t)(((int64_t)g2 * y0) >> 16);
-            s1 = clamp_hl(s1, -S_LIM, S_LIM);
-            s2 = clamp_hl(s2, -S_LIM, S_LIM);
-            switch (type) {
-            case F_LP:
-                o = fast_tanh(y1);
-                break;
-            case F_HP:
-                o = x - ugb - y1;
-                break;
-            case F_BP:
-                o = y0;
-                break;
-            case F_DUB:                              /* (28: the BP into a tanh, 2 .. 14.8 x by DRIVE; below 24 (-69 */
-                o = y0 - clamp32(y0, -24, 24);       /* .. dB) left out: the BP's own rounding hum, made loud) */
-                o = fast_tanh((int32_t)(((int64_t)o * (8192 + 2 * s->drive)) >> 12));
-                break;
-            case F_UBP:
-                o = ugb;
-                break;
-            case F_NOTCH:
-                o = x - ugb;
-                break;
-            default:                                 /* F_PEAK: y1 - hp */
-                o = y1 - (x - ugb - y1);
-                break;
-            }
-            buf[i] = (int16_t)q16_to_s16(o);
-        }
-        s->s1 = s1;
-        s->s2 = s2;
+    switch (type) {                                  /* (1.4: a loop a type, each a function: no switch a sample, */
+    case F_LP: lxr_lp(s, buf); break;                /* each loop its own registers) */
+    case F_HP: lxr_hp(s, buf); break;
+    case F_BP: lxr_bp(s, buf); break;
+    case F_DUB: lxr_dub(s, buf); break;
+    case F_UBP: lxr_ubp(s, buf); break;
+    case F_NOTCH: lxr_notch(s, buf); break;
+    default: lxr_peak(s, buf); break;
     }
 }
 

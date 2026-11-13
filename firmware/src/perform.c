@@ -635,9 +635,6 @@ static void stutter(int16_t *l, int16_t *r)
     }
 }
 
-#ifndef FM1_OPAQUE                                   /* (the host's and the emulator's builds) */
-#define FM1_OPAQUE(x) ((void)0)
-#endif
 #define RG_LIM (1 << 26)
 #define RG_GAIN 45875                                /* (the bands' input, x their damping^0.4: 0.7) */
 #define RG_SUB 16u                                   /* (half-rate samples a pass: 32 at 44.1 kHz) */
@@ -779,7 +776,7 @@ static void ring_block(int16_t *l, int16_t *r, int32_t d, int32_t w)
     gd = wt <= 64 ? 32768 - 256 * wt : 16384 * (127 - wt) / 63;   /* (WET: the dry, Q15; the bands, Q16 on tanh's: */
     gw = wt <= 64 ? 24575 * wt / 64 : 24575 + 8192 * (wt - 64) / 63;   /* 64: 1/2 and 0.75, as before) */
     for (b = 0; b < BLOCK; b += 2u * RG_SUB) {
-        int32_t xb[9u + 2u * RG_SUB], xm[RG_SUB], yl[5u + RG_SUB], yr[5u + RG_SUB], bo[RG_SUB];
+        int32_t xb[9u + 2u * RG_SUB], xm[RG_SUB], yl[5u + RG_SUB], yr[5u + RG_SUB];
         int16_t *lb = l + b, *rb = r + b;
         rg_cpy(xb, pf.rg_xh, 9u);
         rg_cpy(yl, pf.rg_yh[0], 5u);

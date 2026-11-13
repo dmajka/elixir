@@ -134,6 +134,57 @@ static uint64_t bench_phaser(uint32_t ncase)
     return H;
 }
 
+/* the voice filter: svf_block, each type (the LXR's, LP2, Elixir's, the character types) over cutoff, Reso, Drive
+ * (as sound.c sets them), the note, FILTER X and the EG; cutoff, Reso, Drive moved, a hit (svf_reset) and a switch
+ * of type along the way; the samples and the states hashed */
+static int16_t svf_line[FLT_LINE];
+static void svf_knob(svf_t *s, uint32_t which)
+{
+    int32_t f = (int32_t)(knob() * 65536u / 127u), q;
+    switch (which) {
+    case 0: s->fval = (uint32_t)f; s->dirty = 1; break;
+    case 1: q = 65536 - f; s->q = q < 6554 ? 1311 : q; s->rk = f; s->dirty = 1; break;
+    case 2: s->drive = 1638 + (int32_t)(((int64_t)f * f * 6) >> 20); break;
+    case 3: s->xamt = f; break;
+    }
+}
+static uint64_t bench_svf(uint32_t ncase, uint32_t only)
+{
+    for (uint32_t c = 0; c < ncase; c++) {
+        svf_t s;
+        int16_t buf[BLOCK];
+        uint32_t t = 1u + c % F_LAST, lvl = (c / F_LAST) & 3u;
+        if (only && t != only)
+            continue;
+        memset(&s, 0, sizeof s);
+        svf_init(&s);
+        memset(svf_line, 0, sizeof svf_line);
+        s.line = svf_line;
+        for (uint32_t k = 0; k < 4; k++)
+            svf_knob(&s, k);
+        s.key = (int8_t)((int32_t)(rnd() >> 27) - 16);
+        for (uint32_t b = 0; b < 30; b++) {
+            switch (b) {
+            case 5: svf_knob(&s, 0); break;
+            case 9: svf_knob(&s, 1); break;
+            case 12: svf_knob(&s, 2); break;
+            case 15: svf_reset(&s); break;
+            case 18: svf_knob(&s, 0); svf_knob(&s, 1); break;
+            case 21: svf_knob(&s, 3); s.key = (int8_t)((int32_t)(rnd() >> 27) - 16); s.dirty = 1; break;
+            }
+            s.eg = (int32_t)(65536u >> (b >> 2));
+            sig_in(buf, b, lvl);
+            svf_block(&s, b >= 24 && (c & 1u) ? (t % F_LAST) + 1u : t, buf);   /* (a switch of type at 24, half the
+                                                                               * cases) */
+            hash16(buf, BLOCK);
+        }
+        hash32(&s.s1, 4);
+        hash32(s.e, 6);
+        hash32(&s.fb, 1);
+    }
+    return H;
+}
+
 int main(int argc, char **argv)
 {
     const char *only = argc > 1 ? argv[1] : "";
@@ -148,6 +199,12 @@ int main(int argc, char **argv)
     if (!*only || !strcmp(only, "phaser")) {
         H = 1469598103934665603ull, rs = 2u, t0 = now();
         printf("PHASER   %016llx  %.1f us/case\n", (unsigned long long)bench_phaser(ncase), (now() - t0) / 1000.0 / ncase);
+        all = (all ^ H) * 1099511628211ull;
+    }
+    if (!*only || !strcmp(only, "svf")) {
+        uint32_t t1 = argc > 3 ? (uint32_t)atoi(argv[3]) : 0;
+        H = 1469598103934665603ull, rs = 3u, t0 = now();
+        printf("SVF      %016llx  %.1f us/case\n", (unsigned long long)bench_svf(ncase * 4u, t1), (now() - t0) / 1000.0 / ncase);
         all = (all ^ H) * 1099511628211ull;
     }
     printf("all      %016llx\n", (unsigned long long)all);

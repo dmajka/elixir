@@ -452,7 +452,8 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
         return;
     }
     if (p >= PAR_FILTER_DRIVE_1 && p <= PAR_FILTER_DRIVE_6) {        /* SVF_setDrive: 0.4 + d^2 x 6, Q12 */
-        vc[p - PAR_FILTER_DRIVE_1].flt.drive = 1638 + (int32_t)(((int64_t)f * f * 6) >> 20);
+        vc[p - PAR_FILTER_DRIVE_1].flt.drive = 1638 + (int32_t)(((int64_t)f * f * 6) >> 20);   /* (at most
+                                                      * FLT_DRIVE_MAX: dsp.c softclip_in counts on it) */
         return;
     }
     if (p >= PAR_MIX_MOD_1 && p <= PAR_MIX_MOD_3) {
