@@ -2164,12 +2164,12 @@ FM-1 (RAIN is an estimate), as a share of the second core:
 
 | Model | What it is | Cost (% of the second core) | | Counts as one of the two |
 |---|---|---|---|---|
-| **P ADDTV** | Plaits' additive | 23 (about 15 with Aux at 0) | ████████████ | yes |
 | **P SD** | Plaits' analog snare | 18 (about 7 with Aux at 0 or 127) | █████████ | yes |
 | **P BD** | Plaits' analog kick | 18 (about 9 with Aux at 0 or 127) | █████████ | yes |
 | **MODAL** | Rings' bells and plates | 18 | █████████ | yes |
 | **P VA** | Plaits' analog oscillators | 18 | █████████ | yes |
 | **P HH** | Plaits' analog hi-hat | 17 (about 7 with Aux at 0 or 127) | █████████ | yes |
+| **P ADDTV** | Plaits' additive | 16 (about 11 with Aux at 0) | ████████ | yes |
 | **P WSHAPE** | Plaits' wavefolder | 16 | ████████ | yes |
 | **P CHORD** | Plaits' chords | 14 | ███████ | yes |
 | **P SWARM** | Plaits' swarm | 13 | ███████ | yes |

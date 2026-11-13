@@ -560,7 +560,12 @@ static void delay_type_now(uint32_t t)
                                                       * a mono line read as ping-pong's two halves smeared; cleared a
                                                       * piece a block, fxbus_process) */
     fx.dl_in = 0;
-    memset(&tp, 0, sizeof tp);
+    {   /* (1.4: GLITCH's and GRAIN's draws go on, stirred by the write head (the time since power-on): cleared, every
+         * MODE change began the same few glitches again) */
+        uint32_t rng = tp.rng + fx.d_write + tp.w;
+        memset(&tp, 0, sizeof tp);
+        tp.rng = rng;
+    }
     memset(&gs, 0, sizeof gs);                       /* (1.0 Phase 13: GRAIN's grains) */
     memset(fx.d_lp, 0, sizeof fx.d_lp);
     memset(fx.bd, 0, sizeof fx.bd);
