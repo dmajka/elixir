@@ -220,3 +220,5 @@ EURORACK=path/to/eurorack STMLIB=path/to/stmlib tests/reverb_compare.sh  # PLATE
 ## License
 
 GPL-3.0-only. See [NOTICE.md](NOTICE.md) and `LICENSES/`.
+
+You can also try Elixir in the browser, no flashing needed, in the free community [FM-1 Emulator](https://fm1-emulator.atst.tools/).
