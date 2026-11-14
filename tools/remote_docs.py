@@ -28,7 +28,7 @@ CELL = {
     "global.tempo": "Tempo", "global.shuffle": "Shuffle", "global.morph": "Morph", "global.sample-rate": "SRate",
     "global.master-filter": "Master filter", "global.roll-rate": "Roll rate", "global.repeat": "Repeat",
     "global.tape-time": "Tape time", "global.fx-wet": "FX wet", "global.fx-p1": "P1", "global.fx-p2": "P2",
-    "global.fx-p3": "P3", "global.fx-p4": "P4", "global.bus-dirt": "Bus dirt", "global.echo-to-reverb": "Echo > rev",
+    "global.fx-p3": "P3", "global.fx-p4": "P4", "global.decay": "Decay", "global.tape-speed": "Speed", "global.bus-dirt": "Bus dirt", "global.echo-to-reverb": "Echo > rev",
     "global.saturate": "Saturate", "global.reverb-level": "Rev level", "global.reverb-size": "Rev size",
     "global.reverb-damping": "Rev damp", "global.master-dirt": "Master dirt", "global.density": "DENSITY",
     "global.ghost-velocity": "Ghost vel", "global.build": "Build", "global.vary": "Vary",
@@ -113,9 +113,11 @@ class Map:
                 and p["controlType"] == "continuous" and not p["id"].startswith("global.roll-fader.")
                 and p["id"] != "global.master-volume"]
 
-    def grid(self):                                  # the knob grid: rows of 8 whose CCs are all knobs, 8 .. 47
-        knobs = {p["number"] for p in self.global_knobs()}
-        rows = [f for f in range(0, 128, 8) if all(f + c in knobs for c in range(8))]
+    def grid(self):                                  # the knob grid: rows of 8 whose CCs are knobs, 8 .. 47 (1.4: or
+        knobs = {p["number"] for p in self.global_knobs()}   # free, 19 and 20: six knobs a row at least)
+        used = {n for (g, n) in self.by_cc if g == "remoteGlobal"}
+        rows = [f for f in range(0, 128, 8) if all(f + c in knobs or f + c not in used for c in range(8))
+                and sum(f + c in knobs for c in range(8)) >= 6]
         remote_params.need(rows, "GLOBAL has no row of eight knobs")
         k = 1                                        # (the first block; the delay's row, 96 .., is off the grid)
         while k < len(rows) and rows[k] == rows[k - 1] + 8:
@@ -172,7 +174,8 @@ def manual_blocks(m):
     lines = [f"**GLOBAL (channel 16): knobs and faders, CC {grid[0]}–{grid[-1] + 7}**", "", "<!-- grid -->",
              md_row([""] + [str(c) for c in range(1, 9)]), SEP]
     for f in grid:
-        lines.append(md_row([f"{f}–{f + 7}"] + [f"**{p['number']}** {cell(p, MANUAL_CELL)}" for p in m.global_row(f)]))
+        lines.append(md_row([f"{f}–{f + 7}"] + [f"**{p['number']}** {cell(p, MANUAL_CELL)}" if p else f"**{f + c}** –"
+                                                for c, p in enumerate(m.global_row(f))]))
     out["manual-global-knobs"] = lines
     delay, rest = m.off_grid()
     lines = [md_row(["CC", "Sets", "", "CC", "Sets"]), "|---|---|---|---|---|"]

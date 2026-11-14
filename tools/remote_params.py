@@ -68,7 +68,11 @@ GLOBAL_KNOBS = {                                      # remote.c RM_GK's entries
     "VP_REPEAT": ("repeat", "Repeat", "Performance"), "VP_TAPE": ("tape-time", "Tape time", "Delay"),
     "PAR_FX_DRY_WET": ("fx-wet", "FX wet", "Effects"), "PAR_FX_P1": ("fx-p1", "FX P1", "Effects"),
     "PAR_FX_P2": ("fx-p2", "FX P2", "Effects"), "PAR_FX_P3": ("fx-p3", "FX P3", "Effects"),
-    "PAR_FX_P4": ("fx-p4", "FX P4", "Effects"), "PAR_FXDIRT": ("bus-dirt", "Bus dirt", "Effects"),
+    "PAR_FX_P4": ("fx-p4", "FX P4", "Effects"),
+    "VP_WDEC": ("decay", "Global decay", "Performance",
+                "PERFORM 2: WEAR's Decay: every voice's decay, 64 the kit as it is, 0 a click, 127 four times as long."),
+    "VP_WSPD": ("tape-speed", "Tape speed", "Performance",
+                "PERFORM 2: WEAR's Speed: the whole kit's pitch, 64 as it is, 0 and 127 an octave down and up."), "PAR_FXDIRT": ("bus-dirt", "Bus dirt", "Effects"),
     "PAR_ECHOREV": ("echo-to-reverb", "Echo to reverb", "Routing"),
     "PAR_DSAT": ("saturate", "Saturate / Grain scatter", "Effects"),
     "PAR_REV_LEVEL": ("reverb-level", "Reverb level", "Reverb"), "PAR_REV_SIZE": ("reverb-size", "Reverb size", "Reverb"),
@@ -246,6 +250,8 @@ def build(src_dir=ROOT / "firmware/src", kits=None):
     # GLOBAL knobs: RM_GK's first 40 at CC RM_CC0 + i, the rest at RM_XK's CCs
     gcc = {}
     for i, sym in enumerate(gk):
+        if sym == "VP_NONE":                          # (a CC left free: 1.4's 19, 20)
+            continue
         key, name, cat, *interp = known(GLOBAL_KNOBS, sym, f"RM_GK[{i}]")
         cc = cc0 + i if i < 40 else xk[i - 40]
         gcc[sym] = cc

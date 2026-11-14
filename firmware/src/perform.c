@@ -128,6 +128,7 @@ static struct {
     uint8_t dj_spread, dj_slope, dj_tone, dj_wet;    /* 1.0 Phase 18: RING (2/2), 0..127, 64 as before (KSC1) */
     uint8_t dj_decay;                                /* 1.3.1: RING's Decay, 0..127, its own (it shared Reso: a long
                                                       * ring left the other filters screaming) (KSC1) */
+    uint8_t wdecay, wspeed;                          /* 1.4: WEAR's Decay and Tape speed, 0..127, 64 as the kit is (KPF2) */
 } pfs;
 /* 1.0: the DJ filter's type, the global character filter: the LXR's SVF (LP, HP), ACID (its LP; the LXR's HP) or MS20
  * (its LP, HP) */
@@ -164,24 +165,32 @@ static uint32_t dj_fval(int32_t d)                   /* .. its cutoff, Q16 (from
 static const uint8_t REPEAT_TICKS[4] = {96, 48, 24, 12};
 
 /* 0.13: the global LFOs */
+#define NGLFO 4u                                     /* (1.0 Phase 11: a 4th) */
 enum { GD_OFF, GD_MORPH, GD_FILTER, GD_LP, GD_HP, GD_PUSH, GD_COMB, GD_CRUSH, GD_JITTER, GD_CUTS, GD_PUMP,
        GD_DENSITY, GD_TRANSPOSE, GD_MCHANGE, GD_MSPREAD, GD_DFB, GD_DTIME, GD_RSEND, GD_MACRO1,
-       GD_STUT = GD_MACRO1 + NMACRO, GD_DIRT, GD_DBAND, GD_RWET, GD_RTONE, NGD };   /* (0.16: STUTTER's chance, from 0
-                                                      * as the effects; 1.0: the master DIRT's amount, the delay's BAND,
-                                                      * RING's WET and TONE, either way) */
+       GD_STUT = GD_MACRO1 + NMACRO, GD_DIRT, GD_DBAND, GD_RWET, GD_RTONE,
+       GD_SRATE, GD_DECAY, GD_SPEED, GD_TEMPO, GD_SHUFFLE, GD_LDEPTH1, GD_LRATE1 = GD_LDEPTH1 + NGLFO,
+       NGD = GD_LRATE1 + NGLFO };                    /* (0.16: STUTTER's chance, from 0 as the effects; 1.0: the master
+                                                      * DIRT's amount, the delay's BAND, RING's WET and TONE, either way;
+                                                      * 1.4 WEAR: SRATE, DECAY, TAPE SPEED, TEMPO, SHUFFLE, an LFO's
+                                                      * DEPTH and RATE (LFO on LFO, a block late), either way) */
 #define GB_DIRT (GD_STUT - GD_DENSITY)               /* (19c: the ones moved either way, gl.bi: GD_DENSITY .. GD_STUT, */
-#define NGBI (GB_DIRT + 4)                           /* then GD_DIRT .. GD_RTONE's) */
+#define NGBI (GB_DIRT + NGD - GD_DIRT)               /* then GD_DIRT .. the last's) */
 static uint32_t gd_bi(uint32_t g)                    /* (its place in gl.bi, NGBI none) */
 {
-    return g >= GD_DENSITY && g < GD_STUT ? g - GD_DENSITY : g >= GD_DIRT && g <= GD_RTONE ? GB_DIRT + g - GD_DIRT : NGBI;
+    return g >= GD_DENSITY && g < GD_STUT ? g - GD_DENSITY : g >= GD_DIRT && g < NGD ? GB_DIRT + g - GD_DIRT : NGBI;
 }
 enum { GM_FREE, GM_TRIG, GM_HOLD, GM_ONE, GM_HALF, NGM };
 enum { GT_PLAY, GT_PATTERN, GT_BAR, NGT };
-#define NGLFO 4u                                     /* (1.0 Phase 11: a 4th) */
 /* 1.0 Phase 11: WAVE's value past the LFO waves: FOLLOW, an envelope follower on a voice's level (older firmware reads
  * it % NLFO, as SINE). Its knobs re-labelled: TRIG the SOURCE (a voice, GF_ALL: the loudest), RATE the RELEASE
  * (10 ms .. 2 s, to a tenth; the attack instant), PHASE the THRESHOLD (0 OFF, then -60 .. -12 dB); SYNC, MODE unused */
-#define GW_FOLLOW NLFO
+#define GW_FOLLOW (NLFO + 1u)
+/* 1.4: CHAOS, before FOLLOW on the knob: a Lorenz attractor (Lorenz 1963), integrated at block rate, its x the value.
+ * RATE / SYNC how fast it runs (about an orbit and a half a cycle), PHASE relabelled CALM: 0 wild (rho 40), up to a
+ * still point (rho 10; below ~24.7 it spirals in). A trigger (MODE not FREE) starts it again from the same seed: a
+ * chaotic phrase that repeats. Stored in KGL1 as 11 (older firmware reads it as a saw down) */
+#define GW_CHAOS NLFO
 #define GF_ALL NVOICE
 /* SYNC: a cycle, in sixths of a 16th (4 ticks): 0.13's 1/16 .. 256 bars, then (1.0) 1/32 and the triplets and dotted
  * ones, 3/8 and 5/16 (GL_ORDER: the knob's, OFF then fast .. slow as the track LFOs': more bars to the right). GL_FREE: SYNC OFF, RATE in Hz */
@@ -211,6 +220,7 @@ static struct {
     uint8_t len[NGLFO];
     int32_t out[NGLFO];                              /* their value, 0 .. 65536 (the screen) */
     int32_t fol[NGLFO];                              /* 1.0 Phase 11: FOLLOW's level, Q16 */
+    int32_t cz[NGLFO][3];                            /* 1.4: CHAOS's x, y, z, Q16 */
     int32_t dj;                                      /* the DJ filter moved by them, -65536 .. 65536 */
     int32_t amt[NGD];                                /* each effect's amount from them, 0 .. 65536 */
     volatile int32_t morph;                          /* morph moved by them, -255 .. 255 (the main loop's) */
@@ -237,6 +247,7 @@ static void perf_defaults(void)
     pfs.build = DB_GHOSTS;
     pfs.st_size = 1;                                 /* (STUTTER: 1/16 over a 1/4) */
     pfs.st_len = 2;
+    pfs.wdecay = pfs.wspeed = 64;                    /* (1.4 WEAR: the kit as it is) */
     for (c = 0; c < NGLFO; c++) {                    /* 0.13: the global LFOs: off, a triangle over 4 bars */
         memset(&gls[c], 0, sizeof gls[c]);
         gls[c].len = 7;
@@ -293,6 +304,38 @@ static int32_t gf_step(uint32_t n)
     return gl.fol[n] = f;
 }
 
+/* 1.4: CHAOS: back to its seed (near the attractor: chaotic from the start) */
+static void gc_seed(uint32_t n)
+{
+    gl.cz[n][0] = -6 * 65536;
+    gl.cz[n][1] = -8 * 65536;
+    gl.cz[n][2] = 24 * 65536;
+}
+/* .. a block of inc (the LFO's phase step, 2^32 a cycle): Euler steps of at most 0.005, its value 0 .. 65536 */
+static int32_t gc_step(uint32_t n, uint32_t inc)
+{
+    int32_t *c = gl.cz[n], x = c[0], y = c[1], z = c[2], dt, k, ns;
+    const int32_t rho = 40 * 65536 - (int32_t)((gls[n].phase & 127u) * (30u * 65536u) / 127u);
+    if (!x && !y && !z) {                            /* (never run: the origin is a still point) */
+        gc_seed(n);
+        x = c[0], y = c[1], z = c[2];
+    }
+    dt = (int32_t)(inc >> 16);                       /* (time units a block, Q16: a cycle's 1.0) */
+    dt = dt < 2621 ? dt : 2621;                      /* (0.04 a block at the most: fast rates stay stable) */
+    ns = dt / 328 + 1;
+    dt /= ns;
+    for (k = 0; k < ns; k++) {
+        int32_t dx = (int32_t)(((int64_t)(y - x) * 10 * dt) >> 16);
+        int32_t dy = (int32_t)(((((int64_t)x * (rho - z)) >> 16) - y) * dt >> 16);
+        int32_t dz = (int32_t)(((((int64_t)x * y) >> 16) - (((int64_t)z * 174763) >> 16)) * dt >> 16);   /* (8/3) */
+        x = clamp32(x + dx, -100 * 65536, 100 * 65536);
+        y = clamp32(y + dy, -100 * 65536, 100 * 65536);
+        z = clamp32(z + dz, -100 * 65536, 200 * 65536);
+    }
+    c[0] = x, c[1] = y, c[2] = z;
+    return clamp32(32768 + x / 48, 0, 65536);        /* (x +-24: the full swing) */
+}
+
 /* 0.13: the global LFOs, a block (the audio ISR, perf_block): their triggers, a step, what they move */
 static void glfo_block(void)
 {
@@ -307,7 +350,9 @@ static void glfo_block(void)
         lfo_t *l = &gl.l[n];
         const uint32_t g = gls[n].dest < NGD ? gls[n].dest : GD_OFF, m = gls[n].mode < NGM ? gls[n].mode : GM_FREE;
         uint32_t t = sq.tick_q16 ? sq.tick_q16 : 1u;
-        int32_t d = gls[n].depth, x, xb;
+        int32_t d = gls[n].depth, x, xb, lr = gl.bi[gd_bi(GD_LRATE1 + n)];
+        if (gl.bi[gd_bi(GD_LDEPTH1 + n)])            /* (1.4: LFO on LFO, the last block's: either way from the knob) */
+            d = clamp32(d + (int32_t)(((int64_t)gl.bi[gd_bi(GD_LDEPTH1 + n)] * 127) >> 16), -127, 127);
         if (gls[n].wave == GW_FOLLOW) {              /* (1.0 Phase 11: FOLLOW: the level, from 0 either way) */
             gl.out[n] = gf_step(n);
             goto moved;
@@ -325,12 +370,21 @@ static void glfo_block(void)
         l->wave = (uint8_t)(gls[n].wave % NLFO);
         l->offset = gls[n].phase >= 127u ? 0xFFFFFFFFu : (uint32_t)gls[n].phase << 25;
         lfo_mode_set(l, LM_OF[m]);
-        if (m != GM_FREE && (ev & (TRIG_EV[gls[n].trig % NGT] | GLE_KEY << n)))
-            lfo_hit(l);
+        if (m != GM_FREE && (ev & (TRIG_EV[gls[n].trig % NGT] | GLE_KEY << n))) {
+            if (gls[n].wave == GW_CHAOS)
+                gc_seed(n);
+            else
+                lfo_hit(l);
+        }
         {
-            uint32_t inc = l->inc;                   /* (the clock's speed: TAPE STOP, HALF; free: TAPE STOP's) */
-            l->inc = (uint32_t)(((uint64_t)inc * tape_q16) >> (16u + (sq.half && sq.running && gls[n].len < NGLEN)));
-            gl.out[n] = lfo_calc(l);
+            uint32_t inc = l->inc;                   /* (the clock's speed: TAPE STOP, HALF, 1.4: TEMPO; free: TAPE
+                                                      * STOP's, TEMPO's) */
+            l->inc = (uint32_t)(((uint64_t)inc * clk_q16) >> (16u + (sq.half && sq.running && gls[n].len < NGLEN)));
+            if (lr) {                                /* (1.4: LFO on LFO: x 2^(+-2)) */
+                uint64_t q = ((uint64_t)l->inc * (uint32_t)exp2_q16(lr * 2)) >> 16;
+                l->inc = q < 0x7FFFFFFFu ? (uint32_t)q : 0x7FFFFFFFu;
+            }
+            gl.out[n] = gls[n].wave == GW_CHAOS ? gc_step(n, l->inc) : lfo_calc(l);
             l->inc = inc;
         }
     moved:
@@ -362,6 +416,42 @@ static void glfo_block(void)
 static uint32_t pf_amount(uint32_t on, uint32_t bit, uint32_t g)
 {
     return (on >> bit) & 1u ? 65536u : (uint32_t)gl.amt[g];
+}
+
+/* 1.4 WEAR: Decay k (0..127, 64: the kit as it is) as the amp EG's decay rate's factor, Q16: left faster, up to 2^8
+ * (and at 0 SHORT's click), right slower, down to a quarter (4x as long) */
+static uint32_t wear_dec_of(int32_t k)
+{
+    return k == 64 ? 65536u : (uint32_t)exp2_q16(k < 64 ? (64 - k) << 13 : -((k - 64) * 131072 / 63));
+}
+/* .. Tape speed s (0..127) in octaves, Q16: 2 either side of 64 dead (easy to find again), then the square of the way
+ * (fine near the middle), 12 semitones at the ends */
+static int32_t wear_oct(uint32_t s)
+{
+    int32_t d = (int32_t)(s & 127u) - 64, a = d < 0 ? -d : d;
+    a = a > 2 ? (a - 2 > 61 ? 61 : a - 2) : 0;
+    a = a * a * 65536 / 3721;
+    return d < 0 ? -a : a;
+}
+/* .. a block: Decay and Tape speed (the project's, moved by the global LFOs' DECAY and TAPE SPEED), TEMPO, SHUFFLE,
+ * SRATE (the LFOs'): voices.c's wear_* and clk_q16, seq.c's shuf_lfo. Nothing moved: as before, bit for bit */
+static void wear_block(uint32_t on)
+{
+    int32_t k = pfs.wdecay & 127, o = wear_oct(pfs.wspeed) + gl.bi[gd_bi(GD_SPEED)], t;
+    uint32_t sp;
+    if (gl.bi[gd_bi(GD_DECAY)])
+        k = clamp32(k + gl.bi[gd_bi(GD_DECAY)] / 1024, 0, 127);
+    wear_dec = (on >> PF_SHORT) & 1u ? 65536u : wear_dec_of(k);   /* (SHORT held wins: its click as it is) */
+    wear_floor = k == 0 && wear_dec != 65536u ? SHORT_DEC : 0u;
+    o = clamp32(o, -2 * 65536, 2 * 65536);           /* (the knob's octave and the LFO's, together at most 2) */
+    sp = o ? (uint32_t)exp2_q16(o) : 65536u;
+    wear_pitch = tape_q16 == 65536u ? sp : sp == 65536u ? tape_q16 : (uint32_t)(((uint64_t)sp * tape_q16) >> 16);
+    t = sq.sync_ext ? 0 : gl.bi[gd_bi(GD_TEMPO)];   /* (TEMPO: +-25%; under MIDI clock in, the clock is the master) */
+    clk_q16 = t ? (uint32_t)(((uint64_t)tape_q16 * (uint32_t)(65536 + t / 4)) >> 16) : tape_q16;
+    shuf_lfo = (int8_t)(gl.bi[gd_bi(GD_SHUFFLE)] / 1024);
+    decim_all = gl.bi[gd_bi(GD_SRATE)] ? lut1024u(DECIM, (uint32_t)clamp32((int32_t)decim_all_f + gl.bi[gd_bi(GD_SRATE)] / 2,
+                                                                          0, 65536))
+                                       : decim_rate[NVOICE];
 }
 
 /* the audio ISR, a block's start: the held effects into the engine */
@@ -434,6 +524,7 @@ static void perf_block(void)
     } else if (tape_q16 < 65536u) {
         tape_q16 = tape_q16 + 380u < 65536u ? tape_q16 + 380u : 65536u;   /* (back in 0.25 s) */
     }
+    wear_block(on);
     /* the sweeps: a bar to their end, back in a quarter of it. A bar is 384 ticks of tick_q16 / 65536 samples:
      * 65536 x BLOCK / (384 x tick_q16 / 65536) = 2^38 / 384 / tick_q16 = (2^32 / 6) / tick_q16 (32-bit divide) */
     step = (int32_t)(715827883u / (sq.tick_q16 ? sq.tick_q16 : 1u));

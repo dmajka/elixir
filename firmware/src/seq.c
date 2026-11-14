@@ -1600,7 +1600,7 @@ static uint32_t seq_rand(void)                       /* xorshift32 (the bounces'
  * them with the clock) */
 static void seq_bounces(void)
 {
-    uint32_t t, dt = (uint32_t)(((uint64_t)(BLOCK << 8) * tape_q16) >> 16);
+    uint32_t t, dt = (uint32_t)(((uint64_t)(BLOCK << 8) * clk_q16) >> 16);
     for (t = 0; t < NTRACK; t++) {
         sq.bcnt[t] -= sq.bleft[t] ? (int32_t)dt : 0;
         while (sq.bleft[t] && sq.bcnt[t] <= 0) {
@@ -1641,7 +1641,7 @@ static void seq_roll_sweep(void)                     /* the block's swept rolls 
     per = roll_period(sq.roll_k);
     if (sq.rl_cnt > (int32_t)per)                    /* faster: at once */
         sq.rl_cnt = (int32_t)per;
-    sq.rl_cnt -= (int32_t)(((uint64_t)(BLOCK << 8) * tape_q16) >> 16);
+    sq.rl_cnt -= (int32_t)(((uint64_t)(BLOCK << 8) * clk_q16) >> 16);
     if (sq.rl_cnt > 0)
         return;
     sq.rl_cnt += (int32_t)per;
@@ -1679,7 +1679,7 @@ static void seq_croll_grid(void)                     /* (a tick) */
 }
 static void seq_croll_free(void)                     /* (a block) */
 {
-    uint32_t t, adv = (uint32_t)(((uint64_t)(BLOCK << 8) * tape_q16) >> 16);
+    uint32_t t, adv = (uint32_t)(((uint64_t)(BLOCK << 8) * clk_q16) >> 16);
     for (t = 0; t < NTRACK; t++) {
         uint32_t v = sq.croll[t], per;
         if (v < CROLL_FREE) {
@@ -1873,7 +1873,7 @@ static void rush_grid(void)
 /* the block: the amount, recording, the free roll, a held flam, the filter */
 static void seq_rush(void)
 {
-    uint32_t t = sq.ru_tr, adv = (uint32_t)(((uint64_t)(BLOCK << 8) * tape_q16) >> 16), R;
+    uint32_t t = sq.ru_tr, adv = (uint32_t)(((uint64_t)(BLOCK << 8) * clk_q16) >> 16), R;
     uint32_t steplen = (uint32_t)(((uint64_t)24u * sq.tick_q16) >> 8);   /* (a 16th, samples Q8) */
     int32_t k = (int32_t)((uint32_t)BLOCK * 65536u / ((uint32_t)sq.ru_glide * 5u * (FS / 1000u) + BLOCK)), hpt;
     rush_now();
@@ -1921,7 +1921,7 @@ static void seq_rush(void)
         if (rate > cap)
             rate = cap;
         d = (rate >> 4) * (uint32_t)(BLOCK << 8) / ((steplen >> 4) ? (steplen >> 4) : 1u);
-        d = (uint32_t)(((uint64_t)d * tape_q16) >> 16);
+        d = (uint32_t)(((uint64_t)d * clk_q16) >> 16);
         sq.ru_ph += d;
         while (sq.ru_ph >= 65536u) {
             uint32_t vel = rush_vel(sq.ru_head), note = rush_note(), c = (uint32_t)(diff < 0 ? -diff : diff) >> 9;
@@ -2807,14 +2807,18 @@ static void seq_stop_now(void)
 }
 
 /* ------------------------------------------------- the clock (ISR) --- */
+static uint32_t seq_shuffle(void)                    /* (1.4: the pattern's, moved by a global LFO's SHUFFLE) */
+{
+    return shuf_lfo ? (uint32_t)clamp32((int32_t)par[PAR_SHUFFLE] + shuf_lfo, 0, 127) : par[PAR_SHUFFLE];
+}
 static uint32_t seq_shuffle_delay(void)              /* seq_getDeltaTShuffleDelay: shuffle x 16 ticks, Q16 samples */
 {
-    return (uint32_t)(((uint64_t)sq.tick_q16 * 16u * par[PAR_SHUFFLE]) / 127u);
+    return (uint32_t)(((uint64_t)sq.tick_q16 * 16u * seq_shuffle()) / 127u);
 }
 static void seq_play_due(int32_t elapsed)            /* the ticks given so far, held back by a shuffle */
 {
     while (sq.due) {
-        if (sq.prescale == 0u && (sq.master_cnt & 1u) && par[PAR_SHUFFLE] && sq.running) {
+        if (sq.prescale == 0u && (sq.master_cnt & 1u) && seq_shuffle() && sq.running) {
             if (!sq.holding) {
                 sq.holding = 1;
                 sq.hold = (int32_t)(seq_shuffle_delay() >> 16);
@@ -2852,7 +2856,7 @@ static void seq_block_run(void)
     if (sq.gsync)                                    /* (the generators' live tracks the panel reset) */
         seq_gen_syncs();
     if (!sq.sync_ext) {
-        sq.acc_q16 += BLOCK * tape_q16;             /* (TAPE STOP slows the clock) */
+        sq.acc_q16 += BLOCK * clk_q16;              /* (TAPE STOP slows the clock; 1.4: a global LFO's TEMPO) */
         while (sq.acc_q16 >= sq.tick_q16) {          /* (the clock goes out stopped too, as the LXR's) */
             sq.acc_q16 -= sq.tick_q16;
             if (sq.running && (!sq.half || (sq.hph ^= 1u)))   /* (HALF: every other tick) */

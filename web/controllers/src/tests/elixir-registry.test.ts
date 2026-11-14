@@ -14,7 +14,7 @@ const trackChart: [string, number[]][] = [
 ]
 const globalKnobs: [number,string][] = [
   [8,'tempo'],[9,'shuffle'],[10,'morph'],[11,'sample-rate'],[12,'master-filter'],[13,'roll-rate'],[14,'repeat'],[15,'tape-time'],
-  [16,'fx-wet'],[17,'fx-p1'],[18,'fx-p2'],[19,'fx-p3'],[20,'fx-p4'],[21,'bus-dirt'],[22,'echo-to-reverb'],[23,'saturate'],
+  [16,'fx-wet'],[17,'decay'],[18,'tape-speed'],[21,'bus-dirt'],[22,'echo-to-reverb'],[23,'saturate'],
   [24,'reverb-level'],[25,'reverb-size'],[26,'reverb-damping'],[27,'master-dirt'],[28,'density'],[29,'ghost-velocity'],[30,'build'],[31,'vary'],
   [32,'macro-1'],[33,'macro-2'],[34,'macro-3'],[35,'macro-4'],[36,'drill'],[37,'jitter'],[38,'cuts'],[39,'pump'],
   [40,'comb-note'],[41,'comb-feedback'],[42,'crush'],[43,'reverse-length'],[44,'lfo-1-depth'],[45,'lfo-2-depth'],[46,'lfo-3-depth'],[47,'filter-resonance'],
@@ -95,9 +95,9 @@ describe('page 5 shared messages and real-time', () => {
   })
 })
 describe('registry contracts', () => {
-  it('contains 311 uniquely identified parameters with complete metadata', () => {
-    expect(PARAMETER_REGISTRY).toHaveLength(311)
-    expect(new Set(PARAMETER_REGISTRY.map(p=>p.id)).size).toBe(311)
+  it('contains 309 uniquely identified parameters with complete metadata', () => {
+    expect(PARAMETER_REGISTRY).toHaveLength(309)
+    expect(new Set(PARAMETER_REGISTRY.map(p=>p.id)).size).toBe(309)
     for(const p of PARAMETER_REGISTRY) {
       expect(p.name && p.shortName && p.category && p.interpretation).toBeTruthy()
       expect(p.documentation.source).toMatch(/^firmware\/src\/(remote|midi)\.c$/)

@@ -43,7 +43,7 @@ export function generateTemplate(id: BuiltinTemplateId, channels: ChannelSetting
   } else if (id === 'effects') {
     row('encoder.1', global(...['time', 'feedback', 'tone', 'band', 'wow', 'glitch', 'route', 'reverb-to-fx'].map(k => `delay.${k}`)))
     row('encoder.2', global('reverb-level', 'reverb-size', 'reverb-damping', 'echo-to-reverb', 'fx-wet', 'bus-dirt', 'saturate', 'master-dirt'))
-    row('encoder.3', global('fx-p1', 'fx-p2', 'fx-p3', 'fx-p4', 'comb-feedback', 'ring.wet', 'ring.tone', 'ring.spread'))
+    row('encoder.3', global('decay', 'tape-speed', 'comb-note', 'crush', 'comb-feedback', 'ring.wet', 'ring.tone', 'ring.spread'))
     row('fader', trackRow('fx-send'))
     row('button.1', global('freeze', 'throw-reverb', 'throw-fx', 'feedback-push', 'tape-stop', 'low-pass-sweep', 'high-pass-sweep', 'reverse'))
     row('button.2', global(...['half', 'jitter', 'cuts', 'short', 'pump', 'comb', 'space', 'crush'].map(k => `effect.${k}`)))

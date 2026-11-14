@@ -330,9 +330,12 @@ static void proj_write_payload(void)
     }
     pw_byte(pfs.repeat);
     pw_byte(pfs.tape);
-    pw_bytes("KPF2", 4);                            /* PERFORM 2's settings (0.6) */
-    pw_byte(NPF2SET);
+    pw_bytes("KPF2", 4);                            /* PERFORM 2's settings (0.6; 1.4: then WEAR's Decay, Tape speed:
+                                                      * older firmware reads the 8, skips them) */
+    pw_byte(NPF2SET + 2u);
     pw_bytes(&pfs.drill, NPF2SET);
+    pw_byte(pfs.wdecay);
+    pw_byte(pfs.wspeed);
     pw_bytes("KGL1", 4);                            /* the global LFOs (0.13; 1.0: 8 bytes each, RATE: older firmware
                                                       * reads 7, its SYNC OFF as 4 bars) */
     pw_byte(NGLFO);
@@ -341,8 +344,10 @@ static void proj_write_payload(void)
         pw_byte(gls[i].dest);
         pw_byte((uint8_t)gls[i].depth);
         pw_byte(gls[i].len);
-        pw_byte(gls[i].wave == GW_FOLLOW ? 8u : gls[i].wave < 8u ? gls[i].wave : gls[i].wave + 1u);   /* (1.1: FOLLOW
-                                                      * stays 8, as 1.0 wrote it; SMOOTH, DRIFT 9, 10) */
+        pw_byte(gls[i].wave == GW_FOLLOW ? 8u : gls[i].wave == GW_CHAOS ? 11u : gls[i].wave < 8u ? gls[i].wave
+                                                                                                  : gls[i].wave + 1u);   /* (1.1:
+                                                      * FOLLOW stays 8, as 1.0 wrote it; SMOOTH, DRIFT 9, 10; 1.4:
+                                                      * CHAOS 11) */
         pw_byte(gls[i].mode);
         pw_byte(gls[i].trig);
         pw_byte(gls[i].phase);
@@ -703,6 +708,10 @@ static int proj_read_payload(uint32_t ver)
                 uint32_t v = pr_byte();
                 if (i < NPF2SET)
                     (&pfs.drill)[i] = (uint8_t)(i == 4u ? clamp32((int32_t)v, 24, 96) : i == 7u ? v % 3u : v & 127u);
+                else if (i == NPF2SET)                  /* (1.4 WEAR; an older project: 64, as the defaults) */
+                    pfs.wdecay = (uint8_t)(v & 127u);
+                else if (i == NPF2SET + 1u)
+                    pfs.wspeed = (uint8_t)(v & 127u);
             }
         }
     }
@@ -722,8 +731,8 @@ static int proj_read_payload(uint32_t ver)
                 gls[i].len = (uint8_t)(b[2] < NGLEN || b[2] == GL_FREE ? b[2] : 7u);
                 if (c > NGLKGL)
                     gls[i].rate = (uint8_t)(b[7] & 127u);
-                gls[i].wave = (uint8_t)(b[3] == 8u ? GW_FOLLOW : b[3] < 8u ? b[3] : b[3] <= NLFO ? b[3] - 1u
-                                                                                       : b[3] % 8u);   /* (1.0 Phase 11: FOLLOW, */
+                gls[i].wave = (uint8_t)(b[3] == 8u ? GW_FOLLOW : b[3] == 11u ? GW_CHAOS : b[3] < 8u ? b[3]
+                                        : b[3] <= NLFO ? b[3] - 1u : b[3] % 8u);   /* (1.0 Phase 11: FOLLOW, */
                 gls[i].mode = (uint8_t)(b[4] < NGM ? b[4] : GM_FREE);
                 gls[i].trig = (uint8_t)(b[5] < (b[3] == 8u ? GF_ALL + 1u : NGT) ? b[5] : GT_PLAY);   /* .. its
                                                       * SOURCE in TRIG) */

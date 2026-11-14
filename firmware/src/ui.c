@@ -77,8 +77,9 @@ enum { VP_BASE = 0x400, VP_NONE = VP_BASE, VP_IO_TYPE, VP_IO_SLOT, VP_NAME_POS, 
        VP_AUDITION,                                  /* (1.2: a track key plays the voice too; project.c KS_QUIET) */
        VP_RQUANT, VP_NUDGE,                          /* (1.3: REC's Quantize; the GENERATOR page's Nudge, OFF) */
        VP_TRUSH, VP_TRUSH_LAST = VP_TRUSH + NTRACK - 1,   /* (1.4: the remote's RUSH a track: sq.ru_live on it) */
-       VP_PCPAT, VP_PCOUT, VP_PCCH, VP_PCWHEN };     /* (1.4: PROGRAM CHANGE OUT: the pattern, its program, the
+       VP_PCPAT, VP_PCOUT, VP_PCCH, VP_PCWHEN,       /* (1.4: PROGRAM CHANGE OUT: the pattern, its program, the
                                                       * channel, when) */
+       VP_WDEC, VP_WSPD };                           /* (1.4: WEAR's Decay, Tape speed: perform.c pfs.wdecay ..) */
 _Static_assert(NPAR <= VP_BASE, "the virtual parameters after the parameters (25b + 27a: NPAR 525, past 0x200)");
 /* the ACTION page's action (OCT+ does it); 0.10: those of the track's generator (gen_acts) */
 enum { ACT_NONE, ACT_DICE, ACT_COMMIT, ACT_UNDO, ACT_RESET, NACT };
@@ -440,7 +441,8 @@ static const char *const STEP_TITLE[4] = {"STEP", "TRIG", "LOCKS", "RATCHET"};
 #define PG_STUT 3u
 #define PG_RUSH 4u                                   /* (2 pages: RUSH, RUSH SETUP) */
 #define PG_TRP 6u                                    /* 0.23-t7: TRANSPOSE (white keys: the degrees, black: the tracks) */
-#define PG_PERF2 7u                                  /* (3 pages: PERFORM 2 and its setups, its keys the second bank) */
+#define PG_PERF2 7u                                  /* (3 pages: PERFORM 2 and its setups, its keys the second bank;
+                                                      * 1.4: its first WEAR: SRate, Dirt, Decay, Tape speed) */
 #define PG_SPELL 10u                                  /* 32: SPELLS (5 pages: GRIMOIRE, CAST, CHARACTER, LIMITS, MOTION;
                                                       * spells.c) */
 #define PG_WANDER 15u                                /* 40: WANDER (3 pages: QUEST, PACE, HOME; wander.c) */
@@ -457,7 +459,7 @@ static const uint16_t P_PERF[NPERF][4] = {{PAR_BPM, PAR_ROLL, PAR_MORPH, PAR_VOI
                                           {VP_RUSH, VP_RTOP, VP_RFILT, VP_RGLIDE},
                                           {VP_RSTART, VP_RFREE, VP_RFLAM, VP_RPITCH},
                                           {VP_TRP, VP_TRWHEN, VP_TRHOLD, VP_NONE},
-                                          {PAR_BPM, PAR_ROLL, PAR_MORPH, PAR_VOICE_DECIMATION_ALL},
+                                          {PAR_VOICE_DECIMATION_ALL, PAR_MDIRT_AMT, VP_WDEC, VP_WSPD},   /* (1.4: WEAR) */
                                           {VP_P2, VP_P2 + 1, VP_P2 + 2, VP_P2 + 3},
                                           {VP_P2 + 4, VP_P2 + 5, VP_P2 + 6, VP_P2 + 7},
                                           {VP_SP, VP_SP + 1, VP_SP + 2, VP_SP + 3},
@@ -482,7 +484,7 @@ static const uint16_t P_PERF[NPERF][4] = {{PAR_BPM, PAR_ROLL, PAR_MORPH, PAR_VOI
                                           {VP_LWHEN, VP_LTGT, VP_LEFF, VP_LWIN}};
 static const char *const PERF_TITLE[NPERF] = {"PERFORM", "PERFORM: MORE", "PERFORM: DENSITY", "PERFORM: STUTTER",
                                               "PERFORM: RUSH", "PERFORM: RUSH SETUP", "PERFORM: TRANSPOSE",
-                                              "PERFORM 2", "PERFORM 2: SETUP (1/2)", "PERFORM 2: SETUP (2/2)",
+                                              "PERFORM 2: WEAR", "PERFORM 2: SETUP (1/2)", "PERFORM 2: SETUP (2/2)",
                                               "SPELLS: GRIMOIRE", "SPELLS: CAST", "SPELLS: CHARACTER",
                                               "SPELLS: LIMITS", "SPELLS: MOTION", "WANDER: QUEST", "WANDER: PACE",
                                               "WANDER: HOME", "GLOBAL LFO 1 (1/2)", "GLOBAL LFO 1 (2/2)", "GLOBAL LFO 2 (1/2)",
@@ -1155,10 +1157,13 @@ static void lfo1_dest_turn(uint32_t l, int32_t n)
     par_set(PAR_TARGET_LFO1 + l, li[i]);
 }
 /* 0.25.2: the global LFOs' destinations the same way: by group in the signal's order, each group by name */
-static const uint8_t GD_ORDER[NGD] = {GD_OFF, GD_DENSITY, GD_JITTER, GD_MCHANGE, GD_MSPREAD, GD_STUT, GD_TRANSPOSE,
-                                      GD_MORPH, GD_DBAND, GD_DFB, GD_DTIME, GD_PUSH, GD_RSEND, GD_COMB, GD_CRUSH, GD_CUTS,
-                                      GD_DIRT, GD_PUMP, GD_FILTER, GD_HP, GD_LP, GD_RTONE, GD_RWET, GD_MACRO1, GD_MACRO1 + 1,
-                                      GD_MACRO1 + 2, GD_MACRO1 + 3};
+static const uint8_t GD_ORDER[NGD] = {GD_OFF, GD_DENSITY, GD_JITTER, GD_MCHANGE, GD_MSPREAD, GD_SHUFFLE, GD_STUT,
+                                      GD_TEMPO, GD_TRANSPOSE, GD_MORPH, GD_DECAY, GD_SRATE, GD_SPEED, GD_DBAND, GD_DFB,
+                                      GD_DTIME, GD_PUSH, GD_RSEND, GD_COMB, GD_CRUSH, GD_CUTS, GD_DIRT, GD_PUMP,
+                                      GD_FILTER, GD_HP, GD_LP, GD_RTONE, GD_RWET, GD_MACRO1, GD_MACRO1 + 1,
+                                      GD_MACRO1 + 2, GD_MACRO1 + 3, GD_LDEPTH1, GD_LRATE1, GD_LDEPTH1 + 1, GD_LRATE1 + 1,
+                                      GD_LDEPTH1 + 2, GD_LRATE1 + 2, GD_LDEPTH1 + 3, GD_LRATE1 + 3};   /* (1.4: WEAR's
+                                                      * between the kit's and the delay's; GLOBAL MOD's last) */
 static const char *const GD_FULL[NGD][2] = {
     {"", "Off"}, {"KIT", "Morph"}, {"MASTER FILTER", "Filter"}, {"MASTER FILTER", "Low-pass sweep"},
     {"MASTER FILTER", "High-pass sweep"}, {"DELAY", "Feedback push"}, {"MASTER FX", "Comb"}, {"MASTER FX", "Crush"},
@@ -1166,8 +1171,12 @@ static const char *const GD_FULL[NGD][2] = {
     {"SEQUENCER", "Transpose"}, {"SEQUENCER", "Melody change"}, {"SEQUENCER", "Melody spread"},
     {"DELAY", "Delay feedback"}, {"DELAY", "Delay time"}, {"REVERB", "Reverb sends"}, {"MACROS", "Macro 1"},
     {"MACROS", "Macro 2"}, {"MACROS", "Macro 3"}, {"MACROS", "Macro 4"}, {"SEQUENCER", "Stutter chance"},
-    {"MASTER FX", "Dirt amount"}, {"DELAY", "Delay band"}, {"MASTER FILTER", "Ring wet"}, {"MASTER FILTER", "Ring tone"}};
-_Static_assert(NMACRO == 4u && NGD == 27u, "GD_ORDER, GD_FULL: every destination");
+    {"MASTER FX", "Dirt amount"}, {"DELAY", "Delay band"}, {"MASTER FILTER", "Ring wet"}, {"MASTER FILTER", "Ring tone"},
+    {"WEAR", "Sample rate"}, {"WEAR", "Decay"}, {"WEAR", "Tape speed"}, {"SEQUENCER", "Tempo"},
+    {"SEQUENCER", "Shuffle"}, {"GLOBAL MOD", "LFO 1 depth"}, {"GLOBAL MOD", "LFO 2 depth"},
+    {"GLOBAL MOD", "LFO 3 depth"}, {"GLOBAL MOD", "LFO 4 depth"}, {"GLOBAL MOD", "LFO 1 rate"},
+    {"GLOBAL MOD", "LFO 2 rate"}, {"GLOBAL MOD", "LFO 3 rate"}, {"GLOBAL MOD", "LFO 4 rate"}};
+_Static_assert(NMACRO == 4u && NGLFO == 4u && NGD == 40u, "GD_ORDER, GD_FULL: every destination");
 static int is_gl_dest(uint32_t p) { return p >= VP_GL && p <= VP_GL_LAST && (p - VP_GL) % NGLSET == 0u; }
 static uint32_t order_turn(const uint8_t *o, uint32_t c, uint32_t v, int32_t n)   /* (v n places on in order o) */
 {
@@ -1177,6 +1186,18 @@ static uint32_t order_turn(const uint8_t *o, uint32_t c, uint32_t v, int32_t n) 
     return o[clamp32((int32_t)(i < c ? i : 0u) + n, 0, (int32_t)c - 1)];
 }
 static uint32_t gd_turn(uint32_t d, int32_t n) { return order_turn(GD_ORDER, NGD, d, n); }
+/* .. LFO l's Dest n places on (1.4: its own DEPTH and RATE passed over) */
+static uint32_t gd_turn_for(uint32_t l, uint32_t d, int32_t n)
+{
+    uint32_t e = gd_turn(d, n);
+    while (n && (e == GD_LDEPTH1 + l || e == GD_LRATE1 + l)) {
+        uint32_t f = gd_turn(e, n < 0 ? -1 : 1);
+        if (f == e)                                  /* (the list's end: stay) */
+            return d;
+        e = f;
+    }
+    return e;
+}
 #define NDLY_ORDER (NDELAY + 2u)
 static const uint8_t DLY_ORDER[NDLY_ORDER] = {DELAY_OFF, DELAY_NORMAL, DELAY_PINGPONG, DELAY_TAPE, DELAY_TAPEPP, DELAY_GRAIN};   /* (1.0:
                                                       * the delay's MODE knob, OFF first) */
@@ -1439,6 +1460,8 @@ static uint32_t vp_get(uint32_t p)
     case VP_DJ: return pf.dj;
     case VP_REPEAT: return pfs.repeat;
     case VP_TAPE: return pfs.tape;
+    case VP_WDEC: return pfs.wdecay;
+    case VP_WSPD: return pfs.wspeed;
     case VP_DJRESO: return *dj_q();                  /* (1.3.1: RING's Decay its own) */
     case VP_DJTYPE: return djt_place(pfs.dj_ftype);   /* (1.0: the knob's order) */
     case VP_DJTUNE: return pfs.dj_tune;
@@ -1638,6 +1661,7 @@ static uint32_t vp_max(uint32_t p)
     case VP_ER2: return (shown_pat()->gen[ui.track][1] ? shown_pat()->gen[ui.track][1] : 16u) - 1u;
     case VP_EOP: return NEUOP - 1u;
     case VP_DJSPREAD ... VP_DJWET:
+    case VP_WDEC: case VP_WSPD:
     case VP_MASTER: case VP_DJ: case VP_TAPE: case VP_DJRESO: case VP_M1: case VP_M1 + 1: case VP_M1 + 2: case VP_M1 + 3: return 127;
     case VP_REPEAT: case VP_MSEL: return 3;
     case VP_MTARGET: return NUM_MOD_TARGETS - 1u + NLOCK_K;
@@ -1928,6 +1952,8 @@ static void vp_set(uint32_t p, uint32_t v)
     case VP_DJ: pf.dj = (uint8_t)v; return;
     case VP_REPEAT: pfs.repeat = (uint8_t)v; return;
     case VP_TAPE: pfs.tape = (uint8_t)v; return;
+    case VP_WDEC: pfs.wdecay = (uint8_t)(v & 127u); return;
+    case VP_WSPD: pfs.wspeed = (uint8_t)(v & 127u); return;
     case VP_DJRESO: *dj_q() = (uint8_t)(v & 127u); return;
     case VP_DJTYPE: pfs.dj_ftype = DJT_AT[v < NDJT ? v : 0u]; return;
     case VP_DJTUNE: pfs.dj_tune = (uint8_t)(v < NRTUNE ? v : 0u); return;
@@ -2518,7 +2544,7 @@ static void knob_turn(uint32_t k, int32_t n)
     if (p >= VP_GL && p <= VP_GL_LAST && (p - VP_GL) % NGLSET == 2u)   /* (1.0: SYNC: OFF, then slow .. fast) */
         v = (int32_t)order_turn(GL_ORDER, NGLEN + 1u, vp_get(p), n);
     if (is_gl_dest(p)) {                             /* (0.25.2: the same; its name shown over PERF's page) */
-        v = (int32_t)gd_turn(vp_get(p), n);
+        v = (int32_t)gd_turn_for((p - VP_GL) / NGLSET, vp_get(p), n);
         ui.dest_ms = fm1_ms;
         ui.dest_p = (uint16_t)p;
     }
@@ -2645,10 +2671,10 @@ static int morph_unset(void)
     kit_init_values(k);
     return !memcmp(k, morph_par, KIT_LEN);
 }
-/* 1.4: OCT+ offers this kit as the morph: morph turned to 100% on PERFORM (or PERFORM 2) with none */
+/* 1.4: OCT+ offers this kit as the morph: morph turned to 100% on PERFORM with none */
 static int mo_offering(void)
 {
-    return ui.mo_offer && ui.mode == M_PERF && (ui.page % NPERF == 0u || ui.page % NPERF == PG_PERF2) &&
+    return ui.mo_offer && ui.mode == M_PERF && ui.page % NPERF == 0u &&
            par[PAR_MORPH] >= 255u && !ui.shift;
 }
 static uint32_t io_slot_default(uint32_t type)

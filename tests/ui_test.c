@@ -2071,7 +2071,7 @@ static void phase14(void)
             ok &= gd_turn(GD_ORDER[i], 0) == GD_ORDER[i];
         check(ok && gd_turn(GD_ORDER[NGD - 1u], 1) == GD_ORDER[NGD - 1u], "GLOBAL LFO DEST: every one once, by name");
     }
-    turn(EN_K1, 6);
+    turn(EN_K1, 8);                                  /* (1.4: SHUFFLE, TEMPO before MORPH) */
     shot("global-lfo-dest");
     turn(EN_K2, 10);
     check(gls[0].dest == GD_MORPH && gls[0].depth == 127, "GLOBAL LFO: DEST and DEPTH by the knobs");
@@ -2335,7 +2335,7 @@ static void phase39_rush(void)
 static void phase9_perf(void)
 {
     static const char *const T[NPERF] = {"PERFORM", "PERFORM: MORE", "PERFORM: DENSITY", "PERFORM: STUTTER",
-                                         "PERFORM: RUSH", "PERFORM: RUSH SETUP", "PERFORM: TRANSPOSE", "PERFORM 2", "PERFORM 2: SETUP (1/2)", "PERFORM 2: SETUP (2/2)",
+                                         "PERFORM: RUSH", "PERFORM: RUSH SETUP", "PERFORM: TRANSPOSE", "PERFORM 2: WEAR", "PERFORM 2: SETUP (1/2)", "PERFORM 2: SETUP (2/2)",
                                          "SPELLS: GRIMOIRE", "SPELLS: CAST", "SPELLS: CHARACTER", "SPELLS: LIMITS",
                                          "SPELLS: MOTION", "WANDER: QUEST", "WANDER: PACE", "WANDER: HOME",
                                          "GLOBAL LFO 1 (1/2)", "GLOBAL LFO 1 (2/2)", "GLOBAL LFO 2 (1/2)",
@@ -10329,7 +10329,7 @@ static void phase_100_11(void)
     press(B_PLAY);
     turn(EN_SELECT, 1);
     turn(EN_K1, -1);
-    check(gls[3].wave == LFO_DRIFT && gls[3].trig == GT_PLAY, "out of FOLLOW: its SOURCE back to a trigger (PLAY)");
+    check(gls[3].wave == GW_CHAOS && gls[3].trig == GT_PLAY, "out of FOLLOW: its SOURCE back to a trigger (PLAY; 1.4: CHAOS before it)");
     turn(EN_K1, 1);
     gls[3].trig = GF_ALL;
     /* the remote: CC 2 on GLOBAL's channel, LFO 4's depth */
@@ -10455,7 +10455,7 @@ static void phase_100_6b(void)
         run_ms(1);
         ok |= fx.lfo_band > 30000 || fx.lfo_band < -30000;
     }
-    check(ok && gd_turn(GD_MORPH, 1) == GD_DBAND, "GLOBAL LFO DELAY BAND: moved either way (DELAY's first, by name)");
+    check(ok && gd_turn(GD_SPEED, 1) == GD_DBAND, "GLOBAL LFO DELAY BAND: moved either way (DELAY's first, by name)");
     memset(gls, 0, sizeof gls);
     run_ms(20);
     check(fx.lfo_band == 0, "BAND: back with the LFO off");
@@ -12049,6 +12049,199 @@ static void io_del(void)
     press(B_OCTUP);
     run_ms(30);
 }
+/* 1.4 WEAR: PERFORM 2's first page (SRate, Dirt, Decay, Tape speed), the global LFOs' new destinations (SRATE, DECAY,
+ * TAPE SPEED, TEMPO, SHUFFLE, an LFO's DEPTH and RATE), the CHAOS wave */
+static void wear_lfo_off(void)
+{
+    uint32_t c;
+    for (c = 0; c < NGLFO; c++) {
+        gls[c].dest = GD_OFF;
+        gls[c].depth = 0;
+        gls[c].wave = LFO_TRI;
+        gls[c].len = 7;
+        gls[c].mode = GM_FREE;
+        gls[c].phase = 0;
+    }
+}
+static uint32_t wear_d1_inc(uint32_t spd)            /* D1's oscillator 3 ms after a hit at Tape speed spd */
+{
+    pfs.wspeed = (uint8_t)spd;
+    run_ms(5);
+    voice_trigger(0, 100, 60);
+    run_ms(3);
+    return vc[0].osc.inc;
+}
+static void phase_140_wear(void)
+{
+    uint16_t pp[4];
+    char b[40];
+    uint32_t pg, np, i, ok, a, c;
+    int32_t lo, hi;
+    printf("1.4: WEAR\n");
+    p4_reset();
+    wear_lfo_off();
+    perf_goto(PG_PERF2);
+    page_params(pp);
+    title_text(b, sizeof b, &pg, &np);
+    check(pp[0] == PAR_VOICE_DECIMATION_ALL && pp[1] == PAR_MDIRT_AMT && pp[2] == VP_WDEC && pp[3] == VP_WSPD &&
+          !strcmp(b, "PERFORM 2: WEAR") && perf_bank2(), "WEAR: SRate, Dirt, Decay, Tape speed; PERFORM 2's keys");
+    check(pfs.wdecay == 64 && pfs.wspeed == 64 && wear_dec == 65536u && wear_pitch == 65536u && clk_q16 == 65536u,
+          "WEAR: Decay and Tape speed in the middle: nothing changed");
+    shot("wear");
+    ok = 1;
+    card_value(b, sizeof b, VP_WDEC, 64);
+    ok &= !strcmp(b, "100%");
+    card_value(b, sizeof b, VP_WDEC, 127);
+    ok &= !strcmp(b, "400%");
+    card_value(b, sizeof b, VP_WDEC, 0);
+    ok &= !strcmp(b, "CLICK");
+    card_value(b, sizeof b, VP_WSPD, 66);
+    ok &= !strcmp(b, "0");
+    card_value(b, sizeof b, VP_WSPD, 127);
+    ok &= !strcmp(b, "+12.0 st");
+    card_value(b, sizeof b, VP_WSPD, 0);
+    ok &= !strcmp(b, "-12.0 st");
+    card_value(b, sizeof b, VP_WSPD, 70);
+    printf("  Tape speed's card at 70: %s, at 80: ", b);
+    card_value(b, sizeof b, VP_WSPD, 80);
+    printf("%s; Decay's at 32: ", b);
+    card_value(b, sizeof b, VP_WDEC, 32);
+    printf("%s\n", b);
+    check(ok, "WEAR: Decay 100% in the middle, 400% right, CLICK at 0; Tape speed dead around 64, +-12 semitones");
+    turn(EN_K3, 3);
+    turn(EN_K4, -5);
+    check(pfs.wdecay == 67 && pfs.wspeed == 59, "WEAR: K3 Decay, K4 Tape speed");
+    /* Tape speed: the whole kit's pitch, an octave either way at the ends */
+    pfs.wdecay = 64;
+    a = wear_d1_inc(64);
+    c = wear_d1_inc(127);
+    i = wear_d1_inc(0);
+    printf("  D1's increment: Tape speed 64 %u, 127 %u, 0 %u\n", a, c, i);
+    check(c > a * 2u - a / 100u && c < a * 2u + a / 100u && i > a / 2u - a / 100u && i < a / 2u + a / 100u,
+          "WEAR Tape speed: up an octave at 127, down one at 0");
+    pfs.wspeed = 64;
+    /* Decay: the amp EG faster to the left (0: a click), slower to the right */
+    {
+        int32_t g[3];
+        static const uint8_t K[3] = {0, 64, 127};
+        for (i = 0; i < 3u; i++) {
+            pfs.wdecay = K[i];
+            run_ms(5);
+            voice_trigger(0, 100, 60);
+            run_ms(30);
+            g[i] = vc[0].aeg.value;
+        }
+        printf("  D1's amp EG 30 ms after a hit: Decay 0 %d, 64 %d, 127 %d\n", g[0], g[1], g[2]);
+        check(g[0] == 0 && g[1] < g[2], "WEAR Decay: 0 a click, 127 longer than the kit's");
+    }
+    pfs.wdecay = 64;
+    pfs.wspeed = 64;
+    /* saved with the project */
+    pfs.wdecay = 20;
+    pfs.wspeed = 100;
+    i = (uint32_t)proj_save(1, "WEAR    ");
+    pfs.wdecay = pfs.wspeed = 0;
+    i |= (uint32_t)proj_load(1);
+    check(!i && pfs.wdecay == 20 && pfs.wspeed == 100, "WEAR: Decay and Tape speed saved with the project (KPF2)");
+    pfs.wdecay = pfs.wspeed = 64;
+    /* the global LFOs' new destinations, each either way */
+    {
+        static const uint8_t D[5] = {GD_SPEED, GD_DECAY, GD_TEMPO, GD_SHUFFLE, GD_SRATE};
+        int32_t mn[5], mx[5];
+        for (i = 0; i < 5u; i++) {
+            uint32_t k;
+            wear_lfo_off();
+            gls[0].dest = D[i];
+            gls[0].depth = 127;
+            gls[0].len = 0;
+            mn[i] = 0x7FFFFFFF;
+            mx[i] = -0x7FFFFFFF;
+            for (k = 0; k < 300u; k++) {
+                int32_t x;
+                run_ms(1);
+                x = D[i] == GD_SPEED ? (int32_t)wear_pitch : D[i] == GD_DECAY ? (int32_t)wear_dec
+                    : D[i] == GD_TEMPO ? (int32_t)clk_q16 : D[i] == GD_SHUFFLE ? shuf_lfo : (int32_t)decim_all;
+                mn[i] = x < mn[i] ? x : mn[i];
+                mx[i] = x > mx[i] ? x : mx[i];
+            }
+        }
+        printf("  TAPE SPEED %d .. %d, DECAY %d .. %d, TEMPO %d .. %d, SHUFFLE %d .. %d, SRATE %d .. %d\n", mn[0], mx[0],
+               mn[1], mx[1], mn[2], mx[2], mn[3], mx[3], mn[4], mx[4]);
+        check(mn[0] < 40000 && mx[0] > 110000, "GLOBAL LFO TAPE SPEED: down and up (an octave at depth 127)");
+        check(mn[1] < 65536 && mx[1] > 65536, "GLOBAL LFO DECAY: shorter and longer");
+        check(mn[2] < 52000 && mx[2] > 79000, "GLOBAL LFO TEMPO: the clock +-25%");
+        check(mn[3] <= -60 && mx[3] >= 60, "GLOBAL LFO SHUFFLE: either way");
+        check(mn[4] != mx[4], "GLOBAL LFO SRATE: the sample rate moved");
+    }
+    /* LFO on LFO: LFO 2 on LFO 1's depth, LFO 1 at depth 0: moves only by it */
+    wear_lfo_off();
+    gls[0].dest = GD_DECAY;
+    gls[1].dest = GD_LDEPTH1;
+    gls[1].depth = 127;
+    gls[1].len = 0;
+    for (ok = 0, i = 0; i < 300u; i++) {
+        run_ms(1);
+        ok |= wear_dec != 65536u;
+    }
+    check(ok, "GLOBAL LFO on LFO: LFO 2 on LFO 1's DEPTH moves what LFO 1 moves");
+    check(gd_turn_for(0, GD_MACRO1 + 3, 1) == GD_LDEPTH1 + 1 && gd_turn_for(1, GD_MACRO1 + 3, 1) == GD_LDEPTH1 &&
+          gd_turn_for(3, GD_LRATE1 + 2, 1) == GD_LRATE1 + 2 && gd_turn_for(0, GD_LDEPTH1 + 1, -1) == GD_MACRO1 + 3,
+          "GLOBAL LFO DEST: an LFO's own DEPTH and RATE passed over");
+    /* CHAOS */
+    wear_lfo_off();
+    gls[0].wave = GW_CHAOS;
+    gls[0].len = GL_FREE;
+    gls[0].rate = 100;
+    gls[0].dest = GD_SPEED;
+    gls[0].depth = 127;
+    lo = 65536;
+    hi = 0;
+    for (i = 0; i < 3000u; i++) {
+        run_ms(1);
+        lo = gl.out[0] < lo ? gl.out[0] : lo;
+        hi = gl.out[0] > hi ? gl.out[0] : hi;
+    }
+    printf("  CHAOS over 3 s: %d .. %d\n", lo, hi);
+    check(lo < 16000 && hi > 49000, "CHAOS: swings wide");
+    {
+        int32_t s1[64];
+        gc_seed(0);
+        for (i = 0; i < 64u; i++) {
+            run_ms(2);
+            s1[i] = gl.out[0];
+        }
+        gc_seed(0);
+        for (ok = 1, i = 0; i < 64u; i++) {
+            run_ms(2);
+            ok &= s1[i] == gl.out[0];
+        }
+        check(ok, "CHAOS: from its seed again, the same phrase");
+    }
+    gls[0].phase = 127;                              /* (CALM: rho 10, a still point) */
+    for (i = 0; i < 4000u; i++)
+        run_ms(1);
+    lo = 65536;
+    hi = 0;
+    for (i = 0; i < 300u; i++) {
+        run_ms(1);
+        lo = gl.out[0] < lo ? gl.out[0] : lo;
+        hi = gl.out[0] > hi ? gl.out[0] : hi;
+    }
+    check(hi - lo < 300, "CHAOS: CALM 127 settles to a still point");
+    perf_goto(PG_GLFO + 1u);
+    page_params(pp);
+    card_name(b, sizeof b, pp[1]);
+    ok = !strcmp(b, "Calm");
+    card_value(b, sizeof b, pp[0], GW_CHAOS);
+    ok &= !strcmp(b, "CHAOS");
+    check(ok, "CHAOS: its name, PHASE its Calm");
+    i = (uint32_t)proj_save(1, "CHAOS   ");
+    gls[0].wave = LFO_SINE;
+    i |= (uint32_t)proj_load(1);
+    check(!i && gls[0].wave == GW_CHAOS, "CHAOS: saved with the project (KGL1's 11)");
+    wear_lfo_off();
+    run_ms(20);
+}
 static void phase_140_delete(void)
 {
     char nm[9];
@@ -12797,6 +12990,7 @@ int main(int argc, char **argv)
     phase19_locks();
     phase_140_pc();
     phase_140_delete();
+    phase_140_wear();
     copy_pass();                                     /* (1.0's copy and picture pass: last, as it runs time) */
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;

@@ -1181,7 +1181,7 @@ The pages are in four sets. ARP opens **PERFORM** (the performance pages, PERFOR
 | PERFORM: RUSH | Rush | Top | Filter | Glide |
 | PERFORM: RUSH SETUP | Roll at | Free at | Flam | Pitch |
 | PERFORM: TRANSPOSE | Degrees | When | Keys | – |
-| PERFORM 2 | Tempo | Roll (rate) | Morph | SRate |
+| PERFORM 2: WEAR | SRate | Dirt | Decay | Speed (tape speed) |
 | PERFORM 2: SETUP (1/2) | Drill | Jitter | Cuts | Pump |
 | PERFORM 2: SETUP (2/2) | Comb (note) | Comb fb | Crush | Reverse (length) |
 | *SPELLS:* GRIMOIRE | Spell | Variation | Scope | Roll |
@@ -1207,6 +1207,7 @@ The pages are in four sets. ARP opens **PERFORM** (the performance pages, PERFOR
 
 - **PERFORM** is the LXR's own PERFORMANCE page: tempo, roll rate, morph and the global sample-rate reducer.
 - **SRate:** the LXR's global sample rate: every voice's own rate (SHAPE page) times this one, before the mix. Lower is grittier. It is part of the kit, so a kit can bring its own crush; it can be a macro's target and is recorded as locks under REC.
+- **WEAR** (PERFORM 2's first page, from 1.4): the knobs that wear the whole kit down. See [WEAR](#wear-from-14).
 - The voices' levels (the LXR's faders) are on the mixer (GLO); before 0.19 PERF had them too.
 - **Master filter:** off in the middle; left a low-pass on the whole output, right a high-pass. Its resonance (**Filter reso**) and its type (**Filter type**: the LXR's, RING, ACID or MS20) are on FX's MASTER FILTER page (from 1.0).
 - **Macros:** each macro knob moves one parameter between its Min and Max (Max below Min turns it the other way). Set them up on MACRO SETUP: pick the macro, its target (any lockable parameter), Min and Max. Turning a macro while recording writes locks, as any knob does.
@@ -1292,12 +1293,12 @@ Four LFOs (the third from 0.16, the fourth from 1.0) that move the whole kit's p
 | **Depth** | −127 to +127. How far it moves it; negative turns it the other way |
 | **Sync** | OFF, or one cycle's length at the tempo; turning right makes it longer: 1/32, 1/16T, 1/16, 1/8T, 1/8, 3/16, 1/4T, 1/4, 5/16, 1/2T, 3/8, 1/2, 3/4, 1 bar, then 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128 and 256 bars (T a triplet; 3/4, 3/8, 3/16 dotted). At 120 BPM, 256 bars is about 8½ minutes. |
 | **Rate** | With Sync OFF (from 1.0): the speed in Hz, from one cycle in 100 s (shown as its time below 0.1 Hz) to 20 Hz, not following the tempo. With a sync value it reads SYNC. |
-| **Wave** | The LFO waves: SINE, TRI, SAW UP, SAW DN, SQUARE, RANDOM, EXP UP, EXP DN, SMOOTH, DRIFT (from 1.1), then **FOLLOW** (from 1.0: [below](#follow-a-voices-level-from-10)) |
-| **Phase** | Where in its cycle a trigger starts it |
+| **Wave** | The LFO waves: SINE, TRI, SAW UP, SAW DN, SQUARE, RANDOM, EXP UP, EXP DN, SMOOTH, DRIFT (from 1.1), **CHAOS** (from 1.4: [below](#chaos-a-strange-attractor-from-14)), then **FOLLOW** (from 1.0: [below](#follow-a-voices-level-from-10)) |
+| **Phase** | Where in its cycle a trigger starts it (CHAOS: **Calm**) |
 | **Mode** | **FREE** (runs on its own; the default), **TRIG** (starts again at each trigger), **HOLD** (runs, its value held at each trigger), **ONE** (one cycle from a trigger, then still at its end), **HALF** (half a cycle) |
 | **Trig** | What triggers it: **PLAY** (the sequencer starting), **PATTERN** (PLAY and each pattern change), **BAR** (PLAY and each bar) |
 
-Dest turns through them in groups, in the signal's order and each group by name: OFF; SEQUENCER (DENSITY, JITTER, MEL CHANGE, MEL SPREAD, STUTTER, TRANSPOSE); KIT (MORPH); DELAY (DELAY BAND, DELAY FB, DELAY TIME, FB PUSH); REVERB (REV SEND); MASTER FX (COMB, CRUSH, CUTS, DIRT, PUMP); MASTER FILTER (FILTER, HP, LP, RING TONE, RING WET); MACROS (MACRO 1–4; the popup names the macro's parameter).
+Dest turns through them in groups, in the signal's order and each group by name: OFF; SEQUENCER (DENSITY, JITTER, MEL CHANGE, MEL SPREAD, SHUFFLE, STUTTER, TEMPO, TRANSPOSE); KIT (MORPH); WEAR (DECAY, SRATE, TAPE SPEED); DELAY (DELAY BAND, DELAY FB, DELAY TIME, FB PUSH); REVERB (REV SEND); MASTER FX (COMB, CRUSH, CUTS, DIRT, PUMP); MASTER FILTER (FILTER, HP, LP, RING TONE, RING WET); MACROS (MACRO 1–4; the popup names the macro's parameter); GLOBAL MOD (LFO 1–4 DEPTH and RATE; an LFO's own two are skipped).
 
 | Dest | Moves |
 |---|---|
@@ -1315,9 +1316,17 @@ Dest turns through them in groups, in the signal's order and each group by name:
 | **DIRT** | The master DIRT's amount (FX → DIRT), either way from its knob (from 1.0). From 0 it fades the dirt in with the wave: a set that roughens over 16 bars and cleans up again |
 | **MACRO 1–4** | A macro, so an LFO reaches any parameter a step can lock |
 | **STUTTER** | The stutter's chance, from 0 by the depth (see [Stutter](#stutter-from-016)) |
+| **TEMPO** | The sequencer's clock, up to 25% either way from the Tempo knob (from 1.4). Rolls, RUSH, the global LFOs' sync and MIDI clock out follow it, so gear clocked from Elixir drifts with it. A synced delay and the track LFOs keep the tempo as set. With MIDI clock in, it does nothing: the incoming clock leads |
+| **SHUFFLE** | The pattern's Shuffle, either way from its knob (from 1.4): a swing that breathes |
+| **SRATE** | The SRate knob (WEAR), either way from where it is (from 1.4) |
+| **DECAY** | WEAR's Decay, either way from its knob (from 1.4): every hit shorter on one side of the wave, longer on the other |
+| **TAPE SPEED** | The whole kit's pitch, up to an octave either way on top of WEAR's Speed knob (from 1.4). A slow wave warps the beat like a stretched tape; the delay and reverb stay put |
+| **LFO 1–4 DEPTH** | Another global LFO's Depth, either way from its knob (from 1.4). Set that LFO's Depth to 0 and this one fades it in and out |
+| **LFO 1–4 RATE** | Another global LFO's speed, up to 4 times faster or slower (from 1.4). On a synced LFO it pushes it off the grid; a trigger (Mode TRIG, Trig BAR) brings its phase back each time |
 
 - **The knobs stay put.** The LFO moves the sound, not the setting: the Morph knob, the master filter and the effects' settings read as you left them, and that is what the project saves.
-- **Synced to the clock:** a sync value follows the tempo, MIDI clock, HALF and TAPE STOP (a free Rate only TAPE STOP). The LFOs run when stopped too (FREE, or after a trigger).
+- **Synced to the clock:** a sync value follows the tempo, MIDI clock, HALF, TAPE STOP and a TEMPO LFO (a free Rate only TAPE STOP and TEMPO).
+- **LFO on LFO** acts a block late (about 1.5 ms): no loops, and an LFO can't move its own depth or rate. The LFOs run when stopped too (FREE, or after a trigger).
 - **OCT+** on a global LFO's page triggers it by hand (a FREE LFO has no trigger: set its Mode first).
 - The screen shows the LFOs moving (L1–L4) on their pages. LFOs on the same destination add up.
 - The remote's GLOBAL channel turns their depths: CC 44–46 for LFOs 1–3, **CC 2** for LFO 4 (off the grid).
@@ -1340,9 +1349,35 @@ Wave **FOLLOW** turns a global LFO into an envelope follower: instead of a wave 
 
 **A kit morphing into another over 64 bars:** LOAD → MORPH the second kit; GLOBAL LFO 1: Dest MORPH, Depth +127, Sync 64 BARS; page 2: Wave SAW UP, Mode ONE, Trig PLAY. Press PLAY: morph goes from the knob's value to full over 64 bars and stays there. With Mode FREE and Wave TRI instead, it morphs there and back for as long as you play.
 
+#### CHAOS: a strange attractor (from 1.4)
+
+Wave **CHAOS** runs a Lorenz attractor (the 1963 weather model behind "the butterfly effect") instead of a cycle. Its value swings from one side to the other and back, never quite repeating: some swings short, some long, some stuck on one side for a while. It moves smoothly, so it suits slow drifts: a filter, Tape speed, Density.
+
+- **Sync** or **Rate** sets how fast it runs: about one and a half swings per cycle.
+- **Calm** (the Phase knob) sets how wild it is: 0 the wildest, up to about 70 it stays chaotic, past that it settles into a slow spiral and then a still point.
+- **Mode** TRIG, HOLD, ONE or HALF: each trigger starts it again from the same place, so it plays the same chaotic phrase every time (with Trig BAR or PATTERN, a different but repeatable shape each pass). FREE never restarts.
+
+**Drift that never loops:** GLOBAL LFO 1: Dest TAPE SPEED, Depth +12, Sync 8 BARS; page 2: Wave CHAOS, Calm 0. The kit sags and lifts in pitch like an old tape, never the same way twice.
+
+### WEAR (from 1.4)
+
+**PERFORM 2**'s first page, **WEAR**, holds the four knobs that wear the whole kit down. Its keys are PERFORM 2's (below).
+
+| Knob | Does |
+|---|---|
+| **SRate** | The global sample-rate reducer, as on PERFORM (the kit's) |
+| **Dirt** | The master DIRT's amount, the same value as FX → DIRT (the kit's). Its type stays on the DIRT page. From 0 with a type set, turning it fades the dirt in |
+| **Decay** | Every voice's decay at once (the project's). The middle (100%) is the kit as it is; left is shorter, down to a click at 0 (as SHORT); right is longer, up to 4 times as long (400%) |
+| **Speed** | Tape speed: the whole kit's pitch (the project's), up to 12 semitones either way. The middle is the kit as it is, with a small dead zone around it so it's easy to find again; it moves in cents near the middle and faster towards the ends. The delay and reverb aren't retuned, so it sounds like a varispeed on the drums, not on the room. MIDI out's notes don't change |
+
+- **Decay** reaches every amp envelope: the LXR's voices, ENSEMBLE, NOISE and the Plaits engines that use the amp envelope. It doesn't reach the sounds that shape their own decay: P STRING, P MODAL, P BD, P SD, P HH, RAIN, MICRO, and a model's ring (only its strike). SHORT held still wins.
+- Decay and Speed are saved with the project, not the kit, so they don't morph. A project from before 1.4 loads them in the middle.
+- Global LFOs can move all four: SRATE, DIRT, DECAY and TAPE SPEED. In the middle, Decay and Speed cost no CPU.
+- The remote's GLOBAL channel turns them too: SRate CC 11, Dirt CC 27, **Decay CC 17**, **Speed CC 18** (from 1.4; those two were the FX bus's P1 and P2).
+
 ### PERFORM 2: the second bank
 
-Turn SELECT on to **PERFORM 2**. While a PERFORM 2 page is on screen, the 16 white keys play a second set of effects, picked with Aphex Twin, Autechre, microhouse and dub techno in mind. The black keys (mutes) and the bar keys (repeat length) work as before. Hold a key, or latch it with SHIFT (OCT−), just as on the first bank. Effects latched in either bank keep running when you change pages, and a key always lets go in the bank it was pressed in.
+Turn SELECT on to **PERFORM 2** (its first page is [WEAR](#wear-from-14)). While a PERFORM 2 page is on screen, the 16 white keys play a second set of effects, picked with Aphex Twin, Autechre, microhouse and dub techno in mind. The black keys (mutes) and the bar keys (repeat length) work as before. Hold a key, or latch it with SHIFT (OCT−), just as on the first bank. Effects latched in either bank keep running when you change pages, and a key always lets go in the bank it was pressed in.
 
 | Key | Name | Does |
 |---|---|---|
@@ -1720,7 +1755,7 @@ With OFF, none of these do anything. Clock, start, continue and stop have no cha
 | TRACKS: FX send, delay send, reverb send | NRPN 174–179, 403–408, 180–185 |
 | GLOBAL: SRate (11) | CC 115 |
 | GLOBAL: shuffle, morph, roll rate (9, 10, 13) | NRPN 133, 120, 119 |
-| GLOBAL: FX dry/wet, P1–P4 (16–20) | NRPN 108, 110–113 |
+| GLOBAL: FX dry/wet (16) | NRPN 108 |
 | GLOBAL: bus dirt, echo > reverb, saturate (21–23) | NRPN 315, 312, 311 |
 | GLOBAL: reverb level, size, damping, master dirt (24–27) | NRPN 188, 186, 187, 317 |
 | GLOBAL: previous / next pattern (60, 61) | Program change (any pattern) |
@@ -1769,7 +1804,7 @@ Knobs and faders are CCs. Every number is used once on its channel, so a knob an
 | | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
 |---|---|---|---|---|---|---|---|---|
 | 8–15 | **8** Tempo | **9** Shuffle | **10** Morph | **11** SRate | **12** Master filter | **13** Roll rate | **14** Repeat | **15** Tape time |
-| 16–23 | **16** FX dry/wet | **17** P1 | **18** P2 | **19** P3 | **20** P4 | **21** Bus dirt | **22** Echo > rev | **23** Saturate |
+| 16–23 | **16** FX dry/wet | **17** Decay | **18** Speed | **19** – | **20** – | **21** Bus dirt | **22** Echo > rev | **23** Saturate |
 | 24–31 | **24** Rev level | **25** Rev size | **26** Rev damp | **27** Master dirt | **28** DENSITY | **29** Ghost vel | **30** Build | **31** Vary |
 | 32–39 | **32** Macro 1 | **33** Macro 2 | **34** Macro 3 | **35** Macro 4 | **36** DRILL | **37** JITTER | **38** CUTS | **39** PUMP |
 | 40–47 | **40** COMB note | **41** COMB fb | **42** CRUSH | **43** REV length | **44** LFO 1 depth | **45** LFO 2 depth | **46** LFO 3 depth | **47** Filter reso |

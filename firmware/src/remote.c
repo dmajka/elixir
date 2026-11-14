@@ -17,7 +17,7 @@
  * GLOBAL (channel 16): the performance, the FX and the rest.
  *   knobs, CC 8 + 8 x row + column:
  *     8   tempo, shuffle, morph, SRate, DJ filter, roll rate, repeat length, tape time
- *     16  FX dry/wet, P1, P2, P3, P4, bus dirt, echo > reverb, saturate
+ *     16  FX dry/wet, WEAR's Decay, Speed (1.4; P1-P4 before), -, -, bus dirt, echo > reverb, saturate
  *     24  reverb level, size, damping, master dirt, density, ghost velocity, build, density vary
  *     32  macros 1..4, DRILL, JITTER, CUTS, PUMP (PERFORM 2's settings)
  *     40  COMB note, COMB feedback, CRUSH, REVERSE length, global LFO 1, 2, 3 depth, DJ filter resonance (0.24.3)
@@ -65,7 +65,9 @@ enum { RB_MUTE, RB_SOLO };                           /* TRACKS' button rows */
 enum { RG_PERF, RG_PERF2, RG_SELECT, RG_ROLL, RG_DRILL, RG_HOLD, RG_LATCH, RG_DENS };   /* GLOBAL's */
 static const uint16_t RM_GK[RM_NGK] = {
     PAR_BPM, PAR_SHUFFLE, PAR_MORPH, PAR_VOICE_DECIMATION_ALL, VP_DJ, PAR_ROLL, VP_REPEAT, VP_TAPE,
-    PAR_FX_DRY_WET, PAR_FX_P1, PAR_FX_P2, PAR_FX_P3, PAR_FX_P4, PAR_FXDIRT, PAR_ECHOREV, PAR_DSAT,
+    PAR_FX_DRY_WET, VP_WDEC, VP_WSPD, VP_NONE, VP_NONE, PAR_FXDIRT, PAR_ECHOREV, PAR_DSAT,   /* (1.4: 17-20 were the FX
+                                                      * bus's P1-P4, a different thing in each type: WEAR's Decay,
+                                                      * Speed; 19, 20 free) */
     PAR_REV_LEVEL, PAR_REV_SIZE, PAR_REV_DAMP, PAR_MDIRT_AMT, VP_DENS, VP_GHOST, VP_BUILD, VP_DVARY,
     VP_M1, VP_M1 + 1, VP_M1 + 2, VP_M1 + 3, VP_P2, VP_P2 + 1, VP_P2 + 2, VP_P2 + 3,
     VP_P2 + 4, VP_P2 + 5, VP_P2 + 6, VP_P2 + 7, GLV(0, 1), GLV(1, 1), GLV(2, 1), VP_DJRESO,

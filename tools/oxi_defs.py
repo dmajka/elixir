@@ -34,7 +34,7 @@ GLOBAL_ABBR = {                                      # global.<key>: what words 
     "ring.wet": "RgWt", "ring.slope": "RgSl", "ring.tone": "RgTn", "ring.tune": "RgTu", "ring.spread": "RgSp",
     "tempo": "Tmpo", "shuffle": "Shuf", "morph": "Mrph", "sample-rate": "SRat", "master-filter": "MFlt",
     "filter-resonance": "MRes", "roll-rate": "RlRt", "repeat": "Rept", "tape-time": "TpTm", "fx-wet": "FxWt",
-    "fx-p1": "FxP1", "fx-p2": "FxP2", "fx-p3": "FxP3", "fx-p4": "FxP4", "bus-dirt": "BDrt", "echo-to-reverb": "EcRv",
+    "fx-p1": "FxP1", "fx-p2": "FxP2", "fx-p3": "FxP3", "fx-p4": "FxP4", "decay": "Decy", "tape-speed": "TpSp", "bus-dirt": "BDrt", "echo-to-reverb": "EcRv",
     "saturate": "Satu", "reverb-level": "RvLv", "reverb-size": "RvSz", "reverb-damping": "RvDp",
     "master-dirt": "MDrt", "density": "Dens", "ghost-velocity": "GhVl", "build": "Bild", "vary": "Vary",
     "macro-1": "Mac1", "macro-2": "Mac2", "macro-3": "Mac3", "macro-4": "Mac4", "drill": "Drll", "jitter": "Jitr",

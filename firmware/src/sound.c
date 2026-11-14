@@ -439,6 +439,10 @@ static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
     }
     if (p >= PAR_VOICE_DECIMATION1 && p <= PAR_VOICE_DECIMATION_ALL) {
         decim_rate[p - PAR_VOICE_DECIMATION1] = lut1024u(DECIM, (uint32_t)f);
+        if (p == PAR_VOICE_DECIMATION_ALL) {         /* (1.4 WEAR: as played; a global LFO's SRATE moves it, perform.c) */
+            decim_all_f = (uint32_t)f;
+            decim_all = decim_rate[NVOICE];
+        }
         return;
     }
     if (p >= PAR_FREQ_LFO1 && p <= PAR_FREQ_LFO6) {

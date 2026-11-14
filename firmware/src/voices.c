@@ -107,6 +107,12 @@ static uint8_t rp_scaled;                            /* 19a: the next hit's rand
 static int32_t venv[NVOICE];                         /* each voice's output envelope, Q15 (cross modulation) */
 static int32_t vpk[NVOICE];                          /* 1.0 Phase 11: .. its last block's peak, Q15 (a global LFO's FOLLOW) */
 static uint32_t tape_q16 = 65536u;                   /* PERF's TAPE STOP: every voice's pitch (and the tempo), Q16 */
+/* 1.4 WEAR (perform.c perf_block sets them a block): the clock's speed (TAPE STOP's x a global LFO's TEMPO), the
+ * voices' pitch (TAPE STOP's x WEAR's Tape speed), their amp decay's rate x wear_dec (Decay; at its 0, at least
+ * wear_floor: SHORT's click), ALL's sample rate as played (its knob's, moved by a global LFO's SRATE), all Q16 */
+static uint32_t clk_q16 = 65536u, wear_pitch = 65536u, wear_dec = 65536u, wear_floor, decim_all = 65536u;
+static uint32_t decim_all_f;                         /* (ALL's knob as sound.c last set it, Q16) */
+static int8_t shuf_lfo;                              /* (a global LFO's SHUFFLE, -64 .. 64 on the pattern's) */
 static int32_t exp2_q16(int32_t y);                  /* (fxbus.c) */
 /* random per hit: its own generator (the noise oscillators' sequence stays as the LXR's), -32768 .. 32767 */
 static uint32_t hit_rng = 0x2545F491u;
@@ -391,37 +397,51 @@ static void voice_legato(uint32_t track, uint32_t note)
 }
 
 /* ---------------------------------------------------- the block, async --- */
+/* 1.4 WEAR: the amp EG a block, its decay's rate scaled by Decay (the rate put back after: the hit's own stays) */
+static int32_t aeg_calc(voice_t *v)
+{
+    uint32_t d = v->aeg.dec, r;
+    int32_t g;
+    if (wear_dec == 65536u)
+        return slope_calc(&v->aeg);
+    r = (uint32_t)(((uint64_t)d * wear_dec) >> 16);
+    r = r > (uint32_t)EG_ONE ? (uint32_t)EG_ONE : r < wear_floor ? wear_floor : r ? r : 1u;
+    v->aeg.dec = r;
+    g = slope_calc(&v->aeg);
+    v->aeg.dec = d;
+    return g;
+}
 /* calcDrumVoiceAsync / Snare_calcAsync / Cymbal_calcAsync / HiHat_calcAsync: envelopes and pitches, once a block */
 static void voice_async(uint32_t vi)
 {
     voice_t *v = &vc[vi];
-    uint32_t rp = tape_q16 == 65536u ? v->rp : (uint32_t)(((uint64_t)v->rp * tape_q16) >> 16);
+    uint32_t rp = wear_pitch == 65536u ? v->rp : (uint32_t)(((uint64_t)v->rp * wear_pitch) >> 16);
     if (vi <= V_DRUM3 || vi == V_SNARE) {
         int32_t pe = decay_calc(&v->peg);                /* Q24 */
         uint32_t pmod = 65536u + (uint32_t)(((int64_t)pe * v->peg_amt) >> 24);
         if (v->tr.wave == TR_SNAP && !mi[vi].type && !eno[vi].on && !nzo[vi].on)   /* (MICRO, ENSEMBLE, NOISE have no
                                                       * transient) */
             pmod += (uint32_t)(((int64_t)snap_calc(&v->snap, v->tr.inc) * v->tr.vol) >> 15);
-        pmod = rp == 65536u ? pmod : (uint32_t)(((uint64_t)pmod * rp) >> 16);   /* (random pitch, tape) */
+        pmod = rp == 65536u ? pmod : (uint32_t)(((uint64_t)pmod * rp) >> 16);   /* (random pitch, tape, WEAR) */
         v->pmod = pmod;
         if (vi <= V_DRUM3) {
             v->fm2 = (int32_t)(((int64_t)v->fm1 * pe) >> 24);   /* osc.fmMod = fmModAmount x egPitchVal */
             if (v->aeg.atk == EG_ONE && (v->aeg.state == EG_A || v->aeg.state == EG_REPEAT)) {
-                v->gain = slope_calc(&v->aeg);           /* attack 0: no ramp */
+                v->gain = aeg_calc(v);           /* attack 0: no ramp */
                 v->last_gain = v->gain;
             } else {
                 v->last_gain = v->gain;
-                v->gain = slope_calc(&v->aeg);
+                v->gain = aeg_calc(v);
             }
             osc_set_freq(&v->osc, pmod);
             osc_set_freq(&v->mod, rp);
         } else {
-            v->gain = slope_calc(&v->aeg);
+            v->gain = aeg_calc(v);
             osc_set_freq(&v->osc, pmod);
             osc_set_freq(&v->mod, rp);
         }
     } else {
-        v->gain = slope_calc(&v->aeg);
+        v->gain = aeg_calc(v);
         if (v->tr.wave == TR_SNAP && !mi[vi].type && !eno[vi].on && !nzo[vi].on)
             v->pmod = 65536u + (uint32_t)(((int64_t)snap_calc(&v->snap, v->tr.inc) * v->tr.vol) >> 15);
         osc_set_freq(&v->osc, rp == 65536u ? v->pmod : (uint32_t)(((uint64_t)v->pmod * rp) >> 16));
@@ -942,7 +962,7 @@ static void voices_render(uint32_t lo, uint32_t hi)
 #ifdef VOICE_CAPTURE
         VOICE_CAPTURE(vi, b);                        /* (host tests: the voice before the mixer) */
 #endif
-        decimate(v, b, (uint32_t)(((uint64_t)decim_rate[vi] * decim_rate[NVOICE]) >> 16));
+        decimate(v, b, (uint32_t)(((uint64_t)decim_rate[vi] * decim_all) >> 16));
         post_block(v, b);
         ins_block(vi, b);                            /* (27a) */
         for (i = 0; i < BLOCK; i += 2) {
@@ -1265,5 +1285,6 @@ static void voices_init(void)                       /* initDrumVoice, Snare_init
         voice_pan_latch(v);
         decim_rate[i] = 65536u;
     }
-    decim_rate[NVOICE] = 65536u;
+    decim_rate[NVOICE] = decim_all = 65536u;
+    decim_all_f = 0;
 }

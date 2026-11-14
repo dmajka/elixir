@@ -2027,6 +2027,10 @@ static void card_name(char *b, uint32_t n, uint32_t p)
         put_str(b, "Dly level", n);
         return;
     }
+    if (p == PAR_MDIRT_AMT && ui.mode != M_FX) {     /* (1.4: WEAR's; on the FX page DIRT's title names it) */
+        put_str(b, "Dirt", n);
+        return;
+    }
     if (par[PAR_FX_DELAY_TYPE] == DELAY_GRAIN && (p == PAR_DLY_TIME || p == PAR_DLY_WOW || p == PAR_GLITCH || p == PAR_DSAT)) {
         put_str(b, p == PAR_DLY_TIME ? "Position" : p == PAR_DLY_WOW ? "Size" : p == PAR_GLITCH ? "Density" : "Scatter", n);
         return;                                      /* (1.0 Phase 13: GRAIN's knobs) */
@@ -2119,8 +2123,9 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_GL ... VP_GL_LAST: {
         static const char *const N[NGLSET] = {"Dest", "Depth", "Sync", "Wave", "Mode", "Trig", "Phase", "Rate"};
         static const char *const F[NGLSET] = {"Dest", "Depth", "", "Wave", "", "Source", "Thresh", "Release"};
-        put_str(b, (gls[(p - VP_GL) / NGLSET].wave == GW_FOLLOW ? F : N)[(p - VP_GL) % NGLSET], n);   /* (1.0 Phase
-                                                      * 11: FOLLOW's) */
+        const uint32_t w = gls[(p - VP_GL) / NGLSET].wave, k = (p - VP_GL) % NGLSET;
+        put_str(b, w == GW_CHAOS && k == 6u ? "Calm" : (w == GW_FOLLOW ? F : N)[k], n);   /* (1.0 Phase 11: FOLLOW's;
+                                                      * 1.4: CHAOS's PHASE its calm) */
         return;
     }
     case VP_TRACK_VOL: put_str(b, "Volume", n); return;
@@ -2169,6 +2174,8 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     }
     case VP_REPEAT: put_str(b, "Repeat", n); return;
     case VP_TAPE: put_str(b, "Tape time", n); return;
+    case VP_WDEC: put_str(b, "Decay", n); return;
+    case VP_WSPD: put_str(b, "Speed", n); return;   /* (Tape speed: "Tape" is TAPE STOP's time) */
     case VP_DJRESO: put_str(b, ui.mode == M_FX && pfs.dj_ftype == DJT_RING ? "Decay" : "Reso", n); return;
     case VP_DJTUNE: put_str(b, "Tune", n); return;
     case VP_DJSPREAD: put_str(b, "Spread", n); return;   /* (1.0 Phase 18: RING (2/2)) */
@@ -2716,7 +2723,9 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
                                                "JITTER", "CUTS", "PUMP", "DENSITY", "TRANSPOSE", "MEL CHANGE",
                                                "MEL SPREAD", "DELAY FB", "DELAY TIME", "REV SEND", "MACRO 1",
                                                "MACRO 2", "MACRO 3", "MACRO 4", "STUTTER", "DIRT", "DELAY BAND",
-                                               "RING WET", "RING TONE"};
+                                               "RING WET", "RING TONE", "SRATE", "DECAY", "TAPE SPEED", "TEMPO",
+                                               "SHUFFLE", "LFO1 DEPTH", "LFO2 DEPTH", "LFO3 DEPTH", "LFO4 DEPTH",
+                                               "LFO1 RATE", "LFO2 RATE", "LFO3 RATE", "LFO4 RATE"};
             put_str(b, D[v < NGD ? v : 0], n);
             return;
         }
@@ -2759,7 +2768,7 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
             }
             return;
         }
-        case 3: put_str(b, v == GW_FOLLOW ? "FOLLOW" : L_LFOW[v % NLFO], n); return;
+        case 3: put_str(b, v == GW_FOLLOW ? "FOLLOW" : v == GW_CHAOS ? "CHAOS" : L_LFOW[v % NLFO], n); return;
         case 4: {
             static const char *const M[NGM] = {"FREE", "TRIG", "HOLD", "ONE", "HALF"};
             put_str(b, M[v < NGM ? v : 0], n);
@@ -3045,6 +3054,34 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
     case VP_REPEAT: {
         static const char *const R[4] = {"1/4", "1/8", "1/16", "1/32"};
         put_str(b, R[v & 3u], n);
+        return;
+    }
+    case VP_WDEC:                                    /* (1.4: the decay's time, the kit's 100%; 0 SHORT's click) */
+        if (!v) {
+            put_str(b, "CLICK", n);
+        } else {
+            uint32_t pc = (uint32_t)(6553600u / wear_dec_of((int32_t)(v & 127u)));
+            put_int(b, (int32_t)(pc ? pc : 1u));
+            put_str(b + str_len(b), "%", n - str_len(b));
+        }
+        return;
+    case VP_WSPD: {                                  /* (1.4: in semitones, cents under one) */
+        int32_t c = (int32_t)((wear_oct(v) * 1200LL + (wear_oct(v) < 0 ? -32768 : 32768)) / 65536);
+        char *q = b;
+        if (c > 0)
+            *q++ = '+';
+        if (c > -100 && c < 100) {
+            q = put_int(q, c);
+            put_str(q, c ? " ct" : "", n - (uint32_t)(q - b));
+        } else {
+            int32_t a = c < 0 ? -c : c;
+            if (c < 0)
+                *q++ = '-';
+            q = put_int(q, a / 100);
+            *q++ = '.';
+            q = put_int(q, a / 10 % 10);
+            put_str(q, " st", n - (uint32_t)(q - b));
+        }
         return;
     }
     case VP_TAPE: {                                  /* 200 ms x 20^(v / 127), as tenths of a second */
