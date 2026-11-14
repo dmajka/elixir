@@ -1,10 +1,10 @@
 {
  "schemaVersion": 1,
  "file": "elixir-midi-parameters.json",
- "firmwareVersion": "v1.3.1",
- "sourceRevision": "389b5384c0d4",
- "sha256": "a9231910f4757f64a9ba85270ea2d1ab356453277a61ecb219b5e1f9211f28cb",
- "parameterCount": 311,
+ "firmwareVersion": "v1.4",
+ "sourceRevision": "44f7eed9ae5a",
+ "sha256": "a8d27e057e8dfaff7bb4db0222355fa92ac844f7596dc4205d1d61aeec03b4de",
+ "parameterCount": 309,
  "csv": "elixir-midi-parameters.csv",
  "sources": [
   "firmware/src/remote.c",

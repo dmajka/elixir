@@ -1,5 +1,5 @@
 # Elixir for the FM-1: a drum track
-# Written from Elixir v1.3.1's remote map (389b5384c0d4) by tools/hapax_defs.py:
+# Written from Elixir v1.4's remote map (44f7eed9ae5a) by tools/hapax_defs.py:
 # https://dmajka.github.io/elixir/controllers/ (the map: https://dmajka.github.io/elixir/data/)
 # Lanes 1-7 play D1 D2 D3 SN CY CH OH on Elixir's track channels (CONFIG: MIDI CHANNELS, 1-7 by default)
 # at note 60, the voice's own pitch (with the track's MIDI NOTE at ANY, the default). The track's own
@@ -143,14 +143,14 @@ MAXRATE NULL
 85 CH Sample rate
 86 OH Sample rate
 87 SEL Sample rate
-88 D1 LFO amount
-89 D2 LFO amount
-90 D3 LFO amount
-91 SN LFO amount
-92 CY LFO amount
-93 CH LFO amount
-94 OH LFO amount
-95 SEL LFO amount
+88 D1 Rush
+89 D2 Rush
+90 D3 Rush
+91 SN Rush
+92 CY Rush
+93 CH Rush
+94 OH Rush
+95 SEL Rush
 96 D1 Density
 97 D2 Density
 98 D3 Density

@@ -146,8 +146,8 @@
     },
     {
       "type": "cc",
-      "name": "FX P1",
-      "abbr": "FxP1",
+      "name": "Global decay",
+      "abbr": "Decy",
       "minimum": 0,
       "maximum": 127,
       "default_value": 0,
@@ -156,32 +156,12 @@
     },
     {
       "type": "cc",
-      "name": "FX P2",
-      "abbr": "FxP2",
+      "name": "Tape speed",
+      "abbr": "TpSp",
       "minimum": 0,
       "maximum": 127,
       "default_value": 0,
       "nr1": 18,
-      "nr2": 0
-    },
-    {
-      "type": "cc",
-      "name": "FX P3",
-      "abbr": "FxP3",
-      "minimum": 0,
-      "maximum": 127,
-      "default_value": 0,
-      "nr1": 19,
-      "nr2": 0
-    },
-    {
-      "type": "cc",
-      "name": "FX P4",
-      "abbr": "FxP4",
-      "minimum": 0,
-      "maximum": 127,
-      "default_value": 0,
-      "nr1": 20,
       "nr2": 0
     },
     {

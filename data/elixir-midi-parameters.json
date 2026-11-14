@@ -1,7 +1,7 @@
 {
  "schemaVersion": 1,
- "firmwareVersion": "v1.3.1",
- "sourceRevision": "389b5384c0d4",
+ "firmwareVersion": "v1.4",
+ "sourceRevision": "44f7eed9ae5a",
  "parameters": [
   {
    "id": "global.build",
@@ -222,6 +222,34 @@
     "symbol": "RM_GK[30] VP_P2 + 2"
    },
    "shortName": "Cuts"
+  },
+  {
+   "id": "global.decay",
+   "name": "Global decay",
+   "category": "Performance",
+   "scope": "remote-global",
+   "channelGroup": "remoteGlobal",
+   "number": 17,
+   "messageType": "cc",
+   "alternateMessageTypes": [],
+   "minimum": 0,
+   "maximum": 127,
+   "controlType": "continuous",
+   "encoderBehavior": [
+    "PICKUP",
+    "ABS",
+    "REL"
+   ],
+   "feedback": {
+    "source": "USB",
+    "controllerCompatibility": "unverified"
+   },
+   "interpretation": "PERFORM 2: WEAR's Decay: every voice's decay, 64 the kit as it is, 0 a click, 127 four times as long.",
+   "documentation": {
+    "source": "firmware/src/remote.c",
+    "symbol": "RM_GK[9] VP_WDEC"
+   },
+   "shortName": "Global decay"
   },
   {
    "id": "global.delay.band",
@@ -1294,118 +1322,6 @@
     "symbol": "RM_PF PF_FREEZE (RM_GB0 + 8 x row + column)"
    },
    "shortName": "Freeze"
-  },
-  {
-   "id": "global.fx-p1",
-   "name": "FX P1",
-   "category": "Effects",
-   "scope": "remote-global",
-   "channelGroup": "remoteGlobal",
-   "number": 17,
-   "messageType": "cc",
-   "alternateMessageTypes": [],
-   "minimum": 0,
-   "maximum": 127,
-   "controlType": "continuous",
-   "encoderBehavior": [
-    "PICKUP",
-    "ABS",
-    "REL"
-   ],
-   "feedback": {
-    "source": "USB",
-    "controllerCompatibility": "unverified"
-   },
-   "interpretation": "FX P1, over its whole range, as the panel sets it.",
-   "documentation": {
-    "source": "firmware/src/remote.c",
-    "symbol": "RM_GK[9] PAR_FX_P1"
-   },
-   "shortName": "FX P1"
-  },
-  {
-   "id": "global.fx-p2",
-   "name": "FX P2",
-   "category": "Effects",
-   "scope": "remote-global",
-   "channelGroup": "remoteGlobal",
-   "number": 18,
-   "messageType": "cc",
-   "alternateMessageTypes": [],
-   "minimum": 0,
-   "maximum": 127,
-   "controlType": "continuous",
-   "encoderBehavior": [
-    "PICKUP",
-    "ABS",
-    "REL"
-   ],
-   "feedback": {
-    "source": "USB",
-    "controllerCompatibility": "unverified"
-   },
-   "interpretation": "FX P2, over its whole range, as the panel sets it.",
-   "documentation": {
-    "source": "firmware/src/remote.c",
-    "symbol": "RM_GK[10] PAR_FX_P2"
-   },
-   "shortName": "FX P2"
-  },
-  {
-   "id": "global.fx-p3",
-   "name": "FX P3",
-   "category": "Effects",
-   "scope": "remote-global",
-   "channelGroup": "remoteGlobal",
-   "number": 19,
-   "messageType": "cc",
-   "alternateMessageTypes": [],
-   "minimum": 0,
-   "maximum": 127,
-   "controlType": "continuous",
-   "encoderBehavior": [
-    "PICKUP",
-    "ABS",
-    "REL"
-   ],
-   "feedback": {
-    "source": "USB",
-    "controllerCompatibility": "unverified"
-   },
-   "interpretation": "FX P3, over its whole range, as the panel sets it.",
-   "documentation": {
-    "source": "firmware/src/remote.c",
-    "symbol": "RM_GK[11] PAR_FX_P3"
-   },
-   "shortName": "FX P3"
-  },
-  {
-   "id": "global.fx-p4",
-   "name": "FX P4",
-   "category": "Effects",
-   "scope": "remote-global",
-   "channelGroup": "remoteGlobal",
-   "number": 20,
-   "messageType": "cc",
-   "alternateMessageTypes": [],
-   "minimum": 0,
-   "maximum": 127,
-   "controlType": "continuous",
-   "encoderBehavior": [
-    "PICKUP",
-    "ABS",
-    "REL"
-   ],
-   "feedback": {
-    "source": "USB",
-    "controllerCompatibility": "unverified"
-   },
-   "interpretation": "FX P4, over its whole range, as the panel sets it.",
-   "documentation": {
-    "source": "firmware/src/remote.c",
-    "symbol": "RM_GK[12] PAR_FX_P4"
-   },
-   "shortName": "FX P4"
   },
   {
    "id": "global.fx-wet",
@@ -3730,6 +3646,34 @@
    "shortName": "Slot kit"
   },
   {
+   "id": "global.tape-speed",
+   "name": "Tape speed",
+   "category": "Performance",
+   "scope": "remote-global",
+   "channelGroup": "remoteGlobal",
+   "number": 18,
+   "messageType": "cc",
+   "alternateMessageTypes": [],
+   "minimum": 0,
+   "maximum": 127,
+   "controlType": "continuous",
+   "encoderBehavior": [
+    "PICKUP",
+    "ABS",
+    "REL"
+   ],
+   "feedback": {
+    "source": "USB",
+    "controllerCompatibility": "unverified"
+   },
+   "interpretation": "PERFORM 2: WEAR's Speed: the whole kit's pitch, 64 as it is, 0 and 127 an octave down and up.",
+   "documentation": {
+    "source": "firmware/src/remote.c",
+    "symbol": "RM_GK[10] VP_WSPD"
+   },
+   "shortName": "Tape speed"
+  },
+  {
    "id": "global.tape-stop",
    "name": "Tape stop",
    "category": "Performance",
@@ -4112,35 +4056,6 @@
    "shortName": "CH Hit"
   },
   {
-   "id": "tracks.ch.lfo-amount",
-   "name": "CH LFO amount",
-   "category": "Modulation",
-   "scope": "remote-tracks",
-   "track": "ch",
-   "channelGroup": "remoteTracks",
-   "number": 93,
-   "messageType": "cc",
-   "alternateMessageTypes": [],
-   "minimum": 0,
-   "maximum": 127,
-   "controlType": "continuous",
-   "encoderBehavior": [
-    "PICKUP",
-    "ABS",
-    "REL"
-   ],
-   "feedback": {
-    "source": "USB",
-    "controllerCompatibility": "unverified"
-   },
-   "interpretation": "The track's lfo amount, over its whole range, as the panel's knob sets it. Column 8 follows the selected track; CH and OH share the hat voice, all but its decay.",
-   "documentation": {
-    "source": "firmware/src/remote.c",
-    "symbol": "RR_LFO (RM_CC0 + 8 x row + column)"
-   },
-   "shortName": "CH LFO amount"
-  },
-  {
    "id": "tracks.ch.mute",
    "name": "CH Mute",
    "category": "Mixer",
@@ -4282,6 +4197,35 @@
     "symbol": "RR_REVS (RM_CC0 + 8 x row + column)"
    },
    "shortName": "CH Reverb send"
+  },
+  {
+   "id": "tracks.ch.rush",
+   "name": "CH Rush",
+   "category": "Performance",
+   "scope": "remote-tracks",
+   "track": "ch",
+   "channelGroup": "remoteTracks",
+   "number": 93,
+   "messageType": "cc",
+   "alternateMessageTypes": [],
+   "minimum": 0,
+   "maximum": 127,
+   "controlType": "continuous",
+   "encoderBehavior": [
+    "PICKUP",
+    "ABS",
+    "REL"
+   ],
+   "feedback": {
+    "source": "USB",
+    "controllerCompatibility": "unverified"
+   },
+   "interpretation": "PERFORM: RUSH on this track, 0 off to 100% (a roll that takes the kit over). One track rushes at a time: the last turned up; back to 0 on the rushing track lets it go. Recorded under REC as RUSH locks.",
+   "documentation": {
+    "source": "firmware/src/remote.c",
+    "symbol": "RR_RUSH (RM_CC0 + 8 x row + column)"
+   },
+   "shortName": "CH Rush"
   },
   {
    "id": "tracks.ch.sample-rate",
@@ -4535,35 +4479,6 @@
    "shortName": "CY Hit"
   },
   {
-   "id": "tracks.cy.lfo-amount",
-   "name": "CY LFO amount",
-   "category": "Modulation",
-   "scope": "remote-tracks",
-   "track": "cy",
-   "channelGroup": "remoteTracks",
-   "number": 92,
-   "messageType": "cc",
-   "alternateMessageTypes": [],
-   "minimum": 0,
-   "maximum": 127,
-   "controlType": "continuous",
-   "encoderBehavior": [
-    "PICKUP",
-    "ABS",
-    "REL"
-   ],
-   "feedback": {
-    "source": "USB",
-    "controllerCompatibility": "unverified"
-   },
-   "interpretation": "The track's lfo amount, over its whole range, as the panel's knob sets it. Column 8 follows the selected track; CH and OH share the hat voice, all but its decay.",
-   "documentation": {
-    "source": "firmware/src/remote.c",
-    "symbol": "RR_LFO (RM_CC0 + 8 x row + column)"
-   },
-   "shortName": "CY LFO amount"
-  },
-  {
    "id": "tracks.cy.mute",
    "name": "CY Mute",
    "category": "Mixer",
@@ -4705,6 +4620,35 @@
     "symbol": "RR_REVS (RM_CC0 + 8 x row + column)"
    },
    "shortName": "CY Reverb send"
+  },
+  {
+   "id": "tracks.cy.rush",
+   "name": "CY Rush",
+   "category": "Performance",
+   "scope": "remote-tracks",
+   "track": "cy",
+   "channelGroup": "remoteTracks",
+   "number": 92,
+   "messageType": "cc",
+   "alternateMessageTypes": [],
+   "minimum": 0,
+   "maximum": 127,
+   "controlType": "continuous",
+   "encoderBehavior": [
+    "PICKUP",
+    "ABS",
+    "REL"
+   ],
+   "feedback": {
+    "source": "USB",
+    "controllerCompatibility": "unverified"
+   },
+   "interpretation": "PERFORM: RUSH on this track, 0 off to 100% (a roll that takes the kit over). One track rushes at a time: the last turned up; back to 0 on the rushing track lets it go. Recorded under REC as RUSH locks.",
+   "documentation": {
+    "source": "firmware/src/remote.c",
+    "symbol": "RR_RUSH (RM_CC0 + 8 x row + column)"
+   },
+   "shortName": "CY Rush"
   },
   {
    "id": "tracks.cy.sample-rate",
@@ -4958,35 +4902,6 @@
    "shortName": "D1 Hit"
   },
   {
-   "id": "tracks.d1.lfo-amount",
-   "name": "D1 LFO amount",
-   "category": "Modulation",
-   "scope": "remote-tracks",
-   "track": "d1",
-   "channelGroup": "remoteTracks",
-   "number": 88,
-   "messageType": "cc",
-   "alternateMessageTypes": [],
-   "minimum": 0,
-   "maximum": 127,
-   "controlType": "continuous",
-   "encoderBehavior": [
-    "PICKUP",
-    "ABS",
-    "REL"
-   ],
-   "feedback": {
-    "source": "USB",
-    "controllerCompatibility": "unverified"
-   },
-   "interpretation": "The track's lfo amount, over its whole range, as the panel's knob sets it. Column 8 follows the selected track; CH and OH share the hat voice, all but its decay.",
-   "documentation": {
-    "source": "firmware/src/remote.c",
-    "symbol": "RR_LFO (RM_CC0 + 8 x row + column)"
-   },
-   "shortName": "D1 LFO amount"
-  },
-  {
    "id": "tracks.d1.mute",
    "name": "D1 Mute",
    "category": "Mixer",
@@ -5128,6 +5043,35 @@
     "symbol": "RR_REVS (RM_CC0 + 8 x row + column)"
    },
    "shortName": "D1 Reverb send"
+  },
+  {
+   "id": "tracks.d1.rush",
+   "name": "D1 Rush",
+   "category": "Performance",
+   "scope": "remote-tracks",
+   "track": "d1",
+   "channelGroup": "remoteTracks",
+   "number": 88,
+   "messageType": "cc",
+   "alternateMessageTypes": [],
+   "minimum": 0,
+   "maximum": 127,
+   "controlType": "continuous",
+   "encoderBehavior": [
+    "PICKUP",
+    "ABS",
+    "REL"
+   ],
+   "feedback": {
+    "source": "USB",
+    "controllerCompatibility": "unverified"
+   },
+   "interpretation": "PERFORM: RUSH on this track, 0 off to 100% (a roll that takes the kit over). One track rushes at a time: the last turned up; back to 0 on the rushing track lets it go. Recorded under REC as RUSH locks.",
+   "documentation": {
+    "source": "firmware/src/remote.c",
+    "symbol": "RR_RUSH (RM_CC0 + 8 x row + column)"
+   },
+   "shortName": "D1 Rush"
   },
   {
    "id": "tracks.d1.sample-rate",
@@ -5381,35 +5325,6 @@
    "shortName": "D2 Hit"
   },
   {
-   "id": "tracks.d2.lfo-amount",
-   "name": "D2 LFO amount",
-   "category": "Modulation",
-   "scope": "remote-tracks",
-   "track": "d2",
-   "channelGroup": "remoteTracks",
-   "number": 89,
-   "messageType": "cc",
-   "alternateMessageTypes": [],
-   "minimum": 0,
-   "maximum": 127,
-   "controlType": "continuous",
-   "encoderBehavior": [
-    "PICKUP",
-    "ABS",
-    "REL"
-   ],
-   "feedback": {
-    "source": "USB",
-    "controllerCompatibility": "unverified"
-   },
-   "interpretation": "The track's lfo amount, over its whole range, as the panel's knob sets it. Column 8 follows the selected track; CH and OH share the hat voice, all but its decay.",
-   "documentation": {
-    "source": "firmware/src/remote.c",
-    "symbol": "RR_LFO (RM_CC0 + 8 x row + column)"
-   },
-   "shortName": "D2 LFO amount"
-  },
-  {
    "id": "tracks.d2.mute",
    "name": "D2 Mute",
    "category": "Mixer",
@@ -5551,6 +5466,35 @@
     "symbol": "RR_REVS (RM_CC0 + 8 x row + column)"
    },
    "shortName": "D2 Reverb send"
+  },
+  {
+   "id": "tracks.d2.rush",
+   "name": "D2 Rush",
+   "category": "Performance",
+   "scope": "remote-tracks",
+   "track": "d2",
+   "channelGroup": "remoteTracks",
+   "number": 89,
+   "messageType": "cc",
+   "alternateMessageTypes": [],
+   "minimum": 0,
+   "maximum": 127,
+   "controlType": "continuous",
+   "encoderBehavior": [
+    "PICKUP",
+    "ABS",
+    "REL"
+   ],
+   "feedback": {
+    "source": "USB",
+    "controllerCompatibility": "unverified"
+   },
+   "interpretation": "PERFORM: RUSH on this track, 0 off to 100% (a roll that takes the kit over). One track rushes at a time: the last turned up; back to 0 on the rushing track lets it go. Recorded under REC as RUSH locks.",
+   "documentation": {
+    "source": "firmware/src/remote.c",
+    "symbol": "RR_RUSH (RM_CC0 + 8 x row + column)"
+   },
+   "shortName": "D2 Rush"
   },
   {
    "id": "tracks.d2.sample-rate",
@@ -5804,35 +5748,6 @@
    "shortName": "D3 Hit"
   },
   {
-   "id": "tracks.d3.lfo-amount",
-   "name": "D3 LFO amount",
-   "category": "Modulation",
-   "scope": "remote-tracks",
-   "track": "d3",
-   "channelGroup": "remoteTracks",
-   "number": 90,
-   "messageType": "cc",
-   "alternateMessageTypes": [],
-   "minimum": 0,
-   "maximum": 127,
-   "controlType": "continuous",
-   "encoderBehavior": [
-    "PICKUP",
-    "ABS",
-    "REL"
-   ],
-   "feedback": {
-    "source": "USB",
-    "controllerCompatibility": "unverified"
-   },
-   "interpretation": "The track's lfo amount, over its whole range, as the panel's knob sets it. Column 8 follows the selected track; CH and OH share the hat voice, all but its decay.",
-   "documentation": {
-    "source": "firmware/src/remote.c",
-    "symbol": "RR_LFO (RM_CC0 + 8 x row + column)"
-   },
-   "shortName": "D3 LFO amount"
-  },
-  {
    "id": "tracks.d3.mute",
    "name": "D3 Mute",
    "category": "Mixer",
@@ -5974,6 +5889,35 @@
     "symbol": "RR_REVS (RM_CC0 + 8 x row + column)"
    },
    "shortName": "D3 Reverb send"
+  },
+  {
+   "id": "tracks.d3.rush",
+   "name": "D3 Rush",
+   "category": "Performance",
+   "scope": "remote-tracks",
+   "track": "d3",
+   "channelGroup": "remoteTracks",
+   "number": 90,
+   "messageType": "cc",
+   "alternateMessageTypes": [],
+   "minimum": 0,
+   "maximum": 127,
+   "controlType": "continuous",
+   "encoderBehavior": [
+    "PICKUP",
+    "ABS",
+    "REL"
+   ],
+   "feedback": {
+    "source": "USB",
+    "controllerCompatibility": "unverified"
+   },
+   "interpretation": "PERFORM: RUSH on this track, 0 off to 100% (a roll that takes the kit over). One track rushes at a time: the last turned up; back to 0 on the rushing track lets it go. Recorded under REC as RUSH locks.",
+   "documentation": {
+    "source": "firmware/src/remote.c",
+    "symbol": "RR_RUSH (RM_CC0 + 8 x row + column)"
+   },
+   "shortName": "D3 Rush"
   },
   {
    "id": "tracks.d3.sample-rate",
@@ -6284,35 +6228,6 @@
    "shortName": "OH Hit"
   },
   {
-   "id": "tracks.oh.lfo-amount",
-   "name": "OH LFO amount",
-   "category": "Modulation",
-   "scope": "remote-tracks",
-   "track": "oh",
-   "channelGroup": "remoteTracks",
-   "number": 94,
-   "messageType": "cc",
-   "alternateMessageTypes": [],
-   "minimum": 0,
-   "maximum": 127,
-   "controlType": "continuous",
-   "encoderBehavior": [
-    "PICKUP",
-    "ABS",
-    "REL"
-   ],
-   "feedback": {
-    "source": "USB",
-    "controllerCompatibility": "unverified"
-   },
-   "interpretation": "The track's lfo amount, over its whole range, as the panel's knob sets it. Column 8 follows the selected track; CH and OH share the hat voice, all but its decay.",
-   "documentation": {
-    "source": "firmware/src/remote.c",
-    "symbol": "RR_LFO (RM_CC0 + 8 x row + column)"
-   },
-   "shortName": "OH LFO amount"
-  },
-  {
    "id": "tracks.oh.mute",
    "name": "OH Mute",
    "category": "Mixer",
@@ -6454,6 +6369,35 @@
     "symbol": "RR_REVS (RM_CC0 + 8 x row + column)"
    },
    "shortName": "OH Reverb send"
+  },
+  {
+   "id": "tracks.oh.rush",
+   "name": "OH Rush",
+   "category": "Performance",
+   "scope": "remote-tracks",
+   "track": "oh",
+   "channelGroup": "remoteTracks",
+   "number": 94,
+   "messageType": "cc",
+   "alternateMessageTypes": [],
+   "minimum": 0,
+   "maximum": 127,
+   "controlType": "continuous",
+   "encoderBehavior": [
+    "PICKUP",
+    "ABS",
+    "REL"
+   ],
+   "feedback": {
+    "source": "USB",
+    "controllerCompatibility": "unverified"
+   },
+   "interpretation": "PERFORM: RUSH on this track, 0 off to 100% (a roll that takes the kit over). One track rushes at a time: the last turned up; back to 0 on the rushing track lets it go. Recorded under REC as RUSH locks.",
+   "documentation": {
+    "source": "firmware/src/remote.c",
+    "symbol": "RR_RUSH (RM_CC0 + 8 x row + column)"
+   },
+   "shortName": "OH Rush"
   },
   {
    "id": "tracks.oh.sample-rate",
@@ -7294,35 +7238,6 @@
    "shortName": "Selected track FX send"
   },
   {
-   "id": "tracks.selected.lfo-amount",
-   "name": "Selected track LFO amount",
-   "category": "Modulation",
-   "scope": "remote-tracks",
-   "track": "selected",
-   "channelGroup": "remoteTracks",
-   "number": 95,
-   "messageType": "cc",
-   "alternateMessageTypes": [],
-   "minimum": 0,
-   "maximum": 127,
-   "controlType": "continuous",
-   "encoderBehavior": [
-    "PICKUP",
-    "ABS",
-    "REL"
-   ],
-   "feedback": {
-    "source": "USB",
-    "controllerCompatibility": "unverified"
-   },
-   "interpretation": "The track's lfo amount, over its whole range, as the panel's knob sets it. Column 8 follows the selected track; CH and OH share the hat voice, all but its decay.",
-   "documentation": {
-    "source": "firmware/src/remote.c",
-    "symbol": "RR_LFO (RM_CC0 + 8 x row + column)"
-   },
-   "shortName": "Selected track LFO amount"
-  },
-  {
    "id": "tracks.selected.mute",
    "name": "Selected track Mute",
    "category": "Mixer",
@@ -7464,6 +7379,35 @@
     "symbol": "RR_REVS (RM_CC0 + 8 x row + column)"
    },
    "shortName": "Selected track Reverb send"
+  },
+  {
+   "id": "tracks.selected.rush",
+   "name": "Selected track Rush",
+   "category": "Performance",
+   "scope": "remote-tracks",
+   "track": "selected",
+   "channelGroup": "remoteTracks",
+   "number": 95,
+   "messageType": "cc",
+   "alternateMessageTypes": [],
+   "minimum": 0,
+   "maximum": 127,
+   "controlType": "continuous",
+   "encoderBehavior": [
+    "PICKUP",
+    "ABS",
+    "REL"
+   ],
+   "feedback": {
+    "source": "USB",
+    "controllerCompatibility": "unverified"
+   },
+   "interpretation": "PERFORM: RUSH on this track, 0 off to 100% (a roll that takes the kit over). One track rushes at a time: the last turned up; back to 0 on the rushing track lets it go. Recorded under REC as RUSH locks.",
+   "documentation": {
+    "source": "firmware/src/remote.c",
+    "symbol": "RR_RUSH (RM_CC0 + 8 x row + column)"
+   },
+   "shortName": "Selected track Rush"
   },
   {
    "id": "tracks.selected.sample-rate",
@@ -7736,35 +7680,6 @@
    "shortName": "SN Hit"
   },
   {
-   "id": "tracks.sn.lfo-amount",
-   "name": "SN LFO amount",
-   "category": "Modulation",
-   "scope": "remote-tracks",
-   "track": "sn",
-   "channelGroup": "remoteTracks",
-   "number": 91,
-   "messageType": "cc",
-   "alternateMessageTypes": [],
-   "minimum": 0,
-   "maximum": 127,
-   "controlType": "continuous",
-   "encoderBehavior": [
-    "PICKUP",
-    "ABS",
-    "REL"
-   ],
-   "feedback": {
-    "source": "USB",
-    "controllerCompatibility": "unverified"
-   },
-   "interpretation": "The track's lfo amount, over its whole range, as the panel's knob sets it. Column 8 follows the selected track; CH and OH share the hat voice, all but its decay.",
-   "documentation": {
-    "source": "firmware/src/remote.c",
-    "symbol": "RR_LFO (RM_CC0 + 8 x row + column)"
-   },
-   "shortName": "SN LFO amount"
-  },
-  {
    "id": "tracks.sn.mute",
    "name": "SN Mute",
    "category": "Mixer",
@@ -7906,6 +7821,35 @@
     "symbol": "RR_REVS (RM_CC0 + 8 x row + column)"
    },
    "shortName": "SN Reverb send"
+  },
+  {
+   "id": "tracks.sn.rush",
+   "name": "SN Rush",
+   "category": "Performance",
+   "scope": "remote-tracks",
+   "track": "sn",
+   "channelGroup": "remoteTracks",
+   "number": 91,
+   "messageType": "cc",
+   "alternateMessageTypes": [],
+   "minimum": 0,
+   "maximum": 127,
+   "controlType": "continuous",
+   "encoderBehavior": [
+    "PICKUP",
+    "ABS",
+    "REL"
+   ],
+   "feedback": {
+    "source": "USB",
+    "controllerCompatibility": "unverified"
+   },
+   "interpretation": "PERFORM: RUSH on this track, 0 off to 100% (a roll that takes the kit over). One track rushes at a time: the last turned up; back to 0 on the rushing track lets it go. Recorded under REC as RUSH locks.",
+   "documentation": {
+    "source": "firmware/src/remote.c",
+    "symbol": "RR_RUSH (RM_CC0 + 8 x row + column)"
+   },
+   "shortName": "SN Rush"
   },
   {
    "id": "tracks.sn.sample-rate",

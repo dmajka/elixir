@@ -174,7 +174,7 @@
         <a class="btn alt" href="install/">Install on your FM-1</a>
         <a class="btn alt" href="manual/">Read the manual</a>
       </div>
-      <p class="meta">Version 1.3.1, released November 10, 2026 · <a href="#updates">what's new</a></p>
+      <p class="meta">Version 1.4, released November 14, 2026 · <a href="#updates">what's new</a></p>
       <div class="support">
         <p>Elixir is free, made by one person in my spare time. If it makes your FM-1 more fun:</p>
         <a class="btn sm kofi" href="https://ko-fi.com/ghosttropic" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13v5a6 6 0 0 1-6 6H10a6 6 0 0 1-6-6z"/><path d="M17 9h1.5a2.5 2.5 0 0 1 0 5H17"/><path d="M8 3v2M12 3v2"/></svg>Tip me on Ko-fi</a>
@@ -367,7 +367,7 @@
     </div>
 
     <div class="feature">
-      <figure class="screen"><img src="shots/perform.png" alt="The PERFORM 2 page: keys for drill, cuts, pump, comb, crush and reverse" width="240" height="240" loading="lazy"></figure>
+      <figure class="screen"><img src="shots/perform.png" alt="The PERFORM 2 page: keys for drill, cuts, pump, comb, crush and reverse, and the WEAR knobs: SRate, Dirt, Decay, Speed" width="240" height="240" loading="lazy"></figure>
       <div>
         <p class="tag">Performance</p>
         <h3>Made for playing live<a class="ml" href="manual/#13-performance-mode-perf" aria-label="Read more in the manual" title="In the manual"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M6.8 9.2a3 3 0 0 0 4.2 0l2.2-2.2a3 3 0 0 0-4.2-4.2l-1 1M9.2 6.8a3 3 0 0 0-4.2 0L2.8 9a3 3 0 0 0 4.2 4.2l1-1"/></svg></a></h3>
@@ -379,7 +379,7 @@
     </div>
 
     <div class="feature">
-      <figure class="screen"><img src="shots/spells.png" alt="SPELLS: the wizard, Whispering Motes cast on all seven tracks, the twelve-sided die showing 8" width="240" height="240" loading="lazy"></figure>
+      <figure class="screen"><img src="shots/spells.png" alt="SPELLS: the wizard, Whispering Motes cast on all seven tracks, the twelve-sided die showing 5" width="240" height="240" loading="lazy"></figure>
       <div>
         <p class="tag">Randomizing</p>
         <h3>Spells: randomizing with a sense of direction<a class="ml" href="manual/#spells-from-019" aria-label="Read more in the manual" title="In the manual"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M6.8 9.2a3 3 0 0 0 4.2 0l2.2-2.2a3 3 0 0 0-4.2-4.2l-1 1M9.2 6.8a3 3 0 0 0-4.2 0L2.8 9a3 3 0 0 0 4.2 4.2l1-1"/></svg></a></h3>
@@ -529,6 +529,126 @@
   <section class="band" id="updates">
     <div class="intro"><h2>Updates</h2><p>What each release added and fixed.</p></div>
     <div class="updates">
+      <div class="card"><h3>1.4<span>November 14, 2026</span></h3>
+        <p>Pick morph kits with a knob, many more locks per step, a new dub SPRING reverb, WEAR controls for the
+          whole kit, new global LFO moves, program changes out to your other gear, and a lighter engine that leaves
+          room for more effects and heavy drum models at once. Alongside it, the new
+          <a href="controllers/">Controllers</a> page sets up Novation controllers and the Hapax and OXI One
+          sequencers for Elixir. Projects from 1.3 load as before.</p>
+        <h4>Morph</h4>
+        <ul>
+          <li><b>Pick the morph kit with a knob.</b> On PERFORM, KNOB 4 (<b>Morph kit</b>) scrolls through your kit
+            slots, your library and the factory kits by name. The kit loads when you stop turning. Slots still named
+            Init are skipped.</li>
+          <li><b>SNAP</b> (OCT+ on PERFORM): what you're hearing becomes the morph kit, without changing the sound.
+            Keep tweaking the kit, then turn Morph to get back to the snapshot.</li>
+          <li><b>SWAP</b> (hold OCT&minus;, press OCT+ on PERFORM): the kit and the morph kit trade places, and Morph
+            flips to match (30% becomes 70%), so the sound doesn't change. Handy for editing the other kit.</li>
+          <li>When your edits are going to the morph kit (Morph at 100%), the M at the top of the screen is filled in
+            and sound page titles start with <b>MORPH:</b>.</li>
+          <li><b>Morph turns four times faster</b>: 0 to 100% takes about a quarter of the turning it did. Hold
+            OCT&minus; while turning for the finest steps.</li>
+          <li><b>SRate</b> moved from PERFORM's KNOB 4 to the new WEAR page.</li>
+        </ul>
+        <h4>Locks</h4>
+        <ul>
+          <li><b>Up to eight locks per step</b> (it was two). Locks come from one shared supply of 8,192 for all 32
+            patterns, so a busy pattern can use far more than its share.</li>
+          <li>A new <b>LOCKS</b> page, the third page of step edit, lists a step's locks and their values. Add a
+            lock, change it, or delete it by turning Param to OFF.</li>
+          <li><b>CLEAR TRACK LOCKS</b> and <b>CLEAR STEP LOCKS</b> remove locks and leave the steps in place.</li>
+          <li>If every lock is used, a copy that needs more shows <b>NO LOCKS LEFT</b> and changes nothing, so you
+            never lose locks halfway through.</li>
+        </ul>
+        <h4>Effects</h4>
+        <ul>
+          <li><b>SPRING</b> is now a drippy dub spring reverb: each echo chirps upward, more with every bounce, and
+            Size makes the drip deeper. Kits that use SPRING sound different from 1.3, and louder.</li>
+        </ul>
+        <h4>WEAR and global LFOs</h4>
+        <ul>
+          <li><b>WEAR</b>, a new PERFORM page (after TRANSPOSE), shapes the whole kit at once: SRate, Dirt, and two
+            new knobs. <b>Decay</b> shortens every hit down to a click, or stretches it up to four times longer.
+            <b>Speed</b> works like tape speed, shifting the kit's pitch up to an octave either way while the delay
+            and reverb stay put.</li>
+          <li>New global LFO destinations: <b>TEMPO</b> (up to 25% faster or slower, MIDI clock out follows),
+            <b>SHUFFLE</b>, <b>SRATE</b>, <b>DECAY</b> and <b>TAPE SPEED</b>.</li>
+          <li><b>LFOs can modulate LFOs</b>: one global LFO can change another's depth or rate.</li>
+          <li><b>CHAOS</b>, a new LFO wave that swings around and never quite repeats. Calm tames it, and a trigger
+            replays the same phrase.</li>
+        </ul>
+        <h4>Recording and editing</h4>
+        <ul>
+          <li><b>Quantize</b> (hold OCT&minus;, press REC) now goes from 0 to 100% instead of on or off, so you can
+            tighten your timing and keep some of the feel.</li>
+          <li>The <b>pattern page</b> is cleaner: smaller copy, paste and delete hints, so the patterns stand
+            out.</li>
+          <li>The sound buttons are simpler. EDIT returns to the page you were last on, pressing a sound button
+            again does nothing, and SELECT turns the pages.</li>
+          <li><b>Delete kits, sounds, projects, patterns and songs</b> from the save and load pages: select one,
+            press CLEAR (hold OCT&minus;, press OCT+), then OCT+ to confirm. A deleted project is gone for good;
+            a deleted kit slot goes back to Init.</li>
+        </ul>
+        <h4>Controllers and sequencers (new on the site)</h4>
+        <p>The <a href="controllers/">Controllers</a> page (beta) gets your gear playing Elixir without mapping
+          CCs by hand, and it's live now: you don't need to wait for 1.4. Sending a template to a controller needs
+          Chrome or Edge.</p>
+        <ul>
+          <li><b>Launch Control XL 3 and mk2</b>: ready-made templates (Mixer, Perform, Effects, Sound, Sequencer),
+            sent straight to the controller from the page. Change any knob or button and save your own.</li>
+          <li><b>Launchpad Pro MK3</b>: templates for mutes and solos, patterns 1&ndash;32, performance effects,
+            and <b>Drum Record</b>: seven velocity-sensitive pads to play and record the tracks, with Record and
+            Play beside them.</li>
+          <li><b>Hapax and OXI One</b>: instrument definitions to download, so Elixir's tracks, parameters and
+            patterns show up by name on the sequencer. Not yet tested on the hardware.</li>
+          <li>The page always matches the firmware's MIDI map, so a CC that moves in an update moves in the
+            templates too.</li>
+        </ul>
+        <h4>MIDI</h4>
+        <ul>
+          <li><b>Program change out</b> (CONFIG &rarr; PROGRAM CHANGE OUT): Elixir can tell your other gear to
+            change patterns along with it. Choose the program each pattern sends, the channel and the timing.
+            <b>AHEAD</b> sends it early, so a Digitakt or Digitone switches on the same downbeat as Elixir.</li>
+          <li><b>Rush for each track</b> from a controller on CC 88&ndash;94 (TRACKS channel). These CCs used to be
+            LFO amount, so update any controller template that used them.</li>
+          <li><b>CC 17 and 18</b> (GLOBAL channel) now control WEAR's Decay and Speed. The FX bus's P1&ndash;P4
+            controls are no longer on the remote (CC 19 and 20 are now free); adjust them on the unit. FX wet
+            stays on CC 16.</li>
+        </ul>
+        <h4>Performance</h4>
+        <p>These use less of the processor and sound exactly the same, so you can run heavier kits and more effects
+          before you hit CPU OVERLOAD. Figures are CPU use on the FM-1 (CONFIG &rarr; LOAD), 1.3 &rarr; 1.4.</p>
+        <ul>
+          <li><b>Reverbs</b>: ROOM 6% &rarr; 3&ndash;4%, HALL 6% &rarr; 5%, PLATE 9% &rarr; 5%.</li>
+          <li><b>Delays</b>: MONO 6% &rarr; 4%, PING PONG 7% &rarr; 4%, TAPE 6% &rarr; 4%, TAPE PP 7% &rarr; 5%
+            (9% &rarr; 8% with Pitch on).</li>
+          <li><b>Master filter and FX bus</b>: RING 12&ndash;13% &rarr; 8%, ENSEMBLE about a third lighter, PHASER
+            and the voice filters lighter too. ENSEMBLE, PHASER and RING together: 55% &rarr; 48%.</li>
+          <li><b>Drum models</b> on D1&ndash;D3: P ADDTV 23% &rarr; 16%, P SD 24% &rarr; 18%, P BD 20% &rarr; 18%,
+            MODAL 20% &rarr; 18%, P SWARM 15% &rarr; 13%. Two heavy models fit together more often. (Setting Aux all
+            the way down helps P ADDTV and P BD further, and all the way up helps P BD too.)</li>
+          <li><b>FREQ SHIFT</b> on the FX bus is lighter, by about a fifth with Fdbk or Spread at 0.</li>
+          <li>Choosing a morph kit doesn't cause a CPU spike.</li>
+        </ul>
+        <p><b>Two heavy models together</b> (MODAL, P SD, P BD, P HH, P VA, P ADDTV or P WSHAPE) leave more room:</p>
+        <ul>
+          <li>Next to another of them, <b>MODAL</b> leaves out its 8 highest overtones, the quietest ones that die
+            away first, for about a fifth less CPU. It already did this next to a second MODAL.</li>
+          <li><b>Spells and WANDER</b> never put two of them together. If one is already playing, they pick a lighter
+            model of the same kind instead, such as STRING in place of MODAL or P CHORD in place of P SD.</li>
+        </ul>
+        <h4>Fixes</h4>
+        <ul>
+          <li><b>CPU OVERLOAD</b> only flashes when the processor is really at its limit. Brief blips you can't
+            hear no longer set it off.</li>
+          <li><b>CLEAR TRACK</b> keeps the track's length, clock and direction (it used to reset the track to 16
+            steps).</li>
+          <li>Saving a morph no longer moves you to the morph's slot.</li>
+          <li>Morph at 100% now sounds exactly like the morph kit (some settings stopped just short before).</li>
+          <li>The tape delay's <b>Glitch</b> no longer plays the same few glitches each time you change the delay's
+            Mode, and GRAIN's random grains no longer repeat that way either.</li>
+        </ul>
+      </div>
       <div class="card"><h3>1.3.1<span>November 10, 2026</span></h3>
         <ul>
           <li>Fixed: switching the master filter away from <b>RING</b> no longer carries RING's Decay over as the
@@ -541,7 +661,7 @@
             its hit, like a drum pad, so you can build a beat pass by pass and watch the steps appear on the grid.</li>
           <li>Erasing while recording is clearer: hold OCT&minus; and OCT+ together and the screen says
             <b>ERASING AS IT PLAYS</b>.</li>
-          <li>New <b>Quantize</b> record option (SHIFT + REC). Turn it OFF to keep how early or late you played
+          <li>New <b>Quantize</b> record option (hold OCT&minus;, press REC). Turn it OFF to keep how early or late you played
             each hit.</li>
           <li><b>Nudge</b> a whole track up to 16 steps either way: SEQ &rarr; GENERATOR, with the generator OFF,
             KNOB 4. Press OCT+ to keep it.</li>
