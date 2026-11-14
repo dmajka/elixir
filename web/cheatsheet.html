@@ -242,7 +242,7 @@
     <h2>PERF pages (SELECT)</h2>
     <table class="knobs">
       <tr><th>Page</th><th>K1</th><th>K2</th><th>K3</th><th>K4</th></tr>
-      <tr><td>PERFORM</td><td>Tempo</td><td>Roll rate</td><td>Morph</td><td>SRate</td></tr>
+      <tr><td>PERFORM</td><td>Tempo</td><td>Roll rate</td><td>Morph</td><td>Morph kit</td></tr>
       <tr><td>MORE</td><td>Master filter</td><td>Repeat</td><td>Shuffle</td><td>Tape time</td></tr>
       <tr><td>DENSITY</td><td>Density</td><td>Ghost vel</td><td>Build</td><td>Vary</td></tr>
       <tr><td>STUTTER</td><td>Chance</td><td>Size</td><td>Length</td><td>Vary</td></tr>
@@ -292,8 +292,8 @@
     </table>
 
     <h2>Morph</h2>
-    <p>SHIFT (OCT−) + white 9 loads a second kit as the target; PERFORM's K3 crossfades every sound parameter to it
-      (switches flip halfway). M in the header while it's above 0.</p>
+    <p>PERFORM's K4 picks the morph kit, K3 morphs to it. There, <b>OCT+</b> SNAPs what you hear into it; hold OCT−,
+      press OCT+ to <b>SWAP</b> the two kits. Neither changes the sound.</p>
 
     <h2>Mixer and FX</h2>
     <table>
@@ -398,8 +398,8 @@
       KEYS. SHIFT (OCT−) + a key plays at the accent velocity.</p>
     <p class="tip"><b>Recording:</b> REC, then PLAY. Knob moves on sound pages become locks on the steps that are
       on; SHIFT (OCT−) + CLEAR erases the track's steps as they pass.</p>
-    <p class="tip"><b>Morph and edits:</b> with morph up, a knob moves the target too, so you hear the edit at any
-      amount (CONFIG → MORPH to change it).</p>
+    <p class="tip"><b>Morph and edits:</b> at 100% morph the sound knobs edit the morph kit (M solid); below it, the
+      kit (CONFIG → MORPH → Edits to change it).</p>
     <p class="tip"><b>Solo isn't saved</b> and the mutes come back as they were when the last solo goes.</p>
     <p class="tip"><b>Kits:</b> PRESETS lists the 85 factory kits, then the library, then the project's 64 slots.
       The library stays whatever project is loaded.</p>

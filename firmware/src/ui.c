@@ -79,7 +79,8 @@ enum { VP_BASE = 0x400, VP_NONE = VP_BASE, VP_IO_TYPE, VP_IO_SLOT, VP_NAME_POS, 
        VP_TRUSH, VP_TRUSH_LAST = VP_TRUSH + NTRACK - 1,   /* (1.4: the remote's RUSH a track: sq.ru_live on it) */
        VP_PCPAT, VP_PCOUT, VP_PCCH, VP_PCWHEN,       /* (1.4: PROGRAM CHANGE OUT: the pattern, its program, the
                                                       * channel, when) */
-       VP_WDEC, VP_WSPD };                           /* (1.4: WEAR's Decay, Tape speed: perform.c pfs.wdecay ..) */
+       VP_WDEC, VP_WSPD,                             /* (1.4: WEAR's Decay, Tape speed: perform.c pfs.wdecay ..) */
+       VP_MKIT };                                    /* (1.4 MORPH: PERFORM's Morph kit, the kit browser's entries) */                           /* (1.4: WEAR's Decay, Tape speed: perform.c pfs.wdecay ..) */
 _Static_assert(NPAR <= VP_BASE, "the virtual parameters after the parameters (25b + 27a: NPAR 525, past 0x200)");
 /* the ACTION page's action (OCT+ does it); 0.10: those of the track's generator (gen_acts) */
 enum { ACT_NONE, ACT_DICE, ACT_COMMIT, ACT_UNDO, ACT_RESET, NACT };
@@ -134,6 +135,8 @@ static struct {
     uint8_t lib_morph;               /* 1.4: .. the library's morph kit last loaded or saved (SAVE at 100%: there) */
     uint8_t mo_offer;                /* 1.4: morph turned to 100% with no morph kit (the init kit's): OCT+ offers
                                       * this kit as the morph (mo_offering) */
+    uint16_t mk_pend;                /* 1.4 MORPH: 1 + the kit the Morph kit knob shows, loaded when it rests (mk_ms) */
+    uint32_t mk_ms;
     char io_name[8];
     uint8_t song_row;
     uint8_t song_edit;               /* 37: SONG: ROWS: INSERT or DELETE (SE_*) */
@@ -452,7 +455,7 @@ static const char *const STEP_TITLE[4] = {"STEP", "TRIG", "LOCKS", "RATCHET"};
 #define PG_LINKS (PG_MACRO + 2u)                     /* (2 pages: LINKS, LINK SETUP) */
 _Static_assert(PG_LINKS + 2u == NPERF, "PERF's pages: GLOBAL MOD's last");
 #define GLV(n, k) (VP_GL + (n) * NGLSET + (k))
-static const uint16_t P_PERF[NPERF][4] = {{PAR_BPM, PAR_ROLL, PAR_MORPH, PAR_VOICE_DECIMATION_ALL},
+static const uint16_t P_PERF[NPERF][4] = {{PAR_BPM, PAR_ROLL, PAR_MORPH, VP_MKIT},   /* (1.4: SRate to WEAR) */
                                           {VP_DJ, VP_REPEAT, PAR_SHUFFLE, VP_TAPE},
                                           {VP_DENS, VP_GHOST, VP_BUILD, VP_DVARY},
                                           {VP_STCH, VP_STSIZE, VP_STLEN, VP_STVARY},
@@ -835,6 +838,65 @@ static int kb_has(int32_t i)
     if (i < 0 || i >= (int32_t)KB_N)
         return 0;
     return kb_part((uint32_t)i) != KB_LIB || kl_exists(KLK_KIT, (uint32_t)i - NUM_KITS);
+}
+/* 1.4 MORPH: PERFORM's Morph kit knob (VP_MKIT) walks the same entries in their own order: the slots, the library's
+ * kits, the factory's; it loads as it rests (ui_poll: a library kit is a flash read) */
+_Static_assert(KB_FAC == MS_FAC && NUM_KITS == MS_LIB, "kit.c morph_src counts as the kit browser");
+#define MK_REST_MS 250u
+static int mk_has(int32_t i)                         /* an entry it stops on: a kit there is, not an Init slot (a new
+                                                      * project's 64: nothing to morph to) but the morph kit's own */
+{
+    return kb_has(i) && (i >= (int32_t)NUM_KITS || (uint32_t)i == morph_src ||
+                         memcmp(kit_names[i], "Init    ", KIT_NAME_LEN));
+}
+static uint32_t mk_step(uint32_t s, int32_t n)       /* n entries on (as far as there are) */
+{
+    while (n) {
+        int32_t d = n > 0 ? 1 : -1, j = (int32_t)s + d;
+        while (j >= 0 && j < (int32_t)KB_N && !mk_has(j))
+            j += d;
+        if (j < 0 || j >= (int32_t)KB_N)
+            break;
+        s = (uint32_t)j;
+        n -= d;
+    }
+    return s;
+}
+static uint32_t mk_pos(void)                         /* the entry the knob is on */
+{
+    return ui.mk_pend ? ui.mk_pend - 1u : morph_src < KB_N ? morph_src : kit_morph_loaded;
+}
+static void mk_name(char *b)                         /* .. its name (9 bytes) */
+{
+    uint32_t i = mk_pos(), n = 8;
+    if (!ui.mk_pend && (morph_src == MS_NONE || morph_src == MS_SNAP)) {
+        put_str(b, morph_src == MS_SNAP ? "Snapshot" : "None", 9);
+        return;
+    }
+    if (i < NUM_KITS)
+        memcpy(b, kit_names[i], 8);
+    else if (i >= KB_FAC)
+        kit_factory_name(i - KB_FAC, b);
+    else if (kl_name(KLK_KIT, i - NUM_KITS, b))
+        memcpy(b, "Empty   ", 8);
+    b[8] = 0;
+    while (n && b[n - 1] == ' ')
+        b[--n] = 0;
+}
+static void mk_load(uint32_t i)                      /* the knob at rest: entry i the morph kit (as LOAD > MORPH) */
+{
+    ui.mo_offer = 0;
+    if (i == morph_src)                              /* (turned away and back: the morph kit as edited stays) */
+        return;
+    if (i < NUM_KITS) {
+        kit_load_morph(i);
+    } else if (i < KB_FAC) {
+        ui.lib_morph = (uint8_t)(i - NUM_KITS);
+        if (libkit_load(i - NUM_KITS, 1))
+            ui_message("EMPTY SLOT");
+    } else {
+        kit_factory_morph(i - KB_FAC);
+    }
 }
 static int32_t kb_part_start(uint32_t q)            /* where a part opens: the slots on the kit loaded; -1 empty */
 {
@@ -1343,9 +1405,11 @@ static void glfo_macros(void)
 /* 1.0: CONFIG > MORPH, Edits SPLIT (the default): with the morph knob at 100% a sound knob edits the morph kit
  * (what is heard; SAVE > MORPH keeps it), below it the kit alone. BOTH KITS: both move (morph_follow); KIT ONLY:
  * the kit. (medit 0 SPLIT, 1 KIT ONLY, 2 BOTH KITS: settings from before hold 0, BOTH KITS's then) */
+static int morph_editing(void) { return kset.medit == 0u && par[PAR_MORPH] >= 255u; }   /* (1.4: the header's M
+                                                      * shows it) */
 static int morph_side(uint32_t p)
 {
-    return kset.medit == 0u && par[PAR_MORPH] >= 255u && p < NPAR && par_sound(p) && !morph_excluded(p);
+    return morph_editing() && p < NPAR && par_sound(p) && !morph_excluded(p);
 }
 /* 1.3: NUDGE (the GENERATOR page, no generator): the track turned n steps later (earlier: negative) as the knob
  * turns, heard and seen at once; OCT+ keeps it, leaving the page (another track, a generator) puts it back */
@@ -1461,6 +1525,7 @@ static uint32_t vp_get(uint32_t p)
     case VP_REPEAT: return pfs.repeat;
     case VP_TAPE: return pfs.tape;
     case VP_WDEC: return pfs.wdecay;
+    case VP_MKIT: return mk_pos();
     case VP_WSPD: return pfs.wspeed;
     case VP_DJRESO: return *dj_q();                  /* (1.3.1: RING's Decay its own) */
     case VP_DJTYPE: return djt_place(pfs.dj_ftype);   /* (1.0: the knob's order) */
@@ -1663,6 +1728,7 @@ static uint32_t vp_max(uint32_t p)
     case VP_DJSPREAD ... VP_DJWET:
     case VP_WDEC: case VP_WSPD:
     case VP_MASTER: case VP_DJ: case VP_TAPE: case VP_DJRESO: case VP_M1: case VP_M1 + 1: case VP_M1 + 2: case VP_M1 + 3: return 127;
+    case VP_MKIT: return KB_N - 1u;
     case VP_REPEAT: case VP_MSEL: return 3;
     case VP_MTARGET: return NUM_MOD_TARGETS - 1u + NLOCK_K;
     case VP_MMIN: case VP_MMAX: return macro_max(ui.msel);
@@ -1953,6 +2019,16 @@ static void vp_set(uint32_t p, uint32_t v)
     case VP_REPEAT: pfs.repeat = (uint8_t)v; return;
     case VP_TAPE: pfs.tape = (uint8_t)v; return;
     case VP_WDEC: pfs.wdecay = (uint8_t)(v & 127u); return;
+    case VP_MKIT:                                    /* (1.4: loaded as the knob rests; a missing library kit, an
+                                                      * Init slot: the next one there is, down, else up) */
+        v = v < KB_N ? v : KB_N - 1u;
+        if (!mk_has((int32_t)v)) {
+            uint32_t d = mk_step(v, -1);            /* (lands on kits there are only) */
+            v = d != v ? d : mk_step(v, 1);
+        }
+        ui.mk_pend = (uint16_t)(v + 1u);
+        ui.mk_ms = fm1_ms;
+        return;
     case VP_WSPD: pfs.wspeed = (uint8_t)(v & 127u); return;
     case VP_DJRESO: *dj_q() = (uint8_t)(v & 127u); return;
     case VP_DJTYPE: pfs.dj_ftype = DJT_AT[v < NDJT ? v : 0u]; return;
@@ -2475,6 +2551,9 @@ static void knob_turn(uint32_t k, int32_t n)
         else if (dt < 40u)
             step = n * 2;
     }
+    if (p == PAR_MORPH && !ui.shift)                 /* 1.4: Morph 4 a detent (0..255: 64 detents, not 256, end to end;
+                                                      * a knob turns a quarter at a time); OCT- held: 1 */
+        step *= 4;
     if (p == VP_STRETCH && !ui.fine) {               /* 1.0: TIME STRETCH a whole 1% a detent (OCT- held: 0.01%) */
         uint32_t c = vp_get(p);
         v = n > 0 ? (int32_t)(c / 100u) + step : (int32_t)((c + 99u) / 100u) + step;
@@ -2539,6 +2618,8 @@ static void knob_turn(uint32_t k, int32_t n)
         lfo1_dest_turn(p - PAR_TARGET_LFO1, step);
         return;
     }
+    if (p == VP_MKIT)                                /* (1.4: the kits there are, a library's gaps passed over) */
+        v = (int32_t)mk_step(vp_get(p), step);
     if (is_target(p))                                /* (25a: past the voice's LXR targets, Elixir's; 0.25.2: by */
         v = (int32_t)target_turn(p, vp_get(p), step);   /* .. group in EDIT's order) */
     if (p >= VP_GL && p <= VP_GL_LAST && (p - VP_GL) % NGLSET == 2u)   /* (1.0: SYNC: OFF, then slow .. fast) */
@@ -2664,13 +2745,6 @@ static void put_pad8(char *d, const char *s)          /* an 8-character name: s,
     for (i = 0; i < 8u; i++)
         d[i] = *s ? *s++ : ' ';
 }
-/* 1.4: no morph kit yet: the morph target is still the init kit */
-static int morph_unset(void)
-{
-    uint8_t k[KIT_LEN];
-    kit_init_values(k);
-    return !memcmp(k, morph_par, KIT_LEN);
-}
 /* 1.4: OCT+ offers this kit as the morph: morph turned to 100% on PERFORM with none */
 static int mo_offering(void)
 {
@@ -2738,7 +2812,7 @@ static void io_ok(void)
                 if (ui.io_type == IO_SOUND)
                     ui.lib_sound = (uint8_t)s;
                 else if (ui.io_type == IO_MORPH)
-                    ui.lib_morph = (uint8_t)s;
+                    ui.lib_morph = (uint8_t)s, morph_src = rc ? morph_src : (uint16_t)(MS_LIB + s);
                 else
                     ui.lib_kit = (uint8_t)s;
                 ui_message(rc == 0 ? (ui.io_type == IO_SOUND ? "SOUND SAVED" : "KIT SAVED TO LIBRARY")
@@ -3536,6 +3610,18 @@ static void button_down(uint32_t b)
                 sq.erase = 1;
                 return;
             }
+            if (ui.mode == M_PERF && ui.page % NPERF == 0u && !ui.clear_open) {   /* 1.4 SWAP: the kit and the
+                                                      * morph kit exchanged, heard the same (kit.c morph_swap) */
+                uint8_t l = ui.lib_kit;
+                ui.mk_pend = 0;
+                ui.mo_offer = 0;
+                morph_swap();
+                ui.lib_kit = ui.lib_morph;
+                ui.lib_morph = l;
+                ui_message("SWAPPED: KIT AND MORPH KIT");
+                ui.force = 1;
+                return;
+            }
             if (ui.mode == M_PATTERN) {               /* 1.0: the pattern page: CLEAR, then the pattern to delete */
                 ui.pdel = 1;
                 ui_message("DELETE: PRESS A PATTERN");
@@ -3636,13 +3722,20 @@ static void button_down(uint32_t b)
                        "FREE: NO TRIGGER (SEE MODE)" : TR[n]);
             return;
         }
-        if (mo_offering()) {                         /* 1.4: this kit as the morph kit (heard as it was), then SAVE >
-                                                      * MORPH to keep it: an Init slot after the kit's, if one */
+        if (ui.mode == M_PERF && ui.page % NPERF == 0u) {   /* 1.4 SNAP: what is heard becomes the morph kit
+                                                      * (kit.c morph_snap). The offer (100%, no morph kit: this kit as
+                                                      * the morph, heard as it was) then opens SAVE > MORPH to keep it:
+                                                      * an Init slot after the kit's, if one */
             uint32_t i, s = kit_loaded;
-            for (i = 0; i < KIT_LEN; i++)
-                morph_par[i] = par[kit_par(i)];
-            snd_post_all();
+            int unset = morph_unset(), offer = unset && par[PAR_MORPH] >= 255u;
+            ui.mk_pend = 0;
             ui.mo_offer = 0;
+            i = (uint32_t)morph_snap(!unset);
+            if (!offer) {
+                ui_message(unset ? "THIS KIT IS THE MORPH KIT" : i ? "SNAPPED: SAVE KEEPS IT"
+                                                                  : "SNAPPED: SAVE > MORPH KEEPS IT");
+                return;
+            }
             for (i = 1; i < NUM_KITS; i++)
                 if (!memcmp(kit_names[(kit_loaded + i) % NUM_KITS], "Init    ", KIT_NAME_LEN)) {
                     s = (kit_loaded + i) % NUM_KITS;
@@ -3966,6 +4059,12 @@ static void ui_input(void)
     }
     if (ui.hot && fm1_ms - ui.hot_ms > 1200u)
         ui.hot = 0;
+    if (ui.mk_pend && fm1_ms - ui.mk_ms >= MK_REST_MS) {   /* 1.4: the Morph kit knob at rest: its kit loads */
+        uint32_t i = ui.mk_pend - 1u;
+        ui.mk_pend = 0;
+        mk_load(i);
+        ui.force = 1;
+    }
     {
         uint32_t t;
         for (t = 0; t < NTRACK; t++)

@@ -12,6 +12,9 @@ _Static_assert(HALF_FRAMES == UAC_HALF, "usb.c's ring is sized for this half");
 
 static int32_t abuf[2u * HALF_WORDS] __attribute__((aligned(4)));
 static volatile uint32_t audio_halves, audio_max_us, audio_late;
+static volatile uint32_t audio_hot;                 /* 1.4: the late halves the engine itself took 90%+ of (its own time,
+                                                     * as PEAK: an interrupt on top or a late start isn't heard) */
+#define HOT_US (HALF_FRAMES * 1000000u / FS * 9u / 10u)
 static volatile uint32_t t5_nested_ticks;          /* TIMER4 ticks TIMER5 spent nested in this ISR (main.c) */
 static volatile uint8_t in_audio;
 static uint32_t cpu_q8, audio_cpu_rem;              /* the audio ISR's load, 1/256 */
@@ -125,9 +128,12 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
             gr_cap = (uint8_t)(cpu_q8 > 240u ? 2u : cpu_q8 > 228u ? 4u : cpu_q8 > 212u ? 6u : GR_N);   /* (1.0 Phase 13:
                                                     * GRAIN's grains fewer as core 0 nears its limit: 83, 89, 94%) */
         }
-        if (fm1_audio_free_half() != half && !out_hush)
+        if (fm1_audio_free_half() != half && !out_hush) {
             audio_late++;                          /* the DMA moved on while we rendered (a save's erases: not
                                                     * counted, they are not the engine's load) */
+            if (us >= HOT_US)
+                audio_hot++;
+        }
     }
     in_audio = 0;
 }

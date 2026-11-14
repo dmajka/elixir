@@ -62,7 +62,8 @@ static void draw_header(void)
     s = sig_add(s, kit_loaded);
     s = sig_add(s, sq.song_pos | sq.song << 8);
     s = sig_add(s, (uint32_t)kit_names[kit_loaded][0] | (uint32_t)kit_names[kit_loaded][3] << 8);
-    s = sig_add(s, morph_amt | (uint32_t)keys_live() << 8 | (uint32_t)(ui.mode == M_KEYS) << 9);
+    s = sig_add(s, morph_amt | (uint32_t)keys_live() << 8 | (uint32_t)(ui.mode == M_KEYS) << 9 |
+                       (uint32_t)morph_editing() << 10);
     if (!region(R_HDR, s))
         return;
     cv_begin(240, HDR_H, T_BG);
@@ -88,8 +89,13 @@ static void draw_header(void)
         }
         put_str(b, t, sizeof b);
         cv_text_fit(64, 5, &AF_S, b, T_TEXT, T_BG, keys_live() ? 54 : 84);
-        if (morph_amt)
+        if (morph_editing()) {                       /* (1.4: the sound knobs edit the morph kit: M inverted) */
+            int32_t x = keys_live() ? 120 : 150;
+            cv_rrect(x - 2, 3, text_w(&AF_S, "M") + 4, 15, 3, T_ACCENT, T_BG);
+            cv_text(x, 5, &AF_S, "M", T_INK);
+        } else if (morph_amt) {
             cv_text(keys_live() ? 120 : 150, 5, &AF_S, "M", T_ACCENT);
+        }
     }
     if (keys_live() && ui.mode != M_KEYS) {          /* 31: KEYS on (SHIFT + EDIT): the keys play notes here */
         cv_rrect(130, 3, 32, 15, 4, T_ACCENT, T_BG);
@@ -134,7 +140,8 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
             put_str(b, "CONTROL ALL: ", n);
             put_str(b + str_len(b), SECT_NAME[ui.sect], n - str_len(b));
         } else {
-            put_str(b, SECT_NAME[ui.sect], n);
+            put_str(b, morph_editing() ? "MORPH: " : "", n);   /* (1.4: the knobs edit the morph kit) */
+            put_str(b + str_len(b), SECT_NAME[ui.sect], n - str_len(b));
         }
         if (z > 1u) {                                /* 29: the section's page of its pages */
             char d[8];
@@ -207,19 +214,22 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
     }
 }
 static int msg_on(void) { return ui.msg[0] && fm1_ms - ui.msg_ms < (ui.msg_long ? 6000u : 1500u); }
-/* 1.0: CPU OVERLOAD. Halves rendered late (audio.c audio_late), two within 2 s, flash the title red until 2 s after the
- * last (a lone late, a peak with an interrupt on top, isn't a click you hear; a load over the limit is a run), with
+/* 1.0: CPU OVERLOAD. Halves rendered late (1.4: those the engine took 90%+ of itself, audio.c audio_hot; not a late
+ * start, an interrupt on top: CONFIG's LATE counts those too), late at OVL_N times within 2 s (1.4: 4, was 2; a few
+ * apart aren't a click you hear; a load over the limit is late every block, so it still shows within a fraction of
+ * a second), flash the title red until 2 s after the last, with
  * what was heaviest: when core 1 (D1-D3) was the one behind, its models ("MODAL + P SD"); else core 0's biggest part,
  * as CONFIG > LOAD names it. (Not in the first 3 s: start-up's own) */
 #define OVL_MS 2000u
+#define OVL_N 4u
 static void cat(char *b, const char *s, uint32_t n);
-static uint32_t ovl_seen, ovl_ms, ovl_last;
+static uint32_t ovl_seen, ovl_ms, ovl_last[OVL_N - 1u];    /* (the times late before this one, newest first) */
 static uint8_t ovl_on;
 static char ovl_why[40];
 static void ovl_poll(void)
 {
     static const char *const PART[NLD] = {"SEQ, MOD", "D1-D3", "SN-HH", "MIXER", "FX BUS", "REVERB", ""};
-    uint32_t late = audio_late, two = cores_why == CW_TWO, w = ld_q8[LD_WAIT], c0, c1, k, best = NLD, top = 0;
+    uint32_t late = audio_hot, two = cores_why == CW_TWO, w = ld_q8[LD_WAIT], c0, c1, k, best = NLD, top = 0;
     if (ovl_on && fm1_ms - ovl_ms >= OVL_MS)
         ovl_on = 0;
     if (late == ovl_seen)
@@ -227,8 +237,10 @@ static void ovl_poll(void)
     ovl_seen = late;
     if (fm1_ms < 3000u)
         return;
-    k = fm1_ms - ovl_last < OVL_MS;                  /* (the one before it, within 2 s) */
-    ovl_last = fm1_ms;
+    k = ovl_last[OVL_N - 2u] && fm1_ms - ovl_last[OVL_N - 2u] < OVL_MS;   /* (OVL_N - 1 before it, within 2 s) */
+    for (c0 = OVL_N - 2u; c0; c0--)                  /* (no memmove on the unit) */
+        ovl_last[c0] = ovl_last[c0 - 1u];
+    ovl_last[0] = fm1_ms;
     if (!k && !ovl_on)
         return;
     ovl_ms = fm1_ms;
@@ -941,6 +953,20 @@ static void draw_perf_page(int32_t y0)
         cv_text(6, 98, &AF_S, pf.st_on == 2u ? "STUTTER" : pf.st_on ? "LIVE" : "", pf.st_on ? T_ACCENT : T_DIM);
         for (k = 0; k < u && k < 16u; k++)
             cv_rect(80 + (int32_t)k * 9, 100, 7, 7, k < pf.st_rep ? T_ACCENT : k == pf.st_rep ? T_THEME : T_SURF);
+    } else if (ui.page % NPERF == 0u) {              /* 1.4 MORPH: the kit, how far to the morph kit, the morph kit */
+        char m[9], kn[9];
+        uint32_t n = 8;
+        int ed = morph_editing();
+        memcpy(kn, kit_names[kit_loaded], 8);
+        kn[8] = 0;
+        while (n && kn[n - 1] == ' ')
+            kn[--n] = 0;
+        mk_name(m);
+        cv_text_fit(6, 98, &AF_S, kn, ed ? T_DIM : T_TEXT, T_BG, 58);
+        cv_rect(68, 102, 104, 4, T_SURF);
+        cv_rect(68, 102, (int32_t)(morph_amt * 104u / 255u), 4, morph_amt ? T_THEME : T_SURF);
+        cv_rect(68 + (int32_t)(par[PAR_MORPH] * 104u / 255u) - 1, 99, 3, 10, ed ? T_ACCENT : T_MID);
+        cv_text_r(234, 98, &AF_S, m, ui.mk_pend ? T_MID : ed ? T_ACCENT : T_TEXT, T_BG);
     } else if (perf_dens()) {                        /* 19d: the tracks DENSITY moves (left out: struck through) */
         for (i = 0; i < NTRACK; i++) {
             int32_t x = 6 + (int32_t)i * 33;
@@ -960,8 +986,12 @@ static void draw_perf_page(int32_t y0)
                 put_str(b + str_len(b), " ", sizeof b - str_len(b));
             put_str(b + str_len(b), PERF_NAME[i], sizeof b - str_len(b));
         }
-    if (ui.shift)
+    if (ui.shift && ui.page % NPERF == 0u)           /* (1.4: SWAP) */
+        cv_text(6, 112, &AF_S, "OCT+: SWAP KITS  KEY: LATCH", T_MID);
+    else if (ui.shift)
         cv_text(6, 112, &AF_S, "SHIFT + KEY: LATCH (AGAIN: OFF)", T_MID);
+    else if (ui.page % NPERF == 0u && ui.hot >= 3u && !b[0])   /* (1.4: Morph or Morph kit turned) */
+        cv_text(6, 112, &AF_S, "OCT+: SNAP  OCT- + OCT+: SWAP", T_MID);
     else if (perf_dens())
         return;
     else if (perf_stut())
@@ -1845,6 +1875,16 @@ static void draw_body(void)
                                (uint32_t)dundo << 18);
         if (perf_stut())                             /* (0.16: STUTTER: a burst, its repeat, held) */
             s = sig_add(s, pf.st_on | pf.st_rep << 2 | (uint32_t)pf.st_hold << 12 | 2u << 16);
+        if (ui.page % NPERF == 0u) {                 /* (1.4: the kit, the morph kit, where morph is between) */
+            char m[9];
+            uint32_t i;
+            mk_name(m);
+            s = sig_add(s, morph_amt | (uint32_t)par[PAR_MORPH] << 8 | (uint32_t)kit_loaded << 16 |
+                               (uint32_t)morph_editing() << 24 | (uint32_t)(ui.hot >= 3u) << 25);
+            s = sig_add(s, mk_pos() | (uint32_t)(ui.mk_pend != 0) << 16 | (uint32_t)(morph_src >= MS_SNAP) << 17);
+            for (i = 0; i < 8u; i++)
+                s = sig_add(s, (uint8_t)m[i] | (uint32_t)(uint8_t)kit_names[kit_loaded][i] << 8);
+        }
     } else if (shift_menu() && !ui.fine && !ui.clear_open) {   /* (1.0: a knob turned: the page, fine adjust) */
         fn = draw_shift_legend;
         s = 1;
@@ -2176,6 +2216,7 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_TAPE: put_str(b, "Tape time", n); return;
     case VP_WDEC: put_str(b, "Decay", n); return;
     case VP_WSPD: put_str(b, "Speed", n); return;   /* (Tape speed: "Tape" is TAPE STOP's time) */
+    case VP_MKIT: put_str(b, "Morph kit", n); return;
     case VP_DJRESO: put_str(b, ui.mode == M_FX && pfs.dj_ftype == DJT_RING ? "Decay" : "Reso", n); return;
     case VP_DJTUNE: put_str(b, "Tune", n); return;
     case VP_DJSPREAD: put_str(b, "Spread", n); return;   /* (1.0 Phase 18: RING (2/2)) */
@@ -2615,6 +2656,12 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
             two_digits(b, v + 1u);
         return;
     case VP_IO_SRC: put_str(b, v == 2u ? "FACTORY" : v ? "LIBRARY" : "SLOTS", n); return;
+    case VP_MKIT: {                                  /* (1.4: the name; the body says where it is from) */
+        char m[9];
+        mk_name(m);
+        put_str(b, m, n);
+        return;
+    }
     case VP_IO_TRACK: put_str(b, VOICE_NAME[v % NTRACK], n); return;
     case VP_NAME_POS: put_int(b, (int32_t)v + 1); return;
     case VP_NAME_CHAR: b[0] = (char)(v >= 32u ? v : ' '); b[1] = 0; return;

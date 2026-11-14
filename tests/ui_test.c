@@ -2369,18 +2369,21 @@ static void phase9_perf(void)
     press(B_ARP);
     turn(EN_SELECT, -(int32_t)NPERF);
     page_params(kp);
-    check(kp[0] == PAR_BPM && kp[1] == PAR_ROLL && kp[2] == PAR_MORPH && kp[3] == PAR_VOICE_DECIMATION_ALL,
-          "PERFORM: tempo, roll, morph, sample rate (the LXR's page)");
+    check(kp[0] == PAR_BPM && kp[1] == PAR_ROLL && kp[2] == PAR_MORPH && kp[3] == VP_MKIT,
+          "PERFORM: tempo, roll, morph, morph kit (1.4: the sample rate on WEAR)");
     shot("perf-page");
-    /* the sample rate: KNOB 4 lowers it; a macro can target it; under REC it records a lock */
+    /* the sample rate (1.4: WEAR's KNOB 1) lowers it; a macro can target it; under REC it records a lock */
+    perf_goto(PG_PERF2);
+    page_params(kp);
+    check(kp[0] == PAR_VOICE_DECIMATION_ALL, "WEAR: KNOB 1 the sample rate");
     kset.accel = 0;
     par_set(PAR_VOICE_DECIMATION_ALL, 127);
     run_ms(20);
     d0 = decim_rate[6];
-    turn(EN_K4, -60);
+    turn(EN_K1, -60);
     run_ms(20);
     d1 = decim_rate[6];
-    check(par[PAR_VOICE_DECIMATION_ALL] == 67 && d1 < d0, "SRATE: KNOB 4 lowers the voices' rate");
+    check(par[PAR_VOICE_DECIMATION_ALL] == 67 && d1 < d0, "SRATE: WEAR's KNOB 1 lowers the voices' rate");
     check(lock_idx_of(PAR_VOICE_DECIMATION_ALL) == 1u && lock_target_par(1) == PAR_VOICE_DECIMATION_ALL,
           "SRATE: a macro and lock target");
     main_set(p, 0, 0, 1);
@@ -2391,7 +2394,7 @@ static void phase9_perf(void)
     press(B_REC);
     play_from_start();
     run_ms(300);
-    turn(EN_K4, -10);
+    turn(EN_K1, -10);
     run_ms(10);
     press(B_PLAY);
     press(B_REC);
@@ -11250,6 +11253,7 @@ static void copy_pass(void)
     }
     {                                                /* (1.0: CPU OVERLOAD: flashing, with why) */
         uint8_t cw = cores_why;
+        uint32_t k;
         uint32_t c0 = cpu_q8;
         uint16_t q[NLD];
         memcpy(q, ld_q8, sizeof q);
@@ -11262,14 +11266,24 @@ static void copy_pass(void)
         ld_q8[LD_D13] = 250;
         ui.mode = M_FX;
         fx_goto(FXPG_DLY);
+        for (k = 0; k < 8u; k++) {                   /* (1.4: late, the engine under 90%: CONFIG's LATE alone) */
+            audio_late++;
+            run_ms(40);
+        }
+        check(!ovl_on, "CPU OVERLOAD: lates with the engine under 90% aren't one (1.4)");
         run_ms(OVL_MS + 100u);                       /* (lone lates, 2 s apart: no warning) */
-        audio_late++;
+        audio_hot++;
         run_ms(OVL_MS + 100u);
         check(!ovl_on, "CPU OVERLOAD: a lone late half isn't one");
-        audio_late++;
+        audio_hot++;
         run_ms(40);
         check(!ovl_on, "CPU OVERLOAD: nor one 2 s after another");
-        audio_late++;                                /* (a second within 2 s: the warning) */
+        audio_hot++;                                /* (1.4: three within 2 s: still none) */
+        run_ms(400);
+        audio_hot++;
+        run_ms(40);
+        check(!ovl_on, "CPU OVERLOAD: three late within 2 s aren't one (1.4)");
+        audio_hot++;                                /* (a fourth: the warning) */
         run_ms(40);
         check(ovl_on && !strcmp(ovl_why, "CPU OVERLOAD: MODAL + P SD"), "CPU OVERLOAD: core 1's models named (1.0)");
         shot("cpu-overload");
@@ -11279,7 +11293,7 @@ static void copy_pass(void)
         memset(ld_q8, 0, sizeof ld_q8);
         ld_q8[LD_FX] = 140;
         ld_q8[LD_D13] = 90;
-        audio_late++;
+        audio_hot++;
         run_ms(40);
         check(!strcmp(ovl_why, "CPU OVERLOAD: FX BUS"), "CPU OVERLOAD: core 0's biggest part named");
         run_ms(OVL_MS + 100u);
@@ -11777,12 +11791,232 @@ static void morph_offer_test(void)
     kit_init_values(morph_par);
     kset.medit = (uint8_t)keep;
 }
+/* 1.4 MORPH: every parameter as heard (par_base), to compare before and after SNAP and SWAP */
+static void heard(uint8_t *h)
+{
+    uint32_t p;
+    for (p = 0; p < NPAR; p++)
+        h[p] = p == PAR_MORPH ? 0u : (uint8_t)par_base(p);   /* (the knob itself moves) */
+}
+/* 1.4 MORPH: PERFORM's Morph kit knob (slots, library, factory; loaded at rest), SNAP, SWAP, the editing mark */
+static void morph_play_test(void)
+{
+    static const uint8_t AT[] = {0, 1, 2, 63, 64, 100, 127, 128, 129, 200, 254, 255};
+    uint8_t h0[NPAR], h1[NPAR], fk[KIT_LEN], mp[KIT_LEN];
+    uint16_t kp[4];
+    uint32_t i, j, ok, l0, a, ks, ms, keep = kset.medit, acc = kset.accel;
+    char b[64];
+    printf("1.4: MORPH: the Morph kit knob, SNAP, SWAP\n");
+    kset.medit = 0;
+    kset.accel = 0;
+    perf_goto(0);
+    page_params(kp);
+    check(kp[3] == VP_MKIT && vp_max(VP_MKIT) == KB_N - 1u, "PERFORM's KNOB 4: the morph kit");
+    kit_set_morph(0);                                /* (1.4: Morph 4 a detent, Accel off too; Tempo 1; OCT- held: 1) */
+    for (i = 0; i < 3u; i++) {
+        web_enc(EN_K3, 1);
+        run_ms(100);
+    }
+    check(par[PAR_MORPH] == 12u, "Morph: 4 a detent");
+    a = par[PAR_BPM];
+    web_enc(EN_K1, 1);
+    run_ms(100);
+    check(par[PAR_BPM] == a + 1u, ".. Tempo still 1 a detent");
+    web_enc(EN_K1, -1);
+    run_ms(100);
+    hold(B_OCTDN);
+    web_enc(EN_K3, 1);
+    run_ms(100);
+    check(par[PAR_MORPH] == 13u, ".. OCT- held: fine, 1 a detent");
+    release(B_OCTDN);
+    run_ms(20);
+    kit_set_morph(0);
+    kit_set_morph(0);
+    kit_load_ram(3);
+    for (i = 0; i < NUM_KITS; i++) {                 /* (slots 5, 6, 63 named, the rest Init) */
+        kit_save_ram(i, 0);
+        memcpy(kit_names[i], "Init    ", 8);
+    }
+    memcpy(kit_names[5], "FIVE    ", 8);
+    memcpy(kit_names[6], "SIX     ", 8);
+    memcpy(kit_names[63], "LAST    ", 8);
+    kit_load_morph(5);
+    kit_load_ram(3);
+    check(morph_src == 5 && vp_get(VP_MKIT) == 5u, "the knob shows the morph kit's slot");
+    card_value(b, sizeof b, VP_MKIT, vp_get(VP_MKIT));
+    check(!strcmp(b, "FIVE"), "its card: the kit's name");
+    l0 = kit_loads;
+    turn(EN_K4, 1);
+    card_value(b, sizeof b, VP_MKIT, vp_get(VP_MKIT));
+    check(ui.mk_pend == 7u && kit_loads == l0 && !strcmp(b, "SIX"), "turned: SIX shown, nothing loaded yet");
+    turn(EN_K4, 1);
+    turn(EN_K4, -1);
+    check(kit_loads == l0, ".. turning on: still nothing loaded (each detent under 250 ms)");
+    run_ms(300);
+    check(kit_loads == l0 + 1u && morph_src == 6 && kit_morph_loaded == 6 && !ui.mk_pend, "at rest: slot 6 loaded once");
+    check(mk_step(6, 1) == 63u && mk_step(63, -1) == 6u && mk_step(5, -1) == 5u,
+          "Init slots passed over (a new project's: nothing to morph to)");
+    memcpy(kit_names[7], "Init    ", 8);
+    kit_load_morph(7);                               /* (an Init slot the morph kit: the knob stays on it) */
+    check(mk_step(6, 1) == 7u && mk_step(7, 1) == 63u, ".. but the morph kit's own");
+    kit_load_morph(6);
+    run_ms(20);
+    l0 = kit_loads;
+    shot("morph-kit-knob");
+    /* past the slots: the library's kits there are, then the factory's */
+    libkit_save(4, "LIBFOUR ", 0);
+    libkit_save(9, "LIBNINE ", 0);
+    vp_set(VP_MKIT, 63);
+    run_ms(300);
+    a = mk_step(63, 1);
+    check(a >= NUM_KITS && a < KB_FAC && kl_exists(KLK_KIT, a - NUM_KITS), "after slot 64: the library's first kit");
+    a = mk_step(NUM_KITS + 4u, 1);
+    for (i = NUM_KITS + 5u, ok = 1; i < a; i++)
+        ok &= !kl_exists(KLK_KIT, i - NUM_KITS);
+    check(ok && kl_exists(KLK_KIT, a - NUM_KITS), "the library's gaps passed over");
+    vp_set(VP_MKIT, NUM_KITS + 4u);
+    run_ms(300);
+    card_value(b, sizeof b, VP_MKIT, vp_get(VP_MKIT));
+    libkit_get(4, fk);
+    check(!memcmp(fk, morph_par, KIT_LEN) && morph_src == MS_LIB + 4u && ui.lib_morph == 4u && !strcmp(b, "LIBFOUR"),
+          "a library kit the morph kit, named");
+    vp_set(VP_MKIT, KB_FAC + 2u);
+    run_ms(300);
+    kit_factory_values(2, fk);
+    check(!memcmp(fk, morph_par, KIT_LEN) && morph_src == MS_FAC + 2u, "a factory kit the morph kit");
+    kit_set_morph(100);                              /* (a load paced: the morph sweep, not every parameter at once) */
+    run_ms(50);
+    kit_factory_morph(5);
+    check(!snd_all && snd_mkit, "a morph kit loads through the morph sweep, not all at once");
+    run_ms(50);
+    for (i = 1, ok = 1; i < KIT_LEN; i++) {
+        uint32_t p = kit_par(i), v = par_base(p);
+        if (par_sound(p) && !morph_excluded(p) && v < 255u && !(auto_lk[p >> 5] & 1u << (p & 31u)))
+            ok &= snd_mv[i] == v;
+    }
+    check(ok && !snd_mi, ".. and after it everything that morphs sounds the new mixture");
+    kit_set_morph(0);
+    run_ms(50);
+    check(mk_step(KB_N - 1u, 1) == KB_N - 1u && mk_step(0, -1) == 0u, "the list's ends");
+    /* SNAP and SWAP don't change what is heard: two factory kits, LFO 2's switches and an insert's type apart */
+    kit_factory_load(7);
+    kit_factory_morph(11);
+    par[PAR_L2TGT1 + 1] = (uint8_t)(NUM_MOD_TARGETS + 2u);
+    morph_par[kit_idx(PAR_L2TGT1 + 1)] = (uint8_t)(NUM_MOD_TARGETS + 1u);
+    par[PAR_L2AMT1 + 1] = 90;
+    morph_par[kit_idx(PAR_L2AMT1 + 1)] = 40;
+    par[PAR_INS1 + 2] = INS_RING;
+    morph_par[kit_idx(PAR_INS1 + 2)] = INS_SHIFT;
+    par[PAR_INSA1 + 2] = 120;
+    morph_par[kit_idx(PAR_INSA1 + 2)] = 70;
+    memcpy(fk, morph_par, KIT_LEN);
+    for (i = 0; i < KIT_LEN; i++)
+        mp[i] = par[kit_par(i)];
+    for (j = 0, ok = 1; j < sizeof AT; j++) {        /* (SWAP twice: back where it was) */
+        kit_set_morph(AT[j]);
+        heard(h0);
+        ks = kit_loaded;
+        ms = kit_morph_loaded;
+        morph_swap();
+        heard(h1);
+        ok &= !memcmp(h0, h1, NPAR) && par[PAR_MORPH] == 255u - AT[j] && kit_loaded == ms && kit_morph_loaded == ks;
+        morph_swap();
+        heard(h1);
+        ok &= !memcmp(h0, h1, NPAR);
+        if (!ok) {
+            for (i = 0; i < NPAR; i++)
+                if (h0[i] != h1[i])
+                    printf("  SWAP at %u: par %u %u -> %u (morph %u)\n", AT[j], i, h0[i], h1[i], par[PAR_MORPH]);
+            printf("  SWAP at %u: differs (morph_amt %u)\n", AT[j], morph_amt);
+            break;
+        }
+    }
+    check(ok, "SWAP: every parameter heard the same, morph at 100% - it, the slots exchanged (12 places)");
+    for (i = 0, ok = 1; i < KIT_LEN; i++)
+        ok &= morph_par[i] == fk[i] && par[kit_par(i)] == mp[i];
+    check(ok, "SWAP twice: the kits as they were");
+    for (j = 1, ok = 1; j < sizeof AT; j++) {
+        memcpy(morph_par, fk, KIT_LEN);
+        kit_set_morph(AT[j]);
+        heard(h0);
+        ok &= morph_snap(1) == 1;
+        heard(h1);
+        ok &= !memcmp(h0, h1, NPAR) && par[PAR_MORPH] == 255u && morph_src == MS_SNAP;
+        if (!ok) {
+            for (i = 0; i < NPAR; i++)
+                if (h0[i] != h1[i])
+                    printf("  SNAP at %u: par %u %u -> %u\n", AT[j], i, h0[i], h1[i]);
+            printf("  SNAP at %u: differs (morph_amt %u)\n", AT[j], morph_amt);
+            break;
+        }
+    }
+    check(ok, "SNAP: every parameter heard the same, morph to 100% (11 places)");
+    memcpy(morph_par, fk, KIT_LEN);
+    kit_set_morph(0);
+    heard(h0);
+    ok = morph_snap(1) == 0;
+    heard(h1);
+    for (i = 0; i < KIT_LEN; i++)
+        ok &= morph_par[i] == par[kit_par(i)];
+    check(ok && !memcmp(h0, h1, NPAR) && par[PAR_MORPH] == 0u, "SNAP at 0%: the kit itself, morph stays 0");
+    /* by the keys: OCT+ on PERFORM snaps; OCT- held + OCT+ swaps; SAVE then goes to the swapped slot */
+    kit_factory_load(20);
+    kit_save_ram(6, 0);
+    kit_factory_load(21);
+    kit_save_ram(3, 0);
+    kit_load_morph(6);
+    kit_set_morph(128);
+    run_ms(20);
+    perf_goto(0);
+    heard(h0);
+    press(B_OCTUP);
+    heard(h1);
+    check(!memcmp(h0, h1, NPAR) && par[PAR_MORPH] == 255u && morph_src == MS_SNAP && !strcmp(ui.msg, "SNAPPED: SAVE KEEPS IT"),
+          "OCT+ on PERFORM: SNAP, heard the same, morph at 100%");
+    card_value(b, sizeof b, VP_MKIT, vp_get(VP_MKIT));
+    check(!strcmp(b, "Snapshot"), ".. the Morph kit knob: Snapshot");
+    check(morph_editing(), ".. at 100% with SPLIT: the knobs edit the morph kit");
+    shot("morph-snap");
+    ui.track = 0;
+    press(B_SCL);
+    title_text(b, sizeof b, &i, &j);
+    check(!strncmp(b, "MORPH: ", 7), "a sound page's title: MORPH: (the edits go to the morph kit)");
+    shot("morph-editing");
+    kit_load_morph(6);
+    kit_set_morph(64);
+    perf_goto(0);
+    run_ms(20);
+    heard(h0);
+    hold(B_OCTDN);
+    press(B_OCTUP);
+    release(B_OCTDN);
+    heard(h1);
+    check(!memcmp(h0, h1, NPAR) && par[PAR_MORPH] == 191u && kit_loaded == 6 && kit_morph_loaded == 3 && morph_src == 3 &&
+          !ui.clear_open && !strcmp(ui.msg, "SWAPPED: KIT AND MORPH KIT"), "OCT- + OCT+ on PERFORM: SWAP, heard the same");
+    shot("morph-swap");
+    press(B_SAVE);
+    check(ui.mode == M_SAVE && ui.io_type == IO_KIT && ui.io_slot == 6u, "SAVE after SWAP: the kit's slot is the old morph's");
+    goto_mode(B_HOME, M_HOME);
+    perf_goto(PG_PERF2);
+    hold(B_OCTDN);
+    press(B_OCTUP);
+    check(ui.clear_open, "OCT- + OCT+ on PERFORM's other pages: CLEAR, as before");
+    release(B_OCTDN);
+    goto_mode(B_HOME, M_HOME);
+    kit_set_morph(0);
+    kit_init_values(morph_par);
+    morph_src = MS_NONE;
+    kit_load_ram(0);
+    kset.medit = (uint8_t)keep;
+    kset.accel = (uint8_t)acc;
+}
 static void phase19_locks(void)
 {
     pattern_t *p;
     uint32_t i, t, k, ok;
     printf("phase 19 (1.4): the lock pool\n");
     morph_offer_test();
+    morph_play_test();
     p4_reset();
     lkr_model_test();
     phase19_fixes();
@@ -12208,12 +12442,13 @@ static void phase_140_wear(void)
         gc_seed(0);
         for (i = 0; i < 64u; i++) {
             run_ms(2);
-            s1[i] = gl.out[0];
+            s1[i] = gl.cz[0][0];                     /* (its state, not gl.out: 2 ms may hold no block, and the
+                                                      * output then is the one from before the seed) */
         }
         gc_seed(0);
         for (ok = 1, i = 0; i < 64u; i++) {
             run_ms(2);
-            ok &= s1[i] == gl.out[0];
+            ok &= s1[i] == gl.cz[0][0];
         }
         check(ok, "CHAOS: from its seed again, the same phrase");
     }

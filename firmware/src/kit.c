@@ -20,6 +20,14 @@ static uint16_t kit_pk_bits;
 static char kit_names[NUM_KITS][KIT_NAME_LEN];
 static uint8_t kit_loaded;                           /* the slot the edit buffer came from (menu_loadedPresetNr) */
 static uint8_t kit_morph_loaded;                     /* the slot loaded as the morph target */
+/* 1.4 (MORPH): where the morph kit came from, for PERFORM's Morph kit knob (ui.c VP_MKIT, as the kit browser counts:
+ * a slot, MS_LIB + a library kit, MS_FAC + a factory kit), or MS_SNAP (SNAP), MS_NONE (the init kit). Not saved:
+ * a project loads with its slot's (project.c) */
+#define MS_LIB NUM_KITS
+#define MS_FAC (NUM_KITS + 128u)                     /* (+ KL_KITS: ui.c asserts it) */
+#define MS_SNAP 0xFFFEu
+#define MS_NONE 0xFFFFu
+static uint16_t morph_src = MS_NONE;
 static uint8_t kit_loads;                            /* 0.11: one more at each kit into the edit buffer or the morph
                                                       * target (Control All) */
 
@@ -205,7 +213,7 @@ static void kit_save_ram(uint32_t n, int morph)
     }
     kit_put(n, k);
     if (morph)                                       /* (1.4: a morph saved: the morph's slot, the kit's stays) */
-        kit_morph_loaded = (uint8_t)n;
+        kit_morph_loaded = (uint8_t)n, morph_src = (uint16_t)n;
     else
         kit_loaded = (uint8_t)n;
 }
@@ -215,8 +223,16 @@ static void kit_load_morph(uint32_t n)               /* LOAD MORPH: a slot as th
         return;
     kit_get(n, morph_par);
     kit_morph_loaded = (uint8_t)n;
+    morph_src = (uint16_t)n;
     kit_loads++;
-    snd_post_all();
+    snd_post_mkit();                                 /* (1.4: paced: the kit is as it was) */
+}
+/* 1.4: no morph kit yet: the morph target is still the init kit */
+static int morph_unset(void)
+{
+    uint8_t k[KIT_LEN];
+    kit_init_values(k);
+    return !memcmp(k, morph_par, KIT_LEN);
 }
 /* 0.13: morph as it sounds (morph_amt): the knob (par[PAR_MORPH]) and the global LFOs' push (morph_mod, -255 .. 255:
  * perform.c glfo_morph) */
@@ -233,6 +249,48 @@ static void kit_set_morph(uint32_t amt)              /* PAR_MORPH 0..255 */
 {
     par[PAR_MORPH] = (uint8_t)amt;
     morph_update();
+}
+/* 1.4 SNAP: what is heard becomes the morph kit, and the sound doesn't change: with the knob at 0 the kit itself (the
+ * knob stays), above it the mixture and the knob to 100%; no morph kit yet (set 0: the caller's morph_unset, not
+ * called here: two kits on the stack): the kit, the knob as it is. 1: the knob went to 100% */
+static int morph_snap(int set)
+{
+    uint8_t k[KIT_LEN];
+    uint32_t i;
+    int mix = set && par[PAR_MORPH] && morph_amt;
+    for (i = 0; i < KIT_LEN; i++) {                  /* (into k first: morph_mix reads morph_par's switches) */
+        uint32_t p = kit_par(i);
+        k[i] = mix && par_sound(p) && !morph_excluded(p) ? (uint8_t)morph_mix(p, par[p], morph_par[i], morph_amt)
+                                                         : par[p];
+    }
+    memcpy(morph_par, k, KIT_LEN);
+    morph_src = MS_SNAP;
+    kit_loads++;
+    if (mix)
+        kit_set_morph(255);
+    snd_post_mkit();                                 /* (what sounds is as it was) */
+    return mix;
+}
+/* 1.4 SWAP: the kit and the morph kit exchanged, the knob to 100% - it, so the sound doesn't change (morph_lerp's
+ * symmetry; an LFO's push on morph aside); what doesn't morph stays the kit's. The slots swap too (SAVE: there) */
+static void morph_swap(void)
+{
+    uint32_t i, t;
+    for (i = 0; i < KIT_LEN; i++) {
+        uint32_t p = kit_par(i);
+        if (par_sound(p) && !morph_excluded(p)) {
+            uint8_t a = par[p];
+            par[p] = morph_par[i];
+            morph_par[i] = a;
+        }
+    }
+    t = kit_loaded;
+    kit_loaded = kit_morph_loaded;
+    kit_morph_loaded = (uint8_t)t;
+    morph_src = (uint16_t)t;
+    kit_loads++;
+    kit_set_morph(255u - par[PAR_MORPH]);
+    snd_post_all();
 }
 
 /* a voice's Out = FX BUS (the LXR's, a kit from before the sends) becomes its output STEREO and FX SEND 127: the
@@ -374,6 +432,7 @@ static void kit_factory_morph(uint32_t f)            /* one as the morph target 
     if (f >= FACTORY_NKITS)
         return;
     kit_factory_values(f, morph_par);
+    morph_src = (uint16_t)(MS_FAC + f);
     kit_loads++;
-    snd_post_all();
+    snd_post_mkit();
 }

@@ -939,6 +939,7 @@ static void proj_after_load(void)                   /* the session as the projec
     for (t = 0; t < NTRACK; t++)
         sq.idx[t] = -1;
     morph_par[0] = 0;
+    morph_src = morph_unset() ? MS_NONE : kit_morph_loaded;   /* (1.4: the Morph kit knob shows its slot's) */
     kit_loads++;
     snd_post_all();
 }

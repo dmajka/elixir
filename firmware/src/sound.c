@@ -274,10 +274,11 @@ static uint32_t model_pick(uint32_t vi, uint32_t md)
 }
 
 /* LXR presetManager.c interpolate: a + (b - a) x / 256, rounded */
+/* 1.4 (MORPH): x / 255, rounded: 255 is the morph kit exactly (it was x / 256: 0 to 255 at 100% gave 254), and
+ * lerp(a, b, x) == lerp(b, a, 255 - x), so SWAP (ui.c) exchanges the kits with nothing heard */
 static uint32_t morph_lerp(uint32_t a, uint32_t b, uint32_t x)
 {
-    uint32_t f = (uint32_t)((int32_t)(a * 256u) + ((int32_t)b - (int32_t)a) * (int32_t)x) & 0xFFFFu;
-    return (f & 0xFFu) < 0x7Fu ? f >> 8 : (f >> 8) + 1u;
+    return (a * (255u - x) + b * x + 127u) / 255u;
 }
 /* .. 28: the filter type moves through its values as the LXR's, but one of Elixir's types at either end switches at
  * 50% (no sweep through the types between) */
@@ -305,7 +306,8 @@ static uint32_t morph_mix(uint32_t p, uint32_t a, uint32_t b, uint32_t x)
         return x < 128u ? a : b;                     /* .. halfway) */
     if ((p >= PAR_L2AMT1 && p < PAR_L2AMT1 + 6u && morph_l2_differs(p - PAR_L2AMT1)) ||
         (p >= PAR_INSA1 && p < PAR_INSA1 + 6u && par[PAR_INS1 + p - PAR_INSA1] != morph_par[kit_idx(PAR_INS1 + p - PAR_INSA1)]))
-        return x < 128u ? (a * (128u - x) + 64u) / 128u : (b * (x - 128u) + 63u) / 127u;
+        return x < 128u ? (a * (255u - 2u * x) + 127u) / 255u : (b * (2u * x - 255u) + 127u) / 255u;   /* (1.4:
+                                                      * symmetric about 50%, as morph_lerp) */
     return morph_lerp(a, b, x);
 }
 static int morph_excluded(uint32_t p)            /* the outputs and the modulation targets stay the kit's (1.0: and
@@ -1014,18 +1016,26 @@ static void snd_post_all(void) { snd_all = 1; }
 static volatile uint8_t snd_morph;                  /* (the main loop's: moved since the sweep began) */
 static uint16_t snd_mi;                             /* the sweep's next kit index, 0 = none running */
 static void snd_post_morph(void) { snd_morph = 1; }
+/* 1.4 MORPH: a new morph kit (the kit as it was): the same sweep, through every parameter that morphs (one the old
+ * mixture moved and the new kit doesn't); not snd_post_all: every parameter in one block, a busy kit's block late.
+ * At 0% nothing changes, so nothing is applied */
+static volatile uint8_t snd_mkit;                   /* (the main loop's: a morph kit loaded) */
+static uint8_t snd_mfull;                           /* (the sweep running is one) */
+static void snd_post_mkit(void) { snd_mkit = 1; }
 static void snd_morph_sweep(void)
 {
     uint32_t n;
     if (!snd_mi) {
-        if (!snd_morph)
+        if (!snd_morph && !snd_mkit)
             return;
+        snd_mfull = snd_mkit;
+        snd_mkit = 0;
         snd_morph = 0;
         snd_mi = 1;
     }
     for (n = 0; n < SND_MSTEP && snd_mi < KIT_LEN; n++, snd_mi++) {
         uint32_t p = kit_par(snd_mi);
-        if (par[p] != morph_par[snd_mi] && !morph_excluded(p) && par_base(p) != snd_mv[snd_mi])
+        if ((snd_mfull || par[p] != morph_par[snd_mi]) && !morph_excluded(p) && par_base(p) != snd_mv[snd_mi])
             snd_refresh(p);
     }
     if (snd_mi >= KIT_LEN)
@@ -1040,6 +1050,7 @@ static void snd_service(void)                       /* the audio ISR, at a block
         snd_all = 0;
         sndq_r = sndq_w;
         snd_morph = 0;
+        snd_mkit = 0;
         snd_mi = 0;
         for (p = 1; p < KIT_LEN; p++)
             snd_refresh(kit_par(p));

@@ -516,8 +516,13 @@ static int libkit_load(uint32_t n, int morph)
         else
             par[kit_par(i)] = k[i];
     }
+    if (morph)
+        morph_src = (uint16_t)(MS_LIB + n);
     kit_loads++;
-    snd_post_all();
+    if (morph)
+        snd_post_mkit();                             /* (1.4: paced, sound.c) */
+    else
+        snd_post_all();
     return 0;
 }
 /* the edit buffer's voice v into library sound n */

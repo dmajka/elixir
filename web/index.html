@@ -531,85 +531,114 @@
     <div class="updates">
       <!-- 1.4: not released yet. At release, put the tag's date in place of "Coming soon". -->
       <div class="card"><h3>1.4<span>Coming soon</span></h3>
-        <p>Far more room for locks, deleting from the save and load pages, program changes out to your other gear, a
-          drippy dub SPRING, WEAR (decay and tape speed for the whole kit), new global LFO moves, and a lighter
-          engine: most effects and the heaviest drum models now take less of the
-          processor, so more fits at once. Projects from 1.3 load as before.</p>
+        <p>Pick morph kits with a knob, many more locks per step, a new dub SPRING reverb, WEAR controls for the
+          whole kit, new global LFO moves, program changes out to your other gear, and a lighter engine that leaves
+          room for more effects and heavy drum models at once. Alongside it, the new
+          <a href="controllers/">Controllers</a> page sets up Novation controllers and the Hapax and OXI One
+          sequencers for Elixir. Projects from 1.3 load as before.</p>
+        <h4>Morph</h4>
+        <ul>
+          <li><b>Pick the morph kit with a knob.</b> On PERFORM, KNOB 4 (<b>Morph kit</b>) scrolls through your kit
+            slots, your library and the factory kits by name. The kit loads when you stop turning. Slots still named
+            Init are skipped.</li>
+          <li><b>SNAP</b> (OCT+ on PERFORM): what you're hearing becomes the morph kit, without changing the sound.
+            Keep tweaking the kit, then turn Morph to get back to the snapshot.</li>
+          <li><b>SWAP</b> (hold OCT&minus;, press OCT+ on PERFORM): the kit and the morph kit trade places, and Morph
+            flips to match (30% becomes 70%), so the sound doesn't change. Handy for editing the other kit.</li>
+          <li>When your edits are going to the morph kit (Morph at 100%), the M at the top of the screen is filled in
+            and sound page titles start with <b>MORPH:</b>.</li>
+          <li><b>Morph turns four times faster</b>: 0 to 100% takes about a quarter of the turning it did. Hold
+            OCT&minus; while turning for the finest steps.</li>
+          <li><b>SRate</b> moved from PERFORM's KNOB 4 to the new WEAR page.</li>
+        </ul>
         <h4>Locks</h4>
         <ul>
-          <li><b>Up to eight locks on a step</b>, one per parameter (it was two). All 32 patterns share one pool of
-            8,192 locks, so a busy pattern can use far more than its share while the others use none.</li>
-          <li>A new <b>LOCKS</b> page (step edit's third page) lists a step's locks with their values. Add one, change
-            its parameter or value, or turn Param to OFF to delete it. The bottom line says what each knob does.</li>
-          <li><b>CLEAR TRACK LOCKS</b> and <b>CLEAR STEP LOCKS</b> clear a track's or a step's locks and leave the steps
-            alone.</li>
-          <li>If the pool is ever full, a copy that needs more locks is refused with <b>NO LOCKS LEFT</b> and
-            nothing changes, so no locks are lost along the way.</li>
+          <li><b>Up to eight locks per step</b> (it was two). Locks come from one shared supply of 8,192 for all 32
+            patterns, so a busy pattern can use far more than its share.</li>
+          <li>A new <b>LOCKS</b> page, the third page of step edit, lists a step's locks and their values. Add a
+            lock, change it, or delete it by turning Param to OFF.</li>
+          <li><b>CLEAR TRACK LOCKS</b> and <b>CLEAR STEP LOCKS</b> remove locks and leave the steps in place.</li>
+          <li>If every lock is used, a copy that needs more shows <b>NO LOCKS LEFT</b> and changes nothing, so you
+            never lose locks halfway through.</li>
         </ul>
-        <h4>Sound</h4>
+        <h4>Effects</h4>
         <ul>
-          <li><b>SPRING</b> is now a drippy dub spring: every echo is a chirp that sweeps up, more with each trip
-            along the spring, through a tank driven hard, in stereo. Size makes the drip deeper. Kits that use SPRING
-            sound different from 1.3, and louder.</li>
-          <li><b>Make a morph from this kit</b>: with no morph target loaded, turn Morph to 100% and press OCT+. Elixir
-            copies the kit as the target, so you can change it and morph between the two.</li>
+          <li><b>SPRING</b> is now a drippy dub spring reverb: each echo chirps upward, more with every bounce, and
+            Size makes the drip deeper. Kits that use SPRING sound different from 1.3, and louder.</li>
         </ul>
-        <h4>WEAR and the global LFOs</h4>
+        <h4>WEAR and global LFOs</h4>
         <ul>
-          <li><b>WEAR</b>, PERFORM 2's first page: SRate, Dirt, and two new knobs for the whole kit. <b>Decay</b>
-            makes every hit shorter, down to a click, or up to four times longer. <b>Speed</b> is tape speed: the
-            whole kit's pitch up to an octave either way, the delay and reverb left alone.</li>
-          <li>New global LFO destinations: <b>TEMPO</b> (the clock up to 25% either way, MIDI clock out included),
+          <li><b>WEAR</b>, a new PERFORM page (after TRANSPOSE), shapes the whole kit at once: SRate, Dirt, and two
+            new knobs. <b>Decay</b> shortens every hit down to a click, or stretches it up to four times longer.
+            <b>Speed</b> works like tape speed, shifting the kit's pitch up to an octave either way while the delay
+            and reverb stay put.</li>
+          <li>New global LFO destinations: <b>TEMPO</b> (up to 25% faster or slower, MIDI clock out follows),
             <b>SHUFFLE</b>, <b>SRATE</b>, <b>DECAY</b> and <b>TAPE SPEED</b>.</li>
-          <li><b>LFO on LFO</b>: a global LFO can move another one's depth or speed.</li>
-          <li><b>CHAOS</b>, a new global LFO wave: a strange attractor that swings and never quite repeats. Calm
-            tames it, and a trigger replays the same phrase.</li>
+          <li><b>LFOs can modulate LFOs</b>: one global LFO can change another's depth or rate.</li>
+          <li><b>CHAOS</b>, a new LFO wave that swings around and never quite repeats. Calm tames it, and a trigger
+            replays the same phrase.</li>
         </ul>
-        <h4>Recording and sequencing</h4>
+        <h4>Recording and editing</h4>
         <ul>
-          <li>REC's <b>Quantize</b> goes from 0 to 100%, not just on or off, so you can tighten your timing without
-            losing all of the feel.</li>
-          <li>A cleaner <b>pattern page</b>: the copy, paste and delete hints are smaller and line up, so the
-            patterns stand out.</li>
-          <li>The sound buttons are easier to follow. EDIT remembers the page you were on, wherever SELECT took you.
-            Pressing a sound button a second time does nothing; SELECT turns the pages.</li>
+          <li><b>Quantize</b> (hold OCT&minus;, press REC) now goes from 0 to 100% instead of on or off, so you can
+            tighten your timing and keep some of the feel.</li>
+          <li>The <b>pattern page</b> is cleaner: smaller copy, paste and delete hints, so the patterns stand
+            out.</li>
+          <li>The sound buttons are simpler. EDIT returns to the page you were last on, pressing a sound button
+            again does nothing, and SELECT turns the pages.</li>
+          <li><b>Delete kits, sounds, projects, patterns and songs</b> from the save and load pages: select one,
+            press CLEAR (hold OCT&minus;, press OCT+), then OCT+ to confirm. A deleted project is gone for good;
+            a deleted kit slot goes back to Init.</li>
         </ul>
-        <h4>Saving and deleting</h4>
+        <h4>Controllers and sequencers (new on the site)</h4>
+        <p>The <a href="controllers/">Controllers</a> page (beta) gets your gear playing Elixir without mapping
+          CCs by hand, and it's live now: you don't need to wait for 1.4. Sending a template to a controller needs
+          Chrome or Edge.</p>
         <ul>
-          <li><b>Delete a kit, sound, project, pattern or song</b> from the save or load page: select it, press CLEAR
-            (hold OCT&minus;, press OCT+), then OCT+ again to confirm. A deleted project is gone from flash. A kit slot
-            goes back to Init.</li>
+          <li><b>Launch Control XL 3 and mk2</b>: ready-made templates (Mixer, Perform, Effects, Sound, Sequencer),
+            sent straight to the controller from the page. Change any knob or button and save your own.</li>
+          <li><b>Launchpad Pro MK3</b>: templates for mutes and solos, patterns 1&ndash;32, performance effects,
+            and <b>Drum Record</b>: seven velocity-sensitive pads to play and record the tracks, with Record and
+            Play beside them.</li>
+          <li><b>Hapax and OXI One</b>: instrument definitions to download, so Elixir's tracks, parameters and
+            patterns show up by name on the sequencer. Not yet tested on the hardware.</li>
+          <li>The page always matches the firmware's MIDI map, so a CC that moves in an update moves in the
+            templates too.</li>
         </ul>
-        <h4>MIDI and controllers</h4>
+        <h4>MIDI</h4>
         <ul>
-          <li><b>Program change out</b> (CONFIG &rarr; PROGRAM CHANGE OUT): choose which program each pattern sends
-            (its own number, any number or none), the channel, and when. <b>AHEAD</b> sends it as soon as the next
-            pattern is queued, so a Digitakt or Digitone changes pattern on the same downbeat as Elixir.</li>
-          <li><b>Rush per track</b> from a controller: the remote's TRACKS channel has a Rush knob for each track
-            (CC 88&ndash;94) where LFO amount was. Update a controller template that used those CCs.</li>
-          <li>The remote's GLOBAL <b>CC 17 and 18</b> turn WEAR's <b>Decay</b> and <b>Speed</b>. They were the FX
-            bus's P1 and P2, which meant something different for each FX type; P1&ndash;P4 are off the remote now
-            (CC 19 and 20 are free), so turn them on the panel. FX wet stays on CC 16.</li>
+          <li><b>Program change out</b> (CONFIG &rarr; PROGRAM CHANGE OUT): Elixir can tell your other gear to
+            change patterns along with it. Choose the program each pattern sends, the channel and the timing.
+            <b>AHEAD</b> sends it early, so a Digitakt or Digitone switches on the same downbeat as Elixir.</li>
+          <li><b>Rush for each track</b> from a controller on CC 88&ndash;94 (TRACKS channel). These CCs used to be
+            LFO amount, so update any controller template that used them.</li>
+          <li><b>CC 17 and 18</b> (GLOBAL channel) now control WEAR's Decay and Speed. The FX bus's P1&ndash;P4
+            controls are no longer on the remote (CC 19 and 20 are now free); adjust them on the unit. FX wet
+            stays on CC 16.</li>
         </ul>
-        <h4>More room to play</h4>
-        <p>These take less of the processor and sound exactly the same, so heavier kits and effect chains fit
-          without CPU OVERLOAD. The figures are CONFIG &rarr; LOAD's readings on an FM-1, 1.3 &rarr; 1.4.</p>
+        <h4>Performance</h4>
+        <p>These use less of the processor and sound exactly the same, so you can run heavier kits and more effects
+          before you hit CPU OVERLOAD. Figures are CPU use on the FM-1 (CONFIG &rarr; LOAD), 1.3 &rarr; 1.4.</p>
         <ul>
           <li><b>Reverbs</b>: ROOM 6% &rarr; 3&ndash;4%, HALL 6% &rarr; 5%, PLATE 9% &rarr; 5%.</li>
           <li><b>Delays</b>: MONO 6% &rarr; 4%, PING PONG 7% &rarr; 4%, TAPE 6% &rarr; 4%, TAPE PP 7% &rarr; 5%
             (9% &rarr; 8% with Pitch on).</li>
-          <li><b>Master filter and FX bus</b>: RING 12&ndash;13% &rarr; 8%; ENSEMBLE about a third lighter; PHASER
-            and every voice's filter lighter too. ENSEMBLE + PHASER + RING together: 55% &rarr; 48%.</li>
-          <li><b>Drum models</b> (on D1&ndash;D3): P ADDTV 23% &rarr; 16% (15% &rarr; 11% with Aux at 0),
-            P SD 24% &rarr; 18%, P BD 20% &rarr; 18% (much lighter still with Aux at 0 or 127), MODAL 20% &rarr; 18%,
-            P SWARM 15% &rarr; 13%. Two heavy models fit together more often.</li>
+          <li><b>Master filter and FX bus</b>: RING 12&ndash;13% &rarr; 8%, ENSEMBLE about a third lighter, PHASER
+            and the voice filters lighter too. ENSEMBLE, PHASER and RING together: 55% &rarr; 48%.</li>
+          <li><b>Drum models</b> on D1&ndash;D3: P ADDTV 23% &rarr; 16%, P SD 24% &rarr; 18%, P BD 20% &rarr; 18%,
+            MODAL 20% &rarr; 18%, P SWARM 15% &rarr; 13%. Two heavy models fit together more often. (Setting Aux all
+            the way down helps P ADDTV and P BD further, and all the way up helps P BD too.)</li>
+          <li>Choosing a morph kit doesn't cause a CPU spike.</li>
         </ul>
         <h4>Fixes</h4>
         <ul>
-          <li>Saving a morph no longer moves the kit you were on to the morph's slot.</li>
-          <li><b>CLEAR TRACK</b> clears the track's steps and keeps its length, clock and direction. Before, it also
-            set the track back to 16 steps.</li>
-          <li>The tape delay's <b>Glitch</b> no longer plays the same few glitches every time you change the delay's
+          <li><b>CPU OVERLOAD</b> only flashes when the processor is really at its limit. Brief blips you can't
+            hear no longer set it off.</li>
+          <li><b>CLEAR TRACK</b> keeps the track's length, clock and direction (it used to reset the track to 16
+            steps).</li>
+          <li>Saving a morph no longer moves you to the morph's slot.</li>
+          <li>Morph at 100% now sounds exactly like the morph kit (some settings stopped just short before).</li>
+          <li>The tape delay's <b>Glitch</b> no longer plays the same few glitches each time you change the delay's
             Mode, and GRAIN's random grains no longer repeat that way either.</li>
         </ul>
       </div>
