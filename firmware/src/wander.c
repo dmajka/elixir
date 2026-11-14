@@ -1375,7 +1375,13 @@ static void wd_swap_start(void)
         m[n++] = (uint8_t)(MD_PL0 + PL_LIVE[wd_rnd(NPL_LIVE)]);
     if (ok & SE_MICRO)
         m[n++] = (uint8_t)(wd_rnd(NMICRO + 1u) < NMICRO ? MD_MC0 + wd_rnd(NMICRO) : MD_NOISE);   /* (1.0: or NOISE) */
-    if (!n || (md = m[wd_rnd(n)]) == par[PAR_MODEL1 + v] || !model_ok(v, md))
+    if (!n)
+        return;
+    md = m[wd_rnd(n)];
+    if (v <= 2u && model_heavy(md) && sp_heavy(v))   /* (1.4: never two heavy models: spells.c sp_light; the draw
+                                                      * only then) */
+        md = sp_light(v, md, wd_rnd(5));
+    if (md == par[PAR_MODEL1 + v] || !model_ok(v, md))
         return;
     wd.ms_t = (uint8_t)(t + 1u);
     wd.ms_md = (uint8_t)md;

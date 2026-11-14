@@ -6264,6 +6264,53 @@ static void phase32(void)
                 printf("  %s: no LFO on a decay in 40 casts\n", SPELL[n].name);
         }
         check(kick, "a spell's LFO on a decay: its top kept under SP_LFO_DEC");
+        /* 1.4: never two heavy models on D1-D3 (a user's CPU OVERLOAD after a spell): from one heavy (on D1, D2 or
+         * D3) every spell leaves at most one; from none, they still put heavy ones on; the lighter ones still come */
+        {
+            static const uint8_t HV[4] = {MD_MODAL, MD_PL0 + PE_SD, MD_PL0 + PE_BD, MD_PL0 + PE_VA};
+            uint32_t r, v, two = 0, heavy = 0, light = 0, casts = 0, se = sp.eng;
+            sp.eng = SE_ALL;
+            for (n = 0; n < NSPELL; n++) {
+                sp.sel = (uint8_t)n;
+                for (r = 0; r < 24u; r++) {
+                    uint32_t h = 0, from = r % 4u;
+                    sp_snapshot();
+                    for (v = 0; v < 3u; v++)
+                        par[PAR_MODEL1 + v] = 0;
+                    if (from < 3u)
+                        par[PAR_MODEL1 + from] = HV[r % 4u];
+                    sp_cast(r * 2246822519u + n * 7u + 1u);
+                    for (v = 0; v < 3u; v++) {
+                        h += model_heavy(par[PAR_MODEL1 + v]);
+                        light += from < 3u && v != from && model_counted(par[PAR_MODEL1 + v]) &&
+                                 !model_heavy(par[PAR_MODEL1 + v]);
+                    }
+                    two += h > 1u;
+                    heavy += from == 3u && h > 0u;
+                    casts++;
+                    sp_restore();
+                    sp.pend = 0;
+                }
+            }
+            printf("  heavy models: %u casts, two together %u, a heavy one from none %u, a lighter beside one %u\n",
+                   (unsigned)casts, (unsigned)two, (unsigned)heavy, (unsigned)light);
+            check(!two && heavy && light, "spells: never two heavy models on D1-D3 (a lighter one of the engine instead)");
+            {   /* 1.4: MODAL's modes: 24 beside any heavy model, 32 beside a light one */
+                uint8_t t0 = mdl[0].type, t1 = mdl[1].type, t2 = mdl[2].type;
+                int mb;
+                mdl[0].type = MD_MODAL, mdl[1].type = MD_PL0 + PE_SD, mdl[2].type = 0;
+                mb = modal_budget() == 24u;
+                mdl[1].type = MD_STRING;
+                mb &= modal_budget() == 32u;
+                mdl[1].type = MD_MODAL;
+                mb &= modal_budget() == 24u;
+                mdl[1].type = MD_PL0 + PE_FM;
+                mb &= modal_budget() == 32u;
+                mdl[0].type = t0, mdl[1].type = t1, mdl[2].type = t2;
+                check(mb, "MODAL: 24 modes beside a heavy model (P SD, MODAL), 32 beside a light one");
+            }
+            sp.eng = (uint8_t)se;
+        }
         par[PAR_VELOD5] = 110;
         snd_apply(PAR_VELOD5, 127, 65536, 1);
         kick = vc[4].aeg.dec == EG_DEC[MOD_DEC_MAX] && EG_DEC[MOD_DEC_MAX] != 0u;
@@ -7640,6 +7687,20 @@ static void phase41(void)
         check(par[PAR_MODEL1 + v] == md && !wd.ms_t && par[PAR_VOL1 + v] >= vol - 2u, "a model swap: the new model, its level back");
     } else {
         check(0, "a model swap started");
+    }
+    {   /* 1.4: WANDER's model swaps never put a second heavy model on D1-D3 */
+        uint32_t m0 = par[PAR_MODEL1], m1 = par[PAR_MODEL1 + 1u], m2 = par[PAR_MODEL1 + 2u], two = 0, swaps = 0;
+        par[PAR_MODEL1] = MD_MODAL;
+        par[PAR_MODEL1 + 1u] = par[PAR_MODEL1 + 2u] = 0;
+        for (i = 0; i < 4000u; i++) {
+            wd.ms_t = 0;
+            wd_swap_start();
+            if (wd.ms_t && track_voice(wd.ms_t - 1u) >= 1u && track_voice(wd.ms_t - 1u) <= 2u)
+                swaps++, two += model_heavy(wd.ms_md);
+        }
+        wd.ms_t = 0;
+        par[PAR_MODEL1] = (uint8_t)m0, par[PAR_MODEL1 + 1u] = (uint8_t)m1, par[PAR_MODEL1 + 2u] = (uint8_t)m2;
+        check(swaps && !two, "WANDER: a model swap beside a heavy model picks a lighter one");
     }
     hold(B_OCTDN);
     release(B_OCTDN);

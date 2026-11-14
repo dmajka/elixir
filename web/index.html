@@ -628,7 +628,15 @@
           <li><b>Drum models</b> on D1&ndash;D3: P ADDTV 23% &rarr; 16%, P SD 24% &rarr; 18%, P BD 20% &rarr; 18%,
             MODAL 20% &rarr; 18%, P SWARM 15% &rarr; 13%. Two heavy models fit together more often. (Setting Aux all
             the way down helps P ADDTV and P BD further, and all the way up helps P BD too.)</li>
+          <li><b>FREQ SHIFT</b> on the FX bus is lighter, by about a fifth with Fdbk or Spread at 0.</li>
           <li>Choosing a morph kit doesn't cause a CPU spike.</li>
+        </ul>
+        <p><b>Two heavy models together</b> (MODAL, P SD, P BD, P HH, P VA, P ADDTV or P WSHAPE) leave more room:</p>
+        <ul>
+          <li>Next to another of them, <b>MODAL</b> leaves out its 8 highest overtones, the quietest ones that die
+            away first, for about a fifth less CPU. It already did this next to a second MODAL.</li>
+          <li><b>Spells and WANDER</b> never put two of them together. If one is already playing, they pick a lighter
+            model of the same kind instead, such as STRING in place of MODAL or P CHORD in place of P SD.</li>
         </ul>
         <h4>Fixes</h4>
         <ul>

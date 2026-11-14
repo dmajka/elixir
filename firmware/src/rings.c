@@ -15,8 +15,8 @@
  * output with one jack patched), through its limiter. Left out: the sympathetic strings (several strings a voice:
  * the CPU), Rings' reverb (Elixir has its own) and its polyphony (a drum voice is one).
  *
- * The modes a voice runs: 32, 24 with two voices on MODAL, 16 with three (Rings: 60, 28, 12 by polyphony). The
- * string's line holds 43 Hz and up; lower, the string runs at a lower rate, as Rings' does below 23 Hz. Signals Q20
+ * The modes a voice runs: 32, 24 beside another heavy model (1.4; before, another MODAL), 16 with three (Rings: 60,
+ * 28, 12 by polyphony). The string's line holds 43 Hz and up; lower, the string runs at a lower rate, as Rings' does below 23 Hz. Signals Q20
  * (1.0: Rings' full scale), Rings' parameters Q16, coefficients Q24 and Q30; the per-block math (Rings' per 24
  * samples) runs per BLOCK. Where Rings' float has room and Q20 hasn't, a state keeps more bits (the modes' error
  * fed back, the SVFs' and DC blockers' Q26, the string's 32-bit lines, the FM envelopes' Q28): a rounding there
@@ -627,11 +627,22 @@ static void model_limit(void)
         mdl[k].type = t;
     }
 }
-static uint32_t modal_budget(void)                   /* the modes a MODAL voice runs (Rings: by its polyphony) */
+/* 1.4: the heaviest models (the manual's cost table: 16-18% of the second core each, Aux in the middle): MODAL and
+ * Plaits' VA, WSHAPE, ADDTV, BD, SD, HH (PE_ 0, 1, 4, 13, 14, 15: plaits.c checks). Two of them with the FX can be
+ * more than the cores have: MODAL beside another runs fewer modes (modal_budget), and the spells and WANDER put at
+ * most one on D1-D3 (spells.c sp_light) */
+static inline int model_heavy(uint32_t md)
+{
+    return md == MD_MODAL || md == MD_PL0 + 0u || md == MD_PL0 + 1u || md == MD_PL0 + 4u || md == MD_PL0 + 13u ||
+           md == MD_PL0 + 14u || md == MD_PL0 + 15u;
+}
+/* the modes a MODAL voice runs (Rings: by its polyphony): 32 alone, 24 beside another heavy model (1.4: any, not
+ * only another MODAL: the top 8, the quietest and quickest to die, ~150 instructions a sample), 16 with three */
+static uint32_t modal_budget(void)
 {
     uint32_t k, n = 0;
     for (k = 0; k < 3u; k++)
-        n += mdl[k].type == MD_MODAL;
+        n += model_heavy(mdl[k].type);
     return n <= 1u ? 32u : n == 2u ? 24u : 16u;
 }
 /* the block: buf in (the voice's own sound, the share EXCITER gives it; 0 when it has none), the model's out */

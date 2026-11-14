@@ -516,12 +516,33 @@ static uint32_t sp_models(uint32_t skip)             /* the Rings or Plaits mode
         n += v != skip && model_counted(par[PAR_MODEL1 + v]);
     return n;
 }
+/* 1.4: a heavy model (sound.c model_heavy) on D1-D3 but voice skip's */
+static int sp_heavy(uint32_t skip)
+{
+    uint32_t v;
+    for (v = 0; v < 3u; v++)
+        if (v != skip && model_heavy(par[PAR_MODEL1 + v]))
+            return 1;
+    return 0;
+}
+/* 1.4: md for voice v, or with a heavy model on another of D1-D3 a lighter one of its engine (Rings: STRING or FM;
+ * Plaits: FM, CHORD, SPEECH, SWARM, STRING), so a spell or WANDER never puts two heavy ones together (a user's
+ * report: CPU OVERLOAD after a spell) */
+static uint32_t sp_light(uint32_t v, uint32_t md, uint32_t r)
+{
+    static const uint8_t PL[5] = {PE_FM, PE_CHORD, PE_SPEECH, PE_SWARM, PE_STRING};
+    if (v > 2u || !model_heavy(md) || !sp_heavy(v))
+        return md;
+    return md < MD_PL0 ? (r & 1u ? MD_FM : MD_STRING) : MD_PL0 + PL[r % 5u];
+}
 /* a MICRO type or (1.0) NOISE, at random */
 static uint32_t sp_micro_rnd(void) { uint32_t i = sp_rnd(NMICRO + 1u); return i < NMICRO ? MD_MC0 + i : MD_NOISE; }
 static void sp_model(uint32_t v, uint32_t md)
 {
     static const uint8_t D[6] = {64, 64, 32, 40, 0, 0};
     uint32_t i;
+    if (v <= 2u && model_heavy(md) && sp_heavy(v))   /* (the draw only then: every other spell as before) */
+        md = sp_light(v, md, sp_rnd(5));
     if (!model_ok(v, md) || (model_counted(md) && (v > 2u || sp_models(v) >= model_cap)) || par[PAR_MODEL1 + v] == md ||
         !(sp_eng_ok(v) & sp_eng_of(md)))
         return;
@@ -682,7 +703,7 @@ static void sp_kick(const spell_t *S, const spc_t *c)
             e[n++] = (uint8_t)(MD_MC0 + (sp_rnd(2) ? MC_POP : MC_CHIRP));
         if (n) {
             md = e[sp_rnd(n)];
-            if (md && md < MD_MC0 && (sp_models(0) >= model_cap || !model_ok(0, md)))
+            if (md && md < MD_MC0 && (sp_models(0) >= model_cap || !model_ok(0, md) || (model_heavy(md) && sp_heavy(0))))
                 md = ok & SE_LXR ? MD_LXR : par[PAR_MODEL1];
             if (md != par[PAR_MODEL1])
                 sp_par(PAR_MODEL1, (int32_t)md);

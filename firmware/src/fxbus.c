@@ -1345,19 +1345,22 @@ static void fx_flanger(void)
 #define SH_LEN (2u * FL_LEN)                         /* (the flanger's line, both halves: 1,024 samples, 23 ms) */
 _Static_assert(SH_LEN >= 900u, "SHIFT: 20 ms of line");
 /* chain c's four allpasses over the block, in place (Q10): HILB (voices.c, the insert SHIFTER's), (a^2 - z^-2) /
- * (1 - a^2 z^-2) */
+ * (1 - a^2 z^-2). (1.4: walked by a pointer: 11 -> 10 instructions an allpass-sample) */
 static void sh_chain(int32_t *b, uint32_t c)
 {
-    uint32_t k, i;
+    uint32_t k;
     for (k = c * 4u; k < c * 4u + 4u; k++) {
         int32_t a = HILB[k], *z = fx.sh_s[k], x1 = z[0], x2 = z[1], y1 = z[2], y2 = z[3];
-        for (i = 0; i < BLOCK; i += 2u) {            /* (two at a time: no moves between the states) */
-            int32_t x = b[i], y = (int32_t)(((int64_t)a * (x + y2) + (1 << 29)) >> 30) - x2;
-            int32_t xb = b[i + 1u], yb = (int32_t)(((int64_t)a * (xb + y1) + (1 << 29)) >> 30) - x1;
+        int32_t *q = b, *e = b + BLOCK;
+        FM1_OPAQUE(q);
+        do {                                         /* (two at a time: no moves between the states) */
+            int32_t x = q[0], y = (int32_t)(((int64_t)a * (x + y2) + (1 << 29)) >> 30) - x2;
+            int32_t xb = q[1], yb = (int32_t)(((int64_t)a * (xb + y1) + (1 << 29)) >> 30) - x1;
             x2 = x, x1 = xb, y2 = y, y1 = yb;
-            b[i] = y;
-            b[i + 1u] = yb;
-        }
+            q[0] = y;
+            q[1] = yb;
+            q += 2;
+        } while (q != e);
         z[0] = x1, z[1] = x2, z[2] = y1, z[3] = y2;
     }
 }
@@ -1372,71 +1375,162 @@ static uint32_t sh_inc(int32_t p)                    /* SHIFT's Hz (P1, Q16 0 ..
     hz = (int32_t)(((int64_t)hz * 97391) >> 16);     /* (2^32 / FS = 97391.5) */
     return d < 0 ? (uint32_t)-hz : (uint32_t)hz;
 }
-/* the output: the pair against the oscillator (cos, sin Q30, turned by (cr, sr) a sample: from the table at the block's
- * start, so it never drifts), up into the line and the mix; two: the right from up to down by SPREAD (inlined a route
- * each: no test a sample) */
-static inline __attribute__((always_inline)) void sh_out(const int32_t *bi, const int32_t *bq, int two, int32_t sp,
-                                                         int32_t *side)
+/* the pair against the oscillator (cos, sin Q30, turned by (cr, sr) a sample: from the table at the block's start, so
+ * it never drifts): up (into the line and *u) and, with dn, down (*d). (1.4: the oscillator a loop of its own, the
+ * mix another (sh_mix_*): the old single loop held 15 values across a sample and spilled (74 a stereo sample)) */
+static inline __attribute__((always_inline)) void sh_osc(const int32_t *bi, const int32_t *bq, int32_t *u,
+                                                         int32_t *dd, int dn)
 {
     uint32_t i, w = fx.fl_w, ph = fx.sh_ph, inc = sh_inc(fx.p[0]);
     int32_t c = -(sine_at(ph) << 15), s = sine_at(ph + 0x40000000u) << 15;   /* (cos, sin: the LXR's table is -cos) */
     int32_t cr = -(sine_at(inc) << 15), sr = sine_at(inc + 0x40000000u) << 15;   /* (the step's) */
-    int32_t ii = fx.sh_q1, dw = 0, ddw = fx.dw - fx.dw_last, g0 = fx.dw_last;
-    for (i = 0; i < BLOCK; i++) {
-        int32_t q = bq[i], up, dn, g, t;
+    int32_t ii = fx.sh_q1;
+    for (i = 0; i < BLOCK; i++) {                    /* (indexed: walking pointers spilled more, 26 -> 27, 39 -> 40) */
+        int32_t q = bq[i], nx = bi[i], up, t;        /* (both read first: u, dd may be bq, bi) */
         int64_t pi = (int64_t)ii * s, pq = (int64_t)q * c;
         up = sat16((int32_t)((pi - pq + (1LL << 39)) >> 40));   /* (Q10 x Q30 -> Q0, rounded: truncation's -0.5 went
                                                       * round the loop as a limit cycle; measured: the sum moves 1 kHz to
                                                       * 1.1 kHz on +100) */
-        ii = bi[i];
+        if (dn)
+            dd[i] = sat16((int32_t)((pi + pq + (1LL << 39)) >> 40));
+        ii = nx;
         t = (int32_t)(((int64_t)c * cr - (int64_t)s * sr) >> 30);
         s = (int32_t)(((int64_t)s * cr + (int64_t)c * sr) >> 30);
         c = t;
         fl_buf[(w + i) & (SH_LEN - 1u)] = (int16_t)up;
-        dw += ddw;
-        g = g0 + (dw >> 6);
-        if (two) {
-            int32_t r;
-            dn = sat16((int32_t)((pi + pq + (1LL << 39)) >> 40));
-            r = up + (((dn - up) * sp) >> 15);
-            mix_l[i] += fx_l[i] + (((up - fx_l[i]) * g) >> 15);
-            mix_r[i] += fx_r[i] + (((r - fx_r[i]) * g) >> 15);
-        } else {
-            side[i] += fx_l[i] + (((up - fx_l[i]) * g) >> 15);
-        }
+        u[i] = up;
     }
     fx.sh_q1 = ii;
     fx.sh_ph = ph + inc * BLOCK;
     fx.fl_w = w + BLOCK;
 }
+static __attribute__((noinline)) void sh_osc_up(const int32_t *bi, const int32_t *bq, int32_t *u)
+{
+    sh_osc(bi, bq, u, 0, 0);
+}
+static __attribute__((noinline)) void sh_osc_updn(const int32_t *bi, const int32_t *bq, int32_t *u, int32_t *d)
+{
+    sh_osc(bi, bq, u, d, 1);
+}
+/* the mix: DRY/WET ramped from the last block's (g), the left (or the one side) up; the right from up to down by
+ * SPREAD (sp, Q15; at 0 the right is up too: sh_mix_st). Walked by pointers */
+static __attribute__((noinline)) void sh_mix_one(const int32_t *u, const int16_t *x, int32_t *o)
+{
+    int32_t dw = 0, ddw = fx.dw - fx.dw_last, g0 = fx.dw_last;
+    const int32_t *e = u + BLOCK;
+    FM1_OPAQUE(u);
+    FM1_OPAQUE(o);
+    do {
+        int32_t g;
+        dw += ddw;
+        g = g0 + (dw >> 6);
+        *o++ += *x + (((*u++ - *x) * g) >> 15);
+        x++;
+    } while (u != e);
+}
+static __attribute__((noinline)) void sh_mix_spread(const int32_t *u, const int32_t *d, int32_t sp)
+{
+    int32_t dw = 0, ddw = fx.dw - fx.dw_last, g0 = fx.dw_last, *ol = mix_l, *or = mix_r;
+    const int16_t *xl = fx_l, *xr = fx_r;
+    const int32_t *e = u + BLOCK;
+    FM1_OPAQUE(u);
+    FM1_OPAQUE(d);
+    FM1_OPAQUE(ol);
+    FM1_OPAQUE(or);
+    FM1_OPAQUE(xl);
+    FM1_OPAQUE(xr);
+    do {
+        int32_t g, up = *u++, r = up + (((*d++ - up) * sp) >> 15), l = *xl++, rr = *xr++;
+        dw += ddw;
+        g = g0 + (dw >> 6);
+        *ol++ += l + (((up - l) * g) >> 15);
+        *or++ += rr + (((r - rr) * g) >> 15);
+    } while (u != e);
+}
+static __attribute__((noinline)) void sh_mix_st(const int32_t *u)
+{
+    int32_t dw = 0, ddw = fx.dw - fx.dw_last, g0 = fx.dw_last, *ol = mix_l, *or = mix_r;
+    const int16_t *xl = fx_l, *xr = fx_r;
+    const int32_t *e = u + BLOCK;
+    FM1_OPAQUE(u);
+    FM1_OPAQUE(ol);
+    FM1_OPAQUE(or);
+    FM1_OPAQUE(xl);
+    FM1_OPAQUE(xr);
+    do {
+        int32_t g, up = *u++, l = *xl++, rr = *xr++;
+        dw += ddw;
+        g = g0 + (dw >> 6);
+        *ol++ += l + (((up - l) * g) >> 15);
+        *or++ += rr + (((up - rr) * g) >> 15);
+    } while (u != e);
+}
+/* the input (the sum, mono) and the line's pass back (it reaches no further than last block's end: the line is at
+ * least a block), Q10 into both chains' buffers. (1.4: without FDBK the line isn't read: x += 0 then, no clip; a
+ * loop per route; soft3 with its square in 32 bits, the same numbers: |x| <= 49152, x^2 >> 15 < 2^17) */
+static inline __attribute__((always_inline)) void sh_in_fb(int32_t *bi, int32_t *bq, int st, int32_t fb, int32_t d0,
+                                                           int32_t dd)
+{
+    uint32_t i, w = fx.fl_w;
+    for (i = 0; i < BLOCK; i++, d0 += dd) {
+        uint32_t di = (uint32_t)d0 >> 16, fr = (uint32_t)d0 & 0xFFFFu, r = w + i - di;
+        int32_t a = fl_buf[r & (SH_LEN - 1u)], b = fl_buf[(r - 1u) & (SH_LEN - 1u)];
+        int32_t y = a + (int32_t)(((int64_t)(b - a) * (int32_t)fr) >> 16);
+        int32_t x = st ? (fx_l[i] + fx_r[i]) >> 1 : fx_l[i], x2, x3;
+        x += (y * fb + 16384) >> 15;
+        x = clamp32(x >> 1, -49152, 49152);          /* (the loop's soft clip, 2 x soft3: ~1% at half scale) */
+        x2 = (int32_t)(((int64_t)x * x) >> 15);
+        x3 = (int32_t)(((int64_t)x2 * x) >> 15);
+        x = (x - ((x3 * 4855) >> 15)) * 2;
+        bi[i] = bq[i] = x << 10;
+    }
+}
+static __attribute__((noinline)) void sh_in_fb_st(int32_t *bi, int32_t *bq, int32_t fb, int32_t d0, int32_t dd)
+{
+    sh_in_fb(bi, bq, 1, fb, d0, dd);
+}
+static __attribute__((noinline)) void sh_in_fb_one(int32_t *bi, int32_t *bq, int32_t fb, int32_t d0, int32_t dd)
+{
+    sh_in_fb(bi, bq, 0, fb, d0, dd);
+}
+static __attribute__((noinline)) void sh_in(int32_t *bi, int32_t *bq, int st)
+{
+    uint32_t i;
+    if (st)
+        for (i = 0; i < BLOCK; i++)
+            bi[i] = bq[i] = ((fx_l[i] + fx_r[i]) >> 1) << 10;
+    else
+        for (i = 0; i < BLOCK; i++)
+            bi[i] = bq[i] = fx_l[i] << 10;
+}
 static void fx_shift(void)
 {
     int32_t bi[BLOCK], bq[BLOCK];
-    uint32_t i, w = fx.fl_w;
     int st = fx_stereo();
     int32_t fb = (int32_t)(((int64_t)fx.p[1] * 31130) >> 16);   /* (Q15: 0 .. 0.95) */
     int32_t d1 = (BLOCK << 16) + (int32_t)(((int64_t)fx.p[2] * ((882 - BLOCK) << 6)) >> 6);   /* (Q16 samples: a
                                                       * block .. 20 ms) */
     int32_t d0 = fx.sh_d ? fx.sh_d : d1, dd = (d1 - d0) / (int32_t)BLOCK;
     fb += (int32_t)(((int64_t)(31130 - fb) * fx.push) >> 16);   /* (FB PUSH: to the most) */
-    for (i = 0; i < BLOCK; i++, d0 += dd) {          /* the input and the line's pass back (it reaches no further than
-                                                      * last block's end: the line is at least a block) */
-        uint32_t di = (uint32_t)d0 >> 16, fr = (uint32_t)d0 & 0xFFFFu, r = w + i - di;
-        int32_t a = fl_buf[r & (SH_LEN - 1u)], b = fl_buf[(r - 1u) & (SH_LEN - 1u)];
-        int32_t y = a + (int32_t)(((int64_t)(b - a) * (int32_t)fr) >> 16);
-        int32_t x = st ? (fx_l[i] + fx_r[i]) >> 1 : fx_l[i];
-        x += (y * fb + 16384) >> 15;
-        if (fb)                                      /* (the loop's soft clip, 2 x soft3: ~1% at half scale) */
-            x = soft3(x >> 1) * 2;
-        bi[i] = bq[i] = x << 10;
-    }
+    if (fb && st)
+        sh_in_fb_st(bi, bq, fb, d0, dd);
+    else if (fb)
+        sh_in_fb_one(bi, bq, fb, d0, dd);
+    else
+        sh_in(bi, bq, st);
     fx.sh_d = d1;
     sh_chain(bi, 0);
     sh_chain(bq, 1);
-    if (st)
-        sh_out(bi, bq, 1, fx.p[3] >> 1, 0);
-    else
-        sh_out(bi, bq, 0, 0, fx_side());
+    if (st && fx.p[3] >> 1) {                        /* (bi's samples are read before written: up into bq's, down bi's) */
+        sh_osc_updn(bi, bq, bq, bi);
+        sh_mix_spread(bq, bi, fx.p[3] >> 1);
+    } else {
+        sh_osc_up(bi, bq, bq);
+        if (st)
+            sh_mix_st(bq);
+        else
+            sh_mix_one(bq, fx_l, fx_side());
+    }
 }
 
 #if FX_CHORUS_ON

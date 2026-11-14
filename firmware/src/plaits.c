@@ -35,6 +35,8 @@ enum {
     PE_VA, PE_WSHP, PE_FM, PE_GRAIN, PE_ADD, PE_WTBL, PE_CHORD, PE_SPEECH,
     PE_SWARM, PE_NOISE, PE_PART, PE_STRING, PE_MODAL, PE_BD, PE_SD, PE_HH, NPE
 };
+_Static_assert(PE_VA == 0 && PE_WSHP == 1 && PE_ADD == 4 && PE_BD == 13 && PE_SD == 14 && PE_HH == 15,
+               "rings.c model_heavy's engine numbers");
 /* Plaits' post-processing per engine: OUT's and AUX's gains (Q24; negative: through its limiter), and whether the
  * engine envelopes itself (voice.cc's RegisterInstance). (1.0: PE_GRAIN's number CLOUD's, its AUX as loud as OUT) */
 #define PE_RAIN PE_PART                              /* (1.0 Phase 21: RAIN, below, in P PARTCL's number, when */

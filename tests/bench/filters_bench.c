@@ -1,5 +1,5 @@
 /* Elixir: the core-0 filters (1.4, docs/TO_DO_PERF_VOICES.md A): the master filter's RING, the FX bus PHASER, the
- * voice filter (svf_block, every type), the TAPE delays, MONO and PING PONG hashed over a knob grid, one hash each (the bit-identical check).
+ * voice filter (svf_block, every type), the FREQ SHIFT, the TAPE delays, MONO and PING PONG hashed over a knob grid, one hash each (the bit-identical check).
  *   cc -O2 -w -I build/gen -I firmware/src -I tests tests/bench/filters_bench.c -o build/filters_bench && build/filters_bench
  * Each case: fresh state, a few dozen blocks of noise and hits (loud enough to clip), its inputs moved one at a time
  * along the way (a cache of coefficients must see each), some blocks with none moved. Host ns are no measure of the
@@ -130,6 +130,56 @@ static uint64_t bench_phaser(uint32_t ncase)
         }
         hash32(&fx.ph_s[0][0], 10);
         hash32(fx.ph_a, 2);
+    }
+    return H;
+}
+
+/* SHIFT: fx_shift over its knobs (P1 shift, P2 feedback, P3 delay, P4 spread, FB PUSH, DRY/WET ramping), stereo and
+ * the mono routes; the mix, the line and the states hashed */
+static uint64_t bench_shift(uint32_t ncase)
+{
+    static const uint8_t RT[] = {R_ST1, R_ST2, R_L1, R_R1};
+    for (uint32_t c = 0; c < ncase; c++) {
+        uint32_t lvl = c & 3u;
+        memset(fx.sh_s, 0, sizeof fx.sh_s);
+        memset(fl_buf, 0, sizeof fl_buf);
+        fx.sh_q1 = 0, fx.sh_d = 0;
+        fx.route = RT[(c >> 2) & 3u];
+        fx.sh_ph = rnd();
+        fx.fl_w = rnd() >> 20;
+        for (int j = 0; j < 4; j++)
+            fx.p[j] = (int32_t)(knob() * 65536u / 127u);
+        if (rnd() & 1u)
+            fx.p[1] = 0;                             /* (no feedback: its own path) */
+        if (rnd() & 1u)
+            fx.p[3] = 0;
+        fx.push = (rnd() & 3u) ? 0 : (int32_t)(rnd() >> 15);
+        fx.dw = (int32_t)(knob() * 32768u / 127u);
+        fx.dw_last = (rnd() & 1u) ? fx.dw : (int32_t)(knob() * 32768u / 127u);
+        for (uint32_t b = 0; b < 40; b++) {
+            switch (b) {
+            case 8: fx.p[1] = (rnd() & 1u) ? 0 : (int32_t)(knob() * 65536u / 127u); break;
+            case 12: fx.p[2] = (int32_t)(knob() * 65536u / 127u); break;
+            case 16: fx.p[3] = (rnd() & 1u) ? 0 : (int32_t)(knob() * 65536u / 127u); break;
+            case 20: fx.p[0] = (int32_t)(knob() * 65536u / 127u); break;
+            case 24: fx.dw = (int32_t)(knob() * 32768u / 127u); break;
+            case 30: fx.push = (int32_t)(rnd() >> 15); break;
+            }
+            sig_in(fx_l, b, lvl);
+            sig_in(fx_r, b + 3u, lvl);
+            for (int i = 0; i < BLOCK; i++)
+                mix_l[i] = (int32_t)(rnd() >> 20) - 2048, mix_r[i] = (int32_t)(rnd() >> 20) - 2048;
+            fx_shift();
+            hash32(mix_l, BLOCK);
+            hash32(mix_r, BLOCK);
+            fx.dw_last = fx.dw;
+        }
+        hash32(&fx.sh_s[0][0], 32);
+        hash32(&fx.sh_q1, 1);
+        hash32(&fx.sh_d, 1);
+        hash32((const int32_t *)&fx.sh_ph, 1);
+        hash32((const int32_t *)&fx.fl_w, 1);
+        hash16(fl_buf, 2u * FL_LEN);
     }
     return H;
 }
@@ -347,6 +397,11 @@ int main(int argc, char **argv)
     if (!*only || !strcmp(only, "phaser")) {
         H = 1469598103934665603ull, rs = 2u, t0 = now();
         printf("PHASER   %016llx  %.1f us/case\n", (unsigned long long)bench_phaser(ncase), (now() - t0) / 1000.0 / ncase);
+        all = (all ^ H) * 1099511628211ull;
+    }
+    if (!*only || !strcmp(only, "shift")) {
+        H = 1469598103934665603ull, rs = 6u, t0 = now();
+        printf("SHIFT    %016llx  %.1f us/case\n", (unsigned long long)bench_shift(ncase), (now() - t0) / 1000.0 / ncase);
         all = (all ^ H) * 1099511628211ull;
     }
     if (!*only || !strcmp(only, "svf")) {
