@@ -5,6 +5,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <ctype.h>
+#include <string.h>
+#include <sys/stat.h>
 #define TBL_RAW 1                                    /* (22: the packed tables' values, to check the unpacked ones) */
 #include "../web/emu/elixir_web.c"
 /* 1.4: the locks in the pool (seq.c lk_*). The tests' view: a step's i-th lock (in code order): its code
@@ -391,7 +394,7 @@ static void phase2(void)
     sect_go(S_SENDS);
     check(ui.sect == S_SENDS, "SELECT: FX TRACK SENDS (1.0 Phase 16)");
     press(B_LFO);
-    check(ui.sect == S_SENDS, "1.4: LFO again: nothing");
+    check(ui.sect == S_LFO && ui.half == 0, "1.4.1: LFO again: its first page");
     press(B_SEQ);
     black(0);
     white(6);
@@ -1925,11 +1928,47 @@ static void phase14(void)
     page_params(pp);
     check(ui.sect == S_LFO && ui.half == 1 && pp[2] == PAR_LFOMODE1, "1.0: LFO 1's MODE: its second page, K3, by SELECT");
     press(B_LFO);
-    check(ui.sect == S_LFO && ui.half == 1, "1.4: LFO again: nothing (SELECT goes through the pages)");
+    check(ui.sect == S_LFO && ui.half == 0, "1.4.1: LFO again: its first page");
     press(B_ENV);
     check(ui.sect == S_AEG && ui.half == 0, "ENV: AMP EG");
+    turn(EN_SELECT, 1);
     press(B_ENV);
-    check(ui.sect == S_AEG && ui.half == 0, "1.4: ENV again: nothing");
+    check(ui.sect == S_AEG && ui.half == 0, "1.4.1: ENV again: AMP EG");
+    {   /* 1.4.1: CONFIG Select BUTTON: EDIT stays lit through every page; ENV, SCL, LFO keep to their own */
+        uint8_t sb = kset.sbtn, pm = kset.pmem;
+        uint32_t i, ok = 1, n = 0;
+        kset.sbtn = 1;
+        kset.pmem = 0;
+        press(B_EDIT);
+        for (i = 0; i < 30u; i++) {
+            ok &= sound_btn() == S_MODEL;
+            n += ui.sect == S_LFO2;
+            turn(EN_SELECT, 1);
+        }
+        check(ok && n, "1.4.1: Select BUTTON: EDIT lit through every page, LFO 2 among them");
+        press(B_ENV);
+        for (i = 0, ok = 1; i < 12u; i++) {
+            ok &= sect_group(ui.sect) == S_AEG && sound_btn() == S_AEG;
+            turn(EN_SELECT, 1);
+        }
+        for (i = 0; i < 12u; i++) {
+            ok &= sect_group(ui.sect) == S_AEG;
+            turn(EN_SELECT, -1);
+        }
+        check(ok && ui.sect == S_AEG && ui.half == 0, "1.4.1: Select BUTTON: ENV's SELECT keeps to ENV's pages");
+        press(B_LFO);
+        for (i = 0, ok = 1; i < 12u; i++)
+            turn(EN_SELECT, 1);
+        check(ui.sect == S_SENDS && sound_btn() == S_LFO, "1.4.1: Select BUTTON: LFO's last page, FX TRACK SENDS");
+        mode_set(M_CONFIG);
+        ui.page = CF_REMOTE + 2u;
+        ui.force = 1;
+        run_ms(100);
+        shot("config-buttons");
+        kset.sbtn = sb;
+        kset.pmem = pm;
+        press(B_ENV);
+    }
     {   /* 1.4: with Last page, EDIT keeps the page SELECT took it to, in ENV's sections or LFO's too */
         uint8_t pm = kset.pmem, sc, hf;
         kset.pmem = 1;
@@ -1942,8 +1981,6 @@ static void phase14(void)
         turn(EN_SELECT, 1);
         sc = ui.sect;
         hf = ui.half;
-        press(B_ENV);
-        check(ui.sect == sc && ui.half == hf, "1.4: ENV lit (SELECT went there from EDIT): nothing");
         press(B_EDIT);
         check(ui.sect == sc && ui.half == hf, "1.4: EDIT again: nothing");
         press(B_HOME);
@@ -2174,9 +2211,7 @@ static void phase14(void)
     turn(EN_SELECT, 1);
     press(B_FX);
     press(B_LFO);
-    check(ui.mode == M_SOUND && ui.sect == S_LFO && ui.half == 1, "LFO: back to LFO 1's second page (its MODE)");
-    press(B_LFO);
-    check(ui.sect == S_LFO && ui.half == 1, "1.4: LFO again: nothing");
+    check(ui.mode == M_SOUND && ui.sect == S_LFO && ui.half == 0, "1.4.1: LFO: its first page, not where it was");
     seq_goto(PG_SCALE);
     press(B_HOME);
     press(B_SEQ);
@@ -4401,12 +4436,12 @@ static void phase_016t2(void)                        /* 0.16-test2: FX's page or
     uint32_t pal0;
 #define FXSENDS FXPG_FSEND, FXPG_FSEND2, FXPG_DSEND, FXPG_DSEND2, FXPG_RSEND, FXPG_RSEND2   /* (31: the sends last;
                                                       * 1.0 Phase 16: the delay's between) */
-    static const uint8_t OFF[] = {FXPG_REV, FXPG_BUS, FXPG_DLY, FXPG_DLY2, FXPG_ROUTE, FXPG_DIRT, FXPG_DJ, FXPG_COMP,
-                                  FXPG_COMP2, FXSENDS};
-    static const uint8_t PH[] = {FXPG_REV, FXPG_BUS, FXPG_PARS, FXPG_DLY, FXPG_DLY2, FXPG_ROUTE, FXPG_DIRT, FXPG_DJ,
-                                 FXPG_COMP, FXPG_COMP2, FXSENDS};
-    static const uint8_t DL[] = {FXPG_REV, FXPG_BUS, FXPG_DLY, FXPG_DLY2, FXPG_DUB, FXPG_ROUTE, FXPG_DIRT, FXPG_DJ,
-                                 FXPG_COMP, FXPG_COMP2, FXSENDS};   /* (1.0: the always-on delay's; TAPE's page with TAPE) */
+    static const uint8_t OFF[] = {FXPG_REV, FXPG_BUS, FXPG_DLY, FXPG_DLY2, FXPG_DIRT, FXPG_DJ, FXPG_COMP,
+                                  FXPG_COMP2, FXPG_ROUTE, FXSENDS};
+    static const uint8_t PH[] = {FXPG_REV, FXPG_BUS, FXPG_PARS, FXPG_DLY, FXPG_DLY2, FXPG_DIRT, FXPG_DJ,
+                                 FXPG_COMP, FXPG_COMP2, FXPG_ROUTE, FXSENDS};
+    static const uint8_t DL[] = {FXPG_REV, FXPG_BUS, FXPG_DLY, FXPG_DLY2, FXPG_DUB, FXPG_DIRT, FXPG_DJ,
+                                 FXPG_COMP, FXPG_COMP2, FXPG_ROUTE, FXSENDS};   /* (1.0: the always-on delay's; TAPE's page with TAPE) */
     static const struct { uint32_t type, dtype; const uint8_t *pg; uint32_t n; } C[3] = {
         {FX_OFF, DELAY_NORMAL, OFF, 15}, {FX_PHASER, DELAY_NORMAL, PH, 16}, {FX_OFF, DELAY_TAPE, DL, 16}};
     uint32_t k, i, ok;
@@ -5520,7 +5555,7 @@ static void phase27a(void)
     check(ui.sect == S_INSERT && pp[0] == PAR_INS1 + 3u && pp[1] == PAR_INSA1 + 3u && pp[2] == PAR_INSB1 + 3u &&
           pp[3] == PAR_INSC1 + 3u && !strcmp(b, "INSERT FX"), "the filter button, SELECT: INSERT");
     press(B_SCL);
-    check(ui.sect == S_INSERT, "1.4: SCL again: nothing");
+    check(ui.sect == S_FILTER, "1.4.1: SCL again: FILTER");
     sound_open(S_INSERT, 0);
     run_ms(20);
     turn(EN_K1, 1);                                  /* (1.0: OFF, SHIFTER, RING: the dropped types passed) */
@@ -9912,8 +9947,8 @@ static void phase_100_16(void)
             ds = l[j] == FXPG_DSEND ? j : ds;
             di = l[j] == FXPG_DIRT ? j : di;
         }
-        ok &= rt + 1u == di && ds < n && l[ds + 1u] == FXPG_DSEND2 && l[ds + 2u] == FXPG_RSEND;
-        check(ok, "the mixer's DLY SEND pages; FX: ROUTING before DIRT, DELAY SEND between FX's and REVERB's");
+        ok &= di < rt && l[rt - 1u] == FXPG_COMP2 && l[rt + 1u] == FXPG_FSEND && ds < n && l[ds + 1u] == FXPG_DSEND2 && l[ds + 2u] == FXPG_RSEND;
+        check(ok, "the mixer's DLY SEND pages; FX: ROUTING before the sends (1.4.1), DELAY SEND between FX's and REVERB's");
         ui.mode = M_MIXER;
         ui.page = 6;
         ui.force = 1;
@@ -12754,12 +12789,242 @@ static void phase_140_pc(void)
     pc_run(20);
 }
 
+
+/* 1.4.1: The Firmware Hub's card (tools/make_card.py): two screens. A beat with generators on it, the GENERATOR page
+ * on GRIDS; and WANDER out on THE SPIRE. Its own run (ui_test DIR --card): DIR/card-seq.ppm, DIR/card-wander.ppm */
+static void card_shot(const char *dir, const char *name)
+{
+    char path[600];
+    const char *keep = shots;
+    uint32_t n = shot_n;
+    snprintf(path, sizeof path, "%s/%s.ppm", dir, name);
+    ui.force = 1;
+    run_ms(80);
+    {
+        FILE *f = fopen(path, "wb");
+        uint32_t i;
+        if (!f) {
+            perror(path);
+            exit(1);
+        }
+        fprintf(f, "P6\n240 240\n255\n");
+        for (i = 0; i < 240u * 240u; i++) {
+            uint16_t px = (uint16_t)((web_fb[i] >> 8) | (web_fb[i] << 8));
+            uint8_t rgb[3] = {(uint8_t)((px >> 11) * 255 / 31), (uint8_t)(((px >> 5) & 63) * 255 / 63),
+                              (uint8_t)((px & 31) * 255 / 31)};
+            fwrite(rgb, 1, 3, f);
+        }
+        fclose(f);
+    }
+    shots = keep;
+    shot_n = n;
+}
+static int card_scenes(const char *dir)
+{
+    pattern_t *p = &pat[0];
+    uint32_t i;
+    run_ms(1600);
+    p->gx = 64;                                      /* GRIDS on D1, SN, CH: BD, SD, HH from the map's middle */
+    p->gy = 64;
+    p->gchaos = 0;
+    for (i = 0; i < 3u; i++) {
+        uint32_t t = i == 0 ? 0u : i == 1 ? 3u : 5u;
+        p->gen[t][0] = GEN_GRIDS;
+        p->gen[t][1] = (uint8_t)i;
+        p->gen[t][2] = 100;
+        p->gen[t][3] = 1;
+    }
+    sq.gsync = 0x7F;
+    mode_set(M_HOME);
+    black(4);                                        /* CY: EUCLID, 5 hits */
+    seq_goto(PG_GEN);
+    turn(EN_K1, 1);
+    turn(EN_K3, 5);
+    black(1);                                        /* D2, OH: a few steps by hand */
+    mode_set(M_HOME);
+    white(6);
+    white(14);
+    black(6);
+    white(2);
+    white(10);
+    press(B_PLAY);
+    run_ms(1300);
+    black(5);                                        /* CH's GENERATOR page: GRIDS */
+    seq_goto(PG_GEN);
+    ui.dest_ms = 0;                                  /* (the generator's note from CY's turn: gone, the grid) */
+    run_ms(200);
+    card_shot(dir, "card-seq");
+    /* WANDER: THE SPIRE, 32 bars, set out and a few bars on the road */
+    wd_defaults();
+    perf_goto(PG_WANDER);
+    turn(EN_K1, 1);
+    wd.k[WV_JOURNEY] = 1;
+    press(B_OCTUP);
+    run_ms(14000);
+    card_shot(dir, "card-wander");
+    printf("card: %s/card-seq.ppm, card-wander.ppm\n", dir);
+    return 0;
+}
+
+/* 1.4.1: the site's Pages (tools/pages_shots.py, web/make_site.py): every page of every mode, as SELECT walks them, from
+ * a beat with its sounds set up. Its own run (ui_test DIR --pages): DIR/pages/NAME-NN.ppm and pages.tsv (section,
+ * group, page, pages, title, file) */
+static FILE *pg_tsv;
+static const char *pg_dir;
+static uint32_t pg_n;
+static void page_shot(const char *sec, const char *grp)
+{
+    char b[48], path[600], file[64];
+    uint32_t pg, np, i;
+    FILE *f;
+    ui.force = 1;
+    run_ms(80);
+    title_text(b, sizeof b, &pg, &np);
+    snprintf(file, sizeof file, "%s-%02u.ppm", sec, pg_n++);
+    for (i = 0; file[i]; i++)
+        file[i] = file[i] == ' ' ? '-' : (char)tolower((unsigned char)file[i]);
+    snprintf(path, sizeof path, "%s/%s", pg_dir, file);
+    f = fopen(path, "wb");
+    if (!f) {
+        perror(path);
+        exit(1);
+    }
+    fprintf(f, "P6\n240 240\n255\n");
+    for (i = 0; i < 240u * 240u; i++) {
+        uint16_t px = (uint16_t)((web_fb[i] >> 8) | (web_fb[i] << 8));
+        uint8_t rgb[3] = {(uint8_t)((px >> 11) * 255 / 31), (uint8_t)(((px >> 5) & 63) * 255 / 63),
+                          (uint8_t)((px & 31) * 255 / 31)};
+        fwrite(rgb, 1, 3, f);
+    }
+    fclose(f);
+    fprintf(pg_tsv, "%s\t%s\t%u\t%u\t%s\t%s\n", sec, grp, pg + 1u, np, b, file);
+}
+static void pages_walk(const char *sec, const char *grp_fixed, uint32_t n)
+{
+    uint32_t i;
+    for (i = 0; i < n; i++) {
+        char g[16] = "";
+        if (grp_fixed)
+            snprintf(g, sizeof g, "%s", grp_fixed);
+        else if (ui.mode == M_SOUND || ui.mode == M_FX) {
+            uint32_t ng, cur, np, pi;
+            const char *const *nm = crumb_at(&ng, &cur, &np, &pi);
+            snprintf(g, sizeof g, "%s", nm[cur]);
+        }
+        page_shot(sec, g);
+        turn(EN_SELECT, 1);
+    }
+}
+static int pages_tour(const char *out)
+{
+    static char dir[512];
+    static const char *const PSET[NPSET] = {"PERFORM", "SPELLS", "WANDER", "GLOBAL MOD"};
+    uint32_t t, k, m, ms;
+    snprintf(dir, sizeof dir, "%s/pages", out);
+    mkdir(dir, 0755);
+    pg_dir = dir;
+    {
+        char path[600];
+        snprintf(path, sizeof path, "%s/pages.tsv", pg_dir);
+        pg_tsv = fopen(path, "w");
+        if (!pg_tsv) {
+            perror(path);
+            return 1;
+        }
+    }
+    run_ms(1600);                                    /* (the splash gone) */
+    for (t = 0; t < 16; t += 4)                      /* a beat: kick, snare, hats */
+        white(t);
+    black(3);
+    white(4);
+    white(12);
+    black(5);
+    for (t = 0; t < 16; t += 2)
+        white(t);
+    black(0);
+    press(B_PLAY);
+    run_ms(500);
+    /* D1's sound: something on every page's picture */
+    vp_set(sect_par(0, S_FILTER, 0, 1), 70);
+    vp_set(sect_par(0, S_FILTER, 0, 2), 90);
+    vp_set(sect_par(0, S_SHAPE, 0, 1), 40);
+    par_set(PAR_TARGET_LFO1, 22);                    /* (LFO 1 on the filter's Frequency) */
+    vp_set(lfo_par(0, 0, LP_DEPTH), 80);
+    vp_set(sect_par(0, S_RANDOM, 0, 0), 30);
+    vp_set(sect_par(0, S_RANDOM, 0, 3), 60);
+    par[PAR_FX_SEND1] = 40;
+    par[PAR_REV_SEND1] = 70;
+    par[PAR_DSEND1] = 30;
+    par_set(PAR_FX_TYPE, FX_PHASER);
+    par[PAR_FX_DRY_WET] = 64;
+    /* HOME: the grid, the patterns, the song */
+    mode_set(M_HOME);
+    page_shot("home", "GRID");
+    mode_set(M_PATTERN);
+    page_shot("home", "PATTERNS");
+    mode_set(M_SONG);
+    ui.page = 0;
+    page_shot("home", "SONG");
+    turn(EN_SELECT, 1);
+    page_shot("home", "SONG ROWS");
+    turn(EN_SELECT, 1);
+    page_shot("home", "SONG ROADS");
+    mode_set(M_HOME);
+    /* SEQ: the track's pages, then step edit */
+    press(B_SEQ);
+    pages_walk("seq", "TRACK", mode_pages());
+    press(B_SEQ);
+    white(4);
+    pages_walk("step", "STEP", mode_pages());
+    press(B_SEQ);
+    /* the sound pages (D1, the LXR's drum: every page) */
+    press(B_HOME);
+    black(0);
+    press(B_EDIT);
+    pages_walk("sound", 0, mode_pages());
+    /* the models' MODEL pages */
+    press(B_EDIT);
+    sect_go(S_MODEL);
+    for (m = 1; m < NMODEL; m++) {
+        vp_set(sect_par(0, S_MODEL, 0, 0), m);
+        run_ms(60);
+        if (vp_get(sect_par(0, S_MODEL, 0, 0)) == m)
+            page_shot("model", L_MODEL[m]);          /* (the model's name as its group) */
+    }
+    vp_set(sect_par(0, S_MODEL, 0, 0), 0);
+    /* FX */
+    press(B_FX);
+    ui.page = 0;
+    pages_walk("fx", 0, mode_pages());
+    /* GLO: the mixer, CONFIG */
+    press(B_HOME);
+    goto_mode(B_GLO, M_MIXER);
+    ui.page = 0;
+    pages_walk("mixer", "MIXER", mode_pages());
+    goto_mode(B_GLO, M_CONFIG);
+    ui.page = 0;
+    pages_walk("config", "CONFIG", mode_pages());
+    /* ARP: PERF's sets */
+    press(B_HOME);
+    goto_mode(B_ARP, M_PERF);
+    for (k = 0; k < NPSET; k++) {
+        ui.page = (uint8_t)PERF_SET0[perf_set()];
+        ms = perf_count();
+        pages_walk("perf", PSET[perf_set()], ms);
+        press(B_ARP);
+    }
+    fclose(pg_tsv);
+    printf("pages: %u screens -> %s\n", pg_n, pg_dir);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     uint32_t t;
     setvbuf(stdout, NULL, _IOLBF, 0);                /* (a line at a time: a hang shows where) */
     if (argc > 1)
         shots = argv[1];
+    ux_still = 1;                                    /* (1.4.1: the shots without a knob card lit) */
     web_nor_erase();
     web_boot();
     {                                                /* 22: every packed table unpacked to its generator's values */
@@ -12775,6 +13040,10 @@ int main(int argc, char **argv)
     }
     check(kset.gtakes == GT_KEYS && midi_gtakes == GT_KEYS, "0.24: Global in starts at KEYS");
     midi_gtakes = GT_ALL;                            /* (the tests below send the LXR's CCs there: phase_024g) */
+    if (argc > 2 && !strcmp(argv[2], "--pages"))     /* (1.4.1: the site's Pages, alone) */
+        return pages_tour(shots);
+    if (argc > 2 && !strcmp(argv[2], "--card"))      /* (1.4.1: the hub's card, alone) */
+        return card_scenes(shots);
     run_ms(200);
     shot("splash");
     check(text_w(&AF_M, SPLASH_LINE) <= 232 && text_w(&AF_S, "free and unofficial, " ELIXIR_VERSION) <= 232,

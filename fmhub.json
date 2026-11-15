@@ -1,5 +1,5 @@
 {
-  "what": "A super powerful drum synth and sequencer that started as a port of the Erica Synths LXR-02 and kept going. Make a beat in two minutes, then dig into 29 sound engines, deep effects, generative sequencing, live performance tricks, MIDI control and 8-channel USB audio.",
+  "what": "Deep drum synth and sequencer that ports the Erica Synths LXR-02 and adds 22 more sound engines, generative sequencing, extensive randomization & modulation, live performance tricks, MIDI control of 300 parameters with Launchpad and Launch Control maps (see website), and 8-channel USB audio.",
   "author": "Dan Majka",
   "kinds": ["drums"],
   "play": "https://dmajka.github.io/elixir/try/",

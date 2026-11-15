@@ -150,6 +150,39 @@
   .card .cap { font-size: 11px; min-width: 0; padding: 4px 6px; vertical-align: 1px; }
   .map .tip { margin-top: 12px; font-size: 14px; color: var(--dim); }
   details.older { margin-top: 16px; }
+  /* 1.4.1: the page browser (make_site.py fills in its data: the sections and their screens) */
+  .browse { margin-top: 24px; display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; }
+  dialog.pages { width: min(980px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 0; border: 1px solid var(--line);
+                 border-radius: 14px; background: var(--bg); color: var(--fg); overflow: auto; }
+  dialog.pages::backdrop { background: rgba(10, 9, 8, .72); }
+  .pg-head { display: flex; align-items: center; gap: 12px; padding: 16px 20px 0; }
+  .pg-head h2 { font-size: 22px; margin: 0; flex: 1; }
+  .pages button.pg-x { background: none; color: var(--dim); border: 0; font-size: 26px; line-height: 1; padding: 4px 8px; }
+  .pg-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 12px 20px; border-bottom: 1px solid var(--line);
+             scrollbar-width: thin; }
+  .pages .pg-tabs button { flex: none; background: none; color: var(--dim); border: 1px solid var(--line); font-size: 14px;
+                           font-weight: 500; padding: 6px 12px; border-radius: 999px; }
+  .pages .pg-tabs button[aria-selected="true"] { background: var(--accent-fill); color: var(--accent-ink);
+                                                 border-color: var(--accent-fill); }
+  .pg-body { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 24px; padding: 20px; }
+  .pg-body .screen img { max-width: 420px; height: auto; }
+  dialog.pages:focus, dialog.pages:focus-visible { outline: none; }
+  .pg-info .pg-group { display: inline-block; font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+                       background: var(--well); border: 1px solid var(--line); border-radius: 5px; padding: 4px 6px;
+                       margin-bottom: 10px; }
+  .pg-info .pg-group:empty { display: none; }
+  .pg-info h3 { font-size: 22px; margin: 0 0 4px; }
+  .pg-info .pg-num { color: var(--dim); font-variant-numeric: tabular-nums; margin-bottom: 14px; }
+  .pg-info .pg-blurb { color: var(--dim); font-size: 15px; }
+  .pg-nav { display: flex; gap: 10px; margin: 18px 0 10px; }
+  .pg-thumbs { display: flex; gap: 8px; overflow-x: auto; padding: 0 20px 20px; scrollbar-width: thin; }
+  .pages .pg-thumbs button { flex: none; padding: 0; border: 2px solid transparent; border-radius: 6px; background: #000;
+                             line-height: 0; }
+  .pages .pg-thumbs button[aria-current="true"] { border-color: var(--accent-fill); }
+  .pg-thumbs img { width: 76px; height: 76px; border-radius: 4px; display: block; }
+  @media (max-width: 700px) { .pg-body { grid-template-columns: 1fr; gap: 14px; padding: 16px; }
+                              .pg-body .screen img { max-width: 100%; border-width: 6px; }
+                              .pg-head { padding: 14px 16px 0; } .pg-tabs, .pg-thumbs { padding-left: 16px; padding-right: 16px; } }
   details.older > summary { cursor: pointer; padding: 14px 22px; border: 1px solid var(--line); border-radius: var(--radius);
                             background: var(--well); font-weight: 600; }
   details.older[open] > summary { margin-bottom: 16px; }
@@ -441,7 +474,7 @@
       <div class="card"><h3><span class="n">1</span>Press a button</h3><p>It opens that button's section: <span class="cap">EDIT</span>
         opens the sound's model, <span class="cap">HOME</span> the step grid, <span class="cap">FX</span> the effects.</p></div>
       <div class="card"><h3><span class="n">2</span>Press it again</h3><p>Most buttons hold a few sections. Each press goes to
-        the next one, in the order below, then back to the first.</p></div>
+        the next one, in the order below, then back to the first. A sound button goes back to its first page.</p></div>
       <div class="card"><h3><span class="n">3</span>Turn SELECT</h3><p>It turns the pages, one at a time; the title shows where
         you are (<em>3/18</em>). The four knobs change the four values at the bottom of the screen.</p></div>
     </div>
@@ -453,8 +486,8 @@
           <dt><span class="cap">ENV</span></dt><dd><b>Amp envelope</b> → gate → mod envelope and velocity</dd>
           <dt><span class="cap">LFO</span></dt><dd><b>LFO 1</b> → LFO 2 → random per hit → cross mod and choke → sends</dd>
         </dl>
-        <p class="tip">These four jump into one row of 18 sound pages, laid out like a synth's signal path. SELECT walks
-          the whole row.</p></div>
+        <p class="tip">These four jump into one row of 19 sound pages, laid out like a synth's signal path. SELECT walks
+          the whole row, and the line under the title shows where you are in it.</p></div>
       <div class="card"><h3>Patterns and sequencing</h3>
         <dl>
           <dt><span class="cap">HOME</span></dt><dd><b>Step grid</b> → patterns → load → song</dd>
@@ -475,7 +508,7 @@
           undone.</p></div>
       <div class="card"><h3>Mix, effects and settings</h3>
         <dl>
-          <dt><span class="cap">FX</span></dt><dd><b>Reverb</b>, effects bus, delay, routing, dirt, master filter, compressor and
+          <dt><span class="cap">FX</span></dt><dd><b>Reverb</b>, effects bus, delay, dirt, master filter, compressor, routing and
             the sends, one page after another</dd>
           <dt><span class="cap">GLO</span></dt><dd><b>Mixer</b> → settings (MIDI, USB audio, colors …)</dd>
           <dt><span class="cap">OCT−</span></dt><dd><b>SHIFT</b>: hold it and the screen lists what each key does with it</dd>
@@ -503,6 +536,8 @@
       <figure class="screen"><img src="shots/reverb-hall.png" alt="The REVERB page: HALL, a castle" width="240" height="240" loading="lazy"><figcaption>The hall reverb</figcaption></figure>
       <figure class="screen"><img src="shots/rush.png" alt="PERFORM: RUSH, the snare roll" width="240" height="240" loading="lazy"><figcaption>RUSH</figcaption></figure>
     </div>
+    <p class="browse"><button type="button" class="alt" id="pages-open">Browse every page</button>
+      <span class="small">Every screen, mode by mode, in the order SELECT goes through them.</span></p>
   </section>
 
   <section class="band" id="start">
@@ -529,6 +564,24 @@
   <section class="band" id="updates">
     <div class="intro"><h2>Updates</h2><p>What each release added and fixed.</p></div>
     <div class="updates">
+      <div class="card"><h3>1.4.1<span>November 15, 2026</span></h3>
+        <p>Easier to find your way around the sound and effects pages. Projects, kits and settings from 1.4 work as
+          before.</p>
+        <ul>
+          <li><b>See where you are.</b> On the sound and FX pages, a line under the title names each part of the
+            chain: <b>SRC › FLT › SHP › ENV › MOD › FX</b> for the sound, <b>REV › BUS › DLY › DRT › MST › SND</b> for the
+            effects. The part you're in is lit, with a dot for each of its pages. The page number (13/19) is still
+            in the title.</li>
+          <li><b>ENV, SCL and LFO always open their first page</b>, even when you press them again, so one press takes
+            you back to the start of the envelopes, the filter or the LFOs.</li>
+          <li>New setting: <b>CONFIG → BUTTONS &amp; KITS → Select</b>. Set it to BUTTON and the button you pressed stays
+            lit: EDIT goes through every sound page, and ENV, SCL and LFO keep SELECT to their own pages.</li>
+          <li>On the FX pages, <b>ROUTING</b> now sits with the sends, where the effects are mixed.</li>
+          <li>The page pictures are cleaner: fewer words (the knobs already show the values), one text size, and a
+            thinner line for the track's steps.</li>
+          <li>On this site: <a href="#pages">browse every page</a> of Elixir, screen by screen.</li>
+        </ul>
+      </div>
       <div class="card"><h3>1.4<span>November 14, 2026</span></h3>
         <p>Pick morph kits with a knob, many more locks per step, a new dub SPRING reverb, WEAR controls for the
           whole kit, new global LFO moves, program changes out to your other gear, and a lighter engine that leaves
@@ -1202,6 +1255,77 @@
   show.addEventListener("mouseenter", () => { hold = true; });
   show.addEventListener("mouseleave", () => { hold = false; });
   timer = setInterval(() => { if (!hold && !document.hidden) go(i + 1); }, 3500);
+})();
+</script>
+
+<dialog class="pages" id="pages" aria-labelledby="pg-h">
+  <div class="pg-head"><h2 id="pg-h">Every page</h2><button type="button" class="pg-x" aria-label="Close">&times;</button></div>
+  <div class="pg-tabs" role="tablist"></div>
+  <div class="pg-body">
+    <figure class="screen"><img alt="" width="240" height="240"></figure>
+    <div class="pg-info">
+      <span class="pg-group"></span>
+      <h3></h3>
+      <div class="pg-num"></div>
+      <p class="pg-blurb"></p>
+      <div class="pg-nav"><button type="button" class="alt" data-d="-1">&larr; Previous</button>
+        <button type="button" class="alt" data-d="1">Next &rarr;</button></div>
+      <p class="small">Arrow keys go through every page. <a class="pg-man" href="manual/">In the manual</a></p>
+    </div>
+  </div>
+  <div class="pg-thumbs"></div>
+</dialog>
+<script type="application/json" id="pages-data"><!--PAGES--></script>
+<script>
+/* 1.4.1: the page browser: every screen (web/pages, from ui_test's tour), by section, in SELECT's order */
+(() => {
+  const secs = JSON.parse(document.getElementById("pages-data").textContent), d = document.getElementById("pages");
+  const all = secs.flatMap((s, si) => s.shots.map((p, pi) => ({ ...p, si, pi })));
+  const tabs = d.querySelector(".pg-tabs"), thumbs = d.querySelector(".pg-thumbs"), img = d.querySelector(".pg-body img");
+  const $ = (q) => d.querySelector(q);
+  let at = 0, shownSec = -1;
+  secs.forEach((s, si) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.role = "tab"; b.textContent = s.title;
+    b.addEventListener("click", () => go(all.findIndex((p) => p.si === si)));
+    tabs.append(b);
+  });
+  function go(i) {
+    at = (i + all.length) % all.length;
+    const p = all[at], s = secs[p.si];
+    img.src = p.src; img.alt = p.title;
+    $(".pg-group").textContent = p.group;
+    $("h3").textContent = p.title;
+    $(".pg-num").textContent = [p.num && "Page " + p.num, s.button].filter(Boolean).join(" · ");
+    $(".pg-blurb").textContent = s.blurb;
+    const m = $(".pg-man"); m.hidden = !s.manual; m.href = s.manual;
+    [...tabs.children].forEach((b, k) => b.setAttribute("aria-selected", k === p.si ? "true" : "false"));
+    if (shownSec !== p.si) {
+      shownSec = p.si; thumbs.replaceChildren();
+      s.shots.forEach((q, k) => {
+        const b = document.createElement("button"), t = document.createElement("img");
+        b.type = "button"; b.setAttribute("aria-label", q.title);
+        t.src = q.src; t.alt = ""; t.loading = "lazy"; b.append(t);
+        b.addEventListener("click", () => go(all.findIndex((r) => r.si === p.si && r.pi === k)));
+        thumbs.append(b);
+      });
+      tabs.children[p.si].scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
+    [...thumbs.children].forEach((b, k) => b.setAttribute("aria-current", k === p.pi ? "true" : "false"));
+    thumbs.children[p.pi].scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+  d.querySelectorAll(".pg-nav button").forEach((b) => b.addEventListener("click", () => go(at + +b.dataset.d)));
+  $(".pg-x").addEventListener("click", () => d.close());
+  d.addEventListener("click", (e) => { if (e.target === d) d.close(); });
+  d.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowRight") { go(at + 1); e.preventDefault(); }
+    if (e.key === "ArrowLeft") { go(at - 1); e.preventDefault(); }
+  });
+  document.getElementById("pages-open").addEventListener("click", () => { go(at); d.showModal(); });
+  const fromHash = () => { if (location.hash === "#pages" && !d.open) { go(at); d.showModal(); } };
+  fromHash();                                        /* (the manual and the updates link here) */
+  addEventListener("hashchange", fromHash);
+  d.addEventListener("close", () => { if (location.hash === "#pages") history.replaceState(null, "", location.pathname); });
 })();
 </script>
 

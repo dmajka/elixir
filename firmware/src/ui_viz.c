@@ -10,7 +10,7 @@
 #define VZ_X 4                                      /* the panel */
 #define VZ_Y 2
 #define VZ_W 232
-#define VZ_H vz_h                                   /* (104 on a sound page, over the steps' strip; 122 elsewhere) */
+#define VZ_H vz_h                                   /* (1.4.1: 90 on a sound page, 104 on FX, under the crumbs; 122 elsewhere) */
 #define VX0 12                                      /* the plot: x VX0 .. VX1 - 1, y VY0 .. VY1 */
 #define VX1 228
 #define VY0 24
@@ -56,6 +56,8 @@ static void vz_panel(const char *cap)
     if (cap && cap[0])
         cv_text_fit(VX0, VZ_Y + 4, &AF_S, cap, T_MID, vz_bg(), VX1 - VX0);
 }
+/* 1.4.1: a short figure at the caption's right (a total time, a ratio): the panel's one line of words */
+static void vz_cap_r(const char *t) { cv_text_r(VX1, VZ_Y + 4, &AF_S, t, T_MID, vz_bg()); }
 /* 1.0: an effect's name, big, at the panel's top (the delay's, the FX bus's, the insert's) */
 static void vz_title(const char *t) { cv_text(VX0, VZ_Y + 3, &AF_M, t, T_THEME); }
 /* a dashed guide line across the plot */
@@ -807,10 +809,7 @@ static void viz_osc(void)
         pw = sv(S_OSC, 0, 3);
     }
     step = (uint32_t)(((uint64_t)(uint32_t)exp2_q16((int32_t)(coarse * 65536u / 36u)) << 16) / VN);   /* (1 .. 11 cycles) */
-    vz_panel(sn ? (mix ? (mix > 100u ? "MOSTLY NOISE" : "THE WAVE AND NOISE") : "THE WAVE, NO NOISE")
-                : w < 6u ? L_WAVE[w] : "");
-    if (sn)
-        cv_text_r(VX1, VZ_Y + 4 + 14, &AF_S, w < 6u ? L_WAVE[w] : "", T_MID, vz_bg());
+    vz_panel("");                                    /* (1.4.1: no words: the cards name the wave and the mix) */
     vz_hguide(VMID, vz_faint());
     for (i = 0; i < VN; i++) {
         int32_t y = vz_wave(w, i * step, pw);
@@ -851,9 +850,7 @@ static void viz_fm(void)
         mw2 = sv(S_FM, 1, 1);
         cw = sv(S_OSC, 0, 2);
     }
-    put_str(b, mix ? "MIX: THE TWO ADDED" : v <= 2u ? "FM: THE WAVE BENT" : "METAL: 3 OSCILLATORS",
-            sizeof b);
-    vz_panel(b);
+    vz_panel("");                                    /* (1.4.1: the ratio alone) */
     vz_hguide(VMID, vz_faint());
     {                                                /* (the ratio, drawn at x8 at most) */
         int32_t q = exp2_q16(clamp32(r1, -48, 60) * 65536 / 12);
@@ -865,7 +862,7 @@ static void viz_fm(void)
             put_str(b + 6, "1:", sizeof b - 6u);
             put_int(b + str_len(b), (int32_t)((65536 * 2 / (q ? q : 1) + 1) / 2));
         }
-        cv_text_r(VX1, VZ_Y + 4 + 14, &AF_S, b, T_MID, vz_bg());
+        vz_cap_r(b);
     }
     r1 = exp2_q16(clamp32(r1, -36, 36) * 65536 / 12);    /* (the ratios, Q16) */
     r2 = exp2_q16(clamp32(r2, -36, 36) * 65536 / 12);
@@ -893,15 +890,13 @@ static void viz_trans(void)
     uint32_t w = sv(S_CLICK, 0, 0), vol = sv(S_CLICK, 0, 1), fr = sv(S_CLICK, 0, 2), i;
     uint32_t inc = 262144u + (((fr & 127u) << 20) * 10u) / 339u;   /* (sound.c: x0.25 .. x4) */
     char b[40];
-    put_str(b, w < sizeof L_TRANS / sizeof L_TRANS[0] ? L_TRANS[w] : "", sizeof b);
-    vz_panel(b);
+    vz_panel("");                                    /* (1.4.1: the Waveform card names it) */
     if (w == 1u) {                                   /* OFFSET: the wave starts on, not from 0 */
         for (i = 0; i < VN; i++)
             vz_y[i] = vz_yq15(vz_sin((uint32_t)(i * (0x80000000u / VN) * 3u) + (uint32_t)(vol << 24)), VMID, 32);
         vz_hguide(VMID, vz_faint());
         vz_trace(VX0, VN, VMID, T_THEME, vz_fill());
         vz_sparkle(VX0 + 2, vz_y[0] >> 4, 3);
-        cv_text(VX0, VZ_Y + 4 + 14, &AF_S, "THE WAVE STARTS FURTHER ON", T_MID);
         return;
     }
     if (w == 0u) {                                   /* SNAP: a pitch blip (snap_calc: down 0.2 x pitch a block, ^2) */
@@ -915,8 +910,7 @@ static void viz_trans(void)
         vz_hguide(VY1 - 2, vz_faint());
         vz_trace(VX0, VN, VY1 - 2, T_THEME, vz_fill());
         vz_sparkle(VX0 + 2, vz_y[0] >> 4, 3);
-        cv_text(VX0, VZ_Y + 4 + 14, &AF_S, "A PITCH BLIP AT THE HIT", T_MID);
-        cv_text_r(VX1, VZ_Y + 4 + 14, &AF_S, "30 ms", T_MID, vz_bg());
+        vz_cap_r("30 ms");
         return;
     }
     {
@@ -938,8 +932,8 @@ static void viz_trans(void)
                         mx > 40u ? T_THEME : ux_mix(vz_bg(), T_THEME, 60));
         }
         put_int(b, (int32_t)((len << 20) / inc * 10u / 441u));   /* (2204 << 20: in 32 bits) */
-        put_str(b + str_len(b), " ms AT THIS PITCH", sizeof b - str_len(b));
-        cv_text_r(VX1, VZ_Y + 4 + 14, &AF_S, b, T_MID, vz_bg());
+        put_str(b + str_len(b), " ms", sizeof b - str_len(b));   /* (its length at this pitch) */
+        vz_cap_r(b);
 #undef d_at
     }
 }
@@ -996,7 +990,7 @@ static void viz_env(int gate)
         card_value(b + str_len(b), sizeof b - str_len(b), sect_par(ui.track, S_AEG, 0, 0), a);
     put_str(b + str_len(b), "   DECAY ", sizeof b - str_len(b));
     card_value(b + str_len(b), sizeof b - str_len(b), sect_par(ui.track, S_AEG, 0, 1), d);
-    vz_panel(gate ? (held ? "GATE ON: HELD FOR THE STEP" : "GATE OFF: ONE SHOT") : b);
+    vz_panel(gate ? (held ? "HELD" : "ONE SHOT") : "");   /* (1.4.1: the cards have the times) */
     vz_hguide(VY1, vz_faint());
     for (i = 0; i < VN; i++) {
         int32_t tm = (int32_t)((uint32_t)i * (uint32_t)tot * 25u / 54u), y;   /* (hundredths of a ms) */
@@ -1021,10 +1015,8 @@ static void viz_env(int gate)
     if (gate && held)                                /* (the gate: a bar under the held part) */
         cv_rect(VX0 + rise * VN / tot, VY1 + 2, th * VN / tot, 3, T_ACCENT);
     vz_sparkle(VX0 + pk, VY0 + 6, 3);
-    put_str(b, "TOTAL ", sizeof b);
-    put_ms_short(t, tot);
-    put_str(b + str_len(b), t, sizeof b - str_len(b));
-    cv_text_r(VX1, VZ_Y + 4 + 14, &AF_S, b, T_MID, vz_bg());
+    put_ms_short(t, tot);                            /* (the whole sound's length) */
+    vz_cap_r(t);
 }
 
 /* MOD EG: the pitch envelope (D1-D3, SN); VELOCITY: soft to hard hits, what they move */
@@ -1038,7 +1030,7 @@ static void viz_mod(void)
         int32_t td = eg_time_ms(EG_ATK[dec & 127u]);
         int32_t semis = (int32_t)(PITCH_AMT[amt & 127u] * 12u >> 16);
         (void)semis;
-        vz_panel("PITCH ENVELOPE: FROM HIGH, DOWN");
+        vz_panel("");                                /* (1.4.1: the Decay card has its time) */
         vz_hguide(VY1, vz_faint());
         for (i = 0; i < VN; i++) {                   /* (over 400 ms, or the decay if longer) */
             int32_t span = td > 400 ? td : 400, tm = (int32_t)((uint32_t)i * (uint32_t)span * 25u / 54u);
@@ -1050,17 +1042,14 @@ static void viz_mod(void)
         vz_trace(VX0, VN, VY1, T_THEME, vz_fill());
         if (amt)
             vz_sparkle(VX0 + 2, vz_y[0] >> 4, 3);
-        card_value(t, sizeof t, sect_par(ui.track, S_MOD, 0, 0), dec);
-        cv_text_r(VX1, VZ_Y + 4 + 14, &AF_S, t, T_MID, vz_bg());
+        (void)t;
         return;
     }
     {
         uint32_t hh = v >= 4u ? 0u : 1u;
         uint32_t pd = sect_par(ui.track, S_MOD, hh, 0), amt = sv(S_MOD, hh, 1), vol = sv(S_MOD, hh, 2);
-        put_str(b, "VELOCITY > ", sizeof b);
-        if (pd && pd != PAR_NONE)
-            par_format(b + str_len(b), pd, vp_get(pd), sizeof b - str_len(b));
-        vz_panel(b);
+        (void)b;
+        vz_panel("");                                /* (1.4.1: the cards name the target and the volume) */
         for (i = 0; i < 8u; i++) {                   /* (eight hits, soft to hard: their level, the target's move) */
             int32_t x = VX0 + 8 + (int32_t)i * 26, vel = 16 + (int32_t)i * 111 / 7;
             int32_t h = vol ? vel * 40 / 127 : 40, m = pd && vp_get(pd) ? (int32_t)amt * vel * 22 / (127 * 127) : 0;
@@ -1070,7 +1059,6 @@ static void viz_mod(void)
             if (i == 7u && m)
                 vz_sparkle(x + 6, VY1 - h - 4 - m, 3);
         }
-        cv_text_r(VX1, VZ_Y + 4 + 14, &AF_S, vol ? "SOFT HITS QUIETER" : "EVERY HIT AT FULL LEVEL", T_MID, vz_bg());
     }
 }
 
@@ -1116,8 +1104,8 @@ static void viz_flt(uint32_t ty, uint32_t fv, uint32_t rs, const char *name)
         int32_t a = 65536 - (int32_t)(rs * 65536u / 127u);
         d = (65536 - mulq16(65536 - mulq16(a, a), 63000)) * 2;
     }
-    put_str(b, name, sizeof b);
-    if (ty != F_OFF) {
+    put_str(b, name ? name : "", sizeof b);
+    if (name && ty != F_OFF) {                       /* (1.4.1: no name: no words, the sound page's cards have them) */
         put_str(b + str_len(b), "   ", sizeof b - str_len(b));
         if (fc_hz >= 1000) {
             char *e = put_int(b + str_len(b), fc_hz / 1000);
@@ -1187,7 +1175,7 @@ static void viz_flt(uint32_t ty, uint32_t fv, uint32_t rs, const char *name)
 static void viz_filter(void)
 {
     uint32_t ty = sv(S_FILTER, 0, 0) + 1u;           /* (1.0: Type, Freq, Reso, Drive) */
-    viz_flt(ty, sv(S_FILTER, 0, 1) * 65536u / 127u, sv(S_FILTER, 0, 2), ty - 1u < F_LAST ? L_FILTER[ty - 1u] : "");
+    viz_flt(ty, sv(S_FILTER, 0, 1) * 65536u / 127u, sv(S_FILTER, 0, 2), 0);
 }
 /* 1.0: FX's DJ FILTER page: the master's filter where the DJ knob (and what moves it) has it */
 static void viz_ring(int32_t d)                     /* 1.0: RING: its bands where they ring, the root brightest */
@@ -1273,7 +1261,7 @@ static void viz_shape(void)
     char b[40];
     if (ui.half == 1u) {                             /* TILT: the slope round 1 kHz */
         int32_t s = (int32_t)tilt - 64;
-        vz_panel(s ? (s > 0 ? "TILT: BRIGHTER" : "TILT: DARKER") : "TILT: FLAT");
+        vz_panel("");                                /* (1.4.1: the Tilt card says which way) */
         vz_hguide(VMID, vz_faint());
         for (i = 0; i < VN; i++)
             vz_y[i] = (int16_t)(VMID * 16 - ((int32_t)i - (int32_t)VN / 2) * s * 16 / 160);
@@ -1282,13 +1270,8 @@ static void viz_shape(void)
         cv_text_r(VX1, VY1 - 12, &AF_S, "HIGHS", T_MID, vz_bg());
         return;
     }
-    put_str(b, sh < NSHAPE ? L_SHAPE[sh] : "", sizeof b);
-    if (bits) {
-        put_str(b + str_len(b), "   ", sizeof b - str_len(b));
-        put_int(b + str_len(b), 16 - (int32_t)bits);
-        put_str(b + str_len(b), " BITS", sizeof b - str_len(b));
-    }
-    vz_panel(b);
+    (void)b;
+    vz_panel("");                                    /* (1.4.1: the cards name the shape and the bits) */
     vz_hguide(VMID, vz_faint());
     for (i = 0; i < VN; i++)                         /* (the clean sine, faint) */
         cv_pset(VX0 + (int32_t)i, vz_yq15(vz_sin(i * (0xFFFFFFFFu / VN)) * 3 / 4, VMID, 32) >> 4, vz_faint());
@@ -1358,7 +1341,7 @@ static void viz_lfo(int two)
     int32_t lastv = 0;
     uint32_t ph = 0, gone = 0, run;
     const pattern_t *pt = shown_pat();
-    char b[48], nm[32], rt[24];
+    char b[48], nm[32];
     rate = vp_get(lfo_par(ui.track, two, LP_RATE)); amt = vp_get(lfo_par(ui.track, two, LP_DEPTH));
     wave = vp_get(lfo_par(ui.track, two, LP_WAVE)); tgt = lfo_par(ui.track, two, LP_DEST);
     mode = vp_get(lfo_par(ui.track, two, LP_MODE)); sync = vp_get(lfo_par(ui.track, two, LP_SYNC));
@@ -1371,12 +1354,6 @@ static void viz_lfo(int two)
         cyc_q16 = (uint32_t)(cyc_q16 > 0xffffffffu ? 0xffffffffu : cyc_q16) / (uint32_t)bpm;   /* (no 64-bit divide here) */
     }
     cyc_q16 = cyc_q16 < 1u ? 1u : cyc_q16 > (24u << 16) ? 24u << 16 : cyc_q16;
-    if (sync && sync < NSYNC) {                      /* (its rate, as its card shows it: drawn last) */
-        put_str(rt, "SYNC ", sizeof rt);
-        put_str(rt + 5, L_SYNC[sync], sizeof rt - 5u);
-    } else {
-        card_value(rt, sizeof rt, lfo_par(ui.track, two, LP_RATE), rate);
-    }
     {                                                /* 0.25.2: DEST: its group (another voice's: that voice), */
         uint32_t tv = tgt && tgt != PAR_NONE ? target_voice(tgt) : 0u;   /* .. its full name as MODEL's */
         uint32_t g = tgt && tgt != PAR_NONE ? tgt_full(nm, sizeof nm, tv, vp_get(tgt)) : TG_NONE;
@@ -1394,7 +1371,7 @@ static void viz_lfo(int two)
         if (g == TG_NONE)
             put_str(nm, "Off", sizeof nm);
         cv_text_fit(VX0, 22, &AF_M, nm, g == TG_NONE ? T_DIM : T_THEME, vz_bg(),
-                    VX1 - VX0 - (int32_t)text_w(&AF_S, rt) - 10);
+                    VX1 - VX0);
     }
     {                                                /* (who restarts it: the RETRIGGER voice's track, or its own) */
         uint32_t rt = rtrg ? rtrg - 1u : (mode != LM_TRIG ? track_voice(ui.track) : 99u);
@@ -1489,7 +1466,6 @@ static void viz_lfo(int two)
         }
     }
     vz_trace(VX0, VN, VY1, T_THEME, vz_fill());
-    cv_text_r(VX1, VZ_Y + 4 + 14, &AF_S, rt, T_MID, vz_bg());
 }
 
 #undef LY0
@@ -1499,10 +1475,10 @@ static void viz_random(void)
 {
     static const char *const N[4] = {"PITCH", "DECAY", "FILTER", "PAN"};
     uint32_t k, i, h = 0x2545F491u;
-    vz_panel("");                                    /* (1.0: no caption; the rows bigger) */
+    vz_panel("");                                    /* (1.0: no caption) */
     for (k = 0; k < 4u; k++) {
-        int32_t y = VZ_Y + 16 + (int32_t)k * 24, a = (int32_t)sv(S_RANDOM, 0, k), w = a * 70 / 127;
-        cv_text(VX0, y - 7, &AF_M, N[k], a ? T_TEXT : T_DIM);
+        int32_t y = VZ_Y + 14 + (int32_t)k * ((VZ_H - 24) / 3), a = (int32_t)sv(S_RANDOM, 0, k), w = a * 70 / 127;
+        cv_text(VX0, y - 5, &AF_S, N[k], a ? T_TEXT : T_DIM);   /* (1.4.1: S, as FX TRACK SENDS' rows) */
         cv_rect(76, y, 140, 1, vz_faint());
         cv_rect(146, y - 6, 1, 13, ux_mix(vz_bg(), T_TEXT, 40));
         if (a)
@@ -1588,14 +1564,13 @@ static void viz_xmod(void)
 static void viz_pitch(void)
 {
     uint32_t v = track_voice(ui.track), m = sv(S_MODEL, 0, 0);
-    vz_panel("PITCH");
+    vz_panel("");                                    /* (1.4.1: the model; Coarse and Fine its only knobs) */
     cv_text(VX0, 22, &AF_M, L_MODEL[m], T_THEME);
-    vz_wrap(VX0, 46, IX - VX0 - 12, 18, 3u, &AF_M, "Coarse and Fine tune it", T_TEXT);
     ic_model(m, v, sv(S_MODEL, 0, 1), sv(S_MODEL, 0, 2), sv(S_MODEL, 0, 3));
 }
 static void draw_sound_viz(void)
 {
-    vz_h = 104;
+    vz_h = SOUND_VIZ_H - CRUMB_H - 4;                /* (1.4.1: 92, under the crumbs; was 104) */
     if (ui.sect == S_OSC && lxr_unheard(ui.track) == 2u) {
         viz_pitch();
         return;
@@ -2214,7 +2189,7 @@ static void rt_link(int32_t x, int32_t y0, int32_t y1, int32_t amt)   /* a brack
 }
 static void viz_route(void)
 {
-    static const int32_t Y[3] = {30, 62, 94};        /* (BUS, DELAY, REVERB) */
+    static const int32_t Y[3] = {22, 50, 78};        /* (BUS, DELAY, REVERB; 1.4.1: under the crumbs) */
     int32_t r = par[PAR_DLY_ROUTE], fd = r > 64 ? (r - 64) * 127 / 63 : 0, df = r < 64 ? (64 - r) * 127 / 64 : 0;
     int32_t rf = par[PAR_REV_FX], er = par[PAR_ECHOREV], keep[3], k, i, x = RT_X + 32, w;
     uint16_t mf = ux_mix(vz_bg(), T_THEME, 20), c;

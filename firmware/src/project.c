@@ -1072,6 +1072,10 @@ typedef struct {
                                                       * byte: an Elixir 1.0 or 1.1 takes these settings, its mask
                                                       * (127) clearing it) */
     uint8_t pcch, pcwhen;                            /* (1.4: PROGRAM CHANGE OUT, in the padding) */
+    uint8_t sbtn;                                    /* (1.4.1: CONFIG Select: 0, the default and what settings from
+                                                      * before hold, ALL: SELECT goes through every sound page and the
+                                                      * lit button follows; 1 BUTTON: EDIT's every page, ENV, SCL and
+                                                      * LFO's their own, the button pressed stays lit. The padding) */
 } elixir_settings_t;
 #define KS_QUIET 0x80u
 _Static_assert(sizeof(elixir_settings_t) == 284u, "settings: caout after mixout");

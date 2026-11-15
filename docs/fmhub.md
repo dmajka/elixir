@@ -64,7 +64,7 @@ Valid JSON matters: double quotes, commas between fields, no comma after the las
 - Many firmwares have a browser emulator or a host build that can save its 240 × 240 screen – use that, don't take a
   phone photo of the screen.
 - To change it later: replace the file, keep the path, push. The hub copies the picture and serves it itself.
-- Elixir's: `tools/make_card.py` (from 1.0: the splash's potion and word over "drum synth & sequencer", 480 × 480).
+- Elixir's: `tools/make_card.py` (from 1.4.1: two screens side by side, the GENERATOR page on GRIDS and WANDER, under the potion and word, 1008 × 1008; `build/ui_test build/card --card` first).
 
 ## 4. Check before pushing
 

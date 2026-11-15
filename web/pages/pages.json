@@ -1,0 +1,1122 @@
+[
+ {
+  "section": "home",
+  "group": "GRID",
+  "n": 1,
+  "of": 1,
+  "title": "PATTERN",
+  "file": "home-00.png"
+ },
+ {
+  "section": "home",
+  "group": "PATTERNS",
+  "n": 1,
+  "of": 1,
+  "title": "PATTERNS",
+  "file": "home-01.png"
+ },
+ {
+  "section": "home",
+  "group": "SONG",
+  "n": 1,
+  "of": 3,
+  "title": "SONG",
+  "file": "home-02.png"
+ },
+ {
+  "section": "home",
+  "group": "SONG ROWS",
+  "n": 2,
+  "of": 3,
+  "title": "PRESS OCT+ TO INSERT A ROW",
+  "file": "home-03.png"
+ },
+ {
+  "section": "home",
+  "group": "SONG ROADS",
+  "n": 3,
+  "of": 3,
+  "title": "ROADS: AS WRITTEN",
+  "file": "home-04.png"
+ },
+ {
+  "section": "seq",
+  "group": "TRACK",
+  "n": 1,
+  "of": 9,
+  "title": "TRACK",
+  "file": "seq-05.png"
+ },
+ {
+  "section": "seq",
+  "group": "TRACK",
+  "n": 2,
+  "of": 9,
+  "title": "GENERATOR",
+  "file": "seq-06.png"
+ },
+ {
+  "section": "seq",
+  "group": "TRACK",
+  "n": 3,
+  "of": 9,
+  "title": "ACTION",
+  "file": "seq-07.png"
+ },
+ {
+  "section": "seq",
+  "group": "TRACK",
+  "n": 4,
+  "of": 9,
+  "title": "MELODY (1/2)",
+  "file": "seq-08.png"
+ },
+ {
+  "section": "seq",
+  "group": "TRACK",
+  "n": 5,
+  "of": 9,
+  "title": "MELODY (2/2)",
+  "file": "seq-09.png"
+ },
+ {
+  "section": "seq",
+  "group": "TRACK",
+  "n": 6,
+  "of": 9,
+  "title": "SCALE",
+  "file": "seq-10.png"
+ },
+ {
+  "section": "seq",
+  "group": "TRACK",
+  "n": 7,
+  "of": 9,
+  "title": "GROOVE",
+  "file": "seq-11.png"
+ },
+ {
+  "section": "seq",
+  "group": "TRACK",
+  "n": 8,
+  "of": 9,
+  "title": "BOUNCE",
+  "file": "seq-12.png"
+ },
+ {
+  "section": "seq",
+  "group": "TRACK",
+  "n": 9,
+  "of": 9,
+  "title": "TIME STRETCH",
+  "file": "seq-13.png"
+ },
+ {
+  "section": "step",
+  "group": "STEP",
+  "n": 1,
+  "of": 4,
+  "title": "STEP  STEP 5",
+  "file": "step-14.png"
+ },
+ {
+  "section": "step",
+  "group": "STEP",
+  "n": 2,
+  "of": 4,
+  "title": "TRIG  STEP 5",
+  "file": "step-15.png"
+ },
+ {
+  "section": "step",
+  "group": "STEP",
+  "n": 3,
+  "of": 4,
+  "title": "LOCKS  STEP 5",
+  "file": "step-16.png"
+ },
+ {
+  "section": "step",
+  "group": "STEP",
+  "n": 4,
+  "of": 4,
+  "title": "RATCHET  STEP 5",
+  "file": "step-17.png"
+ },
+ {
+  "section": "sound",
+  "group": "SRC",
+  "n": 1,
+  "of": 19,
+  "title": "MODEL",
+  "file": "sound-18.png"
+ },
+ {
+  "section": "sound",
+  "group": "SRC",
+  "n": 2,
+  "of": 19,
+  "title": "OSCILLATOR",
+  "file": "sound-19.png"
+ },
+ {
+  "section": "sound",
+  "group": "SRC",
+  "n": 3,
+  "of": 19,
+  "title": "FM",
+  "file": "sound-20.png"
+ },
+ {
+  "section": "sound",
+  "group": "SRC",
+  "n": 4,
+  "of": 19,
+  "title": "TRANSIENT",
+  "file": "sound-21.png"
+ },
+ {
+  "section": "sound",
+  "group": "FLT",
+  "n": 5,
+  "of": 19,
+  "title": "FILTER",
+  "file": "sound-22.png"
+ },
+ {
+  "section": "sound",
+  "group": "SHP",
+  "n": 6,
+  "of": 19,
+  "title": "SHAPE (1/2)",
+  "file": "sound-23.png"
+ },
+ {
+  "section": "sound",
+  "group": "SHP",
+  "n": 7,
+  "of": 19,
+  "title": "SHAPE (2/2)",
+  "file": "sound-24.png"
+ },
+ {
+  "section": "sound",
+  "group": "SHP",
+  "n": 8,
+  "of": 19,
+  "title": "INSERT FX",
+  "file": "sound-25.png"
+ },
+ {
+  "section": "sound",
+  "group": "ENV",
+  "n": 9,
+  "of": 19,
+  "title": "AMP EG",
+  "file": "sound-26.png"
+ },
+ {
+  "section": "sound",
+  "group": "ENV",
+  "n": 10,
+  "of": 19,
+  "title": "GATE",
+  "file": "sound-27.png"
+ },
+ {
+  "section": "sound",
+  "group": "ENV",
+  "n": 11,
+  "of": 19,
+  "title": "MOD EG / VELO (1/2)",
+  "file": "sound-28.png"
+ },
+ {
+  "section": "sound",
+  "group": "ENV",
+  "n": 12,
+  "of": 19,
+  "title": "MOD EG / VELO (2/2)",
+  "file": "sound-29.png"
+ },
+ {
+  "section": "sound",
+  "group": "MOD",
+  "n": 13,
+  "of": 19,
+  "title": "LFO 1 (1/2)",
+  "file": "sound-30.png"
+ },
+ {
+  "section": "sound",
+  "group": "MOD",
+  "n": 14,
+  "of": 19,
+  "title": "LFO 1 (2/2)",
+  "file": "sound-31.png"
+ },
+ {
+  "section": "sound",
+  "group": "MOD",
+  "n": 15,
+  "of": 19,
+  "title": "LFO 2 (1/2)",
+  "file": "sound-32.png"
+ },
+ {
+  "section": "sound",
+  "group": "MOD",
+  "n": 16,
+  "of": 19,
+  "title": "LFO 2 (2/2)",
+  "file": "sound-33.png"
+ },
+ {
+  "section": "sound",
+  "group": "MOD",
+  "n": 17,
+  "of": 19,
+  "title": "RANDOM PER HIT",
+  "file": "sound-34.png"
+ },
+ {
+  "section": "sound",
+  "group": "MOD",
+  "n": 18,
+  "of": 19,
+  "title": "CROSS MOD / CHOKE",
+  "file": "sound-35.png"
+ },
+ {
+  "section": "sound",
+  "group": "FX",
+  "n": 19,
+  "of": 19,
+  "title": "FX TRACK SENDS",
+  "file": "sound-36.png"
+ },
+ {
+  "section": "model",
+  "group": "MODAL",
+  "n": 1,
+  "of": 17,
+  "title": "MODEL (1/2)",
+  "file": "model-37.png"
+ },
+ {
+  "section": "model",
+  "group": "STRING",
+  "n": 1,
+  "of": 17,
+  "title": "MODEL (1/2)",
+  "file": "model-38.png"
+ },
+ {
+  "section": "model",
+  "group": "FM",
+  "n": 1,
+  "of": 17,
+  "title": "MODEL (1/2)",
+  "file": "model-39.png"
+ },
+ {
+  "section": "model",
+  "group": "P VA",
+  "n": 1,
+  "of": 18,
+  "title": "MODEL (1/2)",
+  "file": "model-40.png"
+ },
+ {
+  "section": "model",
+  "group": "P WSHAPE",
+  "n": 1,
+  "of": 18,
+  "title": "MODEL (1/2)",
+  "file": "model-41.png"
+ },
+ {
+  "section": "model",
+  "group": "P FM",
+  "n": 1,
+  "of": 18,
+  "title": "MODEL (1/2)",
+  "file": "model-42.png"
+ },
+ {
+  "section": "model",
+  "group": "CLOUD",
+  "n": 1,
+  "of": 18,
+  "title": "MODEL (1/2)",
+  "file": "model-43.png"
+ },
+ {
+  "section": "model",
+  "group": "P ADDTV",
+  "n": 1,
+  "of": 18,
+  "title": "MODEL (1/2)",
+  "file": "model-44.png"
+ },
+ {
+  "section": "model",
+  "group": "P WTABLE",
+  "n": 1,
+  "of": 18,
+  "title": "MODEL (1/2)",
+  "file": "model-45.png"
+ },
+ {
+  "section": "model",
+  "group": "P CHORD",
+  "n": 1,
+  "of": 18,
+  "title": "MODEL (1/2)",
+  "file": "model-46.png"
+ },
+ {
+  "section": "model",
+  "group": "P SPEECH",
+  "n": 1,
+  "of": 18,
+  "title": "MODEL (1/2)",
+  "file": "model-47.png"
+ },
+ {
+  "section": "model",
+  "group": "P SWARM",
+  "n": 1,
+  "of": 18,
+  "title": "MODEL (1/2)",
+  "file": "model-48.png"
+ },
+ {
+  "section": "model",
+  "group": "NOISE",
+  "n": 1,
+  "of": 17,
+  "title": "MODEL",
+  "file": "model-49.png"
+ },
+ {
+  "section": "model",
+  "group": "RAIN",
+  "n": 1,
+  "of": 18,
+  "title": "MODEL (1/2)",
+  "file": "model-50.png"
+ },
+ {
+  "section": "model",
+  "group": "P STRING",
+  "n": 1,
+  "of": 17,
+  "title": "MODEL (1/2)",
+  "file": "model-51.png"
+ },
+ {
+  "section": "model",
+  "group": "P MODAL",
+  "n": 1,
+  "of": 17,
+  "title": "MODEL (1/2)",
+  "file": "model-52.png"
+ },
+ {
+  "section": "model",
+  "group": "P BD",
+  "n": 1,
+  "of": 17,
+  "title": "MODEL (1/2)",
+  "file": "model-53.png"
+ },
+ {
+  "section": "model",
+  "group": "P SD",
+  "n": 1,
+  "of": 17,
+  "title": "MODEL (1/2)",
+  "file": "model-54.png"
+ },
+ {
+  "section": "model",
+  "group": "P HH",
+  "n": 1,
+  "of": 17,
+  "title": "MODEL (1/2)",
+  "file": "model-55.png"
+ },
+ {
+  "section": "model",
+  "group": "CLICK",
+  "n": 1,
+  "of": 17,
+  "title": "MODEL (1/2)",
+  "file": "model-56.png"
+ },
+ {
+  "section": "model",
+  "group": "TRAIN",
+  "n": 1,
+  "of": 17,
+  "title": "MODEL (1/2)",
+  "file": "model-57.png"
+ },
+ {
+  "section": "model",
+  "group": "CRUNCH",
+  "n": 1,
+  "of": 17,
+  "title": "MODEL (1/2)",
+  "file": "model-58.png"
+ },
+ {
+  "section": "model",
+  "group": "BITS",
+  "n": 1,
+  "of": 17,
+  "title": "MODEL (1/2)",
+  "file": "model-59.png"
+ },
+ {
+  "section": "model",
+  "group": "BURST",
+  "n": 1,
+  "of": 17,
+  "title": "MODEL (1/2)",
+  "file": "model-60.png"
+ },
+ {
+  "section": "model",
+  "group": "SNAP",
+  "n": 1,
+  "of": 17,
+  "title": "MODEL (1/2)",
+  "file": "model-61.png"
+ },
+ {
+  "section": "model",
+  "group": "GRAIN",
+  "n": 1,
+  "of": 17,
+  "title": "MODEL (1/2)",
+  "file": "model-62.png"
+ },
+ {
+  "section": "model",
+  "group": "DUST",
+  "n": 1,
+  "of": 17,
+  "title": "MODEL (1/2)",
+  "file": "model-63.png"
+ },
+ {
+  "section": "model",
+  "group": "POP",
+  "n": 1,
+  "of": 17,
+  "title": "MODEL (1/2)",
+  "file": "model-64.png"
+ },
+ {
+  "section": "model",
+  "group": "CHIRP",
+  "n": 1,
+  "of": 17,
+  "title": "MODEL (1/2)",
+  "file": "model-65.png"
+ },
+ {
+  "section": "model",
+  "group": "ENSEMBLE",
+  "n": 1,
+  "of": 18,
+  "title": "MODEL (1/2)",
+  "file": "model-66.png"
+ },
+ {
+  "section": "fx",
+  "group": "REV",
+  "n": 1,
+  "of": 16,
+  "title": "REVERB",
+  "file": "fx-67.png"
+ },
+ {
+  "section": "fx",
+  "group": "BUS",
+  "n": 2,
+  "of": 16,
+  "title": "FX BUS",
+  "file": "fx-68.png"
+ },
+ {
+  "section": "fx",
+  "group": "BUS",
+  "n": 3,
+  "of": 16,
+  "title": "FX BUS: PHASER",
+  "file": "fx-69.png"
+ },
+ {
+  "section": "fx",
+  "group": "DLY",
+  "n": 4,
+  "of": 16,
+  "title": "DELAY (1/2)",
+  "file": "fx-70.png"
+ },
+ {
+  "section": "fx",
+  "group": "DLY",
+  "n": 5,
+  "of": 16,
+  "title": "DELAY (2/2)",
+  "file": "fx-71.png"
+ },
+ {
+  "section": "fx",
+  "group": "DRT",
+  "n": 6,
+  "of": 16,
+  "title": "DIRT",
+  "file": "fx-72.png"
+ },
+ {
+  "section": "fx",
+  "group": "MST",
+  "n": 7,
+  "of": 16,
+  "title": "MASTER FILTER",
+  "file": "fx-73.png"
+ },
+ {
+  "section": "fx",
+  "group": "MST",
+  "n": 8,
+  "of": 16,
+  "title": "MASTER COMP",
+  "file": "fx-74.png"
+ },
+ {
+  "section": "fx",
+  "group": "MST",
+  "n": 9,
+  "of": 16,
+  "title": "COMP: SIDECHAIN",
+  "file": "fx-75.png"
+ },
+ {
+  "section": "fx",
+  "group": "SND",
+  "n": 10,
+  "of": 16,
+  "title": "ROUTING",
+  "file": "fx-76.png"
+ },
+ {
+  "section": "fx",
+  "group": "SND",
+  "n": 11,
+  "of": 16,
+  "title": "FX SEND (1/2)",
+  "file": "fx-77.png"
+ },
+ {
+  "section": "fx",
+  "group": "SND",
+  "n": 12,
+  "of": 16,
+  "title": "FX SEND (2/2)",
+  "file": "fx-78.png"
+ },
+ {
+  "section": "fx",
+  "group": "SND",
+  "n": 13,
+  "of": 16,
+  "title": "DELAY SEND (1/2)",
+  "file": "fx-79.png"
+ },
+ {
+  "section": "fx",
+  "group": "SND",
+  "n": 14,
+  "of": 16,
+  "title": "DELAY SEND (2/2)",
+  "file": "fx-80.png"
+ },
+ {
+  "section": "fx",
+  "group": "SND",
+  "n": 15,
+  "of": 16,
+  "title": "REVERB SEND (1/2)",
+  "file": "fx-81.png"
+ },
+ {
+  "section": "fx",
+  "group": "SND",
+  "n": 16,
+  "of": 16,
+  "title": "REVERB SEND (2/2)",
+  "file": "fx-82.png"
+ },
+ {
+  "section": "mixer",
+  "group": "MIXER",
+  "n": 1,
+  "of": 10,
+  "title": "MIXER: VOLUME (1/2)",
+  "file": "mixer-83.png"
+ },
+ {
+  "section": "mixer",
+  "group": "MIXER",
+  "n": 2,
+  "of": 10,
+  "title": "MIXER: VOLUME (2/2)",
+  "file": "mixer-84.png"
+ },
+ {
+  "section": "mixer",
+  "group": "MIXER",
+  "n": 3,
+  "of": 10,
+  "title": "MIXER: PAN (1/2)",
+  "file": "mixer-85.png"
+ },
+ {
+  "section": "mixer",
+  "group": "MIXER",
+  "n": 4,
+  "of": 10,
+  "title": "MIXER: PAN (2/2)",
+  "file": "mixer-86.png"
+ },
+ {
+  "section": "mixer",
+  "group": "MIXER",
+  "n": 5,
+  "of": 10,
+  "title": "MIXER: FX SEND (1/2)",
+  "file": "mixer-87.png"
+ },
+ {
+  "section": "mixer",
+  "group": "MIXER",
+  "n": 6,
+  "of": 10,
+  "title": "MIXER: FX SEND (2/2)",
+  "file": "mixer-88.png"
+ },
+ {
+  "section": "mixer",
+  "group": "MIXER",
+  "n": 7,
+  "of": 10,
+  "title": "MIXER: DLY SEND (1/2)",
+  "file": "mixer-89.png"
+ },
+ {
+  "section": "mixer",
+  "group": "MIXER",
+  "n": 8,
+  "of": 10,
+  "title": "MIXER: DLY SEND (2/2)",
+  "file": "mixer-90.png"
+ },
+ {
+  "section": "mixer",
+  "group": "MIXER",
+  "n": 9,
+  "of": 10,
+  "title": "MIXER: REV SEND (1/2)",
+  "file": "mixer-91.png"
+ },
+ {
+  "section": "mixer",
+  "group": "MIXER",
+  "n": 10,
+  "of": 10,
+  "title": "MIXER: REV SEND (2/2)",
+  "file": "mixer-92.png"
+ },
+ {
+  "section": "config",
+  "group": "CONFIG",
+  "n": 1,
+  "of": 17,
+  "title": "SEQUENCER",
+  "file": "config-93.png"
+ },
+ {
+  "section": "config",
+  "group": "CONFIG",
+  "n": 2,
+  "of": 17,
+  "title": "MIDI",
+  "file": "config-94.png"
+ },
+ {
+  "section": "config",
+  "group": "CONFIG",
+  "n": 3,
+  "of": 17,
+  "title": "MIDI CHANNELS",
+  "file": "config-95.png"
+ },
+ {
+  "section": "config",
+  "group": "CONFIG",
+  "n": 4,
+  "of": 17,
+  "title": "MIDI CHANNELS",
+  "file": "config-96.png"
+ },
+ {
+  "section": "config",
+  "group": "CONFIG",
+  "n": 5,
+  "of": 17,
+  "title": "MIDI NOTES",
+  "file": "config-97.png"
+ },
+ {
+  "section": "config",
+  "group": "CONFIG",
+  "n": 6,
+  "of": 17,
+  "title": "MIDI NOTES",
+  "file": "config-98.png"
+ },
+ {
+  "section": "config",
+  "group": "CONFIG",
+  "n": 7,
+  "of": 17,
+  "title": "MIDI OUT",
+  "file": "config-99.png"
+ },
+ {
+  "section": "config",
+  "group": "CONFIG",
+  "n": 8,
+  "of": 17,
+  "title": "MIDI OUT, VOLUME",
+  "file": "config-100.png"
+ },
+ {
+  "section": "config",
+  "group": "CONFIG",
+  "n": 9,
+  "of": 17,
+  "title": "PROGRAM CHANGE OUT",
+  "file": "config-101.png"
+ },
+ {
+  "section": "config",
+  "group": "CONFIG",
+  "n": 10,
+  "of": 17,
+  "title": "USB MIX",
+  "file": "config-102.png"
+ },
+ {
+  "section": "config",
+  "group": "CONFIG",
+  "n": 11,
+  "of": 17,
+  "title": "USB MIX",
+  "file": "config-103.png"
+ },
+ {
+  "section": "config",
+  "group": "CONFIG",
+  "n": 12,
+  "of": 17,
+  "title": "DEVICE",
+  "file": "config-104.png"
+ },
+ {
+  "section": "config",
+  "group": "CONFIG",
+  "n": 13,
+  "of": 17,
+  "title": "REMOTE",
+  "file": "config-105.png"
+ },
+ {
+  "section": "config",
+  "group": "CONFIG",
+  "n": 14,
+  "of": 17,
+  "title": "MORPH",
+  "file": "config-106.png"
+ },
+ {
+  "section": "config",
+  "group": "CONFIG",
+  "n": 15,
+  "of": 17,
+  "title": "BUTTONS & KITS",
+  "file": "config-107.png"
+ },
+ {
+  "section": "config",
+  "group": "CONFIG",
+  "n": 16,
+  "of": 17,
+  "title": "LOAD",
+  "file": "config-108.png"
+ },
+ {
+  "section": "config",
+  "group": "CONFIG",
+  "n": 17,
+  "of": 17,
+  "title": "ELIXIR",
+  "file": "config-109.png"
+ },
+ {
+  "section": "perf",
+  "group": "PERFORM",
+  "n": 1,
+  "of": 10,
+  "title": "PERFORM",
+  "file": "perf-110.png"
+ },
+ {
+  "section": "perf",
+  "group": "PERFORM",
+  "n": 2,
+  "of": 10,
+  "title": "PERFORM: MORE",
+  "file": "perf-111.png"
+ },
+ {
+  "section": "perf",
+  "group": "PERFORM",
+  "n": 3,
+  "of": 10,
+  "title": "PERFORM: DENSITY",
+  "file": "perf-112.png"
+ },
+ {
+  "section": "perf",
+  "group": "PERFORM",
+  "n": 4,
+  "of": 10,
+  "title": "PERFORM: STUTTER",
+  "file": "perf-113.png"
+ },
+ {
+  "section": "perf",
+  "group": "PERFORM",
+  "n": 5,
+  "of": 10,
+  "title": "PERFORM: RUSH",
+  "file": "perf-114.png"
+ },
+ {
+  "section": "perf",
+  "group": "PERFORM",
+  "n": 6,
+  "of": 10,
+  "title": "PERFORM: RUSH SETUP",
+  "file": "perf-115.png"
+ },
+ {
+  "section": "perf",
+  "group": "PERFORM",
+  "n": 7,
+  "of": 10,
+  "title": "PERFORM: TRANSPOSE",
+  "file": "perf-116.png"
+ },
+ {
+  "section": "perf",
+  "group": "PERFORM",
+  "n": 8,
+  "of": 10,
+  "title": "PERFORM 2: WEAR",
+  "file": "perf-117.png"
+ },
+ {
+  "section": "perf",
+  "group": "PERFORM",
+  "n": 9,
+  "of": 10,
+  "title": "PERFORM 2: SETUP (1/2)",
+  "file": "perf-118.png"
+ },
+ {
+  "section": "perf",
+  "group": "PERFORM",
+  "n": 10,
+  "of": 10,
+  "title": "PERFORM 2: SETUP (2/2)",
+  "file": "perf-119.png"
+ },
+ {
+  "section": "perf",
+  "group": "SPELLS",
+  "n": 1,
+  "of": 5,
+  "title": "SPELLS: GRIMOIRE",
+  "file": "perf-120.png"
+ },
+ {
+  "section": "perf",
+  "group": "SPELLS",
+  "n": 2,
+  "of": 5,
+  "title": "SPELLS: CAST",
+  "file": "perf-121.png"
+ },
+ {
+  "section": "perf",
+  "group": "SPELLS",
+  "n": 3,
+  "of": 5,
+  "title": "SPELLS: CHARACTER",
+  "file": "perf-122.png"
+ },
+ {
+  "section": "perf",
+  "group": "SPELLS",
+  "n": 4,
+  "of": 5,
+  "title": "SPELLS: LIMITS",
+  "file": "perf-123.png"
+ },
+ {
+  "section": "perf",
+  "group": "SPELLS",
+  "n": 5,
+  "of": 5,
+  "title": "SPELLS: MOTION",
+  "file": "perf-124.png"
+ },
+ {
+  "section": "perf",
+  "group": "WANDER",
+  "n": 1,
+  "of": 3,
+  "title": "WANDER: QUEST",
+  "file": "perf-125.png"
+ },
+ {
+  "section": "perf",
+  "group": "WANDER",
+  "n": 2,
+  "of": 3,
+  "title": "WANDER: PACE",
+  "file": "perf-126.png"
+ },
+ {
+  "section": "perf",
+  "group": "WANDER",
+  "n": 3,
+  "of": 3,
+  "title": "WANDER: HOME",
+  "file": "perf-127.png"
+ },
+ {
+  "section": "perf",
+  "group": "GLOBAL MOD",
+  "n": 1,
+  "of": 12,
+  "title": "GLOBAL LFO 1 (1/2)",
+  "file": "perf-128.png"
+ },
+ {
+  "section": "perf",
+  "group": "GLOBAL MOD",
+  "n": 2,
+  "of": 12,
+  "title": "GLOBAL LFO 1 (2/2)",
+  "file": "perf-129.png"
+ },
+ {
+  "section": "perf",
+  "group": "GLOBAL MOD",
+  "n": 3,
+  "of": 12,
+  "title": "GLOBAL LFO 2 (1/2)",
+  "file": "perf-130.png"
+ },
+ {
+  "section": "perf",
+  "group": "GLOBAL MOD",
+  "n": 4,
+  "of": 12,
+  "title": "GLOBAL LFO 2 (2/2)",
+  "file": "perf-131.png"
+ },
+ {
+  "section": "perf",
+  "group": "GLOBAL MOD",
+  "n": 5,
+  "of": 12,
+  "title": "GLOBAL LFO 3 (1/2)",
+  "file": "perf-132.png"
+ },
+ {
+  "section": "perf",
+  "group": "GLOBAL MOD",
+  "n": 6,
+  "of": 12,
+  "title": "GLOBAL LFO 3 (2/2)",
+  "file": "perf-133.png"
+ },
+ {
+  "section": "perf",
+  "group": "GLOBAL MOD",
+  "n": 7,
+  "of": 12,
+  "title": "GLOBAL LFO 4 (1/2)",
+  "file": "perf-134.png"
+ },
+ {
+  "section": "perf",
+  "group": "GLOBAL MOD",
+  "n": 8,
+  "of": 12,
+  "title": "GLOBAL LFO 4 (2/2)",
+  "file": "perf-135.png"
+ },
+ {
+  "section": "perf",
+  "group": "GLOBAL MOD",
+  "n": 9,
+  "of": 12,
+  "title": "MACROS",
+  "file": "perf-136.png"
+ },
+ {
+  "section": "perf",
+  "group": "GLOBAL MOD",
+  "n": 10,
+  "of": 12,
+  "title": "MACRO SETUP",
+  "file": "perf-137.png"
+ },
+ {
+  "section": "perf",
+  "group": "GLOBAL MOD",
+  "n": 11,
+  "of": 12,
+  "title": "LINKS",
+  "file": "perf-138.png"
+ },
+ {
+  "section": "perf",
+  "group": "GLOBAL MOD",
+  "n": 12,
+  "of": 12,
+  "title": "LINK SETUP",
+  "file": "perf-139.png"
+ }
+]

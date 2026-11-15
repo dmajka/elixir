@@ -19,11 +19,14 @@
 #define ROW_H 16
 #define BARS_Y (BODY_Y + NTRACK * ROW_H)
 #define BARS_H (BODY_H - NTRACK * ROW_H)
+#define CRUMB_H 24                                   /* (1.4.1: the sound and FX pages' crumbs, the body's top) */
+#define SOUND_VIZ_H 120                              /* (the crumbs and the picture; the steps' thin strip below) */
 
-enum { R_HDR, R_TITLE, R_LABELS, R_BARS, R_BODY, R_STRIP, R_CARD0, R_COL0 = R_CARD0 + 4, NREG = R_COL0 + 16 };
+enum { R_HDR, R_TITLE, R_LABELS, R_BARS, R_BODY, R_STRIP, R_CRUMB, R_CARD0, R_COL0 = R_CARD0 + 4, NREG = R_COL0 + 16 };
 static uint32_t rsig[NREG];
 static uint8_t body_full;                            /* the body takes the cards' place too (CONFIG > LOAD, ABOUT) */
 static uint8_t body_is_grid;                        /* what the body showed last (a change redraws it all) */
+static uint8_t ux_still;                            /* 1.4.1: renders (ui_test's shots): no knob card lit */
 
 static const uint16_t TRACK_COL[NTRACK] = {RGB(255, 112, 56), RGB(255, 166, 44), RGB(244, 208, 74), RGB(124, 210, 92),
                                            RGB(62, 198, 200), RGB(80, 156, 240), RGB(168, 124, 242)};
@@ -494,6 +497,18 @@ static void body_strips_h(void (*draw)(int32_t), int32_t h)
     }
 }
 static void body_strips(void (*draw)(int32_t)) { body_strips_h(draw, BODY_H); }
+/* 1.4.1: the same, h rows from the body's row y (the picture under the crumbs: its own origin at its top) */
+static void body_strips_at(void (*draw)(int32_t), int32_t yo, int32_t h)
+{
+    int32_t y, n = (h + 63) / 64, step = (h + n - 1) / n;
+    for (y = 0; y < h; y += step) {
+        cv_begin(240, (uint32_t)(h - y < step ? h - y : step), T_BG);
+        cv_oy = -y;
+        draw(y);
+        cv_oy = 0;
+        cv_blit(0, BODY_Y + (uint32_t)(yo + y));
+    }
+}
 
 static void list_row(int32_t y, const char *left, const char *right, int sel, int dim)
 {
@@ -1343,6 +1358,7 @@ static void draw_mixer(int32_t y0)
 {
     uint16_t k[4];
     uint32_t i;
+    int32_t sq = ui.mode == M_FX ? CRUMB_H : 0, B = 104 - sq, R = 90 - sq;   /* (1.4.1: under FX's crumbs) */
     (void)y0;
     page_params(k);
     for (i = 0; i < 4u; i++) {
@@ -1358,32 +1374,32 @@ static void draw_mixer(int32_t y0)
         mn = vp_min(p);
         mx = vp_max(p);
         c = v >= 0 ? TRACK_COL[v] : T_THEME;
-        cv_rrect(x, 8, 26, 96, 3, T_SURF, T_BG);
+        cv_rrect(x, 8, 26, 96 - sq, 3, T_SURF, T_BG);
         if (pan) {                                   /* (pan: from the middle to where it is) */
-            int32_t y = 104 - 3 - (int32_t)(val * 90u / 127u), m = 104 - 3 - 45;
-            cv_rect(x + 2, 104 - 3 - 45, 22, 1, T_LINE);
+            int32_t y = B - 3 - (int32_t)(val * (uint32_t)R / 127u), m = B - 3 - R / 2;
+            cv_rect(x + 2, m, 22, 1, T_LINE);
             cv_rect(x + 3, y < m ? y : m, 20, (y < m ? m - y : y - m) + 2, ux_mix(T_SURF, c, 55));
         } else {
-            h = mx > mn ? (int32_t)((val - mn) * 90u / (mx - mn)) : 0;
-            cv_rect(x + 3, 104 - h - 3, 20, h, ux_mix(T_SURF, c, 55));
+            h = mx > mn ? (int32_t)((val - mn) * (uint32_t)R / (mx - mn)) : 0;
+            cv_rect(x + 3, B - h - 3, 20, h, ux_mix(T_SURF, c, 55));
             if (v >= 0 && p == PAR_VOL1 + (uint32_t)v) {   /* (a volume: the voice's level as it plays) */
-                int32_t pk = voice_peak[v] * 90 / 32768;
+                int32_t pk = voice_peak[v] * R / 32768;
                 if (pk > 0)
-                    cv_rect(x + 3, 104 - pk - 3, 20, 2, T_ACCENT);
+                    cv_rect(x + 3, B - pk - 3, 20, 2, T_ACCENT);
             }
         }
         if (v >= 0)
             put_str(b, v == 5 ? "HH" : VOICE_SHORT[v], sizeof b);
         else
             card_name(b, sizeof b, p);
-        text_c((int32_t)i * 60, 110, 60, &AF_S, b, v >= 0 ? c : T_MID, T_BG);
+        text_c((int32_t)i * 60, 110 - sq, 60, &AF_S, b, v >= 0 ? c : T_MID, T_BG);
     }
 }
 
 static void draw_fx(int32_t y0)
 {
     (void)y0;
-    vz_h = 122;
+    vz_h = BODY_H - CRUMB_H - 4;                     /* (1.4.1: 100, under the crumbs; was 122) */
     switch (fx_page()) {                             /* 30: each page's picture (ui_viz.c) */
     case FXPG_REV: viz_reverb(); break;
     case FXPG_BUS: case FXPG_PARS: viz_fxbus(); break;
@@ -1711,9 +1727,10 @@ static void draw_config_help(int32_t y0)
         help_item(y, "KIT ONLY", "the kit alone: at full morph nothing is heard");
         break;
     case CF_REMOTE + 2:                              /* 0.13: page memory; 0.19: the kit list's order */
-        y = help_item(y, "LAST PAGE", "a button opens the page it showed when you left it; pressed again, it moves on");
-        y = help_item(y, "KITS FIRST", "where PRESETS' kit list starts: FACTORY or your SLOTS");
-        help_item(y, "AUDITION", "a track key (black 1..7) plays its voice as it selects the track");
+        y = help_item(y, "LAST PAGE", "a button opens its last page");
+        y = help_item(y, "KITS FIRST", "PRESETS lists these first");
+        y = help_item(y, "AUDITION", "a track key plays its voice");
+        help_item(y, "SELECT", "BUTTON: ENV, SCL, LFO keep to their own pages");
         break;
     default:
         y = help_item(y, "LEDS", "off, low or high glow");
@@ -1724,9 +1741,122 @@ static void draw_config_help(int32_t y0)
     }
 }
 
+/* 1.4.1: the crumbs. The sound and FX pages in groups, the group shown lit, dots under it for its pages (as the
+ * sequencer's): where you are in 19 pages, and what's on either side. Sound: the synth's order, as the sound buttons
+ * (SRC: EDIT; FLT, SHP: SCL; ENV: ENV; MOD, FX: LFO). FX: the FX button's pages */
+enum { CG_SRC, CG_FLT, CG_SHP, CG_ENV, CG_MOD, CG_FX, NCG_SND };
+static const char *const CR_SND[NCG_SND] = {"SRC", "FLT", "SHP", "ENV", "MOD", "FX"};
+enum { CG_REV, CG_BUS, CG_DLY, CG_DRT, CG_MST, CG_SND, NCG_FX };
+static const char *const CR_FX[NCG_FX] = {"REV", "BUS", "DLY", "DRT", "MST", "SND"};   /* (SND: ROUTING, the sends) */
+static uint32_t crumb_sect(uint32_t s)
+{
+    switch (s) {
+    case S_FILTER: return CG_FLT;
+    case S_SHAPE: case S_INSERT: return CG_SHP;
+    case S_AEG: case S_GATE: case S_MOD: return CG_ENV;
+    case S_LFO: case S_LFOM: case S_LFO2: case S_RANDOM: case S_XMOD: return CG_MOD;
+    case S_SENDS: return CG_FX;
+    default: return CG_SRC;
+    }
+}
+static uint32_t crumb_fx(uint32_t g)
+{
+    switch (g) {
+    case FXPG_REV: return CG_REV;
+    case FXPG_BUS: case FXPG_PARS: return CG_BUS;
+    case FXPG_DLY: case FXPG_DLY2: case FXPG_DUB: return CG_DLY;
+    case FXPG_DIRT: return CG_DRT;
+    case FXPG_DJ: case FXPG_DJ2: case FXPG_COMP: case FXPG_COMP2: return CG_MST;
+    default: return CG_SND;
+    }
+}
+/* the group on screen, its pages and which of them this is; the names */
+static const char *const *crumb_at(uint32_t *ng, uint32_t *cur, uint32_t *np, uint32_t *pi)
+{
+    uint32_t i, n, g;
+    *np = 0;
+    *pi = 0;
+    if (ui.mode == M_SOUND) {
+        uint8_t l[NSPG][2];
+        n = sound_pages(l);
+        *cur = g = crumb_sect(ui.sect);
+        for (i = 0; i < n; i++)
+            if (crumb_sect(l[i][0]) == g) {
+                if (l[i][0] == ui.sect && l[i][1] == ui.half)
+                    *pi = *np;
+                (*np)++;
+            }
+        *ng = NCG_SND;
+        return CR_SND;
+    }
+    {
+        uint8_t l[NFXPG];
+        n = fx_shown(l);
+        *cur = g = crumb_fx(fx_page());
+        for (i = 0; i < n; i++)
+            if (crumb_fx(l[i]) == g) {
+                if (i == (ui.page < n ? ui.page : n - 1u))
+                    *pi = *np;
+                (*np)++;
+            }
+        *ng = NCG_FX;
+        return CR_FX;
+    }
+}
+static void draw_crumbs(void)
+{
+    uint32_t ng, cur, np, pi, i, ca = ui.mode == M_SOUND && (ui.copy || ca_rm);
+    const char *const *nm = crumb_at(&ng, &cur, &np, &pi);
+    int32_t w[NCG_FX], tot = 0, gap, pad, x;
+    if (!region(R_CRUMB, sig_add(sig_add(ui.mode | cur << 4 | np << 8 | pi << 16, ng),
+                                 ca | ui.ca << 1 | (uint32_t)ca_rm << 2 | (uint32_t)kset.caout << 8)))
+        return;
+    cv_begin(240, CRUMB_H, T_BG);
+    if (ca) {                                        /* 0.11: Control All: what OCT- and letting go do (Phase 17: the
+                                                      * tracks in it, the left-out ones dim; by MIDI: no dialog) */
+        if (ui.copy && !ui.ca) {
+            cv_text(8, 4 + CAP_IN(S, 13), &AF_S, "KNOB: ALL TRACKS   TRACK KEY: COPY", T_ACCENT);
+        } else {
+            for (i = 0; i < NTRACK; i++)
+                cv_text(8 + (int32_t)i * 18, 4 + CAP_IN(S, 13), &AF_S, VOICE_SHORT[i],
+                        (kset.caout >> i) & 1u ? T_DIM : TRACK_COL[i]);
+            cv_text(138, 4 + CAP_IN(S, 13), &AF_S, ca_rm ? "OCT-: REVERT" : "LET GO: ASKS", T_ACCENT);
+        }
+        cv_blit(0, BODY_Y);
+        return;
+    }
+    for (i = 0; i < ng; i++) {                       /* (the names where they stay; the lit one's chip round it) */
+        w[i] = text_w(&AF_S, nm[i]);
+        tot += w[i];
+    }
+    gap = (240 - 2 * 8 - tot) / (int32_t)(ng - 1u);  /* (spread to the width, at most 20) */
+    if (gap > 20)
+        gap = 20;
+    pad = gap >= 16 ? 5 : 3;
+    for (i = 0, x = 8; i < ng; i++) {
+        int on = i == cur;
+        if (on)
+            cv_rrect(x - pad, 4, w[i] + 2 * pad, 13, 3, T_THEME, T_BG);
+        cv_text_on(x, 4 + CAP_IN(S, 13), &AF_S, nm[i], on ? T_INK : T_MID, on ? T_THEME : T_BG);
+        if (on && np > 1u) {                         /* (the group's pages: dots under it) */
+            uint32_t d;
+            int32_t dx = x + (w[i] - ((int32_t)np * 5 - 2)) / 2;
+            for (d = 0; d < np; d++)
+                cv_rect(dx + (int32_t)d * 5, 19, 3, 2, d == pi ? T_THEME : T_DIM);
+        }
+        x += w[i];
+        if (i + 1u < ng) {                           /* a chevron, in the gap's middle */
+            int32_t cx = x + (gap - 3) / 2;
+            cv_line(cx, 8, cx + 2, 10, T_DIM);
+            cv_line(cx + 2, 10, cx, 12, T_DIM);
+            x += gap;
+        }
+    }
+    cv_blit(0, BODY_Y);
+}
+
 /* the sound page's body: 30: the section's picture (ui_viz.c); below it, in its own region (SOUND_STRIP), the track's
  * steps in the shown bar, so the playhead redraws only them */
-#define SOUND_VIZ_H 108
 static void draw_sound(int32_t y0)
 {
     (void)y0;
@@ -1734,34 +1864,21 @@ static void draw_sound(int32_t y0)
 }
 static void draw_sound_strip(void)
 {
-    uint32_t k, s = sig_add(ui.track, ui.bar | ui.copy << 2 | ui.ca << 3 | ui.mode << 4 | (uint32_t)ca_rm << 8 |
-                                          (uint32_t)kset.caout << 10);
+    uint32_t k, s = sig_add(ui.track, ui.bar | ui.mode << 4);
     const pattern_t *pt = shown_pat();
     for (k = 0; k < 4u; k++)
         s = sig_add(s, pt->main[ui.track][k]);
     s = sig_add(s, sq.running ? (uint32_t)(uint8_t)sq.idx[ui.track] : 0xFFFFu);
     if (!region(R_STRIP, s))
         return;
-    cv_begin(240, BODY_H - SOUND_VIZ_H, T_BG);
-    if (ui.copy || ca_rm) {                          /* 0.11: Control All: what OCT- and letting go do (Phase 17: the
-                                                      * tracks in it, the left-out ones dim; by MIDI: no dialog) */
-        if (ui.copy && !ui.ca) {
-            cv_text(6, 4, &AF_S, "KNOB: ALL TRACKS   TRACK KEY: COPY", T_ACCENT);
-        } else {
-            for (k = 0; k < NTRACK; k++)
-                cv_text(6 + (int32_t)k * 18, 4, &AF_S, VOICE_SHORT[k], (kset.caout >> k) & 1u ? T_DIM : TRACK_COL[k]);
-            cv_text(136, 4, &AF_S, ca_rm ? "OCT-: REVERT" : "LET GO: ASKS", T_ACCENT);
-        }
-    } else {
-        for (k = 0; k < 16u; k++) {                  /* the track's steps in the shown bar */
-            uint32_t st = ui.bar * 16u + k;
-            int32_t x = 6 + (int32_t)k * 14;
-            int on = main_on(pt, ui.track, st), play = sq.running && sq.idx[ui.track] == (int8_t)st;
-            uint16_t c = on ? TRACK_COL[ui.track] : (k & 3u) == 0u ? T_RAISE : T_SURF;
-            cv_rrect(x, 2, 12, 12, 2, c, T_BG);
-            if (play)
-                cv_rect(x, 16, 12, 2, T_ACCENT);
-        }
+    cv_begin(240, BODY_H - SOUND_VIZ_H, T_BG);       /* (1.4.1: 8 rows, was 20: a thin bar a step; Control All's line
+                                                      * is the crumbs' now) */
+    for (k = 0; k < 16u; k++) {                      /* the track's steps in the shown bar, the playing one lit */
+        uint32_t st = ui.bar * 16u + k;
+        int32_t x = 6 + (int32_t)k * 14;
+        int on = main_on(pt, ui.track, st), play = sq.running && sq.idx[ui.track] == (int8_t)st;
+        uint16_t c = play ? T_ACCENT : on ? TRACK_COL[ui.track] : (k & 3u) == 0u ? T_RAISE : T_SURF;
+        cv_rrect(x, 2, 12, 4, 1, c, T_BG);
     }
     cv_blit(0, BODY_Y + SOUND_VIZ_H);
 }
@@ -2031,10 +2148,20 @@ static void draw_body(void)
     }
     if (fn == draw_sound) {                          /* (30: the picture, then the steps' strip under it) */
         if (region(R_BODY, s)) {
-            body_strips_h(fn, SOUND_VIZ_H);
+            body_strips_at(fn, CRUMB_H, SOUND_VIZ_H - CRUMB_H);   /* (1.4.1: under the crumbs) */
             rsig[R_STRIP] = 0;
+            rsig[R_CRUMB] = 0;
         }
+        draw_crumbs();
         draw_sound_strip();
+        return;
+    }
+    if (fn == draw_fx) {                             /* (1.4.1: FX: the crumbs, the picture under them) */
+        if (region(R_BODY, s)) {
+            body_strips_at(fn, CRUMB_H, BODY_H - CRUMB_H);
+            rsig[R_CRUMB] = 0;
+        }
+        draw_crumbs();
         return;
     }
     body_full = fn == draw_config_help && (ui.page % NCONFIG == CF_LOAD || ui.page % NCONFIG == CF_ABOUT);   /* (1.0:
@@ -2119,6 +2246,7 @@ static void card_name(char *b, uint32_t n, uint32_t p)
     case VP_PMEM: put_str(b, "Last page", n); return;
     case VP_KBSLOTS: put_str(b, "Kits first", n); return;
     case VP_AUDITION: put_str(b, "Audition", n); return;
+    case VP_SBTN: put_str(b, "Select", n); return;
     case VP_RQUANT: put_str(b, "Quantize", n); return;
     case VP_NUDGE: put_str(b, "Nudge", n); return;
     case VP_GTAKES: put_str(b, "Global in", n); return;
@@ -2724,6 +2852,7 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
     case VP_CAKIT: put_str(b, v ? "KIT ONLY" : "BOTH KITS", n); return;
     case VP_MEDIT: put_str(b, v == 1u ? "KIT ONLY" : v ? "BOTH KITS" : "SPLIT", n); return;   /* (1.0: SPLIT) */
     case VP_PMEM: case VP_AUDITION: put_str(b, v ? "YES" : "NO", n); return;
+    case VP_SBTN: put_str(b, v ? "BUTTON" : "ALL", n); return;
     case VP_RQUANT: put_str(put_int(b, (int32_t)v), "%", 5); return;   /* (1.4: 0 .. 100%) */
     case VP_NUDGE:                                    /* (1.3: steps, + later) */
         if (v > 16u) {
@@ -3180,7 +3309,7 @@ static void draw_card(uint32_t k, uint32_t p)
 {
     char nm[24], v[24];
     uint32_t val, mn, mx, s;
-    int lock = 0, hot = ui.hot == k + 1u, idle = (ui.mode == M_SOUND && p != VP_NONE && par_unheard(ui.track, p)) ||
+    int lock = 0, hot = !ux_still && ui.hot == k + 1u, idle = (ui.mode == M_SOUND && p != VP_NONE && par_unheard(ui.track, p)) ||
                                                  vp_dead(p);
     uint16_t bg = T_SURF, fg = T_TEXT;
     int32_t x0 = (int32_t)k * 60;

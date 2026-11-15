@@ -80,7 +80,8 @@ enum { VP_BASE = 0x400, VP_NONE = VP_BASE, VP_IO_TYPE, VP_IO_SLOT, VP_NAME_POS, 
        VP_PCPAT, VP_PCOUT, VP_PCCH, VP_PCWHEN,       /* (1.4: PROGRAM CHANGE OUT: the pattern, its program, the
                                                       * channel, when) */
        VP_WDEC, VP_WSPD,                             /* (1.4: WEAR's Decay, Tape speed: perform.c pfs.wdecay ..) */
-       VP_MKIT };                                    /* (1.4 MORPH: PERFORM's Morph kit, the kit browser's entries) */                           /* (1.4: WEAR's Decay, Tape speed: perform.c pfs.wdecay ..) */
+       VP_MKIT,                                      /* (1.4 MORPH: PERFORM's Morph kit, the kit browser's entries) */
+       VP_SBTN };                                    /* (1.4.1: CONFIG Select: ALL, BUTTON: project.c kset.sbtn) */                           /* (1.4: WEAR's Decay, Tape speed: perform.c pfs.wdecay ..) */
 _Static_assert(NPAR <= VP_BASE, "the virtual parameters after the parameters (25b + 27a: NPAR 525, past 0x200)");
 /* the ACTION page's action (OCT+ does it); 0.10: those of the track's generator (gen_acts) */
 enum { ACT_NONE, ACT_DICE, ACT_COMMIT, ACT_UNDO, ACT_RESET, NACT };
@@ -603,13 +604,14 @@ static uint32_t fx_shown(uint8_t out[NFXPG])        /* the pages shown, in order
         if (par[PAR_FX_DELAY_TYPE] == DELAY_TAPE || par[PAR_FX_DELAY_TYPE] == DELAY_TAPEPP)
             out[n++] = FXPG_DUB;
     }
-    out[n++] = FXPG_ROUTE;                           /* (1.0 Phase 16: the bus, the delay and the reverb's order) */
     out[n++] = FXPG_DIRT;
     out[n++] = FXPG_DJ;
     if (pfs.dj_ftype == DJT_RING)                    /* (1.0 Phase 18: RING's second page) */
         out[n++] = FXPG_DJ2;
     out[n++] = FXPG_COMP;
     out[n++] = FXPG_COMP2;
+    out[n++] = FXPG_ROUTE;                           /* (1.0 Phase 16: the bus, the delay and the reverb's order; 1.4.1:
+                                                      * with the sends, last: how the effects are mixed) */
     out[n++] = FXPG_FSEND;
     out[n++] = FXPG_FSEND2;
     out[n++] = FXPG_DSEND;
@@ -653,7 +655,7 @@ static const uint16_t P_CONFIG[NCONFIG][4] = {
     {VP_LEDS, VP_AUTOSAVE, VP_ACCEL, VP_PALETTE},
     {VP_RCH, VP_RCH2, VP_RKNOBS, VP_RMUTE},
     {VP_MEDIT, VP_CAKIT, VP_NONE, VP_NONE},
-    {VP_PMEM, VP_KBSLOTS, VP_AUDITION, VP_NONE},   /* (1.2: Audition) */
+    {VP_PMEM, VP_KBSLOTS, VP_AUDITION, VP_SBTN},   /* (1.2: Audition; 1.4.1: Select) */
     {VP_NONE, VP_NONE, VP_NONE, VP_NONE},
     {VP_NONE, VP_NONE, VP_NONE, VP_NONE}};
 static const char *const CONFIG_TITLE[NCONFIG] = {"SEQUENCER", "MIDI", "MIDI CHANNELS", "MIDI CHANNELS", "MIDI NOTES",
@@ -1503,6 +1505,7 @@ static uint32_t vp_get(uint32_t p)
     case VP_PMEM: return kset.pmem;
     case VP_KBSLOTS: return kset.kbslots;
     case VP_AUDITION: return !(kset.caout & KS_QUIET);
+    case VP_SBTN: return kset.sbtn != 0;
     case VP_RQUANT: return 100u - sq.rfree;           /* (1.4: %) */
     case VP_NUDGE: return (uint32_t)(ui.nudge + 16);
     case VP_GTAKES: return kset.gtakes;
@@ -1710,7 +1713,7 @@ static uint32_t vp_max(uint32_t p)
     case VP_MEDIT: return 2;
     case VP_NUDGE: return 32;
     case VP_RQUANT: return 100;
-    case VP_CAKIT: case VP_PMEM: case VP_AUDITION: case VP_RMUTE: case VP_MOUT ... VP_MOUT_LAST: case VP_UMIX ... VP_UMIX_LAST: return 1;
+    case VP_CAKIT: case VP_PMEM: case VP_AUDITION: case VP_SBTN: case VP_RMUTE: case VP_MOUT ... VP_MOUT_LAST: case VP_UMIX ... VP_UMIX_LAST: return 1;
     case VP_MVOL: case VP_TD ... VP_TD_LAST: return 127;
     case VP_STRETCH: return TSTR_MAX;
     case VP_REALIGN: return 1;
@@ -1966,6 +1969,7 @@ static void vp_set(uint32_t p, uint32_t v)
     case VP_PMEM: kset.pmem = (uint8_t)v; settings_later(); return;
     case VP_KBSLOTS: kset.kbslots = (uint8_t)v; ui.kb_at = 0; settings_later(); return;
     case VP_AUDITION: kset.caout = (uint8_t)(v ? kset.caout & ~KS_QUIET : kset.caout | KS_QUIET); settings_later(); return;
+    case VP_SBTN: kset.sbtn = (uint8_t)v; settings_later(); return;
     case VP_RQUANT: sq.rfree = (uint8_t)(100u - v); return;
     case VP_NUDGE: nudge_to((int32_t)v - 16); return;
     case VP_GTAKES: kset.gtakes = midi_gtakes = (uint8_t)v; settings_later(); return;
@@ -2720,11 +2724,13 @@ static void mode_set(uint32_t m)
     ui.force = 1;
     bank_fix();
 }
-/* a section button. 1.4: pressed again (or the button lit: SELECT went into its sections), nothing: SELECT goes
- * through the pages (ARP's sets are its own); another button: where that one was */
+/* a section button. EDIT: 1.4: pressed again (or lit: SELECT went into its sections), nothing; with CONFIG Last
+ * page, where it was. 1.4.1: ENV, SCL and LFO always open their first page, pressed again too (where they were left
+ * was hard to follow). CONFIG Select BUTTON: the button pressed stays lit, and SELECT keeps to its pages (EDIT's:
+ * all of them) */
 static void sound_open(uint32_t s, int again)        /* (again: a button; 0: open section s) */
 {
-    if (again && ui.mode == M_SOUND && (ui.sbtn == s || sect_group(ui.sect) == s))
+    if (again && s == S_MODEL && ui.mode == M_SOUND && (ui.sbtn == s || (!kset.sbtn && sect_group(ui.sect) == s)))
         return;
     if (ui.mode == M_SOUND)
         pmem_save();
@@ -2732,7 +2738,7 @@ static void sound_open(uint32_t s, int again)        /* (again: a button; 0: ope
     ui.sbtn = (uint8_t)s;
     ui.sect = (uint8_t)s;
     ui.half = 0;
-    if (kset.pmem && ui.gsect[s]) {                  /* 0.13: the section and half it showed last */
+    if (kset.pmem && s == S_MODEL && ui.gsect[s]) {   /* 0.13: the section and half it showed last (1.4.1: EDIT's) */
         ui.sect = (uint8_t)(ui.gsect[s] - 1u);
         ui.half = ui.ghalf[s];
     }
@@ -4003,12 +4009,23 @@ static void ui_input(void)
                 ui.io_slot = (uint8_t)clamp32((int32_t)ui.io_slot + n, 0, (int32_t)vp_max(VP_IO_SLOT));
         } else if (ui.mode == M_SOUND) {
             uint8_t l[NSPG][2];
-            uint32_t np = sound_pages(l), i;
+            uint32_t np = sound_pages(l), i, j, k;
+            if (kset.sbtn && ui.sbtn != S_MODEL) {   /* 1.4.1: Select BUTTON: ENV, SCL, LFO: their own pages only */
+                for (i = j = 0; i < np; i++)
+                    if (sect_group(l[i][0]) == ui.sbtn) {
+                        l[j][0] = l[i][0];
+                        l[j][1] = l[i][1];
+                        j++;
+                    }
+                np = j;
+            }
             for (i = 0; i < np && !(l[i][0] == ui.sect && l[i][1] == ui.half); i++)
                 ;
-            i = (uint32_t)clamp32((int32_t)i + n, 0, (int32_t)np - 1);
-            ui.sect = l[i][0];
-            ui.half = l[i][1];
+            if (np) {
+                k = (uint32_t)clamp32((int32_t)(i < np ? i : 0u) + n, 0, (int32_t)np - 1);
+                ui.sect = l[k][0];
+                ui.half = l[k][1];
+            }
         } else if (ui.mode == M_HOME || ui.mode == M_RECOPT) {
             ui.bar = (uint8_t)clamp32((int32_t)ui.bar + n, 0, 3);
         } else if (ui.mode == M_PATTERN) {
@@ -4087,6 +4104,8 @@ static void led_put(uint8_t *l, uint32_t id, int on)
             if (FM1_KEYMAP[r][c] == (int8_t)id)
                 l[c] |= (uint8_t)(1u << r);
 }
+/* the sound button lit: the section's (SELECT moving it); 1.4.1: Select BUTTON, the one pressed */
+static uint32_t sound_btn(void) { return kset.sbtn ? ui.sbtn : sect_group(ui.sect); }
 static void ui_leds(void)
 {
     uint8_t nl[FM1_NCOL] = {0}, nd[FM1_NCOL] = {0}, nb[FM1_NCOL] = {0}, nm[FM1_NCOL] = {0};
@@ -4097,10 +4116,10 @@ static void ui_leds(void)
                       : ui.mode == M_KEYS ? B_EDIT
                       : ui.mode == M_FX ? B_FX : ui.mode == M_SAVE || ui.mode == M_LOAD ? B_SAVE
                       : ui.mode == M_MIXER || ui.mode == M_CONFIG ? B_GLO
-                      : ui.mode == M_SOUND ? (sect_group(ui.sect) == S_MODEL ? B_EDIT
-                                              : sect_group(ui.sect) == S_AEG ? B_ENV
-                                              : sect_group(ui.sect) == S_FILTER ? B_SCL
-                                              : sect_group(ui.sect) == S_LFO ? B_LFO : B_GLO)
+                      : ui.mode == M_SOUND ? (sound_btn() == S_MODEL ? B_EDIT
+                                              : sound_btn() == S_AEG ? B_ENV
+                                              : sound_btn() == S_FILTER ? B_SCL
+                                              : sound_btn() == S_LFO ? B_LFO : B_GLO)
                       : NB;
     if (fm1_led_anim_on())
         return;

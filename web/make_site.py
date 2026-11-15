@@ -18,6 +18,8 @@
 #                               (tools/hapax_defs.py, tools/oxi_defs.py)
 #   manual/index.html           MANUAL.md as a page, with docs/img (its signal-flow diagrams: tools/flow_svg.py) in
 #                               manual/img, and elixir-manual-VER.pdf, the page printed (headless Chrome)
+#   pages/                      1.4.1: every page of every mode (web/pages: tools/pages_shots.py, from ui_test's tour),
+#                               the front page's page browser (its <!--PAGES-->: pages_data)
 #   cheatsheet.pdf              the pages of keys and knobs: web/cheatsheet.html printed (1.3.2: here, its remote
 #                               tables rewritten first; no Chrome: web/cheatsheet.pdf, tools/cheatsheet.sh's); fmhub.json
 #                               links to it
@@ -777,6 +779,59 @@ def controllers(out):
     return doc
 
 
+# 1.4.1: the Pages page. The sections in the unit's order: what opens them, the manual's part, and for the sound and FX
+# pages the crumbs' groups (as the screen's) spelled out
+PAGE_SECTIONS = [
+    ("home", "Grid, patterns, song", "HOME", "5-programming-patterns",
+     "The grid of the bar; press HOME again for the pattern banks, then the song."),
+    ("seq", "Track pages", "SEQ", "12-generating-tracks",
+     "The selected track: its length and clock, generators, melody, scale, groove, bounce and time stretch."),
+    ("step", "Step edit", "SEQ, pressed again", "6-step-edit",
+     "A step's note, trig condition, locks and ratchets. Tap a white key for the step."),
+    ("sound", "Sound pages", "EDIT, ENV, SCL, LFO", "9-shaping-the-sound",
+     "Every sound page of a drum voice, in the chain's order. The crumbs under the title show where you are."),
+    ("model", "Models", "EDIT, KNOB 1", "models-rings-and-plaits-drum-13-experimental",
+     "The MODEL page for each of Elixir's voice models."),
+    ("fx", "FX pages", "FX", "10-mixer-sends-fx-bus-and-reverb",
+     "The reverb, the FX bus, the delay, dirt, the master and how they're mixed."),
+    ("mixer", "Mixer", "GLO", "the-mixer-glo", "Volume, pan and the three sends for every voice."),
+    ("perf", "Performance", "ARP, pressed again for each set", "13-performance-mode-perf",
+     "PERFORM, SPELLS, WANDER and GLOBAL MOD: the four sets ARP goes through."),
+    ("config", "Config", "GLO, pressed again", "16-settings-config-and-the-cpu-meter",
+     "The settings: sequencer, MIDI, USB, the remote, buttons, the CPU load."),
+]
+GROUP_NAMES = {"sound": {"SRC": "Source · EDIT", "FLT": "Filter · SCL", "SHP": "Shape · SCL", "ENV": "Envelopes · ENV",
+                         "MOD": "Modulation · LFO", "FX": "Track sends · LFO"},
+               "fx": {"REV": "Reverb", "BUS": "FX bus", "DLY": "Delay", "DRT": "Dirt", "MST": "Master",
+                      "SND": "Routing and sends"}}
+
+
+def pages_data(heads):
+    """the front page's page browser: the sections (what opens them, the manual's part, their groups' names) and the
+    screens, as JSON for its script"""
+    pages = json.loads((ROOT / "web/pages/pages.json").read_text(encoding="utf-8"))
+    ids = {h[1] for h in heads}
+    secs = []
+    for sec, title, button, anchor, blurb in PAGE_SECTIONS:
+        mine = [p for p in pages if p["section"] == sec]
+        if not mine:
+            continue
+        shots = []
+        for p in mine:
+            g = p["group"]
+            if sec in ("home", "model"):             # (each screen its own name)
+                cap, grp, num = g.title(), "", ""
+            else:
+                cap, num = p["title"], (f'{p["n"]}/{p["of"]}' if p["of"] > 1 else "")
+                grp = GROUP_NAMES.get(sec, {}).get(g, g.title() if sec == "perf" else "")
+                if sec in ("sound", "fx"):
+                    grp = f"{g} · {grp}"
+            shots.append({"src": "pages/" + p["file"], "title": cap, "num": num, "group": grp})
+        secs.append({"id": sec, "title": title, "button": button, "blurb": blurb,
+                     "manual": f"manual/#{anchor}" if anchor in ids else "", "shots": shots})
+    return json.dumps(secs, separators=(",", ":")).replace("</", "<\\/")
+
+
 def files_page(entries):
     li = "".join(f'<li><a href="{n}">{n}</a> <span>{d}</span></li>' for n, d in entries)
     return ('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -869,6 +924,12 @@ def main(pkg, out):
     if body.count("<!--PANEL-->") > 1:
         raise SystemExit("MANUAL.md: <!-- panel --> more than once")
     body = chapters(body.replace("<!--PANEL-->", panel_svg(heads)), heads)
+    shutil.copytree(ROOT / "web/pages", out / "pages")   # 1.4.1: every page's screen (tools/pages_shots.py)
+    (out / "pages/pages.json").unlink()
+    front = (out / "index.html").read_text(encoding="utf-8")   # (the front page's browser: its data)
+    if front.count("<!--PAGES-->") != 1:
+        raise SystemExit("web/index.html must contain <!--PAGES--> once")
+    (out / "index.html").write_text(front.replace("<!--PAGES-->", pages_data(heads)), encoding="utf-8")
     shutil.copytree(ROOT / "docs/img", man / "img")   # (the signal-flow diagrams MANUAL.md shows)
 
     def manual_page(pdf):                            # pdf: the PDF's name, or None (no link)
