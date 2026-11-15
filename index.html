@@ -150,6 +150,39 @@
   .card .cap { font-size: 11px; min-width: 0; padding: 4px 6px; vertical-align: 1px; }
   .map .tip { margin-top: 12px; font-size: 14px; color: var(--dim); }
   details.older { margin-top: 16px; }
+  /* 1.4.1: the page browser (make_site.py fills in its data: the sections and their screens) */
+  .browse { margin-top: 24px; display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; }
+  dialog.pages { width: min(980px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 0; border: 1px solid var(--line);
+                 border-radius: 14px; background: var(--bg); color: var(--fg); overflow: auto; }
+  dialog.pages::backdrop { background: rgba(10, 9, 8, .72); }
+  .pg-head { display: flex; align-items: center; gap: 12px; padding: 16px 20px 0; }
+  .pg-head h2 { font-size: 22px; margin: 0; flex: 1; }
+  .pages button.pg-x { background: none; color: var(--dim); border: 0; font-size: 26px; line-height: 1; padding: 4px 8px; }
+  .pg-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 12px 20px; border-bottom: 1px solid var(--line);
+             scrollbar-width: thin; }
+  .pages .pg-tabs button { flex: none; background: none; color: var(--dim); border: 1px solid var(--line); font-size: 14px;
+                           font-weight: 500; padding: 6px 12px; border-radius: 999px; }
+  .pages .pg-tabs button[aria-selected="true"] { background: var(--accent-fill); color: var(--accent-ink);
+                                                 border-color: var(--accent-fill); }
+  .pg-body { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 24px; padding: 20px; }
+  .pg-body .screen img { max-width: 420px; height: auto; }
+  dialog.pages:focus, dialog.pages:focus-visible { outline: none; }
+  .pg-info .pg-group { display: inline-block; font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+                       background: var(--well); border: 1px solid var(--line); border-radius: 5px; padding: 4px 6px;
+                       margin-bottom: 10px; }
+  .pg-info .pg-group:empty { display: none; }
+  .pg-info h3 { font-size: 22px; margin: 0 0 4px; }
+  .pg-info .pg-num { color: var(--dim); font-variant-numeric: tabular-nums; margin-bottom: 14px; }
+  .pg-info .pg-blurb { color: var(--dim); font-size: 15px; }
+  .pg-nav { display: flex; gap: 10px; margin: 18px 0 10px; }
+  .pg-thumbs { display: flex; gap: 8px; overflow-x: auto; padding: 0 20px 20px; scrollbar-width: thin; }
+  .pages .pg-thumbs button { flex: none; padding: 0; border: 2px solid transparent; border-radius: 6px; background: #000;
+                             line-height: 0; }
+  .pages .pg-thumbs button[aria-current="true"] { border-color: var(--accent-fill); }
+  .pg-thumbs img { width: 76px; height: 76px; border-radius: 4px; display: block; }
+  @media (max-width: 700px) { .pg-body { grid-template-columns: 1fr; gap: 14px; padding: 16px; }
+                              .pg-body .screen img { max-width: 100%; border-width: 6px; }
+                              .pg-head { padding: 14px 16px 0; } .pg-tabs, .pg-thumbs { padding-left: 16px; padding-right: 16px; } }
   details.older > summary { cursor: pointer; padding: 14px 22px; border: 1px solid var(--line); border-radius: var(--radius);
                             background: var(--well); font-weight: 600; }
   details.older[open] > summary { margin-bottom: 16px; }
@@ -174,7 +207,7 @@
         <a class="btn alt" href="install/">Install on your FM-1</a>
         <a class="btn alt" href="manual/">Read the manual</a>
       </div>
-      <p class="meta">Version 1.4, released November 14, 2026 · <a href="#updates">what's new</a></p>
+      <p class="meta">Version 1.4.1, released November 15, 2026 · <a href="#updates">what's new</a></p>
       <div class="support">
         <p>Elixir is free, made by one person in my spare time. If it makes your FM-1 more fun:</p>
         <a class="btn sm kofi" href="https://ko-fi.com/ghosttropic" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13v5a6 6 0 0 1-6 6H10a6 6 0 0 1-6-6z"/><path d="M17 9h1.5a2.5 2.5 0 0 1 0 5H17"/><path d="M8 3v2M12 3v2"/></svg>Tip me on Ko-fi</a>
@@ -441,7 +474,7 @@
       <div class="card"><h3><span class="n">1</span>Press a button</h3><p>It opens that button's section: <span class="cap">EDIT</span>
         opens the sound's model, <span class="cap">HOME</span> the step grid, <span class="cap">FX</span> the effects.</p></div>
       <div class="card"><h3><span class="n">2</span>Press it again</h3><p>Most buttons hold a few sections. Each press goes to
-        the next one, in the order below, then back to the first.</p></div>
+        the next one, in the order below, then back to the first. A sound button goes back to its first page.</p></div>
       <div class="card"><h3><span class="n">3</span>Turn SELECT</h3><p>It turns the pages, one at a time; the title shows where
         you are (<em>3/18</em>). The four knobs change the four values at the bottom of the screen.</p></div>
     </div>
@@ -453,8 +486,8 @@
           <dt><span class="cap">ENV</span></dt><dd><b>Amp envelope</b> → gate → mod envelope and velocity</dd>
           <dt><span class="cap">LFO</span></dt><dd><b>LFO 1</b> → LFO 2 → random per hit → cross mod and choke → sends</dd>
         </dl>
-        <p class="tip">These four jump into one row of 18 sound pages, laid out like a synth's signal path. SELECT walks
-          the whole row.</p></div>
+        <p class="tip">These four jump into one row of 19 sound pages, laid out like a synth's signal path. SELECT walks
+          the whole row, and the line under the title shows where you are in it.</p></div>
       <div class="card"><h3>Patterns and sequencing</h3>
         <dl>
           <dt><span class="cap">HOME</span></dt><dd><b>Step grid</b> → patterns → load → song</dd>
@@ -475,7 +508,7 @@
           undone.</p></div>
       <div class="card"><h3>Mix, effects and settings</h3>
         <dl>
-          <dt><span class="cap">FX</span></dt><dd><b>Reverb</b>, effects bus, delay, routing, dirt, master filter, compressor and
+          <dt><span class="cap">FX</span></dt><dd><b>Reverb</b>, effects bus, delay, dirt, master filter, compressor, routing and
             the sends, one page after another</dd>
           <dt><span class="cap">GLO</span></dt><dd><b>Mixer</b> → settings (MIDI, USB audio, colors …)</dd>
           <dt><span class="cap">OCT−</span></dt><dd><b>SHIFT</b>: hold it and the screen lists what each key does with it</dd>
@@ -503,6 +536,8 @@
       <figure class="screen"><img src="shots/reverb-hall.png" alt="The REVERB page: HALL, a castle" width="240" height="240" loading="lazy"><figcaption>The hall reverb</figcaption></figure>
       <figure class="screen"><img src="shots/rush.png" alt="PERFORM: RUSH, the snare roll" width="240" height="240" loading="lazy"><figcaption>RUSH</figcaption></figure>
     </div>
+    <p class="browse"><button type="button" class="alt" id="pages-open">Browse every page</button>
+      <span class="small">Every screen, mode by mode, in the order SELECT goes through them.</span></p>
   </section>
 
   <section class="band" id="start">
@@ -529,6 +564,24 @@
   <section class="band" id="updates">
     <div class="intro"><h2>Updates</h2><p>What each release added and fixed.</p></div>
     <div class="updates">
+      <div class="card"><h3>1.4.1<span>November 15, 2026</span></h3>
+        <p>Easier to find your way around the sound and effects pages. Projects, kits and settings from 1.4 work as
+          before.</p>
+        <ul>
+          <li><b>See where you are.</b> On the sound and FX pages, a line under the title names each part of the
+            chain: <b>SRC › FLT › SHP › ENV › MOD › FX</b> for the sound, <b>REV › BUS › DLY › DRT › MST › SND</b> for the
+            effects. The part you're in is lit, with a dot for each of its pages. The page number (13/19) is still
+            in the title.</li>
+          <li><b>ENV, SCL and LFO always open their first page</b>, even when you press them again, so one press takes
+            you back to the start of the envelopes, the filter or the LFOs.</li>
+          <li>New setting: <b>CONFIG → BUTTONS &amp; KITS → Select</b>. Set it to BUTTON and the button you pressed stays
+            lit: EDIT goes through every sound page, and ENV, SCL and LFO keep SELECT to their own pages.</li>
+          <li>On the FX pages, <b>ROUTING</b> now sits with the sends, where the effects are mixed.</li>
+          <li>The page pictures are cleaner: fewer words (the knobs already show the values), one text size, and a
+            thinner line for the track's steps.</li>
+          <li>On this site: <a href="#pages">browse every page</a> of Elixir, screen by screen.</li>
+        </ul>
+      </div>
       <div class="card"><h3>1.4<span>November 14, 2026</span></h3>
         <p>Pick morph kits with a knob, many more locks per step, a new dub SPRING reverb, WEAR controls for the
           whole kit, new global LFO moves, program changes out to your other gear, and a lighter engine that leaves
@@ -1202,6 +1255,77 @@
   show.addEventListener("mouseenter", () => { hold = true; });
   show.addEventListener("mouseleave", () => { hold = false; });
   timer = setInterval(() => { if (!hold && !document.hidden) go(i + 1); }, 3500);
+})();
+</script>
+
+<dialog class="pages" id="pages" aria-labelledby="pg-h">
+  <div class="pg-head"><h2 id="pg-h">Every page</h2><button type="button" class="pg-x" aria-label="Close">&times;</button></div>
+  <div class="pg-tabs" role="tablist"></div>
+  <div class="pg-body">
+    <figure class="screen"><img alt="" width="240" height="240"></figure>
+    <div class="pg-info">
+      <span class="pg-group"></span>
+      <h3></h3>
+      <div class="pg-num"></div>
+      <p class="pg-blurb"></p>
+      <div class="pg-nav"><button type="button" class="alt" data-d="-1">&larr; Previous</button>
+        <button type="button" class="alt" data-d="1">Next &rarr;</button></div>
+      <p class="small">Arrow keys go through every page. <a class="pg-man" href="manual/">In the manual</a></p>
+    </div>
+  </div>
+  <div class="pg-thumbs"></div>
+</dialog>
+<script type="application/json" id="pages-data">[{"id":"home","title":"Grid, patterns, song","button":"HOME","blurb":"The grid of the bar; press HOME again for the pattern banks, then the song.","manual":"manual/#5-programming-patterns","shots":[{"src":"pages/home-00.png","title":"Grid","num":"","group":""},{"src":"pages/home-01.png","title":"Patterns","num":"","group":""},{"src":"pages/home-02.png","title":"Song","num":"","group":""},{"src":"pages/home-03.png","title":"Song Rows","num":"","group":""},{"src":"pages/home-04.png","title":"Song Roads","num":"","group":""}]},{"id":"seq","title":"Track pages","button":"SEQ","blurb":"The selected track: its length and clock, generators, melody, scale, groove, bounce and time stretch.","manual":"manual/#12-generating-tracks","shots":[{"src":"pages/seq-05.png","title":"TRACK","num":"1/9","group":""},{"src":"pages/seq-06.png","title":"GENERATOR","num":"2/9","group":""},{"src":"pages/seq-07.png","title":"ACTION","num":"3/9","group":""},{"src":"pages/seq-08.png","title":"MELODY (1/2)","num":"4/9","group":""},{"src":"pages/seq-09.png","title":"MELODY (2/2)","num":"5/9","group":""},{"src":"pages/seq-10.png","title":"SCALE","num":"6/9","group":""},{"src":"pages/seq-11.png","title":"GROOVE","num":"7/9","group":""},{"src":"pages/seq-12.png","title":"BOUNCE","num":"8/9","group":""},{"src":"pages/seq-13.png","title":"TIME STRETCH","num":"9/9","group":""}]},{"id":"step","title":"Step edit","button":"SEQ, pressed again","blurb":"A step's note, trig condition, locks and ratchets. Tap a white key for the step.","manual":"manual/#6-step-edit","shots":[{"src":"pages/step-14.png","title":"STEP  STEP 5","num":"1/4","group":""},{"src":"pages/step-15.png","title":"TRIG  STEP 5","num":"2/4","group":""},{"src":"pages/step-16.png","title":"LOCKS  STEP 5","num":"3/4","group":""},{"src":"pages/step-17.png","title":"RATCHET  STEP 5","num":"4/4","group":""}]},{"id":"sound","title":"Sound pages","button":"EDIT, ENV, SCL, LFO","blurb":"Every sound page of a drum voice, in the chain's order. The crumbs under the title show where you are.","manual":"manual/#9-shaping-the-sound","shots":[{"src":"pages/sound-18.png","title":"MODEL","num":"1/19","group":"SRC \u00b7 Source \u00b7 EDIT"},{"src":"pages/sound-19.png","title":"OSCILLATOR","num":"2/19","group":"SRC \u00b7 Source \u00b7 EDIT"},{"src":"pages/sound-20.png","title":"FM","num":"3/19","group":"SRC \u00b7 Source \u00b7 EDIT"},{"src":"pages/sound-21.png","title":"TRANSIENT","num":"4/19","group":"SRC \u00b7 Source \u00b7 EDIT"},{"src":"pages/sound-22.png","title":"FILTER","num":"5/19","group":"FLT \u00b7 Filter \u00b7 SCL"},{"src":"pages/sound-23.png","title":"SHAPE (1/2)","num":"6/19","group":"SHP \u00b7 Shape \u00b7 SCL"},{"src":"pages/sound-24.png","title":"SHAPE (2/2)","num":"7/19","group":"SHP \u00b7 Shape \u00b7 SCL"},{"src":"pages/sound-25.png","title":"INSERT FX","num":"8/19","group":"SHP \u00b7 Shape \u00b7 SCL"},{"src":"pages/sound-26.png","title":"AMP EG","num":"9/19","group":"ENV \u00b7 Envelopes \u00b7 ENV"},{"src":"pages/sound-27.png","title":"GATE","num":"10/19","group":"ENV \u00b7 Envelopes \u00b7 ENV"},{"src":"pages/sound-28.png","title":"MOD EG / VELO (1/2)","num":"11/19","group":"ENV \u00b7 Envelopes \u00b7 ENV"},{"src":"pages/sound-29.png","title":"MOD EG / VELO (2/2)","num":"12/19","group":"ENV \u00b7 Envelopes \u00b7 ENV"},{"src":"pages/sound-30.png","title":"LFO 1 (1/2)","num":"13/19","group":"MOD \u00b7 Modulation \u00b7 LFO"},{"src":"pages/sound-31.png","title":"LFO 1 (2/2)","num":"14/19","group":"MOD \u00b7 Modulation \u00b7 LFO"},{"src":"pages/sound-32.png","title":"LFO 2 (1/2)","num":"15/19","group":"MOD \u00b7 Modulation \u00b7 LFO"},{"src":"pages/sound-33.png","title":"LFO 2 (2/2)","num":"16/19","group":"MOD \u00b7 Modulation \u00b7 LFO"},{"src":"pages/sound-34.png","title":"RANDOM PER HIT","num":"17/19","group":"MOD \u00b7 Modulation \u00b7 LFO"},{"src":"pages/sound-35.png","title":"CROSS MOD / CHOKE","num":"18/19","group":"MOD \u00b7 Modulation \u00b7 LFO"},{"src":"pages/sound-36.png","title":"FX TRACK SENDS","num":"19/19","group":"FX \u00b7 Track sends \u00b7 LFO"}]},{"id":"model","title":"Models","button":"EDIT, KNOB 1","blurb":"The MODEL page for each of Elixir's voice models.","manual":"manual/#models-rings-and-plaits-drum-13-experimental","shots":[{"src":"pages/model-37.png","title":"Modal","num":"","group":""},{"src":"pages/model-38.png","title":"String","num":"","group":""},{"src":"pages/model-39.png","title":"Fm","num":"","group":""},{"src":"pages/model-40.png","title":"P Va","num":"","group":""},{"src":"pages/model-41.png","title":"P Wshape","num":"","group":""},{"src":"pages/model-42.png","title":"P Fm","num":"","group":""},{"src":"pages/model-43.png","title":"Cloud","num":"","group":""},{"src":"pages/model-44.png","title":"P Addtv","num":"","group":""},{"src":"pages/model-45.png","title":"P Wtable","num":"","group":""},{"src":"pages/model-46.png","title":"P Chord","num":"","group":""},{"src":"pages/model-47.png","title":"P Speech","num":"","group":""},{"src":"pages/model-48.png","title":"P Swarm","num":"","group":""},{"src":"pages/model-49.png","title":"Noise","num":"","group":""},{"src":"pages/model-50.png","title":"Rain","num":"","group":""},{"src":"pages/model-51.png","title":"P String","num":"","group":""},{"src":"pages/model-52.png","title":"P Modal","num":"","group":""},{"src":"pages/model-53.png","title":"P Bd","num":"","group":""},{"src":"pages/model-54.png","title":"P Sd","num":"","group":""},{"src":"pages/model-55.png","title":"P Hh","num":"","group":""},{"src":"pages/model-56.png","title":"Click","num":"","group":""},{"src":"pages/model-57.png","title":"Train","num":"","group":""},{"src":"pages/model-58.png","title":"Crunch","num":"","group":""},{"src":"pages/model-59.png","title":"Bits","num":"","group":""},{"src":"pages/model-60.png","title":"Burst","num":"","group":""},{"src":"pages/model-61.png","title":"Snap","num":"","group":""},{"src":"pages/model-62.png","title":"Grain","num":"","group":""},{"src":"pages/model-63.png","title":"Dust","num":"","group":""},{"src":"pages/model-64.png","title":"Pop","num":"","group":""},{"src":"pages/model-65.png","title":"Chirp","num":"","group":""},{"src":"pages/model-66.png","title":"Ensemble","num":"","group":""}]},{"id":"fx","title":"FX pages","button":"FX","blurb":"The reverb, the FX bus, the delay, dirt, the master and how they're mixed.","manual":"manual/#10-mixer-sends-fx-bus-and-reverb","shots":[{"src":"pages/fx-67.png","title":"REVERB","num":"1/16","group":"REV \u00b7 Reverb"},{"src":"pages/fx-68.png","title":"FX BUS","num":"2/16","group":"BUS \u00b7 FX bus"},{"src":"pages/fx-69.png","title":"FX BUS: PHASER","num":"3/16","group":"BUS \u00b7 FX bus"},{"src":"pages/fx-70.png","title":"DELAY (1/2)","num":"4/16","group":"DLY \u00b7 Delay"},{"src":"pages/fx-71.png","title":"DELAY (2/2)","num":"5/16","group":"DLY \u00b7 Delay"},{"src":"pages/fx-72.png","title":"DIRT","num":"6/16","group":"DRT \u00b7 Dirt"},{"src":"pages/fx-73.png","title":"MASTER FILTER","num":"7/16","group":"MST \u00b7 Master"},{"src":"pages/fx-74.png","title":"MASTER COMP","num":"8/16","group":"MST \u00b7 Master"},{"src":"pages/fx-75.png","title":"COMP: SIDECHAIN","num":"9/16","group":"MST \u00b7 Master"},{"src":"pages/fx-76.png","title":"ROUTING","num":"10/16","group":"SND \u00b7 Routing and sends"},{"src":"pages/fx-77.png","title":"FX SEND (1/2)","num":"11/16","group":"SND \u00b7 Routing and sends"},{"src":"pages/fx-78.png","title":"FX SEND (2/2)","num":"12/16","group":"SND \u00b7 Routing and sends"},{"src":"pages/fx-79.png","title":"DELAY SEND (1/2)","num":"13/16","group":"SND \u00b7 Routing and sends"},{"src":"pages/fx-80.png","title":"DELAY SEND (2/2)","num":"14/16","group":"SND \u00b7 Routing and sends"},{"src":"pages/fx-81.png","title":"REVERB SEND (1/2)","num":"15/16","group":"SND \u00b7 Routing and sends"},{"src":"pages/fx-82.png","title":"REVERB SEND (2/2)","num":"16/16","group":"SND \u00b7 Routing and sends"}]},{"id":"mixer","title":"Mixer","button":"GLO","blurb":"Volume, pan and the three sends for every voice.","manual":"manual/#the-mixer-glo","shots":[{"src":"pages/mixer-83.png","title":"MIXER: VOLUME (1/2)","num":"1/10","group":""},{"src":"pages/mixer-84.png","title":"MIXER: VOLUME (2/2)","num":"2/10","group":""},{"src":"pages/mixer-85.png","title":"MIXER: PAN (1/2)","num":"3/10","group":""},{"src":"pages/mixer-86.png","title":"MIXER: PAN (2/2)","num":"4/10","group":""},{"src":"pages/mixer-87.png","title":"MIXER: FX SEND (1/2)","num":"5/10","group":""},{"src":"pages/mixer-88.png","title":"MIXER: FX SEND (2/2)","num":"6/10","group":""},{"src":"pages/mixer-89.png","title":"MIXER: DLY SEND (1/2)","num":"7/10","group":""},{"src":"pages/mixer-90.png","title":"MIXER: DLY SEND (2/2)","num":"8/10","group":""},{"src":"pages/mixer-91.png","title":"MIXER: REV SEND (1/2)","num":"9/10","group":""},{"src":"pages/mixer-92.png","title":"MIXER: REV SEND (2/2)","num":"10/10","group":""}]},{"id":"perf","title":"Performance","button":"ARP, pressed again for each set","blurb":"PERFORM, SPELLS, WANDER and GLOBAL MOD: the four sets ARP goes through.","manual":"manual/#13-performance-mode-perf","shots":[{"src":"pages/perf-110.png","title":"PERFORM","num":"1/10","group":"Perform"},{"src":"pages/perf-111.png","title":"PERFORM: MORE","num":"2/10","group":"Perform"},{"src":"pages/perf-112.png","title":"PERFORM: DENSITY","num":"3/10","group":"Perform"},{"src":"pages/perf-113.png","title":"PERFORM: STUTTER","num":"4/10","group":"Perform"},{"src":"pages/perf-114.png","title":"PERFORM: RUSH","num":"5/10","group":"Perform"},{"src":"pages/perf-115.png","title":"PERFORM: RUSH SETUP","num":"6/10","group":"Perform"},{"src":"pages/perf-116.png","title":"PERFORM: TRANSPOSE","num":"7/10","group":"Perform"},{"src":"pages/perf-117.png","title":"PERFORM 2: WEAR","num":"8/10","group":"Perform"},{"src":"pages/perf-118.png","title":"PERFORM 2: SETUP (1/2)","num":"9/10","group":"Perform"},{"src":"pages/perf-119.png","title":"PERFORM 2: SETUP (2/2)","num":"10/10","group":"Perform"},{"src":"pages/perf-120.png","title":"SPELLS: GRIMOIRE","num":"1/5","group":"Spells"},{"src":"pages/perf-121.png","title":"SPELLS: CAST","num":"2/5","group":"Spells"},{"src":"pages/perf-122.png","title":"SPELLS: CHARACTER","num":"3/5","group":"Spells"},{"src":"pages/perf-123.png","title":"SPELLS: LIMITS","num":"4/5","group":"Spells"},{"src":"pages/perf-124.png","title":"SPELLS: MOTION","num":"5/5","group":"Spells"},{"src":"pages/perf-125.png","title":"WANDER: QUEST","num":"1/3","group":"Wander"},{"src":"pages/perf-126.png","title":"WANDER: PACE","num":"2/3","group":"Wander"},{"src":"pages/perf-127.png","title":"WANDER: HOME","num":"3/3","group":"Wander"},{"src":"pages/perf-128.png","title":"GLOBAL LFO 1 (1/2)","num":"1/12","group":"Global Mod"},{"src":"pages/perf-129.png","title":"GLOBAL LFO 1 (2/2)","num":"2/12","group":"Global Mod"},{"src":"pages/perf-130.png","title":"GLOBAL LFO 2 (1/2)","num":"3/12","group":"Global Mod"},{"src":"pages/perf-131.png","title":"GLOBAL LFO 2 (2/2)","num":"4/12","group":"Global Mod"},{"src":"pages/perf-132.png","title":"GLOBAL LFO 3 (1/2)","num":"5/12","group":"Global Mod"},{"src":"pages/perf-133.png","title":"GLOBAL LFO 3 (2/2)","num":"6/12","group":"Global Mod"},{"src":"pages/perf-134.png","title":"GLOBAL LFO 4 (1/2)","num":"7/12","group":"Global Mod"},{"src":"pages/perf-135.png","title":"GLOBAL LFO 4 (2/2)","num":"8/12","group":"Global Mod"},{"src":"pages/perf-136.png","title":"MACROS","num":"9/12","group":"Global Mod"},{"src":"pages/perf-137.png","title":"MACRO SETUP","num":"10/12","group":"Global Mod"},{"src":"pages/perf-138.png","title":"LINKS","num":"11/12","group":"Global Mod"},{"src":"pages/perf-139.png","title":"LINK SETUP","num":"12/12","group":"Global Mod"}]},{"id":"config","title":"Config","button":"GLO, pressed again","blurb":"The settings: sequencer, MIDI, USB, the remote, buttons, the CPU load.","manual":"manual/#16-settings-config-and-the-cpu-meter","shots":[{"src":"pages/config-93.png","title":"SEQUENCER","num":"1/17","group":""},{"src":"pages/config-94.png","title":"MIDI","num":"2/17","group":""},{"src":"pages/config-95.png","title":"MIDI CHANNELS","num":"3/17","group":""},{"src":"pages/config-96.png","title":"MIDI CHANNELS","num":"4/17","group":""},{"src":"pages/config-97.png","title":"MIDI NOTES","num":"5/17","group":""},{"src":"pages/config-98.png","title":"MIDI NOTES","num":"6/17","group":""},{"src":"pages/config-99.png","title":"MIDI OUT","num":"7/17","group":""},{"src":"pages/config-100.png","title":"MIDI OUT, VOLUME","num":"8/17","group":""},{"src":"pages/config-101.png","title":"PROGRAM CHANGE OUT","num":"9/17","group":""},{"src":"pages/config-102.png","title":"USB MIX","num":"10/17","group":""},{"src":"pages/config-103.png","title":"USB MIX","num":"11/17","group":""},{"src":"pages/config-104.png","title":"DEVICE","num":"12/17","group":""},{"src":"pages/config-105.png","title":"REMOTE","num":"13/17","group":""},{"src":"pages/config-106.png","title":"MORPH","num":"14/17","group":""},{"src":"pages/config-107.png","title":"BUTTONS & KITS","num":"15/17","group":""},{"src":"pages/config-108.png","title":"LOAD","num":"16/17","group":""},{"src":"pages/config-109.png","title":"ELIXIR","num":"17/17","group":""}]}]</script>
+<script>
+/* 1.4.1: the page browser: every screen (web/pages, from ui_test's tour), by section, in SELECT's order */
+(() => {
+  const secs = JSON.parse(document.getElementById("pages-data").textContent), d = document.getElementById("pages");
+  const all = secs.flatMap((s, si) => s.shots.map((p, pi) => ({ ...p, si, pi })));
+  const tabs = d.querySelector(".pg-tabs"), thumbs = d.querySelector(".pg-thumbs"), img = d.querySelector(".pg-body img");
+  const $ = (q) => d.querySelector(q);
+  let at = 0, shownSec = -1;
+  secs.forEach((s, si) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.role = "tab"; b.textContent = s.title;
+    b.addEventListener("click", () => go(all.findIndex((p) => p.si === si)));
+    tabs.append(b);
+  });
+  function go(i) {
+    at = (i + all.length) % all.length;
+    const p = all[at], s = secs[p.si];
+    img.src = p.src; img.alt = p.title;
+    $(".pg-group").textContent = p.group;
+    $("h3").textContent = p.title;
+    $(".pg-num").textContent = [p.num && "Page " + p.num, s.button].filter(Boolean).join(" · ");
+    $(".pg-blurb").textContent = s.blurb;
+    const m = $(".pg-man"); m.hidden = !s.manual; m.href = s.manual;
+    [...tabs.children].forEach((b, k) => b.setAttribute("aria-selected", k === p.si ? "true" : "false"));
+    if (shownSec !== p.si) {
+      shownSec = p.si; thumbs.replaceChildren();
+      s.shots.forEach((q, k) => {
+        const b = document.createElement("button"), t = document.createElement("img");
+        b.type = "button"; b.setAttribute("aria-label", q.title);
+        t.src = q.src; t.alt = ""; t.loading = "lazy"; b.append(t);
+        b.addEventListener("click", () => go(all.findIndex((r) => r.si === p.si && r.pi === k)));
+        thumbs.append(b);
+      });
+      tabs.children[p.si].scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
+    [...thumbs.children].forEach((b, k) => b.setAttribute("aria-current", k === p.pi ? "true" : "false"));
+    thumbs.children[p.pi].scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+  d.querySelectorAll(".pg-nav button").forEach((b) => b.addEventListener("click", () => go(at + +b.dataset.d)));
+  $(".pg-x").addEventListener("click", () => d.close());
+  d.addEventListener("click", (e) => { if (e.target === d) d.close(); });
+  d.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowRight") { go(at + 1); e.preventDefault(); }
+    if (e.key === "ArrowLeft") { go(at - 1); e.preventDefault(); }
+  });
+  document.getElementById("pages-open").addEventListener("click", () => { go(at); d.showModal(); });
+  const fromHash = () => { if (location.hash === "#pages" && !d.open) { go(at); d.showModal(); } };
+  fromHash();                                        /* (the manual and the updates link here) */
+  addEventListener("hashchange", fromHash);
+  d.addEventListener("close", () => { if (location.hash === "#pages") history.replaceState(null, "", location.pathname); });
 })();
 </script>
 
