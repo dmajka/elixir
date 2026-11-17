@@ -1685,7 +1685,7 @@ CC 102 and 103 are numbers the MIDI standard leaves undefined, so a keyboard doe
 
 **Volume and the morph kit** (from 1.0), on the same channels as CC 126 and 127 (both remote channels, and the global channel at KEYS or PAT+KIT):
 - **CC 124: the master volume**, 0–127 (127, the default, is full level). It comes after everything, MASTER included, on a curve like the pot's, and glides so a fader doesn't step. It belongs to the FM-1, not the kit or the project: it is saved with the settings (CONFIG: MIDI OUT, VOLUME, KNOB 4, and the FX bus's last page, KNOB 4, set it too).
-- **CC 125: the morph kit**, slot 1–64 (values 0–63), loaded as the morph target as LOAD → MORPH does. The kit you're playing stays; turn morph to hear it.
+- **CC 125: the morph kit**, slot 1–64 (values 0–63), loaded as the morph target as LOAD → MORPH does. The kit you're playing stays; turn morph to hear it. A slot still named Init is passed over, as the Morph kit knob does: the morph kit stays as it was.
 
 | Channel (default) | Notes | CCs | Also |
 |---|---|---|---|

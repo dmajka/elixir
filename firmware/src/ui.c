@@ -849,7 +849,7 @@ static int mk_has(int32_t i)                         /* an entry it stops on: a 
                                                       * project's 64: nothing to morph to) but the morph kit's own */
 {
     return kb_has(i) && (i >= (int32_t)NUM_KITS || (uint32_t)i == morph_src ||
-                         memcmp(kit_names[i], "Init    ", KIT_NAME_LEN));
+                         !kit_slot_init((uint32_t)i));
 }
 static uint32_t mk_step(uint32_t s, int32_t n)       /* n entries on (as far as there are) */
 {
