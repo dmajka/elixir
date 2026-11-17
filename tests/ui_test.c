@@ -879,15 +879,15 @@ static void phase4(void)
     kset.accel = 1;
     check(p->cond[0][0] == COND_AB + 1, "STEP: the condition (2:2)");
     shot("step-cond");
-    turn(EN_SELECT, 2);
+    turn(EN_SELECT, 1);                               /* (1.4.3: RATCHET the third page) */
     turn(EN_K1, 2);
     turn(EN_K3, 1);
     turn(EN_K4, 2);
     check((p->rat[0][0] & 7u) == 2 && ((p->rat[0][0] >> 3) & 3u) == 1 && (p->rat[0][0] >> 5) == RF_UP,
           "RATCHET: 3 hits, 1/48, up (29: K2 the shape)");
     shot("step-ratchet");
-    turn(EN_SELECT, 1);
-    check(ui.mode == M_STEP && ui.page == 3, "SELECT past RATCHET: still RATCHET");
+    turn(EN_SELECT, 2);
+    check(ui.mode == M_STEP && ui.page == SP_LOCKS, "SELECT past LOCKS: still LOCKS (1.4.3: the last)");
     press(B_SEQ);
     check(ui.mode == M_EUCLID, "SEQ again from the steps: the track's pages (29)");
     /* project version 4: conditions, ratchets, clocks, generators */
@@ -1054,7 +1054,7 @@ static void phase5a(void)
     pat_cp(&pat_backup, p);
     goto_mode(B_SEQ, M_STEP);
     white(0);
-    turn(EN_SELECT, 3 - (int32_t)ui.page);
+    turn(EN_SELECT, (int32_t)SP_RAT - (int32_t)ui.page);
     turn(EN_K2, 1);
     turn(EN_K1, 5);
     check((p->rat[0][0] & RAT_BOUNCE) && (p->rat[0][0] & 7u) == 5u, "RATCHET page: BOUNCE, 8 hits");
@@ -3025,7 +3025,7 @@ static void phase11(void)
     check(ui.mode == M_STEP && ui.page == 0, "SEQ again: step edit, STEP");
     for (i = 1; i < 5u; i++) {
         turn(EN_SELECT, 1);
-        check(ui.mode == M_STEP && ui.page == (i < 4u ? i : 3u), "SELECT: the next step page (RATCHET the last)");
+        check(ui.mode == M_STEP && ui.page == (i < 4u ? i : 3u), "SELECT: the next step page (LOCKS the last)");
     }
     press(B_SEQ);
     check(ui.mode == M_EUCLID, "SEQ again: the track's pages");
@@ -7929,16 +7929,19 @@ static void phase_023t11(void)
     printf("0.23-test11: long lengths, INF, the STEP pages\n");
     p4_reset();
     p = &pat[sq.active];
-    for (i = 0, ok = 1; i < NLEN_ALL; i++) {         /* (every length beside two locks of the highest codes) */
+    for (i = 0, ok = 1; i < 128u; i++) {             /* (every code beside two locks of the highest codes) */
         (void)lk_put(p, 0, 3, NPAR - 1u, 1);
         (void)lk_put(p, 0, 3, NPAR - 2u, 2);
         step_len_set(p, 0, 3, i);
         ok &= step_len(p, 0, 3) == i && lock_get(p, 0, 3, 1) == NPAR - 1u && lock_get(p, 0, 3, 0) == NPAR - 2u;
         lk_clear(p, 0, 3, 1);
         ok &= step_len(p, 0, 3) == i;
-        ok &= len_knob(len_pos(i)) == i;
+        ok &= len_pos(i) < NLEN_KNOB;
     }
-    check(ok, "a step's length (all 23) and its two locks kept apart");
+    for (i = 0; i < NLEN_KNOB; i++)                  /* (1.4.3: the knob's 70 there and back; an old code: its place) */
+        ok &= len_pos(len_knob(i)) == i;
+    ok &= len_pos(LEN_8) == len_pos(LEN_STEP1 + 1u) && len_pos(LEN_LONG + 1u) == len_pos(LEN_STEP1 + 15u);
+    check(ok, "a step's length (7 bits) and its two locks kept apart; the knob's lengths");
     {                                                /* (the arps' orders over 4 tones, as the user's table) */
         static const struct { uint8_t sh; char want[20]; } A[] = {
             {MEL_ARP_UP, "1234"}, {MEL_ARP_DN, "4321"}, {MEL_ARP_UD, "123432"}, {MEL_CONV, "1423"},
@@ -7973,15 +7976,15 @@ static void phase_023t11(void)
     ui.track = 0;
     run_ms(40);
     check(P_STEP[0][0] == PAR_STEP_NOTE && P_STEP[0][1] == VP_LEN && P_STEP[0][2] == PAR_STEP_VOLUME &&
-          P_STEP[1][0] == PAR_STEP_PROB && P_STEP[1][1] == VP_COND && P_STEP[1][2] == PAR_STEP_SHIFT &&
-          P_STEP[1][3] == PAR_STEP_FLAM, "STEP: Note, Length, Velocity; TRIG: Chance, Condition, Shift, Flam");
+          P_STEP[1][0] == PAR_STEP_PROB && P_STEP[1][1] == VP_COND && P_STEP[1][2] == PAR_STEP_FLAM &&
+          P_STEP[1][3] == VP_NONE, "STEP: Note, Length, Velocity, Shift; TRIG: Chance, Condition, Flam (1.4.3)");
     kset.accel = 0;
-    turn(EN_K2, 12);                                 /* (AUTO + 12: 4 BARS) */
+    turn(EN_K2, (int32_t)len_pos(LEN_STEP1 + 63u));  /* (1.4.3: 64, 4 bars) */
     kset.accel = 1;
-    check(step_len(p, 0, 0) == LEN_LONG + 5u, "K2: 4 BARS");
+    check(step_len(p, 0, 0) == LEN_STEP1 + 63u && len_x1_ticks(step_len(p, 0, 0)) == 64u * 24u, "K2: 64");
     press(B_PLAY);
     run_ms(4000);                                    /* (2 bars at 120 BPM: still held) */
-    check(sq.glen[0] > 0u && sq.glen[0] <= 64u * 24u * 2u + 48u, "4 BARS: held two bars in, two to go");
+    check(sq.glen[0] > 0u && sq.glen[0] <= 64u * 24u * 2u + 48u, "64: held two bars in, two to go");
     kset.accel = 0;
     turn(EN_K2, 30);                                 /* (past INF: TIE, the last) */
     turn(EN_K2, -1);
@@ -11813,7 +11816,7 @@ static void phase19_fixes(void)
     lk_put(p, 1, 5, 40, 3);
     main_set(p, 1, 4, 1);
     goto_mode(B_SEQ, M_STEP);
-    ui.page = 2;
+    ui.page = SP_LOCKS;
     ui.track = 1;
     ui.step = 4;
     ui.force = 1;
@@ -12141,7 +12144,7 @@ static void phase19_locks(void)
     check(ok && msg_on() && !strcmp(ui.msg, "STEP FULL: 8 LOCKS"), "1.4: 8 locks a step, the ninth refused (said)");
     /* the LOCKS page: the list; ADD, a parameter, its value; OFF deletes */
     goto_mode(B_SEQ, M_STEP);
-    ui.page = 2;
+    ui.page = SP_LOCKS;
     ui.track = 1;
     ui.step = 4;
     ui.lk_row = 0;
@@ -12310,7 +12313,7 @@ static void phase19_locks(void)
         run_ms(60);
         check(msg_on() && !strcmp(ui.msg, "NO LOCKS LEFT: 8,192 IN USE"), ".. and said");
         ui.mode = M_STEP;
-        ui.page = 2;
+        ui.page = SP_LOCKS;
         ui.track = 6;
         ui.step = 63;
         ui.force = 1;
@@ -13145,6 +13148,97 @@ static void phase_142_hold_clear(void)
     press(B_PLAY);
     p4_reset();
 }
+/* 1.4.3: a held note's tail on the grid; the step pages' order (RATCHET after TRIG, LOCKS last) */
+static void phase_143_tails(void)
+{
+    pattern_t *pt = &pat[0];
+    uint32_t pp0, pp3, ok;
+    uint16_t pp[4];
+    printf("1.4.3: held notes on the grid; the step pages\n");
+    p4_reset();
+    ui.track = 0;
+    /* a bass line on D1: 1/8 (2 steps) on 1, 1/8. (3) on 5, 1/4 (4) on 9 cut by a note on 11, 1/32 on 14, INF on
+     * 15 (round the loop: held to step 1's note) */
+    main_set(pt, 0, 0, 1);  step_len_set(pt, 0, 0, LEN_8);
+    main_set(pt, 0, 4, 1);  step_len_set(pt, 0, 4, LEN_8D);
+    main_set(pt, 0, 8, 1);  step_len_set(pt, 0, 8, LEN_4);
+    main_set(pt, 0, 10, 1);
+    main_set(pt, 0, 13, 1); step_len_set(pt, 0, 13, LEN_32);
+    main_set(pt, 0, 14, 1); step_len_set(pt, 0, 14, LEN_INF);
+    main_set(pt, 1, 2, 1);  step_len_set(pt, 1, 2, LEN_LONG + 1u);   /* (1 BAR, 16 steps, on a 16-step track: round) */
+    check(note_tail(pt, 0, 1) == 8u && note_tail(pt, 0, 2) == 0u, "1/8: one step held after it");
+    check(note_tail(pt, 0, 5) == 8u && note_tail(pt, 0, 6) == 8u && note_tail(pt, 0, 7) == 0u, "1/8.: two steps after");
+    check(note_tail(pt, 0, 9) == 8u && note_tail(pt, 0, 10) == 0u && note_tail(pt, 0, 11) == 0u,
+          "1/4 cut by the next note: held up to it");
+    check(note_tail(pt, 0, 15) == 8u, "INF: held to the next note (round the loop)");
+    check(note_tail(pt, 1, 3) == 8u && note_tail(pt, 1, 1) == 8u && note_tail(pt, 1, 2) == 0u,
+          "1 BAR on a 16-step track: every other step, round the loop");
+    {                                                /* (1.4.3: in steps: 1/4 STEP .. 7 STEPS, on the knob in order) */
+        char b[16];
+        uint32_t i, prev = 0;
+        ok = 1;
+        for (i = 1; i + 2u < NLEN_KNOB; i++) {        /* (AUTO first, INF and TIE last) */
+            uint32_t e = len_x1_ticks(len_knob(i));
+            ok &= e > prev;
+            prev = e;
+        }
+        step_len_set(pt, 0, 3, LEN_X);
+        card_value(b, sizeof b, VP_LEN, len_pos(LEN_X));
+        check(ok && note_eighths(pt, 0, 3) == 2u && !strcmp(b, "1/4") &&
+              len_x1_ticks(len_knob(NLEN_KNOB - 3u)) == 64u * 24u, "lengths in steps: 1/4 .. 64, the knob in order");
+        step_len_set(pt, 0, 3, LEN_8D);
+        card_value(b, sizeof b, VP_LEN, len_pos(LEN_8D));
+        check(!strcmp(b, "3"), "an old 1/8. reads 3");
+        for (i = 0, ok = 1; i < NLEN_KNOB; i++) {     /* (each fits its card: 56 px in the small face) */
+            card_value(b, sizeof b, VP_LEN, i);
+            if (text_w(&AF_S, b) > 56) {
+                printf("  too wide: %s (%d px)\n", b, (int)text_w(&AF_S, b));
+                ok = 0;
+            }
+        }
+        check(ok, "every length fits its card");
+    }
+    {                                                /* (the 7th bit kept by a project's save and load) */
+        int rc;
+        step_len_set(pt, 0, 9, LEN_STEP1 + 40u);
+        main_set(pt, 0, 9, 1);
+        rc = proj_save(1, "LEN     ");
+        seq_clear_pattern(pt);
+        rc |= proj_load(1);
+        check(rc == 0 && step_len(&pat[0], 0, 9) == LEN_STEP1 + 40u, "a length of 41: saved and loaded");
+        pt = &pat[0];
+        main_set(pt, 0, 9, 0);
+        step_len_set(pt, 0, 9, LEN_AUTO);
+    }
+    pt->clk[0] = CLK_1X + 3;                          /* (x2: a step half as long: a length is still in its steps) */
+    pp0 = CLK_TICKS[pt->clk[0]];
+    check(note_eighths(pt, 0, 0) == 16u, "a track's clock: the length in its own steps");
+    pt->clk[0] = CLK_1X;
+    ui.msg[0] = 0;
+    ui.force = 1;
+    run_ms(60);
+    shot("grid-held-notes");
+    /* the step pages: STEP, TRIG, RATCHET, LOCKS; Shift on KNOB 4 on STEP and TRIG */
+    goto_mode(B_SEQ, M_STEP);
+    ui.page = SP_TRIG;
+    page_params(pp);
+    pp3 = pp[3];
+    check(pp3 == VP_NONE && pp[2] == PAR_STEP_FLAM, "TRIG: Flam on KNOB 3, no Shift (STEP has it)");
+    ui.page = SP_RAT;
+    page_params(pp);
+    check(pp[0] == VP_RAT_N, "the third step page: RATCHET");
+    ui.page = SP_STEP;
+    ui.step = 0;
+    step_len_set(pt, 0, 0, LEN_STEP1 + 63u);
+    ui.force = 1;
+    run_ms(60);
+    shot("step-length-longest");
+    step_len_set(pt, 0, 0, LEN_X);
+    ui.force = 1;
+    run_ms(60);
+    shot("step-length-quarter");
+    p4_reset();
+}
 int main(int argc, char **argv)
 {
     uint32_t t;
@@ -13684,6 +13778,7 @@ int main(int argc, char **argv)
     phase_140_delete();
     phase_140_wear();
     phase_142_hold_clear();
+    phase_143_tails();
     copy_pass();                                     /* (1.0's copy and picture pass: last, as it runs time) */
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;

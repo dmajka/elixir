@@ -30,7 +30,7 @@ typedef struct {
     step_t step[NTRACK][NUM_STEPS];
     uint8_t timing[NTRACK][NUM_STEPS];           /* flam (low nibble: off x2 x3 x4 x6 x8) | shift << 4 (0..14, 7 = 0) */
     uint16_t main[NTRACK][4];                    /* step on bits, a word a bar */
-    uint8_t lhi[NTRACK][NUM_STEPS];              /* a step's length's bits 3-5 in bits 2, 3, 6 (step_len; 1.4: the
+    uint8_t lhi[NTRACK][NUM_STEPS];              /* a step's length's bits 3-6 in bits 2, 3, 6, 7 (step_len; 1.4: the
                                                   * locks' bits 0, 1, 4, 5 out: lk_*) */
     uint8_t cond[NTRACK][NUM_STEPS];             /* the trig condition (0.5: COND_*, cond_ok) */
     uint8_t rat[NTRACK][NUM_STEPS];              /* the ratchet: hits - 1 (0 none) | rate << 3 | fade << 5 */
@@ -170,15 +170,36 @@ static const uint8_t LEN_TICKS[NLEN] = {0, 12, 24, 48, 72, 96, 192, 0};
 static const uint16_t LEN_STEPS[] = {12, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024};
 #define NLEN_LONG (sizeof LEN_STEPS / sizeof LEN_STEPS[0])
 #define LEN_INF (LEN_LONG + NLEN_LONG)
-#define NLEN_ALL (LEN_INF + 1u)
-#define NLEN_KNOB NLEN_ALL                           /* (the knob's positions: as many as the codes) */
-static inline uint32_t len_knob(uint32_t i)          /* the knob's position i: its code (TIE last) */
+/* 1.4.3: lengths in steps, as the Elektrons' (the user's): AUTO, 1/4 1/2 3/4, 1 .. 64, INF, TIE. Codes 0 .. 22 as
+ * before (projects keep theirs: 1/32 is 1/2, 1/8 is 2, 1 BAR 16; 96 .. 1024 steps still play, shown as numbers, the
+ * knob stops at 64), 1/4 and 3/4 after INF, n steps 63 + n (a 7th bit: lhi's bit 7). In x1 ticks (24 a step); a
+ * track's clock scales them (gate_start) */
+#define LEN_X (LEN_INF + 1u)                         /* 1/4, 3/4 */
+static const uint8_t LEN_X_TICKS[] = {6, 18};
+#define LEN_STEP1 64u                                /* 1 step .. 64 */
+#define NLEN_KNOB 70u                                /* AUTO, 3 fractions, 64 steps, INF, TIE */
+static inline uint32_t len_knob(uint32_t i)          /* the knob's position i: its code */
 {
-    return i < LEN_TIE ? i : i + 1u >= NLEN_KNOB ? LEN_TIE : i + 1u;
+    return i == 0u ? LEN_AUTO : i == 1u ? LEN_X : i == 2u ? LEN_32 : i == 3u ? LEN_X + 1u
+         : i < 68u ? LEN_STEP1 + i - 4u : i == 68u ? LEN_INF : LEN_TIE;
 }
-static inline uint32_t len_pos(uint32_t l)           /* .. and back */
+static inline int len_till_next(uint32_t l)
 {
-    return l < LEN_TIE ? l : l == LEN_TIE ? NLEN_KNOB - 1u : l < NLEN_ALL ? l - 1u : 0u;
+    return l == LEN_TIE || l == LEN_INF || (l > LEN_X + 1u && l < LEN_STEP1) || l >= LEN_STEP1 + 64u;
+}
+static uint32_t len_x1_ticks(uint32_t l)             /* a length's ticks in x1 steps (0: AUTO, TIE, INF) */
+{
+    return l == LEN_AUTO || len_till_next(l) ? 0u
+         : l >= LEN_STEP1 ? (l - LEN_STEP1 + 1u) * 24u
+         : l >= LEN_X     ? LEN_X_TICKS[l - LEN_X]
+         : l >= LEN_LONG  ? LEN_STEPS[l - LEN_LONG] * 24u
+                          : LEN_TICKS[l];
+}
+static inline uint32_t len_pos(uint32_t l)           /* .. and back (an older code: its length's place) */
+{
+    uint32_t tk = len_x1_ticks(l);
+    return l == LEN_AUTO ? 0u : l == LEN_TIE ? 69u : !tk ? 68u : tk < 12u ? 1u : tk < 18u ? 2u : tk < 24u ? 3u
+         : tk / 24u > 64u ? 67u : 3u + tk / 24u;
 }
 #define COND_MASK 0x3Fu
 #define PROB_MASK 0x7Fu
@@ -187,13 +208,13 @@ static inline uint32_t step_prob(const step_t *x) { return x->prob & PROB_MASK; 
 static inline uint32_t step_len(const pattern_t *p, uint32_t t, uint32_t s)
 {
     return (uint32_t)(p->cond[t][s] >> 6) | (uint32_t)(p->step[t][s].prob >> 7) << 2 |
-           (uint32_t)(p->lhi[t][s] >> 2 & 3u) << 3 | (uint32_t)(p->lhi[t][s] >> 6 & 1u) << 5;
+           (uint32_t)(p->lhi[t][s] >> 2 & 3u) << 3 | (uint32_t)(p->lhi[t][s] >> 6 & 3u) << 5;   /* (1.4.3: bit 7) */
 }
 static void step_len_set(pattern_t *p, uint32_t t, uint32_t s, uint32_t l)
 {
     p->cond[t][s] = (uint8_t)((p->cond[t][s] & COND_MASK) | (l & 3u) << 6);
     p->step[t][s].prob = (uint8_t)((p->step[t][s].prob & PROB_MASK) | ((l >> 2) & 1u) << 7);
-    p->lhi[t][s] = (uint8_t)((p->lhi[t][s] & ~0x4Cu) | ((l >> 3) & 3u) << 2 | ((l >> 5) & 1u) << 6);
+    p->lhi[t][s] = (uint8_t)((p->lhi[t][s] & ~0xCCu) | ((l >> 3) & 3u) << 2 | ((l >> 5) & 3u) << 6);
 }
 /* 19d: DENSITY's BUILD: what its positive side adds */
 enum { DB_CHANCE, DB_GHOSTS, DB_RATCHETS, NDB };
@@ -1069,12 +1090,12 @@ static void gate_start(uint32_t t, uint32_t l)
     sq.tie &= (uint8_t)~b;
     sq.gmidi = (uint8_t)(l != LEN_AUTO ? sq.gmidi | b : sq.gmidi & ~b);
     voice_hold(t, 1);
-    if (l == LEN_TIE || l >= LEN_INF) {              /* (INF: held, no countdown, till the next note) */
+    if (len_till_next(l)) {                          /* (INF: held, no countdown, till the next note) */
         sq.tie |= l == LEN_TIE ? b : 0u;
         sq.glen[t] = 0;
         return;
     }
-    l = l >= LEN_LONG ? LEN_STEPS[l - LEN_LONG] * 24u : l ? LEN_TICKS[l] : trk_ticks(t);
+    l = l ? len_x1_ticks(l) * trk_ticks(t) / 24u : trk_ticks(t);   /* (1.4.3: in the track's own steps) */
     l = trk_scale(t, l);                             /* (1.0: as long as the track's stretched steps) */
     sq.glen[t] = (uint16_t)(l > 0xFFFFu ? 0xFFFFu : l);
 }

@@ -357,6 +357,46 @@ static void draw_labels(void)
     cv_blit(0, BODY_Y);
 }
 
+/* 1.4.3: a note's length in eighths of its track's step (lengths are in the track's steps, whatever its clock); 0
+ * AUTO; NOTE_TILL_NEXT for INF and TIE. A melody's: the length it played the step with (mel_l) */
+#define NOTE_TILL_NEXT 0xFFFFu
+static uint32_t note_eighths(const pattern_t *pt, uint32_t t, uint32_t s)
+{
+    uint32_t l = step_len(pt, t, s);
+    if ((pt == &pat[sq.active] || pt == &gpat) && mel_on(&pat[sq.active], t) && (mel_n[t][s] & 0x80u))
+        l = mel_l[t][s];
+    if (l == LEN_AUTO)
+        return 0;
+    if (len_till_next(l))
+        return NOTE_TILL_NEXT;
+    return len_x1_ticks(l) / 3u;                     /* (24 ticks a step: 3 an eighth) */
+}
+/* 1.4.3: how much of step st (an off step) the note before it still holds, in eighths of the cell (0 .. 8): the
+ * track's previous note (round its loop, as it plays), its length less the steps between. The next note cuts a
+ * note short, so only the one before counts */
+static uint32_t note_tail(const pattern_t *pt, uint32_t t, uint32_t st)
+{
+    uint32_t len = track_len(pt, t), k, d, e;
+    uint64_t m = (uint64_t)pt->main[t][0] | (uint64_t)pt->main[t][1] << 16 | (uint64_t)pt->main[t][2] << 32 |
+                 (uint64_t)pt->main[t][3] << 48, b;
+    if (len < 64u)
+        m &= (1ull << len) - 1u;
+    if (st >= len || (m >> st & 1u))
+        return 0;
+    b = m & ((1ull << st) - 1u);                     /* (the notes before it in the loop, else the last one round) */
+    if (b) {
+        k = 63u - (uint32_t)__builtin_clzll(b);
+        d = st - k;
+    } else {
+        b = m & ~((2ull << st) - 1u);                /* (st < 63 here: st 63 is the loop's last, nothing after) */
+        if (st >= 63u || !b)
+            return 0;
+        k = 63u - (uint32_t)__builtin_clzll(b);
+        d = st + len - k;
+    }
+    e = note_eighths(pt, t, k);
+    return e > d * 8u ? (e - d * 8u > 8u ? 8u : e - d * 8u) : 0u;
+}
 static uint32_t col_sig(uint32_t c)
 {
     uint32_t t, s = sig_add(c, ui.bar), st = ui.bar * 16u + c;
@@ -367,7 +407,8 @@ static uint32_t col_sig(uint32_t c)
         s = sig_add(s, (uint32_t)pt->cond[t][st] | (uint32_t)pt->rat[t][st] << 8 | (pt == &gpat) << 16 |
                            (uint32_t)(x->prob >> 7) << 17);
         s = sig_add(s, main_on(pt, t, st) | (st < track_len(pt, t)) << 1 |
-                           (sq.running && sq.idx[t] == (int8_t)st) << 2);
+                           (sq.running && sq.idx[t] == (int8_t)st) << 2 | note_tail(pt, t, st) << 3 |
+                           (main_on(pt, t, st) && note_eighths(pt, t, st) > 8u) << 7 | (uint32_t)pt->lhi[t][st] << 8);
         if (main_on(pt, t, st))
             s = sig_add(s, (uint32_t)x->volume | (uint32_t)x->prob << 8 | (uint32_t)pt->timing[t][st] << 16 |
                                (uint32_t)lk_has(pt, t, st) << 24);
@@ -388,12 +429,21 @@ static void draw_col(uint32_t c)
         int on = main_on(pt, t, st), in = st < track_len(pt, t), muted = (seq_mutes() >> t) & 1u;
         int play = sq.running && sq.idx[t] == (int8_t)st;
         uint16_t col = muted ? T_DIM : TRACK_COL[t];
+        uint32_t tl;
         if (!in) {
             cv_rect(1, y + 7, CELL_W - 2, 1, T_LINE);
             continue;
         }
         if (play)
             cv_rect(0, y, CELL_W, ROW_H, T_SEL);
+        tl = on ? (note_eighths(pt, t, st) > 8u ? 8u : 0u) : note_tail(pt, t, st);
+        {                                            /* 1.4.3: a held note's tail: a thin bar, the track's color dimmed,
+                                                      * on through the steps it holds (from its own cell's middle) */
+            if (tl) {
+                int32_t x0 = on ? CELL_W / 2 : 0, w = on || tl >= 8u ? CELL_W - x0 : (int32_t)(tl * CELL_W / 8u);
+                cv_rect(x0, y + ROW_H / 2 - 1, w, 3, ux_mix(play ? T_SEL : bg, col, 40));
+            }
+        }
         if (on) {
             uint32_t vel = x->volume & STEP_VOLUME_MASK, h = 4u + vel * 8u / 127u;
             uint16_t fill = ux_mix(play ? T_SEL : bg, col, 45 + (int32_t)vel * 55 / 127);
@@ -418,7 +468,7 @@ static void draw_col(uint32_t c)
                 cv_rect(CELL_W - 2, top + 1, 1, (int32_t)h - 2, T_TEXT);
             if (pt->rat[t][st] & 7u)                 /* a ratchet: a bar under it, longer with more hits */
                 cv_rect(2, y + ROW_H - 1, 1 + (int32_t)(pt->rat[t][st] & 7u), 1, T_ACCENT);
-        } else {
+        } else if (!tl) {                            /* (an empty step: a dot; held over: the tail) */
             cv_rect(CELL_W / 2 - 1, y + ROW_H / 2 - 1, 2, 2, t == ui.track ? T_MID : T_LINE);
         }
         if (t == ui.track && ui.mode == M_STEP && st == ui.step)
@@ -2141,7 +2191,7 @@ static void draw_body(void)
             draw_grid();
             return;
         case M_STEP:
-            if (ui.page % 4u == 2u) {                /* (1.4: LOCKS: the step's locks, a list) */
+            if (ui.page % 4u == SP_LOCKS) {          /* (1.4: LOCKS: the step's locks, a list) */
                 fn = draw_locks;
                 s = locks_sig();
                 break;
@@ -3071,14 +3121,15 @@ static void card_value(char *b, uint32_t n, uint32_t p, uint32_t v)
         return;
     }
     case VP_GAMT: put_str(put_int(b, (int32_t)v), "%", 2); return;
-    case VP_LEN: case VP_MEL + ML_LEN: {
-        static const char *const L[NLEN_ALL] = {"AUTO", "1/32", "1/16", "1/8", "1/8.", "1/4", "1/2", "TIE", "3/4",
-                                                "1 BAR", "1.5 BARS", "2 BARS", "3 BARS", "4 BARS", "6 BARS", "8 BARS",
-                                                "12 BARS", "16 BARS", "24 BARS", "32 BARS", "48 BARS", "64 BARS",
-                                                "INF"};
-        if (p == VP_LEN)                             /* (0.23-t11: the step's knob, TIE last; the melody's: NLEN) */
-            v = len_knob(v);
-        put_str(b, L[v < NLEN_ALL ? v : 0], n);
+    case VP_LEN: case VP_MEL + ML_LEN: {             /* (1.4.3: in steps, as the Elektrons': 1/4 .. 64, no units) */
+        uint32_t l = p == VP_LEN ? len_knob(v) : v, tk = len_x1_ticks(l);
+        static const char *const FR[3] = {"1/4", "1/2", "3/4"};
+        if (l == LEN_AUTO || l == LEN_TIE || l == LEN_INF || !tk)
+            put_str(b, l == LEN_AUTO ? "AUTO" : l == LEN_TIE ? "TIE" : "INF", n);
+        else if (tk < 24u)
+            put_str(b, FR[tk / 6u - 1u], n);
+        else
+            put_int(b, (int32_t)(tk / 24u));
         return;
     }
     case VP_MEL + ML_SHAPE: {

@@ -181,7 +181,7 @@ A pattern has seven tracks of up to 64 steps (four bars of 16). Each track has i
 - **Bar keys** (black 8–11) show bars 1–4. With FOLLOW on (CONFIG), the screen follows the playhead.
 - **Knobs:** tempo, shuffle, the track's length, the track's volume.
 
-On the grid, a step's height shows its velocity, an outline means a chance below 100%, a notch means a flam, a tick underneath means a shift, a dot top right means a lock, a dot top left means a trig condition, and a bar underneath means a ratchet.
+On the grid, a step's height shows its velocity, an outline means a chance below 100%, a notch means a flam, a tick underneath means a shift, a dot top right means a lock, a dot top left means a trig condition, a bar underneath means a ratchet, and (from 1.4.3) a thin bar on through the steps after a note means it's held that long (its Length).
 
 ### Track length
 
@@ -234,15 +234,17 @@ Press **SEQ** twice (the first press opens the track's pages, [section 12](#12-g
 | Page | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
 | STEP | Note | Length | Velocity | Shift (from 1.3) |
-| TRIG | Chance | Condition | Shift | Flam |
-| LOCKS | Lock (the row) | Param | Value | – |
+| TRIG | Chance | Condition | Flam | – |
 | RATCHET | Hits | Shape | Rate (bouncing: Curve) | Fade |
+| LOCKS | Lock (the row) | Param | Value | – |
+
+From 1.4.3 the pages are in this order: RATCHET follows TRIG (after Flam) and LOCKS is last. Shift is on the STEP page only (before 1.4.3 TRIG had it too).
 
 - **Note:** the pitch the voice plays at (C4 = as set). From 0.23-test7 a step plays relative to its track's **Base** (the SCALE page, [Scale](#scale-from-016)): change Base and every step moves with it. Turning Note here **locks** the step's note (the label reads **Locked**): Base leaves it where you put it. Turn a locked note back to the Base note and it follows Base again. Notes played in from the keys, melodies and spells all follow Base.
 - **Chance:** the probability the step plays (PERF's FILL key plays it anyway).
 - **Flam:** OFF, x2, x3, x4, x6, x8: the step repeats evenly inside its length.
-- **Shift:** −7 … +7 eighths of a step, early or late: a hit's microtiming. It is on the STEP page (KNOB 4, from 1.3) and on TRIG (KNOB 3), so you can pick a step and nudge it on the first page. Recording with Quantize under 100% sets it for you ([Recording live](#7-recording-live)).
-- **Length** (from 0.16): how long the note lasts. **AUTO** (the default) is the LXR's: the voice's own envelope, and MIDI's note-off at the next tick. **1/32, 1/16, 1/8, 1/8., 1/4, 1/2**, and from 0.23-test11 **3/4, 1 BAR, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64 BARS** hold the note that long: a voice with **Gate** on (the amp EG's next page, see [section 9](#elixirs-sound-pages)) holds its attack's top until then, and MIDI out sends the note-off at the end, so a synth over USB plays real lengths. **INF** holds it until the track's next note (or STOP): a drone. **TIE** (the knob's last) slides into the next note: its pitch changes, nothing is struck again (MIDI: the new note on, then the old one off). A tied step shows a line into the next one on the grid. A new note on the track always cuts a long one short, as on the Elektrons. A length uses none of the step's locks.
+- **Shift:** −7 … +7 eighths of a step, early or late: a hit's microtiming. It is on the STEP page (KNOB 4, from 1.3), so you can pick a step and nudge it on the first page. Recording with Quantize under 100% sets it for you ([Recording live](#7-recording-live)).
+- **Length** (from 0.16): how long the note lasts. **AUTO** (the default) is the LXR's: the voice's own envelope, and MIDI's note-off at the next tick. The others are steps, as on the Elektrons (from 1.4.3): **1/4, 1/2, 3/4**, then every whole number of steps from **1 to 64**. A track running at another clock (x2, x1/2 …) counts in its own steps, so 2 is always two of its steps. (Before 1.4.3 they were note values: an older project's 1/16 reads 1, 1/8 reads 2, 1 BAR reads 16. Its lengths over 64 steps still play as long as before; the knob shows 64.) They hold the note that long: a voice with **Gate** on (the amp EG's next page, see [section 9](#elixirs-sound-pages)) holds its attack's top until then, and MIDI out sends the note-off at the end, so a synth over USB plays real lengths. **INF** holds it until the track's next note (or STOP): a drone. **TIE** (the knob's last) slides into the next note: its pitch changes, nothing is struck again (MIDI: the new note on, then the old one off). A tied step shows a line into the next one on the grid; from 1.4.3 a note held longer than its step shows a thin bar on through the steps it holds (up to the next note, which cuts it). A new note on the track always cuts a long one short, as on the Elektrons. A length uses none of the step's locks.
 - **Ratchet:** the step plays Hits times, evenly at Rate (1/32, 1/48, 1/64, 1/24). Fade: FLAT, DOWN or UP.
 
 ### Bouncing ratchets
@@ -267,7 +269,7 @@ MIDI notes played while in step edit set the selected step's note.
 A lock sets one parameter to a different value on one step, for example a higher filter cutoff on the last kick of the bar. From 1.4 a step can hold up to **eight** locks, one for each parameter, and the project shares one pool of **8,192** locks among all 32 patterns. One pattern can be dense with locks while the next has none. (Before 1.4, every step had room for exactly two.)
 
 - **The quick way:** on any sound page (EDIT, ENV, SCL, LFO, GLO, the mixer), hold a step key and turn a knob. Holding the key never turns the step on or off by itself (from 1.4.2): you can hold it, go to another page and turn a knob there. A lock on a step that was off turns it on. The knob's card shows the locked value in the accent color. Turn another knob while still holding the step and that parameter gets a lock of its own.
-- **On the LOCKS page** (step edit's third page): the screen lists the selected step's locks, one row each, with the parameter's name and its value as its card reads it (Hz, ms, %). **Lock** (KNOB 1) picks a row; **Param** (KNOB 2) changes that row's parameter (parameters the step already locks are skipped; turned all the way down to **OFF**, the lock is deleted); **Value** (KNOB 3) sets its value. The last row, **+ Add a lock**, adds one: turn Param there and the new lock starts from the kit's value. The line at the bottom says what the knobs do on the row selected. Tap another step key to see its locks.
+- **On the LOCKS page** (step edit's last page): the screen lists the selected step's locks, one row each, with the parameter's name and its value as its card reads it (Hz, ms, %). **Lock** (KNOB 1) picks a row; **Param** (KNOB 2) changes that row's parameter (parameters the step already locks are skipped; turned all the way down to **OFF**, the lock is deleted); **Value** (KNOB 3) sets its value. The last row, **+ Add a lock**, adds one: turn Param there and the new lock starts from the kit's value. The line at the bottom says what the knobs do on the row selected. Tap another step key to see its locks.
 - **Deleting a lock:** select its row and turn **Param** all the way down to **OFF**. To delete all of the step's locks at once, press CLEAR (SHIFT (OCT−) + OCT+), then COPY.
 - **The count:** the top line shows the step (and **FULL 8/8** when it has eight) and how many of the pool's 8,192 locks are left. A ninth lock on a step is refused with **STEP FULL: 8 LOCKS**; a lock when the pool is used up, with **NO LOCKS LEFT: 8,192 IN USE**.
 - **Clearing:** SHIFT (OCT−) + OCT+ offers **CLEAR TRACK LOCKS** (the selected track's, in this pattern) and, in step edit, **CLEAR STEP LOCKS** (the selected step's); on the LOCKS page it opens on the step's. See [Clearing](#clearing).

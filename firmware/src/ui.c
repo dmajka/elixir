@@ -435,13 +435,15 @@ static void sound_fix(void)                          /* a section this track has
 }
 
 static const uint16_t P_HOME[4] = {PAR_BPM, PAR_SHUFFLE, PAR_TRACK_LENGTH, VP_TRACK_VOL};
+/* (1.4.3: RATCHET after TRIG, so it follows Flam; LOCKS last. Shift on STEP only, not TRIG too) */
+enum { SP_STEP, SP_TRIG, SP_RAT, SP_LOCKS };
 static const uint16_t P_STEP[4][4] = {{PAR_STEP_NOTE, VP_LEN, PAR_STEP_VOLUME, PAR_STEP_SHIFT},   /* (0.23-t11: as the */
-                                      {PAR_STEP_PROB, VP_COND, PAR_STEP_SHIFT, PAR_STEP_FLAM},   /* Elektrons') */
-                                      {PAR_P1_DEST, PAR_P2_DEST, PAR_P1_VAL, VP_NONE},   /* (1.4: the list's
+                                      {PAR_STEP_PROB, VP_COND, PAR_STEP_FLAM, VP_NONE},   /* Elektrons') */
+                                      {VP_RAT_N, VP_RAT_SHAPE, VP_RAT_RATE, VP_RAT_FADE},   /* (29: SHAPE names
+                                                                                             * RATE: before it) */
+                                      {PAR_P1_DEST, PAR_P2_DEST, PAR_P1_VAL, VP_NONE}};   /* (1.4: the list's
                                                       * row, its parameter, its value: lk_ui_*) */
-                                      {VP_RAT_N, VP_RAT_SHAPE, VP_RAT_RATE, VP_RAT_FADE}};   /* (29: SHAPE names
-                                                                                               * RATE: before it) */
-static const char *const STEP_TITLE[4] = {"STEP", "TRIG", "LOCKS", "RATCHET"};
+static const char *const STEP_TITLE[4] = {"STEP", "TRIG", "RATCHET", "LOCKS"};
 /* 0.8: the performance pages: PERFORM is the LXR's PERFORMANCE page (BPM, roll, morph, sample rate). 0.13: in order,
  * the performance pages (PERFORM 2's last: its keys the second bank), the global LFOs (each: DEST DEPTH SPEED WAVE,
  * then MODE TRIG PHASE), the macros. 19: DENSITY after MORE (its black keys leave tracks out), a third LFO. 0.16:
@@ -3738,7 +3740,7 @@ static void button_down(uint32_t b)
                 ui.clear_sel = io_mode() ? CL_SLOT       /* (1.4: SAVE / LOAD: the slot shown) */
                              : ui.mode == M_SONG ? CL_SONG_ROW   /* (0.10: on a sound page, its sound) */
                              : ui.mode == M_SOUND || ui.mode == M_KEYS ? CL_SOUND
-                             : ui.mode == M_STEP && ui.page % 4u == 2u ? CL_STEP_LK   /* (1.4: the LOCKS page) */
+                             : ui.mode == M_STEP && ui.page % 4u == SP_LOCKS ? CL_STEP_LK   /* (1.4: the LOCKS page) */
                              : CL_TRACK;
             } else {
                 clear_do();

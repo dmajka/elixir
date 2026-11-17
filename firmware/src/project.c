@@ -453,7 +453,7 @@ static void pr_step(uint32_t ver, pattern_t *p, uint32_t t, uint32_t k)
         lock_old(ver, p, t, k, l[0] | (p->lhi[t][k] & 3u) << 8, l[1]);
         lock_old(ver, p, t, k, l[2] | (p->lhi[t][k] >> 4 & 3u) << 8, l[3]);
     }
-    p->lhi[t][k] &= 0x4Cu;                           /* (the length's) */
+    p->lhi[t][k] &= 0xCCu;                           /* (the length's; 1.4.3: bit 7 too) */
 }
 /* version 13: a track's locks into p (in key order, at most LK_STEP a step; what doesn't fit the pool dropped) */
 static void pr_locks(pattern_t *p, uint32_t t)

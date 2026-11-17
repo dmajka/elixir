@@ -132,7 +132,7 @@
   "group": "STEP",
   "n": 3,
   "of": 4,
-  "title": "LOCKS  STEP 5",
+  "title": "RATCHET  STEP 5",
   "file": "step-16.png"
  },
  {
@@ -140,7 +140,7 @@
   "group": "STEP",
   "n": 4,
   "of": 4,
-  "title": "RATCHET  STEP 5",
+  "title": "LOCKS  STEP 5",
   "file": "step-17.png"
  },
  {
