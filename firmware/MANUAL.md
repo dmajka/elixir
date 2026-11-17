@@ -177,7 +177,7 @@ A pattern has seven tracks of up to 64 steps (four bars of 16). Each track has i
 ### The grid (HOME)
 
 - **Select a track** with its black key (or ALGORITHM). From 1.2 the key also plays the track's voice once, at the keys' velocity, so you can tap the seven keys to hear the kit together. Under REC, while playing, the hit is recorded (from 1.3): tap the keys like pads and watch the steps appear ([Recording live](#7-recording-live)). To turn it off, set CONFIG → BUTTONS & KITS → **Audition** to NO.
-- **Tap a white key** to turn that step on or off.
+- **Tap a white key** to turn that step on or off. From 1.4.2 the step changes as you let go of the key. A key you hold (for a third of a second or more, or while you turn a knob or change pages) leaves the step as it was, so you can hold a step to lock it without losing or adding a note.
 - **Bar keys** (black 8–11) show bars 1–4. With FOLLOW on (CONFIG), the screen follows the playhead.
 - **Knobs:** tempo, shuffle, the track's length, the track's volume.
 
@@ -207,6 +207,7 @@ Hold SHIFT (OCT−) and press **OCT+** (CLEAR). A list opens; turn SELECT to cho
 | CLEAR TRACK | the selected track's steps, their locks and its generator; from 1.4 its length, clock and direction stay as they were |
 | CLEAR PATTERN | every track of the pattern |
 | CLEAR TRACK LOCKS | every lock on the selected track in the pattern shown; its steps stay (from 1.4; before, CLEAR AUTOMATION 1 and 2 cleared one lane each) |
+| CLEAR KNOB LOCKS | (from 1.4.2) one parameter's locks on every step of the selected track in the pattern shown; the steps and their other locks stay. With the list open, **turn the knob** whose locks should go: the list jumps here and names it (the knob's value doesn't change), then confirm. |
 | CLEAR STEP LOCKS | (step edit only) every lock on the selected step; the step stays on. On the LOCKS page the list opens here (from 1.4) |
 | CLEAR SOUND (INIT) | the selected track's voice back to the init kit's, every one of its parameters (sends, shape, LFO, model …); the other voices stay as they are. CH and OH share a voice. |
 | CLEAR KIT (INIT) | every voice back to the init kit |
@@ -265,7 +266,7 @@ MIDI notes played while in step edit set the selected step's note.
 
 A lock sets one parameter to a different value on one step, for example a higher filter cutoff on the last kick of the bar. From 1.4 a step can hold up to **eight** locks, one for each parameter, and the project shares one pool of **8,192** locks among all 32 patterns. One pattern can be dense with locks while the next has none. (Before 1.4, every step had room for exactly two.)
 
-- **The quick way:** on any sound page (EDIT, ENV, SCL, LFO, GLO, the mixer), hold a step key and turn a knob. The step turns on if it was off, and the knob's card shows the locked value in the accent color. Turn another knob while still holding the step and that parameter gets a lock of its own.
+- **The quick way:** on any sound page (EDIT, ENV, SCL, LFO, GLO, the mixer), hold a step key and turn a knob. Holding the key never turns the step on or off by itself (from 1.4.2): you can hold it, go to another page and turn a knob there. A lock on a step that was off turns it on. The knob's card shows the locked value in the accent color. Turn another knob while still holding the step and that parameter gets a lock of its own.
 - **On the LOCKS page** (step edit's third page): the screen lists the selected step's locks, one row each, with the parameter's name and its value as its card reads it (Hz, ms, %). **Lock** (KNOB 1) picks a row; **Param** (KNOB 2) changes that row's parameter (parameters the step already locks are skipped; turned all the way down to **OFF**, the lock is deleted); **Value** (KNOB 3) sets its value. The last row, **+ Add a lock**, adds one: turn Param there and the new lock starts from the kit's value. The line at the bottom says what the knobs do on the row selected. Tap another step key to see its locks.
 - **Deleting a lock:** select its row and turn **Param** all the way down to **OFF**. To delete all of the step's locks at once, press CLEAR (SHIFT (OCT−) + OCT+), then COPY.
 - **The count:** the top line shows the step (and **FULL 8/8** when it has eight) and how many of the pool's 8,192 locks are left. A ninth lock on a step is refused with **STEP FULL: 8 LOCKS**; a lock when the pool is used up, with **NO LOCKS LEFT: 8,192 IN USE**.
@@ -306,12 +307,14 @@ Press **REC** (it lights), then **PLAY**. Everything you play goes into the near
 
 **Erasing:** hold **OCT−** and **OCT+** together (that's CLEAR). As long as both are held, the selected track's steps are erased as the playhead passes them, and the screen says **ERASING AS IT PLAYS**. Let go to stop. To erase another track, select it first (its black key, or ALGORITHM).
 
+**Clearing a knob's locks while recording** (from 1.4.2): hold **OCT−** and **OCT+** and turn the knob. Its locks on the selected track go at once (the screen says, for example, **D1 CUTOFF LOCKS CLEARED**), and the erasing stops: any steps the hold had already erased come back. Keep recording and sweep it again. Stopped, the same knob turn in the CLEAR list picks **CLEAR KNOB LOCKS** ([Clearing](#clearing)).
+
 Other things that record:
 
 - **KEYS** (SHIFT (OCT−) + EDIT): the whole keyboard plays the selected track's voice chromatically, and each note is written with its pitch ([below](#keys-playing-a-voice)). For melodies.
 - **PERF rolls** (ARP, white keys 1–7): a held key records a roll, one hit per repeat. With **Roll** (KNOB 2) on **ONE**, a key is a single hit.
 - **MIDI notes** on a track's channel.
-- **Knob moves** on sound pages are written as locks onto the step that is playing, if that step is on. Each parameter gets its own lock (from 1.4), so you can sweep the filter on one pass and the decay on the next and keep both. Turning the same knob again on a later pass replaces that step's lock, so a 16-step pattern looped while you sweep keeps the last pass: at most one lock per step per parameter.
+- **Knob moves** on sound pages are written as locks onto the step that is playing, if that step is on. Each parameter gets its own lock (from 1.4), so you can sweep the filter on one pass and the decay on the next and keep both. Turning the same knob again on a later pass replaces that step's lock, so a 16-step pattern looped while you sweep keeps the last pass: at most one lock per step per parameter. To start a sweep over, hold OCT− and OCT+ and turn the knob: its locks go (above).
 
 **SHIFT (OCT−) + REC** opens the record options:
 
@@ -1685,7 +1688,7 @@ CC 102 and 103 are numbers the MIDI standard leaves undefined, so a keyboard doe
 
 **Volume and the morph kit** (from 1.0), on the same channels as CC 126 and 127 (both remote channels, and the global channel at KEYS or PAT+KIT):
 - **CC 124: the master volume**, 0–127 (127, the default, is full level). It comes after everything, MASTER included, on a curve like the pot's, and glides so a fader doesn't step. It belongs to the FM-1, not the kit or the project: it is saved with the settings (CONFIG: MIDI OUT, VOLUME, KNOB 4, and the FX bus's last page, KNOB 4, set it too).
-- **CC 125: the morph kit**, slot 1–64 (values 0–63), loaded as the morph target as LOAD → MORPH does. The kit you're playing stays; turn morph to hear it.
+- **CC 125: the morph kit**, slot 1–64 (values 0–63), loaded as the morph target as LOAD → MORPH does. The kit you're playing stays; turn morph to hear it. A slot still named Init is passed over (from 1.4.2), as the Morph kit knob does: the morph kit stays as it was.
 
 | Channel (default) | Notes | CCs | Also |
 |---|---|---|---|
