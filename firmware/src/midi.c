@@ -152,7 +152,7 @@ static void midi_kit_cc(uint32_t cc, uint32_t v)
     if (cc == AK_CC_VOL) {
         out_vol = (uint8_t)v;
     } else if (cc == AK_CC_MORPH) {
-        if (v < NUM_KITS && (v == morph_src || !kit_slot_init(v)))   /* (an Init slot passed over, as    */
+        if (v < NUM_KITS && (v == morph_src || !kit_slot_init(v)))   /* (1.4.2: an Init slot passed over, as */
             kit_load_morph(v);                                        /* .. PERFORM's Morph kit knob does) */
     } else if (cc == GT_CC_SLOT || cc == AK_CC_SLOT) {
         if (v < NUM_KITS)

@@ -349,6 +349,18 @@ static void lk_clear(pattern_t *p, uint32_t t, uint32_t k, uint32_t n)   /* step
     (void)lk_splice(r, i, j - i, 0);
     lk_out();
 }
+/* (1.4.2) one parameter's locks (code) on every step of track t: the steps and their other locks stay */
+static void lk_clear_code(pattern_t *p, uint32_t t, uint32_t code)
+{
+    uint32_t r = lk_run(p, t), i, j;
+    lk_in();
+    for (i = j = lk_at[r]; i < lk_at[r + 1u]; i++)  /* (kept in order: the run stays sorted) */
+        if ((LK_KEY(i) & LK_CODE) != code)
+            lk_e[j++] = lk_e[i];
+    if (j < lk_at[r + 1u])
+        (void)lk_splice(r, j, lk_at[r + 1u] - j, 0);
+    lk_out();
+}
 /* step k of track t: these n locks, all it has (codes sorted or not); its old ones if they don't fit */
 static int lk_step_set(pattern_t *p, uint32_t t, uint32_t k, uint32_t n, const uint16_t *c, const uint8_t *v)
 {
@@ -916,6 +928,12 @@ static void seq_clear_automation(uint32_t t, pattern_t *p)   /* (1.4: all the tr
     lk_clear(p, t, 0, NUM_STEPS);
     if (p == &pat[sq.active] && gen_live(p, t))     /* (1.4 fix: a generator's live track too, as live_step_sync) */
         lk_clear(&gpat, t, 0, NUM_STEPS);
+}
+static void seq_clear_par_locks(uint32_t t, pattern_t *p, uint32_t code)   /* (1.4.2: CLEAR + a knob) */
+{
+    lk_clear_code(p, t, code);
+    if (p == &pat[sq.active] && gen_live(p, t))
+        lk_clear_code(&gpat, t, code);
 }
 static uint32_t track_len(const pattern_t *p, uint32_t t)
 {

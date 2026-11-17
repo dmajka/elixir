@@ -111,6 +111,14 @@ static struct {
     int8_t held_step;                /* a step key held (its locks), -1 none */
     uint8_t trkey;                   /* 0.23-t7: TRANSPOSE: the white key held + 1 (0: none) */
     uint8_t lock_turned;
+    /* (1.4.2, the user's: holding a step never turns it on or off) a step key turns its step on or off as it is
+     * let go, if it was a tap: let go within TAP_MS, nothing locked, the page, track and pattern as they were */
+    uint16_t tap_pend, hold_keys;    /* the white keys pressed as taps (to toggle on release); holding a step (locks) */
+    uint8_t tap_s[16];               /* .. each one's step */
+    uint32_t tap_ms[16], tap_sig[16];   /* .. when, and where (tap_where) */
+    uint16_t clear_par;              /* CLEAR KNOB LOCKS: the parameter + 1 a knob turned in CLEAR picked (0: none) */
+    uint8_t er_t, er_pat;            /* recording, CLEAR held (erasing): the track and pattern, their steps as they */
+    uint16_t er_main[4], er_gmain[4];   /* .. were (a knob turned: they come back, its locks go instead) */
     uint8_t copy_src;                /* COPY: the source track + 1 / pattern + 1 */
     uint8_t ca, ca_loads;            /* 0.11: Control All under way (the kit as it was: ca_snap), kit_loads then */
     uint8_t ca_ask;                  /* .. OCT+ let go: its dialog (OCT+ reverts, OCT- keeps) */
@@ -2531,6 +2539,8 @@ static int32_t sync_detent(uint32_t v, int32_t n)
     i = i < 0 ? 0 : i >= (int32_t)NSYNCV ? (int32_t)NSYNCV - 1 : i;
     return (2 * i + 1) * 127 / 24;
 }
+static void knob_clear(uint32_t p);
+static int io_mode(void);
 static void knob_turn(uint32_t k, int32_t n)
 {
     uint16_t pp[4];
@@ -2541,6 +2551,10 @@ static void knob_turn(uint32_t k, int32_t n)
     if (p == VP_NONE || !n || (ui.mode == M_SOUND && par_unheard(ui.track, p)) || vp_dead(p))   /* (0.19: a
                                                       * model's: locked; 40: not yet in use) */
         return;
+    if (ui.shift && (ui.clear_open || sq.erase) && !io_mode()) {   /* CLEAR held: the knob's locks (not its value) */
+        knob_clear(p);
+        return;
+    }
     mn = vp_min(p);
     mx = vp_max(p);
     if (ui.shift) {                                  /* 1.0: OCT- held: fine, a step a detent (no acceleration, RUSH's
@@ -2611,9 +2625,10 @@ static void knob_turn(uint32_t k, int32_t n)
                          : clamp32((int32_t)dv + step, (int32_t)mn, (int32_t)(mx > 127u ? 127u : mx));
         if (lk_put(pt, ui.track, hs, dest, model_step(p, dv, (uint32_t)v)))
             return;                                  /* (full: lk_msg says so) */
-        main_set(pt, ui.track, (uint32_t)ui.held_step, 1);
+        main_set(pt, ui.track, (uint32_t)ui.held_step, 1);   /* (a lock on an off step turns it on) */
         live_step_sync(pt, ui.track, (uint32_t)ui.held_step);
         ui.lock_turned = 1;
+        ui.tap_pend = 0;                             /* (a hold, not a tap: the step stays on when let go) */
         return;
     }
     v = sync_knob(p) ? sync_detent(vp_get(p), n) : is_lfo_sync(p) ? (int32_t)order_turn(SYNC_ORDER, NSYNC, vp_get(p), n)
@@ -2951,9 +2966,62 @@ static void io_ok(void)
 /* CLEAR (SHIFT + COPY): what it clears */
 /* (1.4: CLEAR TRACK LOCKS, the track's in the pattern shown; CLEAR STEP LOCKS, the selected step's: step edit only) */
 /* (1.4: DELETE, the SAVE / LOAD page's selected slot: SAVE and LOAD only, the last) */
-enum { CL_TRACK, CL_PATTERN, CL_AUTO, CL_STEP_LK, CL_SOUND, CL_KIT, CL_SONG_ROW, CL_SLOT, NCLEAR };
-static const char *const CLEAR_NAME[NCLEAR] = {"CLEAR TRACK", "CLEAR PATTERN", "CLEAR TRACK LOCKS", "CLEAR STEP LOCKS",
-                                               "CLEAR SOUND (INIT)", "CLEAR KIT (INIT)", "DELETE SONG ROW", "DELETE"};
+/* (1.4.2: CLEAR KNOB LOCKS, one parameter's on the track, the knob turned in CLEAR: ui.clear_par) */
+enum { CL_TRACK, CL_PATTERN, CL_AUTO, CL_PAR_LK, CL_STEP_LK, CL_SOUND, CL_KIT, CL_SONG_ROW, CL_SLOT, NCLEAR };
+static const char *const CLEAR_NAME[NCLEAR] = {"CLEAR TRACK", "CLEAR PATTERN", "CLEAR TRACK LOCKS", "CLEAR KNOB LOCKS",
+                                               "CLEAR STEP LOCKS", "CLEAR SOUND (INIT)", "CLEAR KIT (INIT)",
+                                               "DELETE SONG ROW", "DELETE"};
+static void lk_name(char *b, uint32_t n, uint32_t c);   /* (ui_draw.c) */
+static void par_lk_cleared(uint32_t p)              /* "D1 CUTOFF LOCKS CLEARED" */
+{
+    char b[32];
+    uint32_t i;
+    lk_name(b, 18, par_to_autodest(p));
+    for (i = 0; b[i]; i++)
+        if (b[i] >= 'a' && b[i] <= 'z')
+            b[i] = (char)(b[i] - 32);
+    put_str(b + i, " LOCKS CLEARED", sizeof b - i);
+    ui_message(b);
+}
+/* recording, CLEAR held: the selected track's steps as they were, so a knob turned in the hold can put them back */
+static void erase_snap(void)
+{
+    uint32_t t = ui.track, k;
+    ui.er_t = (uint8_t)t;
+    ui.er_pat = (uint8_t)sq.active;
+    for (k = 0; k < 4u; k++) {
+        ui.er_main[k] = pat[sq.active].main[t][k];
+        ui.er_gmain[k] = gpat.main[t][k];
+    }
+}
+/* (1.4.2) CLEAR held and a knob turned: in the list, CLEAR KNOB LOCKS of its parameter (COPY confirms);
+ * recording (erasing as it plays): its locks go now, and the erasing stops, the steps it took back */
+static void knob_clear(uint32_t p)
+{
+    ui.shift_used = 1;
+    ui.force = 1;
+    if (!par_lockable(p)) {
+        ui_message("THAT KNOB HAS NO LOCKS");
+        return;
+    }
+    if (ui.clear_open) {
+        ui.clear_sel = CL_PAR_LK;
+        ui.clear_par = (uint16_t)(p + 1u);
+        return;
+    }
+    sq.erase = 0;
+    if (ui.er_pat == sq.active) {
+        uint32_t t = ui.er_t, k;
+        pattern_t *pt = &pat[sq.active];
+        for (k = 0; k < 4u; k++)
+            pt->main[t][k] |= ui.er_main[k];
+        if (gen_live(pt, t))
+            for (k = 0; k < 4u; k++)
+                gpat.main[t][k] |= ui.er_gmain[k];
+    }
+    seq_clear_par_locks(ui.track, &pat[sq.active], par_to_autodest(p));
+    par_lk_cleared(p);
+}
 static int io_mode(void) { return (ui.mode == M_SAVE || ui.mode == M_LOAD) && !ui.io_naming; }
 /* 1.4: the SAVE / LOAD page's slot deleted (CLEAR, COPY): a kit slot to Init, a library kit or sound, a project (the
  * session stays), a pattern (as the pattern page's DELETE), a song emptied. The factory's stay */
@@ -3030,6 +3098,14 @@ static void clear_do(void)
     }
     case CL_PATTERN: seq_clear_pattern(pt); ui_message("PATTERN CLEARED"); break;
     case CL_AUTO: seq_clear_automation(ui.track, pt); ui_message("TRACK'S LOCKS CLEARED"); break;
+    case CL_PAR_LK:
+        if (!ui.clear_par) {                          /* (nothing picked yet: the list stays open) */
+            ui_message("TURN A KNOB: ITS LOCKS GO");
+            return;
+        }
+        seq_clear_par_locks(ui.track, pt, par_to_autodest(ui.clear_par - 1u));
+        par_lk_cleared(ui.clear_par - 1u);
+        break;
     case CL_STEP_LK:
         lk_clear(pt, ui.track, ui.step & 63u, 1);
         live_step_sync(pt, ui.track, ui.step & 63u);
@@ -3215,6 +3291,8 @@ static void key_play(uint32_t k, int32_t w)
     ui.force = 1;
 }
 
+#define TAP_MS 300u                                  /* a step key let go sooner: a tap (later: a hold) */
+static uint32_t tap_where(void) { return ui.mode | (uint32_t)ui.page << 8 | ui.track << 16 | ui_pattern() << 24; }
 static void white_down(uint32_t w)
 {
     uint32_t s = ui.bar * 16u + w;
@@ -3349,6 +3427,8 @@ static void white_down(uint32_t w)
     if (perf_rush()) {                               /* 39: RUSH's page: a step held, the knob its RUSH lock */
         ui.held_step = (int8_t)s;
         ui.lock_turned = 0;
+        ui.hold_keys |= (uint16_t)(1u << w);
+        ui.tap_s[w] = (uint8_t)s;
         ui.force = 1;
         return;
     }
@@ -3356,10 +3436,15 @@ static void white_down(uint32_t w)
         perf_key(w, 1);
         return;
     }
-    /* the voice pages: the step on / off; held, the knobs set its locks */
-    step_toggle(pt, ui.track, s);
+    /* the voice pages: held, the knobs set its locks; a tap turns the step on / off as it is let go (white_up) */
+    (void)pt;
     ui.held_step = (int8_t)s;
     ui.lock_turned = 0;
+    ui.hold_keys |= (uint16_t)(1u << w);
+    ui.tap_pend |= (uint16_t)(1u << w);
+    ui.tap_s[w] = (uint8_t)s;
+    ui.tap_ms[w] = fm1_ms;
+    ui.tap_sig[w] = tap_where();
     sq.armed_step = (int8_t)s;
     sq.armed_track = (int8_t)ui.track;
 }
@@ -3376,9 +3461,19 @@ static void white_up(uint32_t w)
     if (ui.perf || (w >= NTRACK && (ui.pf_held & (1u << ((b2 ? NPF : 0u) + w - NTRACK)))) ||
         (w < NTRACK && b2 && (ui.drill_held & (1u << w))))
         perf_key(w, 0);                               /* (an effect held when PERF was left lets go too) */
-    if (ui.held_step == (int8_t)(ui.bar * 16u + w)) {
-        ui.held_step = -1;
-        sq.armed_step = sq.armed_track = -1;
+    if ((ui.tap_pend >> w) & 1u) {                  /* a tap: the step on / off now (held: as it was) */
+        ui.tap_pend &= (uint16_t)~(1u << w);
+        if (fm1_ms - ui.tap_ms[w] < TAP_MS && ui.tap_sig[w] == tap_where() && !ui_asking()) {
+            step_toggle(shown_pat(), ui.track, ui.tap_s[w]);
+            ui.force = 1;
+        }
+    }
+    if ((ui.hold_keys >> w) & 1u) {
+        ui.hold_keys &= (uint16_t)~(1u << w);
+        if (ui.held_step == (int8_t)ui.tap_s[w]) {
+            ui.held_step = -1;
+            sq.armed_step = sq.armed_track = -1;
+        }
     }
 }
 static void black_down(uint32_t k)
@@ -3613,6 +3708,8 @@ static void button_down(uint32_t b)
         if (ui.shift) {
             ui.shift_used = 1;
             if (sq.rec && sq.running) {               /* recording: SHIFT CLEAR erases as the steps play */
+                if (!sq.erase)
+                    erase_snap();
                 sq.erase = 1;
                 return;
             }
@@ -3637,6 +3734,7 @@ static void button_down(uint32_t b)
             }
             if (!ui.clear_open) {
                 ui.clear_open = 1;
+                ui.clear_par = 0;
                 ui.clear_sel = io_mode() ? CL_SLOT       /* (1.4: SAVE / LOAD: the slot shown) */
                              : ui.mode == M_SONG ? CL_SONG_ROW   /* (0.10: on a sound page, its sound) */
                              : ui.mode == M_SOUND || ui.mode == M_KEYS ? CL_SOUND

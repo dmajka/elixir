@@ -8700,12 +8700,27 @@ static void phase_100_4(void)
     k[kit_idx(PAR_FILTER_FREQ_1)] = 33;
     kit_get(7, m);
     kit_put(7, k);
-    gcc(125, 7);
-    check(kit_morph_loaded == 7u && morph_par[kit_idx(PAR_FILTER_FREQ_1)] == 33u, "MORPH: CC 125 loads slot 8 as the target");
-    rcc(125, 3);
-    check(kit_morph_loaded == 3u, "MORPH: CC 125 on TRACKS too");
-    gcc(125, 100);
-    check(kit_morph_loaded == 3u, "MORPH: past the slots, nothing");
+    {
+        char n3[KIT_NAME_LEN], n5[KIT_NAME_LEN], n7[KIT_NAME_LEN];
+        memcpy(n3, kit_names[3], KIT_NAME_LEN);
+        memcpy(n5, kit_names[5], KIT_NAME_LEN);
+        memcpy(n7, kit_names[7], KIT_NAME_LEN);
+        memcpy(kit_names[3], "Three   ", KIT_NAME_LEN);
+        memcpy(kit_names[5], "Init    ", KIT_NAME_LEN);
+        memcpy(kit_names[7], "Seven   ", KIT_NAME_LEN);
+        gcc(125, 7);
+        check(kit_morph_loaded == 7u && morph_par[kit_idx(PAR_FILTER_FREQ_1)] == 33u,
+              "MORPH: CC 125 loads slot 8 as the target");
+        rcc(125, 3);
+        check(kit_morph_loaded == 3u, "MORPH: CC 125 on TRACKS too");
+        gcc(125, 100);
+        check(kit_morph_loaded == 3u, "MORPH: past the slots, nothing");
+        gcc(125, 5);
+        check(kit_morph_loaded == 3u, "MORPH: CC 125 passes over an Init slot, as the Morph kit knob");
+        memcpy(kit_names[3], n3, KIT_NAME_LEN);
+        memcpy(kit_names[5], n5, KIT_NAME_LEN);
+        memcpy(kit_names[7], n7, KIT_NAME_LEN);
+    }
     kit_put(7, m);
     /* the remote's DENSITY a track, centred, on top of PERF's, not in a COMMIT */
     check(rm_par(RR_RNDP * 8u + 2u) == VP_TD + 2u && vp_get(VP_TD + 2u) == 64u, "TRACKS' row 12: DENSITY, centred");
@@ -11814,11 +11829,11 @@ static void phase19_fixes(void)
     goto_mode(B_HOME, M_HOME);
     hold(B_OCTDN);
     press(B_OCTUP);
-    ui.clear_sel = CL_AUTO;
+    ui.clear_sel = CL_PAR_LK;
     turn(EN_SELECT, 1);
     c = ui.clear_sel;
     turn(EN_SELECT, -1);
-    check(c == CL_SOUND && ui.clear_sel == CL_AUTO, "1.4: CLEAR STEP LOCKS isn't offered outside step edit");
+    check(c == CL_SOUND && ui.clear_sel == CL_PAR_LK, "1.4: CLEAR STEP LOCKS isn't offered outside step edit");
     release(B_OCTDN);
     /* CLEAR TRACK LOCKS on a generator's track: its live copy's too */
     p->gen[2][0] = GEN_MUTATE;
@@ -13018,6 +13033,118 @@ static int pages_tour(const char *out)
     return 0;
 }
 
+/* 1.4.2: a step key held never turns its step on or off (a tap does, as it is let go); CLEAR + a knob clears
+ * that knob's locks on the track (in the list: CLEAR KNOB LOCKS; recording: at once, the erased steps back) */
+static void phase_142_hold_clear(void)
+{
+    pattern_t *pt = &pat[0];
+    uint16_t pp[4];
+    uint32_t i, n, c, c2, ok;
+    printf("1.4.2: a held step stays; CLEAR + a knob\n");
+    p4_reset();
+    ui.track = 0;
+    white(4);
+    check(main_on(pt, 0, 4), "a tap turns a step on");
+    key_hold(4);
+    check(main_on(pt, 0, 4), "pressed: the step not turned off yet");
+    key_up(4);
+    check(!main_on(pt, 0, 4), "a tap turns it off as it is let go");
+    key_hold(5);
+    run_ms(400);
+    key_up(5);
+    check(!main_on(pt, 0, 5), "held, nothing turned: an off step stays off");
+    main_set(pt, 0, 5, 1);
+    key_hold(5);
+    run_ms(400);
+    key_up(5);
+    check(main_on(pt, 0, 5), "held, nothing turned: an on step stays on");
+    keys |= 1u << WHITE_KEY[6];                       /* (two taps overlapping: both count) */
+    web_keys(keys);
+    run_ms(20);
+    keys |= 1u << WHITE_KEY[7];
+    web_keys(keys);
+    run_ms(20);
+    keys &= ~(1u << WHITE_KEY[6]);
+    web_keys(keys);
+    run_ms(20);
+    keys &= ~(1u << WHITE_KEY[7]);
+    web_keys(keys);
+    run_ms(20);
+    check(main_on(pt, 0, 6) && main_on(pt, 0, 7), "two taps overlapping: both steps on");
+    main_set(pt, 0, 6, 0);
+    main_set(pt, 0, 7, 0);
+    press(B_EDIT);
+    check(ui.mode == M_SOUND, "EDIT: a sound page");
+    page_params(pp);
+    c = par_to_autodest(pp[0]);
+    c2 = par_to_autodest(pp[1]);
+    key_hold(5);                                     /* an on step held, a knob: its lock, the step stays on */
+    turn(EN_K1, 3);
+    key_up(5);
+    check(main_on(pt, 0, 5) && lk_get(pt, 0, 5, c) >= 0, "held + a knob: a lock, the step stays on");
+    key_hold(9);                                     /* an off step: a lock turns it on */
+    turn(EN_K1, 3);
+    key_up(9);
+    check(main_on(pt, 0, 9) && lk_get(pt, 0, 9, c) >= 0, "held + a knob on an off step: on, locked");
+    key_hold(9);                                     /* held, the page changed: the step stays */
+    press(B_HOME);
+    key_up(9);
+    check(main_on(pt, 0, 9), "held, another page: the step stays on");
+    press(B_EDIT);
+    /* CLEAR, then a knob: CLEAR KNOB LOCKS of its parameter; COPY: only that one's, on every step */
+    for (i = 0; i < 16u; i++)
+        lk_put(pt, 0, i, c, 10u + i);
+    lk_put(pt, 0, 3, c2, 99);
+    lk_put(pt, 1, 3, c, 77);
+    main_set(pt, 0, 3, 1);
+    hold(B_OCTDN);
+    press(B_OCTUP);
+    check(ui.clear_open && ui.clear_sel == CL_SOUND, "CLEAR on a sound page: CLEAR SOUND first");
+    ui.clear_sel = CL_PAR_LK;
+    ui.force = 1;
+    run_ms(40);
+    shot("clear-knob-locks-pick");
+    press(B_OCTUP);
+    check(ui.clear_open && !strcmp(ui.msg, "TURN A KNOB: ITS LOCKS GO"), "CLEAR KNOB LOCKS, no knob yet: stays open");
+    n = par[pp[0]];
+    turn(EN_K1, 2);
+    check(ui.clear_sel == CL_PAR_LK && ui.clear_par == pp[0] + 1u && par[pp[0]] == n,
+          "CLEAR open, a knob: CLEAR KNOB LOCKS of it (its value as it was)");
+    shot("clear-knob-locks");
+    press(B_OCTUP);
+    release(B_OCTDN);
+    for (i = ok = 0; i < 16u; i++)
+        ok += lk_get(pt, 0, i, c) >= 0;
+    printf("  %s\n", ui.msg);
+    check(!ok && lk_get(pt, 0, 3, c2) == 99 && lk_get(pt, 1, 3, c) == 77 && main_on(pt, 0, 3),
+          "CLEAR KNOB LOCKS: that parameter's on the track; the others, the other tracks', the steps stay");
+    /* recording, CLEAR held, a knob: its locks go at once; what the hold erased comes back */
+    for (i = 0; i < 16u; i++) {
+        main_set(pt, 0, i, (i & 3u) == 0u);
+        lk_put(pt, 0, i, c, 50);
+    }
+    press(B_PLAY);
+    press(B_REC);
+    run_ms(100);
+    hold(B_OCTDN);
+    hold(B_OCTUP);
+    run_ms(700);                                      /* (a step or two erased) */
+    for (i = n = 0; i < 16u; i++)
+        n += main_on(pt, 0, i);
+    turn(EN_K1, 1);
+    check(!sq.erase, "REC, CLEAR held, a knob: the erasing stops");
+    release(B_OCTUP);
+    release(B_OCTDN);
+    for (i = ok = c2 = 0; i < 16u; i++) {
+        ok += lk_get(pt, 0, i, c) >= 0;
+        c2 += main_on(pt, 0, i) != ((i & 3u) == 0u);
+    }
+    printf("  erased %u of 4 before the knob; %s\n", 4u - n, ui.msg);
+    check(n < 4u && !ok && !c2, "REC, CLEAR held, a knob: its locks gone, the erased steps back");
+    press(B_REC);
+    press(B_PLAY);
+    p4_reset();
+}
 int main(int argc, char **argv)
 {
     uint32_t t;
@@ -13556,6 +13683,7 @@ int main(int argc, char **argv)
     phase_140_pc();
     phase_140_delete();
     phase_140_wear();
+    phase_142_hold_clear();
     copy_pass();                                     /* (1.0's copy and picture pass: last, as it runs time) */
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;

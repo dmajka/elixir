@@ -599,6 +599,17 @@ static void draw_clear(int32_t y0)
         cv_text_in(10, 92, 220, &AF_S, "let go of SHIFT to cancel", T_MID, T_SURF);
         return;
     }
+    if (ui.clear_sel == CL_PAR_LK) {                 /* (1.4.2: the knob turned, its name under it) */
+        char r[24];
+        cv_text_in(10, 44, 220, &AF_M, CLEAR_NAME[CL_PAR_LK], T_ACCENT, T_SURF);
+        if (ui.clear_par)
+            lk_name(r, sizeof r, par_to_autodest(ui.clear_par - 1u));
+        cv_text_in(10, 62, 220, &AF_S, ui.clear_par ? r : "Turn the knob whose locks go", ui.clear_par ? T_TEXT : T_MID,
+                   T_SURF);
+        cv_text_in(10, 78, 220, &AF_S, ui.clear_par ? "COPY: clear them" : "", T_TEXT, T_SURF);
+        cv_text_in(10, 92, 220, &AF_S, "let go of SHIFT to cancel", T_MID, T_SURF);
+        return;
+    }
     if (ui.clear_sel == CL_STEP_LK) {                /* (1.4: which step: CLEAR STEP 12 LOCKS) */
         char b[24];
         put_str(b, "CLEAR STEP ", sizeof b);
@@ -607,7 +618,7 @@ static void draw_clear(int32_t y0)
     } else {
         cv_text_in(10, 50, 220, &AF_M, CLEAR_NAME[ui.clear_sel], T_ACCENT, T_SURF);
     }
-    cv_text_in(10, 76, 220, &AF_S, "SELECT: what   COPY: confirm", T_TEXT, T_SURF);
+    cv_text_in(10, 76, 220, &AF_S, "SELECT: what   COPY: confirm", T_TEXT, T_SURF);   /* (a knob: CLEAR KNOB LOCKS) */
     cv_text_in(10, 90, 220, &AF_S, "let go of SHIFT to cancel", T_MID, T_SURF);
 }
 
@@ -2007,7 +2018,7 @@ static void draw_body(void)
         s = 1;
     } else if (ui.clear_open) {
         fn = draw_clear;
-        s = sig_add(2, ui.clear_sel | (ui.step & 63u) << 8);
+        s = sig_add(2, ui.clear_sel | (ui.step & 63u) << 8 | (uint32_t)ui.clear_par << 16);
     } else if (ui.sb_open) {
         fn = draw_sound_browser;
         s = sig_add(40, ui.sb_sel | ui.track << 16);

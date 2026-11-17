@@ -227,7 +227,7 @@ static void kit_load_morph(uint32_t n)               /* LOAD MORPH: a slot as th
     kit_loads++;
     snd_post_mkit();                                 /* (1.4: paced: the kit is as it was) */
 }
-/* a slot still named Init (a new project's 64): nothing to morph to (ui.c mk_has, midi.c CC 125 pass it over) */
+/* 1.4.2: a slot still named Init (a new project's 64): nothing to morph to (ui.c mk_has, CC 125 pass it over) */
 static int kit_slot_init(uint32_t n) { return !memcmp(kit_names[n], "Init    ", KIT_NAME_LEN); }
 /* 1.4: no morph kit yet: the morph target is still the init kit */
 static int morph_unset(void)
