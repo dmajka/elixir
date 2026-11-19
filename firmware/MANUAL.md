@@ -1816,11 +1816,13 @@ Knobs and faders are CCs. Every number is used once on its channel, so a knob an
 | | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
 |---|---|---|---|---|---|---|---|---|
 | 8–15 | **8** Tempo | **9** Shuffle | **10** Morph | **11** SRate | **12** Master filter | **13** Roll rate | **14** Repeat | **15** Tape time |
-| 16–23 | **16** FX dry/wet | **17** Decay | **18** Speed | **19** – | **20** – | **21** Bus dirt | **22** Echo > rev | **23** Saturate |
+| 16–23 | **16** FX dry/wet | **17** Decay | **18** Speed | **19** RELOAD (button) | **20** – | **21** Bus dirt | **22** Echo > rev | **23** Saturate |
 | 24–31 | **24** Rev level | **25** Rev size | **26** Rev damp | **27** Master dirt | **28** DENSITY | **29** Ghost vel | **30** Build | **31** Vary |
 | 32–39 | **32** Macro 1 | **33** Macro 2 | **34** Macro 3 | **35** Macro 4 | **36** DRILL | **37** JITTER | **38** CUTS | **39** PUMP |
 | 40–47 | **40** COMB note | **41** COMB fb | **42** CRUSH | **43** REV length | **44** LFO 1 depth | **45** LFO 2 depth | **46** LFO 3 depth | **47** Filter reso |
 <!-- /remote:manual-global-knobs -->
+
+**CC 19 is RELOAD** (from 1.4.6), a button in the knob grid's free place: a press (any value above 0) reloads the kit and the playing pattern as last saved, as hold OCT−, press key 13 does, undoing every tweak since. The release does nothing; set the controller's button to momentary. It goes back to the last save, so save (SAVE → KIT, SAVE → PATTERN) when you've got somewhere you want to come back to.
 
 **GLOBAL (channel 16): more knobs, off the grid** (from 1.0). 63 and 96–103 were buttons before 1.0 (CONTROL ALL latched, the effects latched): a tap on 62 or 88–95 does that now.
 

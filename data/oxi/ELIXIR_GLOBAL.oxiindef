@@ -166,6 +166,16 @@
     },
     {
       "type": "cc",
+      "name": "Reload",
+      "abbr": "Rlod",
+      "minimum": 0,
+      "maximum": 127,
+      "default_value": 0,
+      "nr1": 19,
+      "nr2": 0
+    },
+    {
+      "type": "cc",
       "name": "Bus dirt",
       "abbr": "BDrt",
       "minimum": 0,

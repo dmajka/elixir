@@ -1,7 +1,7 @@
 {
  "schemaVersion": 1,
- "firmwareVersion": "v1.4.5",
- "sourceRevision": "2ee300c6c603",
+ "firmwareVersion": "v1.4.6",
+ "sourceRevision": "4e117b5fa94d",
  "parameters": [
   {
    "id": "global.build",
@@ -2544,6 +2544,30 @@
     "symbol": "RM_PF RM_REC (RM_GB0 + 8 x row + column)"
    },
    "shortName": "Record"
+  },
+  {
+   "id": "global.reload",
+   "name": "Reload",
+   "category": "Patterns",
+   "scope": "remote-global",
+   "channelGroup": "remoteGlobal",
+   "number": 19,
+   "messageType": "cc",
+   "alternateMessageTypes": [],
+   "minimum": 0,
+   "maximum": 127,
+   "controlType": "button",
+   "feedback": {
+    "source": "USB",
+    "controllerCompatibility": "unverified"
+   },
+   "buttonBehavior": "press",
+   "interpretation": "Reload the kit and the playing pattern as last saved (as hold OCT−, press key 13): undoes the tweaks since. At the press; the release does nothing.",
+   "documentation": {
+    "source": "firmware/src/remote.c",
+    "symbol": "RM_RELOAD (ui.c ui_reload)"
+   },
+   "shortName": "Reload"
   },
   {
    "id": "global.repeat",
