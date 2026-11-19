@@ -1,7 +1,7 @@
 {
  "schemaVersion": 1,
- "firmwareVersion": "v1.4.6",
- "sourceRevision": "4e117b5fa94d",
+ "firmwareVersion": "v1.4.7",
+ "sourceRevision": "f83e3cd262aa",
  "parameters": [
   {
    "id": "global.build",
