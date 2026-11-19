@@ -555,6 +555,7 @@ static uint8_t songs[NUM_SONGS][MAX_SONG_LENGTH] RAMBUF;   /* (1.0: in the old d
 static uint8_t song_rd[NUM_SONGS] POOL;   /* 42: a song's ROADS: bit 7 on; bits 0-3 SURPRISE ^ 4 (0..15); bits 4-6 HOME
                                            * (SONG_HOME's) */
 
+#define EXT_WIN 25u                                  /* 1.4.7: MIDI sync's pulses kept: a beat's 24 lengths */
 static struct {
     uint8_t running, active, pending, load_pending;
     uint8_t song_mode, song, song_pos;
@@ -586,6 +587,9 @@ static struct {
     uint32_t ext_left;                           /* ticks of the last pulse still to come */
     uint32_t ext_iv;                             /* samples a pulse (smoothed), Q8 */
     uint32_t ext_since;                          /* samples since the last pulse */
+    uint32_t ext_now;                            /* 1.4.7: samples since boot (MIDI sync's clock; wraps) */
+    uint32_t ext_t[EXT_WIN];                     /* .. at the last pulses (a beat of them, a ring) */
+    uint8_t ext_n, ext_w;                        /* (how many, where the next goes) */
     int32_t ext_next;                            /* samples until its next tick, Q8 */
     uint8_t ext_clk;                             /* pulses since the last step (0..5) */
     uint8_t beat;                                /* the master step's beat (the UI's flash): step & 3 == 0 */
@@ -2894,6 +2898,9 @@ static void seq_block_run(void)
 {
     if (sq.gsync)                                    /* (the generators' live tracks the panel reset) */
         seq_gen_syncs();
+    sq.ext_now += BLOCK;                             /* (1.4.7: MIDI sync's clock runs off sync too: no stale window) */
+    if (sq.ext_since < (uint32_t)FS)
+        sq.ext_since += BLOCK;                       /* (.. and stops at a second: the clock stopped) */
     if (!sq.sync_ext) {
         sq.acc_q16 += BLOCK * clk_q16;              /* (TAPE STOP slows the clock; 1.4: a global LFO's TEMPO) */
         while (sq.acc_q16 >= sq.tick_q16) {          /* (the clock goes out stopped too, as the LXR's) */
@@ -2903,7 +2910,6 @@ static void seq_block_run(void)
             seq_clock_out_tick();
         }
     } else {
-        sq.ext_since += BLOCK;
         while (sq.ext_left && sq.ext_next <= 0) {    /* the pulse's later ticks, spread over its length */
             sq.ext_left--;
             if (sq.running && (!sq.half || (sq.hph ^= 1u)))
@@ -2926,20 +2932,40 @@ static void seq_block_run(void)
     seq_pc_out();
 }
 
-/* MIDI sync: a clock pulse (24 a beat), start, continue, stop (midi.c, in the ISR) */
+/* MIDI sync: a clock pulse (24 a beat), start, continue, stop (midi.c, in the ISR).
+ * 1.4.7: a pulse is seen at a block start, so one pulse's length is off by up to a block (1.45 ms: 14 or 15 blocks
+ * at 120 BPM, 115 or 123 BPM), and the tempo shown danced above ~90 BPM (a report: a Sequential Take 5 over TRS).
+ * Now the tempo is a beat's pulses (EXT_WIN - 1: the error a block over 24 of them), smoothed by 1/8, and what the
+ * screen, the synced delay and the LFOs follow (bpm_ext_x10) moves only when it is off by ~0.5% (seq_ext_tempo).
+ * The ticks still follow each pulse as it comes. (tests/ui_test.c: 120 .. 200 BPM, with jitter, steady) */
+static void seq_ext_tempo(uint32_t span, uint32_t m)   /* m pulses' length, span samples */
+{
+    uint32_t v = (span << 8) / m, x10;               /* (Q8 samples a pulse; span < EXT_WIN FS: fits) */
+    int32_t d;
+    sq.ext_iv = sq.ext_iv && sq.ext_n >= EXT_WIN ? sq.ext_iv + (uint32_t)((int32_t)(v - sq.ext_iv) >> 3) : v;
+    x10 = (uint32_t)clamp32((int32_t)((uint64_t)FS * 600u * 256u / (uint32_t)(sq.ext_iv * 24u)), 100, 3000);
+    d = (int32_t)x10 - (int32_t)sq.bpm_ext_x10;
+    if (!sq.bpm_ext_x10 || d >= (int32_t)(x10 / 400u + 3u) || -d >= (int32_t)(x10 / 400u + 3u)) {
+        sq.bpm_ext_x10 = (uint16_t)x10;
+        seq_tempo_changed();
+    }
+}
 static void seq_ext_pulse(void)
 {
+    uint32_t first;
     if (!sq.sync_ext)
         return;
     if (sq.ext_left && sq.running)                   /* the pulse came early: the last one's ticks now */
         sq.due += sq.ext_left;
-    if (sq.ext_since > 0u && sq.ext_since < (uint32_t)FS) {
-        uint32_t iv = sq.ext_since << 8;
-        sq.ext_iv = sq.ext_iv ? sq.ext_iv + ((int32_t)(iv - sq.ext_iv) >> 3) : iv;
-        sq.bpm_ext_x10 = (uint16_t)clamp32((int32_t)((uint64_t)FS * 600u * 256u / (uint32_t)(sq.ext_iv * 24u)), 100,
-                                           3000);
-        seq_tempo_changed();
-    }
+    if (sq.ext_since >= (uint32_t)FS)                /* (a second without: the clock stopped; a new window) */
+        sq.ext_n = 0;
+    sq.ext_t[sq.ext_w] = sq.ext_now;
+    sq.ext_w = (uint8_t)(sq.ext_w + 1u < EXT_WIN ? sq.ext_w + 1u : 0u);
+    if (sq.ext_n < EXT_WIN)
+        sq.ext_n++;
+    first = sq.ext_n < EXT_WIN ? (sq.ext_w + EXT_WIN - sq.ext_n) % EXT_WIN : sq.ext_w;   /* (the oldest) */
+    if (sq.ext_n >= 2u && sq.ext_now != sq.ext_t[first])
+        seq_ext_tempo(sq.ext_now - sq.ext_t[first], sq.ext_n - 1u);
     sq.ext_since = 0;
     if (sq.running)
         sq.due++;

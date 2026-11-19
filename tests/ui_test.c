@@ -13447,6 +13447,38 @@ int main(int argc, char **argv)
         web_midi(0xFC, 0, 0);
         run_ms(100);
         check(!sq.running, "MIDI STOP stops");
+        /* 1.4.7: the tempo shown holds still (a report: it danced above ~90 BPM; a pulse is seen at a block start).
+         * Clock at 120, 160, 200 BPM, each pulse up to 1 ms late (the sender's jitter): 8 beats, the last 4 at one
+         * tempo, the right one */
+        {
+            static const uint32_t bpms[3] = {120u, 160u, 200u};
+            uint32_t b, k, lcg = 12345u;
+            for (b = 0; b < 3u; b++) {
+                double per = FS * 60.0 / bpms[b] / 24.0, t = 0.0, now = 0.0;
+                uint16_t held = 0;
+                int steady = 1;
+                run_ms(1100);                            /* (the clock stopped: a new window) */
+                for (k = 0; k < 24u * 8u; k++) {
+                    double at;
+                    lcg = lcg * 1103515245u + 12345u;
+                    t += per;
+                    at = t + (double)((lcg >> 16) % 1000u) * FS / 1000000.0;
+                    while (now + BLOCK <= at) {
+                        web_render(BLOCK);
+                        now += BLOCK;
+                    }
+                    web_midi(0xF8, 0, 0);
+                    if (k == 24u * 4u)
+                        held = sq.bpm_ext_x10;
+                    else if (k > 24u * 4u && sq.bpm_ext_x10 != held)
+                        steady = 0;
+                }
+                web_render(BLOCK);
+                printf("  ext tempo at %u BPM: %u.%u\n", bpms[b], sq.bpm_ext_x10 / 10u, sq.bpm_ext_x10 % 10u);
+                check(steady, "MIDI sync: the tempo holds still through 4 beats of a jittery clock");
+                check((sq.bpm_ext_x10 + 5u) / 10u == bpms[b], "MIDI sync: .. at the clock's tempo");
+            }
+        }
         par_set(PAR_BPM, 120);
         run_ms(40);
     }
