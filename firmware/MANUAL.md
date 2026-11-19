@@ -1866,11 +1866,10 @@ The delay's row is a strip of eight for a controller's knob row: Feedback and Ba
 
 #### The effects: tap or hold (from 1.0)
 
-The effects are PERF's (see [Performance mode](#13-performance-mode-perf)); they work from any page, and leaving PERF doesn't turn off what the remote latched. One button each does both jobs:
+The effects are PERF's (see [Performance mode](#13-performance-mode-perf)); they work from any page, and leaving PERF doesn't turn off what the remote latched. With Mute/solo at **TOGGLE** (the default from 1.4.5), a momentary button plays its effect while held, off when let go, and a toggle button latches it (on latches, off lets go). At **PRESS**, one button does both jobs:
 
 - **Tap** (let go within a quarter of a second): latched, on until you press it again. The press that turns it off does nothing when let go.
 - **Hold** (longer): on while held, off when let go. The effect starts at the press either way, so a hold doesn't come in late.
-- **Mute/solo at TOGGLE** (REMOTE page, KNOB 4): for buttons that keep their own state, what the button sends is the latch: on latches, off lets go.
 
 The light is on while the effect is, however it was turned on. CONTROL ALL's button **62** works the same way, except that a short press during which a knob moved something counts as a hold, so a quick grab-and-turn doesn't stay on.
 
@@ -1895,8 +1894,8 @@ Hold GLOBAL's button **62**, or tap it to latch it (again: off), and [Control Al
 - **REL:** for endless encoders sending relative values: 64 ± n (65 up, 63 down) or two's complement (1 up, 127 down). Don't use it with faders.
 
 **Mute/solo** (REMOTE page, KNOB 4, from 0.24.3): how the mute and solo buttons (TRACKS 104–119) are read.
-- **PRESS** (the default): for momentary buttons, which send on when pressed and off when let go. Each press mutes or unmutes; the release does nothing.
-- **TOGGLE:** for buttons that keep their own state (a Launch Control XL pad set to Toggle in Components, say): what the button sends is the mute. CC above 0 or a note on mutes (solos), CC 0 or a note off unmutes. With the feedback below looped back to the controller, its pads light with the mutes, and a mute from the panel moves them too.
+- **PRESS** (the default up to 1.4.4): for momentary buttons, which send on when pressed and off when let go. Each press mutes or unmutes; the release does nothing.
+- **TOGGLE** (the default from 1.4.5; settings saved before keep theirs): for buttons that keep their own state (a Launch Control XL pad set to Toggle in Components, say): what the button sends is the mute. CC above 0 or a note on mutes (solos), CC 0 or a note off unmutes. With the feedback below looped back to the controller, its pads light with the mutes, and a mute from the panel moves them too.
 
 **Recording:** under REC with the sequencer playing, a TRACKS knob records locks on its own track (column 8 on the selected track), as a panel knob does. The GLOBAL knobs record nothing.
 
