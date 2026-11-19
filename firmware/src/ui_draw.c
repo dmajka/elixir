@@ -1178,12 +1178,57 @@ static int32_t key_x(uint32_t k)                     /* the left of key k (semit
     static const uint8_t WI[12] = {0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6};   /* F .. E: the white key at or below */
     return 8 + (int32_t)(k / 12u * 7u + WI[k % 12u]) * 14;
 }
+/* (after 1.4.3) KEYS in the scale (ui.c keys_fold): the white keys the scale's notes (the roots marked), black 1-7 the
+ * tracks in their colours (the one played filled), 8-11 not drawn; the key and the scale under them */
+static void draw_keys_fold(void)
+{
+    const pattern_t *p = &pat[sq.active];
+    uint32_t k, w = 0, nd8 = keys_ndeg();
+    char b[32];
+    uint16_t c = TRACK_COL[ui.track];
+    for (k = 0; k < 27u; k++) {
+        uint32_t s = k % 12u;
+        int held = (ui.keys >> k) & 1u;
+        if (s == 1u || s == 3u || s == 5u || s == 8u || s == 10u)
+            continue;
+        cv_rrect(key_x(k), 6, 13, 64, 2, held ? c : T_RAISE, T_BG);
+        if (w++ % nd8 == 0u)
+            cv_rect(key_x(k) + 4, 60, 5, 2, held ? RGB(12, 12, 12) : T_THEME);
+    }
+    for (k = 0; k < NTRACK; k++) {
+        uint32_t x = (uint32_t)key_x(BLACK_KEY[k]);
+        cv_rect((int32_t)x + 8, 6, 11, 40, T_BG);
+        cv_rrect((int32_t)x + 9, 6, 9, 39, 2, TRACK_COL[k], T_BG);
+        if (k != ui.track)
+            cv_rect((int32_t)x + 10, 7, 7, 37, T_BG);
+    }
+    for (k = NTRACK; k < 11u; k++)
+        cv_rect(key_x(BLACK_KEY[k]) + 8, 6, 11, 40, T_BG);
+    put_str(b, NOTE_NAMES[p->sroot % 12u], sizeof b);
+    put_str(b + str_len(b), " ", sizeof b - str_len(b));
+    put_str(b + str_len(b), SCALE_NAME[p->scale], sizeof b - str_len(b));
+    cv_text(8, 76, &AF_S, b, T_MID);
+    if (ui.knote < 128u) {
+        note_name(b, ui.knote);
+        cv_text_r(232, 74, &AF_M, b, T_THEME, T_BG);
+    }
+    {
+        static const char *const L1[2] = {"SHIFT + KEY", "accent"}, *const LR[2] = {"REC", "the notes go into the steps"};
+        static const char *const L2[4] = {"BLACK KEYS", "track", "SHIFT + EDIT", "grid"};
+        help_pairs(8, 96, sq.rec && sq.running ? LR : L1, 1);
+        help_pairs(8, 112, L2, 2);
+    }
+}
 static void draw_keys(int32_t y0)
 {
     uint32_t k;
     char b[32];
     uint16_t c = TRACK_COL[ui.track];
     (void)y0;
+    if (keys_fold()) {
+        draw_keys_fold();
+        return;
+    }
     for (k = 0; k < 27u; k++) {                      /* the white keys, then the black ones over them */
         uint32_t s = k % 12u;
         int held = (ui.keys >> k) & 1u;
@@ -2153,7 +2198,8 @@ static void draw_body(void)
         case M_KEYS:
             fn = draw_keys;
             s = sig_add(14, ui.keys | (uint32_t)ui.knote << 27);
-            s = sig_add(s, ui.track | ui.koct << 4 | (sq.rec && sq.running) << 8);
+            s = sig_add(s, ui.track | ui.koct << 4 | (sq.rec && sq.running) << 8 | (uint32_t)keys_fold() << 9 |
+                               (uint32_t)pat[sq.active].scale << 10 | (uint32_t)pat[sq.active].sroot << 18);
             break;
         case M_CONFIG:
             fn = draw_config_help;

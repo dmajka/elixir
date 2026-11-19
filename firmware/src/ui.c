@@ -94,6 +94,7 @@ static struct {
     uint8_t kplay;                   /* 0.8: the keys play the track's voice (KEYS, and the sound pages opened from it) */
     uint8_t koct, knote;             /* .. KEYS' octave (3: the keys from F3), the last note played */
     uint8_t kkey;                    /* .. 19b: the key that played it (its release lets a GATE voice go), 0xFF none */
+    uint8_t ktrack;                  /* .. (after 1.4.3: the track it played on: a black key may pick another meanwhile) */
     uint32_t pf_held, pf_latch;      /* PERF's keys 8..16 held, latched (bit PF_*: pf.on is both) */
     uint8_t roll_latch;              /* the rolls latched (SHIFT + key 1..7) */
     uint8_t drill_held, drill_latch; /* 0.6: PERFORM 2's keys 1..7 (DRILL) */
@@ -3206,6 +3207,20 @@ static int keys_live(void)
 }
 /* 1.0: SHIFT (OCT-) held: the menu (SHIFT + a white key), on every page but PERF's (its own: latches, SPELLS',
  * WANDER's) and KEYS (an accent); a knob turned meanwhile hides it (fine adjust: the page's values) */
+/* (after 1.4.3) KEYS in the scale (keyboard folding): when the playing pattern has a scale (SEQ -> SCALE: not CHROMATIC), the
+ * white keys play its notes upwards from the root on any track (not only those that follow it: key_scale_note), and
+ * black keys 1-7 pick the track (as off KEYS: its hit too, CONFIG Audition), so one hand hops between the sounds
+ * while the other plays; black keys 8-11 do nothing. CHROMATIC: the keys a piano, as before */
+static int keys_fold(void)
+{
+    const pattern_t *p = &pat[sq.active];
+    return keys_live() && p->scale && p->scale < NSCALE;
+}
+static uint32_t keys_ndeg(void)                      /* the playing scale's notes an octave (12: none) */
+{
+    const pattern_t *p = &pat[sq.active];
+    return (uint32_t)__builtin_popcount(SCALE_MASK[p->scale < NSCALE ? p->scale : SC_CHROM] & 0xFFFu);
+}
 static int shift_menu(void) { return ui.shift && ui.mode != M_PERF && ui.mode != M_PATTERN && !keys_live(); }   /* (1.0:
                                                       * the pattern page: SHIFT + a pattern deletes it) */
 /* PERF's keys: 1..7 roll their track, 8..16 the effects (perform.c PF_*); SHIFT + a key latches it (again: lets
@@ -3284,11 +3299,12 @@ static int32_t key_scale_note(uint32_t w)
  * one) in the track's scale; a GATE voice held until the key is let go */
 static void key_play(uint32_t k, int32_t w)
 {
-    int32_t n = w >= 0 && scale_on(ui.track) ? key_scale_note((uint32_t)w) : 53 + (int32_t)k + 12 * ((int32_t)ui.koct - 3);
+    int32_t n = w >= 0 && keys_fold() ? key_scale_note((uint32_t)w) : 53 + (int32_t)k + 12 * ((int32_t)ui.koct - 3);
     if (ui.shift)
         ui.shift_used = 1;
     ui.knote = (uint8_t)clamp32(n, 0, 127);
     ui.kkey = (uint8_t)k;
+    ui.ktrack = ui.track;
     key_note_post(ui.track, ui.knote, ui.shift ? key_acc : key_vel, KF_REC | KF_HOLD);
     ui.force = 1;
 }
@@ -3481,6 +3497,16 @@ static void white_up(uint32_t w)
 static void black_down(uint32_t k)
 {
     pattern_t *pt = shown_pat();
+    if (keys_fold()) {                               /* (after 1.4.3) in the scale: 1-7 the track, played (SHIFT: accent) */
+        if (k < NTRACK) {
+            track_select(k);
+            if (ui.shift)
+                ui.shift_used = 1;
+            if (!(kset.caout & KS_QUIET))
+                key_note_post(k, tb_note(k), ui.shift ? key_acc : key_vel, KF_REC);
+        }
+        return;
+    }
     if (keys_live()) {
         key_play(BLACK_KEY[k], -1);
         return;
@@ -4085,7 +4111,7 @@ static void ui_input(void)
             black_down(k);
     if (ui.kkey < 27u && ((up >> ui.kkey) & 1u)) {   /* 19b: the key that played let go: a GATE voice too */
         if (ui.kplay)
-            key_note_post(ui.track, ui.knote, 0, KF_REL);
+            key_note_post(ui.ktrack, ui.knote, 0, KF_REL);
         ui.kkey = 0xFF;
     }
     if ((n = panel_enc(EN_ALGO)) != 0 && !ui_asking()) {
@@ -4223,7 +4249,21 @@ static void ui_leds(void)
                       : NB;
     if (fm1_led_anim_on())
         return;
-    if (keys_live()) {                               /* 0.8: KEYS: a keyboard (lit: held; the Cs a mid level) */
+    if (keys_fold()) {                               /* (after 1.4.3) KEYS in the scale: the white keys the scale (lit: held;
+                                                      * the roots a mid level), black 1-7 the tracks (lit: the one
+                                                      * played; a hit flashes), 8-11 dark */
+        uint32_t nd8 = keys_ndeg();
+        for (k = 0; k < 16u; k++) {
+            uint32_t id = 14u + WHITE_KEY[k];
+            led_put(nl, id, (ui.keys >> WHITE_KEY[k]) & 1u);
+            led_put(k % nd8 == 0u ? nm : nd, id, 1);
+        }
+        for (k = 0; k < NTRACK; k++) {
+            uint32_t id = 14u + BLACK_KEY[k];
+            led_put(nl, id, k == ui.track || fm1_ms - ui.flash_ms[k] < 70u);
+            led_put(nd, id, 1);
+        }
+    } else if (keys_live()) {                        /* 0.8: KEYS: a keyboard (lit: held; the Cs a mid level) */
         for (k = 0; k < 27u; k++) {
             uint32_t n = 53u + k + 12u * ui.koct - 36u;
             led_put(nl, 14u + k, (ui.keys >> k) & 1u);

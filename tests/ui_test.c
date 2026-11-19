@@ -3776,6 +3776,35 @@ static void phase19(void)
         check(ui.knote == (uint8_t)key_scale_note(1), "KEYS: white key 2 plays the second degree");
     }
     shot("keys-scale");
+    {   /* (after 1.4.3) keyboard folding: any track in the scale, black keys 1-7 the track (its hit), 8-11 nothing */
+        uint32_t c = trig_count[3], c0 = trig_count[0];
+        int32_t cs, s;
+        check(keys_fold() && !scale_on(3), "keys fold: KEYS folds to the scale; SN doesn't follow it");
+        black(3);
+        run_ms(10);
+        check(ui.track == 3u && trig_count[3] == c + 1u, "keys fold: KEYS in a scale: black key 4 picks SN and plays it");
+        cs = (int32_t)(vc[3].osc.midi_freq >> 8);
+        white(2);
+        run_ms(10);
+        s = cs + (int32_t)ui.knote - SEQ_DEFAULT_NOTE;
+        check(ui.knote == (uint8_t)key_scale_note(2) && ui.ktrack == 3u &&
+              ((SCALE_MASK[SC_DORIAN] >> (uint32_t)(((s - 2) % 12 + 12) % 12)) & 1u),
+              "keys fold: on SN (not following) the white keys play D DORIAN");
+        c = trig_count[3];
+        black(7);
+        run_ms(10);
+        check(ui.track == 3u && trig_count[3] == c && trig_count[0] == c0, "keys fold: black key 8 does nothing");
+        keys |= 1u << WHITE_KEY[0];                  /* (held, for the screen) */
+        web_keys(keys);
+        run_ms(40);
+        shot("keys-fold");
+        keys = 0;
+        web_keys(keys);
+        run_ms(40);
+        black(0);
+        run_ms(10);
+        check(ui.track == 0u, "keys fold: black key 1 back to D1");
+    }
     hold(B_OCTDN);                                   /* (31: KEYS stays on till SHIFT + EDIT) */
     press(B_EDIT);
     release(B_OCTDN);
