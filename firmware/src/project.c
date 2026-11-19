@@ -1052,7 +1052,8 @@ static void autosave_poll(void)
  * doesn't take these longer settings: it starts from its defaults.
  * 1.4: pcch, pcwhen: PROGRAM CHANGE OUT's channel (0, the default: the global one; 1..16) and when it goes out (seq.c
  * PCW_*: 0, the default, AHEAD). In the struct's padding: settings from before hold 0 there, and an Elixir before 1.4
- * takes these (the same length) */
+ * takes these (the same length).
+ * 1.4.5: rknobs' default is Mute/solo TOGGLE (0x80, ui.c RK_TOGGLE; knobs PICKUP): saved settings keep theirs */
 #define SET_LEN_015 16u
 #define SET_LEN_016 20u
 typedef struct {
@@ -1080,7 +1081,7 @@ typedef struct {
 #define KS_QUIET 0x80u
 _Static_assert(sizeof(elixir_settings_t) == 284u, "settings: caout after mixout");
 _Static_assert(__builtin_offsetof(elixir_settings_t, ccmap) == SET_LEN_016, "settings: the map after 0.16's 20 bytes");
-static elixir_settings_t kset = {SET_MAGIC, 11, 1, 1, 1, 0xFF, 100, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, {0}, 127, 0};   /* (palette 11: SAND) */
+static elixir_settings_t kset = {SET_MAGIC, 11, 1, 1, 1, 0xFF, 100, 127, 0, 0, 0x80u, 0, 0, 0, 0, 0, 0, {0}, 127, 0};   /* (palette 11: SAND) */
 static uint32_t cc_map_at(uint32_t cc) { return kset.ccmap[cc & 127u]; }
 static uint8_t remote_of(uint32_t v, uint32_t dflt) { return (uint8_t)(v > 16u ? 0xFFu : v ? v - 1u : dflt - 1u); }
 static uint8_t settings_dirty;

@@ -98,8 +98,9 @@ it('opens a guarded send panel with device-specific mode counts and preserves it
     expect(request).not.toHaveBeenCalled()
     const selector = w.find('[aria-label="Destination custom mode"]')
     await selector.setValue('2')
-    const verify = w.findAll('.hardware-panel button').find(b => b.text() === 'Verify device & back up slot 1')!
-    expect(verify.attributes('disabled')).toBeDefined()
+    const send = w.findAll('.hardware-panel button').find(b => b.text() === 'Send to mode 2')!   // (1.4.4: any mode)
+    expect(send.attributes('disabled')).toBeDefined()   // (not connected yet)
+    expect(w.findAll('.hardware-panel button').some(b => b.text() === 'Back up mode 2 first')).toBe(true)
     const hardware = w.findComponent({ name: 'HardwareConnection' })
     hardware.vm.$emit('busy', true); await flushPromises()
     await w.find('[aria-label="Close send panel"]').trigger('click')
@@ -116,7 +117,7 @@ it('opens a guarded send panel with device-specific mode counts and preserves it
     expect(w.findAll('[aria-label="Destination custom mode"] option')).toHaveLength(8)
     await w.find('[aria-label="Destination custom mode"]').setValue('8')
     expect(w.findComponent({ name: 'LaunchpadTransfer' }).exists()).toBe(false)
-    expect(w.text()).toContain('This app cannot send to the selected custom mode yet')
+    expect(w.text()).toContain('Send to mode 8')   // (1.4.4: every Launchpad mode too)
     expect(request).not.toHaveBeenCalled()
   } finally { Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal'); Reflect.deleteProperty(HTMLDialogElement.prototype, 'close') }
 })

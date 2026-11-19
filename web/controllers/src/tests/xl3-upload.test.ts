@@ -76,12 +76,13 @@ it('reports partial success and never retries a missing second surface reply', a
 })
 it('rejects unsupported slots, relative mode and other firmware before writes', async () => {
  const f = simulated()
- await expect(f.uploader.prepare(file, 2)).rejects.toThrow('slot1')
+ await expect(f.uploader.prepare(file, 16)).rejects.toThrow('1 to 15')
+ await expect(f.uploader.prepare(file, 2)).rejects.toThrow()   // (the simulator answers only slot 1: a slot's read must match its address)
  const mode = decodeFile(file).mode; mode.controls[0]!.relative = true
  expect(() => prepareXL3Slot1Frames(encodeFile(mode))).toThrow('absolute CC')
  f.transport.exchange = async () => { const reply = read('slot1-reconnect/frame-001.syx'); reply[15] = 28; return reply }
  await expect(f.uploader.prepare(file, 1)).rejects.toThrow('1564')
- expect(f.frames).toHaveLength(0)
+ expect(f.frames.filter(b => b[8] === 69)).toHaveLength(0)   // (reads only: no write)
  expect(isXL3MainPortName('LCXL3 1 MIDI In')).toBe(true)
  expect(isXL3MainPortName('LCXL3 1 DAW In')).toBe(false)
  expect(isXL3MainPortName('Launch Control XL MK2')).toBe(false)

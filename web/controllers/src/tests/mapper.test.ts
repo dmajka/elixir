@@ -26,7 +26,7 @@ it('searches, applies, rejects incompatible behavior and removes assignments', a
   const behavior = w.findAll('.editor form select')[1]!
   await behavior.setValue('toggle')
   await w.find('.editor form').trigger('submit')
-  expect(w.find('[role=alert]').text()).toContain('momentary hardware')
+  expect(w.find('.editor [role=alert]').exists()).toBe(false)   // (1.4.4: toggle mutes, the receiver in state mode)
   expect(w.findAll('.control')[32]!.text()).toContain('D1 Mute')
   await w.findAll('.editor form .actions button')[1]!.trigger('click')
   expect(w.text()).toContain('47/48 assigned')

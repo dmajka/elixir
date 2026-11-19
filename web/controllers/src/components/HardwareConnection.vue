@@ -3,6 +3,8 @@ import MidiMonitor from './MidiMonitor.vue'
 import ControllerCheck from './ControllerCheck.vue'
 import LaunchpadTransfer from './LaunchpadTransfer.vue'
 import Mk2Send from './Mk2Send.vue'
+import SlotSend from './SlotSend.vue'
+import { LAUNCHPAD_PRO_MK3_PROFILE } from '../devices/novation/launchpad-pro-mk3/profile'
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import type { MidiTransactionTrace } from '../midi/request-transport'
 import type { ControllerTemplate } from '../core/mapping-engine/types'
@@ -138,8 +140,7 @@ onBeforeUnmount(() => { invalidatePlan(); stopState(); stopMessages(); session.d
 <template>
   <section class="hardware-panel" aria-label="Hardware connection">
     <h2 v-if="!compact">Hardware connection</h2>
-    <label v-if="compact && !isMk2" class="mode-selector">Custom mode<select v-model.number="slot" :disabled="busy || launchpadBusy || restoreAvailable" aria-label="Destination custom mode"><option v-for="n in deviceProfile.customModeSlots" :key="n" :value="n">Mode {{ n }}{{ n === 1 ? ' · verified' : ' · use Components app' }}</option></select></label>
-    <p v-if="compact && !isMk2">{{ deviceProfile.model }} has {{ deviceProfile.customModeSlots }} custom modes. This app currently sends only to custom mode 1, because that is the only slot tested on hardware. To fill modes 2–{{ deviceProfile.customModeSlots }}, download the device file (.syx), open it in Novation’s Components app, and select the mode there.</p>
+    <label v-if="compact && !isMk2" class="mode-selector">Custom mode<select v-model.number="slot" :disabled="busy || launchpadBusy || restoreAvailable" aria-label="Destination custom mode"><option v-for="n in deviceProfile.customModeSlots" :key="n" :value="n">Mode {{ n }}</option></select></label>
     <p v-if="!compact">Connect to enumerate MIDI ports and optionally capture incoming messages. Port names do not verify the controller model or firmware.</p>
     <div class="actions"><button v-if="!connected" :disabled="!support.supported || busy" @click="connect">{{ busy ? 'Requesting MIDI permission…' : 'Connect MIDI (SysEx permission)' }}</button><button v-else :disabled="busy || launchpadBusy" @click="disconnect">Disconnect MIDI</button><span>{{ connected ? 'MIDI access granted' : support.reason }}</span></div>
     <p v-if="error" role="alert" class="error">{{ error }}</p>
@@ -151,7 +152,8 @@ onBeforeUnmount(() => { invalidatePlan(); stopState(); stopMessages(); session.d
     <p v-if="connected && !ports.length">No MIDI ports found. Check the controller connection.</p>
     <details v-if="!compact"><summary>Passive input capture</summary><p>This receives only the selected input; it sends no queries or configuration. Captures may help document physical output or replies visible on this input. Browser MIDI access may conflict with Components; it cannot intercept Components’ outgoing traffic.</p><label><input v-model="excludeClock" type="checkbox" :disabled="capture || messages.length > 0"> Exclude MIDI clock from capture (clear capture before changing)</label><div class="actions"><button :disabled="!inputId || captureFull" @click="capture = !capture">{{ capture ? 'Stop capture' : 'Start capture' }}</button><button @click="clearCapture">Clear capture</button><button :disabled="!messages.length" @click="downloadCapture">Download capture JSON</button></div><p role="status">{{ messages.length }} captured messages{{ capture ? ' · Listening' : '' }}{{ captureFull ? ' · Capture limit reached; clear to resume.' : '' }}</p><pre v-if="messages.length" class="capture-preview">{{ messages.slice(-5).map(m => `${m.inputId} ${m.timestamp.toFixed(1)}: ${m.bytes.map(b => b.toString(16).padStart(2, '0')).join(' ')}`).join('\n') }}</pre></details>
     <MidiMonitor v-if="!compact" :template="template" :incoming="latestMessage" :input-name="inputs.find(p => p.id === inputId)?.name" />
-    <template v-if="template.deviceProfileId === XL3_FILE_SERIALIZER.deviceProfileId">
+    <SlotSend v-if="compact && !isMk2" :template="template" :slot="slot" :launchpad="template.deviceProfileId === LAUNCHPAD_PRO_MK3_PROFILE.id" :ready="connected && !!inputId && !!outputId" :create-transport="() => session.createRequestTransport(inputId, outputId)" @busy="busy = $event" />
+    <template v-else-if="template.deviceProfileId === XL3_FILE_SERIALIZER.deviceProfileId">
     <h3>Prepare transfer</h3><label v-if="!compact" class="slot-field">Destination custom-mode slot<input v-model.number="slot" :disabled="busy" type="number" min="1" max="15"></label>
     <p>Uploading would overwrite both surfaces of custom-mode slot {{ slot }}. Direct transfer currently supports slot 1, firmware build 1563 and absolute CC mappings. Close Components before using this connection to avoid competing requests.</p>
     <p v-if="preparation.error" class="error" role="alert">{{ preparation.error }}</p><p v-else>File validated: {{ preparation.value?.name }} · {{ preparation.value?.byteLength }} bytes · 2 surfaces.</p>

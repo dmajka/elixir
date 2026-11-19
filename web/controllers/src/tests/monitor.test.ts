@@ -18,7 +18,7 @@ it('simulates all presets with changed channels and resolves every assigned MIDI
       expect(observed.status).toBe('match')
       expect(observed.channel).toBe(a.channel)
       expect(observed.parameters).toContain(a.parameter.name)
-      if (button && a.messageType !== 'program-change') expect(decodeMidi(sim.emit(a.control.id, 'release')).value).toBe(a.minimum)
+      if (button && a.messageType !== 'program-change' && a.buttonMode !== 'toggle') expect(decodeMidi(sim.emit(a.control.id, 'release')).value).toBe(a.minimum)
     }
   }
 })
@@ -123,6 +123,8 @@ it('keeps the prepared Phase 8 changed-channel mode compatible with the Componen
   const { decodeFile, encodeFile } = await import('../devices/novation/launch-control-xl3/codec')
   const { XL3_FILE_SERIALIZER } = await import('../devices/novation/launch-control-xl3/adapter')
   const template = JSON.parse(readFileSync('research/hardware/phase8/channel-check.json', 'utf8'))
+  // (the fixture predates 1.4.4's mute/solo colors: pin the codec's own defaults it was exported with)
+  for (const a of template.assignments) if (/\.(mute|solo)$/.test(a.parameterId)) a.colors = { off: a.controlId.startsWith('button.1') ? 25 : 37, on: 3 }
   const file = new Uint8Array(readFileSync('research/hardware/phase8/channel-check.syx'))
   const exported = new Uint8Array(readFileSync('research/hardware/phase8/phase8-channel-check-components.syx'))
   expect(engine.exportFile(template, XL3_FILE_SERIALIZER)).toEqual(file)
@@ -136,6 +138,8 @@ it('keeps the prepared Phase 8 changed-channel mode compatible with the Componen
 })
 it('physical changed-channel capture covers every group with correct track/global channels', () => {
   const template = JSON.parse(readFileSync('research/hardware/phase8/channel-check.json', 'utf8'))
+  // (the fixture predates 1.4.4's mute/solo colors: pin the codec's own defaults it was exported with)
+  for (const a of template.assignments) if (/\.(mute|solo)$/.test(a.parameterId)) a.colors = { off: a.controlId.startsWith('button.1') ? 25 : 37, on: 3 }
   const mapping = engine.resolve(template)
   const capture = JSON.parse(readFileSync('research/hardware/phase8-channels-physical.json', 'utf8'))
   expect(capture.messages).toHaveLength(341)

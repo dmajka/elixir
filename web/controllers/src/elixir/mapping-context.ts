@@ -19,5 +19,5 @@ export function createElixirMappingEngine(otherChannels?: OtherChannels, paramet
 }
 export function createEmptyTemplate(id: string, name: string, deviceProfileId = XL3_PROFILE.id): ControllerTemplate {
   return { schemaVersion: 1, id, name, deviceProfileId, channels: { ...DEFAULT_CHANNEL_SETTINGS },
-    receiver: { encoderMode: 'pickup', buttonMode: 'press' }, assignments: [] }
+    receiver: { encoderMode: 'pickup', buttonMode: 'state' }, assignments: [] }
 }

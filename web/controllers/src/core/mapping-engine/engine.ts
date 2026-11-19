@@ -72,7 +72,13 @@ export function createMappingEngine(context: { parameters: readonly MappingParam
       if (a.range && (p.controlType !== 'continuous' || type !== 'cc')) issue('error', 'range-not-applicable', 'Ranges are supported only for continuous CC assignments.', c.id)
       if (type !== 'nrpn' && type !== 'realtime' && maximum > 127) issue('error', 'message-range', 'This message type supports values only from 0–127.', c.id)
       if (minimum < p.minimum || maximum > p.maximum) issue('error', 'parameter-range', `Range exceeds ${p.minimum}–${p.maximum}.`, c.id)
-      const encoderMode = a.encoderMode ?? 'absolute', buttonMode = a.buttonMode ?? 'momentary'
+      // A mute or solo on a receiver in state mode: toggle hardware by default; the receiver's press mode (older
+      // templates) keeps momentary. Effect latches stay momentary: with the receiver in state mode, on while held.
+      const mute = /\.mute$/.test(p.id), solo = /\.solo$/.test(p.id)
+      const latchDefault = (mute || solo) && p.buttonBehavior === 'press-or-state' && template.receiver.buttonMode === 'state' && c.buttonModes.includes('toggle') && type !== 'program-change'
+      const encoderMode = a.encoderMode ?? 'absolute', buttonMode = a.buttonMode ?? (latchDefault ? 'toggle' : 'momentary')
+      // Mutes and solos: bright white when off, vibrant red (mute) or green (solo) when on, where the control lights
+      const colors = (mute || solo) && isButton ? { ...(c.led.off && c.led.colors.includes(3) ? { off: 3 } : {}), ...(c.led.on && c.led.colors.includes(mute ? 5 : 21) ? { on: mute ? 5 : 21 } : {}), ...a.colors } : a.colors
       if (encoderMode === 'relative' && a.range) issue('error', 'relative-range', 'Absolute value ranges are not supported on a relative encoder.', c.id)
       if (a.encoderMode !== undefined && (isButton || !c.encoderModes.includes(a.encoderMode))) issue('error', 'encoder-mode', 'Encoder mode is unsupported by this physical control.', c.id)
       if (a.buttonMode !== undefined && (!isButton || !c.buttonModes.includes(a.buttonMode) || type === 'program-change')) issue('error', 'button-mode', 'Button mode is unsupported for this assignment.', c.id)
@@ -83,7 +89,7 @@ export function createMappingEngine(context: { parameters: readonly MappingParam
       if (p.controlType === 'button' && buttonMode === 'toggle') {
         if (p.buttonBehavior === 'held' || p.buttonBehavior === 'press' || (p.buttonBehavior === 'press-or-state' && template.receiver.buttonMode === 'press')) issue('error', 'button-receiver-mode', 'Use momentary hardware for held/press actions; mute/solo toggle hardware requires receiver state mode.', c.id)
       }
-      if (p.buttonBehavior === 'press-or-state' && buttonMode === 'momentary' && template.receiver.buttonMode === 'state') issue('warning', 'momentary-state', 'Receiver state mode will follow the held button rather than latch mute/solo.', c.id)
+      if ((mute || solo) && buttonMode === 'momentary' && template.receiver.buttonMode === 'state') issue('warning', 'momentary-state', 'Receiver state mode will follow the held button rather than latch mute/solo.', c.id)
       if (a.colors) for (const key of ['off', 'on'] as const) {
         if (a.colors[key] !== undefined && (!c.led[key] || !c.led.colors.includes(a.colors[key]!))) issue('error', 'led-color', `${key} LED color is not supported by this profile.`, c.id)
       }
@@ -93,7 +99,7 @@ export function createMappingEngine(context: { parameters: readonly MappingParam
       const key = `${type}:${channel ?? 'system'}:${p.number}`, owner = messageOwners.get(key)
       if (owner) issue('warning', 'duplicate-message', `${c.id} and ${owner} emit the same MIDI address.`, c.id)
       messageOwners.set(key, c.id)
-      if (issues.filter(i => i.severity === 'error').length === errorsBefore) resolved.push({ control: c, parameter: p, messageType: type, channel, number: p.number, minimum, maximum, label, encoderMode, buttonMode, ...(a.colors ? { colors: { ...a.colors } } : {}) })
+      if (issues.filter(i => i.severity === 'error').length === errorsBefore) resolved.push({ control: c, parameter: p, messageType: type, channel, number: p.number, minimum, maximum, label, encoderMode, buttonMode, ...(colors && Object.keys(colors).length ? { colors: { ...colors } } : {}) })
     }
     const unassigned = profile.controls.filter(c => !assigned.has(c.id))
     if (unassigned.length) issue('warning', 'unassigned-controls', `${unassigned.length} physical controls are unassigned and will be disabled in file export.`)

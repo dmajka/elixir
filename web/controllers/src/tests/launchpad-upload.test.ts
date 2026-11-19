@@ -60,21 +60,21 @@ it('rejects changed stored content and invalidated preparation before any write'
   const f = simulator(), uploader = createLaunchpadUploader(f.transport, undefined, true)
   const plan = await uploader.prepare(candidate)
   f.replaceStored(candidate)
-  await expect(uploader.upload(candidate, plan.token)).rejects.toThrow('slot 1 changed')
+  await expect(uploader.upload(candidate, plan.token)).rejects.toThrow('custom mode changed')
   expect(f.send).not.toHaveBeenCalled()
   const next = await uploader.prepare(candidate)
   uploader.invalidate()
   await expect(uploader.upload(candidate, next.token)).rejects.toThrow('Prepare')
 })
-it('rejects untested firmware and toggle, global-channel or program pads before writing', async () => {
+it('accepts toggle pads; rejects untested firmware, global-channel or program pads before writing', async () => {
   const f = simulator(), uploader = createLaunchpadUploader(f.transport, undefined, true)
   await expect(uploader.prepare(original)).resolves.toBeTruthy()   // (note pads on explicit channels: Drums Square)
   const variant = (change: (p: ReturnType<typeof decodeLaunchpadFile>['pads'][number]) => void) => {
     const mode = decodeLaunchpadFile(original); change(mode.pads.find(p => p.type === 'note')!); return encodeLaunchpadFile(mode)
   }
-  await expect(uploader.prepare(variant(p => { p.behavior = 'toggle' }))).rejects.toThrow('momentary CC and note')
-  await expect(uploader.prepare(variant(p => { p.channel = 'global' }))).rejects.toThrow('momentary CC and note')
-  await expect(uploader.prepare(variant(p => { p.type = 'program-change'; p.behavior = 'trigger' }))).rejects.toThrow('momentary CC and note')
+  await expect(uploader.prepare(variant(p => { p.behavior = 'toggle' }))).resolves.toBeTruthy()
+  await expect(uploader.prepare(variant(p => { p.channel = 'global' }))).rejects.toThrow('CC and note pads only')
+  await expect(uploader.prepare(variant(p => { p.type = 'program-change'; p.behavior = 'trigger' }))).rejects.toThrow('CC and note pads only')
   const otherFirmware = identity.slice(); otherFirmware[15] = 4
   const normalExchange = f.transport.exchange
   f.transport.exchange = vi.fn(async (request, accepts, signal) => request[1] === 126 ? otherFirmware : normalExchange(request, accepts, signal))

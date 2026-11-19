@@ -39,7 +39,9 @@ describe('complete semantic mapping and file adapter', () => {
     expect(controls.slice(0,24).map(c => c.number)).toEqual([72,73,74,75,76,77,78,79,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71])
     expect(controls.slice(24).map(c => c.number)).toEqual([8,9,10,11,12,13,14,15,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119])
     expect(controls.every(c => c.channel === 15 && c.type === 'cc')).toBe(true)
-    expect(controls.slice(32).every(c => c.behavior === 'momentary')).toBe(true)
+    expect(controls.slice(32).every(c => c.behavior === 'toggle')).toBe(true)   // (1.4.4: mutes and solos toggle)
+    expect(controls.slice(32, 40).every(c => c.offColor === 3 && c.onColor === 5)).toBe(true)
+    expect(controls.slice(40).every(c => c.offColor === 3 && c.onColor === 21)).toBe(true)
   })
   it('disables every unassigned control, including an entirely blank custom mode', () => {
     const t = one(), report = engine.validate(t), d = decodeFile(engine.exportFile(t, XL3_FILE_SERIALIZER))
@@ -117,7 +119,7 @@ describe('compatibility validation', () => {
     t.name = 'x'.repeat(17); expect(codes(t)).toContain('mode-name')
   })
   it('enforces held/press/state button semantics and encoder capability', () => {
-    const t = one(); t.assignments = [{ controlId: 'button.1.1', parameterId: 'tracks.d1.mute', buttonMode: 'toggle' }]
+    const t = one(); t.receiver.buttonMode = 'press'; t.assignments = [{ controlId: 'button.1.1', parameterId: 'tracks.d1.mute', buttonMode: 'toggle' }]
     expect(codes(t)).toContain('button-receiver-mode')
     t.receiver.buttonMode = 'state'; expect(engine.validate(t).valid).toBe(true)
     t.assignments[0]!.parameterId = 'global.roll.d1'; expect(codes(t)).toContain('button-receiver-mode')

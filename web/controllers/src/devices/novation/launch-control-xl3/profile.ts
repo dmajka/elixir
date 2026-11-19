@@ -1,6 +1,6 @@
 import type { DeviceProfile, PhysicalControl } from '../../../core/mapping-engine/types'
 // Conservative common palette supported by encoder and button editor; not all button colors exposed yet.
-const colors = Object.freeze([0, 3, 5, 9, 13, 17, 25, 29, 33, 37, 41, 45, 49, 53, 57])
+const colors = Object.freeze([0, 3, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57])
 const controls: PhysicalControl[] = []
 for (let row = 1; row <= 3; row++) for (let col = 1; col <= 8; col++) controls.push({
   id: `encoder.${row}.${col}`, name: `Encoder ${row}/${col}`, kind: 'encoder', group: `encoders.${row}`, row: row - 1, column: col - 1,

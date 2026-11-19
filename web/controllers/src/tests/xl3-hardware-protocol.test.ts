@@ -14,7 +14,8 @@ it('matches full captured acknowledgements and rejects other surfaces, addresses
   expect(isXL3Acknowledgement(bytes, 0)).toBe(true)
   expect(isXL3Acknowledgement(bytes, 3)).toBe(false)
   for (let i = 0; i < bytes.length; i++) { const corrupt = bytes.slice(); corrupt[i] = 99; expect(isXL3Acknowledgement(corrupt, 0)).toBe(false) }
-  expect(() => isXL3Acknowledgement(bytes, 0, 7)).toThrow('Unverified')
+  expect(isXL3Acknowledgement(bytes, 0, 7)).toBe(false)   // (slot 2's address: another slot's reply)
+  expect(() => isXL3Acknowledgement(bytes, 0, 200)).toThrow('Unknown')
 })
 it('decodes actual hardware surfaces into the exact Components re-export model', () => {
   const frames = [read('slot1-reconnect/frame-002.syx'), read('slot1-reconnect/frame-003.syx')]

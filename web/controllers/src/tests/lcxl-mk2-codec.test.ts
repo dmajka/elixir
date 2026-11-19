@@ -34,7 +34,7 @@ describe('the Launch Control XL mk2 template file', () => {
     const reverb = PARAMETER_REGISTRY.find(p => p.id === 'tracks.d1.reverb-send')!, mute = PARAMETER_REGISTRY.find(p => p.id === 'tracks.d1.mute')!
     expect(d.slot).toBe(0)
     expect(d.continuous[0]).toEqual({ number: reverb.number, min: 0, max: 127, channel: 15 })
-    expect(d.buttons[0]).toMatchObject({ type: 'cc', number: mute.number, channel: 15, toggle: false })
+    expect(d.buttons[0]).toMatchObject({ type: 'cc', number: mute.number, channel: 15, toggle: true })   // (1.4.4: mutes and solos toggle)
     expect(d.buttons.slice(16)).toEqual(defaultMk2Template().buttons.slice(16))   // (the side buttons: as Components has them)
   })
   it('refuses what it cannot write or read', () => {

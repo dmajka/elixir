@@ -3454,6 +3454,7 @@ static void phase12_remote(void)
     gcc(8, 66);
     check(ok && par[PAR_BPM] == bpm + 2u, "REL: 64 +/- n, two's complement, the tempo a BPM a step");
     vp_set(VP_RKNOBS, RK_PICKUP);
+    vp_set(VP_RMUTE, 0);                             /* (PRESS here: 1.4.5's default is TOGGLE) */
     /* buttons, as CCs (a Launch Control's custom template) and as notes: mute, solo on TRACKS */
     sq.muted = sq.solo = 0;
     rcc(104 + 1, 127);

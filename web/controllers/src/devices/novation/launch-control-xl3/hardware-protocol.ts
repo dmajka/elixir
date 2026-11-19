@@ -13,23 +13,30 @@ export function parseXL3Identity(data: Uint8Array): XL3Identity {
   if (data.length !== 17 || data[1] !== 0x7e || data[3] !== 6 || data[4] !== 2 || data[5] !== 0 || data[6] !== 0x20 || data[7] !== 0x29 || data[8] !== 0x48 || data[9] !== 1 || data[10] !== 0 || data[11] !== 0) throw new Error('Not the captured XL3 application identity')
   return { deviceId: data[2]!, family: data[8]! | (data[9]! << 7), member: 0, firmwareBuild: data[14]! * 128 + data[15]!, versionBytes: Array.from(data.slice(12, 16)) }
 }
+/** The address a custom mode's replies carry: slots 1-4 at 6-9 on both surfaces. Slots 5-15 (build 1563, read with
+ * index 4-14): surface 0 at 18-28, but surface 3 at another (slot 5: 13); the uploader takes each surface's from the
+ * device's reply to its read, and expects the same after. */
+export function xl3ReplyAddress(slot: number) {
+  if (!Number.isInteger(slot) || slot < 1 || slot > 15) throw new Error('Choose a custom mode from 1 to 15.')
+  return slot <= 4 ? slot + 5 : slot + 13
+}
 function capturedConfiguration(surface: XL3Surface, address: number) {
   if (surface !== 0 && surface !== 3) throw new Error('Unknown surface')
-  // Only address6 (human slot1 in the observed replies) has hardware evidence.
-  if (address !== 6) throw new Error('Unverified hardware response address')
+  if (!Number.isInteger(address) || address < 0 || address > 127) throw new Error('Unknown hardware response address')
 }
-export function isXL3Acknowledgement(data: Uint8Array, surface: XL3Surface, address = 6): boolean {
-  capturedConfiguration(surface, address)
+export function isXL3Acknowledgement(data: Uint8Array, surface: XL3Surface, address: number | 'any' = 6): boolean {
+  if (address !== 'any') capturedConfiguration(surface, address)
   try { frame(data) } catch { return false }
-  return data.length === 12 && prefix.every((b, i) => data[i] === b) && data[8] === 0x15 && data[9] === surface && data[10] === address
+  return data.length === 12 && prefix.every((b, i) => data[i] === b) && data[8] === 0x15 && data[9] === surface && (address === 'any' || data[10] === address)
 }
 /** Parse only the captured CC7, explicit-channel subset and known metadata. */
-export function decodeXL3ReadBack(frames: readonly Uint8Array[], address = 6): { mode: CustomMode; raw: Uint8Array } {
+export function decodeXL3ReadBack(frames: readonly Uint8Array[], addresses: number | readonly [number, number] = 6): { mode: CustomMode; raw: Uint8Array } {
   if (frames.length !== 2) throw new Error('Expected two read-back surfaces')
   const canonical: number[] = [], seen = new Set<number>()
   for (const data of frames) {
     frame(data)
     const surface = data[9] as XL3Surface
+    const address = typeof addresses === 'number' ? addresses : addresses[surface === 0 ? 0 : 1]
     capturedConfiguration(surface, address)
     if (data.length < 14 || !prefix.every((b, i) => data[i] === b) || data[8] !== 0x10 || data[10] !== address || seen.has(surface)) throw new Error('Unmatched or duplicate read-back surface')
     seen.add(surface)
@@ -46,8 +53,9 @@ export function decodeXL3ReadBack(frames: readonly Uint8Array[], address = 6): {
         if (metadataSeen || n !== 0) throw new Error('Unsupported hardware metadata')
         metadataSeen = true
       } else if (tag < 0x20) {
-        const allowed = surface === 0 ? [6, 4] : [0, 1, 2, 6, 4]
-        if (!allowed.includes(tag) || globals.has(tag) || n !== (tag === 4 ? 64 : 0)) throw new Error('Unsupported hardware global settings')
+        // (1.4.4: a mode's global settings, whatever they hold: not part of the canonical file, which keeps its own;
+        // slot 1 had only 6 and 4 on surface 0, 0 1 2 6 4 on surface 3, but other modes carry others)
+        if (globals.has(tag)) throw new Error('Duplicate hardware global setting')
         globals.set(tag, n)
       } else if ((tag & 0x60) === 0x40) {
         const length = tag & 31, payload = Array.from(data.slice(p, p + length)); p += length
@@ -63,7 +71,7 @@ export function decodeXL3ReadBack(frames: readonly Uint8Array[], address = 6): {
         canonical.push(tag, n, ...data.slice(p, p + length)); p += length
       } else throw new Error('Unknown hardware container')
     }
-    if (!nameSeen || !metadataSeen || globals.size !== (surface === 0 ? 2 : 5)) throw new Error('Incomplete hardware metadata')
+    if (!nameSeen || !metadataSeen) throw new Error('Incomplete hardware metadata')
     canonical.push(0xf7)
   }
   const decoded = decodeFile(Uint8Array.from(canonical))

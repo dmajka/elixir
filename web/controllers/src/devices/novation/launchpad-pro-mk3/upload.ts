@@ -1,5 +1,5 @@
 import { decodeLaunchpadFile } from './codec'
-import { MK3_SLOT1_INDEX, readLaunchpadSlot1 } from './hardware-protocol'
+import { mk3SlotIndex, readLaunchpadSlot1 } from './hardware-protocol'
 import type { MidiRequestTransport } from '../../../midi/request-transport'
 
 /** Verified browser subset: slot1, build483, explicit-channel momentary CC and note pads (the notes: restoring the
@@ -14,16 +14,16 @@ export interface LaunchpadUploadProgress {
 }
 const same = (left: Uint8Array, right: Uint8Array) => left.length === right.length && left.every((byte, i) => byte === right[i])
 
-export function prepareLaunchpadWrite(file: Uint8Array): Uint8Array {
+export function prepareLaunchpadWrite(file: Uint8Array, slot = 1): Uint8Array {
   decodeLaunchpadFile(file)
   const frame = file.slice()
-  frame[8] = MK3_SLOT1_INDEX
+  frame[8] = mk3SlotIndex(slot)
   return frame
 }
 function validateCandidate(file: Uint8Array) {
   const mode = decodeLaunchpadFile(file)
-  if (mode.pads.some(p => p.type !== 'off' && ((p.type !== 'cc' && p.type !== 'note') || p.channel === 'global' || p.behavior !== 'momentary'))) {
-    throw new Error('Sending from the browser supports explicit-channel momentary CC and note pads only')
+  if (mode.pads.some(p => p.type !== 'off' && ((p.type !== 'cc' && p.type !== 'note') || p.channel === 'global' || p.behavior === 'trigger'))) {
+    throw new Error('Sending from the browser supports explicit-channel CC and note pads only (momentary or toggle)')
   }
   return mode
 }
@@ -37,8 +37,8 @@ function transferPause(signal?: AbortSignal) {
 }
 
 export function createLaunchpadUploader(transport: MidiRequestTransport, onProgress: (state: LaunchpadUploadProgress) => void = () => {}, writesEnabled = MK3_BROWSER_WRITE_ENABLED) {
-  let prepared: { token: object; candidate: Uint8Array; original: Uint8Array; deviceId: number } | undefined
-  let restoration: { candidate: Uint8Array; original: Uint8Array; deviceId: number } | undefined
+  let prepared: { token: object; candidate: Uint8Array; original: Uint8Array; deviceId: number; slot: number } | undefined
+  let restoration: { candidate: Uint8Array; original: Uint8Array; deviceId: number; slot: number } | undefined
   let busy = false
   let generation = 0
   let state: LaunchpadUploadProgress = { message: '', acceptedSends: 0, stored: false, restored: false }
@@ -46,23 +46,24 @@ export function createLaunchpadUploader(transport: MidiRequestTransport, onProgr
     state = { ...state, ...changes, message }
     onProgress({ ...state })
   }
-  async function checkedRead(signal?: AbortSignal) {
-    const read = await readLaunchpadSlot1(transport, signal)
+  async function checkedRead(slot: number, signal?: AbortSignal) {
+    const read = await readLaunchpadSlot1(transport, signal, slot)
     if (read.identity.firmwareBuild !== MK3_TESTED_BUILD) throw new Error('Browser writes currently require MK3 firmware build483')
     return read
   }
-  async function writeAndCompare(file: Uint8Array, signal?: AbortSignal) {
+  async function writeAndCompare(file: Uint8Array, slot: number, signal?: AbortSignal) {
     if (!transport.send) throw new Error('Transport does not support a standalone send')
-    transport.send(prepareLaunchpadWrite(file), signal)
-    update('Browser accepted the mode send. Checking stored slot 1…', { acceptedSends: state.acceptedSends + 1 })
+    transport.send(prepareLaunchpadWrite(file, slot), signal)
+    update('Browser accepted the mode send. Checking stored the custom mode…', { acceptedSends: state.acceptedSends + 1 })
     await transferPause(signal)
-    const read = await checkedRead(signal)
-    if (!same(read.backup, file)) throw new Error('Stored slot 1 differs from the sent mode. Keep the backup for restoration.')
+    const read = await checkedRead(slot, signal)
+    if (!same(read.backup, file)) throw new Error('Stored the custom mode differs from the sent mode. Keep the backup for restoration.')
     return read
   }
   return {
     invalidate() { generation++; prepared = undefined; restoration = undefined },
-    async prepare(file: Uint8Array, signal?: AbortSignal) {
+    async prepare(file: Uint8Array, signal?: AbortSignal, slot = 1) {
+      mk3SlotIndex(slot)
       if (busy) throw new Error('Another MK3 operation is running')
       const currentGeneration = generation
       const candidate = file.slice()
@@ -72,13 +73,13 @@ export function createLaunchpadUploader(transport: MidiRequestTransport, onProgr
       restoration = undefined
       state = { message: '', acceptedSends: 0, stored: false, restored: false }
       try {
-        update('Verifying MK3 and backing up slot 1…')
-        const read = await checkedRead(signal)
+        update('Verifying MK3 and backing up the custom mode…')
+        const read = await checkedRead(slot, signal)
         if (generation !== currentGeneration) throw new Error('MK3 preparation was invalidated')
         const token = Object.freeze({})
-        prepared = { token, candidate, original: read.backup.slice(), deviceId: read.identity.deviceId }
-        update('Slot 1 backup is ready. Download it before confirming the overwrite.')
-        return { token, backup: read.backup.slice(), backupName: read.mode.name, modeName: mode.name, identity: read.identity }
+        prepared = { token, candidate, original: read.backup.slice(), deviceId: read.identity.deviceId, slot }
+        update('Backup ready.')
+        return { token, slot, backup: read.backup.slice(), backupName: read.mode.name, modeName: mode.name, identity: read.identity }
       } finally { busy = false }
     },
     async upload(file: Uint8Array, token: object, signal?: AbortSignal) {
@@ -89,31 +90,31 @@ export function createLaunchpadUploader(transport: MidiRequestTransport, onProgr
       prepared = undefined
       busy = true
       try {
-        update('Rechecking device and original slot 1…')
-        const before = await checkedRead(signal)
-        if (before.identity.deviceId !== plan.deviceId || !same(before.backup, plan.original)) throw new Error('Device or slot 1 changed. Prepare a fresh backup.')
+        update('Rechecking device and original the custom mode…')
+        const before = await checkedRead(plan.slot, signal)
+        if (before.identity.deviceId !== plan.deviceId || !same(before.backup, plan.original)) throw new Error('Device or the custom mode changed. Prepare a fresh backup.')
         // Retain the original even when a send succeeds but stored verification fails.
         if (generation !== currentGeneration || signal?.aborted) throw new Error('MK3 write preparation was invalidated')
         restoration = plan
-        await writeAndCompare(plan.candidate, signal)
-        update('Stored slot 1 matches the test mapping. Physical output is ready to check.', { stored: true })
+        await writeAndCompare(plan.candidate, plan.slot, signal)
+        update('Stored the custom mode matches the test mapping. Physical output is ready to check.', { stored: true })
       } finally { busy = false }
     },
     async restore(signal?: AbortSignal) {
       if (!writesEnabled) throw new Error('MK3 browser writes await explicit acceptance-test approval')
-      if (busy || !restoration) throw new Error('No original slot 1 backup is bound to this session')
+      if (busy || !restoration) throw new Error('No original the custom mode backup is bound to this session')
       const plan = restoration
       const currentGeneration = generation
       busy = true
       try {
-        update('Checking MK3 before restoring the original slot 1…')
-        const before = await checkedRead(signal)
+        update('Checking MK3 before restoring the original the custom mode…')
+        const before = await checkedRead(plan.slot, signal)
         if (before.identity.deviceId !== plan.deviceId) throw new Error('Device identity changed before restoration')
         // Restore only the backup retained from this session, never an arbitrary import.
         if (generation !== currentGeneration || signal?.aborted) throw new Error('MK3 restoration was invalidated')
-        await writeAndCompare(plan.original, signal)
+        await writeAndCompare(plan.original, plan.slot, signal)
         restoration = undefined
-        update('Original slot 1 restored and stored comparison passed.', { restored: true })
+        update('Original the custom mode restored and stored comparison passed.', { restored: true })
       } finally { busy = false }
     },
   }
