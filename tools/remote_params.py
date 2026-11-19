@@ -308,6 +308,15 @@ def build(src_dir=ROOT / "firmware/src", kits=None):
                 **({"track": track} if track else {}), number=cc, **button, buttonBehavior=beh,
                 interpretation=f"{interp} {PRESS}", documentation=doc("remote.c", f"{sym} (RM_GB0 + 8 x row + column)"))
 
+    # GLOBAL: RELOAD (1.4.6), a button at a knob's free place (RM_RELOAD: RM_GK's VP_NONE)
+    reload_cc = define(rc, "RM_RELOAD", "remote.c")
+    need(gk[reload_cc - cc0] == "VP_NONE", f"remote.c: RM_RELOAD {reload_cc} isn't a free GLOBAL knob place")
+    add(id="global.reload", name="Reload", category="Patterns", scope="remote-global", channelGroup="remoteGlobal",
+        number=reload_cc, **{**button, "alternateMessageTypes": []}, buttonBehavior="press",   # (a CC only)
+        interpretation="Reload the kit and the playing pattern as last saved (as hold OCT−, press key 13): undoes "
+        "the tweaks since. At the press; the release does nothing.",
+        documentation=doc("remote.c", "RM_RELOAD (ui.c ui_reload)"))
+
     # GLOBAL: a track's roll by a CC's value
     for c, t in enumerate(TRACKS):
         add(id=f"global.roll-fader.{t}", name=f"{LABELS[c]} roll rate", category="Roll", scope="remote-global",

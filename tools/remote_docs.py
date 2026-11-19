@@ -25,7 +25,7 @@ HEAD = ["D1", "D2", "D3", "SN", "CY", "CH", "OH"]
 # what a parameter is called in a table's cell: the manual's and the cheat sheet's own shorthand (a parameter missing
 # here shows its name). The numbers never come from here.
 CELL = {
-    "global.tempo": "Tempo", "global.shuffle": "Shuffle", "global.morph": "Morph", "global.sample-rate": "SRate",
+    "global.reload": "RELOAD (button)", "global.tempo": "Tempo", "global.shuffle": "Shuffle", "global.morph": "Morph", "global.sample-rate": "SRate",
     "global.master-filter": "Master filter", "global.roll-rate": "Roll rate", "global.repeat": "Repeat",
     "global.tape-time": "Tape time", "global.fx-wet": "FX wet", "global.fx-p1": "P1", "global.fx-p2": "P2",
     "global.fx-p3": "P3", "global.fx-p4": "P4", "global.decay": "Decay", "global.tape-speed": "Speed", "global.bus-dirt": "Bus dirt", "global.echo-to-reverb": "Echo > rev",
@@ -66,7 +66,7 @@ MANUAL_CELL = {"global.fx-wet": "FX dry/wet", "global.pattern-previous": "previo
                "global.ring.tone": "RING Tone", "global.ring.tune": "RING Tune (the chord)",
                "global.ring.spread": "RING Spread", "global.lfo-4-depth": "LFO 4's depth"}
 MANUAL_ROW = {"pitch": "Pitch (coarse)", "delay-send": "Delay send (1.0)", "density": "DENSITY (1.0)"}
-CHEAT_CELL = {"global.echo-to-reverb": "Echo>rev", "global.master-dirt": "Mstr dirt", "global.reverse-length": "REV len",
+CHEAT_CELL = {"global.reload": "RELOAD btn", "global.echo-to-reverb": "Echo>rev", "global.master-dirt": "Mstr dirt", "global.reverse-length": "REV len",
               "global.lfo-1-depth": "LFO1 dep", "global.lfo-2-depth": "LFO2 dep", "global.lfo-3-depth": "LFO3 dep",
               "global.lfo-4-depth": "LFO4 dep", "global.play-stop": "PLAY/STOP",
               "global.control-all": "CTRL ALL tap/hold", "global.control-all-revert": "CA revert"}
@@ -116,7 +116,8 @@ class Map:
     def grid(self):                                  # the knob grid: rows of 8 whose CCs are knobs, 8 .. 47 (1.4: or
         knobs = {p["number"] for p in self.global_knobs()}   # free, 19 and 20: six knobs a row at least)
         used = {n for (g, n) in self.by_cc if g == "remoteGlobal"}
-        rows = [f for f in range(0, 128, 8) if all(f + c in knobs or f + c not in used for c in range(8))
+        inset = {p["number"] for p in self.p if p["id"] == "global.reload"}   # (1.4.6: a button in a knob's place)
+        rows = [f for f in range(0, 128, 8) if all(f + c in knobs or f + c in inset or f + c not in used for c in range(8))
                 and sum(f + c in knobs for c in range(8)) >= 6]
         remote_params.need(rows, "GLOBAL has no row of eight knobs")
         k = 1                                        # (the first block; the delay's row, 96 .., is off the grid)
@@ -132,7 +133,8 @@ class Map:
         return sorted(delay, key=lambda p: p["number"]), rest
 
     def button_rows(self):                           # GLOBAL's rows of 8 holding buttons
-        firsts = {p["number"] // 8 * 8 for p in self.p if p["scope"] == "remote-global" and p["controlType"] == "button"}
+        firsts = {p["number"] // 8 * 8 for p in self.p if p["scope"] == "remote-global" and p["controlType"] == "button"
+                  and p["id"] != "global.reload"}   # (1.4.6: in the knob grid, at 19)
         return [(f, self.global_row(f)) for f in range(min(firsts), max(firsts) + 8, 8)]   # (knob rows between too)
 
     def rolls(self):

@@ -3468,6 +3468,19 @@ static void phase12_remote(void)
     track_select(4);
     rcc(104 + 7, 127);
     check(sq.muted == (2u | 16u), "TRACKS: column 8's mute, the selected track's (CY)");
+    {                                                /* 1.4.6: GLOBAL CC 19 RELOADs, at the press only */
+        uint32_t v0;
+        gbtn(19);
+        v0 = par[PAR_FILTER_FREQ_1];
+        par_set(PAR_FILTER_FREQ_1, v0 ^ 16u);
+        gcc(19, 127);
+        check(par[PAR_FILTER_FREQ_1] == v0, "1.4.6: CC 19 reloads the kit as saved");
+        par_set(PAR_FILTER_FREQ_1, v0 ^ 16u);
+        gcc(19, 100);                                /* (still held: no second reload) */
+        check(par[PAR_FILTER_FREQ_1] == (v0 ^ 16u), "1.4.6: CC 19 held: nothing more until let go");
+        gcc(19, 0);
+        gbtn(19);
+    }
     sq.muted = sq.solo = 0;
     /* 0.24.3: Mute/solo TOGGLE: the button's state is the mute's (a controller's toggle buttons) */
     vp_set(VP_RMUTE, 1);

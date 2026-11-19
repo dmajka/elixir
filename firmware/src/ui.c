@@ -3221,6 +3221,20 @@ static uint32_t keys_ndeg(void)                      /* the playing scale's note
     const pattern_t *p = &pat[sq.active];
     return (uint32_t)__builtin_popcount(SCALE_MASK[p->scale < NSCALE ? p->scale : SC_CHROM] & 0xFFFu);
 }
+/* RELOAD (SHIFT + key 13; 1.4.6: the remote's GLOBAL CC 19): the kit and the playing pattern as last saved */
+static void ui_reload(void)
+{
+    if (pat_voices(&pat[sq.active]) == PV_LOCKED)
+        kit_unstash(PV_SLOT(sq.active));             /* (37: a LOCKED pattern's: as last kept) */
+    else
+        kit_load_ram(kit_loaded);
+    sq.pending = sq.active;
+    sq.load_pending = 1;
+    pat_revert = 1;
+    if (!sq.running)
+        seq_pattern_activate();
+    ui_message("RELOADED");
+}
 static int shift_menu(void) { return ui.shift && ui.mode != M_PERF && ui.mode != M_PATTERN && !keys_live(); }   /* (1.0:
                                                       * the pattern page: SHIFT + a pattern deletes it) */
 /* PERF's keys: 1..7 roll their track, 8..16 the effects (perform.c PF_*); SHIFT + a key latches it (again: lets
@@ -3369,18 +3383,7 @@ static void white_down(uint32_t w)
             return;
         case 10: perf_reset(); return;                /* (SHIFT HOME's) */
         case 11: solo_key(); return;                  /* (SHIFT GLO's) */
-        case 12:                                      /* RELOAD: the kit and the pattern as saved */
-            if (pat_voices(&pat[sq.active]) == PV_LOCKED)
-                kit_unstash(PV_SLOT(sq.active));     /* (37: a LOCKED pattern's: as last kept) */
-            else
-                kit_load_ram(kit_loaded);
-            sq.pending = sq.active;
-            sq.load_pending = 1;
-            pat_revert = 1;
-            if (!sq.running)
-                seq_pattern_activate();
-            ui_message("RELOADED");
-            return;
+        case 12: ui_reload(); return;                 /* RELOAD: the kit and the pattern as saved */
         default:                                      /* 1..7: play the voice (at the keys' velocity); 14..16 free */
             if (w < NTRACK)
                 key_note_post(w, tb_note(w), key_vel, 0);

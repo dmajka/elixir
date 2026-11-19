@@ -39,6 +39,8 @@
  *   the step it made on its own (ui.c ca_take); the select buttons 64 .. 70 (and the panel's track keys) leave a track
  *   out or put it back (lit: in). Off: kept, no dialog. 71 reverts the kit to before the last Control All (until a
  *   kit loads), as OCT- does on the panel while it is on.
+ * 1.4.6: GLOBAL CC 19 (RM_RELOAD, a knob's place left free) is a button: RELOAD, as SHIFT + key 13 (the kit and the
+ *   playing pattern as last saved), at the press (a CC above 0 after 0); the release does nothing.
  * Both channels (midi.c): CC 124 the master volume, 125 the morph target, 126 a slot kit, 127 a factory kit.
  * Knobs (CONFIG): PICKUP (a pot acts once it passes the value: nothing jumps), ABS, REL (encoders: 64 +/- n, or
  * two's complement). Under REC a track's knob records a lock on its own track, as a panel knob on the selected one.
@@ -57,6 +59,7 @@ static const uint8_t RM_XK[RM_NXK] = {3, 2, 4, 5, 7, 63, 96, 97, 98, 99, 100, 10
 #define RM_TAP_MS 250u                               /* 1.0: a press shorter than this latches (88 .. 95, 62) */
 #define RM_GB0 48u                                   /* .. its buttons: 48 .. 111 */
 #define RM_NGB 64u
+#define RM_RELOAD 19u                                /* 1.4.6: RELOAD's (RM_GK's 11: VP_NONE) */
 #define RM_ROLL0 112u                                /* 1.0: GLOBAL's rolls a track: 112 .. 119 */
 #define RM_NK (RM_NTK + RM_NGK)                      /* the knobs: TRACKS' then GLOBAL's */
 #define RM_NB (RM_NTB + RM_NGB)                      /* the buttons: the same */
@@ -84,6 +87,7 @@ static const uint8_t RM_PF[16] = {RM_PLAY, RM_REC, PF_FILL, PF_STUT, PF_FREEZE, 
 static const uint8_t RM_FX[8] = {PF_HALF, PF_JITTER, PF_CUTS, PF_SHORT, PF_PUMP, PF_COMB, PF_SPACE, PF_CRUSH};
 
 static struct {
+    uint8_t reload_dn;                               /* (1.4.6: CC 19 last above 0) */
     uint8_t last[RM_NK];                             /* PICKUP: the knob's last value, 0xFF none yet */
     uint8_t sent[RM_NK];                             /* the value sent (or received) last, 0xFF none */
     uint32_t picked[(RM_NK + 31u) / 32u];            /* PICKUP: the knobs that have passed the value */
@@ -357,7 +361,11 @@ static void rm_in(uint32_t ch, uint32_t st, uint32_t d1, uint32_t d2)
     uint32_t nk = glob ? RM_NGK : RM_NTK, b0 = glob ? RM_GB0 : RM_TB0, nb = glob ? RM_NGB : RM_NTB, j;
     for (j = 0; glob && cc && j < RM_NXK && RM_XK[j] != d1; j++)
         ;
-    if (glob && cc && j < RM_NXK) {                  /* (1.0: off the grid; before the buttons: 63, 96 .. 103) */
+    if (glob && cc && d1 == RM_RELOAD) {             /* (1.4.6: at the press only) */
+        if (d2 && !rm.reload_dn)
+            ui_reload();
+        rm.reload_dn = d2 != 0u;
+    } else if (glob && cc && j < RM_NXK) {                  /* (1.0: off the grid; before the buttons: 63, 96 .. 103) */
         rm_knob(RM_NTK + 40u + j, d2);
     } else if (cc && d1 >= RM_CC0 && d1 < RM_CC0 + (glob ? 40u : nk)) {
         rm_knob(d1 - RM_CC0 + (glob ? RM_NTK : 0u), d2);

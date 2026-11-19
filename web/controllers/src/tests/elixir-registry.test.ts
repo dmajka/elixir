@@ -95,9 +95,9 @@ describe('page 5 shared messages and real-time', () => {
   })
 })
 describe('registry contracts', () => {
-  it('contains 309 uniquely identified parameters with complete metadata', () => {
-    expect(PARAMETER_REGISTRY).toHaveLength(309)
-    expect(new Set(PARAMETER_REGISTRY.map(p=>p.id)).size).toBe(309)
+  it('contains 310 uniquely identified parameters with complete metadata', () => {
+    expect(PARAMETER_REGISTRY).toHaveLength(310)
+    expect(new Set(PARAMETER_REGISTRY.map(p=>p.id)).size).toBe(310)
     for(const p of PARAMETER_REGISTRY) {
       expect(p.name && p.shortName && p.category && p.interpretation).toBeTruthy()
       expect(p.documentation.source).toMatch(/^firmware\/src\/(remote|midi)\.c$/)

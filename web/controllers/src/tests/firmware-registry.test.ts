@@ -59,7 +59,7 @@ describe('the registry generated from the firmware', () => {
     expect(again.json().equals(current)).toBe(true)
     const meta = JSON.parse(readFileSync(join(again.out, 'elixir-midi-parameters.meta.json'), 'utf8'))
     const sha = execFileSync('shasum', ['-a', '256', join(again.out, 'elixir-midi-parameters.json')], { encoding: 'utf8' }).split(' ')[0]
-    expect(meta).toMatchObject({ schemaVersion: 1, sha256: sha, parameterCount: 309 })
+    expect(meta).toMatchObject({ schemaVersion: 1, sha256: sha, parameterCount: 310 })
     const doc = parseParameterDocument(JSON.parse(current.toString('utf8')))
     expect(doc.parameters.map(p => p.id)).toEqual([...doc.parameters.map(p => p.id)].sort())   // (sorted by id)
   })

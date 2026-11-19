@@ -30,7 +30,7 @@ TRACK_PARAM = {                                      # tracks.<track>.<key>: two
     "density": "Dn", "mute": "Mu", "solo": "So"}
 CENTERED = {"pan", "density"}                        # (64 is their middle: the default)
 GLOBAL_ABBR = {                                      # global.<key>: what words alone can't make readable in four
-    "lfo-1-depth": "LFO1", "lfo-2-depth": "LFO2", "lfo-3-depth": "LFO3", "lfo-4-depth": "LFO4",
+    "reload": "Rlod", "lfo-1-depth": "LFO1", "lfo-2-depth": "LFO2", "lfo-3-depth": "LFO3", "lfo-4-depth": "LFO4",
     "ring.wet": "RgWt", "ring.slope": "RgSl", "ring.tone": "RgTn", "ring.tune": "RgTu", "ring.spread": "RgSp",
     "tempo": "Tmpo", "shuffle": "Shuf", "morph": "Mrph", "sample-rate": "SRat", "master-filter": "MFlt",
     "filter-resonance": "MRes", "roll-rate": "RlRt", "repeat": "Rept", "tape-time": "TpTm", "fx-wet": "FxWt",
