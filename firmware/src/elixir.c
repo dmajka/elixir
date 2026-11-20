@@ -46,8 +46,11 @@
 #include "fm1_lcd_hw.h"
 #define RING_PUBLISH() __asm__ volatile("" ::: "memory")
 #define POOL __attribute__((section(".pool")))
-#define RAMHOT __attribute__((section(".ram_hot"), noinline))   /* 1.0: control code run from RAM (app.ld) */
-#define RAMBUF __attribute__((section(".ram_buf")))   /* 18a: zeroed, in RAMTEXT after the RAM code (app.ld) */
+/* RAMHOT marks a function to run from RAM (app.ld HOTCODE's .ram_hot) in an ELIXIR_RAMHOT=1 build (2026-11-21
+ * Phase 1, a test). Only a marker: tools/build.py moves the function's .text.<name> by a partial link, so its code is
+ * the same as in flash. (A section attribute changes the code: the JieLi clang never inlines across sections.) */
+#define RAMHOT
+#define RAMBUF __attribute__((section(".ram_buf")))   /* 18a: zeroed, in RAMTEXT (app.ld: buffers only) */
 #define NOINITBUF __attribute__((section(".noinit_buf")))   /* 1.0: zeroed at every start, in NOINIT past its records */
 static volatile uint32_t fm1_ms;        /* milliseconds since boot (TIMER5) */
 #define BOOTGUARD_MAGIC 0x42475245u     /* (0.15: c2 added) */

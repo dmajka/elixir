@@ -1518,7 +1518,7 @@ static const uint16_t TRACK_DECAY[NTRACK] = {PAR_VELOD1, PAR_VELOD2, PAR_VELOD3,
                                              PAR_VELOD6_CLOSED, PAR_VELOD6_OPEN};
 static void bounce_start(uint32_t t, uint32_t r, uint32_t s, uint32_t vel, uint32_t note, uint32_t occ);
 static uint32_t seq_rand(void);
-static void step_hit(uint32_t t, const pattern_t *p, uint32_t s, uint32_t loop, const lmod_t *m)
+static RAMHOT void step_hit(uint32_t t, const pattern_t *p, uint32_t s, uint32_t loop, const lmod_t *m)
 {
     uint32_t r = p->rat[t][s], n, vel = p->step[t][s].volume & STEP_VOLUME_MASK, note = snote(p, t, s);
     uint32_t occ = (loop << 6 | s) + 1u, ln = step_len(p, t, s);
@@ -2655,7 +2655,7 @@ static void seq_track_step(uint32_t t)
 /* the position a tick on: the pattern's end, the steps that start; play: what sounds on it */
 /* 1.0: TIME STRETCH: a tick of the clock moves each track by its speed (sq.trate): 0, 1 or 2 of its own ticks, a
  * pass each (at 100%, the one as before) */
-static void seq_advance(int play)
+static RAMHOT void seq_advance(int play)
 {
     uint32_t t, k, pt = pat_ticks(), mk[2] = {0, 0};
     if (sq.ptick >= pt)

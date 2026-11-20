@@ -361,7 +361,7 @@ static uint32_t pick(uint32_t itg, uint32_t q16, int mod, uint32_t n)
 #define MOD_DEC_MAX 120u                             /* (an amp decay of 120: ~25 s) */
 /* midiParser_ccHandler: the parameter p at the value itg (0..127, its menu index, ..) / q16 (0..1, Q16);
  * mod: a modulator's value (the LXR's isFloatModulator) */
-static void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
+static RAMHOT void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
 {
     int32_t f = (int32_t)(q16 > 65536u ? 65536u : q16);
     uint32_t i;
