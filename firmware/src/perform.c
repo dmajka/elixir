@@ -210,7 +210,9 @@ static struct {                                      /* the project's (KGL1) */
 #define NGLKGL 7u                                    /* (KGL1: 0.13's bytes of each, then 1.0's RATE) */
 #define NGLSET 8u                                    /* (the settings of each: the pages' knobs) */
 #define GL_RATE_INC 62333u                           /* (0.01 Hz: 2^32 x BLOCK / FS / 100) */
-static uint32_t gl_rate_inc(uint32_t r)              /* RATE's step a block: 0.01 Hz x 2^(11 r / 127) */
+/* RATE's step a block: 0.01 Hz x 2^(11 r / 127). Phase 4: this, CHAOS's and FOLLOW's helpers out of line, in flash
+ * (perf_block runs from RAM; these are rare) */
+static __attribute__((noinline)) uint32_t gl_rate_inc(uint32_t r)
 {
     return (uint32_t)(((uint64_t)GL_RATE_INC * (uint32_t)exp2_q16((int32_t)((r & 127u) * 11u * 65536u / 127u))) >> 16);
 }
@@ -288,7 +290,7 @@ static int32_t gf_rel(uint32_t r)
 }
 /* .. a block: the source's last peak over the threshold, x 2 (full from 6 dB under the top), at once up, down by
  * RELEASE. Its value 0 .. 65536 */
-static int32_t gf_step(uint32_t n)
+static __attribute__((noinline)) int32_t gf_step(uint32_t n)
 {
     uint32_t s = gls[n].trig, i;
     int32_t pk = 0, t = gf_thr(gls[n].phase), x, f = gl.fol[n];
@@ -305,14 +307,14 @@ static int32_t gf_step(uint32_t n)
 }
 
 /* 1.4: CHAOS: back to its seed (near the attractor: chaotic from the start) */
-static void gc_seed(uint32_t n)
+static __attribute__((noinline)) void gc_seed(uint32_t n)
 {
     gl.cz[n][0] = -6 * 65536;
     gl.cz[n][1] = -8 * 65536;
     gl.cz[n][2] = 24 * 65536;
 }
 /* .. a block of inc (the LFO's phase step, 2^32 a cycle): Euler steps of at most 0.005, its value 0 .. 65536 */
-static int32_t gc_step(uint32_t n, uint32_t inc)
+static __attribute__((noinline)) int32_t gc_step(uint32_t n, uint32_t inc)
 {
     int32_t *c = gl.cz[n], x = c[0], y = c[1], z = c[2], dt, k, ns;
     const int32_t rho = 40 * 65536 - (int32_t)((gls[n].phase & 127u) * (30u * 65536u) / 127u);
@@ -454,8 +456,35 @@ static void wear_block(uint32_t on)
                                        : decim_rate[NVOICE];
 }
 
+/* Phase 4 (2026-11-21): perf_block runs from RAM; its branches for a held key (PUMP's envelope, TAPE STOP's slowing)
+ * stay in flash, out of line (rare: RAM kept for what runs every block) */
+static __attribute__((noinline)) void pump_on(uint32_t a)   /* PUMP on: D1's hit down in 2 blocks, back over an 8th */
+{
+    if (trig_count[0] != pf.pump_seen)
+        pf.pump_up = 1;
+    if (pf.pump_up) {
+        pf.pump_env += 16384;
+        if (pf.pump_env >= 32767) {
+            pf.pump_env = 32767;
+            pf.pump_up = 0;
+        }
+    } else {
+        pf.pump_env -= (int32_t)(32767u * BLOCK / (48u * (sq.tick_q16 >> 16) + 1u)) + 1;
+        if (pf.pump_env < 0)
+            pf.pump_env = 0;
+    }
+    pump_g1 = 32768 - ((pf.pump_env * pf.pump_env) >> 15) * (int32_t)(pfs.pump * (a >> 4) >> 12) / 127;
+}
+static __attribute__((noinline)) void tape_stop_on(void)   /* TAPE STOP: linear in speed over its time (T ms) */
+{
+    int32_t t_ms = (int32_t)(((int64_t)200 * exp2_q16(pfs.tape * 2232)) >> 16);   /* 200 x 20^(t / 127) */
+    int32_t step = (int32_t)(95109 / (uint32_t)(t_ms > 1 ? t_ms : 1));   /* 65536 x BLOCK / FS per ms */
+    tape_q16 = tape_q16 > (uint32_t)step ? tape_q16 - (uint32_t)step : 0u;
+}
+
 /* the audio ISR, a block's start: the held effects into the engine */
-static void perf_block(void)
+static void perf_block(void) __attribute__((noinline));   /* (RAMHOT apart from engine_block: once a block) */
+static RAMHOT void perf_block(void)
 {
     uint32_t on = pf.on, v, a;
     int32_t target, step;
@@ -489,20 +518,7 @@ static void perf_block(void)
     pump_g0 = pump_g1;                               /* PUMP: D1's hit: down in 2 blocks, back over an 8th */
     a = pf_amount(on, PF_PUMP, GD_PUMP);
     if (a) {
-        if (trig_count[0] != pf.pump_seen)
-            pf.pump_up = 1;
-        if (pf.pump_up) {
-            pf.pump_env += 16384;
-            if (pf.pump_env >= 32767) {
-                pf.pump_env = 32767;
-                pf.pump_up = 0;
-            }
-        } else {
-            pf.pump_env -= (int32_t)(32767u * BLOCK / (48u * (sq.tick_q16 >> 16) + 1u)) + 1;
-            if (pf.pump_env < 0)
-                pf.pump_env = 0;
-        }
-        pump_g1 = 32768 - ((pf.pump_env * pf.pump_env) >> 15) * (int32_t)(pfs.pump * (a >> 4) >> 12) / 127;
+        pump_on(a);
     } else {
         pf.pump_env = 0;
         pump_g1 = pump_g1 + 2048 < 32768 ? pump_g1 + 2048 : 32768;
@@ -517,10 +533,8 @@ static void perf_block(void)
         vc[v].throw_rev = (uint8_t)(v == pf.throw_v && ((on >> PF_THROW_R) & 1u));
         vc[v].throw_fx = (uint8_t)(v == pf.throw_v && ((on >> PF_THROW_F) & 1u));
     }
-    if ((on >> PF_TAPE) & 1u) {                      /* TAPE STOP: linear in speed over its time (T ms) */
-        int32_t t_ms = (int32_t)(((int64_t)200 * exp2_q16(pfs.tape * 2232)) >> 16);   /* 200 x 20^(t / 127) */
-        step = (int32_t)(95109 / (uint32_t)(t_ms > 1 ? t_ms : 1));   /* 65536 x BLOCK / FS per ms */
-        tape_q16 = tape_q16 > (uint32_t)step ? tape_q16 - (uint32_t)step : 0u;
+    if ((on >> PF_TAPE) & 1u) {
+        tape_stop_on();
     } else if (tape_q16 < 65536u) {
         tape_q16 = tape_q16 + 380u < 65536u ? tape_q16 + 380u : 65536u;   /* (back in 0.25 s) */
     }
