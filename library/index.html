@@ -3,6 +3,7 @@
      Elixir's library page (0.7): back up and restore the FM-1's projects, import LXR-02 kits (.SND), export kits.
      0.8: the kit library (back up, restore, kits into it), LXR-02 projects (kits, patterns, songs).
      0.24: the MIDI CC map.
+     1.5: a row per project slot (download, upload, save here, load), the sections' bar (#projects …), regrouped.
      Talks to firmware/src/library.c over Web MIDI SysEx (web/library.js). web/make_site.py puts it at library/. -->
 <html lang="en">
 <head>
@@ -14,156 +15,235 @@
 <style>
   main { padding-top: 40px; padding-bottom: 16px; }
   h1 { font-size: 32px; font-weight: 650; margin: 0 0 8px; }
-  h2 { font-size: 19px; font-weight: 600; margin: 40px 0 10px; padding-top: 24px; border-top: 1px solid var(--line); }
-  h3 { font-size: 15px; font-weight: 600; margin: 20px 0 6px; }
+  h2 { font-size: 22px; font-weight: 650; margin: 48px 0 10px; padding-top: 24px; border-top: 1px solid var(--line);
+       scroll-margin-top: 56px; }
+  h3 { font-size: 16px; font-weight: 600; margin: 28px 0 6px; scroll-margin-top: 56px; }
   p { margin: 0 0 14px; }
+  ul { padding-left: 1.2em; }
+  li { margin-bottom: 6px; }
   button.alt { padding: 5px 12px; font-size: 14px; }
   select, input[type=number] { font: inherit; font-size: 14px; }
   input[type=file] { font-size: 14px; max-width: 100%; }
   table { width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 14px; }
-  td, th { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+  td, th { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); vertical-align: middle; }
   th { font-weight: 600; color: var(--dim); }
   .kits { columns: 4 120px; font-size: 13px; margin: 0 0 14px; padding: 0; list-style: none; }
-  .kits li { break-inside: avoid; }
+  .kits li { break-inside: avoid; margin: 0; }
   .kits a { text-decoration: none; }
   .kits .n { color: var(--dim); display: inline-block; width: 2em; }
   #status { min-height: 1.6em; font-weight: 600; }
   progress { width: 100%; height: 8px; display: block; accent-color: var(--accent-fill); margin: 8px 0; }
+  progress[hidden] { display: none; }
   .off { opacity: .35; pointer-events: none; }
   label { margin-right: 12px; white-space: nowrap; }
-  #ccmap td { padding: 3px 4px; vertical-align: middle; }
+  label:has(input[type=file]) { white-space: normal; }
+
+  /* the sections' bar: stays at the top while the page scrolls */
+  nav.toc { position: sticky; top: var(--head-h); z-index: 2; background: var(--bg); border-bottom: 1px solid var(--line);
+            margin: 24px -16px 0; padding: 8px 16px; display: flex; gap: 4px 18px; flex-wrap: wrap; font-size: 14px; }
+  nav.toc a { color: var(--dim); text-decoration: none; padding: 2px 0; }
+  nav.toc a:hover { color: var(--fg); }
+  nav.toc + h2 { border-top: 0; margin-top: 24px; }
+  nav.toc a.here { color: var(--fg); box-shadow: inset 0 -2px var(--accent-fill); }
+
+  /* the project slots */
+  #slots td:first-child { white-space: nowrap; width: 1%; padding-right: 12px; }
+  #slots .size { color: var(--dim); font-size: 13px; display: block; }
+  #slots .acts { text-align: right; }
+  #slots .acts button { margin: 2px 0 2px 4px; }
+  #slots tr.playing td:first-child { font-weight: 700; }
+  @media (max-width: 560px) {
+    #slots tr { display: grid; grid-template-columns: auto 1fr; border-bottom: 1px solid var(--line); padding: 4px 0; }
+    #slots td { border: 0; }
+    #slots .acts { grid-column: 1 / -1; text-align: left; padding-top: 0; }
+    #slots .acts button { margin: 2px 4px 2px 0; }
+    #slothead { display: none; }
+  }
+
+  #ccmap td { padding: 3px 4px; }
   #ccmap td:first-child { width: 3em; font-variant-numeric: tabular-nums; }
   #ccmap td:nth-child(2) { color: var(--dim); }
   #ccmap input { width: 100%; box-sizing: border-box; font: inherit; font-size: 14px; padding: 3px 6px; }
   #ccmap tr.changed td:first-child { font-weight: 700; }
-  #ccmap input.bad { outline: 2px solid #c33; }
+  #ccmap input.bad { outline: 2px solid var(--warn); }
   .ccwrap { max-height: 32em; overflow-y: auto; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
   @media (max-width: 560px) { #ccmap td:nth-child(2) { display: none; } }
 </style>
 </head>
 <body>
-<header class="site"><div class="wrap"><a class="brand" href="../"><svg class="pixel" viewBox="4 0 14 18" aria-hidden="true"><path class="px-c" d="M9 0h4v1h-4zM9 1h4v1h-4z"/><path class="px-o" d="M8 2h6v1h-6zM9 3h1v1h-1zM12 3h1v1h-1zM9 4h1v1h-1zM12 4h1v1h-1zM9 5h1v1h-1zM12 5h1v1h-1zM8 6h1v1h-1zM13 6h1v1h-1zM7 7h1v1h-1zM14 7h1v1h-1zM6 8h1v1h-1zM15 8h1v1h-1zM5 9h1v1h-1zM16 9h1v1h-1zM4 10h1v1h-1zM17 10h1v1h-1zM4 11h1v1h-1zM17 11h1v1h-1zM4 12h1v1h-1zM17 12h1v1h-1zM4 13h1v1h-1zM17 13h1v1h-1zM4 14h1v1h-1zM17 14h1v1h-1zM5 15h1v1h-1zM16 15h1v1h-1zM6 16h1v1h-1zM15 16h1v1h-1zM7 17h8v1h-8z"/><path class="px-h" d="M10 3h1v1h-1zM10 4h1v1h-1zM7 10h1v1h-1zM6 11h1v1h-1zM6 12h1v1h-1zM6 13h1v1h-1z"/><path class="px-g" d="M11 3h1v1h-1zM11 4h1v1h-1zM10 5h2v1h-2zM9 6h4v1h-4zM8 7h6v1h-6zM7 8h8v1h-8z"/><path class="px-L" d="M6 9h10v1h-10zM14 11h1v1h-1zM11 13h1v1h-1zM15 14h1v1h-1z"/><path class="px-l" d="M5 10h2v1h-2zM8 10h9v1h-9zM5 11h1v1h-1zM7 11h7v1h-7zM15 11h2v1h-2zM5 12h1v1h-1zM7 12h10v1h-10zM5 13h1v1h-1zM7 13h4v1h-4zM12 13h5v1h-5zM5 14h10v1h-10zM16 14h1v1h-1zM6 15h1v1h-1z"/><path class="px-d" d="M7 15h9v1h-9zM7 16h8v1h-8z"/></svg>Elixir</a><nav><a href="../try/">Try it</a><a href="../install/">Install</a><a href="../manual/">Manual</a><a href="../cheatsheet.pdf">Cheat sheet</a><a href="../library/" aria-current="page">Library</a><a href="../controllers/">Controllers<span class="beta">beta</span></a><a href="https://github.com/dmajka/elixir">Source</a></nav></div></header>
+<header class="site"><div class="wrap"><a class="brand" href="../"><svg class="pixel" viewBox="4 0 14 18" aria-hidden="true"><path class="px-c" d="M9 0h4v1h-4zM9 1h4v1h-4z"/><path class="px-o" d="M8 2h6v1h-6zM9 3h1v1h-1zM12 3h1v1h-1zM9 4h1v1h-1zM12 4h1v1h-1zM9 5h1v1h-1zM12 5h1v1h-1zM8 6h1v1h-1zM13 6h1v1h-1zM7 7h1v1h-1zM14 7h1v1h-1zM6 8h1v1h-1zM15 8h1v1h-1zM5 9h1v1h-1zM16 9h1v1h-1zM4 10h1v1h-1zM17 10h1v1h-1zM4 11h1v1h-1zM17 11h1v1h-1zM4 12h1v1h-1zM17 12h1v1h-1zM4 13h1v1h-1zM17 13h1v1h-1zM4 14h1v1h-1zM17 14h1v1h-1zM5 15h1v1h-1zM16 15h1v1h-1zM6 16h1v1h-1zM15 16h1v1h-1zM7 17h8v1h-8z"/><path class="px-h" d="M10 3h1v1h-1zM10 4h1v1h-1zM7 10h1v1h-1zM6 11h1v1h-1zM6 12h1v1h-1zM6 13h1v1h-1z"/><path class="px-g" d="M11 3h1v1h-1zM11 4h1v1h-1zM10 5h2v1h-2zM9 6h4v1h-4zM8 7h6v1h-6zM7 8h8v1h-8z"/><path class="px-L" d="M6 9h10v1h-10zM14 11h1v1h-1zM11 13h1v1h-1zM15 14h1v1h-1z"/><path class="px-l" d="M5 10h2v1h-2zM8 10h9v1h-9zM5 11h1v1h-1zM7 11h7v1h-7zM15 11h2v1h-2zM5 12h1v1h-1zM7 12h10v1h-10zM5 13h1v1h-1zM7 13h4v1h-4zM12 13h5v1h-5zM5 14h10v1h-10zM16 14h1v1h-1zM6 15h1v1h-1z"/><path class="px-d" d="M7 15h9v1h-9zM7 16h8v1h-8z"/></svg>Elixir</a><button class="menu" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu"><svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button><nav id="site-nav"><a href="../try/">Try it</a><a href="../install/">Install</a><a href="../quickstart/">Quick start</a><a href="../manual/">Manual</a><a href="../library/" aria-current="page">Library</a><a href="../controllers/">Controllers<span class="beta">beta</span></a><a class="gh" href="https://github.com/dmajka/elixir" title="Source on GitHub"><svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span>Source on GitHub</span></a></nav></div></header><script>
+(() => {
+  const h = document.currentScript.previousElementSibling, b = h.querySelector(".menu");
+  const set = (on) => { h.classList.toggle("open", on); b.setAttribute("aria-expanded", on); };
+  b.addEventListener("click", () => set(!h.classList.contains("open")));
+  h.querySelector("nav").addEventListener("click", (e) => { if (e.target.closest("a")) set(false); });
+  document.addEventListener("click", (e) => { if (!h.contains(e.target)) set(false); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && h.classList.contains("open")) { set(false); b.focus(); } });
+})();
+</script>
 <main class="wrap narrow">
   <h1>Elixir library</h1>
-  <p>Back up what's on your FM-1, put it back, and bring in kits from an LXR-02.</p>
-  <p class="small">Chrome or Edge (Web MIDI). Elixir on the FM-1 (or Kettle 0.7 or later, its former name),
-    connected with a USB data cable. Close other apps that use MIDI and allow MIDI (SysEx) when the browser asks.</p>
+  <p>Back up the projects and kits on your FM-1, put them back, move projects between slots, and bring in kits and
+    projects from an LXR-02.</p>
+  <p class="small">You need Chrome or Edge (for Web MIDI), and Elixir on the FM-1 (or Kettle 0.7 or later, its former
+    name) connected with a USB data cable. Close other apps that use MIDI, and allow MIDI (SysEx) when the browser
+    asks.</p>
   <p><button id="connect">Connect to Elixir</button></p>
-  <p id="status"></p>
+  <p id="status" role="status"></p>
   <progress id="bar" max="1" value="0" hidden></progress>
 
-  <div id="dev" class="off">
-  <h2>Projects on the FM-1</h2>
-  <table><thead><tr><th>Slot</th><th>Name</th><th>Size</th><th></th></tr></thead><tbody id="slots"></tbody></table>
+  <nav class="toc" aria-label="On this page">
+    <a href="#projects">Projects</a>
+    <a href="#backup">Back up &amp; restore</a>
+    <a href="#kits">Kits</a>
+    <a href="#kit-library">Kit library</a>
+    <a href="#kit-slots">Kit slots</a>
+    <a href="#lxr-project">LXR-02 projects</a>
+    <a href="#cc-map">CC map</a>
+  </nav>
 
-  <h2>Back up</h2>
-  <p>Saves every project, and the session, to one file on this computer. Do this before installing other firmware
-    (V15 or another): Elixir's own updates keep your projects, other firmware may not.</p>
-  <p><label><input type="checkbox" id="savefirst" checked> first save what's on the unit now into the session slot</label></p>
-  <p><button id="backup">Back up everything</button></p>
-
-  <h2>Restore</h2>
-  <p>Puts a backup (or one project's file) back. The project that was in the slot before stays until the restore is
-    complete, so an interrupted restore loses nothing.</p>
-  <p><label>Into <select id="into">
-      <option value="same">the slots they came from</option>
-      <option value="0">Project 1</option><option value="1">Project 2</option>
-      <option value="2">Project 3</option><option value="3">Project 4</option>
-      <option value="4">the session (AUTO)</option></select></label>
-    <label><input type="checkbox" id="loadafter" checked> then load it</label></p>
-  <p><input type="file" id="restore" accept=".ktbk,.ktp"></p>
-
-  <h2>Kit slots or the kit library?</h2>
-  <p>Elixir keeps your kits in two places, both in the FM-1's flash. A third set, the LXR-02's 85 factory kits, is
-    built into Elixir itself (from 0.19, with Erica Synths' permission): it takes none of this space and is always
-    there.</p>
-  <ul>
-    <li><b>The kit slots</b> (64) belong to the project, like the LXR-02's. Patterns name their kit by slot number
-      (a pattern whose Voices are KIT loads its kit), and the slots are saved with the project
-      (SAVE → PROJECT, or AUTOSAVE's session). Loading another project brings its own 64 kits. Put a project's
-      working kits here.</li>
-    <li><b>The kit library</b> (128 kits, and 128 single sounds) is a collection of its own, written to flash at once
-      and left as it is whatever project you load. Put kits you want in every project here, such as your favorites
-      or Hrtl's kit packs (below). On the FM-1, turn <b>PRESETS</b> for the kit browser: it lists the factory kits
-      (F1 …), then the library's (L1 …), then the slots; <b>KNOB 1</b> jumps between them and <b>OCT+</b> loads
-      one. (CONFIG → BUTTONS &amp; KITS, Kits first, puts the slots first.) A library kit can also be the <b>morph target</b> (LOAD → MORPH, From
-      LIBRARY), and the sound browser on a track's sound pages offers single voices from its kits. To use a library
-      kit with a pattern, load it and save it into a slot (SAVE → KIT, To SLOTS).</li>
+  <!-- ===================================================================================== projects -->
+  <h2 id="projects">Projects</h2>
+  <p>The FM-1's four project slots and the session (what AUTOSAVE keeps). A dot marks the project that's playing.</p>
+  <div class="dev off">
+  <table><thead id="slothead"><tr><th>Slot</th><th>Project</th><th></th></tr></thead><tbody id="slots"></tbody></table>
+  <ul class="small">
+    <li><b>Download</b> saves the slot's project to this computer as a <code>.ktp</code> file.</li>
+    <li><b>Upload</b> puts a <code>.ktp</code> file (or one project from a backup) into the slot. What was there
+      stays until the upload is complete, so an interrupted upload loses nothing.</li>
+    <li><b>Save here</b> saves what's playing on the FM-1 into the slot, as SAVE → PROJECT does.</li>
+    <li><b>Load</b> loads the slot on the FM-1, replacing what's playing.</li>
   </ul>
-  <p class="small">Picking a folder below takes the .SND files in it <b>and in all its subfolders</b>, nothing else:
-    one project's folder (PROJ00 …), or an SD card's top folder for every project's kits, project by project. Chrome
-    asks to "upload" the folder's files: the page only reads them here and sends the kits to your FM-1, nothing else
-    leaves this computer. An LXR voice routed to the FX bus comes in as FX SEND 127 (the same sound); Elixir's own
-    settings (sends, reverb, shaping, models) start at their defaults.</p>
+  <p><label><input type="checkbox" id="uploadload" checked> load a project after uploading it</label></p>
+  <input type="file" id="slotfile" accept=".ktp,.ktbk" hidden>
+  </div>
 
-  <h2>Kit library</h2>
-  <h3>Import LXR-02 kits into the library</h3>
-  <p>Up to 128 kits, from the library kit you choose on; the rest are left out (the page says how many). The LXR-02's
-    factory kits are already built into Elixir, so there is no need to import them.</p>
-  <p><label>From library kit <input type="number" id="libfirst" min="1" max="128" value="1" style="width:4em"></label>
-    <label><input type="checkbox" id="libskip" checked> leave out Init/empty kits</label></p>
-  <p><label>Kit files <input type="file" id="libsndfiles" accept=".snd,.SND" multiple></label></p>
-  <p><label>A folder <input type="file" id="libsnddir" webkitdirectory></label></p>
-  <h3>Hrtl kit packs</h3>
-  <p>Two sets of 16 kits by Hrtl for the LXR-02, distributed with Erica Synths' permission. They go into the
-    library's first empty slots (L1 on, near the top of the kit browser's LIBRARY): a kit you keep there stays.</p>
-  <p><label><input type="checkbox" id="pack-hrtl-dlc" checked> Hrtl DLC kits</label>
-    <label><input type="checkbox" id="pack-hrtl-untz" checked> Hrtl UNTZ kits</label></p>
-  <p class="small">Both packs take about a quarter of the kit library's flash (each about 12%), leaving the rest for
-    your own kits and sounds. You can save your own kits over them at any time.</p>
-  <p><button id="packs">Add to the kit library</button></p>
+  <h2 id="backup">Back up &amp; restore</h2>
+  <div class="dev off">
+  <h3>Back up everything</h3>
+  <p>Saves every project, and the session, to one <code>.ktbk</code> file. Do this before installing other firmware
+    (V15 or another): Elixir's own updates keep your projects, other firmware may not. The kit library has a
+    <a href="#kit-library">backup of its own</a>.</p>
+  <p><label><input type="checkbox" id="savefirst" checked> first save what's playing into the session</label></p>
+  <p><button id="backup-all">Back up everything</button></p>
+  <h3>Restore a backup</h3>
+  <p>Puts every project in a <code>.ktbk</code> file back into the slot it came from. To put one project into a
+    different slot, use its slot's Upload above.</p>
+  <p><label><input type="checkbox" id="loadafter" checked> then load the first one</label></p>
+  <p><input type="file" id="restore" accept=".ktbk,.ktp"></p>
+  </div>
+
+  <!-- ========================================================================================= kits -->
+  <h2 id="kits">Kits: slots or library?</h2>
+  <p>Elixir keeps your kits in two places in the FM-1's flash. A third set, the LXR-02's 85 factory kits, is built
+    into Elixir itself (from 0.19, with Erica Synths' permission): it takes none of this space and is always there.</p>
+  <ul>
+    <li><b>The kit slots</b> (64) belong to the project, as on the LXR-02. A pattern names its kit by slot number (a
+      pattern whose Voices are KIT loads its kit), and the slots are saved with the project (SAVE → PROJECT, or
+      AUTOSAVE's session). Loading another project brings its own 64 kits. Keep a project's working kits here.</li>
+    <li><b>The kit library</b> (128 kits and 128 single sounds) is a collection of its own: written to flash at once,
+      and left as it is whichever project you load. Keep kits you want in every project here, such as your favorites
+      or Hrtl's kit packs. A library kit can also be the <b>morph target</b> (LOAD → MORPH, From LIBRARY), and the
+      sound browser on a track's sound pages offers single voices from its kits. To use a library kit with a pattern,
+      load it and save it into a slot (SAVE → KIT, To SLOTS).</li>
+  </ul>
+  <p>On the FM-1, turn <b>PRESETS</b> for the kit browser: it lists the factory kits (F1 …), then the library's
+    (L1 …), then the slots. <b>KNOB 1</b> jumps between them and <b>OCT+</b> loads one. (CONFIG → BUTTONS &amp;
+    KITS, Kits first, puts the slots first.)</p>
+  <p class="small"><b>Importing LXR-02 kits:</b> picking a folder takes the .SND files in it <b>and in all its
+    subfolders</b>, nothing else: one project's folder (PROJ00 …), or an SD card's top folder for every project's
+    kits, project by project. Chrome asks to "upload" the folder's files, but the page only reads them here and sends
+    the kits to your FM-1: nothing leaves this computer. An LXR voice routed to the FX bus comes in as FX SEND 127
+    (the same sound); Elixir's own settings (sends, reverb, shaping, models) start at their defaults.</p>
+
+  <h2 id="kit-library">Kit library</h2>
+  <div class="dev off">
   <h3>In the library</h3>
-  <p>On the FM-1, SAVE → KIT or MORPH with To LIBRARY saves into it, SAVE → SOUND a single sound. Click a kit to
-    download it as an LXR-02 .SND file. Back the library up before installing other firmware; a backup restores onto
-    any Elixir, the emulator's too.</p>
+  <p>On the FM-1, SAVE → KIT or MORPH with To LIBRARY saves a kit into it, SAVE → SOUND a single sound. Click a kit
+    to download it as an LXR-02 .SND file. Back the library up before installing other firmware; a backup restores
+    onto any Elixir, the emulator's too.</p>
   <p id="libsum" class="small"></p>
   <ul class="kits" id="libkits"></ul>
   <p><button id="libbackup">Back up the kit library</button></p>
   <p><label>Restore <input type="file" id="librestore" accept=".ktlb"></label></p>
+
+  <h3>Hrtl kit packs</h3>
+  <p>Two sets of 16 kits by Hrtl for the LXR-02, distributed with Erica Synths' permission. They go into the
+    library's first empty slots (from L1, near the top of the kit browser's LIBRARY): a kit already there stays.</p>
+  <p><label><input type="checkbox" id="pack-hrtl-dlc" checked> Hrtl DLC kits</label>
+    <label><input type="checkbox" id="pack-hrtl-untz" checked> Hrtl UNTZ kits</label></p>
+  <p class="small">Each pack takes about 12% of the kit library's flash, leaving the rest for your own kits and
+    sounds. You can save your own kits over them at any time.</p>
+  <p><button id="packs">Add to the kit library</button></p>
+
+  <h3>Import LXR-02 kits into the library</h3>
+  <p>Up to 128 kits, starting at the library kit you choose; any that don't fit are left out (the page says how
+    many). The LXR-02's factory kits are already built into Elixir, so there's no need to import them.</p>
+  <p><label>From library kit <input type="number" id="libfirst" min="1" max="128" value="1" style="width:4em"></label>
+    <label><input type="checkbox" id="libskip" checked> leave out Init/empty kits</label></p>
+  <p><label>Kit files <input type="file" id="libsndfiles" accept=".snd,.SND" multiple></label></p>
+  <p><label>A folder <input type="file" id="libsnddir" webkitdirectory></label></p>
+  </div>
+
+  <h3 id="phone-link">Experimental: a phone emulator link into a kit</h3>
+  <p>Paste a link (or its text) from the phone emulator's Share. Its kit (the sound as it played, under its name)
+    goes into a kit library slot on the connected FM-1, or downloads as a .ktlb for the library's Restore above.
+    Only the kit comes across, not the pattern or WANDER. Check the kit after loading it.</p>
+  <p><textarea id="shktext" rows="3" style="width:100%" placeholder="https://dmajka.github.io/elixir/try/mobile.html#p=..."></textarea></p>
+  <p><label>Library slot <input type="number" id="shkslot" min="1" max="128" value="128" style="width:4em"></label>
+    <button id="shkput">Put it in the library</button> <button class="alt" id="shkdl">Download as .ktlb</button></p>
+
+  <div class="dev off">
   <h3>Empty the kit library</h3>
-  <p>Deletes every kit and sound in the library, for a clean start: installing V15 or updating Elixir doesn't clear
-    it. The factory kits are built into Elixir and stay; the kit slots and projects aren't touched.</p>
+  <p>Deletes every kit and sound in the library, for a clean start: neither installing V15 nor updating Elixir
+    clears it. The factory kits are built into Elixir and stay; the kit slots and projects aren't touched.</p>
   <p><label><input type="checkbox" id="libbackfirst" checked> back it up first (downloads a .ktlb)</label></p>
   <p><button class="alt" id="libempty">Empty the kit library</button></p>
+  </div>
 
-  <h2>Kit slots</h2>
+  <h2 id="kit-slots">Kit slots</h2>
+  <div class="dev off">
+  <h3>The slots on the FM-1</h3>
+  <p>The playing project's 64 kits. Click one to download it as an LXR-02 .SND file (the LXR's parameters only:
+    Elixir's own aren't in that format).</p>
+  <ul class="kits" id="kitlist"></ul>
   <h3>Import LXR-02 kits into the slots</h3>
-  <p>Up to 64 kits, from the slot you choose on, into the project that's playing. They replace the kits there until you
-    load a project: save the project on the FM-1 (SAVE → PROJECT), or let AUTOSAVE keep them.</p>
+  <p>Up to 64 kits, starting at the slot you choose, into the project that's playing. They replace the kits there;
+    to keep them, save the project on the FM-1 (SAVE → PROJECT) or let AUTOSAVE keep them before you load another.</p>
   <p><label>From slot <input type="number" id="first" min="1" max="64" value="1" style="width:4em"></label>
     <label><input type="checkbox" id="skipinit" checked> leave out Init/empty kits</label>
     <label><input type="checkbox" id="loadfirst" checked> load the first</label></p>
   <p><label>Kit files <input type="file" id="sndfiles" accept=".snd,.SND" multiple></label></p>
   <p><label>A folder <input type="file" id="snddir" webkitdirectory></label></p>
-  <h3>Import an LXR-02 project</h3>
-  <p>Pick one project folder from an LXR-02 SD card (PROJ00 …), not the whole card: its kits go into the kit slots by
-    their numbers (so each pattern still finds its kit), its patterns into Elixir's patterns, its songs into the songs.
-    It replaces what's playing; save the project on the FM-1 afterwards. Elixir has 32 patterns to the LXR's 64: pick
-    which half.</p>
+  </div>
+
+  <h2 id="lxr-project">Import an LXR-02 project</h2>
+  <div class="dev off">
+  <p>Pick one project folder from an LXR-02 SD card (PROJ00 …), not the whole card. Its kits go into the kit slots by
+    number (so each pattern still finds its kit), its patterns into Elixir's patterns and its songs into the songs.
+    It replaces what's playing: save the project on the FM-1 afterwards. Elixir has 32 patterns to the LXR's 64, so
+    pick which half.</p>
   <p><label>Patterns <select id="lxrhalf"><option value="0">1–32</option><option value="32">33–64</option></select></label></p>
   <p><label>A project folder <input type="file" id="lxrdir" webkitdirectory></label></p>
-  <p class="small">A song's steps on a pattern from the other half play pattern 32 instead.</p>
-  <h3>The slots on the FM-1</h3>
-  <p>The playing project's 64 kits. Click one to download it as an LXR-02 .SND file (the LXR's parameters only:
-    Elixir's own aren't in that format).</p>
-  <ul class="kits" id="kits"></ul>
+  <p class="small">A song step that names a pattern from the other half plays pattern 32 instead.</p>
+  </div>
 
-  <h2>MIDI CC map</h2>
+  <h2 id="cc-map">MIDI CC map</h2>
   <p>Elixir takes the LXR-02's CC numbers. If your controller sends other numbers, point each one at the parameter
     you want here: any parameter Elixir takes by CC or NRPN, or nothing. Every change goes to the FM-1 as you make it.</p>
   <ul>
     <li><b>Type into the box</b> to search the parameters (a voice, "decay", "reverb", or a number such as CC 9 or
-      NRPN 174). Empty is the LXR's own. <b>Off</b> makes the FM-1 ignore that CC.</li>
+      NRPN 174). Empty means the LXR's own. <b>Off</b> makes the FM-1 ignore that CC.</li>
     <li>A CC aimed at a short list (a waveform, a filter type, a model) sweeps the whole list over the knob's travel;
       the others take the value as it is.</li>
-    <li>The channels work as before: a CC for a voice's parameter is received on that voice's track channel or on the
-      global channel; one without a voice on any of Elixir's channels. CC 6, 98 and 99 stay NRPN's, and the REMOTE
+    <li>Channels work as before: a CC for a voice's parameter is received on that voice's track channel or on the
+      global channel; one without a voice, on any of Elixir's channels. CC 6, 98 and 99 stay NRPN's, and the REMOTE
       channels have their own map.</li>
     <li>The map belongs to the FM-1, not a project: it stays whatever you load, and is saved with Elixir's settings
       a second after the sequencer stops.</li>
   </ul>
   <p id="ccnote" class="small"></p>
-  <div id="ccbox">
+  <div class="dev off" id="ccbox">
   <p><label><input type="checkbox" id="cconly"> only the CCs I've changed</label></p>
   <div class="ccwrap"><table id="ccmap"><thead><tr><th>CC</th><th>As the LXR</th><th>Sets</th></tr></thead>
     <tbody id="ccrows"></tbody></table></div>
@@ -175,15 +255,6 @@
     (the mod wheel sets D1's coarse pitch), <code>20,NRPN 174,D1 FX send</code> or <code>9,off</code>. The name column
     is only for reading. Loading a CSV replaces the whole map: the CCs it doesn't list go back to the LXR's.</p>
   </div>
-  </div>
-
-  <h2>Experimental: a phone emulator link into a kit</h2>
-  <p>Paste a link (or its text) from the phone emulator's Share. Its kit (the sound as it played, under its name)
-    goes into a kit library slot on the connected FM-1, or downloads as a .ktlb that Restore above puts on one. Only
-    the kit comes across, not the pattern or WANDER. Experimental: check the kit after loading it.</p>
-  <p><textarea id="shktext" rows="3" style="width:100%" placeholder="https://dmajka.github.io/elixir/try/mobile.html#p=..."></textarea></p>
-  <p><label>Library slot <input type="number" id="shkslot" min="1" max="128" value="128"></label>
-    <button id="shkput">Put it in the library</button> <button class="alt" id="shkdl">Download as .ktlb</button></p>
 
 </main>
 <footer class="site">
@@ -224,15 +295,20 @@ async function job(fn) {
   }
 }
 
+let ccmap = null;                                    // (0.24: the CC map)
 async function refresh() {
   info = await lib.info();
-  const rows = info.slots.map((s, l) => `<tr><td>${SLOT_NAMES[l]}${info.loaded === l ? " ·" : ""}</td>` +
-    `<td>${s.exists ? s.name || "(no name)" : '<span class="small">empty</span>'}</td>` +
-    `<td>${s.exists ? (s.len / 1024).toFixed(1) + " KB" : ""}</td>` +
-    `<td>${s.exists ? `<button class="alt" data-get="${l}">Download</button> <button class="alt" data-load="${l}">Load</button>` : ""}</td></tr>`);
+  const rows = info.slots.map((s, l) => `<tr${info.loaded === l ? ' class="playing"' : ""}>` +
+    `<td>${SLOT_NAMES[l]}${info.loaded === l ? " ·" : ""}</td>` +
+    `<td>${s.exists ? esc(s.name || "(no name)") + `<span class="size">${(s.len / 1024).toFixed(1)} KB</span>`
+                    : '<span class="small">empty</span>'}</td><td class="acts">` +
+    (s.exists ? `<button class="alt" data-act="get" data-slot="${l}">Download</button>` : "") +
+    `<button class="alt" data-act="put" data-slot="${l}">Upload</button>` +
+    `<button class="alt" data-act="save" data-slot="${l}">Save here</button>` +
+    (s.exists ? `<button class="alt" data-act="load" data-slot="${l}">Load</button>` : "") + "</td></tr>");
   $("slots").innerHTML = rows.join("");
   const names = await lib.kitNames(info.nkits);
-  $("kits").innerHTML = names.map((n, i) => `<li><span class="n">${i + 1}</span><a href="#" data-kit="${i}">` +
+  $("kitlist").innerHTML = names.map((n, i) => `<li><span class="n">${i + 1}</span><a href="#" data-kit="${i}">` +
     `${n.replace(/[<&]/g, "") || "–"}</a>${info.kitLoaded === i ? " ·" : ""}</li>`).join("");
   try {                                              // (0.8 on: the kit library)
     const lk = await lib.libList(KL_KIT), ls = await lib.libList(KL_SOUND);
@@ -254,9 +330,22 @@ async function refresh() {
   }
 }
 
-// 0.24: the CC map
-let ccmap = null;
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+// 1.5: the sections' bar marks the section being read (the last heading above the bar's bottom edge)
+{
+  const links = [...document.querySelectorAll("nav.toc a")], heads = links.map((a) => $(a.hash.slice(1)));
+  const mark = () => {
+    const y = document.querySelector("nav.toc").getBoundingClientRect().bottom + 40;
+    let k = -1;
+    heads.forEach((h, i) => { if (h.getBoundingClientRect().top <= y) k = i; });
+    if (innerHeight + scrollY >= document.body.scrollHeight - 2) k = heads.length - 1;
+    links.forEach((a, i) => a.classList.toggle("here", i === k));
+  };
+  addEventListener("scroll", mark, { passive: true });
+  mark();
+}
+
+// 0.24: the CC map
 $("cctargets").innerHTML = ["Off", ...CC_TARGETS.map((t) => t.label)].map((l) => `<option value="${esc(l)}">`).join("");
 function ccDraw() {
   const only = $("cconly").checked, rows = [];
@@ -327,25 +416,61 @@ $("connect").addEventListener("click", () => job(async () => {
     "Ports seen: " + ([...access.inputs.values()].map((i) => i.name).join(", ") || "none"));
   lib = new Library(t);
   await refresh();
-  $("dev").classList.remove("off");
+  document.querySelectorAll(".dev").forEach((e) => e.classList.remove("off"));
   say(`Connected: ${kettle(info.version) ? "Kettle" : "Elixir"} ${info.version} on ${t.name}.`);
 }));
 
+// 1.5: a row per slot: Download, Upload (a .ktp, or the slot's project from a .ktbk), Save here, Load
+let putSlot = -1;
 $("slots").addEventListener("click", (e) => {
-  const get = e.target.dataset.get, load = e.target.dataset.load;
-  if (get !== undefined) job(async () => {
-    const img = await lib.readProject(+get, bar);
-    download(img, `${safe(info.slots[+get].name)}-${stamp()}.ktp`);
-    say(`Downloaded ${SLOT_NAMES[+get]}.`);
+  const act = e.target.dataset.act, l = +e.target.dataset.slot, name = SLOT_NAMES[l], s = info && info.slots[l];
+  if (!act) return;
+  if (act === "get") job(async () => {
+    const img = await lib.readProject(l, bar);
+    download(img, `${safe(s.name)}-${stamp()}.ktp`);
+    say(`Downloaded ${name}.`);
   });
-  if (load !== undefined && confirm(`Load ${SLOT_NAMES[+load]} on the FM-1? What's playing now is replaced.`)) job(async () => {
-    await lib.loadProject(+load);
+  if (act === "put") { putSlot = l; $("slotfile").click(); }
+  if (act === "save") {
+    const nm = l === 4 ? "SESSION " : s.exists ? s.name : "PROJECT" + (l + 1);   // (as the FM-1's SAVE names it)
+    if (!confirm(`Save what's playing on the FM-1 into ${name}` + (s.exists ? `, replacing ${s.name || "the project there"}?` : "?") +
+                 (l < 4 ? ` The FM-1 then treats ${name} as the playing project.` : ""))) return;
+    job(async () => {
+      say(`Saving into ${name} …`);
+      await lib.saveProject(l, nm);
+      await refresh();
+      say(`Saved what's playing into ${name}.`);
+    });
+  }
+  if (act === "load" && confirm(`Load ${name} on the FM-1? What's playing now is replaced.`)) job(async () => {
+    await lib.loadProject(l);
     await refresh();
-    say(`${SLOT_NAMES[+load]} loaded.`);
+    say(`${name} loaded.`);
+  });
+});
+$("slotfile").addEventListener("change", (e) => {
+  const f = e.target.files[0], l = putSlot, name = SLOT_NAMES[l];
+  e.target.value = "";
+  if (!f || l < 0) return;
+  job(async () => {
+    const entries = unpackBackup(await f.arrayBuffer());
+    const en = entries.length === 1 ? entries[0] : entries.find((x) => x.slot === l);
+    if (!en) throw new Error(`${f.name} holds ${entries.length} projects and none from ${name}: upload one project's .ktp, ` +
+                             "or restore the whole backup below.");
+    const c = checkImage(en.img);
+    if (!c.ok) throw new Error(c.why);
+    const s = info.slots[l];
+    if (s.exists && !confirm(`Replace ${name} (${s.name || "no name"}) with ${c.name || f.name}?`)) { say("Upload canceled."); return; }
+    say(`Uploading into ${name} …`);
+    await lib.writeProject(l, en.img, "", bar);
+    const load = $("uploadload").checked;
+    if (load) await lib.loadProject(l);
+    await refresh();
+    say(`${c.name || f.name} is in ${name}${load ? " and loaded" : ""}.`);
   });
 });
 
-$("backup").addEventListener("click", () => job(async () => {
+$("backup-all").addEventListener("click", () => job(async () => {
   if ($("savefirst").checked) {
     say("Saving the session …");
     await lib.saveProject(4, "SESSION ");
@@ -370,8 +495,9 @@ $("restore").addEventListener("change", (e) => {
   job(async () => {
     const entries = unpackBackup(await f.arrayBuffer());
     for (const en of entries) { const c = checkImage(en.img); if (!c.ok) throw new Error(c.why); }
-    const into = $("into").value;
-    const plan = into === "same" ? entries.map((en) => ({ ...en, slot: en.slot < 0 ? 0 : en.slot })) : [{ ...entries[0], slot: +into }];
+    if (entries.length === 1 && entries[0].slot < 0)
+      throw new Error(`${f.name} is one project, not a backup: use Upload on the slot you want it in.`);
+    const plan = entries;
     const over = plan.filter((p) => info.slots[p.slot].exists).map((p) => SLOT_NAMES[p.slot]);
     if (over.length && !confirm(`Replace ${over.join(", ")} on the FM-1?`)) { say("Restore canceled."); return; }
     for (const p of plan) {
@@ -485,7 +611,7 @@ $("libkits").addEventListener("click", (e) => {
   });
 });
 
-$("kits").addEventListener("click", (e) => {
+$("kitlist").addEventListener("click", (e) => {
   const k = e.target.dataset.kit;
   if (k === undefined) return;
   e.preventDefault();

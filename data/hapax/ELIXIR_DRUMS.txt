@@ -1,5 +1,5 @@
 # Elixir for the FM-1: a drum track
-# Written from Elixir v1.4.7's remote map (f83e3cd262aa) by tools/hapax_defs.py:
+# Written from Elixir v1.5's remote map (93b480d21d69) by tools/hapax_defs.py:
 # https://dmajka.github.io/elixir/controllers/ (the map: https://dmajka.github.io/elixir/data/)
 # Lanes 1-7 play D1 D2 D3 SN CY CH OH on Elixir's track channels (CONFIG: MIDI CHANNELS, 1-7 by default)
 # at note 60, the voice's own pitch (with the track's MIDI NOTE at ANY, the default). The track's own

@@ -99,7 +99,7 @@ footer nav a { margin: 0 6px; }
 footer small { font-size: 11px; opacity: .8; }
 </style>
 <style>
-header.site { background: #131210; border-bottom: 1px solid #2d2a25; font: 15px/1.4 -apple-system, BlinkMacSystemFont,
+header.site { position: sticky; top: 0; z-index: 50; background: #131210; border-bottom: 1px solid #2d2a25; font: 15px/1.4 -apple-system, BlinkMacSystemFont,
   "Segoe UI", "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
 header.site .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; display: flex; align-items: center; gap: 24px;
   min-height: 56px; flex-wrap: wrap; box-sizing: border-box; }
@@ -115,13 +115,37 @@ header.site nav .beta { margin-left: 5px; padding: 1px 4px; border: 1px solid #f
 header.site .px-c { fill: #96603a; } header.site .px-o { fill: #f2ede3; } header.site .px-g { fill: rgba(242,237,227,.08); }
 header.site .px-h { fill: #fff; } header.site .px-l { fill: #f0a43a; } header.site .px-L { fill: #f8d394; }
 header.site .px-d { fill: #a8640f; }
-@media (max-width: 560px) { header.site .wrap { gap: 4px 16px; padding-top: 10px; padding-bottom: 10px; }
-  header.site nav { margin-left: 0; gap: 14px; } }
-@media (max-width: 420px) { header.site nav { gap: 2px 12px; font-size: 14px; } }
+header.site nav a.gh { display: flex; align-items: center; color: #5c564d; }
+header.site nav a.gh:hover { color: #a29b8e; }
+header.site nav a.gh span { display: none; }
+header.site .menu { display: none; margin-left: auto; padding: 8px; border: 1px solid #2d2a25; border-radius: 8px;
+  background: transparent; color: #f2ede3; cursor: pointer; line-height: 0; }
+header.site .menu svg { display: block; }
+@media (max-width: 760px) {
+  header.site .wrap { position: relative; flex-wrap: nowrap; }
+  header.site .menu { display: block; }
+  header.site nav { display: none; position: absolute; top: 100%; left: 0; right: 0; flex-direction: column; gap: 0;
+    background: #131210; border-bottom: 1px solid #2d2a25; padding: 6px 16px 12px; box-shadow: 0 12px 24px -12px rgba(0,0,0,.6); }
+  header.site.open nav { display: flex; }
+  header.site nav a { padding: 10px 0; border-bottom: 1px solid #2d2a25; }
+  header.site nav a:last-child { border-bottom: 0; }
+  header.site nav a[aria-current] { box-shadow: inset 3px 0 #f0a43a; padding-left: 10px; }
+  header.site nav a.gh { gap: 10px; color: #a29b8e; }
+  header.site nav a.gh span { display: inline; }
+}
 </style>
 </head>
 <body>
-<header class="site"><div class="wrap"><a class="brand" href="../"><svg class="pixel" viewBox="4 0 14 18" aria-hidden="true"><path class="px-c" d="M9 0h4v1h-4zM9 1h4v1h-4z"/><path class="px-o" d="M8 2h6v1h-6zM9 3h1v1h-1zM12 3h1v1h-1zM9 4h1v1h-1zM12 4h1v1h-1zM9 5h1v1h-1zM12 5h1v1h-1zM8 6h1v1h-1zM13 6h1v1h-1zM7 7h1v1h-1zM14 7h1v1h-1zM6 8h1v1h-1zM15 8h1v1h-1zM5 9h1v1h-1zM16 9h1v1h-1zM4 10h1v1h-1zM17 10h1v1h-1zM4 11h1v1h-1zM17 11h1v1h-1zM4 12h1v1h-1zM17 12h1v1h-1zM4 13h1v1h-1zM17 13h1v1h-1zM4 14h1v1h-1zM17 14h1v1h-1zM5 15h1v1h-1zM16 15h1v1h-1zM6 16h1v1h-1zM15 16h1v1h-1zM7 17h8v1h-8z"/><path class="px-h" d="M10 3h1v1h-1zM10 4h1v1h-1zM7 10h1v1h-1zM6 11h1v1h-1zM6 12h1v1h-1zM6 13h1v1h-1z"/><path class="px-g" d="M11 3h1v1h-1zM11 4h1v1h-1zM10 5h2v1h-2zM9 6h4v1h-4zM8 7h6v1h-6zM7 8h8v1h-8z"/><path class="px-L" d="M6 9h10v1h-10zM14 11h1v1h-1zM11 13h1v1h-1zM15 14h1v1h-1z"/><path class="px-l" d="M5 10h2v1h-2zM8 10h9v1h-9zM5 11h1v1h-1zM7 11h7v1h-7zM15 11h2v1h-2zM5 12h1v1h-1zM7 12h10v1h-10zM5 13h1v1h-1zM7 13h4v1h-4zM12 13h5v1h-5zM5 14h10v1h-10zM16 14h1v1h-1zM6 15h1v1h-1z"/><path class="px-d" d="M7 15h9v1h-9zM7 16h8v1h-8z"/></svg>Elixir</a><nav><a href="../try/" aria-current="page">Try it</a><a href="../install/">Install</a><a href="../manual/">Manual</a><a href="../cheatsheet.pdf">Cheat sheet</a><a href="../library/">Library</a><a href="../controllers/">Controllers<span class="beta">beta</span></a><a href="https://github.com/dmajka/elixir">Source</a></nav></div></header>
+<header class="site"><div class="wrap"><a class="brand" href="../"><svg class="pixel" viewBox="4 0 14 18" aria-hidden="true"><path class="px-c" d="M9 0h4v1h-4zM9 1h4v1h-4z"/><path class="px-o" d="M8 2h6v1h-6zM9 3h1v1h-1zM12 3h1v1h-1zM9 4h1v1h-1zM12 4h1v1h-1zM9 5h1v1h-1zM12 5h1v1h-1zM8 6h1v1h-1zM13 6h1v1h-1zM7 7h1v1h-1zM14 7h1v1h-1zM6 8h1v1h-1zM15 8h1v1h-1zM5 9h1v1h-1zM16 9h1v1h-1zM4 10h1v1h-1zM17 10h1v1h-1zM4 11h1v1h-1zM17 11h1v1h-1zM4 12h1v1h-1zM17 12h1v1h-1zM4 13h1v1h-1zM17 13h1v1h-1zM4 14h1v1h-1zM17 14h1v1h-1zM5 15h1v1h-1zM16 15h1v1h-1zM6 16h1v1h-1zM15 16h1v1h-1zM7 17h8v1h-8z"/><path class="px-h" d="M10 3h1v1h-1zM10 4h1v1h-1zM7 10h1v1h-1zM6 11h1v1h-1zM6 12h1v1h-1zM6 13h1v1h-1z"/><path class="px-g" d="M11 3h1v1h-1zM11 4h1v1h-1zM10 5h2v1h-2zM9 6h4v1h-4zM8 7h6v1h-6zM7 8h8v1h-8z"/><path class="px-L" d="M6 9h10v1h-10zM14 11h1v1h-1zM11 13h1v1h-1zM15 14h1v1h-1z"/><path class="px-l" d="M5 10h2v1h-2zM8 10h9v1h-9zM5 11h1v1h-1zM7 11h7v1h-7zM15 11h2v1h-2zM5 12h1v1h-1zM7 12h10v1h-10zM5 13h1v1h-1zM7 13h4v1h-4zM12 13h5v1h-5zM5 14h10v1h-10zM16 14h1v1h-1zM6 15h1v1h-1z"/><path class="px-d" d="M7 15h9v1h-9zM7 16h8v1h-8z"/></svg>Elixir</a><button class="menu" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu"><svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button><nav id="site-nav"><a href="../try/" aria-current="page">Try it</a><a href="../install/">Install</a><a href="../quickstart/">Quick start</a><a href="../manual/">Manual</a><a href="../library/">Library</a><a href="../controllers/">Controllers<span class="beta">beta</span></a><a class="gh" href="https://github.com/dmajka/elixir" title="Source on GitHub"><svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span>Source on GitHub</span></a></nav></div></header><script>
+(() => {
+  const h = document.currentScript.previousElementSibling, b = h.querySelector(".menu");
+  const set = (on) => { h.classList.toggle("open", on); b.setAttribute("aria-expanded", on); };
+  b.addEventListener("click", () => set(!h.classList.contains("open")));
+  h.querySelector("nav").addEventListener("click", (e) => { if (e.target.closest("a")) set(false); });
+  document.addEventListener("click", (e) => { if (!h.contains(e.target)) set(false); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && h.classList.contains("open")) { set(false); b.focus(); } });
+})();
+</script>
 <!-- 0.25: on a phone, offer the mobile emulator (../mobile/) -->
 <div id="gomobile" hidden style="position:fixed;left:12px;right:12px;bottom:12px;z-index:99;padding:14px 16px;border-radius:12px;
   background:#232326;color:#e9e9ec;font:15px/1.4 system-ui,sans-serif;box-shadow:0 4px 24px #0008;text-align:center">
@@ -160,13 +184,13 @@ header.site .px-d { fill: #a8640f; }
       <li>Black key <b>4</b> is the snare: white keys <b>5</b> and <b>13</b>.</li>
       <li>Press <b>PLAY</b>. Turn <b>PRESETS</b> to hear other kits; <b>OCT+</b> loads one.</li>
     </ol>
-    <p>Then try <a href="../manual/#2-quick-start-a-beat-in-two-minutes">the quick start</a> or the
+    <p>Then try <a href="../quickstart/">the quick start</a> or the
       <a href="../cheatsheet.pdf">cheat sheet</a>.</p></section>
   <section><h2>Your computer keyboard</h2>
     <table>
       <tr><td><kbd>Z</kbd>–<kbd>/</kbd> <kbd>Q</kbd>–<kbd>O</kbd></td><td>The FM-1's keys, laid out like a piano</td></tr>
       <tr><td><kbd>S</kbd> <kbd>D</kbd> <kbd>F</kbd> <kbd>H</kbd> <kbd>J</kbd> <kbd>L</kbd> <kbd>;</kbd></td><td>Black keys 1–7: the tracks D1 to OH</td></tr>
-      <tr><td><kbd>1</kbd>–<kbd>0</kbd> <kbd>-</kbd> <kbd>=</kbd></td><td>FX, SCL, ENV, LFO, EDIT, GLO, HOME, SAVE, ARP, SEQ, PLAY, REC</td></tr>
+      <tr><td><kbd>1</kbd>–<kbd>0</kbd> <kbd>-</kbd> <kbd>=</kbd></td><td>FX, SEL, ENV, LFO, EDIT, GLO, HOME, SAVE, ARP, SEQ, PLAY, REC</td></tr>
       <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>OCT− (SHIFT) and OCT+ (COPY / OK)</td></tr>
       <tr><td><kbd>↑</kbd> <kbd>↓</kbd> / <kbd>←</kbd> <kbd>→</kbd></td><td>SELECT / ALGORITHM</td></tr>
       <tr><td>Drag a knob</td><td>Up and down to turn it</td></tr>
@@ -214,7 +238,7 @@ header.site .px-d { fill: #a8640f; }
 </details>
 
 <footer>
-  <small class="version">v1.4.7</small><br>
+  <small class="version">v1.5</small><br>
   Elixir: the Erica Synths LXR-02 firmware (GPL-3.0) ported to the FM-1 on Felucca's hardware layer (Leo Kuroshita) · <a href="https://www.gnu.org/licenses/gpl-3.0.html">GPL-3.0</a> · emulator page after Felucca's and charlesvestal's <a href="https://github.com/charlesvestal/fm1-x0x">X0X</a> · DotGothic16 font, <a href="fonts/OFL.txt">SIL OFL 1.1</a><br>
   <small>An unofficial port, not affiliated with or endorsed by Erica Synths or M-VAVE. "LXR-02" and "Erica Synths" are trademarks of Erica Synths; M-VAVE and FM-1 of their owners.</small>
 </footer>
@@ -226,7 +250,7 @@ import { Library, sndFiles, packBackup, unpackBackup, checkImage, SLOT_NAMES, KL
          importLxrProject, KIT_PACKS, fetchPack, addPacks } from "./library.js";
 const NS = "http://www.w3.org/2000/svg";
 // panel.c's labels (bit = label) and encoder roles
-const B = { FX: 0, SCL: 1, ENV: 2, LFO: 3, EDIT: 4, GLO: 5, HOME: 6, SAVE: 7, ARP: 8, SEQ: 9, PLAY: 10, REC: 11, "OCT-": 12, "OCT+": 13 };
+const B = { FX: 0, SEL: 1, ENV: 2, LFO: 3, EDIT: 4, GLO: 5, HOME: 6, SAVE: 7, ARP: 8, SEQ: 9, PLAY: 10, REC: 11, "OCT-": 12, "OCT+": 13 };
 const EN = { SELECT: 0, ALGORITHM: 1, PRESETS: 2, "KNOB 1": 3, "KNOB 2": 4, "KNOB 3": 5, "KNOB 4": 6 };
 const PLAY_GREEN = 14;
 // the 27 keys F3..G5: key k = k semitones above F3
@@ -239,9 +263,9 @@ const OLD = (k) => k.replace("elixir-", "kettle-");           // 0.14: Kettle's 
 // ------------------------------------------------------------------ the panel
 // Two drawings of the same controls: WIDE after the FM-1's own layout, TALL for a phone held upright (the
 // screen larger, the keys across the whole width). Rebuilt when the orientation changes; the state stays.
-const ROW1 = ["FX", "SCL", "ENV", "LFO", "EDIT", "GLO"], ROW2 = ["HOME", "SAVE", "ARP", "SEQ", "PLAY", "REC"];
+const ROW1 = ["FX", "SEL", "ENV", "LFO", "EDIT", "GLO"], ROW2 = ["HOME", "SAVE", "ARP", "SEQ", "PLAY", "REC"];
 // what each control does in Elixir (drawn under its label)
-const SUB = { FX: "FX/REVERB", SCL: "FILTER", ENV: "AMP/MOD", LFO: "LFO", EDIT: "OSC/FM", GLO: "MIX/CFG", HOME: "GRID/PAT",
+const SUB = { FX: "FX/REVERB", SEL: "FILTER", ENV: "AMP/MOD", LFO: "LFO", EDIT: "OSC/FM", GLO: "MIX/CFG", HOME: "GRID/PAT",
               SAVE: "SAVE/LOAD", ARP: "PERF", SEQ: "STEP", PLAY: "STOP", REC: "" };
 const KNOB_SUB = { SELECT: "page", ALGORITHM: "track", PRESETS: "kits" };
 const WHITE_TXT = [...Array(16)].map((_, i) => String(i + 1));

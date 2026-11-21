@@ -7,6 +7,7 @@
   --liquid: #f0a43a; --liquid-hi: #f8d394; --liquid-lo: #a8640f; --glass: rgba(29, 27, 24, .07);
   --cork: #96603a; --spark: #e9a640; --shine: #ffffff; --shadow: rgba(240, 164, 58, .55);
   --radius: 10px;
+  --head-h: 61px;                                    /* (the header: 60px and its line; sticky bars sit under it) */
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -25,6 +26,7 @@
 }
 
 * { box-sizing: border-box; }
+html { scroll-padding-top: var(--head-h); }          /* (a link to #x lands below the sticky header) */
 body { margin: 0; background: var(--bg); color: var(--fg); -webkit-font-smoothing: antialiased;
        font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif; }
 a { color: var(--accent); text-underline-offset: 2px; }
@@ -41,8 +43,8 @@ code { font: 0.88em ui-monospace, SFMono-Regular, Menlo, monospace; background: 
 .small { color: var(--dim); font-size: 14px; }
 .warn { color: var(--warn); }
 
-/* the header on every page */
-header.site { border-bottom: 1px solid var(--line); }
+/* the header on every page: stays at the top; under 760px its links fold into the menu button (make_site.py MENU_JS) */
+header.site { position: sticky; top: 0; z-index: 50; background: var(--bg); border-bottom: 1px solid var(--line); }
 header.site .wrap { display: flex; align-items: center; gap: 24px; min-height: 60px; flex-wrap: wrap; }
 .brand { display: flex; align-items: center; gap: 10px; color: var(--fg); text-decoration: none; font-weight: 650;
          font-size: 19px; letter-spacing: 0.02em; }
@@ -53,9 +55,25 @@ header.site nav a:hover, header.site nav a[aria-current] { color: var(--fg); }
 header.site nav a[aria-current] { box-shadow: inset 0 -2px var(--accent-fill); }
 header.site nav .beta { margin-left: 5px; padding: 1px 4px; border: 1px solid var(--accent-fill); border-radius: 4px;
   color: var(--accent); font-size: 10px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; vertical-align: 2px; }
-@media (max-width: 560px) { header.site .wrap { gap: 4px 16px; padding-top: 10px; padding-bottom: 10px; }
-                            header.site nav { margin-left: 0; gap: 14px; } }
-@media (max-width: 420px) { header.site nav { gap: 2px 12px; font-size: 14px; } }
+header.site nav a.gh { display: flex; align-items: center; color: color-mix(in srgb, var(--dim) 45%, var(--bg)); }   /* (1.5: the source, quietly) */
+header.site nav a.gh:hover { color: var(--dim); }
+header.site nav a.gh span { display: none; }
+header.site .menu { display: none; margin-left: auto; padding: 8px; line-height: 0; border-radius: 8px;
+                    background: transparent; color: var(--fg); border: 1px solid var(--line); }
+header.site .menu:hover { border-color: var(--dim); filter: none; }
+@media (max-width: 760px) {
+  header.site .wrap { position: relative; flex-wrap: nowrap; }
+  header.site .menu { display: block; }
+  header.site nav { display: none; position: absolute; top: 100%; left: 0; right: 0; flex-direction: column; gap: 0;
+                    margin: 0; font-size: 16px; background: var(--bg); border-bottom: 1px solid var(--line);
+                    padding: 6px 16px 12px; box-shadow: 0 12px 24px -14px rgba(0, 0, 0, .35); }
+  header.site.open nav { display: flex; }
+  header.site nav a { padding: 11px 0; border-bottom: 1px solid var(--line); }
+  header.site nav a:last-child { border-bottom: 0; }
+  header.site nav a[aria-current] { box-shadow: inset 3px 0 var(--accent-fill); padding-left: 12px; }
+  header.site nav a.gh { gap: 10px; color: var(--dim); }
+  header.site nav a.gh span { display: inline; }
+}
 
 /* buttons, as links or as buttons */
 .btn, button { display: inline-block; font: inherit; font-size: 16px; font-weight: 600; line-height: 1.2;
