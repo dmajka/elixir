@@ -36,15 +36,16 @@ Elixir (called Kettle until 0.13) is the Erica Synths LXR-02 firmware (GPL-3.0) 
 - **First hardware run (0.5.1):** installed on a real FM-1 from V15 with the install page (`web/make_site.py`); a battery display on CONFIG; autosave no longer makes a burst of noise after a stop. See *0.5.1* below.
 - **Tests:** render_test, compare_test, library_test (the library page's code against the device's), install_test (the install page's updater against simulated FM-1s, Kettle to Elixir), rings_compare (the models against Rings' float code) and ui_test (96 screens; CONFIG → LOAD and the cores, the models' limit; Phase 14 (LFO modes, global LFOs, Last page, Euclid 2); the remote map; Control All; Rings' models; PERF's pages, MIX and KEYS; the kit library and sound browser; PERFORM 2; links between tracks; bouncing ratchets and the roll sweep; the output's hush and autosave's timing; the battery display; Grids' map; clocks, conditions, ratchets, generators, bar copy; locks, patterns, project save/load, a 0.1 project, sends, reverb, sound shaping, phaser, flanger, PERF's effects and macros, autosave failure, sync in) all pass.
 
-**Measured resources** (the 1.4.7 build, 2026-11-19; build.py's numbers. RAM and pool are one SRAM: the build fails below 8 KiB of their spare together, so "usable" is the free less that. Details and history: TECHNICAL_DOCUMENTATION.md §11. The project, library and SysEx rows are still 0.13's.)
+**Measured resources** (the 1.5 build, 2026-11-21; build.py's numbers. RAM and pool are one SRAM: the build fails below 8 KiB of their spare together, so "usable" is the free less that. Details and history: TECHNICAL_DOCUMENTATION.md §11. The project, library and SysEx rows are still 0.13's.)
 
 | | Used | Total | Free | Usable |
 |---|---|---|---|---|
-| RAM (.data + .bss) | 57,784 B | 73,728 B | 15,944 B | 17,852 B with the pool |
-| Pool (big buffers, same SRAM) | 370,828 B | 380,928 B | 10,100 B | (above) |
-| RAMTEXT (`.ram_text` + `.ram_buf`) | 32,256 B | 32,544 B | 288 B | 288 B |
-| App flash (image) | 574,572 B | 581,564 B | 6,992 B | 6,992 B |
-| Stacks (static worst case) | user ~5.3 KB, ISR ~3.8 KB | 12 KB, 8 KB | | |
+| RAM (.data + .bss) | 57,800 B | 65,536 B | 7,736 B | 252 B above the 8 KiB reserve, with the pool |
+| Pool (big buffers, same SRAM) | 367,452 B | 368,160 B | 708 B | (above) |
+| RAMTEXT (`.ram_buf`) | 32,512 B | 32,544 B | 32 B | 32 B |
+| HOTCODE (RAM code: `.ram_text`, `.c1_text`, `.ram_hot`) | 20,652 B | 20,960 B | 308 B | 308 B |
+| App flash (image) | 577,524 B | 581,564 B | 4,040 B | 4,040 B |
+| Stacks (static worst case, 1.4.7) | user ~5.3 KB, ISR ~3.8 KB | 12 KB, 8 KB | | |
 | Project slot | busy test project 35.8 KB | 48,896 B payload | ~13 KB | dense projects already fail (PROJECT TOO BIG) |
 | Kit library (flash) | 72 KB at 0xEA000–0xFBFFF | | 128 kits + 128 sounds | a kit entry holds 480 B (kit 377 B) |
 | Library SysEx message | a kit: 390 B | LIB_MAX 400 B | 10 B | (static assert; raising it costs ~3.3 B of RAM a byte) |
