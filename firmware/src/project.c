@@ -41,6 +41,10 @@ static struct {
     uint32_t sig_ms, idle_since;
     uint32_t last_sig;                              /* (0.5.1) the signature at the last check: a change restarts the
                                                      * rest */
+    uint32_t proj_sig;                              /* (1.5) the session's signature when it was last what its project
+                                                     * slot holds (a load, a save, a new project; with none loaded: the
+                                                     * new session's), 0 unknown. LOAD asks to save first when the
+                                                     * session moved from it. Kept in the session's header (rsv[0]) */
 } pj;
 
 /* ------------------------------------------------- the stream to flash --- */
@@ -883,6 +887,8 @@ static int proj_write(uint32_t l, const char *name)
         h.len = len;
         h.crc = ~pw.crc;
         memcpy(h.name, name, 8);
+        if (l == PROJ_AUTO)                         /* (1.5: whether the session is its project's; older firmware */
+            h.rsv[0] = pj.proj_sig;                 /* leaves rsv alone) */
         h.hcrc = st_crc32(&h, sizeof h - 4u);
         if (st_prog(phys_base((uint32_t)target), &h, sizeof h))
             return -4;
@@ -918,8 +924,10 @@ static int proj_delete(uint32_t l)
     }
     flash_unhush();
     proj_scan();
-    if (pj.loaded == l)
+    if (pj.loaded == l) {
         pj.loaded = 0xFF;                            /* (ui.c io_delete: the settings' project too) */
+        pj.proj_sig = 0;                             /* (1.5: its session saved nowhere now) */
+    }
     return rc;
 }
 
@@ -968,6 +976,49 @@ static int proj_load(uint32_t l)
     rc = proj_read_payload(h.version);
     proj_after_load();
     return rc;
+}
+
+/* 1.5: a new project (LOAD on an empty slot): what a first power-on has (engine.c engine_init, seq.c seq_init),
+ * every part a project holds as proj_read_payload's defaults. Stopped, in the main loop, as proj_load */
+static void proj_new(void)
+{
+    uint8_t k[KIT_LEN];
+    uint32_t i, t;
+    kit_init_values(k);
+    for (i = 0; i < NUM_KITS; i++) {
+        kit_put(i, k);
+        memcpy(kit_names[i], "Init    ", KIT_NAME_LEN);
+    }
+    memcpy(morph_par, k, KIT_LEN);
+    memset(par, 0, NPAR);
+    engine_globals_default();
+    kit_load_ram(0);                                /* (the edit buffer: kit 1, Init) */
+    morph_amt = 0;
+    kit_morph_loaded = 0;
+    sq.active = sq.pending = 0;
+    sq.song = 0;
+    sq.song_nx = 0xFF;
+    sq.roll_rate = 5;                               /* 1/16 */
+    sq.rfree = 0;
+    scl_last.root = scl_last.scale = 0;
+    rush_defaults();
+    for (i = 0; i < NUM_PATTERN; i++) {
+        seq_clear_pattern(&pat[i]);
+        pat[i].shuffle = pat[i].kit = 0;
+        pat[i].gx = pat[i].gy = pat[i].gchaos = 0;
+        pat[i].pcout = PCO_AUTO;
+    }
+    for (i = 0; i < NUM_SONGS; i++)
+        for (t = 0; t < MAX_SONG_LENGTH; t++)
+            songs[i][t] = SONG_END;
+    songs[0][0] = 0;
+    memset(song_rd, 0, sizeof song_rd);
+    perf_defaults();
+    sp_defaults();
+    wd_defaults();
+    for (t = 0; t < NTRACK; t++)
+        seq_stretch_set(t, TSTR_ONE);
+    proj_after_load();
 }
 
 /* -------------------------------------------------------- the session --- */
@@ -1264,11 +1315,13 @@ static void persist_boot(void)                      /* power-on: the flash, the 
 }
 static void session_boot(void)                      /* after engine_init: the last session */
 {
+    proj_hdr_t h;
     if (proj_exists(PROJ_AUTO) && proj_load(PROJ_AUTO) == 0) {
         pj.loaded = kset.project;
         pj.saved_sig = session_sig();
+        pj.proj_sig = hdr_read((uint32_t)pj.phys[PROJ_AUTO], &h) || h.rsv[0] == 0xFFFFFFFFu ? 0u : h.rsv[0];
     } else {
-        pj.saved_sig = session_sig();
+        pj.saved_sig = pj.proj_sig = session_sig();  /* (1.5: a new session: nothing to save) */
     }
     pj.idle_since = pj.sig_ms = fm1_ms;
 }

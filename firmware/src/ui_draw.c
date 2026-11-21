@@ -304,7 +304,14 @@ static void draw_title(void)
         cv_text_fit(34, CAP_IN(S, 20), &AF_S, "ERASING AS IT PLAYS", T_REC, T_BG, 200);
     else if (mo)
         cv_text_fit(34, CAP_IN(S, 20), &AF_S, ui.msg, T_ACCENT, T_BG, 200);
-    else
+    else if ((ui.mode == M_SAVE || ui.mode == M_LOAD) && !ui.io_naming) {   /* 1.5: SAVE switches the two */
+        const char *to = ui.mode == M_SAVE ? "load page" : "save page";
+        int32_t x = 236 - text_w(&AF_S, to);
+        cv_text(x, CAP_IN(S, 20), &AF_S, to, T_MID);
+        x -= text_w(&AF_S, "SAVE") + 4;
+        cv_text(x, CAP_IN(S, 20), &AF_S, "SAVE", T_THEME);
+        cv_text_fit(34, CAP_IN(S, 20), &AF_S, b, T_TEXT, T_BG, x - 34 - 8);
+    } else
         cv_text_fit(34, CAP_IN(S, 20), &AF_S, b, T_TEXT, T_BG, np > 8u ? 158 : 236 - 34 - (int32_t)np * 7 - 4);
     if (np > 8u && !mo && !ovl) {                    /* the page: n / pages (many: the sound pages) */
         char d[8];
@@ -630,7 +637,7 @@ static void draw_clear(int32_t y0)
 {
     (void)y0;
     cv_rrect(10, 20, 220, 88, 6, T_SURF, T_BG);
-    cv_text_in(10, 30, 220, &AF_S, "SHIFT + COPY", T_MID, T_SURF);
+    cv_text_in(10, 30, 220, &AF_S, "CLEAR (OCT- + OCT+)", T_MID, T_SURF);
     if (ui.clear_sel == CL_SLOT) {                   /* (1.4: DELETE KIT 05, its name under it) */
         static const char *const TY[NIO] = {"KIT ", "PATTERN ", "SONG ", "KIT ", "SOUND ", "PROJECT ", "FACTORY ",
                                             "FACTORY "};
@@ -645,8 +652,8 @@ static void draw_clear(int32_t y0)
         cv_text_in(10, 44, 220, &AF_M, b, T_ACCENT, T_SURF);
         io_slot_name(r, sizeof r, ui.io_type, ui.io_slot);
         cv_text_in(10, 62, 220, &AF_S, r, T_TEXT, T_SURF);
-        cv_text_in(10, 78, 220, &AF_S, "COPY: delete", T_TEXT, T_SURF);
-        cv_text_in(10, 92, 220, &AF_S, "let go of SHIFT to cancel", T_MID, T_SURF);
+        cv_text_in(10, 78, 220, &AF_S, "OCT+ again: delete", T_TEXT, T_SURF);
+        cv_text_in(10, 92, 220, &AF_S, "let go of OCT- to cancel", T_MID, T_SURF);
         return;
     }
     if (ui.clear_sel == CL_PAR_LK) {                 /* (1.4.2: the knob turned, its name under it) */
@@ -656,8 +663,8 @@ static void draw_clear(int32_t y0)
             lk_name(r, sizeof r, par_to_autodest(ui.clear_par - 1u));
         cv_text_in(10, 62, 220, &AF_S, ui.clear_par ? r : "Turn the knob whose locks go", ui.clear_par ? T_TEXT : T_MID,
                    T_SURF);
-        cv_text_in(10, 78, 220, &AF_S, ui.clear_par ? "COPY: clear them" : "", T_TEXT, T_SURF);
-        cv_text_in(10, 92, 220, &AF_S, "let go of SHIFT to cancel", T_MID, T_SURF);
+        cv_text_in(10, 78, 220, &AF_S, ui.clear_par ? "OCT+ again: clear them" : "", T_TEXT, T_SURF);
+        cv_text_in(10, 92, 220, &AF_S, "let go of OCT- to cancel", T_MID, T_SURF);
         return;
     }
     if (ui.clear_sel == CL_STEP_LK) {                /* (1.4: which step: CLEAR STEP 12 LOCKS) */
@@ -668,8 +675,8 @@ static void draw_clear(int32_t y0)
     } else {
         cv_text_in(10, 50, 220, &AF_M, CLEAR_NAME[ui.clear_sel], T_ACCENT, T_SURF);
     }
-    cv_text_in(10, 76, 220, &AF_S, "SELECT: what   COPY: confirm", T_TEXT, T_SURF);   /* (a knob: CLEAR KNOB LOCKS) */
-    cv_text_in(10, 90, 220, &AF_S, "let go of SHIFT to cancel", T_MID, T_SURF);
+    cv_text_in(10, 76, 220, &AF_S, "SELECT: what   OCT+ again: confirm", T_TEXT, T_SURF);   /* (a knob: CLEAR KNOB LOCKS) */
+    cv_text_in(10, 90, 220, &AF_S, "let go of OCT- to cancel", T_MID, T_SURF);
 }
 
 static void cat(char *b, const char *s, uint32_t n);
@@ -696,9 +703,9 @@ static void draw_dx_ask(int32_t y0)
     }
     cv_text_in(6, 45, 228, &AF_S, fx_first() < FX_NAPP ? FX_APPS[fx_first()].backup : "", T_MID, T_SURF);
     cv_text_in(6, 61, 228, &AF_M, ui.dx_ask == 2u ? "SURE? ERASE IT" : "ERASE IT FOR ELIXIR?", T_ACCENT, T_SURF);
-    cv_text_in(6, 85, 228, &AF_S, ui.dx_ask == 2u ? "COPY (OCT+) again: erase" : "COPY (OCT+) twice: erase", T_TEXT,
+    cv_text_in(6, 85, 228, &AF_S, ui.dx_ask == 2u ? "OCT+ again: erase" : "OCT+ twice: erase", T_TEXT,
                T_SURF);
-    cv_text_in(6, 99, 228, &AF_S, "SHIFT (OCT-): keep, save nothing", T_MID, T_SURF);
+    cv_text_in(6, 99, 228, &AF_S, "OCT-: keep it, save nothing", T_MID, T_SURF);
 }
 /* 0.11: Control All's dialog, after OCT+ is let go */
 static void draw_ca_ask(int32_t y0)
@@ -1065,7 +1072,7 @@ static void draw_perf_page(int32_t y0)
     if (ui.shift && ui.page % NPERF == 0u)           /* (1.4: SWAP) */
         cv_text(6, 112, &AF_S, "OCT+: SWAP KITS  KEY: LATCH", T_MID);
     else if (ui.shift)
-        cv_text(6, 112, &AF_S, "SHIFT + KEY: LATCH (AGAIN: OFF)", T_MID);
+        cv_text(6, 112, &AF_S, "OCT- + KEY: LATCH (AGAIN: OFF)", T_MID);
     else if (ui.page % NPERF == 0u && ui.hot >= 3u && !b[0])   /* (1.4: Morph or Morph kit turned) */
         cv_text(6, 112, &AF_S, "OCT+: SNAP  OCT- + OCT+: SWAP", T_MID);
     else if (perf_dens())
@@ -1148,7 +1155,7 @@ static void draw_shift_legend(int32_t y0)
     static const char *const F[6] = {"KIT", "MORPH", "RESET SOUND", "RESET PERF", "SOLO", "RELOAD"};
     uint32_t i;
     (void)y0;
-    cv_text(8, 0, &AF_S, "SHIFT + WHITE KEY", T_THEME);
+    cv_text(8, 0, &AF_S, "OCT- + WHITE KEY", T_THEME);
     for (i = 0; i < NTRACK; i++) {                   /* keys 1..7: play the voice */
         int32_t x = 4 + (int32_t)i * 33;
         cv_rrect(x, 14, 31, 16, 3, T_RAISE, T_BG);
@@ -1213,8 +1220,8 @@ static void draw_keys_fold(void)
         cv_text_r(232, 74, &AF_M, b, T_THEME, T_BG);
     }
     {
-        static const char *const L1[2] = {"SHIFT + KEY", "accent"}, *const LR[2] = {"REC", "the notes go into the steps"};
-        static const char *const L2[4] = {"BLACK KEYS", "track", "SHIFT + EDIT", "grid"};
+        static const char *const L1[2] = {"OCT- + KEY", "accent"}, *const LR[2] = {"REC", "the notes go into the steps"};
+        static const char *const L2[4] = {"BLACK KEYS", "track", "OCT- + EDIT", "grid"};
         help_pairs(8, 96, sq.rec && sq.running ? LR : L1, 1);
         help_pairs(8, 112, L2, 2);
     }
@@ -1256,8 +1263,8 @@ static void draw_keys(int32_t y0)
         cv_text_r(232, 74, &AF_M, b, T_THEME, T_BG);
     }
     {
-        static const char *const L1[2] = {"SHIFT + KEY", "accent"}, *const LR[2] = {"REC", "the notes go into the steps"};
-        static const char *const L2[4] = {"ALGORITHM", "track", "SHIFT + EDIT", "grid"};
+        static const char *const L1[2] = {"OCT- + KEY", "accent"}, *const LR[2] = {"REC", "the notes go into the steps"};
+        static const char *const L2[4] = {"ALGORITHM", "track", "OCT- + EDIT", "grid"};
         help_pairs(8, 96, sq.rec && sq.running ? LR : L1, 1);
         help_pairs(8, 112, L2, 2);
     }
@@ -1421,10 +1428,12 @@ static void draw_io(int32_t y0)
             list_row(i * 16, l, r, s == ui.io_slot, 0);
         }
         {
-            static const char *const LS[6] = {"OCT+", "save", "SAVE", "to load", "CLEAR", "delete"};
-            static const char *const LL[6] = {"OCT+", "load", "SAVE", "to save", "CLEAR", "delete"};
-            help_pairs(10, 116, ui.mode == M_SAVE ? LS : LL,   /* (1.4: CLEAR deletes the slot; not the factory's) */
-                       ui.io_type == IO_FACTORY || ui.io_type == IO_FMORPH ? 2u : 3u);
+            /* (1.5, the user: "SAVE to load" read as an instruction, and there is no CLEAR button: the keys as
+             * printed; SAVE's page change moved to the title) */
+            const char *kv[4] = {"OCT+", ui.mode == M_SAVE ? "save" : ui.io_type == IO_PROJECT &&
+                                 !proj_exists(ui.io_slot) ? "new project" : "load", "OCT- + OCT+", "delete"};
+            help_pairs(10, 113, kv,                  /* (1.4: delete: not the factory's; 1.5: 113, clear of the cards' marks) */
+                       ui.io_type == IO_FACTORY || ui.io_type == IO_FMORPH ? 1u : 2u);
         }
     }
 }
@@ -1611,7 +1620,7 @@ static void draw_links(int32_t y0)
         cat(b, " is empty.", sizeof b);
         cv_text(8, 30, &AF_M, b, T_TEXT);
         help_item(help_item(56, "START", "KNOB 2 picks a starting point, or set one up on LINK SETUP"),
-                  "SHIFT + SEQ", "opens this page");
+                  "OCT- + SEQ", "opens this page");
         return;
     }
     if (e > LE_DUCK && e != LE_TRIG)
@@ -2029,6 +2038,34 @@ static uint32_t sound_sig(void)
     return s;
 }
 
+/* 1.5: LOAD PROJECT, the session moved from its project: save it first? */
+static void draw_pj_ask(int32_t y0)
+{
+    char b[32], nm[9];
+    (void)y0;
+    cv_rrect(10, 14, 220, 100, 6, T_SURF, T_BG);
+    cv_text_in(10, 22, 220, &AF_S, "UNSAVED CHANGES", T_MID, T_SURF);
+    if (ui.pj_into == 0xFFu) {                       /* (every slot taken: nowhere to save) */
+        cv_text_in(10, 38, 220, &AF_M, "NO EMPTY SLOT", T_ACCENT, T_SURF);
+        cv_text_in(10, 58, 220, &AF_S, "they will be lost", T_TEXT, T_SURF);
+        cv_text_in(10, 78, 220, &AF_S, proj_exists(ui.pj_to) ? "OCT+: load anyway" : "OCT+: new project anyway",
+                   T_TEXT, T_SURF);
+        cv_text_in(10, 94, 220, &AF_S, "another button: cancel", T_MID, T_SURF);
+        return;
+    }
+    proj_name_of(nm, ui.pj_into);
+    nm[8] = 0;
+    cv_text_in(10, 38, 220, &AF_M, "SAVE THEM FIRST?", T_ACCENT, T_SURF);
+    put_str(b, "to ", sizeof b);
+    two_digits(b + 3, ui.pj_into + 1u);
+    cat(b, " ", sizeof b);
+    cat(b, nm, sizeof b);
+    cv_text_in(10, 58, 220, &AF_S, b, T_TEXT, T_SURF);
+    cv_text_in(10, 78, 220, &AF_S, proj_exists(ui.pj_to) ? "OCT+: save, then load" : "OCT+: save, then new project",
+               T_TEXT, T_SURF);
+    cv_text_in(10, 94, 220, &AF_S, "OCT-: don't save   others: cancel", T_MID, T_SURF);
+}
+
 /* 1.0: the pattern page's DELETE (CLEAR, then a pattern) */
 static void draw_pdel_ask(int32_t y0)
 {
@@ -2041,8 +2078,8 @@ static void draw_pdel_ask(int32_t y0)
     cv_rrect(10, 20, 220, 88, 6, T_SURF, T_BG);
     cv_text_in(10, 30, 220, &AF_S, ui.pdel_n == sq.active ? "THE PLAYING PATTERN" : "PATTERNS", T_MID, T_SURF);
     cv_text_in(10, 50, 220, &AF_M, t, T_ACCENT, T_SURF);
-    cv_text_in(10, 76, 220, &AF_S, "COPY (OCT+): delete", T_TEXT, T_SURF);
-    cv_text_in(10, 90, 220, &AF_S, "SHIFT (OCT-): keep", T_MID, T_SURF);
+    cv_text_in(10, 76, 220, &AF_S, "OCT+: delete", T_TEXT, T_SURF);
+    cv_text_in(10, 90, 220, &AF_S, "OCT-: keep", T_MID, T_SURF);
 }
 
 static void draw_body(void)
@@ -2053,6 +2090,9 @@ static void draw_body(void)
     if (ui.dx_ask) {                                 /* 0.24.1: another app's data */
         fn = draw_dx_ask;
         s = sig_add(97, ui.dx_ask | (uint32_t)fx_found << 4 | (uint32_t)fx_apps << 8);
+    } else if (ui.pj_ask) {                          /* 1.5: SAVE FIRST? */
+        fn = draw_pj_ask;
+        s = sig_add(223, ui.pj_to | (uint32_t)ui.pj_into << 8);
     } else if (ui.pdel == 2u) {                      /* 1.0: DELETE PATTERN? */
         fn = draw_pdel_ask;
         s = sig_add(211, ui.pdel_n | (uint32_t)(ui.pdel_n == sq.active) << 8);

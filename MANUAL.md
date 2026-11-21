@@ -348,7 +348,7 @@ Elixir has **32 patterns** in two banks of 16, and **64 songs**.
 - **Bar keys 8–9:** bank 1 (patterns 1–16) or bank 2 (17–32).
 - **Knobs:** **Voices** (FREE, LOCKED or KIT, below), shuffle, Edits (KEEP or DROP, below), **Play** (PATTERN or SONG: what PLAY plays, see [Songs](#songs-home-a-fourth-press)).
 - **Copy a pattern:** hold **COPY (OCT+)** and tap the pattern, then hold COPY again and tap the target. A LOCKED pattern's voices go with it.
-- **Delete a pattern** (from 1.0): hold **SHIFT (OCT−)** and tap the pattern (or CLEAR, SHIFT + COPY, then the pattern). On this page SHIFT doesn't show its menu. The screen asks **DELETE PATTERN P05?**: **COPY (OCT+)** deletes it (its steps, generators, links, scale, groove and shuffle, as a new project's empty pattern), **SHIFT (OCT−)** keeps it; any other button, or COPY alone before you pick, cancels. Deleting the playing pattern empties it as it plays (a LOCKED pattern's voices are left in its slot). A song row that played it plays the empty pattern.
+- **Delete a pattern** (from 1.0): hold **OCT−** and tap the pattern (or CLEAR: hold OCT−, press OCT+, then tap the pattern). On this page OCT− doesn't show its menu. The screen asks **DELETE PATTERN P05?**: **OCT+** deletes it (its steps, generators, links, scale, groove and shuffle, as a new project's empty pattern), **OCT−** keeps it; any other button, or OCT+ alone before you pick, cancels. Deleting the playing pattern empties it as it plays (a LOCKED pattern's voices are left in its slot). A song row that played it plays the empty pattern.
 
 **Voices** (from 0.20) sets where a pattern's sounds come from; its card shows FREE, LOCKED or KIT (and the kit slot). Below the patterns the page lists COPY, PASTE and DELETE.
 
@@ -1617,13 +1617,29 @@ The page draws the cottage, the home pattern and how far away you are.
 | KIT | From / To: 64 SLOTS, the LIBRARY's 128, or (load) the 85 FACTORY kits | OCT+, name it, OCT+ | OCT+ (from the library or factory: into the sound being edited). FACTORY's last entry, **ALL > SLOTS**, puts the first 64 into the slots |
 | MORPH | From / To: SLOTS or LIBRARY, or (load) the 85 FACTORY kits | OCT+, name it, OCT+ (saves the morph mixture you hear) | OCT+: load as the morph target |
 | SOUND | the library's 128; KNOB 2 the track | OCT+, name it, OCT+: the track's sound | OCT+: into the track (a drum's sound into any drum track; the others into their own) |
-| PROJECT | 4 | OCT+, name it, OCT+ | OCT+ |
+| PROJECT | 4 | OCT+, name it, OCT+ | OCT+; on an empty slot, a [new project](#starting-a-new-project) |
 | PATTERN (save only) | 32 | a white key saves to that pattern at once | (the pattern page) |
 | SONG (save only) | 64 | OCT+ | (the song page) |
 
-**Naming:** KNOB 1 the letter's position, KNOB 2 the letter, KNOB 3 upper / lower case. OCT+ saves, OCT− alone goes back.
+**Naming:** KNOB 1 the letter's position, KNOB 2 the letter, KNOB 3 upper / lower case. OCT+ saves, OCT− alone goes back. A project saved to an empty slot starts out named PROJECT1 to PROJECT4, after its slot.
 
-**Deleting** (from 1.4): on the save or load page, select the slot, then press CLEAR (hold SHIFT (OCT−), press OCT+). The screen asks **DELETE KIT 05** with the slot's name under it: press **COPY (OCT+)** again to delete it, or let go of SHIFT to keep it.
+The line under the list says what OCT+ does and how to delete; the title's right side says where **SAVE** takes you (the save page and the load page switch with it).
+
+#### Starting a new project
+
+(From 1.5.) On LOAD → PROJECT, select an **(empty)** slot: the line under the list says **OCT+ new project**. Press OCT+. Elixir starts a new project, the same as a first power-on (Init kits, empty patterns and songs, 120 BPM, PERFORM and the global LFOs at their defaults), and saves it to that slot straight away, named after the slot (PROJECT2 in slot 2). Rename it later by saving it again (SAVE → PROJECT, the same slot).
+
+**Unsaved changes are asked about first.** Loading a project or starting a new one replaces what you're playing. If it has changed since you last saved or loaded its project, the screen asks **SAVE THEM FIRST?** and says where they'd go (**to 01 MYSONG**, its project's slot):
+
+- **OCT+** saves them there, then loads (or starts the new project).
+- **OCT−** loads without saving them.
+- Any other button cancels; nothing changes. PLAY and REC still work while it asks.
+
+A session that never came from a project (a first power-on, or after deleting its project) is offered the first empty slot instead. With all four slots full, the screen says **NO EMPTY SLOT**: OCT+ loads anyway (the changes are lost), any other button cancels. To keep them, cancel, delete a project you don't need, and try again.
+
+Autosave doesn't change this: it keeps your session through power-off, but it never writes to your projects, so a saved project stays as you saved it until you save it again. Elixir remembers through power-off whether the session has unsaved changes.
+
+**Deleting** (from 1.4): on the save or load page, select the slot, then hold **OCT−** and press **OCT+** (CLEAR). The screen asks **DELETE KIT 05** with the slot's name under it: press **OCT+** again to delete it, or let go of OCT− to keep it.
 
 | Type | Deleting it |
 |---|---|
@@ -1636,7 +1652,7 @@ The page draws the cottage, the home pattern and how far away you are.
 
 ### Projects
 
-A project is everything: all 64 kits, the 32 patterns, the 64 songs, the settings, the sound as it is, the morph target, the macros. Elixir keeps **four projects** in the FM-1's flash.
+A project is everything: all 64 kits, the 32 patterns, the 64 songs, the settings, the sound as it is, the morph target, the macros. Elixir keeps **four projects** in the FM-1's flash. Start a new one from LOAD → PROJECT on an empty slot ([Starting a new project](#starting-a-new-project), from 1.5); Elixir asks before unsaved changes would be lost.
 
 **The session saves itself.** When AUTOSAVE is on (CONFIG → DEVICE), Elixir saves the session (all the patterns, with their edits, the kits and the rest) while stopped, once 8 seconds have passed since you stopped or last changed something and the sound (reverb and delay tails too) has died away. It loads it at power-on. The FM-1 runs on a battery, so this means nothing is lost when it switches off. If something keeps sounding (a frozen delay, pads played live), it saves anyway after 30 seconds of rest.
 

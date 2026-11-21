@@ -12634,6 +12634,110 @@ static void phase_140_wear(void)
     wear_lfo_off();
     run_ms(20);
 }
+/* 1.5: a new project (LOAD on an empty slot) and SAVE FIRST? (the user: "I'm not sure how else you're supposed to
+ * start a new project") */
+static uint8_t fresh_pl[PROJ_PAYLOAD], new_pl[PROJ_PAYLOAD];
+static uint32_t fresh_len;
+static uint32_t pl_grab(uint32_t l, uint8_t *b)      /* project l's payload as in flash, its length */
+{
+    proj_hdr_t h;
+    if (!proj_exists(l) || hdr_read((uint32_t)pj.phys[l], &h) || h.len > PROJ_PAYLOAD)
+        return 0;
+    memcpy(b, nor + phys_base((uint32_t)pj.phys[l]) + 256u, h.len);
+    return h.len;
+}
+static void fresh_grab(void)                         /* (at power-on: what a new project must save as; its session
+                                                      * differs only in KIT_SHARED, which a load fills, unsaved) */
+{
+    proj_save(3, "FRESH   ");
+    fresh_len = pl_grab(3, fresh_pl);
+    proj_delete(3);
+}
+static void phase_15_new_project(void)
+{
+    uint32_t i, ok, n;
+    seq_stop_now();
+    for (i = 0; i < PROJ_USER; i++)
+        proj_delete(i);
+    /* the session saved as project 1 (SAVE PROJECT: name, OCT+) */
+    io_open(M_SAVE, IO_PROJECT);
+    ui.io_slot = 0;
+    press(B_OCTUP);
+    press(B_OCTUP);
+    ok = proj_exists(0) && pj.loaded == 0 && session_sig() == pj.proj_sig;
+    io_open(M_LOAD, IO_PROJECT);
+    ui.io_slot = 1;
+    run_ms(30);
+    shot("load-project-empty");
+    check(ok, "1.5: SAVE PROJECT: the session is its project's (nothing unsaved)");
+    /* nothing unsaved: LOAD on the empty slot 2 starts a new project there, no question */
+    press(B_OCTUP);
+    n = pl_grab(1, new_pl);
+    shot("new-project");
+    check(!ui.pj_ask && proj_exists(1) && pj.loaded == 1 && !memcmp(pj.name[1], "PROJECT2", 8) &&
+          !strcmp(ui.msg, "NEW PROJECT") && session_sig() == pj.proj_sig,
+          "1.5: LOAD on an empty slot: a new project, PROJECT2, saved there");
+    check(fresh_len && n == fresh_len && !memcmp(new_pl, fresh_pl, n),
+          "1.5: a new project saves exactly as a first power-on's session");
+    /* a change, then LOAD project 1: SAVE THEM FIRST? to 02 PROJECT2; OCT+ saves it, then loads */
+    main_set(&pat[0], 3, 5, 1);
+    ui.io_slot = 0;
+    press(B_OCTUP);
+    ok = ui.pj_ask && ui.pj_to == 0 && ui.pj_into == 1 && pj.loaded == 1;
+    shot("load-project-save-first");
+    press(B_OCTUP);
+    ok &= !ui.pj_ask && pj.loaded == 0 && !strcmp(ui.msg, "PROJECT LOADED") && !main_on(&pat[0], 3, 5);
+    ui.io_slot = 1;
+    press(B_OCTUP);                                  /* (back: nothing unsaved, no question) */
+    check(ok && !ui.pj_ask && pj.loaded == 1 && main_on(&pat[0], 3, 5),
+          "1.5: SAVE FIRST? OCT+: saved to its project, then the other loaded");
+    /* OCT-: loaded without saving */
+    main_set(&pat[0], 4, 6, 1);
+    ui.io_slot = 0;
+    press(B_OCTUP);
+    ok = ui.pj_ask;
+    press(B_OCTDN);
+    ok &= !ui.pj_ask && pj.loaded == 0;
+    ui.io_slot = 1;
+    press(B_OCTUP);
+    check(ok && !ui.pj_ask && pj.loaded == 1 && main_on(&pat[0], 3, 5) && !main_on(&pat[0], 4, 6),
+          "1.5: SAVE FIRST? OCT-: loaded, the change not saved");
+    /* another button: cancelled, all as it was */
+    main_set(&pat[0], 4, 6, 1);
+    ui.io_slot = 0;
+    press(B_OCTUP);
+    ok = ui.pj_ask;
+    press(B_FX);
+    check(ok && !ui.pj_ask && pj.loaded == 1 && main_on(&pat[0], 4, 6) && !strcmp(ui.msg, "LOAD CANCELLED") &&
+          ui.mode == M_LOAD, "1.5: SAVE FIRST? another button: cancelled");
+    /* kept across power-off: the session's header holds whether it is its project's */
+    pj.proj_sig ^= 1u;                               /* (as autosave would: the session written, its flag with it) */
+    proj_save(PROJ_AUTO, "SESSION ");
+    i = pj.proj_sig;
+    pj.proj_sig = 0;
+    session_boot();
+    check(pj.proj_sig == i, "1.5: the session's header keeps its project's signature (power-off)");
+    pj.proj_sig = session_sig();
+    /* a session with no project and no empty slot: OCT+ loads anyway */
+    proj_delete(1);                                  /* (loaded none now) */
+    proj_save(1, "OTHER   ");
+    proj_save(2, "THIRD   ");
+    proj_save(3, "FOURTH  ");
+    main_set(&pat[0], 5, 7, 1);
+    ui.io_slot = 2;
+    press(B_OCTUP);
+    ok = ui.pj_ask && ui.pj_into == 0xFFu;
+    shot("load-project-no-slot");
+    press(B_OCTUP);
+    check(ok && !ui.pj_ask && pj.loaded == 2, "1.5: no empty slot: OCT+ loads anyway");
+    /* the copy: the keys as printed (no CLEAR, SHIFT or COPY), the SAVE / LOAD hint in the title */
+    check(text_w(&AF_S, "OCT-: don't save   others: cancel") <= 216 && text_w(&AF_M, "SAVE THEM FIRST?") <= 216,
+          "1.5: SAVE FIRST?'s lines fit");
+    for (i = 0; i < PROJ_USER; i++)
+        proj_delete(i);
+    mode_set(M_HOME);
+    run_ms(30);
+}
 static void phase_140_delete(void)
 {
     char nm[9];
@@ -13303,6 +13407,7 @@ int main(int argc, char **argv)
         tbl_state = TBL_OK;
     }
     check(kset.gtakes == GT_KEYS && midi_gtakes == GT_KEYS, "0.24: Global in starts at KEYS");
+    fresh_grab();                                    /* (1.5: a new project must equal this) */
     midi_gtakes = GT_ALL;                            /* (the tests below send the LXR's CCs there: phase_024g) */
     if (argc > 2 && !strcmp(argv[2], "--pages"))     /* (1.4.1: the site's Pages, alone) */
         return pages_tour(shots);
@@ -13854,6 +13959,7 @@ int main(int argc, char **argv)
     phase_140_wear();
     phase_142_hold_clear();
     phase_143_tails();
+    phase_15_new_project();
     copy_pass();                                     /* (1.0's copy and picture pass: last, as it runs time) */
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;

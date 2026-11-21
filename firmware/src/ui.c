@@ -130,6 +130,8 @@ static struct {
     uint32_t dx_ms;
     uint8_t clear_open, clear_sel;
     uint8_t pdel, pdel_n;            /* 1.0: the pattern page's delete: 1 CLEAR pressed (pick one), 2 asked; the pattern */
+    uint8_t pj_ask, pj_to, pj_into;  /* 1.5: LOAD PROJECT's SAVE FIRST?: asked; the slot to load (empty: a new project);
+                                      * the slot the session would be saved to (0xFF: none free) */
     uint8_t ca_len;                  /* 1.0: Control All on the tracks' lengths (OCT+ held, the length knob): ca_lens */
     uint8_t ca_lens[NTRACK];         /* .. the lengths as they were */
     uint8_t fine;                    /* 1.0: a knob turned with OCT- held (fine: no acceleration; the page stays shown) */
@@ -260,7 +262,7 @@ static void ui_message(const char *s)
     ui.msg_long = 0;
     ui.force = 1;
 }
-static int ui_asking(void) { return ui.ca_ask || ui.dx_ask || ui.pdel == 2u; }   /* a dialog: the keys and knobs wait */
+static int ui_asking(void) { return ui.ca_ask || ui.dx_ask || ui.pdel == 2u || ui.pj_ask; }   /* a dialog: the keys and knobs wait */
 static const char *fx_msg(const char *what)          /* 0.24.1: "WYRD'S DATA: NOT SAVED" */
 {
     static char b[32];
@@ -2805,6 +2807,91 @@ static void solo_key(void)                           /* 0.10: the track soloed (
     ui_message(sq.solo & (1u << ui.track) ? "SOLO ON" : sq.solo ? "SOLO OFF (OTHERS STILL SOLO)" : "SOLO OFF");
 }
 
+/* 1.5: LOAD PROJECT: slot s loaded, or (empty) a new project there, named PROJECT<n> and saved at once */
+static void proj_name_of(char *nm, uint32_t s)       /* (8 bytes: its name, or a new one's) */
+{
+    if (proj_exists(s)) {
+        memcpy(nm, pj.name[s], 8);
+    } else {
+        memcpy(nm, "PROJECT1", 8);
+        nm[7] = (char)('1' + s);
+    }
+}
+static void pj_go(uint32_t s)
+{
+    char nm[8];
+    if (sq.running)
+        seq_stop_now();
+    if (proj_exists(s)) {
+        ui_message("LOADING PROJECT...");
+        ui_draw();
+        if (proj_load(s)) {
+            ui_message("LOAD FAILED");
+            return;
+        }
+        ui_message("PROJECT LOADED");
+    } else {
+        proj_new();
+        proj_name_of(nm, s);
+        ui_message("SAVING NEW PROJECT...");
+        ui_draw();
+        if (proj_save(s, nm)) {                      /* (data locked, the flash: a new session all the same) */
+            pj.loaded = 0xFF;
+            pj.proj_sig = 0;
+            ui_message("NEW PROJECT, NOT SAVED");
+            return;
+        }
+        ui_message("NEW PROJECT");
+    }
+    pj.loaded = (uint8_t)s;
+    kset.project = (uint8_t)s;
+    settings_later();
+    pj.proj_sig = session_sig();
+}
+/* .. asked first when the session moved from its project (or has none): saved to its project's slot, else the first
+ * empty one (not s) */
+static void pj_open(uint32_t s)
+{
+    uint32_t i;
+    if (s >= PROJ_USER)
+        return;
+    if (session_sig() == pj.proj_sig) {
+        pj_go(s);
+        return;
+    }
+    ui.pj_to = (uint8_t)s;
+    ui.pj_into = 0xFF;
+    if (pj.loaded < PROJ_USER && proj_exists(pj.loaded))
+        ui.pj_into = pj.loaded;
+    for (i = 0; i < PROJ_USER && ui.pj_into == 0xFFu; i++)
+        if (i != s && !proj_exists(i))
+            ui.pj_into = (uint8_t)i;
+    ui.pj_ask = 1;
+    ui.force = 1;
+}
+static void pj_answer(uint32_t b)                    /* the dialog's button: OCT+ saves then goes, OCT- goes, else no */
+{
+    char nm[8];
+    int rc;
+    ui.pj_ask = 0;
+    ui.force = 1;
+    if (b == B_OCTUP && ui.pj_into != 0xFFu) {
+        proj_name_of(nm, ui.pj_into);
+        ui_message("SAVING PROJECT...");
+        ui_draw();
+        rc = proj_save(ui.pj_into, nm);
+        if (rc) {
+            ui_message(rc == -20 ? "PROJECT TOO BIG: NOT LOADED" : "SAVE FAILED: NOT LOADED");
+            return;
+        }
+        pj.loaded = ui.pj_into;
+    } else if (b != B_OCTDN && !(b == B_OCTUP && ui.pj_into == 0xFFu)) {
+        ui_message("LOAD CANCELLED");
+        return;
+    }
+    pj_go(ui.pj_to);
+}
+
 /* OK in SAVE / LOAD */
 static void io_ok(void)
 {
@@ -2816,7 +2903,7 @@ static void io_ok(void)
             ui.io_naming = 1;                         /* the name first */
             ui.io_pos = 0;
             if (ui.io_type == IO_PROJECT)
-                memcpy(ui.io_name, proj_exists(s) ? pj.name[s] : "PROJECT ", 8);
+                proj_name_of(ui.io_name, s);         /* (1.5: an empty slot's PROJECT<n>, as a new one's) */
             else if (ui.io_type == IO_SOUND && kl_name(KLK_SOUND, s, ui.io_name))
                 put_pad8(ui.io_name, VOICE_NAME[track_voice(ui.track)]);
             else if (ui.io_type != IO_SOUND && (!ui.io_src || kl_name(KLK_KIT, s, ui.io_name)))
@@ -2878,6 +2965,7 @@ static void io_ok(void)
             rc = proj_save(s, ui.io_name);
             if (rc == 0) {
                 pj.loaded = (uint8_t)s;
+                pj.proj_sig = session_sig();         /* (1.5: nothing unsaved now) */
                 kset.project = (uint8_t)s;
                 settings_later();
                 ui_message("PROJECT SAVED");
@@ -2943,23 +3031,8 @@ static void io_ok(void)
         sq.song = (uint8_t)s;
         ui_message("SONG LOADED");
         break;
-    case IO_PROJECT:
-        if (!proj_exists(s)) {
-            ui_message("EMPTY SLOT");
-            break;
-        }
-        if (sq.running)
-            seq_stop_now();
-        ui_message("LOADING PROJECT...");
-        ui_draw();
-        if (proj_load(s) == 0) {
-            pj.loaded = (uint8_t)s;
-            kset.project = (uint8_t)s;
-            settings_later();
-            ui_message("PROJECT LOADED");
-        } else {
-            ui_message("LOAD FAILED");
-        }
+    case IO_PROJECT:                                 /* (1.5: an empty slot: a new project; SAVE FIRST? asked) */
+        pj_open(s);
         break;
     default:
         break;
@@ -3682,6 +3755,16 @@ static void button_down(uint32_t b)
         ui.force = 1;
         if (b != B_PLAY && b != B_REC)               /* (the transport still works; the rest waits) */
             return;
+    }
+    if (ui.pj_ask) {                                 /* 1.5: SAVE FIRST?: the transport still works; the rest answers */
+        if (b != B_PLAY && b != B_REC) {
+            if (b == B_OCTUP)
+                ui.copy_used = 1;
+            else if (b == B_OCTDN)
+                ui.shift_used = 1;
+            pj_answer(b);
+            return;
+        }
     }
     if (ui.pdel == 2u) {                             /* 1.0: DELETE PATTERN?: COPY (OCT+) deletes, SHIFT (OCT-) keeps */
         if (b == B_OCTUP || b == B_OCTDN) {
