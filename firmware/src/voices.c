@@ -185,7 +185,7 @@ static int32_t lfo_glide(const lfo_t *l)             /* .. at the phase: a half 
     int32_t w = (int32_t)((uint32_t)(RG_SINE[((l->phase >> 21) + 3072u) & 4095u] + 32767) * 65536u / 65534u);
     return l->rnd0 + (int32_t)(((int64_t)(l->rnd - l->rnd0) * w) >> 16);
 }
-static RAMHOT int32_t lfo_wave(lfo_t *l, uint32_t old)      /* the wave at the phase (from old: RANDOM's draw), 0..1, Q16 */
+static int32_t lfo_wave(lfo_t *l, uint32_t old)      /* the wave at the phase (from old: RANDOM's draw), 0..1, Q16 */
 {
     switch (l->wave) {
     case LFO_SINE:
@@ -221,7 +221,7 @@ static RAMHOT int32_t lfo_wave(lfo_t *l, uint32_t old)      /* the wave at the p
         return 0;
     }
 }
-static RAMHOT int32_t lfo_calc(lfo_t *l)                    /* lfo_calc: 0..1, Q16 */
+static int32_t lfo_calc(lfo_t *l)                    /* lfo_calc: 0..1, Q16 */
 {
     uint32_t old = l->phase;
     int32_t v;
@@ -398,7 +398,7 @@ static void voice_legato(uint32_t track, uint32_t note)
 
 /* ---------------------------------------------------- the block, async --- */
 /* 1.4 WEAR: the amp EG a block, its decay's rate scaled by Decay (the rate put back after: the hit's own stays) */
-static RAMHOT int32_t aeg_calc(voice_t *v)
+static int32_t aeg_calc(voice_t *v)
 {
     uint32_t d = v->aeg.dec, r;
     int32_t g;

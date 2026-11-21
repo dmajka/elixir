@@ -277,7 +277,7 @@ static uint32_t lk_id(const pattern_t *p)
 }
 static uint32_t lk_run(const pattern_t *p, uint32_t t) { return lk_id(p) * NTRACK + t; }
 static uint32_t lk_used(void) { return lk_at[LK_PATS]; }
-static RAMHOT uint32_t lk_lb(uint32_t r, uint32_t key)      /* the first of run r's at key or after */
+static uint32_t lk_lb(uint32_t r, uint32_t key)      /* the first of run r's at key or after */
 {
     uint32_t lo = lk_at[r], hi = lk_at[r + 1u];
     key <<= 8;
@@ -329,7 +329,7 @@ static int lk_has(const pattern_t *p, uint32_t t, uint32_t k)   /* step k has a 
     uint32_t r = lk_run(p, t), i = lk_lb(r, k << 10);
     return i < lk_at[r + 1u] && LK_KEY(i) >> 10 == k;
 }
-static RAMHOT int32_t lk_get(const pattern_t *p, uint32_t t, uint32_t k, uint32_t code)   /* its value, -1 none */
+static int32_t lk_get(const pattern_t *p, uint32_t t, uint32_t k, uint32_t code)   /* its value, -1 none */
 {
     uint32_t r = lk_run(p, t), key = k << 10 | code, i = lk_lb(r, key);
     return i < lk_at[r + 1u] && LK_KEY(i) == key ? (int32_t)LK_VAL(i) : -1;
@@ -1773,7 +1773,7 @@ static void rush_defaults(void)                      /* (Elixir Desktop's: FREE 
 enum { RT_64, RT_128, RT_256, NRT };
 static uint32_t trk_dir(uint32_t t);
 static void live_step_sync(const pattern_t *p, uint32_t t, uint32_t s);
-static RAMHOT uint32_t rush_lock(const pattern_t *p, uint32_t t, uint32_t k)   /* step k's RUSH (0: none) */
+static uint32_t rush_lock(const pattern_t *p, uint32_t t, uint32_t k)   /* step k's RUSH (0: none) */
 {
     int32_t v;
     if (!main_on(p, t, k))
