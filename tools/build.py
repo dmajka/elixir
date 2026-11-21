@@ -241,7 +241,7 @@ def build_app():
         version = (version or source_version()) + "-cold"
     if os.environ.get("ELIXIR_LDDIAG") in ("1", "2"):    # (a diagnostic build says so on the about screen)
         version = (version or source_version()) + "-diag" + os.environ["ELIXIR_LDDIAG"]
-    elif os.environ.get("ELIXIR_RAMHOT_FLASH"):   # (an A/B with some RAMHOT functions left in flash)
+    if os.environ.get("ELIXIR_RAMHOT_FLASH"):   # (an A/B with some RAMHOT functions left in flash)
         version = (version or source_version()) + "-split"
     if version:
         flags.append(f'-DELIXIR_VERSION="{version}"')
