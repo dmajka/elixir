@@ -564,6 +564,23 @@
   <section class="band" id="updates">
     <div class="intro"><h2>Updates</h2><p>What each release added and fixed.</p></div>
     <div class="updates">
+      <div class="card"><h3>1.5<span>In testing</span></h3>
+        <p>Start new projects, a lighter load on the processor, and clearer hints on screen. Projects, kits and
+          settings from 1.4 work as before.</p>
+        <ul>
+          <li><b>New projects.</b> On LOAD &rarr; PROJECT, pick an empty slot and press OCT+. Elixir starts a fresh
+            project (Init kits, empty patterns) and saves it to that slot, named after it (PROJECT2 in slot 2).</li>
+          <li><b>Asks before you lose changes.</b> Loading a project or starting a new one asks <b>SAVE THEM
+            FIRST?</b> when what you're playing has changed: OCT+ saves, then loads; OCT&minus; loads without saving;
+            any other button cancels. Autosave still keeps your session through power-off, as before.</li>
+          <li><b>More room before CPU OVERLOAD.</b> The control code that runs once per block (the sequencer, the
+            performance keys, the global LFOs) now runs from the processor's fast memory, and mixing the six voices
+            takes less work. In a busy test project the first core's load fell from about 73% to about 61%.</li>
+          <li><b>Clearer hints.</b> The screen names the buttons as they're printed: hold OCT&minus;, press OCT+
+            to delete, instead of SHIFT, COPY and CLEAR. The save and load pages say what OCT+ does and where SAVE
+            takes you.</li>
+        </ul>
+      </div>
       <div class="card"><h3>1.4.7<span>November 19, 2026</span></h3>
         <p>Steadier MIDI clock sync. Projects, kits and settings from 1.4 work as before.</p>
         <ul>
