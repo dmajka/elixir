@@ -336,7 +336,7 @@ export function packKitLib(entries) {
 }
 export function unpackKitLib(buf) {
   const b = new Uint8Array(buf);
-  if (!(b[0] === 0x4b && b[1] === 0x54 && b[2] === 0x4c && b[3] === 0x42)) throw new Error("not a Elixir kit library");
+  if (!(b[0] === 0x4b && b[1] === 0x54 && b[2] === 0x4c && b[3] === 0x42)) throw new Error("not an Elixir kit library");
   const n = rd32(b, 4), out = [];
   let i = 8;
   for (let k = 0; k < n; k++) {
@@ -364,9 +364,9 @@ function crc32(bytes) {                              // zlib's, as storage.c's
 
 // a project image: the header's magic, its own CRC, the payload's length and CRC
 export function checkImage(img) {
-  if (!(img instanceof Uint8Array) || img.length < 257) return { ok: false, why: "not a Elixir project" };
+  if (!(img instanceof Uint8Array) || img.length < 257) return { ok: false, why: "not an Elixir project" };
   const h = img.subarray(0, 48);                    // (proj_hdr_t: 48 bytes, its own CRC last)
-  if (rd32(h, 0) !== MAGIC) return { ok: false, why: "not a Elixir project" };
+  if (rd32(h, 0) !== MAGIC) return { ok: false, why: "not an Elixir project" };
   if (rd32(h, 44) !== crc32(h.subarray(0, 44))) return { ok: false, why: "the project's header is damaged" };
   const len = rd32(h, 16);
   if (img.length !== 256 + len) return { ok: false, why: "the project file is cut short" };
@@ -390,7 +390,7 @@ export function packBackup(entries) {
 export function unpackBackup(buf) {                  // -> [{ slot, img }] (also takes a single project image)
   const b = new Uint8Array(buf);
   if (rd32(b, 0) === MAGIC) return [{ slot: -1, img: b }];
-  if (!(b[0] === 0x4b && b[1] === 0x54 && b[2] === 0x42 && b[3] === 0x4b)) throw new Error("not a Elixir backup");
+  if (!(b[0] === 0x4b && b[1] === 0x54 && b[2] === 0x42 && b[3] === 0x4b)) throw new Error("not an Elixir backup");
   const n = rd32(b, 4), out = [];
   let i = 8;
   for (let k = 0; k < n; k++) {
@@ -438,7 +438,8 @@ export function sndBytes(name, data) {
     if (out[8 + 149 + v] >= 229) out[8 + 149 + v] = 0;
     if (out[8 + 167 + v] >= 229) out[8 + 167 + v] = 0;
     const sy = out[8 + 179 + v];                        // (1.0: its LFO sync's 3/4 3/8 5/16 3/16: the LXR's nearest,
-    if (sy > 11) out[8 + 179 + v] = [3, 5, 5, 7][sy - 12] ?? 0;   // 1/1 1/3 1/3 1/6)
+    if (sy > 11) out[8 + 179 + v] = sy >= 30 ? 1 : [3, 5, 5, 7][sy - 12] ?? 0;   // 1/1 1/3 1/3 1/6; 1.5's 8/1 16/1
+                                                        // (saved as 30 31): 4/1, its longest)
     if (out[8 + 155 + v] > 7) out[8 + 155 + v] = 5;    // (1.1: its LFO's SMOOTH, DRIFT: RANDOM)
   }
   return out;

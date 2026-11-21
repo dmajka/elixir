@@ -1170,9 +1170,11 @@ static void draw_shift_legend(int32_t y0)
         cv_text_fit(x + 22, y + CAP_IN(S, 16), &AF_S, F[i], T_INK, T_SEL, 90);
     }
     {
-        static const char *const L1[6] = {"VOICE", "mute", "GLO", "solo", "BAR", "length"};
+        const char *L1[6] = {"VOICE", "mute", "GLO", "solo", "BAR", "length"};
         static const char *const L2[6] = {"SEQ", "links", "EDIT", "keys", "PLAY", "song"};
         static const char *const L3[6] = {"REC", "options", "HOME", "perf reset", "KNOB", "fine"};
+        if (ui.mode == M_MIXER || ui.mode == M_CONFIG)   /* (1.5: the GLO pages: a track key mutes, OCT- solos) */
+            L1[1] = "solo";
         help_pairs(8, 90, L1, 3);
         help_pairs(8, 103, L2, 3);
         help_pairs(8, 116, L3, 3);
@@ -1852,7 +1854,7 @@ static void draw_config_help(int32_t y0)
         y = help_item(y, "LAST PAGE", "a button opens its last page");
         y = help_item(y, "KITS FIRST", "PRESETS lists these first");
         y = help_item(y, "AUDITION", "a track key plays its voice");
-        help_item(y, "SELECT", "BUTTON: within ENV, SCL, LFO");
+        help_item(y, "SELECT", "BUTTON: within ENV, SEL, LFO");
         break;
     default:
         y = help_item(y, "AUTOSAVE", "saves when stopped");
@@ -1863,7 +1865,7 @@ static void draw_config_help(int32_t y0)
 
 /* 1.4.1: the crumbs. The sound and FX pages in groups, the group shown lit, dots under it for its pages (as the
  * sequencer's): where you are in 19 pages, and what's on either side. Sound: the synth's order, as the sound buttons
- * (SRC: EDIT; FLT, SHP: SCL; ENV: ENV; MOD, FX: LFO). FX: the FX button's pages */
+ * (SRC: EDIT; FLT, SHP: SEL; ENV: ENV; MOD, FX: LFO). FX: the FX button's pages */
 enum { CG_SRC, CG_FLT, CG_SHP, CG_ENV, CG_MOD, CG_FX, NCG_SND };
 static const char *const CR_SND[NCG_SND] = {"SRC", "FLT", "SHP", "ENV", "MOD", "FX"};
 enum { CG_REV, CG_BUS, CG_DLY, CG_DRT, CG_MST, CG_SND, NCG_FX };
@@ -1975,14 +1977,15 @@ static void draw_crumbs(void)
     pad = gap >= 16 ? 5 : 3;
     for (i = 0, x = 8; i < ng; i++) {
         int on = i == cur;
-        if (on)
-            cv_rrect(x - pad, 4, w[i] + 2 * pad, 13, 3, T_THEME, T_BG);
-        cv_text_on(x, 4 + CAP_IN(S, 13), &AF_S, nm[i], on ? T_INK : T_MID, on ? T_THEME : T_BG);
+        if (on)                                      /* (1.5: a neutral chip, the keycaps' grey: the sound page's
+                                                      * picture is in the track's colour, the palette's THEME clashed) */
+            cv_rrect(x - pad, 4, w[i] + 2 * pad, 13, 3, T_KEY, T_BG);
+        cv_text_on(x, 4 + CAP_IN(S, 13), &AF_S, nm[i], on ? T_INK : T_MID, on ? T_KEY : T_BG);
         if (on && np > 1u) {                         /* (the group's pages: dots under it) */
             uint32_t d;
             int32_t dx = x + (w[i] - ((int32_t)np * 5 - 2)) / 2;
             for (d = 0; d < np; d++)
-                cv_rect(dx + (int32_t)d * 5, 19, 3, 2, d == pi ? T_THEME : T_DIM);
+                cv_rect(dx + (int32_t)d * 5, 19, 3, 2, d == pi ? T_TEXT : T_DIM);
         }
         x += w[i];
         if (i + 1u < ng) {                           /* a chevron, in the gap's middle */
@@ -2046,8 +2049,8 @@ static uint32_t sound_sig(void)
         for (h = 0; h < 2u; h++)                     /* (30: the pages drawn from another section's knobs) */
             for (k = 0; k < 4u; k++)
                 s = sig_add(s, sv(S_SHAPE, h, k) | sv(S_AEG, h, k) << 8 | sv(S_MOD, h, k) << 16 | sv(S_OSC, h, k) << 24);
-    if (ui.sect == S_SENDS)                          /* (1.0 Phase 16: the picture's caption) */
-        s = sig_add(s, par[PAR_DLY_ROUTE]);
+    if (ui.sect == S_SENDS)                          /* (1.5: the volume's bar, the voice's level as it plays) */
+        s = sig_add(s, (uint32_t)(voice_peak[v] >> 10));
     if (ui.sect == S_XMOD)
         for (k = 0; k < NVOICE; k++)
             s = sig_add(s, par[PAR_CHOKE1 + k]);
@@ -2359,7 +2362,7 @@ static void card_name(char *b, uint32_t n, uint32_t p)
 {
     if (ui.mode == M_SOUND && ui.sect == S_SENDS) {  /* 1.0 Phase 16: FX TRACK SENDS: short, to fit */
         const char *t = p >= PAR_DSEND1 && p < PAR_DSEND1 + 6u ? "Delay" : p >= PAR_REV_SEND1 && p < PAR_REV_SEND1 + 6u
-                      ? "Reverb" : p >= PAR_FX_SEND1 && p < PAR_FX_SEND1 + 6u ? "FX" : 0;
+                      ? "Reverb" : p >= PAR_FX_SEND1 && p < PAR_FX_SEND1 + 6u ? "FX" : p >= PAR_VOL1 && p <= PAR_VOL6 ? "Vol" : 0;
         if (t) {
             put_str(b, t, n);
             return;

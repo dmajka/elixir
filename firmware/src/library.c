@@ -532,6 +532,7 @@ static uint32_t lib_kit_get(uint32_t idx)
     {
         uint8_t k[KIT_LEN];
         kit_get(idx, k);
+        kit_sync(k, 1);                              /* (1.5: kit.c sync_in) */
         lib_puts(k, KIT_LEN);
     }
     return LS_OK;

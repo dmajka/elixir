@@ -138,13 +138,13 @@ footer small { font-size: 11px; opacity: .8; }
       <li>Black key <b>4</b> is the snare: white keys <b>5</b> and <b>13</b>.</li>
       <li>Press <b>PLAY</b>. Turn <b>PRESETS</b> to hear other kits; <b>OCT+</b> loads one.</li>
     </ol>
-    <p>Then try <a href="../manual/#2-quick-start-a-beat-in-two-minutes">the quick start</a> or the
+    <p>Then try <a href="../quickstart/">the quick start</a> or the
       <a href="../cheatsheet.pdf">cheat sheet</a>.</p></section>
   <section><h2>Your computer keyboard</h2>
     <table>
       <tr><td><kbd>Z</kbd>–<kbd>/</kbd> <kbd>Q</kbd>–<kbd>O</kbd></td><td>The FM-1's keys, laid out like a piano</td></tr>
       <tr><td><kbd>S</kbd> <kbd>D</kbd> <kbd>F</kbd> <kbd>H</kbd> <kbd>J</kbd> <kbd>L</kbd> <kbd>;</kbd></td><td>Black keys 1–7: the tracks D1 to OH</td></tr>
-      <tr><td><kbd>1</kbd>–<kbd>0</kbd> <kbd>-</kbd> <kbd>=</kbd></td><td>FX, SCL, ENV, LFO, EDIT, GLO, HOME, SAVE, ARP, SEQ, PLAY, REC</td></tr>
+      <tr><td><kbd>1</kbd>–<kbd>0</kbd> <kbd>-</kbd> <kbd>=</kbd></td><td>FX, SEL, ENV, LFO, EDIT, GLO, HOME, SAVE, ARP, SEQ, PLAY, REC</td></tr>
       <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>OCT− (SHIFT) and OCT+ (COPY / OK)</td></tr>
       <tr><td><kbd>↑</kbd> <kbd>↓</kbd> / <kbd>←</kbd> <kbd>→</kbd></td><td>SELECT / ALGORITHM</td></tr>
       <tr><td>Drag a knob</td><td>Up and down to turn it</td></tr>
@@ -204,7 +204,7 @@ import { Library, sndFiles, packBackup, unpackBackup, checkImage, SLOT_NAMES, KL
          importLxrProject, KIT_PACKS, fetchPack, addPacks } from "./library.js";
 const NS = "http://www.w3.org/2000/svg";
 // panel.c's labels (bit = label) and encoder roles
-const B = { FX: 0, SCL: 1, ENV: 2, LFO: 3, EDIT: 4, GLO: 5, HOME: 6, SAVE: 7, ARP: 8, SEQ: 9, PLAY: 10, REC: 11, "OCT-": 12, "OCT+": 13 };
+const B = { FX: 0, SEL: 1, ENV: 2, LFO: 3, EDIT: 4, GLO: 5, HOME: 6, SAVE: 7, ARP: 8, SEQ: 9, PLAY: 10, REC: 11, "OCT-": 12, "OCT+": 13 };
 const EN = { SELECT: 0, ALGORITHM: 1, PRESETS: 2, "KNOB 1": 3, "KNOB 2": 4, "KNOB 3": 5, "KNOB 4": 6 };
 const PLAY_GREEN = 14;
 // the 27 keys F3..G5: key k = k semitones above F3
@@ -217,9 +217,9 @@ const OLD = (k) => k.replace("elixir-", "kettle-");           // 0.14: Kettle's 
 // ------------------------------------------------------------------ the panel
 // Two drawings of the same controls: WIDE after the FM-1's own layout, TALL for a phone held upright (the
 // screen larger, the keys across the whole width). Rebuilt when the orientation changes; the state stays.
-const ROW1 = ["FX", "SCL", "ENV", "LFO", "EDIT", "GLO"], ROW2 = ["HOME", "SAVE", "ARP", "SEQ", "PLAY", "REC"];
+const ROW1 = ["FX", "SEL", "ENV", "LFO", "EDIT", "GLO"], ROW2 = ["HOME", "SAVE", "ARP", "SEQ", "PLAY", "REC"];
 // what each control does in Elixir (drawn under its label)
-const SUB = { FX: "FX/REVERB", SCL: "FILTER", ENV: "AMP/MOD", LFO: "LFO", EDIT: "OSC/FM", GLO: "MIX/CFG", HOME: "GRID/PAT",
+const SUB = { FX: "FX/REVERB", SEL: "FILTER", ENV: "AMP/MOD", LFO: "LFO", EDIT: "OSC/FM", GLO: "MIX/CFG", HOME: "GRID/PAT",
               SAVE: "SAVE/LOAD", ARP: "PERF", SEQ: "STEP", PLAY: "STOP", REC: "" };
 const KNOB_SUB = { SELECT: "page", ALGORITHM: "track", PRESETS: "kits" };
 const WHITE_TXT = [...Array(16)].map((_, i) => String(i + 1));

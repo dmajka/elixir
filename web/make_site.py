@@ -16,6 +16,8 @@
 #                               (tools/remote_params.py) on every build; the mapper is built from the same bytes;
 #                               hapax/, oxi/: the Hapax's and the OXI One's instrument definitions, from the same map
 #                               (tools/hapax_defs.py, tools/oxi_defs.py)
+#   quickstart/                 1.5: web/quickstart.html, its first beat the manual's section 2 (MANUAL.md: the steps'
+#                               one copy), its screens from pages/
 #   manual/index.html           MANUAL.md as a page, with docs/img (its signal-flow diagrams: tools/flow_svg.py) in
 #                               manual/img, and elixir-manual-VER.pdf, the page printed (headless Chrome)
 #   pages/                      1.4.1: every page of every mode (web/pages: tools/pages_shots.py, from ui_test's tour),
@@ -47,7 +49,8 @@ SRC = ["build.sh", "LICENSE", "LICENSES", "NOTICE.md", "README.md", "MANUAL.md",
 
 
 # the header on every page: depth 0 at the root, 1 a folder down; here: the page's own link
-NAV = [("try/", "Try it"), ("install/", "Install"), ("manual/", "Manual"), ("cheatsheet.pdf", "Cheat sheet"),
+# (1.5: the cheat sheet is linked from the manual and the front page; Source is an icon)
+NAV = [("try/", "Try it"), ("install/", "Install"), ("quickstart/", "Quick start"), ("manual/", "Manual"),
        ("library/", "Library"), ("controllers/", 'Controllers<span class="beta">beta</span>')]
 
 
@@ -55,16 +58,39 @@ def nav(depth, here=None):
     up = "../" * depth
     links = "".join(f'<a href="{up}{href}"' + (' aria-current="page"' if href == here else "") + f">{text}</a>"
                     for href, text in NAV)
-    if REPO:
-        links += f'<a href="{REPO}">Source</a>'
+    if REPO:                                         # (the label shows only in the phone menu)
+        links += f'<a class="gh" href="{REPO}" title="Source on GitHub">{GITHUB_ICON}<span>Source on GitHub</span></a>'
     return (f'<header class="site"><div class="wrap"><a class="brand" href="{up or "./"}">{potion_svg(small=True)}'
-            f"Elixir</a><nav>{links}</nav></div></header>")
+            f'Elixir</a><button class="menu" type="button" aria-expanded="false" aria-controls="site-nav" '
+            f'aria-label="Menu">{MENU_ICON}</button><nav id="site-nav">{links}</nav></div></header>{MENU_JS}')
+
+
+# 1.5: the header stays at the top; on a phone its links fold into a menu button (site.css, NAV_CSS: max-width 760px)
+GITHUB_ICON = ('<svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 '
+               '0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-'
+               '.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07'
+               '-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27'
+               '.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65'
+               ' 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>'
+               '</svg>')
+MENU_ICON = ('<svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14" '
+             'stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>')
+MENU_JS = """<script>
+(() => {
+  const h = document.currentScript.previousElementSibling, b = h.querySelector(".menu");
+  const set = (on) => { h.classList.toggle("open", on); b.setAttribute("aria-expanded", on); };
+  b.addEventListener("click", () => set(!h.classList.contains("open")));
+  h.querySelector("nav").addEventListener("click", (e) => { if (e.target.closest("a")) set(false); });
+  document.addEventListener("click", (e) => { if (!h.contains(e.target)) set(false); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && h.classList.contains("open")) { set(false); b.focus(); } });
+})();
+</script>"""
 
 
 # the header on a page without site.css (try/: the emulator has its own styles, and site.css's would restyle its
 # buttons): the same header, on a dark bar, its rules scoped to it
 NAV_CSS = """<style>
-header.site { background: #131210; border-bottom: 1px solid #2d2a25; font: 15px/1.4 -apple-system, BlinkMacSystemFont,
+header.site { position: sticky; top: 0; z-index: 50; background: #131210; border-bottom: 1px solid #2d2a25; font: 15px/1.4 -apple-system, BlinkMacSystemFont,
   "Segoe UI", "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
 header.site .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; display: flex; align-items: center; gap: 24px;
   min-height: 56px; flex-wrap: wrap; box-sizing: border-box; }
@@ -80,9 +106,24 @@ header.site nav .beta { margin-left: 5px; padding: 1px 4px; border: 1px solid #f
 header.site .px-c { fill: #96603a; } header.site .px-o { fill: #f2ede3; } header.site .px-g { fill: rgba(242,237,227,.08); }
 header.site .px-h { fill: #fff; } header.site .px-l { fill: #f0a43a; } header.site .px-L { fill: #f8d394; }
 header.site .px-d { fill: #a8640f; }
-@media (max-width: 560px) { header.site .wrap { gap: 4px 16px; padding-top: 10px; padding-bottom: 10px; }
-  header.site nav { margin-left: 0; gap: 14px; } }
-@media (max-width: 420px) { header.site nav { gap: 2px 12px; font-size: 14px; } }
+header.site nav a.gh { display: flex; align-items: center; color: #5c564d; }
+header.site nav a.gh:hover { color: #a29b8e; }
+header.site nav a.gh span { display: none; }
+header.site .menu { display: none; margin-left: auto; padding: 8px; border: 1px solid #2d2a25; border-radius: 8px;
+  background: transparent; color: #f2ede3; cursor: pointer; line-height: 0; }
+header.site .menu svg { display: block; }
+@media (max-width: 760px) {
+  header.site .wrap { position: relative; flex-wrap: nowrap; }
+  header.site .menu { display: block; }
+  header.site nav { display: none; position: absolute; top: 100%; left: 0; right: 0; flex-direction: column; gap: 0;
+    background: #131210; border-bottom: 1px solid #2d2a25; padding: 6px 16px 12px; box-shadow: 0 12px 24px -12px rgba(0,0,0,.6); }
+  header.site.open nav { display: flex; }
+  header.site nav a { padding: 10px 0; border-bottom: 1px solid #2d2a25; }
+  header.site nav a:last-child { border-bottom: 0; }
+  header.site nav a[aria-current] { box-shadow: inset 3px 0 #f0a43a; padding-left: 10px; }
+  header.site nav a.gh { gap: 10px; color: #a29b8e; }
+  header.site nav a.gh span { display: inline; }
+}
 </style>"""
 
 
@@ -356,7 +397,7 @@ PANEL_SEC = {                                        # control: (sections, what 
     "OCT-": ([3], "SHIFT (hold): what each key does on screen"),
     "OCT+": ([3], "COPY (hold), OK in dialogs; with SHIFT: CLEAR"),
     "FX": ([10], "FX bus, reverb, dirt, compressor"),
-    "SCL": ([9], "Filter, shape, insert FX"),
+    "SEL": ([9], "Filter, shape, insert FX"),
     "ENV": ([9], "Amp envelope, gate, mod envelope"),
     "LFO": ([9], "LFOs, random per hit, cross mod"),
     "EDIT": ([9], "Model, oscillator, FM, transient; SHIFT: KEYS"),
@@ -415,7 +456,7 @@ def panel_svg(heads):
                       f'<text class="bl" x="{x + 45}" y="273">{name.replace("-", "−")}</text>'
                       f'<text class="bs" x="{x + 45}" y="286">{sub}</text>' + badge(x + 45, 314, name),
                       f"{name.replace('-', '−')} ({sub})"))
-    rows = (["FX", "SCL", "ENV", "LFO", "EDIT", "GLO"], ["HOME", "SAVE", "ARP", "SEQ", "PLAY", "REC"])
+    rows = (["FX", "SEL", "ENV", "LFO", "EDIT", "GLO"], ["HOME", "SAVE", "ARP", "SEQ", "PLAY", "REC"])
     for r, row in enumerate(rows):
         for i, name in enumerate(row):
             x, y = 582 + 63 * i, 174 + 62 * r
@@ -583,7 +624,7 @@ PAGE = """<!doctype html>
   aside .pdf a {{ display: inline; padding: 0; border: 0; color: var(--gild); }}
 
   /* the side bar: the book's contents */
-  aside {{ position: sticky; top: 0; align-self: start; max-height: 100vh; overflow-y: auto; padding: 32px 0;
+  aside {{ position: sticky; top: var(--head-h); align-self: start; max-height: calc(100vh - var(--head-h)); overflow-y: auto; padding: 32px 0;
            font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif; }}
   aside summary {{ display: none; }}
   aside .title {{ font: 600 13px/1 var(--serif); letter-spacing: .28em; text-transform: uppercase; color: var(--gild);
@@ -603,7 +644,7 @@ PAGE = """<!doctype html>
   aside li ul a.on {{ font-weight: 500; }}
   @media (max-width: 960px) {{
     .book {{ display: block; padding: 0; }}
-    aside {{ position: sticky; top: 0; z-index: 1; background: var(--paper); padding: 8px 16px; max-height: 70vh;
+    aside {{ position: sticky; top: var(--head-h); z-index: 1; background: var(--paper); padding: 8px 16px; max-height: 70vh;
              border-bottom: 1px solid var(--rule); }}
     aside summary {{ display: list-item; cursor: pointer; font-weight: 600; padding: 4px 0; }}
     aside .title {{ display: none; }}
@@ -788,7 +829,7 @@ PAGE_SECTIONS = [
      "The selected track: its length and clock, generators, melody, scale, groove, bounce and time stretch."),
     ("step", "Step edit", "SEQ, pressed again", "6-step-edit",
      "A step's note, trig condition, locks and ratchets. Tap a white key for the step."),
-    ("sound", "Sound pages", "EDIT, ENV, SCL, LFO", "9-shaping-the-sound",
+    ("sound", "Sound pages", "EDIT, ENV, SEL, LFO", "9-shaping-the-sound",
      "Every sound page of a drum voice, in the chain's order. The crumbs under the title show where you are."),
     ("model", "Models", "EDIT, KNOB 1", "models-rings-and-plaits-drum-13-experimental",
      "The MODEL page for each of Elixir's voice models."),
@@ -800,7 +841,7 @@ PAGE_SECTIONS = [
     ("config", "Config", "GLO, pressed again", "16-settings-config-and-the-cpu-meter",
      "The settings: sequencer, MIDI, USB, the remote, buttons, the CPU load."),
 ]
-GROUP_NAMES = {"sound": {"SRC": "Source · EDIT", "FLT": "Filter · SCL", "SHP": "Shape · SCL", "ENV": "Envelopes · ENV",
+GROUP_NAMES = {"sound": {"SRC": "Source · EDIT", "FLT": "Filter · SEL", "SHP": "Shape · SEL", "ENV": "Envelopes · ENV",
                          "MOD": "Modulation · LFO", "FX": "Track sends · LFO"},
                "fx": {"REV": "Reverb", "BUS": "FX bus", "DLY": "Delay", "DRT": "Dirt", "MST": "Master",
                       "SND": "Routing and sends"}}
@@ -932,10 +973,27 @@ def main(pkg, out):
     (out / "index.html").write_text(front.replace("<!--PAGES-->", pages_data(heads)), encoding="utf-8")
     shutil.copytree(ROOT / "docs/img", man / "img")   # (the signal-flow diagrams MANUAL.md shows)
 
+    # 1.5: the quick start, its first beat the manual's section 2 (the numbered list in it), its links to the
+    # manual's sections rewritten from the manual's own anchors
+    sec2 = re.search(r"^## 2\. .*?\n(.*?)^---$", md, flags=re.M | re.S)
+    steps = re.search(r"^1\. .*?(?=\n\n|\Z)", sec2[1] if sec2 else "", flags=re.M | re.S)
+    if not steps:
+        raise SystemExit("MANUAL.md: section 2 has no numbered steps for the quick start")
+    beat = markdown(steps[0])[1].replace('href="#', 'href="../manual/#')
+    q = (ROOT / "web/quickstart.html").read_text(encoding="utf-8")
+    for mark in ("<!--NAV-->", "<!--FIRSTBEAT-->"):
+        if q.count(mark) != 1:
+            raise SystemExit(f"web/quickstart.html must contain {mark} once")
+    (out / "quickstart").mkdir()
+    (out / "quickstart/index.html").write_text(q.replace("<!--NAV-->", nav(1, "quickstart/"))
+                                               .replace("<!--FIRSTBEAT-->", beat), encoding="utf-8")
+
     def manual_page(pdf):                            # pdf: the PDF's name, or None (no link)
-        side = f'<p class="pdf"><a href="{pdf}">The manual as a PDF</a></p>' if pdf else ""
-        b = body.replace("<hr>", f'<p class="pdf"><a href="{pdf}">Download the manual as a PDF</a></p>\n<hr>', 1) \
-            if pdf else body                         # (after the opening paragraphs)
+        cheat = '<a href="../cheatsheet.pdf" target="_blank" rel="noopener">The cheat sheet (PDF)</a>'   # (1.5: was in the header)
+        side = (f'<p class="pdf"><a href="{pdf}">The manual as a PDF</a></p>' if pdf else "") + f'<p class="pdf">{cheat}</p>'
+        top = (f'<a href="{pdf}">Download the manual as a PDF</a><br>' if pdf else "") + \
+            '<a href="../cheatsheet.pdf" target="_blank" rel="noopener">The cheat sheet: every key and knob at a glance (PDF)</a>'
+        b = body.replace("<hr>", f'<p class="pdf">{top}</p>\n<hr>', 1)   # (after the opening paragraphs)
         (man / "index.html").write_text(PAGE.format(title=html.escape(title), body=b, toc=toc(heads), pdf_side=side,
                                                     nav=nav(1, "manual/")), encoding="utf-8")
 
@@ -977,7 +1035,7 @@ def main(pkg, out):
         ("LICENSE", "GPL-3.0"), ("NOTICE.md", "what Elixir is built from"), ("LICENSES/", "the other license texts")]),
         encoding="utf-8")
     (out / ".nojekyll").write_text("")              # GitHub Pages: serve the files as they are
-    print(f"site: {out}: index.html, install/, library/, controllers/ ({len(params['parameters'])} parameters), try/, manual/, firmware/{name} ({len(raw)} B, {product}), firmware/{src}"
+    print(f"site: {out}: index.html, install/, quickstart/, library/, controllers/ ({len(params['parameters'])} parameters), try/, manual/, firmware/{name} ({len(raw)} B, {product}), firmware/{src}"
           f"{', earlier: ' + ' '.join(o['version'] for o in older) if older else ''}")
 
 

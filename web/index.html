@@ -34,7 +34,11 @@
   .show .dots button { width: 8px; height: 8px; padding: 0; border: 0; border-radius: 50%; background: var(--line);
                        cursor: pointer; }
   .show .dots button[aria-current="true"] { background: var(--accent-fill); }
-  .actions { display: flex; gap: 12px; flex-wrap: wrap; margin: 26px 0 16px; }
+  .actions { display: flex; gap: 12px; flex-wrap: wrap; margin: 26px 0 14px; }
+  .learn { display: flex; gap: 8px 24px; flex-wrap: wrap; margin: 0 0 18px; }   /* (1.5: the manual and the cheat sheet) */
+  .learn a { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 16px; text-decoration: none; }
+  .learn a:hover span { text-decoration: underline; text-underline-offset: 3px; }
+  .learn svg { width: 18px; height: 18px; flex: none; }
   .meta { font-size: 14px; color: var(--dim); }
   .support { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 18px; padding-top: 18px;
              border-top: 1px dashed var(--line); }
@@ -65,12 +69,6 @@
   section.band { padding: 56px 0; border-top: 1px solid var(--line); }
   .intro { max-width: 720px; margin-bottom: 32px; }
   .intro p { color: var(--dim); font-size: 18px; }
-
-  .depth { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-  .depth .card { position: relative; }
-  .depth .when { font-size: 13px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase;
-                 color: var(--accent); margin: 0 0 6px; }
-  @media (max-width: 760px) { .depth { grid-template-columns: 1fr; } }
 
   .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
   @media (max-width: 900px) { .grid3 { grid-template-columns: repeat(2, 1fr); } }
@@ -131,24 +129,6 @@
   .updates li { margin-bottom: 5px; }
   .updates li b { color: var(--fg); font-weight: 600; }
   .updates .card > p { font-size: 16px; color: var(--fg); }
-  .moves { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; }
-  .moves .n { display: inline-grid; place-items: center; width: 26px; height: 26px; margin-right: 10px; border-radius: 50%;
-              font-size: 14px; font-weight: 650; background: var(--accent-fill); color: var(--accent-ink); vertical-align: 1px; }
-  @media (max-width: 760px) { .moves { grid-template-columns: 1fr; } }
-  .map { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-  @media (max-width: 760px) { .map { grid-template-columns: 1fr; } }
-  .map h3 { font-size: 13px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--accent);
-            margin: 0 0 6px; }
-  .map dl { display: grid; grid-template-columns: auto 1fr; gap: 0 14px; margin: 0; align-items: baseline; }
-  .map dt, .map dd { padding: 8px 0; border-top: 1px solid var(--line); margin: 0; }
-  .map dt:first-of-type, .map dd:first-of-type { border-top: 0; }
-  .map dd { color: var(--dim); font-size: 15px; }
-  .map dd b { color: var(--fg); font-weight: 550; }
-  .cap { display: inline-block; min-width: 54px; text-align: center; font: 650 12px/1 -apple-system, BlinkMacSystemFont,
-         "Segoe UI", sans-serif; letter-spacing: .04em; padding: 7px 8px; border-radius: 6px; background: #2a2a2d;
-         color: #ececee; box-shadow: inset 0 -2px 0 rgba(0,0,0,.45); white-space: nowrap; }
-  .card .cap { font-size: 11px; min-width: 0; padding: 4px 6px; vertical-align: 1px; }
-  .map .tip { margin-top: 12px; font-size: 14px; color: var(--dim); }
   details.older { margin-top: 16px; }
   /* 1.4.1: the page browser (make_site.py fills in its data: the sections and their screens) */
   .browse { margin-top: 24px; display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; }
@@ -205,8 +185,12 @@
       <div class="actions">
         <a class="btn" href="try/">Try it in your browser</a>
         <a class="btn alt" href="install/">Install on your FM-1</a>
-        <a class="btn alt" href="manual/">Read the manual</a>
       </div>
+      <p class="learn">
+        <a href="quickstart/"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M10 8l6 4-6 4z"/></svg><span>Quick start</span></a>
+        <a href="manual/"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg><span>Read the manual</span></a>
+        <a href="cheatsheet.pdf" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg><span>Cheat sheet</span></a>
+      </p>
       <p class="meta">Version <!--VERSION-->, released <!--RELEASED--> · <a href="#updates">what's new</a></p>
       <div class="support">
         <p>Elixir is free, made by one person in my spare time. If it makes your FM-1 more fun:</p>
@@ -241,26 +225,7 @@
     <li><b>85</b><span>LXR-02 factory kits built in</span></li>
   </ul>
 
-  <section class="band" style="border-top:0">
-    <div class="intro">
-      <h2>Simple to start. Deep when you want it.</h2>
-      <p>You don't need to learn it all at once. Everything past the basics waits until you go looking for it, and
-        anything that changes your beat for you can be undone.</p>
-    </div>
-    <div class="depth">
-      <div class="card"><p class="when">Minute one</p><h3>Pick a kit, tap a beat</h3><p>Turn PRESETS to choose one of
-        the LXR-02's factory kits, pick a drum, tap the white keys and press play. The manual's quick start is nine
-        short steps.</p></div>
-      <div class="card"><p class="when">Week one</p><h3>Make it yours</h3><p>Shape a kick, add delay and reverb, lock a
-        filter sweep to one step, give the hats a swing, and play the performance keys: rolls, stutters, tape
-        stops.</p></div>
-      <div class="card"><p class="when">Month one</p><h3>Let it surprise you</h3><p>Have a generator write the hats,
-        roll the dice on a sound, let the pattern drift somewhere new over ten minutes, and map it all to a
-        controller.</p></div>
-    </div>
-  </section>
-
-  <section class="band" id="features">
+  <section class="band" id="features" style="border-top:0">
     <div class="intro">
       <h2>Everything in one place</h2>
       <p>What's in the bottle, grouped by what it's for. The <a href="manual/">manual</a> has the details.</p>
@@ -463,63 +428,6 @@
     </div>
   </section>
 
-  <section class="band" id="how">
-    <div class="intro">
-      <h2>Finding your way around</h2>
-      <p>Every FM-1 firmware does this a little differently, so here's how Elixir works. There are three moves, and they
-        work the same everywhere. Pick a track with the black keys 1–7 first; the sound and sequencer pages are about
-        that track.</p>
-    </div>
-    <div class="moves">
-      <div class="card"><h3><span class="n">1</span>Press a button</h3><p>It opens that button's section: <span class="cap">EDIT</span>
-        opens the sound's model, <span class="cap">HOME</span> the step grid, <span class="cap">FX</span> the effects.</p></div>
-      <div class="card"><h3><span class="n">2</span>Press it again</h3><p>Most buttons hold a few sections. Each press goes to
-        the next one, in the order below, then back to the first. A sound button goes back to its first page.</p></div>
-      <div class="card"><h3><span class="n">3</span>Turn SELECT</h3><p>It turns the pages, one at a time; the title shows where
-        you are (<em>3/18</em>). The four knobs change the four values at the bottom of the screen.</p></div>
-    </div>
-    <div class="map">
-      <div class="card"><h3>The sound of the selected track</h3>
-        <dl>
-          <dt><span class="cap">EDIT</span></dt><dd><b>Model</b> → oscillator → FM → transient</dd>
-          <dt><span class="cap">SCL</span></dt><dd><b>Filter</b> → shape (drive, bits, tilt) → insert effect</dd>
-          <dt><span class="cap">ENV</span></dt><dd><b>Amp envelope</b> → gate → mod envelope and velocity</dd>
-          <dt><span class="cap">LFO</span></dt><dd><b>LFO 1</b> → LFO 2 → random per hit → cross mod and choke → sends</dd>
-        </dl>
-        <p class="tip">These four jump into one row of 19 sound pages, laid out like a synth's signal path. SELECT walks
-          the whole row, and the line under the title shows where you are in it.</p></div>
-      <div class="card"><h3>Patterns and sequencing</h3>
-        <dl>
-          <dt><span class="cap">HOME</span></dt><dd><b>Step grid</b> → patterns → load → song</dd>
-          <dt><span class="cap">SEQ</span></dt><dd><b>The track's pages</b> (length, generator, melody, scale, groove …) → step
-            edit</dd>
-          <dt><span class="cap">PLAY</span> <span class="cap">REC</span></dt><dd>Start and stop; record live from the keys</dd>
-          <dt><span class="cap">SAVE</span></dt><dd><b>Save</b> → load</dd>
-        </dl>
-        <p class="tip">Tap white keys to place steps. Hold a step and turn a knob to set that value for that step only.</p></div>
-      <div class="card"><h3>Playing live and the generative tools</h3>
-        <dl>
-          <dt><span class="cap">ARP</span></dt><dd><b>Perform</b> (the keys become effects) → spells → wander → global
-            modulation (LFOs, macros, links)</dd>
-          <dt><span class="cap">PRESETS</span></dt><dd>Turn it to browse kits. On a sound page, it browses single sounds for the
-            track</dd>
-        </dl>
-        <p class="tip">Performance effects stop when you let go of the key, and a spell or a wander can always be
-          undone.</p></div>
-      <div class="card"><h3>Mix, effects and settings</h3>
-        <dl>
-          <dt><span class="cap">FX</span></dt><dd><b>Reverb</b>, effects bus, delay, dirt, master filter, compressor, routing and
-            the sends, one page after another</dd>
-          <dt><span class="cap">GLO</span></dt><dd><b>Mixer</b> → settings (MIDI, USB audio, colors …)</dd>
-          <dt><span class="cap">OCT−</span></dt><dd><b>SHIFT</b>: hold it and the screen lists what each key does with it</dd>
-          <dt><span class="cap">OCT+</span></dt><dd><b>COPY</b> and OK. Hold it and turn a knob to change every track at once</dd>
-        </dl></div>
-    </div>
-    <p class="small" style="margin-top:16px">The <a href="cheatsheet.pdf">cheat sheet</a> has every page's knobs on four
-      pages, and the <a href="manual/#3-the-panel">manual</a> covers the panel in detail. In the
-      <a href="try/">emulator</a> you can try all of this with the mouse.</p>
-  </section>
-
   <section class="band">
     <div class="intro"><h2>On the FM-1's screen</h2><p>Every page draws what its knobs do.</p></div>
     <div class="strip">
@@ -553,9 +461,10 @@
       <div class="card"><h3>Install it</h3><p>The install page checks your FM-1, puts the official V15 firmware on
         first if needed, then installs Elixir. Going back to V15 is on the same page.</p>
         <a class="btn alt" href="install/">Install Elixir</a></div>
-      <div class="card"><h3>Learn it</h3><p>The manual starts with a beat in two minutes, then covers every page,
-        button and knob. The <a href="cheatsheet.pdf">cheat sheet</a> fits it all on four pages.</p>
-        <a class="btn alt" href="manual/">Read the manual</a></div>
+      <div class="card"><h3>Learn it</h3><p>The quick start shows how it's laid out in nine short cards. The
+        <a href="manual/">manual</a> covers every page, button and knob, and the <a href="cheatsheet.pdf" target="_blank"
+        rel="noopener">cheat sheet</a> puts it all on a few pages.</p>
+        <a class="btn alt" href="quickstart/">Quick start</a></div>
     </div>
   </section>
 
@@ -564,9 +473,9 @@
   <section class="band" id="updates">
     <div class="intro"><h2>Updates</h2><p>What each release added and fixed.</p></div>
     <div class="updates">
-      <div class="card"><h3>1.5<span>In testing</span></h3>
-        <p>Start new projects, a lighter load on the processor, and clearer hints on screen. Projects, kits and
-          settings from 1.4 work as before.</p>
+      <div class="card"><h3>1.5<span>November 21, 2026</span></h3>
+        <p>Start new projects, a lighter load on the processor, mute and solo from the mixer, slower LFOs, and
+          clearer hints on screen. Projects, kits and settings from 1.4 work as before.</p>
         <ul>
           <li><b>New projects.</b> On LOAD &rarr; PROJECT, pick an empty slot and press OCT+. Elixir starts a fresh
             project (Init kits, empty patterns) and saves it to that slot, named after it (PROJECT2 in slot 2).</li>
@@ -586,7 +495,21 @@
             on. The GRAY palette stays gray.</li>
           <li><b>CONFIG, shorter and easier to find your way around.</b> The hints are one line each, with the
             obvious knobs left out, and crumbs under the title show where you are in CONFIG's 17 pages, as on the
-            sound and FX pages.</li>
+            sound and FX pages. On every page the crumbs' lit part is now a neutral gray, so it doesn't compete with
+            the picture's color.</li>
+          <li><b>Mute and solo on the mixer.</b> On the mixer and CONFIG (GLO), a track's black key mutes and
+            unmutes it; hold OCT&minus; and press a track's key to solo it. The keys light for the tracks that
+            play.</li>
+          <li><b>Hold GLO for a quick look at the mixer.</b> From any page but SAVE and LOAD, hold GLO: the mixer
+            opens while you hold it, and letting go takes you back to the page you came from. A short press works as
+            before.</li>
+          <li><b>Slower LFOs.</b> A track LFO's Sync now reaches 8/1 and 16/1 (eight and sixteen bars) for slow
+            sweeps. The rarely used 5/16 and 3/16 are gone: kits and projects saved with them load with the nearest
+            value, 1/2T or 1/4T.</li>
+          <li><b>Volume on the sends page.</b> The last sound page (FX TRACK SENDS) has the track's volume on KNOB 4,
+            next to its FX, delay and reverb sends.</li>
+          <li><b>A quick start on this site.</b> The new <a href="quickstart/">quick start</a> shows how the panel
+            is laid out, in nine short cards with the screens.</li>
         </ul>
       </div>
       <div class="card"><h3>1.4.7<span>November 19, 2026</span></h3>
@@ -665,10 +588,10 @@
             chain: <b>SRC › FLT › SHP › ENV › MOD › FX</b> for the sound, <b>REV › BUS › DLY › DRT › MST › SND</b> for the
             effects. The part you're in is lit, with a dot for each of its pages. The page number (13/19) is still
             in the title.</li>
-          <li><b>ENV, SCL and LFO always open their first page</b>, even when you press them again, so one press takes
+          <li><b>ENV, SEL and LFO always open their first page</b>, even when you press them again, so one press takes
             you back to the start of the envelopes, the filter or the LFOs.</li>
           <li>New setting: <b>CONFIG → BUTTONS &amp; KITS → Select</b>. Set it to BUTTON and the button you pressed stays
-            lit: EDIT goes through every sound page, and ENV, SCL and LFO keep SELECT to their own pages.</li>
+            lit: EDIT goes through every sound page, and ENV, SEL and LFO keep SELECT to their own pages.</li>
           <li>On the FX pages, <b>ROUTING</b> now sits with the sends, where the effects are mixed.</li>
           <li>The page pictures are cleaner: fewer words (the knobs already show the values), one text size, and a
             thinner line for the track's steps.</li>
@@ -1173,7 +1096,7 @@
           <h4>Changed</h4>
           <ul>
             <li>The sound pages run in a synth's order: MODEL, oscillator, FM, transient, filter, shape, insert FX,
-              the envelopes, then the modulation. SELECT steps through them all; EDIT, ENV, SCL and LFO jump to their
+              the envelopes, then the modulation. SELECT steps through them all; EDIT, ENV, SEL and LFO jump to their
               sections. A section of several pages shows its page in the title.</li>
             <li>SEQ opens the track's pages (TRACK, generator, action, groove, bounce, melody, scale), SEQ again step
               edit. ARP cycles PERFORM → SPELLS → GLOBAL MOD (the global LFOs, macros and links).</li>
@@ -1205,7 +1128,7 @@
               now called Chord; Timbre and Morph are named Invert and Wave.</li>
             <li>TRK LFO 2 (LFO, after LFO MODE; from 0.19 LFO 2): a second LFO on every track, with LFO 1's waves, sync, retrigger,
               offset and modes, on any of the track's own parameters. On the same target as LFO 1 it adds to it.</li>
-            <li>INSERT (SCL, after SHAPE): an effect on every track before its pan and sends: PHASER, FLANGER,
+            <li>INSERT (SEL, after SHAPE): an effect on every track before its pan and sends: PHASER, FLANGER,
               CHORUS, TREMOLO, AUTOPAN, SHIFTER (a frequency shifter with feedback) or RING, with an AMOUNT and two
               knobs named for the type.</li>
             <li>The LFO's and velocity's targets go on past the LXR's to Elixir's own: the sends, tilt, bits, the

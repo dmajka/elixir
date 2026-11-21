@@ -1347,7 +1347,7 @@ static void viz_lfo(int two)
     mode = vp_get(lfo_par(ui.track, two, LP_MODE)); sync = vp_get(lfo_par(ui.track, two, LP_SYNC));
     rtrg = vp_get(lfo_par(ui.track, two, LP_RETRIG)); ofs = vp_get(lfo_par(ui.track, two, LP_PHASE));
     if (sync && sync < NSYNC)
-        cyc_q16 = ((uint64_t)SYNC_SCALE_X60[sync] << 14) / 15u;
+        cyc_q16 = ((uint64_t)SYNC_SCALE_X60[sync] << 14) / 60u;
     else {                                           /* (the free rate a bar at the tempo) */
         uint64_t inc = lut1024u(LFO_INC, rate * 65536u / 127u), bpm = seq_bpm() ? seq_bpm() : 120u;
         cyc_q16 = (inc * (FS / BLOCK) * 240u) >> 16;
@@ -1496,24 +1496,25 @@ static void viz_random(void)
     }
 }
 
-/* 1.0 Phase 16: FX TRACK SENDS: the voice's three sends as bars in its colour; the caption, how the bus and the
- * delay are joined (ROUTING) */
+/* 1.0 Phase 16: FX TRACK SENDS; 1.5: and the volume (knob 4). A bar a knob, over its card, in the track's colour
+ * (as the mixer's); the volume with the voice's level as it plays. No caption: the cards name them */
 static void viz_sends(void)
 {
-    static const char *const N[3] = {"FX", "DELAY", "REVERB"};
-    uint32_t v = track_voice(ui.track), k;
-    char b[24], c[32];
-    card_value(b, sizeof b, PAR_DLY_ROUTE, par[PAR_DLY_ROUTE]);
-    put_str(c, "BUS & DELAY: ", sizeof c);
-    put_str(c + 13, b, sizeof c - 13u);
-    vz_panel(c);
-    for (k = 0; k < 3u; k++) {
-        static const uint16_t S[3] = {PAR_FX_SEND1, PAR_DSEND1, PAR_REV_SEND1};
-        int32_t y = VY0 + 10 + (int32_t)k * 24, a = par[S[k] + v], w = a * 140 / 127;
-        cv_text(VX0, y - 5, &AF_S, N[k], a ? T_TEXT : T_DIM);
-        cv_rect(76, y, 140, 1, vz_faint());
-        if (w)
-            cv_rect(76, y - 3, w, 7, ux_mix(vz_bg(), TRACK_COL[ui.track], 70));
+    uint16_t k[4];
+    uint32_t v = track_voice(ui.track), i;
+    int32_t R = VY1 - VY0, h;
+    vz_panel("");
+    page_params(k);
+    for (i = 0; i < 4u; i++) {
+        int32_t x = (int32_t)i * 60 + 20;
+        if (k[i] == VP_NONE)
+            continue;
+        h = (int32_t)vp_get(k[i]) * R / 127;
+        cv_rrect(x, VY0, 20, R, 3, ux_mix(vz_bg(), T_TEXT, 10), vz_bg());
+        if (h)
+            cv_rect(x, VY1 - h, 20, h, ux_mix(vz_bg(), TRACK_COL[ui.track], 70));
+        if (k[i] == PAR_VOL1 + v && voice_peak[v] * R / 32768 > 0)
+            cv_rect(x, VY1 - voice_peak[v] * R / 32768, 20, 2, T_ACCENT);
     }
 }
 /* CROSS MOD / CHOKE: the source's voice into this one (its mode, by the amount); the voices that choke each other */

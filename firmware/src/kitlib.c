@@ -488,6 +488,7 @@ static int libkit_save(uint32_t n, const char *name, int morph)
         uint32_t p = kit_par(i);
         k[i] = morph && morph_amt && !morph_excluded(p) ? (uint8_t)morph_mix(p, par[p], morph_par[i], morph_amt) : par[p];
     }
+    kit_sync(k, 1);                                  /* (1.5: kit.c sync_in) */
     return kl_write(KLK_KIT, n, name, k, KIT_LEN);
 }
 /* library kit n (kit layout) into k: 0, or -1 */
@@ -525,6 +526,19 @@ static int libkit_load(uint32_t n, int morph)
         snd_post_all();
     return 0;
 }
+/* 1.5: a sound's (kind, voice, count, values) LFO SYNCs read (0) or to be saved (1), as a kit's (kit.c sync_in) */
+static void snd_sync(uint8_t *s, int out)
+{
+    uint32_t i, k = 0;
+    for (i = 0; i < KIT_LEN && k < s[2]; i++) {
+        uint32_t p = kit_par(i);
+        if (par_voice(p) != s[1])
+            continue;
+        if (is_lfo_sync(p))
+            s[3 + k] = (uint8_t)(out ? sync_out(s[3 + k]) : sync_in(s[3 + k]));
+        k++;
+    }
+}
 /* the edit buffer's voice v into library sound n */
 static int libsound_save(uint32_t n, const char *name, uint32_t v)
 {
@@ -532,6 +546,7 @@ static int libsound_save(uint32_t n, const char *name, uint32_t v)
     b[0] = (uint8_t)voice_kind(v);
     b[1] = (uint8_t)v;
     b[2] = (uint8_t)voice_get_par(v, b + 3);
+    snd_sync(b, 1);
     return kl_write(KLK_SOUND, n, name, b, 3u + b[2]);
 }
 /* library sound n into s (3 + values): its count, -1 none, -2 not this voice's kind */
@@ -540,6 +555,7 @@ static int32_t libsound_get(uint32_t n, uint32_t v, uint8_t *s)
     int32_t len = kl_read(KLK_SOUND, n, s, 3u + SOUND_MAX, 0);
     if (len < 3 || s[1] > 5u || (int32_t)s[2] + 3 > len)
         return -1;
+    snd_sync(s, 0);
     return s[0] != voice_kind(v) || voice_kind(s[1]) != s[0] ? -2 : (int32_t)s[2];
 }
 /* .. into the edit buffer's voice v: 0, -1, -2 */

@@ -334,7 +334,7 @@ static void phase2(void)
               autodest_to_par(lock_get(p, 0, 5, 1)) == PAR_FX_SEND1 + 10u, "version-2 locks move to their numbers");
         seq_clear_automation(0, p);
     }
-    /* the panel: SCL > SHAPE, LFO > RANDOM > CROSS MOD; a lock on a shaping parameter, saved and loaded */
+    /* the panel: SEL > SHAPE, LFO > RANDOM > CROSS MOD; a lock on a shaping parameter, saved and loaded */
     for (i = 0; i < NUM_PATTERN; i++)                 /* (the dense project's patterns and kits out) */
         seq_clear_pattern(&pat[i]);
     {
@@ -349,7 +349,7 @@ static void phase2(void)
     black(0);
     press(B_SCL);
     sect_go(S_SHAPE);
-    check(ui.mode == M_SOUND && ui.sect == S_SHAPE, "SCL, SELECT: SHAPE");
+    check(ui.mode == M_SOUND && ui.sect == S_SHAPE, "SEL, SELECT: SHAPE");
     turn(EN_K1, 1);
     turn(EN_K4, 4);
     {
@@ -1934,7 +1934,7 @@ static void phase14(void)
     turn(EN_SELECT, 1);
     press(B_ENV);
     check(ui.sect == S_AEG && ui.half == 0, "1.4.1: ENV again: AMP EG");
-    {   /* 1.4.1: CONFIG Select BUTTON: EDIT stays lit through every page; ENV, SCL, LFO keep to their own */
+    {   /* 1.4.1: CONFIG Select BUTTON: EDIT stays lit through every page; ENV, SEL, LFO keep to their own */
         uint8_t sb = kset.sbtn, pm = kset.pmem;
         uint32_t i, ok = 1, n = 0;
         kset.sbtn = 1;
@@ -3190,7 +3190,7 @@ static void phase13_control_all(void)
     before = *p;
     black(0);
     press(B_SCL);
-    check(ui.mode == M_SOUND && ui.sect == S_FILTER, "SCL: the filter page");
+    check(ui.mode == M_SOUND && ui.sect == S_FILTER, "SEL: the filter page");
     /* the filter on every voice, by the knob's steps from each one's own value, clamped */
     hold(B_OCTUP);
     turn(EN_K2, 5);                            /* (1.0: FILTER's knobs Type, Freq, Reso, Drive) */
@@ -3271,7 +3271,7 @@ static void phase13_control_all(void)
     /* a Elixir parameter (blocks of six): bits on every voice */
     press(B_SCL);
     sect_go(S_SHAPE);
-    check(ui.sect == S_SHAPE, "SCL, SELECT: SHAPE");
+    check(ui.sect == S_SHAPE, "SEL, SELECT: SHAPE");
     hold(B_OCTUP);
     turn(EN_K4, 2);
     release(B_OCTUP);
@@ -5598,7 +5598,7 @@ static void phase27a(void)
     check(ui.sect == S_INSERT && pp[0] == PAR_INS1 + 3u && pp[1] == PAR_INSA1 + 3u && pp[2] == PAR_INSB1 + 3u &&
           pp[3] == PAR_INSC1 + 3u && !strcmp(b, "INSERT FX"), "the filter button, SELECT: INSERT");
     press(B_SCL);
-    check(ui.sect == S_FILTER, "1.4.1: SCL again: FILTER");
+    check(ui.sect == S_FILTER, "1.4.1: SEL again: FILTER");
     sound_open(S_INSERT, 0);
     run_ms(20);
     turn(EN_K1, 1);                                  /* (1.0: OFF, SHIFTER, RING: the dropped types passed) */
@@ -8609,11 +8609,73 @@ static void phase_100_3(void)
     par_set(PAR_SYNC_LFO1, 6);                        /* (1/4) */
     run_ms(20);
     turn(EN_K3, 1);
-    check(par[PAR_SYNC_LFO1] == 14u, "SYNC K3 on from 1/4: 5/16 (by length, longer to the right)");
-    par_format(b, PAR_SYNC_LFO1, 14, sizeof b);
-    check(!strcmp(b, "5/16"), "its name: 5/16");
+    check(par[PAR_SYNC_LFO1] == 5u, "SYNC K3 on from 1/4: 1/2T (by length, longer to the right; 1.5: no 5/16)");
     turn(EN_K3, -2);
-    check(par[PAR_SYNC_LFO1] == 15u, "SYNC back two: 3/16");
+    check(par[PAR_SYNC_LFO1] == 7u, "SYNC back two: 1/4T (1.5: no 3/16)");
+    par_set(PAR_SYNC_LFO1, 1);                        /* (4/1) */
+    run_ms(20);
+    turn(EN_K3, 1);
+    par_format(b, PAR_SYNC_LFO1, par[PAR_SYNC_LFO1], sizeof b);
+    check(par[PAR_SYNC_LFO1] == 14u && !strcmp(b, "8/1"), "1.5: SYNC on from 4/1: 8/1");
+    turn(EN_K3, 1);
+    par_format(b, PAR_SYNC_LFO1, par[PAR_SYNC_LFO1], sizeof b);
+    check(par[PAR_SYNC_LFO1] == 15u && !strcmp(b, "16/1"), "1.5: .. then 16/1, the longest");
+    turn(EN_K3, 1);
+    check(par[PAR_SYNC_LFO1] == 15u, "1.5: 16/1 the knob's end");
+    run_ms(20);
+    d = (uint32_t)(4294967296.0 * BLOCK / FS / 32.0);
+    check(vc[0].lfo.inc > d - d / 200u && vc[0].lfo.inc < d + d / 200u, "1.5: SYNC 16/1: a cycle in 32 s at 120 BPM");
+    par_set(PAR_SYNC_LFO1, 14);
+    run_ms(20);
+    d = (uint32_t)(4294967296.0 * BLOCK / FS / 16.0);
+    check(vc[0].lfo.inc > d - d / 200u && vc[0].lfo.inc < d + d / 200u, "1.5: SYNC 8/1: a cycle in 16 s at 120 BPM");
+    par_set(PAR_L2SYNC1, 13);                         /* (1.5: LFO 2 past 11 was free) */
+    run_ms(20);
+    d = (uint32_t)(4294967296.0 * BLOCK / FS / 0.75);
+    check(vc[0].lfo2.sync == 13u && vc[0].lfo2.inc > d - d / 200u && vc[0].lfo2.inc < d + d / 200u,
+          "1.5: LFO 2's SYNC 3/8 syncs (was free past 1/32)");
+    {                                                 /* 1.5: saved, 8/1 16/1 as 30 31; 14 15 read: 5/16 3/16's nearest */
+        uint8_t k[KIT_LEN], sn[3u + SOUND_MAX];
+        kit_init_values(k);
+        k[PAR_SYNC_LFO1] = 14;
+        k[PAR_SYNC_LFO1 + 1] = 15;
+        k[PAR_SYNC_LFO1 + 2] = 30;
+        k[kit_idx(PAR_L2SYNC1)] = 31;
+        k[kit_idx(PAR_L2SYNC1 + 1)] = 13;
+        kit_sanitize(k);
+        check(k[PAR_SYNC_LFO1] == 5u && k[PAR_SYNC_LFO1 + 1] == 7u && k[PAR_SYNC_LFO1 + 2] == 14u &&
+              k[kit_idx(PAR_L2SYNC1)] == 15u && k[kit_idx(PAR_L2SYNC1 + 1)] == 13u,
+              "1.5: a kit read: 5/16 -> 1/2T, 3/16 -> 1/4T, 30 31 -> 8/1 16/1, the rest as they were");
+        par_set(PAR_SYNC_LFO1, 15);
+        par_set(PAR_L2SYNC1, 14);
+        check(!libsound_save(98, "SYNC    ", 0) && libsound_get(98, 0, sn) > 0, "1.5: a sound saved and read");
+        {
+            uint32_t i, j = 0, a = 0, c = 0;
+            for (i = 0; i < KIT_LEN; i++)
+                if (par_voice(kit_par(i)) == 0u) {
+                    a |= kit_par(i) == PAR_SYNC_LFO1 && sn[3 + j] == 15u;
+                    c |= kit_par(i) == PAR_L2SYNC1 && sn[3 + j] == 14u;
+                    j++;
+                }
+            check(a && c, "1.5: .. its SYNCs 16/1 and 8/1 as they were");
+        }
+        {
+            int rc;
+            k[PAR_SYNC_LFO1] = 0;
+            kit_put(3, k);                            /* (slot 3: D1 LFO 1 OFF, D2 1/4T, D3 8/1, LFO 2 16/1) */
+            lk_put(&pat[sq.active], 0, 2, par_to_autodest(PAR_SYNC_LFO1), 15);
+            rc = proj_save(1, "SYNC    ");
+            par[PAR_SYNC_LFO1] = par[PAR_L2SYNC1] = 0;
+            rc |= proj_load(1);
+            kit_get(3, k);
+            check(rc == 0 && par[PAR_SYNC_LFO1] == 15u && par[PAR_L2SYNC1] == 14u && k[PAR_SYNC_LFO1 + 1] == 7u &&
+                  k[PAR_SYNC_LFO1 + 2] == 14u && k[kit_idx(PAR_L2SYNC1)] == 15u &&
+                  lk_get(&pat[sq.active], 0, 2, par_to_autodest(PAR_SYNC_LFO1)) == 15,
+                  "1.5: a project keeps 8/1 and 16/1 (the edit buffer, a kit, a lock)");
+            lk_del(&pat[sq.active], 0, 2, par_to_autodest(PAR_SYNC_LFO1));
+        }
+        par_set(PAR_L2SYNC1, 0);
+    }
     par_format(b, PAR_SYNC_LFO1, 5, sizeof b);
     check(!strcmp(b, "1/2T"), "the LXR's 1/3: a half-note triplet, 1/2T");
     par_set(PAR_SYNC_LFO1, 13);                       /* (3/8 at 120 BPM: 0.75 s a cycle) */
@@ -9960,7 +10022,9 @@ static void phase_100_16(void)
         ui.half = 0;
         page_params(pp);
         ok = l[n - 1u][0] == S_SENDS && pp[0] == PAR_FX_SEND1 + 1 && pp[1] == PAR_DSEND1 + 1 &&
-             pp[2] == PAR_REV_SEND1 + 1 && pp[3] == VP_NONE;
+             pp[2] == PAR_REV_SEND1 + 1 && pp[3] == PAR_VOL1 + 1;   /* (1.5: the volume on K4) */
+        card_name(b, sizeof b, pp[3]);
+        ok &= !strcmp(b, "Vol");
         card_name(b, sizeof b, pp[0]);
         ok &= !strcmp(b, "FX");
         card_name(b, sizeof b, pp[1]);
@@ -9971,7 +10035,7 @@ static void phase_100_16(void)
         run_ms(100);
         shot("sends-track");
         ok &= l[n - 2u][0] != S_SENDS;               /* (1.0: one page; the returns are global, on FX and MIXER) */
-        check(ok, "FX TRACK SENDS: the last page, one page: FX / Delay / Reverb");
+        check(ok, "FX TRACK SENDS: the last page, one page: FX / Delay / Reverb / Vol");
         /* Control All on it: every track's delay send */
         ui.half = 0;
         par_set(PAR_FX_SEND1 + 1, 40);
@@ -10706,6 +10770,10 @@ static void phase_100_6(void)
         vp_set(VP_DJRESO, 100);
         pf.dj = 100;
         root = ring_root((100 - 64) * 1040);
+        memset(pf.rg_s, 0, sizeof pf.rg_s);          /* (1.5: what rang before, still ringing at a long Decay: the
+                                                      * test's timing decided it) */
+        memset(pf.rg_xh, 0, sizeof pf.rg_xh);
+        memset(pf.rg_yh, 0, sizeof pf.rg_yh);
         card_name(nm, sizeof nm, VP_DJRESO);
         check(!strcmp(nm, "Decay"), "RING: Reso is Decay");
         card_value(nm, sizeof nm, VP_DJ, 100);
@@ -12653,6 +12721,43 @@ static void fresh_grab(void)                         /* (at power-on: what a new
     fresh_len = pl_grab(3, fresh_pl);
     proj_delete(3);
 }
+/* 1.5: the GLO pages: a track key mutes its track (again: not), OCT- + it solos; GLO held from another page: the
+ * mixer, back to that page as it lets go (a tap: as before) */
+static void phase_15_glo(void)
+{
+    uint32_t pg, ok;
+    sq.muted = sq.solo = 0;
+    goto_mode(B_GLO, M_MIXER);
+    ui.track = 0;
+    black(2);
+    ok = sq.muted == 4u && ui.track == 0u && ui.mode == M_MIXER;
+    black(2);
+    check(ok && sq.muted == 0u, "1.5: MIXER: a track key mutes its track, again unmutes (the track stays)");
+    goto_mode(B_GLO, M_CONFIG);
+    black(5);
+    check(sq.muted == 32u, "1.5: CONFIG: the same");
+    hold(B_OCTDN);
+    black(1);
+    release(B_OCTDN);
+    check(sq.solo == 2u && sq.muted == 32u, "1.5: OCT- + a track key: soloed");
+    shot("glo-mutes");
+    sq.muted = sq.solo = 0;
+    /* GLO held on a sound page: the mixer; let go: back, on the page it was on */
+    sound_open(S_SENDS, 0);
+    run_ms(20);
+    pg = ui.page;
+    hold(B_GLO);
+    ok = ui.mode == M_MIXER;
+    run_ms(500);
+    black(0);
+    ok &= sq.muted == 1u;
+    release(B_GLO);
+    check(ok && ui.mode == M_SOUND && ui.sect == S_SENDS && ui.page == pg, "1.5: GLO held: the mixer, back as it lets go");
+    sq.muted = 0;
+    press(B_GLO);
+    check(ui.mode == M_MIXER, "1.5: GLO tapped: the mixer stays");
+    goto_mode(B_HOME, M_HOME);
+}
 static void phase_15_new_project(void)
 {
     uint32_t i, ok, n;
@@ -13960,6 +14065,7 @@ int main(int argc, char **argv)
     phase_142_hold_clear();
     phase_143_tails();
     phase_15_new_project();
+    phase_15_glo();
     copy_pass();                                     /* (1.0's copy and picture pass: last, as it runs time) */
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;

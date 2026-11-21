@@ -14,7 +14,7 @@
  *   OCT+               COPY (held, + a track, a bar, a pattern); SHIFT + COPY = CLEAR; OK in the dialogs;
  *                      held on a sound page, a knob: CONTROL ALL (let go: OCT+ reverts, OCT- keeps; 1.0: on the
  *                      length, every track's)
- *   EDIT ENV SCL LFO GLO   the sound sections (SHIFT GLO: solo the track): OSC > FM > CLICK, AMP EG > MOD, FILTER > SHAPE, LFO > RANDOM >
+ *   EDIT ENV SEL LFO GLO   the sound sections (SHIFT GLO: solo the track): OSC > FM > CLICK, AMP EG > MOD, FILTER > SHAPE, LFO > RANDOM >
  *                      CROSS MOD (Elixir's: their pages are K_PAGES), MIX > MIXER (volume,
  *                      pan, FX send, reverb send) > CONFIG (the CPU load at the bottom)
  *   FX  SEQ  ARP  HOME  SAVE   FX bus > reverb; the track's pages > step edit; PERF's sets; GRID > PATTERNS >
@@ -171,6 +171,8 @@ static struct {
     uint8_t seq_m, glo_m;            /* .. the mode SEQ and GLO showed last (pmem_save), */
     uint8_t pset[4];                 /* .. 29: PERF's page in each set (PERFORM, 32: SPELLS, 40: WANDER, GLOBAL MOD) */
     uint8_t pcpat;                   /* 1.4: the pattern PROGRAM CHANGE OUT shows (the one playing as CONFIG opens) */
+    uint8_t glo_back, glo_page;      /* 1.5: GLO held from another page: that mode + 1 (0: none), its page, */
+    uint32_t glo_ms;                 /* .. and when GLO went down (held GLO_HOLD_MS: back there as it lets go) */
 } ui = {.held_step = -1, .koct = 3, .knote = 0xFF, .kkey = 0xFF};
 
 
@@ -287,8 +289,9 @@ static const uint16_t K_PAGES[NSECT - S_SHAPE][8] = {{PAR_SHAPE1, PAR_DRIVE1, PA
                                        {PAR_GATE1},       /* (19b) */
                                        {0},               /* (25b: LFO 2: lfo_par) */
                                        {PAR_INS1, PAR_INSA1, PAR_INSB1, PAR_INSC1},          /* (27a) */
-                                       {PAR_FX_SEND1, PAR_DSEND1, PAR_REV_SEND1}};   /* (1.0 Phase 16; one page:
-                                                      * the returns are global, on the FX and mixer pages) */
+                                       {PAR_FX_SEND1, PAR_DSEND1, PAR_REV_SEND1, PAR_VOL1}};   /* (1.0 Phase 16;
+                                                      * one page: the returns are global, on the FX and mixer pages;
+                                                      * 1.5: the volume, as the mixer's) */
 /* 1.0: every LFO's knobs in one order (LP_*: page 1 Dest, Depth, Sync, Rate; page 2 Wave, Phase, Mode, Retrigger;
  * the global LFOs' too, ui.c P_PERF). LFO 1's Voice is no knob: its Dest turns through every voice's (lfo1_dest_turn) */
 enum { LP_DEST, LP_DEPTH, LP_SYNC, LP_RATE, LP_WAVE, LP_PHASE, LP_MODE, LP_RETRIG, NLP };
@@ -2678,7 +2681,7 @@ static void knob_turn(uint32_t k, int32_t n)
 /* ------------------------------------------------------------ modes --- */
 static void pmem_save(void)                          /* 0.13: where the buttons were, as this page is left */
 {
-    if (ui.mode == M_SOUND) {                        /* 1.4: EDIT's: the page it was on, whichever; ENV, SCL, LFO's:
+    if (ui.mode == M_SOUND) {                        /* 1.4: EDIT's: the page it was on, whichever; ENV, SEL, LFO's:
                                                       * one of their own (SELECT past them: as they were) */
         uint32_t g = ui.sbtn;
         if (g == S_MODEL || sect_group(ui.sect) == g) {
@@ -2745,7 +2748,7 @@ static void mode_set(uint32_t m)
     bank_fix();
 }
 /* a section button. EDIT: 1.4: pressed again (or lit: SELECT went into its sections), nothing; with CONFIG Last
- * page, where it was. 1.4.1: ENV, SCL and LFO always open their first page, pressed again too (where they were left
+ * page, where it was. 1.4.1: ENV, SEL and LFO always open their first page, pressed again too (where they were left
  * was hard to follow). CONFIG Select BUTTON: the button pressed stays lit, and SELECT keeps to its pages (EDIT's:
  * all of them) */
 static void sound_open(uint32_t s, int again)        /* (again: a button; 0: open section s) */
@@ -2801,10 +2804,11 @@ static void io_open(uint32_t m, uint32_t type)
     if (type != IO_PROJECT)
         ui.bank = (uint8_t)(ui.io_slot / 16u);
 }
-static void solo_key(void)                           /* 0.10: the track soloed (again: not): SHIFT GLO, the menu's 12 */
+static void solo_key(uint32_t t)                     /* 0.10: track t soloed (again: not): SHIFT GLO, the menu's 12;
+                                                      * 1.5: OCT- + a track key on the GLO pages */
 {
-    sq.solo ^= (uint8_t)(1u << ui.track);
-    ui_message(sq.solo & (1u << ui.track) ? "SOLO ON" : sq.solo ? "SOLO OFF (OTHERS STILL SOLO)" : "SOLO OFF");
+    sq.solo ^= (uint8_t)(1u << t);
+    ui_message(sq.solo & (1u << t) ? "SOLO ON" : sq.solo ? "SOLO OFF (OTHERS STILL SOLO)" : "SOLO OFF");
 }
 
 /* 1.5: LOAD PROJECT: slot s loaded, or (empty) a new project there, named PROJECT<n> and saved at once */
@@ -3455,7 +3459,7 @@ static void white_down(uint32_t w)
             ui_message("SOUND RESET (AS SAVED)");
             return;
         case 10: perf_reset(); return;                /* (SHIFT HOME's) */
-        case 11: solo_key(); return;                  /* (SHIFT GLO's) */
+        case 11: solo_key(ui.track); return;                  /* (SHIFT GLO's) */
         case 12: ui_reload(); return;                 /* RELOAD: the kit and the pattern as saved */
         default:                                      /* 1..7: play the voice (at the keys' velocity); 14..16 free */
             if (w < NTRACK)
@@ -3603,6 +3607,17 @@ static void black_down(uint32_t k)
                 ui.copy_src = 0;
                 ui_message("TRACK COPIED");
             }
+            return;
+        }
+        if (ui.mode == M_MIXER || ui.mode == M_CONFIG) {   /* 1.5: the GLO pages: the track muted (again: not);
+                                                      * OCT- held: soloed. No audition here */
+            if (ui.shift) {
+                ui.shift_used = 1;
+                solo_key(t);
+            } else {
+                sq.muted ^= (uint8_t)(1u << t);
+            }
+            ui.force = 1;
             return;
         }
         if (ui.shift) {
@@ -4081,8 +4096,15 @@ static void button_down(uint32_t b)
     case B_GLO:
         if (ui.shift) {                               /* 0.10: SHIFT GLO: the track soloed (again: not) */
             ui.shift_used = 1;
-            solo_key();
+            solo_key(ui.track);
             return;
+        }
+        ui.glo_back = 0;
+        if (ui.mode != M_MIXER && ui.mode != M_CONFIG && ui.mode != M_SAVE && ui.mode != M_LOAD) {   /* 1.5: held, back
+                                                      * (button_up; not to SAVE or LOAD, their dialogs gone) */
+            ui.glo_back = (uint8_t)(ui.mode + 1u);
+            ui.glo_page = (uint8_t)ui.page;
+            ui.glo_ms = fm1_ms;
         }
         if (ui.mode == M_MIXER)                      /* (29: the mixer, then CONFIG; the track's MIX pages gone) */
             mode_set(M_CONFIG);
@@ -4108,9 +4130,17 @@ static void button_down(uint32_t b)
         return;
     }
 }
+#define GLO_HOLD_MS 400u
 static void button_up(uint32_t b)
 {
-    if (b == B_OCTDN) {
+    if (b == B_GLO) {                                /* 1.5: GLO held from another page: back there, on its page */
+        if (ui.glo_back && (ui.mode == M_MIXER || ui.mode == M_CONFIG) && fm1_ms - ui.glo_ms >= GLO_HOLD_MS) {
+            mode_set(ui.glo_back - 1u);
+            ui.page = ui.glo_page;
+            ui.force = 1;
+        }
+        ui.glo_back = 0;
+    } else if (b == B_OCTDN) {
         ui.shift = 0;
         ui.fine = 0;
         if (ui.clear_open)                            /* SHIFT let go: CLEAR aborted (the LXR's way) */
@@ -4222,7 +4252,7 @@ static void ui_input(void)
         } else if (ui.mode == M_SOUND) {
             uint8_t l[NSPG][2];
             uint32_t np = sound_pages(l), i, j, k;
-            if (kset.sbtn && ui.sbtn != S_MODEL) {   /* 1.4.1: Select BUTTON: ENV, SCL, LFO: their own pages only */
+            if (kset.sbtn && ui.sbtn != S_MODEL) {   /* 1.4.1: Select BUTTON: ENV, SEL, LFO: their own pages only */
                 for (i = j = 0; i < np; i++)
                     if (sect_group(l[i][0]) == ui.sbtn) {
                         l[j][0] = l[i][0];
@@ -4449,6 +4479,11 @@ static void ui_leds(void)
         if (ca_keys()) {                             /* (Phase 17: Control All: lit, the tracks in it; dim, left out) */
             led_put(nl, id, !((kset.caout >> k) & 1u));
             led_put(nd, id, 1);
+            continue;
+        }
+        if (ui.mode == M_MIXER || ui.mode == M_CONFIG) {   /* (1.5: the GLO pages: lit, the tracks that play; off,
+                                                      * muted, or another soloed) */
+            led_put(nl, id, !muted);
             continue;
         }
         led_put(nl, id, (k == ui.track && !ui.perf) || (flash && !muted));

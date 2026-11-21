@@ -36,18 +36,22 @@ Elixir (called Kettle until 0.13) is the Erica Synths LXR-02 firmware (GPL-3.0) 
 - **First hardware run (0.5.1):** installed on a real FM-1 from V15 with the install page (`web/make_site.py`); a battery display on CONFIG; autosave no longer makes a burst of noise after a stop. See *0.5.1* below.
 - **Tests:** render_test, compare_test, library_test (the library page's code against the device's), install_test (the install page's updater against simulated FM-1s, Kettle to Elixir), rings_compare (the models against Rings' float code) and ui_test (96 screens; CONFIG → LOAD and the cores, the models' limit; Phase 14 (LFO modes, global LFOs, Last page, Euclid 2); the remote map; Control All; Rings' models; PERF's pages, MIX and KEYS; the kit library and sound browser; PERFORM 2; links between tracks; bouncing ratchets and the roll sweep; the output's hush and autosave's timing; the battery display; Grids' map; clocks, conditions, ratchets, generators, bar copy; locks, patterns, project save/load, a 0.1 project, sends, reverb, sound shaping, phaser, flanger, PERF's effects and macros, autosave failure, sync in) all pass.
 
-**Measured resources** (from the 0.13 build, 2026-10-26; build.py's numbers. The build fails below 4 KB of RAM or 8 KB of pool spare, so "usable" is the free less that.)
+**Measured resources** (the 1.4.7 build, 2026-11-19; build.py's numbers. RAM and pool are one SRAM: the build fails below 8 KiB of their spare together, so "usable" is the free less that. Details and history: TECHNICAL_DOCUMENTATION.md §11. The project, library and SysEx rows are still 0.13's.)
 
 | | Used | Total | Free | Usable |
 |---|---|---|---|---|
-| Fast RAM (.data + .bss) | 42,688 B | 73,728 B | 31,040 B | ~27 KB |
-| Pool (big buffers, same SRAM) | 347,268 B | 368,640 B | 21,372 B | ~13 KB |
-| App flash (image) | 331,904 B | 581,564 B | 249,660 B | ~244 KB |
+| RAM (.data + .bss) | 57,784 B | 73,728 B | 15,944 B | 17,852 B with the pool |
+| Pool (big buffers, same SRAM) | 370,828 B | 380,928 B | 10,100 B | (above) |
+| RAMTEXT (`.ram_text` + `.ram_buf`) | 32,256 B | 32,544 B | 288 B | 288 B |
+| App flash (image) | 574,572 B | 581,564 B | 6,992 B | 6,992 B |
+| Stacks (static worst case) | user ~5.3 KB, ISR ~3.8 KB | 12 KB, 8 KB | | |
 | Project slot | busy test project 35.8 KB | 48,896 B payload | ~13 KB | dense projects already fail (PROJECT TOO BIG) |
 | Kit library (flash) | 72 KB at 0xEA000–0xFBFFF | | 128 kits + 128 sounds | a kit entry holds 480 B (kit 377 B) |
 | Library SysEx message | a kit: 390 B | LIB_MAX 400 B | 10 B | (static assert; raising it costs ~3.3 B of RAM a byte) |
 
-Where it goes: RAM: Rings' lines 18 KB (`rg_line` 12 KB, `rg_stretch` 6 KB), `mdl` 3.4 KB, `sq` 2.3 KB, `vc` 2.1 KB, the audio buffer 2 KB. Pool: the 32 patterns 159 KB (5,099 B each), the FX bus's line 64 KB, the screen canvas 30 KB, the 64 kits 24 KB, REVERSE's recorder 11 KB, the reverb's combs 10 KB, the comb 8 KB, and three spare patterns (live generators, backup, undo) 15 KB. Phase 14 cost +292 B RAM, +1,168 B pool, +4.5 KB flash, 6 bytes a kit.
+Where it goes at 1.4.7: RAM: Rings' lines 18 KB, `mdl` 3.5 KB, `vc` 3.3 KB, `sq` 2.9 KB, the audio buffer 2 KB. Pool: the 32 patterns 108 KB (3,378 B each), the lock pool 48 KB, the FX bus's line 64 KB, the screen canvas 30 KB, the 64 kits 22 KB, the unpacked tables 36 KB, Plaits 12 KB. Flash: 1.4 took 21.6 KB, most of it splitting hot loops per type for speed.
+
+At 0.13: RAM: Rings' lines 18 KB (`rg_line` 12 KB, `rg_stretch` 6 KB), `mdl` 3.4 KB, `sq` 2.3 KB, `vc` 2.1 KB, the audio buffer 2 KB. Pool: the 32 patterns 159 KB (5,099 B each), the FX bus's line 64 KB, the screen canvas 30 KB, the 64 kits 24 KB, REVERSE's recorder 11 KB, the reverb's combs 10 KB, the comb 8 KB, and three spare patterns (live generators, backup, undo) 15 KB. Phase 14 cost +292 B RAM, +1,168 B pool, +4.5 KB flash, 6 bytes a kit.
 
 Rules of thumb: a per-step byte costs 32 × 7 × 64 = 14 KB of pool (more than is usable); a per-track byte 224 B; a per-pattern byte 32 B; a per-voice kit parameter 6 B a kit (384 B of pool) and brings the library's message closer to LIB_MAX.
 

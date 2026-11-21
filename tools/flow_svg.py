@@ -58,11 +58,11 @@ def line(d):
 def track():
     stages = [
         ("SOURCE", ["Oscillator, FM and transient, or a model:", "Rings, Plaits, MICRO or ENSEMBLE"], "EDIT"),
-        ("FILTER", ["the LXR's types, LP4, combs, vowel, chord …;", "ACID, MS20, LADDER (FILTER X: env amt)"], "SCL"),
+        ("FILTER", ["the LXR's types, LP4, combs, vowel, chord …;", "ACID, MS20, LADDER (FILTER X: env amt)"], "SEL"),
         ("AMP EG", ["Attack, decay, slope; GATE holds it for", "the note's length"], "ENV"),
-        ("SHAPE", ["The waveshaper Drive goes into: LXR,", "FOLD, CLIP, FUZZ, TAPE, BITE …"], "SCL"),
-        ("SAMPLE RATE · BITS · TILT", ["The rate reducer, the bitcrusher and", "a one-knob EQ"], "SCL"),
-        ("INSERT FX", ["Phaser, flanger, chorus, tremolo,", "autopan, shifter or ring"], "SCL"),
+        ("SHAPE", ["The waveshaper Drive goes into: LXR,", "FOLD, CLIP, FUZZ, TAPE, BITE …"], "SEL"),
+        ("SAMPLE RATE · BITS · TILT", ["The rate reducer, the bitcrusher and", "a one-knob EQ"], "SEL"),
+        ("INSERT FX", ["Phaser, flanger, chorus, tremolo,", "autopan, shifter or ring"], "SEL"),
         ("CROSS MOD · CHOKE", ["Another voice ducks it or rings it; a hit", "in its choke group cuts it short"], "LFO"),
         ("VOLUME · PAN", ["The mixer's level and place"], "GLO"),
     ]

@@ -1,0 +1,248 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only
+     Elixir's quick start (1.5): how the FM-1 is laid out under Elixir, in numbered cards with the unit's screens
+     (../pages/, tools/pages_shots.py). web/make_site.py puts it at quickstart/, filling in the header and, for the first beat,
+     the manual's section 2 (MANUAL.md, the nine steps: their only copy). Took over the front page's "Finding your way
+     around" (the three moves and the button map). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elixir quick start</title>
+<meta name="description" content="Elixir quick start: how the FM-1 works under Elixir, in nine short cards.">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../site.css">
+<style>
+  main { padding-top: 48px; }
+  h1 { font-size: 40px; font-weight: 650; margin: 0 0 10px; letter-spacing: -0.02em; }
+  .lede { font-size: 19px; color: var(--dim); max-width: 640px; margin-bottom: 28px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px 26px; }
+  .card p, .card li { color: var(--dim); font-size: 16px; }
+  .card p:last-child, .card ul:last-child, .card ol:last-child { margin-bottom: 0; }
+  .card b, .card strong { color: var(--fg); font-weight: 600; }
+  .card ul, .card ol { padding-left: 1.2em; margin: 0 0 14px; }
+  .card li { margin-bottom: 6px; }
+  .first h2 { font-size: 22px; margin-bottom: 6px; }
+  .first ol { columns: 2 300px; column-gap: 40px; margin-top: 14px; }
+  .first li { break-inside: avoid; }
+  .cards { display: grid; gap: 20px; margin-top: 20px; counter-reset: c; }
+  .qs { display: grid; grid-template-columns: 1fr 240px; gap: 28px; align-items: start; scroll-margin-top: 76px; }
+  .qs.wide { grid-template-columns: 1fr; }
+  .qs .no { font-size: 13px; font-weight: 650; letter-spacing: .08em; color: var(--accent); margin: 0 0 6px; }
+  .qs h2 { font-size: 24px; margin-bottom: 10px; }
+  .qs .screen img { max-width: 240px; border-width: 6px; }
+  .tip { font-size: 15px; padding-top: 12px; border-top: 1px dashed var(--line); }
+  .cap { display: inline-block; text-align: center; font: 650 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+         letter-spacing: .04em; padding: 4px 6px; border-radius: 6px; background: #2a2a2d; color: #ececee;
+         box-shadow: inset 0 -2px 0 rgba(0,0,0,.45); white-space: nowrap; vertical-align: 1px; }
+  dl.map { display: grid; grid-template-columns: auto 1fr; gap: 0 16px; margin: 4px 0 14px; align-items: baseline; }
+  dl.map dt, dl.map dd { padding: 8px 0; border-top: 1px solid var(--line); margin: 0; }
+  dl.map dt:first-of-type, dl.map dd:first-of-type { border-top: 0; }
+  dl.map dt { display: flex; gap: 4px; flex-wrap: wrap; }
+  dl.map dd { color: var(--dim); font-size: 15px; }
+  .next { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 16px; }
+  .next a { display: block; text-decoration: none; height: 100%; }
+  .next a:hover { border-color: var(--dim); }
+  .next h3 { color: var(--fg); margin-bottom: 4px; }
+  .next p { font-size: 15px; margin: 0; }
+  section.more { margin-top: 56px; }
+  section.more h2 { font-size: 24px; }
+  @media (max-width: 760px) {
+    h1 { font-size: 32px; }
+    .qs { grid-template-columns: 1fr; gap: 18px; }
+    .qs .screen { order: -1; }
+    .card { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+<!--NAV-->
+<main class="wrap">
+  <h1>Quick start</h1>
+  <p class="lede">How Elixir works on the FM-1, in nine short cards. Follow along on the unit, or with the mouse in
+    the <a href="../try/">emulator</a>.</p>
+
+  <div class="card first">
+    <h2>Your first beat</h2>
+    <p>Nine steps, about two minutes. The cards below explain what you just did.</p>
+<!--FIRSTBEAT-->
+  </div>
+
+  <div class="cards">
+    <section class="card qs" id="getting-around">
+      <div>
+        <p class="no">1 / 9</p>
+        <h2>Getting around</h2>
+        <p>Pick a track first, with black keys 1–7 or by turning <b>ALGORITHM</b>: the sound and sequencer pages are
+          about that track. Then three moves work the same everywhere:</p>
+        <ol>
+          <li><b>Press a button</b> to open its section: <span class="cap">HOME</span> the step grid,
+            <span class="cap">EDIT</span> the sound, <span class="cap">FX</span> the effects.</li>
+          <li><b>Press it again</b> for the button's next section, then back to the first.</li>
+          <li><b>Turn SELECT</b> to turn the pages. The title shows where you are (<em>5/19</em>).</li>
+        </ol>
+        <dl class="map">
+          <dt><span class="cap">HOME</span></dt><dd>Step grid → patterns → load → song</dd>
+          <dt><span class="cap">SEQ</span></dt><dd>The track's pages (length, generator, melody, scale, groove …) → step edit</dd>
+          <dt><span class="cap">EDIT</span><span class="cap">SEL</span><span class="cap">ENV</span><span class="cap">LFO</span></dt>
+            <dd>The selected track's sound (card 4)</dd>
+          <dt><span class="cap">FX</span></dt><dd>Reverb, effects bus, delay, dirt, master filter, compressor, routing</dd>
+          <dt><span class="cap">GLO</span></dt><dd>Mixer → settings (MIDI, USB audio, colors …)</dd>
+          <dt><span class="cap">ARP</span></dt><dd>Perform → spells → wander → global modulation (cards 7 and 8)</dd>
+          <dt><span class="cap">SAVE</span></dt><dd>Save → load (card 9)</dd>
+          <dt><span class="cap">PLAY</span><span class="cap">REC</span></dt><dd>Start and stop; record (card 6)</dd>
+        </dl>
+        <p class="tip"><b>OCT−</b> is Elixir's shift and <b>OCT+</b> is copy and OK. Hold OCT− and the screen lists
+          what each key does with it.</p>
+      </div>
+      <figure class="screen"><img src="../pages/sound-22.png" alt="The FILTER page: the title says 5/19, the line under it shows the sound's six parts with FLT lit" width="240" height="240" loading="lazy"></figure>
+    </section>
+
+    <section class="card qs" id="tracks-and-steps">
+      <div>
+        <p class="no">2 / 9</p>
+        <h2>Tracks and steps</h2>
+        <p>The keyboard is the sequencer. <b>Black keys 1–7</b> are the seven tracks: D1 D2 D3 (the kick and two
+          toms), SN, CY, CH and OH. Each one plays its sound as you pick it. Turning ALGORITHM picks them too.</p>
+        <p>The <b>16 white keys</b> are the 16 steps of a bar: tap one to turn it on or off. <b>Black keys 8–11</b>
+          show bars 1–4. Each track can have its own length, up to four bars, so tracks can loop against each other.</p>
+        <p class="tip">Hold OCT−, press a track's black key to mute it. Hold OCT−, press a bar key to make the track
+          that many bars long.</p>
+      </div>
+      <figure class="screen"><img src="../pages/home-00.png" alt="The step grid: seven tracks by sixteen steps, the playhead on step 5" width="240" height="240" loading="lazy"></figure>
+    </section>
+
+    <section class="card qs" id="the-knobs">
+      <div>
+        <p class="no">3 / 9</p>
+        <h2>The four knobs</h2>
+        <p>KNOBS 1–4 change the four values at the bottom of the screen, whatever the page. On the grid they're
+          the tempo, the shuffle, the track's length and its volume.</p>
+        <ul>
+          <li><b>PRESETS</b> browses kits, the LXR-02's factory kits among them: turn it, then press OCT+ to load one.
+            On a sound page it browses single sounds for the track.</li>
+          <li>Hold <b>OCT−</b> while turning a knob for fine steps.</li>
+          <li>Hold <b>OCT+</b> while turning a knob on a sound page to change every track at once.</li>
+          <li><b>MASTER</b> is the volume.</li>
+        </ul>
+      </div>
+      <figure class="screen"><img src="../pages/sound-26.png" alt="The AMP EG page: the envelope's curve, its four knobs underneath" width="240" height="240" loading="lazy"></figure>
+    </section>
+
+    <section class="card qs" id="shaping-a-sound">
+      <div>
+        <p class="no">4 / 9</p>
+        <h2>Shaping a sound</h2>
+        <p>A track's sound is one row of 19 pages, in the order the sound flows through a synth. <b>EDIT</b> opens
+          the row at its start, and SELECT walks all of it, every sound setting the track has. <b>SEL</b>,
+          <b>ENV</b> and <b>LFO</b> are shortcuts: each jumps straight to its part of the row. The line under the
+          title shows which part you're in.</p>
+        <dl class="map">
+          <dt><span class="cap">EDIT</span></dt><dd>The start: model → oscillator → FM → transient, then on through the rest</dd>
+          <dt><span class="cap">SEL</span></dt><dd>Jumps to the filter → shape (drive, bits, tilt) → insert effect</dd>
+          <dt><span class="cap">ENV</span></dt><dd>Jumps to the amp envelope → gate → mod envelope and velocity</dd>
+          <dt><span class="cap">LFO</span></dt><dd>Jumps to LFO 1 → LFO 2 → random per hit → cross mod and choke → sends</dd>
+        </dl>
+        <p>The first page, MODEL, swaps the drum's engine: the LXR's own, Rings, Plaits or one of Elixir's.</p>
+        <p class="tip">Lost the sound? Hold OCT−, press white key 10: the track's sound goes back to how the kit has it.</p>
+      </div>
+      <figure class="screen"><img src="../pages/sound-18.png" alt="The MODEL page" width="240" height="240" loading="lazy"></figure>
+    </section>
+
+    <section class="card qs" id="one-step">
+      <div>
+        <p class="no">5 / 9</p>
+        <h2>One step, one value</h2>
+        <p><b>Hold a step's white key and turn a knob</b> on any sound page: that value changes on that step only.
+          This is a lock. The knob's card shows it in the accent color, and the step gets a dot on the grid. A step
+          can hold eight.</p>
+        <p>For everything else about a step, press <b>SEQ twice</b> for step edit. Tap a white key to pick the step,
+          and turn SELECT for its pages: note, length, velocity and timing; chance and conditions; ratchets; its locks.</p>
+      </div>
+      <figure class="screen"><img src="../pages/step-14.png" alt="Step edit: step 5 picked on the grid, its note, length, velocity and shift underneath" width="240" height="240" loading="lazy"></figure>
+    </section>
+
+    <section class="card qs wide" id="recording">
+      <div>
+        <p class="no">6 / 9</p>
+        <h2>Recording, copying, clearing</h2>
+        <ul>
+          <li><b>Record:</b> press REC, then PLAY, and tap black keys 1–7 like drum pads. Each hit lands on the
+            nearest step and stays there as the pattern loops. Knobs turned on a sound page while recording are written as locks.</li>
+          <li><b>Erase as it plays:</b> while recording, hold OCT− and OCT+ together. The selected track's steps go
+            as the playhead passes them.</li>
+          <li><b>Copy a bar:</b> hold OCT+, press a bar key. The bar on screen is copied into it, every track.</li>
+          <li><b>Clear:</b> hold OCT−, press OCT+. Keep OCT− held, turn SELECT to choose what (the track, the pattern,
+            its locks, the sound), and press OCT+ again. Let go of OCT− to cancel.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="card qs" id="playing-live">
+      <div>
+        <p class="no">7 / 9</p>
+        <h2>Playing live</h2>
+        <p>Press <b>ARP</b> for PERFORM. The white keys become effects that last while you hold them: 1–7 roll a
+          track, 8 is a fill, 9 repeats, 10 freezes the delay, 11 and 12 throw the track into the reverb or the FX
+          bus, 13 pushes the delay's feedback, 14 is a tape stop, and 15 and 16 sweep the master filter. The black
+          keys mute.</p>
+        <p>Let go and the beat is back as it was. Hold OCT−, press a key to latch it on.</p>
+        <p class="tip">Something still on and you don't know what? Hold OCT−, press HOME: every performance effect
+          off, from any page.</p>
+      </div>
+      <figure class="screen"><img src="../pages/perf-110.png" alt="The PERFORM page: the sixteen keys' effects by name" width="240" height="240" loading="lazy"></figure>
+    </section>
+
+    <section class="card qs" id="surprises">
+      <div>
+        <p class="no">8 / 9</p>
+        <h2>Letting it surprise you</h2>
+        <ul>
+          <li><b>Spells:</b> press ARP twice. Pick tracks with the black keys and press OCT+ to cast: the sound and
+            pattern of those tracks change at random, in the spell's direction. OCT+ again rolls again, OCT− takes it
+            back exactly, bar key 2 keeps it.</li>
+          <li><b>Wander:</b> press ARP a third time, then OCT+. The pattern drifts somewhere new over minutes.
+            OCT− brings it home.</li>
+          <li><b>Generators:</b> on SEQ's GENERATOR page, Euclid, Grids, a Turing machine and others write a track
+            for you. UNDO on the ACTION page takes back their last change.</li>
+        </ul>
+      </div>
+      <figure class="screen"><img src="../pages/perf-120.png" alt="SPELLS: the wizard, the targets and the sixteen parts a spell may change" width="240" height="240" loading="lazy"></figure>
+    </section>
+
+    <section class="card qs wide" id="saving">
+      <div>
+        <p class="no">9 / 9</p>
+        <h2>Saving</h2>
+        <p>Elixir saves your session by itself a few seconds after you stop, so switching off loses nothing.</p>
+        <p>To keep a version, save it as a project (there are four): press <b>SAVE</b>, turn KNOB 1 to PROJECT,
+          press OCT+, name it (KNOB 1 the letter's position, KNOB 2 the letter) and press OCT+ again. Press SAVE
+          again for the load page.</p>
+        <p class="tip">Went too far? Hold OCT−, press white key 13 (RELOAD): the kit and the pattern as last saved.
+          The <a href="../library/">library page</a> backs your projects up to a computer.</p>
+      </div>
+    </section>
+  </div>
+
+  <section class="more">
+    <h2>Where to go next</h2>
+    <div class="next">
+      <a class="card" href="../manual/"><h3>The manual</h3><p>Every page, button and knob, with the ideas behind
+        them.</p></a>
+      <a class="card" href="../cheatsheet.pdf" target="_blank" rel="noopener"><h3>The cheat sheet</h3><p>Every
+        page's knobs on a few pages, to print and keep by the FM-1.</p></a>
+      <a class="card" href="../#pages"><h3>Every page</h3><p>Each screen, mode by mode, in the order SELECT goes
+        through them.</p></a>
+      <a class="card" href="../try/"><h3>The emulator</h3><p>The real firmware in your browser, to try any of this
+        with the mouse.</p></a>
+    </div>
+  </section>
+</main>
+<footer class="site">
+  <div class="wrap">
+    Elixir is free software (GPL-3.0), unofficial and not affiliated with or endorsed by Erica Synths or M-VAVE.
+    "Erica Synths" and "LXR-02" are trademarks of Erica Synths; "M-VAVE" and "FM-1" are trademarks of their owner.
+  </div>
+</footer>
+</body>
+</html>

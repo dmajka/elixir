@@ -791,7 +791,7 @@ static RAMHOT void snd_apply(uint32_t p, uint32_t itg, uint32_t q16, int mod)
             case 2: lfo2_mod[vi].dest = (uint16_t)mod_dest(itg < NUM_TARGETS_X ? itg : 0u, vi); break;
             case 3: l->wave = (uint8_t)pick(itg < NLFO ? itg : 0u, (uint32_t)f, mod, NLFO); break;
             case 4: lfo_mode_set(l, pick(itg < NLFOMODE ? itg : 0u, (uint32_t)f, mod, NLFOMODE)); break;
-            case 5: l->sync = (uint8_t)(itg > 11u ? 0u : itg); lfo_update_inc(l); break;
+            case 5: l->sync = (uint8_t)(itg < NSYNC ? itg : 0u); lfo_update_inc(l); break;   /* (1.5: was 11: 3/4 .. free) */
             case 6: l->retrig = (uint8_t)(mod ? (7u * (uint32_t)f) >> 16 : itg > 6u ? 0u : itg); break;
             default: l->offset = f >= 65536 ? 0xFFFFFFFFu : (uint32_t)f << 16; break;
             }

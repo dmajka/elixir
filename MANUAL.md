@@ -91,9 +91,11 @@ Elixir has installed and started on one real FM-1, from V15, with the install pa
 4. Press black key **6** (CH, closed hat). Tap white keys **1, 3, 5, 7, 9, 11, 13, 15**.
 5. Press **PLAY**. Turn **PRESETS** to browse the LXR-02's factory kits and press **OCT+** to hear your beat on one.
 6. Turn **KNOB 1** to change the tempo, **KNOB 2** for shuffle.
-7. Select D1 again (black key 1), press **EDIT** and turn the knobs to change the kick's pitch and waveform. Press **ENV** for its envelope.
+7. Select D1 again (black key 1), press **EDIT** and turn **SELECT** one page on, to OSCILLATOR: the knobs change the kick's pitch and waveform. Press **ENV** for its envelope.
 8. Hold COPY (**OCT+**) and press black key **9** (bar 2): bar 1 of every track is copied into bar 2 and the pattern is now two bars long. Press bar key **9** again on its own to see bar 2, and change it.
 9. Press **SAVE**, turn KNOB 1 to PROJECT, press **OCT+**, name it, press **OCT+** again.
+
+The site's [quick start](https://dmajka.github.io/elixir/quickstart/) goes on from here: how the panel is laid out, in nine short cards with the screens.
 
 ---
 
@@ -108,13 +110,13 @@ The FM-1's keyboard has 16 white keys and 11 black keys, numbered left to right 
 | Control | What it does in Elixir |
 |---|---|
 | **White keys 1–16** | The 16 steps of the bar on screen. On the pattern page: patterns. In PERF: rolls and effects. |
-| **Black keys 1–7** | Select a track: D1 D2 D3 SN CY CH OH. SHIFT (OCT−) + key: mute / unmute it. |
+| **Black keys 1–7** | Select a track: D1 D2 D3 SN CY CH OH. SHIFT (OCT−) + key: mute / unmute it. On the mixer and CONFIG (GLO), from 1.5: the key alone mutes / unmutes, SHIFT (OCT−) + key solos. |
 | **Black keys 8–11** | Show bar 1–4. On pattern, song, save and load pages: the bank of 16. SHIFT (OCT−) + key: track length (16, 32, 48, 64). COPY (OCT+) + key: copy the shown bar into it. In PERF: the repeat length. |
 | **OCT−** | **SHIFT** (hold). While held, the screen shows the menu: what SHIFT (OCT−) + each key does ([table](#shift-oct--white-keys-outside-perf)). On PERF's pages SHIFT keeps PERF's own jobs (latching, SPELLS, WANDER). **Held while turning a knob: fine adjust**, one step a detent with no acceleration; the page stays on screen so you can see the value (from 1.0). |
 | **OCT+** | **COPY** (hold). SHIFT (OCT−) + OCT+ = **CLEAR**. OK in the save, load and action dialogs. Held on a sound page, a knob turned is **Control All**. |
 | **EDIT** | Sound: the model page, then SELECT goes through every sound page (from 1.4, pressing it again does nothing). SHIFT (OCT−) + EDIT: **KEYS** (the keys play the track's voice, on every page until SHIFT (OCT−) + EDIT again) |
 | **ENV** | Sound: the amp envelope (SELECT on: gate, mod envelope / velocity) |
-| **SCL** | Sound: the filter (SELECT on: shape, insert FX) |
+| **SEL** | Sound: the filter (SELECT on: shape, insert FX) |
 | **LFO** | Sound: LFO 1 (SELECT on: LFO 2, random per hit, cross mod / choke, FX track sends) |
 | **GLO** | Mixer → config |
 | **FX** | FX bus → reverb (turn SELECT for the pages) |
@@ -138,7 +140,7 @@ The FM-1's keyboard has 16 white keys and 11 black keys, numbered left to right 
 |---|---|
 | Header (top line) | The playing pattern (P01), the queued one (>02), the kit's name or SONG nn, M when morph is on, MIDI when synced to MIDI clock, the tempo, play (triangle, bright on the beat) and record (red dot) |
 | Title | The selected track (colored tag), the page's name, page dots (or "3/14" when there are many pages), or a message |
-| Crumbs (sound and FX pages, from 1.4.1; CONFIG from 1.5) | Where the page is in the chain: `SRC › FLT › SHP › ENV › MOD › FX` on the sound pages, `REV › BUS › DLY › DRT › MST › SND` on FX's, `SEQ › MIDI › OUT › USB › DEV › SYS` on CONFIG's. The group you're in is lit, with a dot under it for each of its pages |
+| Crumbs (sound and FX pages, from 1.4.1; CONFIG from 1.5) | Where the page is in the chain: `SRC › FLT › SHP › ENV › MOD › FX` on the sound pages, `REV › BUS › DLY › DRT › MST › SND` on FX's, `SEQ › MIDI › OUT › USB › DEV › SYS` on CONFIG's. The group you're in is lit (from 1.5 in a neutral grey, so it doesn't compete with the picture in the track's color), with a dot under it for each of its pages |
 | Body | The grid, or the page's own display (on a sound page, the track's steps in a thin line under the picture) |
 | Cards (bottom) | The four knobs: each parameter's name, value and position. The card of the last knob turned is highlighted. A locked value shows in the accent color. |
 
@@ -147,7 +149,7 @@ The site's home page shows every page's screen, mode by mode: [Browse every page
 ### LEDs
 
 - **Step keys:** lit = step on; the playing step flips its light; beats (1, 5, 9, 13) glow faintly.
-- **Track keys:** the selected track lit; each flashes when its track plays; a muted track goes dark.
+- **Track keys:** the selected track lit; each flashes when its track plays; a muted track goes dark. On the mixer and CONFIG (from 1.5): every track that plays lit, a muted one (or one a solo silences) dark.
 - **Bar keys:** the shown bar lit, the playing bar breathing, bars past the track's length dark.
 - **Buttons:** the current mode's button lit; REC lit when recording; OCT− lit while SHIFT is held, OCT+ while COPY is held; OCT+ breathes when it will act as OK, and during Control All and its dialog.
 - **PLAY:** green while playing, dark for half a step on each beat.
@@ -218,6 +220,10 @@ Hold SHIFT (OCT−) and press **OCT+** (CLEAR). A list opens; turn SELECT to cho
 
 SHIFT (OCT−) + a track's black key mutes or unmutes it (in PERF, the black keys mute on their own).
 
+**On the mixer and CONFIG (GLO), from 1.5**, the black keys mute on their own too: press a track's key to mute it, again to unmute it. Every track that plays is lit; a muted one goes dark. Hold OCT− and press a track's key to solo it (again: unsolo); several can be soloed at once, and the tracks a solo silences go dark. The keys don't select or play a track here.
+
+**Hold GLO** (from 1.5) from any other page (but SAVE and LOAD) for a quick trip to the mixer: it opens while GLO is held, SELECT turns its pages, the knobs set levels, pans and sends and the black keys mute. Let go after more than 0.4 s and you're back on the page you came from. A short press works as before and stays on the mixer (or CONFIG: with Last page on YES, GLO opens the one you left it on, held too).
+
 **SHIFT (OCT−) + GLO** solos the selected track: only soloed tracks play, from any page, so you can shape one sound inside a busy pattern. Select another track and press SHIFT (OCT−) + GLO again to solo it too; SHIFT (OCT−) + GLO on a soloed track takes it out. The mutes are kept underneath and come back as they were when the last solo goes. A soloed track has a bar beside its name on the grid; the others show as muted. Solo isn't saved.
 
 ### Tempo, shuffle, MIDI sync
@@ -268,7 +274,7 @@ MIDI notes played while in step edit set the selected step's note.
 
 A lock sets one parameter to a different value on one step, for example a higher filter cutoff on the last kick of the bar. From 1.4 a step can hold up to **eight** locks, one for each parameter, and the project shares one pool of **8,192** locks among all 32 patterns. One pattern can be dense with locks while the next has none. (Before 1.4, every step had room for exactly two.)
 
-- **The quick way:** on any sound page (EDIT, ENV, SCL, LFO, GLO, the mixer), hold a step key and turn a knob. Holding the key never turns the step on or off by itself (from 1.4.2): you can hold it, go to another page and turn a knob there. A lock on a step that was off turns it on. The knob's card shows the locked value in the accent color. Turn another knob while still holding the step and that parameter gets a lock of its own.
+- **The quick way:** on any sound page (EDIT, ENV, SEL, LFO, GLO, the mixer), hold a step key and turn a knob. Holding the key never turns the step on or off by itself (from 1.4.2): you can hold it, go to another page and turn a knob there. A lock on a step that was off turns it on. The knob's card shows the locked value in the accent color. Turn another knob while still holding the step and that parameter gets a lock of its own.
 - **On the LOCKS page** (step edit's last page): the screen lists the selected step's locks, one row each, with the parameter's name and its value as its card reads it (Hz, ms, %). **Lock** (KNOB 1) picks a row; **Param** (KNOB 2) changes that row's parameter (parameters the step already locks are skipped; turned all the way down to **OFF**, the lock is deleted); **Value** (KNOB 3) sets its value. The last row, **+ Add a lock**, adds one: turn Param there and the new lock starts from the kit's value. The line at the bottom says what the knobs do on the row selected. Tap another step key to see its locks.
 - **Deleting a lock:** select its row and turn **Param** all the way down to **OFF**. To delete all of the step's locks at once, press CLEAR (SHIFT (OCT−) + OCT+), then COPY.
 - **The count:** the top line shows the step (and **FULL 8/8** when it has eight) and how many of the pool's 8,192 locks are left. A ninth lock on a step is refused with **STEP FULL: 8 LOCKS**; a lock when the pool is used up, with **NO LOCKS LEFT: 8,192 IN USE**.
@@ -387,9 +393,9 @@ A ROADS song never stops at END or LOOP: the row after the last is the first. Th
 
 ## 9. Shaping the sound
 
-Select a track, then press a sound button. Turning SELECT steps through every page, in a synth's order: **model, oscillator, FM, transient, filter, shape, insert FX, amp EG, gate, mod EG / velocity**, then the modulation: **LFO 1, LFO 2, random per hit, cross mod / choke, FX track sends** (1.0). EDIT opens the first (MODEL; with CONFIG → BUTTONS & KITS → Last page on YES, the page you left it on), ENV the amp EG, SCL the filter and LFO the LFOs. Each page shows eight parameters (two rows of four); the lit row is on the knobs, and SELECT gives the other row. From 1.4.1 **ENV, SCL and LFO always open their first page**, pressed again too, so one press brings you back to the start of the envelopes, the filter or the LFOs. EDIT pressed again does nothing (from 1.4). As SELECT goes through the pages the button for that part of the chain lights up. A section with more than one page has its page in the title: MOD EG / VELO (1/2), (2/2). The crumbs under the title (from 1.4.1) show the six parts of the chain, with the part you're in lit.
+Select a track, then press a sound button. Turning SELECT steps through every page, in a synth's order: **model, oscillator, FM, transient, filter, shape, insert FX, amp EG, gate, mod EG / velocity**, then the modulation: **LFO 1, LFO 2, random per hit, cross mod / choke, FX track sends** (1.0). EDIT opens the first (MODEL; with CONFIG → BUTTONS & KITS → Last page on YES, the page you left it on), ENV the amp EG, SEL the filter and LFO the LFOs. Each page shows eight parameters (two rows of four); the lit row is on the knobs, and SELECT gives the other row. From 1.4.1 **ENV, SEL and LFO always open their first page**, pressed again too, so one press brings you back to the start of the envelopes, the filter or the LFOs. EDIT pressed again does nothing (from 1.4). As SELECT goes through the pages the button for that part of the chain lights up. A section with more than one page has its page in the title: MOD EG / VELO (1/2), (2/2). The crumbs under the title (from 1.4.1) show the six parts of the chain, with the part you're in lit.
 
-**Select: BUTTON** (CONFIG → BUTTONS & KITS, from 1.4.1). For a sound button that stays lit, set **Select** to BUTTON (the default is ALL, as above). Then EDIT stays lit as SELECT goes through every page, and ENV, SCL and LFO keep SELECT to their own pages: ENV the amp EG, gate and mod EG / velocity; SCL the filter, shape and insert FX; LFO the LFOs, random per hit, cross mod / choke and the FX track sends.
+**Select: BUTTON** (CONFIG → BUTTONS & KITS, from 1.4.1). For a sound button that stays lit, set **Select** to BUTTON (the default is ALL, as above). Then EDIT stays lit as SELECT goes through every page, and ENV, SEL and LFO keep SELECT to their own pages: ENV the amp EG, gate and mod EG / velocity; SEL the filter, shape and insert FX; LFO the LFOs, random per hit, cross mod / choke and the FX track sends.
 
 From 0.19 the top of each page is a picture of what its knobs do rather than a list of their values (the knob cards below already show those): the oscillator's wave, the envelope's curve with its times, the filter's response with its cutoff in Hz, an LFO over a bar at the tempo with the track's retriggers, a model's description with its knobs as vials, and so on. It changes as you turn a knob. The FX pages (the reverb's tail, the delay's echoes, the compressors' curves and gain reduction, DIRT) and the SEQ pages Groove, Bounce, Melody, Melody loop and Scale have pictures too; Track, Generator and Action keep the grid. The MODEL page names the model, says what it is and draws it. A Rings, Plaits, MICRO or ENSEMBLE model makes its own sound, so on that voice the FM and TRANSIENT pages are hidden and the OSC page keeps only Coarse and Fine (the model's pitch); its other knobs show -- and don't turn. The AMP EG page stays where the amp EG shapes the model (from 0.25: ENSEMBLE, and the Plaits engines that don't make their own envelope: all but P STRING, P MODAL, P BD, P SD and P HH); for Rings and MICRO it is hidden. Rings with Exciter turned up keeps every page, since the voice's own sound strikes it. If Exciter is down in the kit but up in the morph kit, those pages stay, grayed and locked, until you morph. The reverb page draws what makes its sound (from 0.20: ROOM a hut, HALL a castle, PLATE a steel shield, SPRING a bare spring), growing with Size, its echoes going out as arcs (Level, Damping); P SPEECH's MODEL page is a wizard whose lips move as you turn its knobs; the delay page spells out its mode (Tape ping pong and so on). Knobs read in their own units where those say more than 0–127: the filter's cutoff in Hz, its resonance as Q, the envelopes' times in ms, the LFOs' rates in Hz, the sample rate in kHz.
 
@@ -403,7 +409,7 @@ From 0.19 the top of each page is a picture of what its knobs do rather than a l
 | **Transient** (EDIT) | Waveform, Volume, Frequency | same | same |
 | **Amp EG** (ENV; then Elixir's GATE page) | Attack, Decay, Slope | Attack, Decay, Repeat count (claps), Slope | Attack, Decay (CH: closed; OH: open), Repeat (cymbal), Slope |
 | **Mod EG / velocity** (ENV) | Pitch EG: Decay, Slope, Amount / Velocity: destination, amount, volume mod | same | Velocity: destination, amount, volume mod |
-| **Filter** (SCL) | Type (LP HP BP UNITY BP NOTCH PEAK LP2 OFF; then Elixir's, below), Freq, Reso, Drive (from 1.0 in this order; the LXR's: Frequency, Resonance, Type, Overdrive) | same | same |
+| **Filter** (SEL) | Type (LP HP BP UNITY BP NOTCH PEAK LP2 OFF; then Elixir's, below), Freq, Reso, Drive (from 1.0 in this order; the LXR's: Frequency, Resonance, Type, Overdrive) | same | same |
 | **LFO 1** (LFO, 2 pages) | Dest, Depth, Sync, Rate / Wave, Phase, Mode, Retrigger ([the LFO pages](#the-lfo-pages-from-10)) | same | same |
 | **LFO 2** (LFO, Elixir's) | the same knobs as LFO 1 | same | same |
 
@@ -457,7 +463,7 @@ Every LFO has the same knobs in the same places, the global LFOs (PERF, GLOBAL M
 | Page 2 | **Wave** | **Phase** | **Mode** | **Retrigger** (the global LFOs: **Trig**) |
 
 - **Dest:** what it moves. **Depth:** how far (the LXR's Amount).
-- **Sync:** OFF, or one cycle's length at the tempo. With Sync OFF the LFO runs at **Rate** (in Hz); with a sync value Rate reads SYNC and does nothing. Turning right makes the cycle longer. The track LFOs' sync values, fast to slow: 1/32, 1/16, 1/8T, 1/8, 1/4T, 3/16, 1/4, 5/16, 1/2T, 3/8, 1/2, 3/4, 1/1, 2/1, 4/1 (four bars). T is a triplet; 3/4, 3/8 and 3/16 are the dotted half, quarter and eighth. (1/2T, 1/4T and 1/8T are the LXR's 1/3, 1/6 and 1/12, renamed; 3/4, 3/8, 5/16 and 3/16 are new in 1.0.)
+- **Sync:** OFF, or one cycle's length at the tempo. With Sync OFF the LFO runs at **Rate** (in Hz); with a sync value Rate reads SYNC and does nothing. Turning right makes the cycle longer. The track LFOs' sync values, fast to slow: 1/32, 1/16, 1/8T, 1/8, 1/4T, 1/4, 1/2T, 3/8, 1/2, 3/4, 1/1, 2/1, 4/1 (four bars), 8/1 and 16/1 (eight and sixteen bars). T is a triplet; 3/4 and 3/8 are the dotted half and quarter. (1/2T, 1/4T and 1/8T are the LXR's 1/3, 1/6 and 1/12, renamed; 3/4 and 3/8 are new in 1.0, 8/1 and 16/1 in 1.5. 1.0 had 5/16 and 3/16 too: kits and projects saved with them load from 1.5 as the nearest still here, 1/2T and 1/4T.) From 1.5 LFO 2's 3/4 and 3/8 sync as LFO 1's do (before, LFO 2 ran free at its Rate on them).
 - **Wave:** SINE, TRI, SAW UP, SAW DN, SQUARE, RANDOM, EXP UP, EXP DN, SMOOTH, DRIFT.
   - **RANDOM** is a sample and hold: a new random value each cycle, held until the next, in steps.
   - **SMOOTH** (from 1.1) is RANDOM with the steps taken out: each cycle it glides on a curve from one random value to the next, so a filter or pitch wanders instead of jumping. There is no separate slew control; SMOOTH is the smooth random.
@@ -494,7 +500,7 @@ Every track has a second LFO: **LFO 2** (LFO, after LFO 1). It has LFO 1's knobs
 
 ### Elixir's sound pages
 
-**Shape** (SCL, after the filter):
+**Shape** (SEL, after the filter):
 
 | | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
@@ -506,7 +512,7 @@ Every track has a second LFO: **LFO 2** (LFO, after LFO 1). It has LFO 1's knobs
 - **Bits:** OFF, then 15 down to 1. Works after the sample-rate reducer for a full bitcrusher.
 - **Tilt:** a one-knob EQ around 700 Hz. 0 is flat, + brighter, − darker.
 
-**Insert FX** (SCL, after Shape; from 0.18): one effect on each track, after the shape, bits and tilt and before the pan and the sends, so the FX bus and the reverb get it too.
+**Insert FX** (SEL, after Shape; from 0.18): one effect on each track, after the shape, bits and tilt and before the pan and the sends, so the FX bus and the reverb get it too.
 
 | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|
@@ -546,9 +552,9 @@ Each hit varies by up to the amount set: pitch up to an octave either way at 127
 - **Mode:** **DUCK** (this voice drops while the source sounds: sidechain), **FILTER** (the source's level opens this voice's filter), **RING** (the two multiplied).
 - **Choke:** a group 1–4. A hit on any voice in the group fades the others in that group out (within 1.5 ms). The hats already choke each other, since they share a voice.
 
-**FX track sends** (LFO, last; from 1.0): the track's three sends in one place, one page: **FX**, **Delay**, **Reverb** on KNOBs 1–3.
+**FX track sends** (LFO, last; from 1.0): the track's three sends in one place, one page: **FX**, **Delay**, **Reverb** on KNOBs 1–3, and from 1.5 the track's **Vol** (its volume, the mixer's) on KNOB 4.
 
-The page draws the three sends as bars in the track's color and names the delay's routing (below, [Routing](#routing-from-10)). The returns they feed (FX Dry/Wet, the delay's and the reverb's Level) are the kit's, shared by every track, so they are on the FX pages and the mixer, not here. Control All works here as on any sound page: hold it and turn FX to raise every track's FX send.
+The page draws a bar over each knob in the track's color, as the mixer does, with the voice's level as a tick on Vol (from 1.5; before, three bars across and the delay's routing, which is on the FX pages' [ROUTING](#routing-from-10)). The returns they feed (FX Dry/Wet, the delay's and the reverb's Level) are the kit's, shared by every track, so they are on the FX pages and the mixer, not here. Control All works here as on any sound page: hold it and turn FX to raise every track's FX send.
 
 ### Models: Rings and Plaits (Drum 1–3, experimental)
 
@@ -895,7 +901,7 @@ The **DIRT** page (the FX bus's last) has two drives, both off at 0:
 - **Bus dirt** drives whatever goes into the FX bus before its effect, whatever the type: dirty echoes, a driven phaser. With the type OFF the bus is just a drive for the voices you send to it.
 - **Master** and **Amount** put a drive on the whole mix, before the master filter: **TAPE** (soft, darker as it rises), **TUBE** (soft and lopsided: warm even harmonics), **FUZZ** (a hard clip, mixed in parallel so the kick keeps its punch), **DIODE** (the LXR's diode curve) or **FOLD** (a sine fold, in parallel). Amount sets the drive, and each type's tone and mix follow it; the level is trimmed as it rises so it stays near the dry sound.
 
-They are part of the kit; the amounts morph and can be locked per step, the Master type doesn't morph. The per-voice shapes (SCL → Shape) are the third kind of dirt.
+They are part of the kit; the amounts morph and can be locked per step, the Master type doesn't morph. The per-voice shapes (SEL → Shape) are the third kind of dirt.
 
 ### The master filter and the global character filter (from 1.0)
 
@@ -1937,7 +1943,7 @@ GLO twice (past the mixer) opens CONFIG. Turn SELECT for its pages. From 1.5 the
 | DEVICE | LEDs (OFF / LOW / HIGH glow), Autosave, Accel (fast knob turns move further), Colors (screen palette: GRAY, GREEN, AMBER, FUCK ICE (blue on navy; ICE before 1.5), VIOLET, ROSE, SOLAR (Solarized dark, from 1.5: base02 blue, yellow values; PAPER before), HI-CON, NIGHT, GRIMOIRE (from 1.5: oxblood leather, parchment, gold leaf, arcane teal; MONO before), HYRULE (forest green and Triforce gold) or SAND (the default: amber on true black, near-black cards). From 1.5 a sound page's picture is drawn in the track's color, except on GRAY |
 | REMOTE | Tracks (the TRACKS channel: OFF, 1–16; 15 by default), Global (the GLOBAL channel; 16 by default; never the same as Tracks), Knobs (PICKUP / ABS / REL), Mute/solo (PRESS / TOGGLE): see [the remote map](#the-remote-map) |
 | MORPH | Edits: SPLIT (the default from 1.0: at morph 100% the knobs edit the morph kit, below it the kit), BOTH KITS (a knob's edit moves the morph target too) or KIT ONLY (the kit alone, the LXR's way). Ctrl all: BOTH KITS (the default: Control All moves the morph target too) or KIT ONLY; see [Kits and morph](#11-kits-and-morph) and [Control All](#control-all-every-track-at-once) |
-| BUTTONS & KITS | **Audition** (KNOB 3, from 1.2): YES (the default) or NO. With YES, a track's black key plays its voice as it selects the track (on the grid, the sound and SEQ pages and every page but PERF's), and from 1.3 records it under REC. With NO, the key only selects. **Kits first** (KNOB 2, from 0.19): FACTORY (the default) or SLOTS, the kit browser's order (see [Kits and morph](#11-kits-and-morph)). **Last page**: NO (the default) or YES. With YES, a button opens the page it showed when you left it: on CONFIG's BUTTONS & KITS page, press FX, then GLO, and you're back on BUTTONS & KITS. It works for SEQ (the track's pages or step edit, whichever you were on), FX, ARP (and each of its two sets), GLO (the mixer or CONFIG) and EDIT (the section and row: from 1.4, whatever page SELECT took it to, even in the envelopes or LFOs; from 1.4.1 ENV, SCL and LFO always open their first page). Pressed again, SEQ, ARP, GLO and FX move on as always; EDIT does nothing. HOME still goes to the grid. **Select** (KNOB 4, from 1.4.1): ALL (the default) or BUTTON, how SELECT goes through the sound pages ([Shaping the sound](#9-shaping-the-sound)). |
+| BUTTONS & KITS | **Audition** (KNOB 3, from 1.2): YES (the default) or NO. With YES, a track's black key plays its voice as it selects the track (on the grid, the sound and SEQ pages and every page but PERF's), and from 1.3 records it under REC. With NO, the key only selects. **Kits first** (KNOB 2, from 0.19): FACTORY (the default) or SLOTS, the kit browser's order (see [Kits and morph](#11-kits-and-morph)). **Last page**: NO (the default) or YES. With YES, a button opens the page it showed when you left it: on CONFIG's BUTTONS & KITS page, press FX, then GLO, and you're back on BUTTONS & KITS. It works for SEQ (the track's pages or step edit, whichever you were on), FX, ARP (and each of its two sets), GLO (the mixer or CONFIG) and EDIT (the section and row: from 1.4, whatever page SELECT took it to, even in the envelopes or LFOs; from 1.4.1 ENV, SEL and LFO always open their first page). Pressed again, SEQ, ARP, GLO and FX move on as always; EDIT does nothing. HOME still goes to the grid. **Select** (KNOB 4, from 1.4.1): ALL (the default) or BUTTON, how SELECT goes through the sound pages ([Shaping the sound](#9-shaping-the-sound)). |
 | LOAD | No knobs: where the processor's time goes, and the cores; see [the LOAD page](#the-load-page) |
 | ELIXIR | No knobs: the potion, the version, each core's load and the CPU line with the battery |
 
