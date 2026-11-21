@@ -851,6 +851,26 @@ static uint32_t stems_live(void) { return uac_recording() != 0; }   /* (CONFIG: 
 static uint32_t stems_live(void) { return 0; }
 #endif
 
+/* 2026-11-21 Phase 2: sat16 as max, then min: smax, smin, no branch (the compiler makes sat16's form a branch) */
+static inline int32_t sat16mm(int32_t v)
+{
+    v = v < -32768 ? -32768 : v;
+    return v > 32767 ? 32767 : v;
+}
+/* 2026-11-21 Phase 2: a voice's partial FX send and the rest of it panned into the mix, in one pass (were three: the
+ * send, the dry part into a block, the pan), the same sums: 0 < s < 32768, the pan's route */
+static __attribute__((noinline)) void mix_send_pan(const int16_t *buf, int32_t s, int32_t pl, int32_t pr, int32_t *dl,
+                                                   int32_t *dr)
+{
+    uint32_t i;
+    for (i = 0; i < BLOCK; i++) {
+        int32_t b = buf[i], x = (b * s) >> 15, d = (int16_t)(b - x);
+        fx_l[i] = (int16_t)sat16mm(fx_l[i] + ((x * pl) >> 14));
+        fx_r[i] = (int16_t)sat16mm(fx_r[i] + ((x * pr) >> 14));
+        dl[i] += (d * pl) >> 14;
+        dr[i] += (d * pr) >> 14;
+    }
+}
 static void mix_voice(const mixs_t *v, const int16_t *buf, int32_t *dl, int32_t *dr)   /* mixer_addDataToOutput, with
                                                       * the sends; the dry part into dl, dr */
 {
@@ -863,8 +883,8 @@ static void mix_voice(const mixs_t *v, const int16_t *buf, int32_t *dl, int32_t 
         const int32_t ds = v->dly_send;
         for (i = 0; i < BLOCK; i++) {
             int32_t x = (buf[i] * ds) >> 15;
-            dly_l[i] = (int16_t)sat16(dly_l[i] + ((x * pl) >> 14));
-            dly_r[i] = (int16_t)sat16(dly_r[i] + ((x * pr) >> 14));
+            dly_l[i] = (int16_t)sat16mm(dly_l[i] + ((x * pl) >> 14));
+            dly_r[i] = (int16_t)sat16mm(dly_r[i] + ((x * pr) >> 14));
         }
         dly_fed = 1;
     }
@@ -876,14 +896,23 @@ static void mix_voice(const mixs_t *v, const int16_t *buf, int32_t *dl, int32_t 
         }
         rev_fed |= any != 0;                         /* (a silent voice lets the reverb sleep) */
     }
-    if (s) {                                         /* the FX send: its share through the bus (panned, as the LXR's) */
+    if (s == 32768) {                                /* the FX send: its share through the bus (panned, as the LXR's) */
         for (i = 0; i < BLOCK; i++) {
-            int32_t x = s == 32768 ? buf[i] : (buf[i] * s) >> 15;
-            fx_l[i] = (int16_t)sat16(fx_l[i] + ((x * pl) >> 14));
-            fx_r[i] = (int16_t)sat16(fx_r[i] + ((x * pr) >> 14));
+            fx_l[i] = (int16_t)sat16mm(fx_l[i] + ((buf[i] * pl) >> 14));
+            fx_r[i] = (int16_t)sat16mm(fx_r[i] + ((buf[i] * pr) >> 14));
         }
-        if (s == 32768)
-            return;
+        return;
+    }
+    if (s && (v->route < R_L1 || v->route > R_R2)) {   /* (the pan's routes: ST1, ST2, FX) */
+        mix_send_pan(buf, s, pl, pr, dl, dr);        /* (2026-11-21 Phase 2: the send, the rest panned, one pass) */
+        return;
+    }
+    if (s) {
+        for (i = 0; i < BLOCK; i++) {
+            int32_t x = (buf[i] * s) >> 15;
+            fx_l[i] = (int16_t)sat16mm(fx_l[i] + ((x * pl) >> 14));
+            fx_r[i] = (int16_t)sat16mm(fx_r[i] + ((x * pr) >> 14));
+        }
         for (i = 0; i < BLOCK; i++)                  /* the rest to the output */
             dry[i] = (int16_t)(buf[i] - ((buf[i] * s) >> 15));
         buf = dry;
