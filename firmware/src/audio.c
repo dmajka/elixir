@@ -12,9 +12,10 @@ _Static_assert(HALF_FRAMES == UAC_HALF, "usb.c's ring is sized for this half");
 
 static int32_t abuf[2u * HALF_WORDS] __attribute__((aligned(4)));
 static volatile uint32_t audio_halves, audio_max_us, audio_late;
-static volatile uint32_t audio_hot;                 /* 1.4: the late halves the engine itself took 90%+ of (its own time,
+static volatile uint32_t audio_hot;                 /* 1.4: the late halves the engine itself took 95%+ of (1.5: was 90%,
+                                                     * the user: fewer warnings for buffers you can't hear; its own time,
                                                      * as PEAK: an interrupt on top or a late start isn't heard) */
-#define HOT_US (HALF_FRAMES * 1000000u / FS * 9u / 10u)
+#define HOT_US (HALF_FRAMES * 1000000u / FS * 19u / 20u)
 static volatile uint32_t t5_nested_ticks;          /* TIMER4 ticks TIMER5 spent nested in this ISR (main.c) */
 static volatile uint8_t in_audio;
 static uint32_t cpu_q8, audio_cpu_rem;              /* the audio ISR's load, 1/256 */

@@ -217,7 +217,7 @@ static void title_text(char *b, uint32_t n, uint32_t *pg, uint32_t *np)
     }
 }
 static int msg_on(void) { return ui.msg[0] && fm1_ms - ui.msg_ms < (ui.msg_long ? 6000u : 1500u); }
-/* 1.0: CPU OVERLOAD. Halves rendered late (1.4: those the engine took 90%+ of itself, audio.c audio_hot; not a late
+/* 1.0: CPU OVERLOAD. Halves rendered late (1.4: those the engine took 90%+ of itself, 1.5: 95%+; audio.c audio_hot; not a late
  * start, an interrupt on top: CONFIG's LATE counts those too), late at OVL_N times within 2 s (1.4: 4, was 2; a few
  * apart aren't a click you hear; a load over the limit is late every block, so it still shows within a fraction of
  * a second), flash the title red until 2 s after the last, with

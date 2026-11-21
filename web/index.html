@@ -575,7 +575,9 @@
             any other button cancels. Autosave still keeps your session through power-off, as before.</li>
           <li><b>More room before CPU OVERLOAD.</b> The control code that runs once per block (the sequencer, the
             performance keys, the global LFOs) now runs from the processor's fast memory, and mixing the six voices
-            takes less work. In a busy test project the first core's load fell from about 73% to about 61%.</li>
+            takes less work. In a busy test project the first core's load fell from about 73% to about 61%. The
+            CPU OVERLOAD warning also shows only when the engine itself used 95% or more of a buffer's time (was
+            90%), so near misses you can't hear no longer flash it.</li>
           <li><b>Clearer hints.</b> The screen names the buttons as they're printed: hold OCT&minus;, press OCT+
             to delete, instead of SHIFT, COPY and CLEAR. The save and load pages say what OCT+ does and where SAVE
             takes you.</li>
