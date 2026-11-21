@@ -25,15 +25,34 @@ static uint32_t ld_t, ld_acc[NLD];
 #ifndef ELIXIR_LDDIAG
 #define ELIXIR_LDDIAG 0
 #endif
+/* 2026-11-21 Phase 2 (ELIXIR_LDDIAG=2): MIXER split instead: the voices' mix (mix_one, SPACE), the master's COMP, its
+ * DIRT, perf_master (the DJ filter, PERF's effects), the output (the 16-bit pack, USB 1-2, the volume loop, OUT_SHIFT).
+ * DM_START / DM_MARK time those spans alone (the mixer's code sits between others) */
 #if defined(LOAD_CLOCK) && ELIXIR_LDDIAG
+#if ELIXIR_LDDIAG == 2
+enum { DM_MIX, DM_COMP, DM_DIRT, DM_PERF, DM_OUT, NDG };
+#else
 enum { DG_SND, DG_IN, DG_SEQ, DG_PRE, NDG };
+#endif
 static uint32_t dg_t, dg_acc[NDG];
+#define DG_ADD(p) do { uint32_t n_ = LOAD_CLOCK(); \
+                       dg_acc[p] += (int32_t)(n_ - dg_t) > 0 ? n_ - dg_t : 0u; dg_t = n_; } while (0)
+#endif
+#if defined(LOAD_CLOCK) && ELIXIR_LDDIAG == 1
 #define DG_START() (dg_t = LOAD_CLOCK())
-#define DG_MARK(p) do { uint32_t n_ = LOAD_CLOCK(); \
-                        dg_acc[p] += (int32_t)(n_ - dg_t) > 0 ? n_ - dg_t : 0u; dg_t = n_; } while (0)
+#define DG_MARK(p) DG_ADD(p)
 #else
 #define DG_START() ((void)0)
 #define DG_MARK(p) ((void)0)
+#endif
+#if defined(LOAD_CLOCK) && ELIXIR_LDDIAG == 2
+#define LDDIAG_MIX 1
+#define DM_START() (dg_t = LOAD_CLOCK())
+#define DM_MARK(p) DG_ADD(p)
+#else
+#define LDDIAG_MIX 0
+#define DM_START() ((void)0)
+#define DM_MARK(p) ((void)0)
 #endif
 
 static inline int32_t sat16(int32_t v){ return v > 32767 ? 32767 : v < -32768 ? -32768 : v; }

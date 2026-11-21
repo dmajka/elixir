@@ -1176,6 +1176,7 @@ static void voices_block(void)
     }
     fxbus_early();                                   /* (the delay's reads: needs no voice) */
     LOAD_MARK(LD_FX);
+    DM_START();
     for (vi = 0; vi < NVOICE; vi++)                  /* cross modulation, choke, the mixer */
         mix_one(vi, ub);
     if (space_mx)                                    /* SPACE: the dry sound dipped to 0.4 */
@@ -1185,6 +1186,7 @@ static void voices_block(void)
             mc_kl[i] = (mc_kl[i] * 13107) >> 15;
             mc_kr[i] = (mc_kr[i] * 13107) >> 15;
         }
+    DM_MARK(DM_MIX);
     LOAD_MARK(LD_MIX);
     reverb_bus();                                    /* (1.0 Phase 16: REV > FX's share into the bus's input) */
     fxbus_process();

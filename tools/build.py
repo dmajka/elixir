@@ -239,14 +239,16 @@ def build_app():
     version = VERSION
     if os.environ.get("ELIXIR_RAMHOT") == "0":    # (the A/B build with no RAM code says so on the about screen)
         version = (version or source_version()) + "-cold"
+    if os.environ.get("ELIXIR_LDDIAG") in ("1", "2"):    # (a diagnostic build says so on the about screen)
+        version = (version or source_version()) + "-diag" + os.environ["ELIXIR_LDDIAG"]
     elif os.environ.get("ELIXIR_RAMHOT_FLASH"):   # (an A/B with some RAMHOT functions left in flash)
         version = (version or source_version()) + "-split"
     if version:
         flags.append(f'-DELIXIR_VERSION="{version}"')
     if os.environ.get("ELIXIR_WTABLE") == "1":       # (0.24: P WTABLE, parked; ~48 KB: docs/parked/README.md)
         flags.append("-DELIXIR_WTABLE=1")
-    if os.environ.get("ELIXIR_LDDIAG") == "1":           # (1.0: SEQ, MOD split on the LOAD page: a test build)
-        flags.append("-DELIXIR_LDDIAG=1")
+    if os.environ.get("ELIXIR_LDDIAG") in ("1", "2"):    # (1.0: SEQ, MOD split on the LOAD page: a test build;
+        flags.append(f"-DELIXIR_LDDIAG={os.environ['ELIXIR_LDDIAG']}")   # 2026-11-21 Phase 2: 2, MIXER's parts)
     if os.environ.get("ELIXIR_PH_MONO") in ("0", "1"):     # (1.0 Phase 10: 0, the phaser's two chains, to A/B)
         flags.append(f'-DPH_MONO={os.environ["ELIXIR_PH_MONO"]}')
     if os.environ.get("ELIXIR_FX_CHORUS") == "1":          # (1.0: the FX bus's CHORUS, set aside: built back in)

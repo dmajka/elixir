@@ -1706,7 +1706,7 @@ static void draw_load(void)
     cv_text(122, 82, &AF_S, b, T_TEXT);
     /* one reading a line, the name left and the value right (0.25.3: they overlapped on one line) */
     cv_rect(10, 99, 222, 1, T_LINE);
-    if (cores_why == CW_TWO) {
+    if (cores_why == CW_TWO && !LDDIAG_MIX) {
         put_int(b, (int32_t)((ld_q8[LD_WAIT] * 100u + 128u) >> 8));
         cat(b, "%", sizeof b);
         load_line(104, "CORE 0 WAITS", b, T_TEXT);
@@ -1714,20 +1714,27 @@ static void draw_load(void)
         stack_line(b, c1_stack(), 4096u);
         load_line(118, "CORE 1 STACK", b, c1_stack() > 3584u ? T_REC : T_TEXT);
 #endif
-    } else {
+    } else if (!LDDIAG_MIX) {
         load_line(104, "1 CORE", WHY[cores_why < sizeof WHY / sizeof WHY[0] ? cores_why : 0],
                   cores_why >= CW_BAD ? T_REC : T_TEXT);
     }
 #if defined(LOAD_CLOCK) && ELIXIR_LDDIAG
-    {   /* (the diagnostic: SEQ, MOD's parts, average and peak) */
+    {   /* (the diagnostic: SEQ, MOD's parts (2: MIXER's), average and peak) */
+#if ELIXIR_LDDIAG == 2
+        static const char *const DGN[NDG] = {"MIX 6 VOICES", "MASTER COMP", "MASTER DIRT", "DJ FILTER, PERF",
+                                             "OUT, USB 1-2"};
+        const int32_t y0 = 104;
+#else
         static const char *const DGN[NDG] = {"PARAMS", "MIDI, KEYS, PERF", "SEQUENCER", "VOICE MOD"};
+        const int32_t y0 = 118;
+#endif
         uint32_t k;
         for (k = 0; k < NDG; k++) {
             put_int(b, (int32_t)((dg_q8[k] * 100u + 128u) >> 8));
             cat(b, "%  ", sizeof b);
             put_int(b + str_len(b), (int32_t)((dg_pk[k] * 100u + 128u) >> 8));
             cat(b, "%", sizeof b);
-            load_line(118 + 14 * (int32_t)k, DGN[k], b, T_TEXT);
+            load_line(y0 + 14 * (int32_t)k, DGN[k], b, T_TEXT);
         }
     }
     if (0)

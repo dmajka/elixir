@@ -97,13 +97,18 @@ static void engine_block(int32_t *out)
     lk_isr = 0;
     DG_MARK(DG_SEQ);
     voices_block();
+    DM_START();
     comp_master(mix_l, mix_r);                      /* (0.16: the master's COMPRESSOR, off at RATIO OFF) */
+    DM_MARK(DM_COMP);
     dirt_master(mix_l, mix_r);                      /* (23c: the master's DIRT, off at 0) */
+    DM_MARK(DM_DIRT);
     for (i = 0; i < BLOCK; i++) {
         ml[i] = (int16_t)sat16(mix_l[i]);
         mr[i] = (int16_t)sat16(mix_r[i]);
     }
+    DM_MARK(DM_OUT);
     perf_master(ml, mr);                            /* the DJ filter, TAPE STOP's fade */
+    DM_MARK(DM_PERF);
 #if UAC_STEMS
     {   /* 1.0: the USB audio's 1-2: the stereo mix as the FM-1's DAC takes it, before MASTER and the master volume
          * (the stems' level: voices.c); then the block goes out with its stems */
@@ -134,6 +139,7 @@ static void engine_block(int32_t *out)
         out_gain = g;
         quiet_blocks = pk > QUIET_LEVEL ? 0u : quiet_blocks + (quiet_blocks < 0xFFFFFFu);
     }
+    DM_MARK(DM_OUT);
     LOAD_MARK(LD_MIX);                              /* (the master's: the mixer's) */
     voices_end();                                   /* (1.0 Phase 10f: core 1's D1-D3 for the next block, waited for) */
 }

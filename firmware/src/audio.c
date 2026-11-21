@@ -94,8 +94,10 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
 #endif
         for (b = 0; b < HALF_FRAMES; b += BLOCK)
             engine_block(o + 2u * b);
+        DM_START();
         for (i = 0; i < HALF_WORDS; i++)
             o[i] *= 1 << OUT_SHIFT;
+        DM_MARK(DM_OUT);
         LOAD_MARK(LD_MIX);
 #ifdef LOAD_CLOCK
         for (i = 0; i < NLD; i++) {
