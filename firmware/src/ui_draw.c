@@ -1687,7 +1687,7 @@ static void draw_load(void)
     uint32_t k;
     for (k = 0; k < NLD - 1u; k++) {
         uint32_t i = ORDER[k], a = (ld_q8[i] * 100u + 128u) >> 8, pk = (ld_pk[i] * 100u + 128u) >> 8;
-        int32_t y = 2 + (int32_t)k * 12, w = (int32_t)(a > 100u ? 100u : a), wp = (int32_t)(pk > 100u ? 100u : pk);
+        int32_t y = 2 + (int32_t)k * 11, w = (int32_t)(a > 100u ? 100u : a), wp = (int32_t)(pk > 100u ? 100u : pk);
         cv_text(10, y, &AF_S, i == LD_D13 ? d13 : PART[i], T_TEXT);
         put_str(put_int(b, (int32_t)a), "%", 2);
         cv_text_r(104, y, &AF_S, b, T_TEXT, T_BG);
@@ -1704,7 +1704,7 @@ static void draw_load(void)
         put_int(b + str_len(b), (int32_t)(cores_why == CW_TWO && c > w ? c - w : c));
     }
     cat(b, "%", sizeof b);
-    cv_text(10, 82, &AF_S, b, T_TEXT);
+    cv_text(10, 71, &AF_S, b, T_TEXT);
     put_str(b, "CORE 1  ", sizeof b);
     if (cores_why == CW_TWO) {
         put_int(b + str_len(b), (int32_t)((ld_q8[LD_D13] * 100u + 128u) >> 8));
@@ -1712,19 +1712,19 @@ static void draw_load(void)
     } else {
         cat(b, "OFF", sizeof b);
     }
-    cv_text(122, 82, &AF_S, b, T_TEXT);
+    cv_text(122, 71, &AF_S, b, T_TEXT);
     /* one reading a line, the name left and the value right (0.25.3: they overlapped on one line) */
-    cv_rect(10, 99, 222, 1, T_LINE);
+    cv_rect(10, 86, 222, 1, T_LINE);
     if (cores_why == CW_TWO && !LDDIAG_MIX) {
         put_int(b, (int32_t)((ld_q8[LD_WAIT] * 100u + 128u) >> 8));
         cat(b, "%", sizeof b);
-        load_line(104, "CORE 0 WAITS", b, T_TEXT);
+        load_line(90, "CORE 0 WAITS", b, T_TEXT);
 #if !(defined(LOAD_CLOCK) && ELIXIR_LDDIAG)
         stack_line(b, c1_stack(), 4096u);
-        load_line(118, "CORE 1 STACK", b, c1_stack() > 3584u ? T_REC : T_TEXT);
+        load_line(102, "CORE 1 STACK", b, c1_stack() > 3584u ? T_REC : T_TEXT);
 #endif
     } else if (!LDDIAG_MIX) {
-        load_line(104, "1 CORE", WHY[cores_why < sizeof WHY / sizeof WHY[0] ? cores_why : 0],
+        load_line(90, "1 CORE", WHY[cores_why < sizeof WHY / sizeof WHY[0] ? cores_why : 0],
                   cores_why >= CW_BAD ? T_REC : T_TEXT);
     }
 #if defined(LOAD_CLOCK) && ELIXIR_LDDIAG
@@ -1732,10 +1732,10 @@ static void draw_load(void)
 #if ELIXIR_LDDIAG == 2
         static const char *const DGN[NDG] = {"MIX 6 VOICES", "MASTER COMP", "MASTER DIRT", "DJ FILTER, PERF",
                                              "OUT, USB 1-2"};
-        const int32_t y0 = 104;
+        const int32_t y0 = 90;
 #else
         static const char *const DGN[NDG] = {"PARAMS", "MIDI, KEYS, PERF", "SEQUENCER", "VOICE MOD"};
-        const int32_t y0 = 118;
+        const int32_t y0 = 102;
 #endif
         uint32_t k;
         for (k = 0; k < NDG; k++) {
@@ -1743,7 +1743,7 @@ static void draw_load(void)
             cat(b, "%  ", sizeof b);
             put_int(b + str_len(b), (int32_t)((dg_pk[k] * 100u + 128u) >> 8));
             cat(b, "%", sizeof b);
-            load_line(y0 + 14 * (int32_t)k, DGN[k], b, T_TEXT);
+            load_line(y0 + 12 * (int32_t)k, DGN[k], b, T_TEXT);
         }
     }
     if (0)
@@ -1751,9 +1751,9 @@ static void draw_load(void)
     {   /* 18a: the main stacks' deepest use since power-on, of their sizes (app.ld); red past three quarters */
         uint32_t u = ustack_used(), sv = sstack_used();
         stack_line(b, u, USTACK_B);
-        load_line(132, "USER STACK", b, u > USTACK_B / 4u * 3u ? T_REC : T_TEXT);
+        load_line(114, "USER STACK", b, u > USTACK_B / 4u * 3u ? T_REC : T_TEXT);
         stack_line(b, sv, SSTACK_B);
-        load_line(146, "SYS STACK", b, sv > SSTACK_B / 4u * 3u ? T_REC : T_TEXT);
+        load_line(126, "SYS STACK", b, sv > SSTACK_B / 4u * 3u ? T_REC : T_TEXT);
     }
 #if UAC_STEMS && !(defined(LOAD_CLOCK) && ELIXIR_LDDIAG)
     {   /* 1.0, Phase 8: the USB audio's service (TIMER5, outside the parts above) and its glitches since power-on */
@@ -1768,7 +1768,7 @@ static void draw_load(void)
         }
         put_int(b + str_len(b), (int32_t)g);
         cat(b, g == 1u ? " GLITCH" : " GLITCHES", sizeof b);
-        load_line(160, "USB AUDIO", b, g ? T_REC : T_TEXT);
+        load_line(138, "USB AUDIO", b, g ? T_REC : T_TEXT);
     }
 #endif
 }
@@ -1780,7 +1780,7 @@ static void draw_config_help(int32_t y0)
     (void)y0;
     if (ui.page % NCONFIG == CF_LOAD) {
         draw_load();
-        draw_cpu(178, "BLOCK ");                     /* (the cards' place: LOAD has no knobs. 1.0: BLOCK, the
+        draw_cpu(152, "BLOCK ");                     /* (the cards' place: LOAD has no knobs. 1.0: BLOCK, the
                                                       * whole half's time, CORE 0 + its WAIT: what LATE counts) */
         return;
     }
@@ -1788,44 +1788,44 @@ static void draw_config_help(int32_t y0)
         draw_about();
         return;
     }
-    switch (ui.page % NCONFIG) {
+    switch (ui.page % NCONFIG) {                     /* (1.5: a line each; the plain knobs left out) */
     case 0:
-        y = help_item(y, "TEMPO", "at its lowest, Elixir follows MIDI clock");
-        y = help_item(y, "FOLLOW", "the bar shown follows the playhead");
-        help_item(y, "PLAY", "PATTERN loops the pattern; SONG plays the song's rows");
+        y = help_item(y, "TEMPO", "at its lowest: MIDI clock");
+        y = help_item(y, "FOLLOW", "the view follows the playhead");
+        help_item(y, "PLAY", "PATTERN loops it; SONG: rows");
         break;
     case 1:
-        y = help_item(y, "GLOBAL", "program change picks the pattern, CC 102 / 103 the kit (Global in: more)");
-        y = help_item(y, "TX N", "the notes of the tracks MIDI OUT has on");
-        y = help_item(y, "FILTERS", "N notes, R clock and transport, C CC and NRPN, P program change");
-        help_item(y, "ROUTE", "TRS>USB passes the jack's MIDI on to USB");
+        y = help_item(y, "GLOBAL", "PC: pattern. CC 102, 103: kit");
+        y = help_item(y, "TX N", "notes of the tracks with OUT on");
+        y = help_item(y, "FILTERS", "N notes R clock C CC P PC");
+        help_item(y, "ROUTE", "TRS>USB: the jack's MIDI to USB");
         break;
     case 2:
     case 3:
-        y = help_item(y, "CHANNEL", "each track's MIDI channel, in and out");
+        y = help_item(y, "CHANNEL", "each track's, in and out");
         if (ui.page % NCONFIG == 3u)
-            help_item(y, "GLOBAL IN", "KEYS: patterns, kits (CC 102, 103), notes, wheel; PAT+KIT: no notes; ALL: the LXR's");
+            help_item(y, "GLOBAL IN", "KEYS: pats, kits, notes, wheel. PAT+KIT: no notes. ALL: as the LXR");
         break;
     case 4:
     case 5:
-        y = help_item(y, "ANY", "the track plays any note, pitched");
-        help_item(y, "A NOTE", "only that note triggers the track");
+        y = help_item(y, "ANY", "any note plays it, pitched");
+        help_item(y, "A NOTE", "only that note triggers it");
         break;
     case CF_MOUT:                                    /* 1.0: a track's notes out; the master volume */
     case CF_MOUT + 1:
-        y = help_item(y, "OUT", "the track's notes go out on its channel (TX N on too)");
+        y = help_item(y, "OUT", "notes out on its channel (TX N on)");
         if (ui.page % NCONFIG == CF_MOUT + 1u)
-            help_item(y, "VOLUME", "the master volume, after MASTER; CC 124 on the remote's channels");
+            help_item(y, "VOLUME", "the master's; remote CC 124");
         break;
     case CF_PCOUT:                                   /* 1.4: PROGRAM CHANGE OUT */
-        y = help_item(y, "SENDS", "AUTO: its own number (P01 sends 0), or a program 0-127, or OFF");
-        y = help_item(y, "CHANNEL", "GLOB: the global channel's. TX filter P on (MIDI)");
-        help_item(y, "WHEN", "AHEAD: as it's queued, so an Elektron keeps time. CHANGE: as it starts");
+        y = help_item(y, "SENDS", "AUTO: P01 sends 0; or 0-127");
+        y = help_item(y, "CHANNEL", "GLOB: the global one. TX P on");
+        help_item(y, "WHEN", "AHEAD: as queued, for Elektrons");
         break;
     case CF_UMIX:                                    /* 1.0, Phase 8: the voices in the USB audio's stereo mix */
     case CF_UMIX + 1:
-        y = help_item(y, "OUT", "leaves the stereo mix (USB 1-2, the outputs) while a computer records");
-        y = help_item(y, "STEMS", "USB 3-8: D1 D2 D3 SN CY HH, always");
+        y = help_item(y, "OUT", "left out of the mix while recording");
+        y = help_item(y, "STEMS", "USB 3-8: D1 D2 D3 SN CY HH");
         help_text(HELP_X, y, stems_live() ? "RECORDING" : "NOT RECORDING: ALL IN THE MIX", stems_live() ? T_REC : T_MID);
         break;
     case CF_REMOTE: {                                /* 0.12: the remote; a channel it shares with a track warned of */
@@ -1834,9 +1834,9 @@ static void draw_config_help(int32_t y0)
             uint32_t c = t < NTRACK ? midi_track_ch(t) : midi_global_ch();
             clash |= (remote_ch < 16u && c == remote_ch) || (remote_gch < 16u && c == remote_gch);
         }
-        y = help_item(y, "TRACKS", "the channel for the tracks' knobs, mutes and solo");
-        y = help_item(y, "GLOBAL", "the channel for PERF, FX and density");
-        y = help_item(y, "KNOBS", "PICKUP: a pot acts once it passes the value. REL: encoders");
+        y = help_item(y, "TRACKS", "knobs, mutes, solo");
+        y = help_item(y, "GLOBAL", "PERF, FX, density");
+        y = help_item(y, "KNOBS", "PICKUP: pots. REL: encoders");
         if (clash)                                   /* (in Mute/solo's line: no room for both) */
             help_text(HELP_X, y, "SHARES A TRACK'S OR THE GLOBAL CHANNEL", T_REC);
         else
@@ -1844,21 +1844,19 @@ static void draw_config_help(int32_t y0)
         break;
     }
     case CF_REMOTE + 1:                              /* 0.12: Control All with morph; 31: and the edits */
-        y = help_item(y, "EDITS, CTRL ALL", "where an edit goes while morph is on");
-        y = help_item(y, "BOTH KITS", "the morph target moves too: heard at any morph amount");
-        help_item(y, "KIT ONLY", "the kit alone: at full morph nothing is heard");
+        y = help_item(y, "EDITS, CTRL ALL", "while morphing");
+        y = help_item(y, "BOTH KITS", "heard at any morph amount");
+        help_item(y, "KIT ONLY", "unheard at full morph");
         break;
     case CF_REMOTE + 2:                              /* 0.13: page memory; 0.19: the kit list's order */
         y = help_item(y, "LAST PAGE", "a button opens its last page");
         y = help_item(y, "KITS FIRST", "PRESETS lists these first");
         y = help_item(y, "AUDITION", "a track key plays its voice");
-        help_item(y, "SELECT", "BUTTON: ENV, SCL, LFO keep to their own pages");
+        help_item(y, "SELECT", "BUTTON: within ENV, SCL, LFO");
         break;
     default:
-        y = help_item(y, "LEDS", "off, low or high glow");
-        y = help_item(y, "AUTOSAVE", "keeps the session when stopped");
-        y = help_item(y, "ACCEL", "fast turns move further");
-        help_item(y, "PALETTE", "the screen's colors");
+        y = help_item(y, "AUTOSAVE", "saves when stopped");
+        help_item(y, "ACCEL", "fast turns move further");
         break;
     }
 }
@@ -1870,6 +1868,15 @@ enum { CG_SRC, CG_FLT, CG_SHP, CG_ENV, CG_MOD, CG_FX, NCG_SND };
 static const char *const CR_SND[NCG_SND] = {"SRC", "FLT", "SHP", "ENV", "MOD", "FX"};
 enum { CG_REV, CG_BUS, CG_DLY, CG_DRT, CG_MST, CG_SND, NCG_FX };
 static const char *const CR_FX[NCG_FX] = {"REV", "BUS", "DLY", "DRT", "MST", "SND"};   /* (SND: ROUTING, the sends) */
+/* 1.5: CONFIG's 17 pages: SEQUENCER; MIDI, its channels and notes; MIDI OUT and PROGRAM CHANGE OUT; USB MIX; DEVICE,
+ * REMOTE, MORPH, BUTTONS & KITS; LOAD and ELIXIR */
+enum { CG_SEQ, CG_MIDI, CG_OUT, CG_USB, CG_DEV, CG_SYS, NCG_CFG };
+static const char *const CR_CFG[NCG_CFG] = {"SEQ", "MIDI", "OUT", "USB", "DEV", "SYS"};
+static uint32_t crumb_cfg(uint32_t p)
+{
+    return p == 0u ? CG_SEQ : p < CF_MOUT ? CG_MIDI : p < CF_UMIX ? CG_OUT : p < CF_UMIX + 2u ? CG_USB
+           : p < CF_LOAD ? CG_DEV : CG_SYS;
+}
 static uint32_t crumb_sect(uint32_t s)
 {
     switch (s) {
@@ -1911,6 +1918,17 @@ static const char *const *crumb_at(uint32_t *ng, uint32_t *cur, uint32_t *np, ui
         *ng = NCG_SND;
         return CR_SND;
     }
+    if (ui.mode == M_CONFIG) {
+        *cur = g = crumb_cfg(ui.page % NCONFIG);
+        for (i = 0; i < NCONFIG; i++)
+            if (crumb_cfg(i) == g) {
+                if (i == ui.page % NCONFIG)
+                    *pi = *np;
+                (*np)++;
+            }
+        *ng = NCG_CFG;
+        return CR_CFG;
+    }
     {
         uint8_t l[NFXPG];
         n = fx_shown(l);
@@ -1929,7 +1947,7 @@ static void draw_crumbs(void)
 {
     uint32_t ng, cur, np, pi, i, ca = ui.mode == M_SOUND && (ui.copy || ca_rm);
     const char *const *nm = crumb_at(&ng, &cur, &np, &pi);
-    int32_t w[NCG_FX], tot = 0, gap, pad, x;
+    int32_t w[8], tot = 0, gap, pad, x;
     if (!region(R_CRUMB, sig_add(sig_add(ui.mode | cur << 4 | np << 8 | pi << 16, ng),
                                  ca | ui.ca << 1 | (uint32_t)ca_rm << 2 | (uint32_t)kset.caout << 8)))
         return;
@@ -2320,6 +2338,14 @@ static void draw_body(void)
     }
     body_full = fn == draw_config_help && (ui.page % NCONFIG == CF_LOAD || ui.page % NCONFIG == CF_ABOUT);   /* (1.0:
                                                       * ABOUT too: no knobs, no empty cards' row) */
+    if (fn == draw_config_help) {                    /* (1.5: CONFIG: the crumbs, the page under them) */
+        if (region(R_BODY, s)) {
+            body_strips_at(fn, CRUMB_H, (body_full ? 240 - BODY_Y : BODY_H) - CRUMB_H);
+            rsig[R_CRUMB] = 0;
+        }
+        draw_crumbs();
+        return;
+    }
     if (!region(R_BODY, s))
         return;
     if (body_full)                                   /* (CONFIG > LOAD: no knobs, so the cards' place too) */
@@ -3661,5 +3687,5 @@ static void draw_about(void)
         cv_text(82, 54, &AF_S, "TABLES BAD", T_REC);
     else
         cv_text(82, 54, &AF_S, "the LXR-02 on the FM-1", T_MID);
-    draw_cpu(178, "CPU ");                           /* (1.0: at the bottom, as LOAD's) */
+    draw_cpu(152, "CPU ");                           /* (1.0: at the bottom, as LOAD's; 1.5: under the crumbs) */
 }

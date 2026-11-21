@@ -1568,9 +1568,14 @@ static void viz_pitch(void)
     cv_text(VX0, 22, &AF_M, L_MODEL[m], T_THEME);
     ic_model(m, v, sv(S_MODEL, 0, 1), sv(S_MODEL, 0, 2), sv(S_MODEL, 0, 3));
 }
-static void draw_sound_viz(void)
+/* 1.5: two colours a glance can't tell apart (8-bit channel steps summed, under 100) */
+static int col_near(uint16_t a, uint16_t b)
 {
-    vz_h = SOUND_VIZ_H - CRUMB_H - 4;                /* (1.4.1: 92, under the crumbs; was 104) */
+    int32_t dr = (a >> 11) - (b >> 11), dg = ((a >> 5) & 63) - ((b >> 5) & 63), db = (a & 31) - (b & 31);
+    return (dr < 0 ? -dr : dr) * 8 + (dg < 0 ? -dg : dg) * 4 + (db < 0 ? -db : db) * 8 < 100;
+}
+static void sound_viz_sect(void)
+{
     if (ui.sect == S_OSC && lxr_unheard(ui.track) == 2u) {
         viz_pitch();
         return;
@@ -1593,6 +1598,21 @@ static void draw_sound_viz(void)
     case S_SENDS: viz_sends(); break;
     default: vz_panel(""); break;
     }
+}
+/* 1.5: a sound page's picture in the track's colour (THEME for the picture alone; the crumbs and cards keep the
+ * palette's); the ACCENT, near it, the text's. GRAY stays gray, a light palette (CUSTOM) its own */
+static void draw_sound_viz(void)
+{
+    uint16_t th = ux.theme, ac = ux.accent;
+    vz_h = SOUND_VIZ_H - CRUMB_H - 4;                /* (1.4.1: 92, under the crumbs; was 104) */
+    if (!ux.mono && !ux.light) {
+        ux.theme = TRACK_COL[ui.track];
+        if (col_near(ac, ux.theme))
+            ux.accent = ux.text;
+    }
+    sound_viz_sect();
+    ux.theme = th;
+    ux.accent = ac;
 }
 
 /* ------------------------------------------------- the track's pages --- */

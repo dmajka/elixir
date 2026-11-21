@@ -20,7 +20,7 @@ typedef struct {
     uint8_t psh;                        /* log2 of the phases per glyph: g[i << psh] .. g[(i << psh) + phases - 1] */
     const uint8_t *hc;                  /* data's Huffman code (cv_alpha_hc), 0 = 2 px per byte (cv_alpha) */
 } aafont_t;
-typedef struct { const char *name; uint16_t bg, surf, text, theme, accent; uint8_t open; } ui_pal_t;   /* (open: tools/gen_ui_palettes.py OPEN) */
+typedef struct { const char *name; uint16_t bg, surf, text, theme, accent; uint8_t flags; } ui_pal_t;   /* (flags: 1 OPEN, 2 REC_BRIGHT: tools/gen_ui_palettes.py) */
 typedef struct { uint16_t off; uint8_t w; const char *label; } kc_t;
 #include "ui_fonts.h"                   /* AF_S 12 px / 400, AF_M 15 px / 500, AF_L 28 px / 600 */
 #include "ui_palettes.h"
@@ -92,7 +92,7 @@ static struct {
  * Selections, accents, keys and gauges keep their fills in every style */
 #define ST_FLAT 0u
 #define ST_LINE 1u
-#define T_RULE ux.dim            /* LINE: the dividers (DIM: visible on NIGHT, GREY, MONO and PAPER, quieter than labels) */
+#define T_RULE ux.dim            /* LINE: the dividers (DIM: visible on NIGHT and GREY, quieter than labels) */
 #define T_BG ux.bg               /* background */
 #define T_SURF ux.surf           /* dialogs, menu rows, mixer strips */
 #define T_TEXT ux.text           /* primary text */
@@ -135,7 +135,7 @@ static uint32_t ux_luma(uint16_t c)        /* 0..255 */
 
 /* 1.6 (#244): a palette of the user's, the 11th (index NPALETTES, "CUSTOM"): the same five stored colours, the rest
  * derived as for every palette, set from the editor (ui.c cpal_*; settings: favorites.factory[15][0..9, 12]). Not GREY
- * (no gray ramps) and not MONO: the channels blend as they are */
+ * (no gray ramps): the channels blend as they are */
 static ui_pal_t ux_cust = {"CUSTOM", 0x0841, 0xCE59, 0xEF5D, 0xFFDF, 0xFD20};
 /* the five colours as stored (RGB565, 16 bits little endian each: BG SURF TEXT THEME ACCENT) */
 static void palette_custom_load(const uint8_t *b)
@@ -168,14 +168,9 @@ static void palette_set(uint32_t i)
     ux.key = ux_mix(p->bg, p->text, UI_KEY_PCT);
     ux.lane = ux_mix(ux.surf, p->theme, 10);
     ux.grid = ux_mix(ux.surf, p->text, 6);
-    ux.panel = p->open ? p->bg : ux.surf;
+    ux.panel = p->flags & 1u ? p->bg : ux.surf;
     ux.light = ux_luma(p->bg) > 128u;
-    ux.rec = ux.mono ? p->accent : ux.light ? UI_REC_LIGHT : UI_REC_DARK;
-    if (!cust && i == UI_BW_INDEX) {             /* MONO: black and white, set, not blended (tools/gen_ui_palettes.py) */
-        ux.mid = ux.sel = ux.key = ux.rec = p->text;   /* a selection, a keycap, REC: white, its INK black */
-        ux.dim = ux.line = ux.raise = ux.lane = UI_BW_GREY;   /* the one grey: inactive, tracks, wells */
-        ux.tint = ux.grid = p->bg;
-    }
+    ux.rec = ux.mono ? p->accent : p->flags & 2u ? UI_REC_BRIGHT : ux.light ? UI_REC_LIGHT : UI_REC_DARK;
     ux.gen++;                                    /* the text ramps change with the coverage curve */
 }
 

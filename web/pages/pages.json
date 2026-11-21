@@ -745,7 +745,7 @@
  },
  {
   "section": "config",
-  "group": "CONFIG",
+  "group": "SEQ",
   "n": 1,
   "of": 17,
   "title": "SEQUENCER",
@@ -753,7 +753,7 @@
  },
  {
   "section": "config",
-  "group": "CONFIG",
+  "group": "MIDI",
   "n": 2,
   "of": 17,
   "title": "MIDI",
@@ -761,7 +761,7 @@
  },
  {
   "section": "config",
-  "group": "CONFIG",
+  "group": "MIDI",
   "n": 3,
   "of": 17,
   "title": "MIDI CHANNELS",
@@ -769,7 +769,7 @@
  },
  {
   "section": "config",
-  "group": "CONFIG",
+  "group": "MIDI",
   "n": 4,
   "of": 17,
   "title": "MIDI CHANNELS",
@@ -777,7 +777,7 @@
  },
  {
   "section": "config",
-  "group": "CONFIG",
+  "group": "MIDI",
   "n": 5,
   "of": 17,
   "title": "MIDI NOTES",
@@ -785,7 +785,7 @@
  },
  {
   "section": "config",
-  "group": "CONFIG",
+  "group": "MIDI",
   "n": 6,
   "of": 17,
   "title": "MIDI NOTES",
@@ -793,7 +793,7 @@
  },
  {
   "section": "config",
-  "group": "CONFIG",
+  "group": "OUT",
   "n": 7,
   "of": 17,
   "title": "MIDI OUT",
@@ -801,7 +801,7 @@
  },
  {
   "section": "config",
-  "group": "CONFIG",
+  "group": "OUT",
   "n": 8,
   "of": 17,
   "title": "MIDI OUT, VOLUME",
@@ -809,7 +809,7 @@
  },
  {
   "section": "config",
-  "group": "CONFIG",
+  "group": "OUT",
   "n": 9,
   "of": 17,
   "title": "PROGRAM CHANGE OUT",
@@ -817,7 +817,7 @@
  },
  {
   "section": "config",
-  "group": "CONFIG",
+  "group": "USB",
   "n": 10,
   "of": 17,
   "title": "USB MIX",
@@ -825,7 +825,7 @@
  },
  {
   "section": "config",
-  "group": "CONFIG",
+  "group": "USB",
   "n": 11,
   "of": 17,
   "title": "USB MIX",
@@ -833,7 +833,7 @@
  },
  {
   "section": "config",
-  "group": "CONFIG",
+  "group": "DEV",
   "n": 12,
   "of": 17,
   "title": "DEVICE",
@@ -841,7 +841,7 @@
  },
  {
   "section": "config",
-  "group": "CONFIG",
+  "group": "DEV",
   "n": 13,
   "of": 17,
   "title": "REMOTE",
@@ -849,7 +849,7 @@
  },
  {
   "section": "config",
-  "group": "CONFIG",
+  "group": "DEV",
   "n": 14,
   "of": 17,
   "title": "MORPH",
@@ -857,7 +857,7 @@
  },
  {
   "section": "config",
-  "group": "CONFIG",
+  "group": "DEV",
   "n": 15,
   "of": 17,
   "title": "BUTTONS & KITS",
@@ -865,7 +865,7 @@
  },
  {
   "section": "config",
-  "group": "CONFIG",
+  "group": "SYS",
   "n": 16,
   "of": 17,
   "title": "LOAD",
@@ -873,7 +873,7 @@
  },
  {
   "section": "config",
-  "group": "CONFIG",
+  "group": "SYS",
   "n": 17,
   "of": 17,
   "title": "ELIXIR",

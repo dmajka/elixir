@@ -13071,7 +13071,7 @@ static void pages_walk(const char *sec, const char *grp_fixed, uint32_t n)
         char g[16] = "";
         if (grp_fixed)
             snprintf(g, sizeof g, "%s", grp_fixed);
-        else if (ui.mode == M_SOUND || ui.mode == M_FX) {
+        else if (ui.mode == M_SOUND || ui.mode == M_FX || ui.mode == M_CONFIG) {
             uint32_t ng, cur, np, pi;
             const char *const *nm = crumb_at(&ng, &cur, &np, &pi);
             snprintf(g, sizeof g, "%s", nm[cur]);
@@ -13168,7 +13168,7 @@ static int pages_tour(const char *out)
     pages_walk("mixer", "MIXER", mode_pages());
     goto_mode(B_GLO, M_CONFIG);
     ui.page = 0;
-    pages_walk("config", "CONFIG", mode_pages());
+    pages_walk("config", 0, mode_pages());          /* (1.5: by its crumbs) */
     /* ARP: PERF's sets */
     press(B_HOME);
     goto_mode(B_ARP, M_PERF);
