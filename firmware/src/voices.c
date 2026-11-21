@@ -185,7 +185,7 @@ static int32_t lfo_glide(const lfo_t *l)             /* .. at the phase: a half 
     int32_t w = (int32_t)((uint32_t)(RG_SINE[((l->phase >> 21) + 3072u) & 4095u] + 32767) * 65536u / 65534u);
     return l->rnd0 + (int32_t)(((int64_t)(l->rnd - l->rnd0) * w) >> 16);
 }
-static int32_t lfo_wave(lfo_t *l, uint32_t old)      /* the wave at the phase (from old: RANDOM's draw), 0..1, Q16 */
+static RAMHOT int32_t lfo_wave(lfo_t *l, uint32_t old)      /* the wave at the phase (from old: RANDOM's draw), 0..1, Q16 */
 {
     switch (l->wave) {
     case LFO_SINE:
@@ -221,7 +221,7 @@ static int32_t lfo_wave(lfo_t *l, uint32_t old)      /* the wave at the phase (f
         return 0;
     }
 }
-static int32_t lfo_calc(lfo_t *l)                    /* lfo_calc: 0..1, Q16 */
+static RAMHOT int32_t lfo_calc(lfo_t *l)                    /* lfo_calc: 0..1, Q16 */
 {
     uint32_t old = l->phase;
     int32_t v;
@@ -239,7 +239,7 @@ static int32_t lfo_calc(lfo_t *l)                    /* lfo_calc: 0..1, Q16 */
     v = lfo_wave(l, old);
     return l->mode == LM_HOLD ? l->hold : v;
 }
-static void lfo_mode_set(lfo_t *l, uint32_t m)       /* 0.13: ONE, HALF wait at the offset; HOLD from its value now */
+static RAMHOT void lfo_mode_set(lfo_t *l, uint32_t m)       /* 0.13: ONE, HALF wait at the offset; HOLD from its value now */
 {
     if (l->mode == m)
         return;
@@ -398,7 +398,7 @@ static void voice_legato(uint32_t track, uint32_t note)
 
 /* ---------------------------------------------------- the block, async --- */
 /* 1.4 WEAR: the amp EG a block, its decay's rate scaled by Decay (the rate put back after: the hit's own stays) */
-static int32_t aeg_calc(voice_t *v)
+static RAMHOT int32_t aeg_calc(voice_t *v)
 {
     uint32_t d = v->aeg.dec, r;
     int32_t g;
@@ -452,7 +452,7 @@ static void voice_async(uint32_t vi)
 }
 
 /* ------------------------------------------------------- the block, sync --- */
-static void add_sat(int16_t *a, const int16_t *b)
+static RAMHOT void add_sat(int16_t *a, const int16_t *b)
 {
     uint32_t i;
     for (i = 0; i < BLOCK; i++)
@@ -460,7 +460,7 @@ static void add_sat(int16_t *a, const int16_t *b)
 }
 
 /* the voice's volume x gain (Q15 x Q24) as Q15, and the velocity when VOL MOD is on */
-static int32_t combined_q15(const voice_t *v)
+static RAMHOT int32_t combined_q15(const voice_t *v)
 {
     int64_t c = ((int64_t)v->vol * v->gain) >> 24;
     if (v->vol_mod)
@@ -1017,7 +1017,7 @@ static void reverb_now(void);
  * were after it (a choked voice fades over that block, then is silent: its next render sees 2). The sends start again
  * in the pair's other half; the reverb reads the half the mixer filled last */
 static uint8_t vb_turned;                            /* (voices_end turned it: the next voices_block doesn't) */
-static void voices_turn(void)
+static RAMHOT void voices_turn(void)
 {
     uint32_t i, vi;
     int16_t (*t)[BLOCK] = vbuf;

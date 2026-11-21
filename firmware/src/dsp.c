@@ -115,7 +115,7 @@ static void osc_base_note(osc_t *o, uint32_t note)  /* osc_setBaseNote */
     osc_recalc(o);
 }
 /* osc_setFreq: the block's increment of the note x pitchMod (Q16), and the overtone table freqToTableIndex picks */
-static void osc_set_freq(osc_t *o, uint32_t pmod)
+static RAMHOT void osc_set_freq(osc_t *o, uint32_t pmod)
 {
     uint64_t inc = ((uint64_t)o->note_inc * pmod) >> 16;
     uint32_t t = 4, lim = INC_440;
@@ -237,7 +237,7 @@ typedef struct {
 } trans_t;
 #define TR_END (2204u << 20)
 
-static void trans_block(trans_t *t, int16_t *buf)   /* transient_calcBlock */
+static RAMHOT void trans_block(trans_t *t, int16_t *buf)   /* transient_calcBlock */
 {
     uint32_t i, w, end;
     const int8_t *d;
@@ -260,7 +260,7 @@ static void trans_block(trans_t *t, int16_t *buf)   /* transient_calcBlock */
 }
 
 /* snapEg.c: value 1 at the trigger, falls 0.2 x the transient's pitch a block; out = value^2 x 24 (Q16) */
-static int32_t snap_calc(int32_t *v, uint32_t pitch_q20)
+static RAMHOT int32_t snap_calc(int32_t *v, uint32_t pitch_q20)
 {
     int32_t r = 0;
     if (*v > 0) {
@@ -287,7 +287,7 @@ typedef struct {
 } decay_eg_t;
 
 /* (1 + k) v / (1 + k |v|), v Q24, k Q16 -> Q24 (SlopeEg2 / DecayEg calcSlopeValue) */
-static int32_t eg_shape(int32_t v, int32_t k)
+static RAMHOT int32_t eg_shape(int32_t v, int32_t k)
 {
     int64_t num = (int64_t)(65536 + (int64_t)k) * v;
     int32_t den = 65536 + (int32_t)(((int64_t)k * (v < 0 ? -v : v)) >> 24);   /* (fits: a 32-bit divisor, the
@@ -307,7 +307,7 @@ static void slope_trigger(slope_eg_t *e)            /* slopeEg2_trigger */
     }
     e->rcnt = e->repeat;
 }
-static int32_t slope_calc(slope_eg_t *e)            /* slopeEg2_calc, once a block */
+static RAMHOT int32_t slope_calc(slope_eg_t *e)            /* slopeEg2_calc, once a block */
 {
     int32_t v = e->value;
     switch (e->state) {
@@ -1155,7 +1155,7 @@ static inline int32_t dist_sample(int32_t x, int32_t k8)
         return x;
     return sat16(((256 + k8) * x) / den);
 }
-static void dist_block(int16_t *buf, int32_t k8)     /* calcDistBlock */
+static RAMHOT void dist_block(int16_t *buf, int32_t k8)     /* calcDistBlock */
 {
     uint32_t i;
     for (i = 0; i < BLOCK; i++)

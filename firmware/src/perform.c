@@ -420,13 +420,13 @@ static uint32_t pf_amount(uint32_t on, uint32_t bit, uint32_t g)
 
 /* 1.4 WEAR: Decay k (0..127, 64: the kit as it is) as the amp EG's decay rate's factor, Q16: left faster, up to 2^8
  * (and at 0 SHORT's click), right slower, down to a quarter (4x as long) */
-static uint32_t wear_dec_of(int32_t k)
+static RAMHOT uint32_t wear_dec_of(int32_t k)
 {
     return k == 64 ? 65536u : (uint32_t)exp2_q16(k < 64 ? (64 - k) << 13 : -((k - 64) * 131072 / 63));
 }
 /* .. Tape speed s (0..127) in octaves, Q16: 2 either side of 64 dead (easy to find again), then the square of the way
  * (fine near the middle), 12 semitones at the ends */
-static int32_t wear_oct(uint32_t s)
+static RAMHOT int32_t wear_oct(uint32_t s)
 {
     int32_t d = (int32_t)(s & 127u) - 64, a = d < 0 ? -d : d;
     a = a > 2 ? (a - 2 > 61 ? 61 : a - 2) : 0;

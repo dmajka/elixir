@@ -203,27 +203,27 @@ def ld_regions():
 
 
 def ramhot(obj):
-    """2026-11-21 Phase 1, ELIXIR_RAMHOT=1 (a test): the functions marked RAMHOT in firmware/src run from RAM (app.ld
-    HOTCODE). A partial link renames each one's .text.<name> to .ram_hot.<name>, keeping its code and relocations: a
+    """2026-11-21 Phase 1: the functions marked RAMHOT in firmware/src run from RAM (app.ld HOTCODE); on by default
+    since Phase 1d, ELIXIR_RAMHOT=0 keeps them in flash (an A/B build, v<version>-cold). A partial link renames each one's .text.<name> to .ram_hot.<name>, keeping its code and relocations: a
     section attribute would change the code (the JieLi clang never inlines into a function of another section), and
     this objcopy (LLVM 4) can't rename. Returns the object to link"""
     (OUT / "elixir_hot.o").unlink(missing_ok=True)
-    if os.environ.get("ELIXIR_RAMHOT") != "1":
+    if os.environ.get("ELIXIR_RAMHOT") == "0":
         return obj
     names = []
     for f in sorted((FW / "src").glob("*.c")):
         names += re.findall(r"^static\s+RAMHOT\s+[\w\s*]*?\b(\w+)\s*\(", f.read_text(), re.M)
     if not names:
-        raise SystemExit("ELIXIR_RAMHOT=1: no function is marked RAMHOT")
+        raise SystemExit("RAMHOT: no function is marked RAMHOT")
     sects = set(re.findall(r"^\s*\d+ (\.text\.\w+) ", tc("common/bin/objdump", "-h", obj), re.M))
     lost = [n for n in names if f".text.{n}" not in sects]
     if lost:                                      # inlined into its callers: nothing of its own to move
-        raise SystemExit(f"ELIXIR_RAMHOT=1: no section of its own (inlined?): {', '.join(lost)}")
+        raise SystemExit(f"RAMHOT: no section of its own (inlined?): {', '.join(lost)}")
     script = OUT / "ramhot.ld"
     script.write_text("SECTIONS\n{\n" + "".join(f"    .ram_hot.{n} : {{ *(.text.{n}) }}\n" for n in names) + "}\n")
     out = OUT / "elixir_hot.o"
     tc("pi32v2/bin/ld", "-r", "-T", script, obj, "-o", out)
-    print(f"ELIXIR_RAMHOT=1: {', '.join(names)} to .ram_hot")
+    print(f"RAMHOT: {len(names)} functions to .ram_hot")
     return out
 
 
@@ -231,8 +231,8 @@ def build_app():
     flags = [*CFLAGS, "-Ifirmware/hal", "-Ifirmware/src", "-Ibuild/gen"]
     flags.append(f'-DFELUCCA_ID="{PRODUCT}"')
     version = VERSION
-    if os.environ.get("ELIXIR_RAMHOT") == "1":    # (Phase 1's test build says so on the about screen: v1.4.7-hot)
-        version = (version or source_version()) + "-hot"
+    if os.environ.get("ELIXIR_RAMHOT") == "0":    # (the A/B build with no RAM code says so on the about screen)
+        version = (version or source_version()) + "-cold"
     if version:
         flags.append(f'-DELIXIR_VERSION="{version}"')
     if os.environ.get("ELIXIR_WTABLE") == "1":       # (0.24: P WTABLE, parked; ~48 KB: docs/parked/README.md)
@@ -363,7 +363,7 @@ def check(img, syms, dis, rt):
     hc_org, hc_len = region["HOTCODE"]
     hot = sym("_rh_end") - sym("_rh_start")
     notes.append(f"HOTCODE: .ram_text {sym('_rt_end') - sym('_rt_start')} B, .c1_text {sym('_c1_end') - sym('_c1_start')}"
-                 f" B, .ram_hot {hot} B{' (ELIXIR_RAMHOT=1)' if hot else ''}, "
+                 f" B, .ram_hot {hot} B{'' if hot else ' (ELIXIR_RAMHOT=0)'}, "
                  f"{hc_org + hc_len - sym('_rh_end')} B free of {hc_len}")
     if sym("_rt_start") != hc_org or not sym("_rt_start") < sym("_c1_start") <= sym("_rh_start"):
         errors.append("app.ld: HOTCODE is not .ram_text, .c1_text, .ram_hot in order (the guard's one RAM PC window)")

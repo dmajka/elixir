@@ -46,8 +46,8 @@
 #include "fm1_lcd_hw.h"
 #define RING_PUBLISH() __asm__ volatile("" ::: "memory")
 #define POOL __attribute__((section(".pool")))
-/* RAMHOT marks a function to run from RAM (app.ld HOTCODE's .ram_hot) in an ELIXIR_RAMHOT=1 build (2026-11-21
- * Phase 1, a test). Only a marker: tools/build.py moves the function's .text.<name> by a partial link, so its code is
+/* RAMHOT marks a function to run from RAM (app.ld HOTCODE's .ram_hot; 2026-11-21 Phase 1, on by default since 1d:
+ * an ELIXIR_RAMHOT=0 build keeps it in flash, for an A/B). Only a marker: tools/build.py moves the function's .text.<name> by a partial link, so its code is
  * the same as in flash. (A section attribute changes the code: the JieLi clang never inlines across sections.) */
 #define RAMHOT
 #define RAMBUF __attribute__((section(".ram_buf")))   /* 18a: zeroed, in RAMTEXT (app.ld: buffers only) */

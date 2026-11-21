@@ -9,11 +9,11 @@
  * RAM  : .data/.bss (64 KiB): what the audio and key-scan interrupts touch, small variables
  * POOL : big zero-initialised buffers (FX lines, canvases, the parts' engine memory, the main loop's work
  *        buffers), section .pool. The same SRAM: the RAM / POOL boundary only splits the budget (1.5: 96 / 336
- *        KiB -> 72 / 360 KiB; 2026-11-21: 64 KiB / the rest less HOTCODE); tools/build.py reads the lengths here
+ *        KiB -> 72 / 360 KiB; 2026-11-21: 64 KiB / the rest less HOTCODE; Phase 1d: HOTCODE 15 -> 19.7 KiB); tools/build.py reads the lengths here
  * HOTCODE: all the code that runs from RAM, at the top of the SRAM just under the stacks (2026-11-21 Phase 1):
  *        .ram_text (code that must run while the flash is busy: the flash driver), .c1_text (the second core's
  *        waiting loop, hal/fm1_cpu1.h: an idle core 1 never fetches from the flash), .ram_hot (control code out of
- *        the flash's cache misses, ELIXIR_RAMHOT=1). One window for the guard's RAM PC limit (fm1_guard.h).
+ *        the flash's cache misses; ELIXIR_RAMHOT=0 leaves it empty). One window for the guard's RAM PC limit (fm1_guard.h).
  *        pi32v2's call reaches +-4 MiB (a 22-bit halfword offset): from here every function in XIP (code ends
  *        ~0x0205xxxx; .rodata follows it) and back; RAMTEXT, 4 MiB under XIP, reached none. A call out of reach
  *        fails the link. Its length is cut from POOL's; check build.py's HOTCODE line
@@ -26,8 +26,8 @@ MEMORY
     XIP    (rx)  : ORIGIN = 0x02000120, LENGTH = 0x8DFBC
     RAMTEXT (rw) : ORIGIN = 0x01C00000, LENGTH = 0x7F20
     RAM    (rwx) : ORIGIN = 0x01C08000, LENGTH = 64K
-    POOL   (rw)  : ORIGIN = 0x01C18000, LENGTH = 0x5B400
-    HOTCODE (rwx): ORIGIN = 0x01C73400, LENGTH = 0x3C00
+    POOL   (rw)  : ORIGIN = 0x01C18000, LENGTH = 0x5A140
+    HOTCODE (rwx): ORIGIN = 0x01C72140, LENGTH = 0x4EC0
     NOINIT (rw)  : ORIGIN = 0x01C7C000, LENGTH = 0x3D50
 }
 SECTIONS

@@ -859,7 +859,7 @@ static void snd_refresh(uint32_t p)                 /* apply a parameter's value
 /* ------------------------------------------------- modulation nodes --- */
 /* modulationNode.c modNode_updateValue: the target at its value / 127 + amount x (source x 2 - 1), 0..1 */
 static uint32_t mod_touched[(NPAR + 31) / 32];
-static void modnode_move(modnode_t *m, int32_t val, int32_t from)   /* from: where it moves from (-1: its value) */
+static RAMHOT void modnode_move(modnode_t *m, int32_t val, int32_t from)   /* from: where it moves from (-1: its value) */
 {
     int32_t nv;
     m->last = val;
@@ -1045,7 +1045,7 @@ static void snd_morph_sweep(void)
 }
 
 static void seq_tempo_changed(void);               /* (seq.c) */
-static void snd_service(void)                       /* the audio ISR, at a block start */
+static RAMHOT void snd_service(void)                       /* the audio ISR, at a block start */
 {
     if (snd_all) {
         uint32_t p;

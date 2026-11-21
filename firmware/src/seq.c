@@ -223,7 +223,7 @@ enum { DB_CHANCE, DB_GHOSTS, DB_RATCHETS, NDB };
 static uint8_t key_vel = 100, key_acc = 127;
 
 static pattern_t pat[NUM_PATTERN] POOL;
-static pattern_t pat_backup POOL;   /* the playing pattern as loaded (or saved): RELOAD's, and DROP's */
+static pattern_t pat_backup RAMBUF;   /* the playing pattern as loaded (or saved): RELOAD's, and DROP's (2026-11-21: in RAMTEXT, for HOTCODE) */
 static uint8_t pat_keep = 1;        /* 0.9: a pattern's edits stay when another plays (as in the project); 0: dropped,
                                      * the LXR's way (the pattern page's Edits; project.c kset.pdrop) */
 static uint8_t pat_revert;          /* RELOAD: the playing pattern back as saved, whatever Edits says */
@@ -277,7 +277,7 @@ static uint32_t lk_id(const pattern_t *p)
 }
 static uint32_t lk_run(const pattern_t *p, uint32_t t) { return lk_id(p) * NTRACK + t; }
 static uint32_t lk_used(void) { return lk_at[LK_PATS]; }
-static uint32_t lk_lb(uint32_t r, uint32_t key)      /* the first of run r's at key or after */
+static RAMHOT uint32_t lk_lb(uint32_t r, uint32_t key)      /* the first of run r's at key or after */
 {
     uint32_t lo = lk_at[r], hi = lk_at[r + 1u];
     key <<= 8;
@@ -329,7 +329,7 @@ static int lk_has(const pattern_t *p, uint32_t t, uint32_t k)   /* step k has a 
     uint32_t r = lk_run(p, t), i = lk_lb(r, k << 10);
     return i < lk_at[r + 1u] && LK_KEY(i) >> 10 == k;
 }
-static int32_t lk_get(const pattern_t *p, uint32_t t, uint32_t k, uint32_t code)   /* its value, -1 none */
+static RAMHOT int32_t lk_get(const pattern_t *p, uint32_t t, uint32_t k, uint32_t code)   /* its value, -1 none */
 {
     uint32_t r = lk_run(p, t), key = k << 10 | code, i = lk_lb(r, key);
     return i < lk_at[r + 1u] && LK_KEY(i) == key ? (int32_t)LK_VAL(i) : -1;
@@ -861,7 +861,7 @@ static int pv_copy(uint32_t src, uint32_t dst)
 enum { GLE_PLAY = 1, GLE_PATTERN = 2, GLE_BAR = 4, GLE_KEY = 8 };
 static volatile uint8_t glfo_ev;
 /* 0.10: the tracks silent: muted, or not soloed while any is */
-static uint32_t seq_mutes(void)
+static RAMHOT uint32_t seq_mutes(void)
 {
     return sq.muted | sq.wmute | (sq.solo ? ~(uint32_t)sq.solo & ((1u << NTRACK) - 1u) : 0u);
 }
@@ -1136,7 +1136,7 @@ static uint32_t trk_ticks(uint32_t t)                /* ticks a step of track t 
     uint32_t c = pat[sq.active].clk[t];
     return CLK_TICKS[c < NCLK ? c : CLK_1X];
 }
-static uint32_t pat_ticks(void)                     /* the pattern's length in ticks: its longest track's */
+static RAMHOT uint32_t pat_ticks(void)                     /* the pattern's length in ticks: its longest track's */
 {
     const pattern_t *p = &pat[sq.active];
     uint32_t t, best = 0;
@@ -1151,7 +1151,7 @@ static uint32_t pat_ticks(void)                     /* the pattern's length in t
 /* the trig conditions: step s of track t at its loop (the times round since the start) plays? Worked out once
  * an occurrence (a flam asks again); PRE: this track's last condition (other than PRE / NEI), NEI: the track
  * before's */
-static int cond_ok(const pattern_t *p, uint32_t t, uint32_t s, uint32_t loop)
+static RAMHOT int cond_ok(const pattern_t *p, uint32_t t, uint32_t s, uint32_t loop)
 {
     uint32_t c = step_cond(p, t, s), r, n = t ? t - 1u : NTRACK - 1u;
     if (c == COND_NONE)
@@ -1203,18 +1203,18 @@ static uint32_t dens_rank(const pattern_t *p, uint32_t t, uint32_t s, int on, ui
     }
     return r;
 }
-static int32_t dens_at(uint32_t t)                   /* track t's DENSITY: the knob's (but a track left out), 40: and
+static RAMHOT int32_t dens_at(uint32_t t)                   /* track t's DENSITY: the knob's (but a track left out), 40: and
                                                       * WANDER's */
 {
     int32_t d = sq.wonly == 1u || ((sq.dex >> t) & 1u) ? 0 : sq.dens;
     return clamp32(d + (sq.wonly == 2u ? 0 : sq.wdens[t]) + (sq.wonly ? 0 : sq.tdens[t]), -64, 63);
 }
-static int dens_on(uint32_t t)                       /* DENSITY moves track t's steps (GRIDS, TURING: their density) */
+static RAMHOT int dens_on(uint32_t t)                       /* DENSITY moves track t's steps (GRIDS, TURING: their density) */
 {
     uint32_t g = pat[sq.active].gen[t][0];
     return dens_at(t) && g != GEN_GRIDS && g != GEN_TURING;
 }
-static int dens_drop(const pattern_t *p, uint32_t t, uint32_t s, uint32_t loop)
+static RAMHOT int dens_drop(const pattern_t *p, uint32_t t, uint32_t s, uint32_t loop)
 {
     int32_t d = dens_at(t);
     return d < 0 && dens_on(t) && dens_rank(p, t, s, 1, loop) <= (uint32_t)(-d) * 3u;   /* (at -64: up to the beats) */
@@ -1231,14 +1231,14 @@ static uint32_t dens_part(uint32_t t, uint32_t part)
     hi = (part + 1u) * 64u / n;
     return d < lo ? 0u : d >= hi - 1u ? 256u : (d - lo + 1u) * 256u / (hi - lo);
 }
-static uint32_t dens_prob(const pattern_t *p, uint32_t t, uint32_t s)   /* a step's chance, DENSITY's push in it */
+static RAMHOT uint32_t dens_prob(const pattern_t *p, uint32_t t, uint32_t s)   /* a step's chance, DENSITY's push in it */
 {
     uint32_t pr = step_prob(&p->step[t][s]);
     if (dens_at(t) <= 0 || !dens_on(t))
         return pr;
     return pr + (100u - (pr > 100u ? 100u : pr)) * dens_part(t, 0) / 256u;
 }
-static int dens_ghost(const pattern_t *p, uint32_t t, uint32_t s, uint32_t loop)   /* an empty step plays a ghost */
+static RAMHOT int dens_ghost(const pattern_t *p, uint32_t t, uint32_t s, uint32_t loop)   /* an empty step plays a ghost */
 {
     uint32_t a = dens_on(t) ? dens_part(t, 1) : 0u;
     return a && dens_rank(p, t, s, 0, loop) > 256u - a;
@@ -1463,7 +1463,7 @@ static uint32_t groove_hash(uint32_t t, uint32_t s, uint32_t loop)
     h *= 0x297A2D39u;
     return h ^ (h >> 15);
 }
-static int32_t groove_at(uint32_t t, uint32_t s, uint32_t loop, int32_t *dv)
+static RAMHOT int32_t groove_at(uint32_t t, uint32_t s, uint32_t loop, int32_t *dv)
 {
     const pattern_t *p = &pat[sq.active];
     int32_t d = 0, v = 0;
@@ -1773,7 +1773,7 @@ static void rush_defaults(void)                      /* (Elixir Desktop's: FREE 
 enum { RT_64, RT_128, RT_256, NRT };
 static uint32_t trk_dir(uint32_t t);
 static void live_step_sync(const pattern_t *p, uint32_t t, uint32_t s);
-static uint32_t rush_lock(const pattern_t *p, uint32_t t, uint32_t k)   /* step k's RUSH (0: none) */
+static RAMHOT uint32_t rush_lock(const pattern_t *p, uint32_t t, uint32_t k)   /* step k's RUSH (0: none) */
 {
     int32_t v;
     if (!main_on(p, t, k))
@@ -1807,7 +1807,7 @@ static uint32_t rush_at(uint32_t t)                  /* track t's RUSH lock now,
         return r;
     return (uint32_t)((int32_t)r + ((int32_t)n - (int32_t)r) * (int32_t)sq.tph[t] / (int32_t)trk_ticks(t));
 }
-static void rush_now(void)                           /* the amount in use and its track: the knob, else a lock */
+static RAMHOT void rush_now(void)                           /* the amount in use and its track: the knob, else a lock */
 {
     uint32_t t, r;
     if (sq.ru_live) {
@@ -2858,7 +2858,7 @@ static uint32_t seq_shuffle_delay(void)              /* seq_getDeltaTShuffleDela
 {
     return (uint32_t)(((uint64_t)sq.tick_q16 * 16u * seq_shuffle()) / 127u);
 }
-static void seq_play_due(int32_t elapsed)            /* the ticks given so far, held back by a shuffle */
+static RAMHOT void seq_play_due(int32_t elapsed)            /* the ticks given so far, held back by a shuffle */
 {
     while (sq.due) {
         if (sq.prescale == 0u && (sq.master_cnt & 1u) && seq_shuffle() && sq.running) {

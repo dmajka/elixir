@@ -615,7 +615,7 @@ static void model_trigger(uint32_t vi, uint32_t vel, uint32_t inc)
  * 2 (D1-D3 render on the second core, voices.c); 1 on one core (main.c), where two can pass 100% */
 static uint8_t model_cap = 2;
 static int model_counted(uint32_t md);
-static void model_limit(void)
+static RAMHOT void model_limit(void)
 {
     uint32_t k, n = 0;
     for (k = 0; k < 3u; k++) {
