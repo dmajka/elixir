@@ -137,13 +137,12 @@ static inline int lfo_glides(uint32_t w) { return w == LFO_SMOOTH || w == LFO_DR
  *   ONE   a hit starts it from the offset, it runs one cycle and stops at its end (still until the first hit)
  *   HALF  the same, half a cycle */
 enum { LM_TRIG, LM_HOLD, LM_ONE, LM_HALF, NLFOMODE };
-/* lfo_calcPhaseInc's scaler (cycles in 4 bars) x 60: the LXR's 11 (4/1 .. 1/32, 1/3 1/6 1/12 shown as the triplets
- * 1/2T 1/4T 1/8T), then (1.0) 3/4, 3/8, (1.5) 8/1, 16/1 (in the packed slot's 4 bits: the kits as they were; 14 and 15
- * were 5/16 and 3/16 until 1.5, a kit saved keeps 8/1 and 16/1 as 30 and 31: kit.c sync_in). The knob turns through
- * them by length (ui.c SYNC_ORDER) */
+/* lfo_calcPhaseInc's scaler (cycles in 4 bars) x 15: the LXR's 11 (4/1 .. 1/32, 1/3 1/6 1/12 shown as the triplets
+ * 1/2T 1/4T 1/8T), then (1.0) 3/4, 3/8, 5/16, 3/16 (in the packed slot's 4 bits: the kits as they were; 1.5 had 8/1
+ * and 16/1 in 14 and 15, saved as 30 and 31: kit.c sync_in). The knob turns through them by length (ui.c SYNC_ORDER) */
 #define NSYNC 16u
-static const uint16_t SYNC_SCALE_X60[NSYNC] = {0, 60, 120, 240, 480, 720, 960, 1440, 1920, 2880, 3840, 7680, 320, 640, 30, 15};
-static const uint8_t SYNC_ORDER[NSYNC] = {0, 11, 10, 9, 8, 7, 6, 5, 13, 4, 12, 3, 2, 1, 14, 15};   /* (OFF, then fast ..
+static const uint16_t SYNC_SCALE_X60[NSYNC] = {0, 15, 30, 60, 120, 180, 240, 360, 480, 720, 960, 1920, 80, 160, 192, 320};
+static const uint8_t SYNC_ORDER[NSYNC] = {0, 11, 10, 9, 8, 7, 15, 6, 14, 5, 13, 4, 12, 3, 2, 1};   /* (OFF, then fast ..
                                                                                          * slow: the knob's, a CC's) */
 static int is_lfo_sync(uint32_t p);                  /* (sound.c) */
 
@@ -153,13 +152,13 @@ static void lfo_update_inc(lfo_t *l)                 /* lfo_setFreq / lfo_setSyn
         l->inc = lut1024u(LFO_INC, l->rate);
     } else {
         /* bpm / 60 / 4 x scaler cycles a second, / (FS / BLOCK) a block. The LXR's (a whole scaler) as it divides;
-         * 1.0's thirds, 1.5's halves and quarters times 2^64 / (60 x the divisor) (a constant: no 64-bit divide on the target) */
+         * 1.0's thirds and fifths times 2^64 / (15 x the divisor) (a constant: no 64-bit divide on the target) */
         uint32_t s = SYNC_SCALE_X60[l->sync];
-        if (s % 60u == 0u)
-            l->inc = (uint32_t)((((uint64_t)seq_bpm_x10 * (s / 60u) * BLOCK) << 32) / (uint32_t)(10u * 60u * 4u * 4u * FS));
+        if (s % 15u == 0u)
+            l->inc = (uint32_t)((((uint64_t)seq_bpm_x10 * (s / 15u) * BLOCK) << 32) / (uint32_t)(10u * 60u * 4u * 4u * FS));
         else
             l->inc = (uint32_t)(((uint64_t)(seq_bpm_x10 * s * BLOCK) *
-                                 (uint32_t)(0xFFFFFFFFFFFFFFFFull / (60ull * 10u * 60u * 4u * 4u * FS))) >> 32);
+                                 (uint32_t)(0xFFFFFFFFFFFFFFFFull / (15ull * 10u * 60u * 4u * 4u * FS))) >> 32);
     }
 }
 static void lfo_recalc_sync(void)

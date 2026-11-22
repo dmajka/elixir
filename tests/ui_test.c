@@ -8609,33 +8609,22 @@ static void phase_100_3(void)
     par_set(PAR_SYNC_LFO1, 6);                        /* (1/4) */
     run_ms(20);
     turn(EN_K3, 1);
-    check(par[PAR_SYNC_LFO1] == 5u, "SYNC K3 on from 1/4: 1/2T (by length, longer to the right; 1.5: no 5/16)");
+    check(par[PAR_SYNC_LFO1] == 14u, "SYNC K3 on from 1/4: 5/16 (by length, longer to the right)");
+    par_format(b, PAR_SYNC_LFO1, 14, sizeof b);
+    check(!strcmp(b, "5/16"), "its name: 5/16");
     turn(EN_K3, -2);
-    check(par[PAR_SYNC_LFO1] == 7u, "SYNC back two: 1/4T (1.5: no 3/16)");
+    check(par[PAR_SYNC_LFO1] == 15u, "SYNC back two: 3/16");
     par_set(PAR_SYNC_LFO1, 1);                        /* (4/1) */
     run_ms(20);
     turn(EN_K3, 1);
-    par_format(b, PAR_SYNC_LFO1, par[PAR_SYNC_LFO1], sizeof b);
-    check(par[PAR_SYNC_LFO1] == 14u && !strcmp(b, "8/1"), "1.5: SYNC on from 4/1: 8/1");
-    turn(EN_K3, 1);
-    par_format(b, PAR_SYNC_LFO1, par[PAR_SYNC_LFO1], sizeof b);
-    check(par[PAR_SYNC_LFO1] == 15u && !strcmp(b, "16/1"), "1.5: .. then 16/1, the longest");
-    turn(EN_K3, 1);
-    check(par[PAR_SYNC_LFO1] == 15u, "1.5: 16/1 the knob's end");
-    run_ms(20);
-    d = (uint32_t)(4294967296.0 * BLOCK / FS / 32.0);
-    check(vc[0].lfo.inc > d - d / 200u && vc[0].lfo.inc < d + d / 200u, "1.5: SYNC 16/1: a cycle in 32 s at 120 BPM");
-    par_set(PAR_SYNC_LFO1, 14);
-    run_ms(20);
-    d = (uint32_t)(4294967296.0 * BLOCK / FS / 16.0);
-    check(vc[0].lfo.inc > d - d / 200u && vc[0].lfo.inc < d + d / 200u, "1.5: SYNC 8/1: a cycle in 16 s at 120 BPM");
+    check(par[PAR_SYNC_LFO1] == 1u, "1.5.1: 4/1 the knob's end (no 8/1, 16/1)");
     par_set(PAR_L2SYNC1, 13);                         /* (1.5: LFO 2 past 11 was free) */
     run_ms(20);
     d = (uint32_t)(4294967296.0 * BLOCK / FS / 0.75);
     check(vc[0].lfo2.sync == 13u && vc[0].lfo2.inc > d - d / 200u && vc[0].lfo2.inc < d + d / 200u,
           "1.5: LFO 2's SYNC 3/8 syncs (was free past 1/32)");
-    {                                                 /* 1.5: saved, 8/1 16/1 as 30 31; 14 15 read: 5/16 3/16's nearest */
-        uint8_t k[KIT_LEN], sn[3u + SOUND_MAX];
+    {                                                 /* 1.5.1: 14 15 are 5/16 3/16; 1.5's saved 8/1 16/1 (30 31): 4/1 */
+        uint8_t k[KIT_LEN];
         kit_init_values(k);
         k[PAR_SYNC_LFO1] = 14;
         k[PAR_SYNC_LFO1 + 1] = 15;
@@ -8643,35 +8632,23 @@ static void phase_100_3(void)
         k[kit_idx(PAR_L2SYNC1)] = 31;
         k[kit_idx(PAR_L2SYNC1 + 1)] = 13;
         kit_sanitize(k);
-        check(k[PAR_SYNC_LFO1] == 5u && k[PAR_SYNC_LFO1 + 1] == 7u && k[PAR_SYNC_LFO1 + 2] == 14u &&
-              k[kit_idx(PAR_L2SYNC1)] == 15u && k[kit_idx(PAR_L2SYNC1 + 1)] == 13u,
-              "1.5: a kit read: 5/16 -> 1/2T, 3/16 -> 1/4T, 30 31 -> 8/1 16/1, the rest as they were");
-        par_set(PAR_SYNC_LFO1, 15);
-        par_set(PAR_L2SYNC1, 14);
-        check(!libsound_save(98, "SYNC    ", 0) && libsound_get(98, 0, sn) > 0, "1.5: a sound saved and read");
-        {
-            uint32_t i, j = 0, a = 0, c = 0;
-            for (i = 0; i < KIT_LEN; i++)
-                if (par_voice(kit_par(i)) == 0u) {
-                    a |= kit_par(i) == PAR_SYNC_LFO1 && sn[3 + j] == 15u;
-                    c |= kit_par(i) == PAR_L2SYNC1 && sn[3 + j] == 14u;
-                    j++;
-                }
-            check(a && c, "1.5: .. its SYNCs 16/1 and 8/1 as they were");
-        }
+        check(k[PAR_SYNC_LFO1] == 14u && k[PAR_SYNC_LFO1 + 1] == 15u && k[PAR_SYNC_LFO1 + 2] == 1u &&
+              k[kit_idx(PAR_L2SYNC1)] == 1u && k[kit_idx(PAR_L2SYNC1 + 1)] == 13u,
+              "1.5.1: a kit read: 5/16 3/16 kept, 1.5's 8/1 16/1 -> 4/1, the rest as they were");
         {
             int rc;
             k[PAR_SYNC_LFO1] = 0;
-            kit_put(3, k);                            /* (slot 3: D1 LFO 1 OFF, D2 1/4T, D3 8/1, LFO 2 16/1) */
-            lk_put(&pat[sq.active], 0, 2, par_to_autodest(PAR_SYNC_LFO1), 15);
+            kit_put(3, k);                            /* (slot 3: D1 LFO 1 OFF, D2 3/16, D3 4/1) */
+            par_set(PAR_SYNC_LFO1, 15);
+            par_set(PAR_L2SYNC1, 14);
+            lk_put(&pat[sq.active], 0, 2, par_to_autodest(PAR_SYNC_LFO1), 14);
             rc = proj_save(1, "SYNC    ");
             par[PAR_SYNC_LFO1] = par[PAR_L2SYNC1] = 0;
             rc |= proj_load(1);
             kit_get(3, k);
-            check(rc == 0 && par[PAR_SYNC_LFO1] == 15u && par[PAR_L2SYNC1] == 14u && k[PAR_SYNC_LFO1 + 1] == 7u &&
-                  k[PAR_SYNC_LFO1 + 2] == 14u && k[kit_idx(PAR_L2SYNC1)] == 15u &&
-                  lk_get(&pat[sq.active], 0, 2, par_to_autodest(PAR_SYNC_LFO1)) == 15,
-                  "1.5: a project keeps 8/1 and 16/1 (the edit buffer, a kit, a lock)");
+            check(rc == 0 && par[PAR_SYNC_LFO1] == 15u && par[PAR_L2SYNC1] == 14u && k[PAR_SYNC_LFO1 + 1] == 15u &&
+                  k[PAR_SYNC_LFO1 + 2] == 1u && lk_get(&pat[sq.active], 0, 2, par_to_autodest(PAR_SYNC_LFO1)) == 14,
+                  "1.5.1: a project keeps 5/16 and 3/16 (the edit buffer, a kit, a lock)");
             lk_del(&pat[sq.active], 0, 2, par_to_autodest(PAR_SYNC_LFO1));
         }
         par_set(PAR_L2SYNC1, 0);

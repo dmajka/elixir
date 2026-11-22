@@ -1347,7 +1347,7 @@ static void viz_lfo(int two)
     mode = vp_get(lfo_par(ui.track, two, LP_MODE)); sync = vp_get(lfo_par(ui.track, two, LP_SYNC));
     rtrg = vp_get(lfo_par(ui.track, two, LP_RETRIG)); ofs = vp_get(lfo_par(ui.track, two, LP_PHASE));
     if (sync && sync < NSYNC)
-        cyc_q16 = ((uint64_t)SYNC_SCALE_X60[sync] << 14) / 60u;
+        cyc_q16 = ((uint64_t)SYNC_SCALE_X60[sync] << 14) / 15u;
     else {                                           /* (the free rate a bar at the tempo) */
         uint64_t inc = lut1024u(LFO_INC, rate * 65536u / 127u), bpm = seq_bpm() ? seq_bpm() : 120u;
         cyc_q16 = (inc * (FS / BLOCK) * 240u) >> 16;

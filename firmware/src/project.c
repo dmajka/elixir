@@ -205,12 +205,9 @@ static void proj_write_payload(void)
             for (i = 0; i < KIT_LEN; i++)
                 e[kit_par(i)] = k[i];
         }
-        par_sync(e, 1);                            /* (1.5: 8/1, 16/1 as 30, 31: kit.c sync_in) */
         pw_bytes(e, NPAR);
         pw_u16(KIT_LEN);
-        memcpy(k, morph_par, KIT_LEN);
-        kit_sync(k, 1);
-        pw_bytes(k, KIT_LEN);
+        pw_bytes(morph_par, KIT_LEN);
     }
     pw_byte(par[PAR_MORPH]);                       /* (0.13: the knob; the global LFOs move it from there) */
     pw_byte(pat_voices(&pat[sq.active]) == PV_FREE ? kit_loaded : pv_from);
@@ -226,7 +223,6 @@ static void proj_write_payload(void)
     for (k = 0; k < NUM_KITS; k++) {                /* kits: the name, which parameters differ from INIT, those */
         uint8_t bits[(KIT_LEN + 7) / 8] = {0}, kb[KIT_LEN];
         kit_get(k, kb);                             /* (25-0: a byte a value here, as before) */
-        kit_sync(kb, 1);
         pw_bytes(kit_names[k], KIT_NAME_LEN);
         for (i = 0; i < KIT_LEN; i++)
             if (kb[i] != init[i])
@@ -315,7 +311,7 @@ static void proj_write_payload(void)
                 pw_u16(lk_at[r + 1u] - lk_at[r]);
                 for (j = lk_at[r]; j < lk_at[r + 1u]; j++) {
                     pw_u16(LK_KEY(j));
-                    pw_byte(is_lfo_sync(autodest_to_par(LK_KEY(j) & LK_CODE)) ? sync_out(LK_VAL(j)) : LK_VAL(j));
+                    pw_byte(LK_VAL(j));
                 }
             }
         }
@@ -480,7 +476,7 @@ static void pr_locks(pattern_t *p, uint32_t t)
         if ((w > lk_at[r] && key <= last) || ks >= LK_STEP || !(key & LK_CODE) || (key & LK_CODE) == NO_AUTOMATION ||
             key >> 10 >= NUM_STEPS)
             continue;
-        if (is_lfo_sync(autodest_to_par(key & LK_CODE)))   /* (1.5: kit.c sync_in) */
+        if (is_lfo_sync(autodest_to_par(key & LK_CODE)))   /* (1.5.1: kit.c sync_in) */
             v = sync_in(v);
         lk_e[w++] = key << 8 | v;
         last = key;
@@ -510,7 +506,7 @@ static int proj_read_payload(uint32_t ver)
     n = ver < 2u ? NUM_PARAMS : pr_u16();
     pr_bytes(par, n < NPAR ? n : NPAR);
     pr_skip(n > NPAR ? n - NPAR : 0u);
-    par_sync(par, 0);                               /* (1.5: 5/16, 3/16 from before as the nearest; 30, 31: kit.c) */
+    par_sync(par);                                  /* (1.5.1: 1.5's 8/1, 16/1 as 4/1: kit.c sync_in) */
     if (n <= PAR_DLY_ROUTE)                         /* (1.0 Phase 16: from before the route: the delay after the bus) */
         par[PAR_DLY_ROUTE] = DLY_ROUTE_OLD;
     nk = ver < 2u ? END_OF_SOUND_PARAMETERS : pr_u16();

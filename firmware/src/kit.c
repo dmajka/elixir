@@ -348,24 +348,22 @@ static void dly_migrate(uint8_t *k, uint32_t sync, uint8_t *l2t)
         k[PAR_FX_DELAY_TYPE] = DELAY_OFF;            /* (1.0: MODE OFF, the user's default) */
     }
 }
-/* 1.5: the LFO SYNCs 14, 15 (voices.c SYNC_SCALE_X60) were 5/16 and 3/16 until 1.5, 8/1 and 16/1 from it. Saved (a
- * project, the library, the library page's link) they are 30 and 31, so a 14 or 15 read is from before 1.5: as the
- * nearest still there, 1/2T and 1/4T. In the slots and par[]: 14, 15 (the packed slot's 4 bits) */
-static uint32_t sync_in(uint32_t v) { return v == 30u || v == 31u ? v - 16u : v == 14u ? 5u : v == 15u ? 7u : v; }
-static uint32_t sync_out(uint32_t v) { return v == 14u || v == 15u ? v + 16u : v; }
-static void kit_sync(uint8_t *k, int out)            /* a kit (kit layout) read (0) or to be saved (1) */
+/* 1.5.1: the LFO SYNCs 14, 15 (voices.c SYNC_SCALE_X60) are 5/16 and 3/16 again. 1.5 had 8/1 and 16/1 there and
+ * saved them (a project, the library, the library page's link) as 30 and 31: read, as the nearest, 4/1 */
+static uint32_t sync_in(uint32_t v) { return v == 30u || v == 31u ? 1u : v; }
+static void kit_sync(uint8_t *k)                     /* a kit (kit layout) read */
 {
     uint32_t i;
     for (i = 0; i < KIT_LEN; i++)
         if (is_lfo_sync(kit_par(i)))
-            k[i] = (uint8_t)(out ? sync_out(k[i]) : sync_in(k[i]));
+            k[i] = (uint8_t)sync_in(k[i]);
 }
-static void par_sync(uint8_t *e, int out)            /* .. the edit buffer's (par[]'s layout) */
+static void par_sync(uint8_t *e)                     /* .. the edit buffer's (par[]'s layout) */
 {
     uint32_t i;
     for (i = 0; i < 6u; i++) {
-        e[PAR_SYNC_LFO1 + i] = (uint8_t)(out ? sync_out(e[PAR_SYNC_LFO1 + i]) : sync_in(e[PAR_SYNC_LFO1 + i]));
-        e[PAR_L2SYNC1 + i] = (uint8_t)(out ? sync_out(e[PAR_L2SYNC1 + i]) : sync_in(e[PAR_L2SYNC1 + i]));
+        e[PAR_SYNC_LFO1 + i] = (uint8_t)sync_in(e[PAR_SYNC_LFO1 + i]);
+        e[PAR_L2SYNC1 + i] = (uint8_t)sync_in(e[PAR_L2SYNC1 + i]);
     }
 }
 /* a kit (kit layout) as Elixir reads it: the modulation targets indexes of MOD_TARGETS (preset_readDrumsetData's
@@ -373,7 +371,7 @@ static void par_sync(uint8_t *e, int out)            /* .. the edit buffer's (pa
 static void kit_sanitize(uint8_t *p)
 {
     uint32_t i;
-    kit_sync(p, 0);                                  /* (1.5: first: 30, 31 are past SYNC's largest) */
+    kit_sync(p);                                     /* (1.5.1: first: 30, 31 are past SYNC's largest) */
     for (i = 0; i < 6u; i++) {
         if (!target_ok(p[PAR_VEL_DEST_1 + i]))       /* (25a: and Elixir's after them) */
             p[PAR_VEL_DEST_1 + i] = 0;
