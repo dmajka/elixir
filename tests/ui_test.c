@@ -3997,6 +3997,12 @@ static void phase19(void)
             pfs.dj_decay = pfs.dj_reso = 0;
             rc |= proj_load(1);
             check(!rc && pfs.dj_decay == 120 && pfs.dj_reso == 30, "project: RING's Decay (KSC1)");
+            vp_set(VP_DJ, 90);                       /* 1.5.2: the knob (Filt) too: a RING drone's note stays */
+            rc = proj_save(1, "LFO3    ");
+            vp_set(VP_DJ, 64);
+            rc |= proj_load(1);
+            check(!rc && vp_get(VP_DJ) == 90, "project: the DJ filter's Filt (KSC1)");
+            vp_set(VP_DJ, 64);
             pfs.dj_reso = pfs.dj_decay = 0;
             pfs.dj_ftype = DJT_LXR;
         }
@@ -12734,6 +12740,21 @@ static void phase_15_glo(void)
     press(B_GLO);
     check(ui.mode == M_MIXER, "1.5: GLO tapped: the mixer stays");
     goto_mode(B_HOME, M_HOME);
+    {                                                /* 1.5.2: Last page on GLO left on CONFIG: held, the mixer */
+        uint8_t pm = kset.pmem;
+        kset.pmem = 1;
+        goto_mode(B_GLO, M_CONFIG);
+        goto_mode(B_HOME, M_HOME);
+        hold(B_GLO);
+        ok = ui.mode == M_MIXER;
+        run_ms(500);
+        release(B_GLO);
+        ok &= ui.mode == M_HOME;
+        press(B_GLO);
+        check(ok && ui.mode == M_CONFIG, "1.5.2: GLO held: the mixer even with CONFIG last; a tap: still CONFIG");
+        goto_mode(B_HOME, M_HOME);
+        kset.pmem = pm;
+    }
 }
 static void phase_15_new_project(void)
 {

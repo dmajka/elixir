@@ -173,6 +173,8 @@ static struct {
     uint8_t pcpat;                   /* 1.4: the pattern PROGRAM CHANGE OUT shows (the one playing as CONFIG opens) */
     uint8_t glo_back, glo_page;      /* 1.5: GLO held from another page: that mode + 1 (0: none), its page, */
     uint32_t glo_ms;                 /* .. and when GLO went down (held GLO_HOLD_MS: back there as it lets go) */
+    uint8_t glo_cfg, glo_was;        /* 1.5.2: a tap opens CONFIG (Last page: GLO left there), and the GLO page
+                                      * shown last as GLO went down (a hold leaves it so) */
 } ui = {.held_step = -1, .koct = 3, .knote = 0xFF, .kkey = 0xFF};
 
 
@@ -4099,7 +4101,8 @@ static void button_down(uint32_t b)
             solo_key(ui.track);
             return;
         }
-        ui.glo_back = 0;
+        ui.glo_back = ui.glo_cfg = 0;
+        ui.glo_was = ui.glo_m;
         if (ui.mode != M_MIXER && ui.mode != M_CONFIG && ui.mode != M_SAVE && ui.mode != M_LOAD) {   /* 1.5: held, back
                                                       * (button_up; not to SAVE or LOAD, their dialogs gone) */
             ui.glo_back = (uint8_t)(ui.mode + 1u);
@@ -4108,10 +4111,13 @@ static void button_down(uint32_t b)
         }
         if (ui.mode == M_MIXER)                      /* (29: the mixer, then CONFIG; the track's MIX pages gone) */
             mode_set(M_CONFIG);
-        else if (kset.pmem && ui.mode != M_CONFIG && ui.glo_m == M_CONFIG)
+        else if (kset.pmem && ui.mode != M_CONFIG && ui.glo_m == M_CONFIG && !ui.glo_back)
             mode_set(M_CONFIG);                      /* (0.13: the pages GLO showed last) */
-        else
+        else {                                       /* (1.5.2: from another page always the mixer first, held or not:
+                                                      * the levels and mutes at once; a tap goes on to CONFIG, button_up) */
+            ui.glo_cfg = (uint8_t)(kset.pmem && ui.glo_back && ui.glo_m == M_CONFIG);
             mode_set(M_MIXER);
+        }
         return;
     case B_SAVE:
         if (ui.shift) {
@@ -4137,9 +4143,13 @@ static void button_up(uint32_t b)
         if (ui.glo_back && (ui.mode == M_MIXER || ui.mode == M_CONFIG) && fm1_ms - ui.glo_ms >= GLO_HOLD_MS) {
             mode_set(ui.glo_back - 1u);
             ui.page = ui.glo_page;
+            ui.glo_m = ui.glo_was;                   /* (1.5.2: a peek leaves the GLO page shown last as it was) */
+            ui.force = 1;
+        } else if (ui.glo_cfg && ui.mode == M_MIXER) {   /* (1.5.2: a tap: CONFIG, Last page left GLO there) */
+            mode_set(M_CONFIG);
             ui.force = 1;
         }
-        ui.glo_back = 0;
+        ui.glo_back = ui.glo_cfg = 0;
     } else if (b == B_OCTDN) {
         ui.shift = 0;
         ui.fine = 0;

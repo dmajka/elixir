@@ -361,8 +361,9 @@ static void proj_write_payload(void)
                                                       * 39: RUSH: a byte unused (0.23-test1's GHOST), FLAM, PITCH,
                                                       * START, FREE, TOP, FILTER, GLIDE (older firmware: the 11 read,
                                                       * these skipped), 0.24.3: the DJ filter's resonance; 1.0: its type;
-                                                      * Phase 18: RING's SPREAD, SLOPE, TONE, WET; 1.3.1: its Decay */
-    pw_byte(27);
+                                                      * Phase 18: RING's SPREAD, SLOPE, TONE, WET; 1.3.1: its Decay;
+                                                      * 1.5.2: its knob (Filt) */
+    pw_byte(28);
     pw_byte(scl_last.root);
     pw_byte(scl_last.scale);
     pw_byte((uint8_t)pfs.dens);
@@ -390,6 +391,7 @@ static void proj_write_payload(void)
     pw_byte(pfs.dj_tone);
     pw_byte(pfs.dj_wet);
     pw_byte(pfs.dj_decay);                           /* (1.3.1: older firmware skips it) */
+    pw_byte(pf.dj);                                  /* (1.5.2: the DJ filter's knob, 64 off: a RING drone stays) */
     pw_bytes("KSP2", 4);                            /* 32: SPELLS: the knobs, the targets, the GRIMOIRE's recipes */
     sp_write();
     pw_bytes("KWND", 4);                            /* 40: WANDER: the knobs, the tracks, the parts (not the road) */
@@ -573,6 +575,7 @@ static int proj_read_payload(uint32_t ver)
     dly_migrate(par, par[PAR_DSYNC], &par[PAR_L2TGT1]);
     scl_last.root = scl_last.scale = 0;             /* (a pattern without a scale: CHROMATIC; KSC1 sets the last) */
     rush_defaults();                                /* (39: RUSH's, KSC1 sets them) */
+    pf.dj = 64;                                     /* (1.5.2: the DJ filter off; KSC1 sets it) */
     npat = ver < 2u ? 64u : pr_byte();
     for (i = 0; i < npat; i++) {                    /* (patterns past NUM_PATTERN: read into pat_backup, dropped) */
         pattern_t *p = i < NUM_PATTERN ? &pat[i] : &pat_backup;
@@ -750,11 +753,11 @@ static int proj_read_payload(uint32_t ver)
     if (!pr.err && pr.pos + 4u <= pr.end) {
         pr_bytes(tag, 4);
         if (!memcmp(tag, "KSC1", 4)) {               /* 19: the scale last chosen, DENSITY; STUTTER */
-            uint8_t b[27] = {0, 0, 0, 40, DB_GHOSTS, 0, 0, 1, 2, SV_OFF, 0, 0, 0, 12, 10, 80, RT_256, 60, 8, 0, DJT_LXR, RC_MAJ,
-                             64, 64, 64, 64, 0xFF};
+            uint8_t b[28] = {0, 0, 0, 40, DB_GHOSTS, 0, 0, 1, 2, SV_OFF, 0, 0, 0, 12, 10, 80, RT_256, 60, 8, 0, DJT_LXR, RC_MAJ,
+                             64, 64, 64, 64, 0xFF, 64};
             n = pr_byte();                           /* (31: VARY 0 before; 39: RUSH's; 0.24.3: Reso 0; Phase 18: 64s) */
-            pr_bytes(b, n < 27u ? n : 27u);
-            pr_skip(n > 27u ? n - 27u : 0u);
+            pr_bytes(b, n < 28u ? n : 28u);
+            pr_skip(n > 28u ? n - 28u : 0u);
             scl_last.root = (uint8_t)(b[0] % 12u);
             scl_last.scale = (uint8_t)(b[1] < NSCALE ? b[1] : SC_CHROM);
             pfs.dens = (int8_t)clamp32((int8_t)b[2], -64, 63);
@@ -782,6 +785,7 @@ static int proj_read_payload(uint32_t ver)
             pfs.dj_wet = (uint8_t)(b[25] & 127u);
             pfs.dj_decay = (uint8_t)(b[26] != 0xFFu ? b[26] & 127u : pfs.dj_reso);   /* (1.3.1; before: Reso's, so
                                                       * RING rings as it did) */
+            pf.dj = (uint8_t)(b[27] & 127u);         /* (1.5.2; before: 64, off) */
         }
     }
     if (!pr.err && pr.pos + 4u <= pr.end) {
