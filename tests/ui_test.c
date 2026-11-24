@@ -981,6 +981,13 @@ static void hush_test(void)
     }
     check(web_flash_writes != w && n >= 280u && n < 330u, "autosave: saves anyway after 30 s at rest");
     printf("  autosave while sounding: %u.%u s after the change\n", (unsigned)(n / 10u), (unsigned)(n % 10u));
+    pf.dj = 90;                                      /* 1.5.2: Filt alone is a change autosave saves */
+    w = web_flash_writes;
+    for (n = 0; n < 200u && web_flash_writes == w; n++)
+        run_ms(100);
+    pf.dj = 64;
+    check(web_flash_writes != w && !proj_load(PROJ_AUTO) && pf.dj == 90, "1.5.2: autosave: Filt alone, saved");
+    pf.dj = 64;
     check(out_hush == 0 && audio_late == 0, "after the saves: the output back, no LATE counted");
 }
 

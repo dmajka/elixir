@@ -1042,6 +1042,7 @@ static uint32_t session_sig(void)                   /* FNV-1a over what a projec
     SIG(song_rd, sizeof song_rd);
     SIG(morph_par, sizeof morph_par);
     SIG(&pfs, sizeof pfs);
+    SIG(&pf.dj, sizeof pf.dj);                      /* (1.5.2: the DJ filter's knob, saved in KSC1) */
     SIG(gls, sizeof gls);
     SIG(&scl_last, sizeof scl_last);
 #undef SIG
