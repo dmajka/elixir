@@ -12763,6 +12763,54 @@ static void phase_15_glo(void)
         kset.pmem = pm;
     }
 }
+/* 1.5.4: the morph kit chosen is saved: the project's for the FREE patterns, a LOCKED pattern's own */
+static void phase_154_morph_kit(void)
+{
+    uint8_t fk[KIT_LEN];
+    pattern_t p0 = pat[0], p1 = pat[1];
+    int rc;
+    seq_stop_now();
+    seq_set_next_pattern(0);
+    run_ms(50);
+    libkit_save(4, "LIBFOUR ", 0);
+    vp_set(VP_MKIT, NUM_KITS + 4u);
+    run_ms(300);
+    check(morph_src == MS_LIB + 4u && ms_shared == MS_LIB + 4u, "1.5.4: on a FREE pattern the choice is the project's");
+    seq_set_next_pattern(1);
+    run_ms(50);
+    pv_set(PV_LOCKED);
+    run_ms(50);
+    check(morph_src == MS_LIB + 4u && !pat_mk[1], "1.5.4: LOCKED: the project's morph kit until one is chosen there");
+    vp_set(VP_MKIT, KB_FAC + 2u);
+    run_ms(300);
+    check(pat_mk[1] == MS_FAC + 3u && ms_shared == MS_LIB + 4u, "1.5.4: one chosen on a LOCKED pattern: its own");
+    seq_set_next_pattern(0);
+    run_ms(50);
+    libkit_get(4, fk);
+    check(morph_src == MS_LIB + 4u && !memcmp(fk, morph_par, KIT_LEN), "1.5.4: a FREE pattern: the project's again");
+    seq_set_next_pattern(1);
+    run_ms(50);
+    kit_factory_values(2, fk);
+    check(morph_src == MS_FAC + 2u && !memcmp(fk, morph_par, KIT_LEN), "1.5.4: the LOCKED pattern: its own again");
+    rc = proj_save(1, "MORPHKIT");
+    morph_src = ms_shared = MS_NONE;
+    pat_mk[1] = 0;
+    rc |= proj_load(1);
+    check(!rc && morph_src == MS_FAC + 2u && ms_shared == MS_LIB + 4u && pat_mk[1] == MS_FAC + 3u &&
+          !memcmp(fk + 1, morph_par + 1, KIT_LEN - 1u), "1.5.4: saved with the project: the project's and the pattern's");
+    seq_set_next_pattern(0);
+    run_ms(50);
+    libkit_get(4, fk);
+    check(morph_src == MS_LIB + 4u && !memcmp(fk, morph_par, KIT_LEN), ".. and the FREE patterns' after the load");
+    seq_set_next_pattern(1);
+    run_ms(50);
+    pv_set(PV_FREE);
+    seq_set_next_pattern(0);
+    run_ms(50);
+    pat[0] = p0;
+    pat[1] = p1;
+    pat_mk[1] = 0;
+}
 static void phase_15_new_project(void)
 {
     uint32_t i, ok, n;
@@ -14071,6 +14119,7 @@ int main(int argc, char **argv)
     phase_143_tails();
     phase_15_new_project();
     phase_15_glo();
+    phase_154_morph_kit();
     copy_pass();                                     /* (1.0's copy and picture pass: last, as it runs time) */
     printf(fails ? "ui_test: %d FAILED\n" : "ui_test: ok (%d shots)\n", fails ? fails : shot_n);
     return fails != 0;

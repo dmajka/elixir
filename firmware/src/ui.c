@@ -861,7 +861,7 @@ static int kb_has(int32_t i)
 }
 /* 1.4 MORPH: PERFORM's Morph kit knob (VP_MKIT) walks the same entries in their own order: the slots, the library's
  * kits, the factory's; it loads as it rests (ui_poll: a library kit is a flash read) */
-_Static_assert(KB_FAC == MS_FAC && NUM_KITS == MS_LIB, "kit.c morph_src counts as the kit browser");
+_Static_assert(KB_FAC == MS_FAC && NUM_KITS == MS_LIB && KB_N == MS_N, "kit.c morph_src counts as the kit browser");
 #define MK_REST_MS 250u
 static int mk_has(int32_t i)                         /* an entry it stops on: a kit there is, not an Init slot (a new
                                                       * project's 64: nothing to morph to) but the morph kit's own */
@@ -916,6 +916,28 @@ static void mk_load(uint32_t i)                      /* the knob at rest: entry 
             ui_message("EMPTY SLOT");
     } else {
         kit_factory_morph(i - KB_FAC);
+    }
+}
+/* 1.5.4: the morph kit chosen follows the pattern: as one starts, its own (a LOCKED or KIT pattern's, seq.c pat_mk)
+ * or the project's (ms_shared) loads; one chosen while it plays becomes its own, or on a FREE pattern the project's.
+ * A Snapshot isn't loaded again (no copy of it is kept): what sounds stays, and becomes the choice */
+static void mk_sync(void)
+{
+    uint32_t n = sq.active, own = pat_voices(&pat[n]) != PV_FREE;
+    uint16_t want = own && pat_mk[n] ? (uint16_t)(pat_mk[n] - 1u) : ms_shared;
+    if (ui.mk_pend)
+        return;
+    if (n != mk_pat) {
+        mk_pat = (uint8_t)n;
+        if (want < KB_N && want != morph_src && mk_has((int32_t)want)) {
+            mk_load(want);
+            ui.force = 1;
+        }
+    } else if (morph_src != want) {
+        if (own)
+            pat_mk[n] = (uint16_t)(morph_src + 1u);
+        else
+            ms_shared = morph_src;
     }
 }
 static int32_t kb_part_start(uint32_t q)            /* where a part opens: the slots on the kit loaded; -1 empty */
@@ -4334,6 +4356,7 @@ static void ui_input(void)
         mk_load(i);
         ui.force = 1;
     }
+    mk_sync();
     {
         uint32_t t;
         for (t = 0; t < NTRACK; t++)

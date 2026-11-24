@@ -21,11 +21,12 @@ static char kit_names[NUM_KITS][KIT_NAME_LEN];
 static uint8_t kit_loaded;                           /* the slot the edit buffer came from (menu_loadedPresetNr) */
 static uint8_t kit_morph_loaded;                     /* the slot loaded as the morph target */
 /* 1.4 (MORPH): where the morph kit came from, for PERFORM's Morph kit knob (ui.c VP_MKIT, as the kit browser counts:
- * a slot, MS_LIB + a library kit, MS_FAC + a factory kit), or MS_SNAP (SNAP), MS_NONE (the init kit). Not saved:
- * a project loads with its slot's (project.c) */
+ * a slot, MS_LIB + a library kit, MS_FAC + a factory kit), or MS_SNAP (SNAP), MS_NONE (the init kit). 1.5.4: saved
+ * with the project (KSC1), and a LOCKED or KIT pattern's own (seq.c pat_mk); before, a project loaded with its slot's */
 #define MS_LIB NUM_KITS
 #define MS_FAC (NUM_KITS + 128u)                     /* (+ KL_KITS: ui.c asserts it) */
 #define MS_SNAP 0xFFFEu
+#define MS_N (MS_FAC + FACTORY_NKITS)                /* (1.5.4: the sources a project keeps; factory_kits.h, below) */
 #define MS_NONE 0xFFFFu
 static uint16_t morph_src = MS_NONE;
 static uint8_t kit_loads;                            /* 0.11: one more at each kit into the edit buffer or the morph

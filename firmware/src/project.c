@@ -188,6 +188,18 @@ static void pr_skip(uint32_t n)
         (void)pr_byte();
 }
 
+/* 1.5.4: KSC1's tail: the morph kit chosen (kit.c morph_src: the one morph_par holds), the project's (seq.c
+ * ms_shared), each pattern's (pat_mk), two bytes each. mk_cur, mk_read: as read, for proj_after_load */
+#define KSC_MK (4u + 2u * NUM_PATTERN)
+static uint16_t mk_cur;
+static uint8_t mk_read;
+static uint16_t ms_ok(uint32_t v) { return (uint16_t)(v < MS_N || v == MS_SNAP ? v : MS_NONE); }
+static void mk_none(void)                           /* (an older project, a new one: no morph kit chosen) */
+{
+    mk_read = 0;
+    ms_shared = MS_NONE;
+    memset(pat_mk, 0, sizeof pat_mk);
+}
 static void proj_write_payload(void)
 {
     uint32_t i, k, t;
@@ -362,8 +374,8 @@ static void proj_write_payload(void)
                                                       * START, FREE, TOP, FILTER, GLIDE (older firmware: the 11 read,
                                                       * these skipped), 0.24.3: the DJ filter's resonance; 1.0: its type;
                                                       * Phase 18: RING's SPREAD, SLOPE, TONE, WET; 1.3.1: its Decay;
-                                                      * 1.5.2: its knob (Filt) */
-    pw_byte(28);
+                                                      * 1.5.2: its knob (Filt); 1.5.4: the morph kit chosen (KSC_MK) */
+    pw_byte(28u + KSC_MK);
     pw_byte(scl_last.root);
     pw_byte(scl_last.scale);
     pw_byte((uint8_t)pfs.dens);
@@ -392,6 +404,10 @@ static void proj_write_payload(void)
     pw_byte(pfs.dj_wet);
     pw_byte(pfs.dj_decay);                           /* (1.3.1: older firmware skips it) */
     pw_byte(pf.dj);                                  /* (1.5.2: the DJ filter's knob, 64 off: a RING drone stays) */
+    pw_u16(morph_src);                               /* (1.5.4: the one heard, the project's, each pattern's: seq.c) */
+    pw_u16(ms_shared);
+    for (i = 0; i < NUM_PATTERN; i++)
+        pw_u16(pat_mk[i]);
     pw_bytes("KSP2", 4);                            /* 32: SPELLS: the knobs, the targets, the GRIMOIRE's recipes */
     sp_write();
     pw_bytes("KWND", 4);                            /* 40: WANDER: the knobs, the tracks, the parts (not the road) */
@@ -576,6 +592,7 @@ static int proj_read_payload(uint32_t ver)
     scl_last.root = scl_last.scale = 0;             /* (a pattern without a scale: CHROMATIC; KSC1 sets the last) */
     rush_defaults();                                /* (39: RUSH's, KSC1 sets them) */
     pf.dj = 64;                                     /* (1.5.2: the DJ filter off; KSC1 sets it) */
+    mk_none();                                      /* (1.5.4: KSC1 sets them) */
     npat = ver < 2u ? 64u : pr_byte();
     for (i = 0; i < npat; i++) {                    /* (patterns past NUM_PATTERN: read into pat_backup, dropped) */
         pattern_t *p = i < NUM_PATTERN ? &pat[i] : &pat_backup;
@@ -757,7 +774,16 @@ static int proj_read_payload(uint32_t ver)
                              64, 64, 64, 64, 0xFF, 64};
             n = pr_byte();                           /* (31: VARY 0 before; 39: RUSH's; 0.24.3: Reso 0; Phase 18: 64s) */
             pr_bytes(b, n < 28u ? n : 28u);
-            pr_skip(n > 28u ? n - 28u : 0u);
+            n = n > 28u ? n - 28u : 0u;
+            if (n >= KSC_MK) {                       /* (1.5.4: the morph kit chosen) */
+                n -= KSC_MK;
+                mk_cur = ms_ok(pr_u16());
+                ms_shared = ms_ok(pr_u16());
+                for (i = 0; i < NUM_PATTERN; i++)
+                    pat_mk[i] = (uint16_t)(ms_ok((uint16_t)(pr_u16() - 1u)) + 1u);
+                mk_read = 1;
+            }
+            pr_skip(n);
             scl_last.root = (uint8_t)(b[0] % 12u);
             scl_last.scale = (uint8_t)(b[1] < NSCALE ? b[1] : SC_CHROM);
             pfs.dens = (int8_t)clamp32((int8_t)b[2], -64, 63);
@@ -954,7 +980,10 @@ static void proj_after_load(void)                   /* the session as the projec
     for (t = 0; t < NTRACK; t++)
         sq.idx[t] = -1;
     morph_par[0] = 0;
-    morph_src = morph_unset() ? MS_NONE : kit_morph_loaded;   /* (1.4: the Morph kit knob shows its slot's) */
+    morph_src = mk_read ? mk_cur : morph_unset() ? MS_NONE : kit_morph_loaded;   /* (1.4: before 1.5.4, its slot's) */
+    if (!mk_read)
+        ms_shared = morph_src;
+    mk_pat = sq.active;                             /* (what morph_par holds is the playing pattern's: no reload) */
     kit_loads++;
     snd_post_all();
 }
@@ -997,6 +1026,7 @@ static void proj_new(void)
         memcpy(kit_names[i], "Init    ", KIT_NAME_LEN);
     }
     memcpy(morph_par, k, KIT_LEN);
+    mk_none();
     memset(par, 0, NPAR);
     engine_globals_default();
     kit_load_ram(0);                                /* (the edit buffer: kit 1, Init) */
@@ -1043,6 +1073,8 @@ static uint32_t session_sig(void)                   /* FNV-1a over what a projec
     SIG(morph_par, sizeof morph_par);
     SIG(&pfs, sizeof pfs);
     SIG(&pf.dj, sizeof pf.dj);                      /* (1.5.2: the DJ filter's knob, saved in KSC1) */
+    SIG(&ms_shared, sizeof ms_shared);              /* (1.5.4: the morph kit chosen, KSC1) */
+    SIG(pat_mk, sizeof pat_mk);
     SIG(gls, sizeof gls);
     SIG(&scl_last, sizeof scl_last);
 #undef SIG

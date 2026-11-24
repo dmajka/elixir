@@ -770,6 +770,12 @@ enum { PV_FREE, PV_LOCKED, PV_KIT, NPV };
 #define PV_SLOT(n) (NUM_KITS / 2u + (n))
 static uint8_t pv_from;
 static uint8_t pv_skip;             /* (a pattern saved into another slot: its KIT not reloaded when it switches) */
+/* 1.5.4: the morph kit chosen (kit.c morph_src): the project's, ms_shared, for the FREE patterns; a LOCKED or KIT
+ * pattern's own, pat_mk[n] - 1, once one is chosen while it plays (0: none, the project's). ui.c mk_sync loads it as
+ * the pattern starts and keeps these as the choice changes; mk_pat: the pattern it saw last (0xFF: look again) */
+static uint16_t pat_mk[NUM_PATTERN];
+static uint16_t ms_shared = MS_NONE;
+static uint8_t mk_pat = 0xFF;
 /* 1.4: PROGRAM CHANGE OUT (docs/MIDI_PROGRAM_CHANGE_OUT.md): the program change a pattern sends goes out from the
  * audio ISR (seq_pc_out, each block) when the pattern the far end should be heading for changes: AHEAD (the default),
  * the one queued (or the song's next row) as soon as it is known, so a box that changes at the end of its own pattern
@@ -825,6 +831,7 @@ static void pv_set(uint32_t v)
         pv_from = kit_loaded;
     }
     pat_set_voices(p, v, v == PV_KIT ? k : pat_kit(p));
+    pat_mk[n] = 0;                                   /* (1.5.4: the project's morph kit until one is chosen here) */
     if (v == PV_LOCKED) {
         kit_stash(PV_SLOT(n));
         pv_name(n);
@@ -852,8 +859,11 @@ static int pv_copy(uint32_t src, uint32_t dst)
         kit_put(PV_SLOT(dst), k);
         pv_name(dst);
     }
-    if (dst == sq.active)                            /* (its old voices go unkept: KIT's way out) */
+    pat_mk[dst] = pat_mk[src];                       /* (1.5.4: its morph kit too) */
+    if (dst == sq.active) {                          /* (its old voices go unkept: KIT's way out) */
         pv_switch(a == PV_LOCKED ? PV_KIT : a, dst, dst);
+        mk_pat = 0xFF;
+    }
     return 0;
 }
 /* 0.13: what triggers the global LFOs (perform.c glfo_block): PLAY, a pattern change, a bar; OCT+ on LFO n's page:
@@ -931,7 +941,9 @@ static void pat_delete(uint32_t n)
     pat[n].shuffle = pat[n].kit = 0;
     pat[n].gx = pat[n].gy = pat[n].gchaos = 0;
     pat[n].pcout = PCO_AUTO;
+    pat_mk[n] = 0;
     if (n == sq.active) {
+        mk_pat = 0xFF;
         pv_switch(a == PV_LOCKED ? PV_KIT : a, n, n);
         pat_cp(&pat_backup, &pat[n]);
     }
