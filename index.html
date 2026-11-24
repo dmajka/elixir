@@ -200,7 +200,7 @@
         <a href="manual/"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg><span>Read the manual</span></a>
         <a href="cheatsheet.pdf" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg><span>Cheat sheet</span></a>
       </p>
-      <p class="meta">Version 1.5.3, released November 23, 2026 · <a href="#updates">what's new</a></p>
+      <p class="meta">Version 1.5.4, released November 24, 2026 · <a href="#updates">what's new</a></p>
       <div class="support">
         <p>Elixir is free, made by one person in my spare time. If it makes your FM-1 more fun:</p>
         <a class="btn sm kofi" href="https://ko-fi.com/ghosttropic" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13v5a6 6 0 0 1-6 6H10a6 6 0 0 1-6-6z"/><path d="M17 9h1.5a2.5 2.5 0 0 1 0 5H17"/><path d="M8 3v2M12 3v2"/></svg>Tip me on Ko-fi</a>
@@ -482,6 +482,19 @@
   <section class="band" id="updates">
     <div class="intro"><h2>Updates</h2><p>What each release added and fixed.</p></div>
     <div class="updates">
+      <div class="card"><h3>1.5.4<span>November 24, 2026</span></h3>
+        <p>Projects and patterns keep the morph kit you picked. Projects, kits and settings from 1.5.3 work as
+          before.</p>
+        <ul>
+          <li><b>The morph kit is saved.</b> Before, a project kept the morph kit&rsquo;s sound but forgot which
+            kit it was, so after a reload the Morph kit card could show the wrong kit. Now the project saves your
+            pick, and your FREE patterns share it.</li>
+          <li><b>Patterns with their own voices keep their own morph kit.</b> On a LOCKED or KIT pattern, pick a
+            morph kit while it plays and the pattern keeps it. It loads when the pattern starts. Until you pick one,
+            the pattern uses the project&rsquo;s morph kit. A Snapshot isn&rsquo;t kept this way: it lasts until
+            another pattern brings in a different morph kit.</li>
+        </ul>
+      </div>
       <div class="card"><h3>1.5.3<span>November 23, 2026</span></h3>
         <p>Autosave keeps the master filter too. Projects, kits and settings from 1.5.2 work as before.</p>
         <ul>
